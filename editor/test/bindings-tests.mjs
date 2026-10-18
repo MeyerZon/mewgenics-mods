@@ -366,9 +366,9 @@ export async function runBindingsTests(test, assert, eq) {
   });
   test("symbolTable / dataTable / lkTable return entries sorted by index", () => {
     const m = parseManifest(mini());
-    eq(symbolTable(m).map((e) => e.name).join(","), "FnA");
-    eq(dataTable(m).map((e) => e.name).join(","), "Glob");
-    eq(lkTable(m).map((e) => e.name).join(","), "FnB");
+    eq(symbolTable(m).map((/** @type {any} */ e) => e.name).join(","), "FnA");
+    eq(dataTable(m).map((/** @type {any} */ e) => e.name).join(","), "Glob");
+    eq(lkTable(m).map((/** @type {any} */ e) => e.name).join(","), "FnB");
     eq(entry(m, "Foo_typeid").kind, "constant");
     eq(entry(m, "Missing"), null);
   });
@@ -408,7 +408,7 @@ export async function runBindingsTests(test, assert, eq) {
     const want = enumerators("FW_SYM_");
     eq(want.length, 15);
     const got = symbolTable(m);
-    eq(got.map((e) => e.exposure.find((/** @type {any} */ x) => x.enum).enum).join("\n"), want.join("\n"));
+    eq(got.map((/** @type {any} */ e) => e.exposure.find((/** @type {any} */ x) => x.enum).enum).join("\n"), want.join("\n"));
     for (const e of got) assert(e.signature && e.signature.pattern, `${e.name} needs a signature`);
     eq(entry(m, "TurnControl_NextTurn").rva, "0x8e3c60");
     eq(entry(m, "Status_GetCategory").signature.exactLen, 126);
@@ -418,7 +418,7 @@ export async function runBindingsTests(test, assert, eq) {
     const want = enumerators("FW_DATA_");
     eq(want.length, 9);
     const got = dataTable(m);
-    eq(got.map((e) => e.exposure.find((/** @type {any} */ x) => x.enum).enum).join("\n"), want.join("\n"));
+    eq(got.map((/** @type {any} */ e) => e.exposure.find((/** @type {any} */ x) => x.enum).enum).join("\n"), want.join("\n"));
     eq(got[0].name, "App_global");
     eq(got[0].rva, "0x13c4a30");
     eq(entry(m, "SDL_HideWindow_slot").rva, "0x12e82a0");
@@ -430,11 +430,11 @@ export async function runBindingsTests(test, assert, eq) {
     const m = loadManifest(realPath);
     const lk = lkTable(m);
     const rvas = ["0x4929c0", "0x492c20", "0x492e80", "0x492f20", "0x493190", "0x5028e0", "0x493690", "0x493910", "0x493b80", "0x493e00", "0x4933e0", "0x494080", "0x502b40"];
-    eq(lk.map((e) => e.rva).join(","), rvas.join(","));
-    eq(lk.map((e) => e.exposure.find((/** @type {any} */ x) => x.table).shape).join(""), "AAAAAABBBBCDE");
+    eq(lk.map((/** @type {any} */ e) => e.rva).join(","), rvas.join(","));
+    eq(lk.map((/** @type {any} */ e) => e.exposure.find((/** @type {any} */ x) => x.table).shape).join(""), "AAAAAABBBBCDE");
     eq(lk[0].name, "Status_GetCategory", "index 0 is also FW_SYM_Status_GetCategory");
     eq(lk[4].name, "Status_GetFlags");
-    assert(lk.filter((e) => e.anchors.strings && e.anchors.strings.some((/** @type {any} */ s) => s.role === "funcsig")).length >= 11, "funcsig anchors recorded for the lookups that have one");
+    assert(lk.filter((/** @type {any} */ e) => e.anchors.strings && e.anchors.strings.some((/** @type {any} */ s) => s.role === "funcsig")).length >= 11, "funcsig anchors recorded for the lookups that have one");
   });
   test("25143593.json: vtables, type id, vtable slot constants and >= 30 struct offsets with macros", () => {
     const m = loadManifest(realPath);
@@ -445,7 +445,7 @@ export async function runBindingsTests(test, assert, eq) {
     eq(entry(m, "DefaultStatusSource").rva, "0x13c4d30");
     eq(entry(m, "LuckUp_vtableSlots").value, "172");
     eq(entry(m, "VT_OnStacksChanged").value, "170");
-    const offs = m.entries.filter((e) => e.kind === "offset");
+    const offs = m.entries.filter((/** @type {any} */ e) => e.kind === "offset");
     assert(offs.length >= 30, `offsets: ${offs.length}`);
     eq(entry(m, "Status_stacks").value, "0x5c");
     eq(entry(m, "Status_stacks").exposure[0].macro, "OFF_STATUS_STACKS");
@@ -465,9 +465,9 @@ export async function runBindingsTests(test, assert, eq) {
         if (r.count !== 1 || r.hits[0] !== parseInt(e.rva, 16)) bad.push(`${e.name}: ${r.count} hits, first 0x${(r.hits[0] ?? -1).toString(16)}`);
       }
       assert(bad.length === 0, bad.join("; "));
-      assert(m.entries.filter((e) => e.kind === "function" && e.signature).length >= 34, "all TSV code rows carried over (incl. Status_ApplyLuckUp, now unique at 76 bytes)");
+      assert(m.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.signature).length >= 34, "all TSV code rows carried over (incl. Status_ApplyLuckUp, now unique at 76 bytes)");
     });
-    test("T1 real exe: every function entry (signed or raw) begins a .pdata RUNTIME_FUNCTION; data/vtable entries map to a file byte", () => {
+    test("T1 real exe: every function entry (signed or raw) begins a .pdata RUNTIME_FUNCTION; vtables have file bytes; data globals sit inside a section", () => {
       /** @type {string[]} */
       const bad = [];
       for (const e of m.entries) {
@@ -475,8 +475,11 @@ export async function runBindingsTests(test, assert, eq) {
           const rva = parseInt(e.rva, 16);
           const f = p.pdata.find(rva);
           if (!f || f.begin !== rva) bad.push(`${e.name} 0x${rva.toString(16)} is not a function start (${f ? "inside 0x" + f.begin.toString(16) : "no pdata"})`);
-        } else if (e.kind === "data" || e.kind === "vtable") {
+        } else if (e.kind === "vtable") {
           if (p.rvaToOff(parseInt(e.rva, 16)) < 0) bad.push(`${e.name} has no file byte`);
+        } else if (e.kind === "data") {
+          // globals may live in .data's zero-filled tail (no file byte), but must be inside a section
+          if (!p.sectionOf(parseInt(e.rva, 16))) bad.push(`${e.name} is outside every section`);
         }
       }
       assert(bad.length === 0, bad.join("; "));

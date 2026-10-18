@@ -58,6 +58,7 @@ declare module "node:fs" {
   export function readFileSync(path: string): Buffer;
   export function writeFileSync(path: string, data: string | Uint8Array): void;
   export function existsSync(path: string): boolean;
+  export function mkdtempSync(prefix: string): string;
   export function readdirSync(path: string, opts?: any): any[];
   export function mkdirSync(path: string, opts?: { recursive?: boolean }): void;
   export function statSync(path: string): { isDirectory(): boolean; isFile(): boolean; size: number; mtimeMs: number };
@@ -139,4 +140,8 @@ declare module "node:http" {
 declare module "node:zlib" {
   export function deflateSync(data: Uint8Array, opts?: { level?: number }): Buffer;
   export function inflateSync(data: Uint8Array): Buffer;
+}
+
+declare module "node:os" {
+  export function tmpdir(): string;
 }
