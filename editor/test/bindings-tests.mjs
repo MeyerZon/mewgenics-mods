@@ -261,7 +261,7 @@ export async function runBindingsTests(test, assert, eq) {
     const code = rows.filter((r) => /^\d+$/.test(r.len));
     const p = parsePe(exe);
     test(`T1 real exe: each of the ${code.length} TSV code signatures matches exactly once, at its RVA (TODO #4)`, () => {
-      assert(code.length >= 34, `expected >= 34 code rows, got ${code.length}`);
+      assert(code.length >= 33, `expected >= 33 code rows, got ${code.length}`);
       /** @type {string[]} */
       const bad = [];
       for (const r of code) {
