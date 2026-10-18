@@ -675,7 +675,169 @@ export async function runIngameTests(test, assert, eq) {
     rmSync(ROOT, { recursive: true, force: true });
   }
 
-  void REPO_ROOT;
+  // ---- adapters: api.mjs, MCP tools, CLI (all against the fake game) --------
+  console.log("\n# In-game: api / MCP / CLI adapters");
+  {
+    const FAKE = join(HERE, "fixtures", "fake-game.mjs");
+    const ROOT = join(FIX, "__tmp_adapters");
+    rmSync(ROOT, { recursive: true, force: true });
+    const gameDir = join(ROOT, "game");
+    const appdata = join(ROOT, "appdata");
+    const appLogs = join(appdata, "Glaiel Games", "Mewgenics", "76561198000000009", "logs");
+    const runsDir = join(ROOT, "runs");
+    mkdirSync(join(gameDir, "mod_logs"), { recursive: true });
+    mkdirSync(appLogs, { recursive: true });
+    /** @param {string} mode */
+    const fakeEnv = (mode) => ({
+      ...process.env,
+      MEWTEST_FAKE_GAME: FAKE,
+      FAKE_GAME_MODE: mode,
+      FAKE_GAME_APPDATA_LOGS: appLogs,
+      MEWGENICS_DIR: gameDir,
+      APPDATA: appdata,
+      MEWTEST_RESULTS_DIR: runsDir,
+    });
+    const hasSamples = existsSync(join(MODS_DIR, "jokers-luck", "tests", "smoke.mewtest"));
+
+    const api = await load("../src/core/api.mjs");
+    if (api.__error || typeof api.runIngameTest !== "function" || typeof api.listIngameTests !== "function") {
+      test("api.mjs exports listIngameTests and runIngameTest", () => assert(false, api.__error || "missing exports"));
+    } else {
+      if (hasSamples) {
+        test("api.listIngameTests lists jokers-luck/smoke", () => {
+          const names = api.listIngameTests().tests.map((/** @type {any} */ t) => `${t.mod}/${t.name}`);
+          assert(names.includes("jokers-luck/smoke"), names.join(","));
+        });
+      }
+      const inline = await api.runIngameTest({ mod: "jokers-luck", script: "cmd listcmds\nexpect console \"listcmds\"\nquit\n", env: fakeEnv("pass") });
+      test("api.runIngameTest inline script against the fake game -> pass", () => {
+        eq(inline.ok, true, inline.reason || inline.error);
+        eq(inline.verdict, "pass");
+        eq(inline.test.inline, true);
+        assert(!("events" in inline.result) || inline.result.events.length === 0, "events omitted unless includeEvents");
+      });
+      if (hasSamples) {
+        const named = await api.runIngameTest({ mod: "jokers-luck", test: "smoke", env: fakeEnv("pass"), includeEvents: true, timeoutMs: 1000 });
+        test("api.runIngameTest named test with overrides -> pass, events included, timeout override applied", () => {
+          eq(named.verdict, "pass", named.reason || named.error);
+          eq(named.test.name, "smoke");
+          assert(named.result.events.length > 0, "events included");
+          eq(named.plan.timeoutMs, 1000);
+        });
+      }
+      const neither = await api.runIngameTest({ mod: "jokers-luck", env: fakeEnv("pass") });
+      const both = await api.runIngameTest({ mod: "jokers-luck", test: "smoke", script: "quit\n", env: fakeEnv("pass") });
+      const missing = await api.runIngameTest({ mod: "jokers-luck", test: "does-not-exist", env: fakeEnv("pass") });
+      test("api.runIngameTest rejects neither/both of test|script and an unknown test name", () => {
+        assert(neither.ok === false && /test|script/.test(neither.error), JSON.stringify(neither.error));
+        assert(both.ok === false && /one of/.test(both.error), JSON.stringify(both.error));
+        assert(missing.ok === false && /does-not-exist/.test(missing.error), JSON.stringify(missing.error));
+      });
+    }
+
+    // MCP server round trip (spawned with the fake-game env)
+    const serverPath = join(REPO_ROOT, "editor", "src", "mcp", "server.mjs");
+    const mcp = await (async () => {
+      const { spawn } = await import("node:child_process");
+      const child = spawn(process.argv[0], [serverPath], { stdio: ["pipe", "pipe", "pipe"], env: fakeEnv("pass") });
+      /** @type {Map<number, {resolve:(v:any)=>void, reject:(e:any)=>void}>} */
+      const pending = new Map();
+      let id = 1, buf = "";
+      child.stdout.on("data", (/** @type {any} */ chunk) => {
+        buf += chunk.toString("utf8");
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          let msg;
+          try { msg = JSON.parse(line); } catch { continue; }
+          const p = msg.id !== undefined ? pending.get(msg.id) : undefined;
+          if (p) { pending.delete(msg.id); msg.error ? p.reject(new Error(JSON.stringify(msg.error))) : p.resolve(msg.result); }
+        }
+      });
+      child.stderr.on("data", () => {});
+      /** @param {string} method @param {any} params */
+      const req = (method, params) => new Promise((resolve, reject) => {
+        const myId = id++;
+        pending.set(myId, { resolve, reject });
+        child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: myId, method, params }) + "\n");
+        setTimeout(() => { if (pending.has(myId)) { pending.delete(myId); reject(new Error(`timeout: ${method}`)); } }, 20000);
+      });
+      /** @type {any} */
+      const out = {};
+      try {
+        await req("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
+        out.list = await req("tools/list", {});
+        out.listTests = await req("tools/call", { name: "list_ingame_tests", arguments: {} });
+        out.run = await req("tools/call", { name: "run_ingame_test", arguments: { mod: "jokers-luck", script: "cmd listcmds\nquit\n" } });
+        out.neither = await req("tools/call", { name: "run_ingame_test", arguments: { mod: "jokers-luck" } });
+      } catch (e) {
+        out.error = String(e);
+      } finally {
+        child.stdin.end();
+        setTimeout(() => child.kill(), 500);
+      }
+      return out;
+    })();
+    test("MCP tools/list returns the 11 editor tools (9 + list_ingame_tests + run_ingame_test)", () => {
+      assert(!mcp.error, mcp.error);
+      const names = mcp.list.tools.map((/** @type {any} */ t) => t.name);
+      eq(names.length, 11, names.join(","));
+      assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
+    });
+    test("MCP list_ingame_tests returns the discovered scripts", () => {
+      const payload = JSON.parse(mcp.listTests.content[0].text);
+      assert(Array.isArray(payload.tests), "tests array");
+      if (hasSamples) assert(payload.tests.some((/** @type {any} */ t) => t.mod === "jokers-luck" && t.name === "smoke"), "jokers-luck/smoke listed");
+    });
+    test("MCP run_ingame_test (inline, fake game) returns the awaited report with verdict pass", () => {
+      const payload = JSON.parse(mcp.run.content[0].text);
+      eq(payload.verdict, "pass", payload.reason || mcp.run.content[0].text.slice(0, 200));
+      eq(mcp.run.isError, false);
+    });
+    test("MCP run_ingame_test without test|script is an error", () => {
+      eq(mcp.neither.isError, true);
+      assert(/test|script/.test(mcp.neither.content[0].text), mcp.neither.content[0].text);
+    });
+
+    // CLI
+    const cliPath = join(REPO_ROOT, "editor", "scripts", "ingame.mjs");
+    /** @param {Record<string,string|undefined>} env @param {string[]} [argv] */
+    const runCli = async (env, argv = []) => {
+      const { spawn } = await import("node:child_process");
+      return new Promise((resolve) => {
+        const child = spawn(process.argv[0], [cliPath, ...argv], { stdio: ["ignore", "pipe", "pipe"], env });
+        let out = "", err = "";
+        child.stdout.on("data", (/** @type {any} */ c) => { out += c.toString("utf8"); });
+        child.stderr.on("data", (/** @type {any} */ c) => { err += c.toString("utf8"); });
+        child.on("exit", (/** @type {any} */ code) => resolve({ code, out, err }));
+        child.on("error", (/** @type {any} */ e) => resolve({ code: null, out, err: String(e) }));
+      });
+    };
+    const skip = /** @type {any} */ (await runCli({ ...fakeEnv("pass"), MEWTEST_SKIP: "1" }));
+    test("CLI with MEWTEST_SKIP=1 exits 0 and prints skipped", () => {
+      eq(skip.code, 0, skip.err);
+      assert(/skipped/i.test(skip.out), skip.out);
+    });
+    if (hasSamples) {
+      const failRun = /** @type {any} */ (await runCli(fakeEnv("fail"), ["jokers-luck", "smoke"]));
+      test("CLI with a failing fake run exits 1 and prints FAIL", () => {
+        eq(failRun.code, 1, failRun.err);
+        assert(/FAIL/.test(failRun.out), failRun.out);
+      });
+      const passRun = /** @type {any} */ (await runCli(fakeEnv("pass"), ["jokers-luck", "--json"]));
+      test("CLI --json with a passing fake run exits 0 and emits JSON reports", () => {
+        eq(passRun.code, 0, passRun.err + passRun.out);
+        const parsed = JSON.parse(passRun.out);
+        assert(Array.isArray(parsed.reports) && parsed.reports.every((/** @type {any} */ r) => r.verdict === "pass"), passRun.out.slice(0, 300));
+      });
+    }
+    const usage = /** @type {any} */ (await runCli(fakeEnv("pass"), ["--bogus-flag"]));
+    test("CLI usage error exits 2", () => eq(usage.code, 2, usage.out + usage.err));
+    rmSync(ROOT, { recursive: true, force: true });
+  }
+
   void resolve;
 }
 
