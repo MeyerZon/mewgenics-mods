@@ -1,0 +1,22 @@
+// Appended to data/abilities/fighter_abilities.gon.
+// Smoke test for new content: a Spin variant composed only from existing fields.
+// It inherits name/desc from Spin until a localization entry exists.
+SpinDev {
+    variant_of Spin
+
+    cost {
+        infcantrip true
+        mana 1
+    }
+
+    target {
+        target_mode none
+        aoe_mode square
+        knockback_mode character_to_tile
+        multihit 5
+    }
+
+    damage_instance {
+        damage 2+bonus_melee_ability_damage
+    }
+}

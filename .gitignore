@@ -1,0 +1,22 @@
+# extracted game assets and binaries never go in the repo
+.extracted/
+*.gpak
+*.swf
+*.wav
+*.ogg
+*.sav
+*.exe
+*.dll
+*.o
+*.obj
+build/
+# local launcher output
+launch-*.local.bat
+.analysis/
+
+# editor: generated caches and dev-only toolchain (never committed)
+editor/data/
+editor/node_modules/
+# editor: Playwright (dev-only) run output
+editor/test-results/
+editor/playwright-report/

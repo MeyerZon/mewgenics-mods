@@ -1,0 +1,7 @@
+{
+  "title": "Dev Sandbox",
+  "author": "MeyerZon",
+  "version": "0.1.0",
+  "description": "Development sandbox for the mewgenics-mods project. Verifies -modpaths overlays (.merge/.append) before real content.",
+  "requirements": []
+}

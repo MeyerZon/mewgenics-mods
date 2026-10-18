@@ -1,0 +1,6 @@
+{
+  "_comment": "Names registered by the NATIVE layer (Mewjector + mewframework) that are not present in base game data. The validator treats these as valid status/ability/component references so data mods that pair with a native mod validate. Seeded with JokersLuck so mods/jokers-luck validates. Add a native mod's registered names here (plain strings, or {\"name\",\"kind\",\"mod\"} objects).",
+  "names": [
+    { "name": "JokersLuck", "kind": "status", "mod": "jokers-luck" }
+  ]
+}

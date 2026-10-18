@@ -1,0 +1,22 @@
+{
+  "name": "mewgenics-mod-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local data-layer mod editor for Mewgenics: GON/CSV overlay authoring, validation, merge-preview, MCP server, and web UI. Zero runtime dependencies.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:index": "node scripts/build-index.mjs",
+    "mcp": "node src/mcp/server.mjs",
+    "web": "node web/server.mjs",
+    "test": "node test/run-tests.mjs",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "typescript": "7.0.2"
+  }
+}

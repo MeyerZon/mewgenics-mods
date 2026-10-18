@@ -1,0 +1,7 @@
+{
+  "title": "Joker's Luck",
+  "author": "MeyerZon",
+  "version": "0.1.0",
+  "description": "Sample mod: a new status effect, Joker's Luck, that rerolls the affected unit's luck modifier to a random value between -10 and +10 at the start of each of its turns. Data layer (this folder) plus native layer (native/mods/jokers-luck, loaded via Mewjector + mewframework).",
+  "requirements": []
+}

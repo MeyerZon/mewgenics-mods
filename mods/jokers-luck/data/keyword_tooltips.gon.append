@@ -1,0 +1,6 @@
+// Joker's Luck: display name and tooltip for the native status registered by jokers_luck.dll.
+JokersLuck {
+    name "KEYWORD_JOKERSLUCK_NAME"
+    tooltip "KEYWORD_JOKERSLUCK_DESC"
+    tooltip_stackless "KEYWORD_JOKERSLUCK_DESC"
+}

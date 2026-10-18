@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "name": "my_rat",
+  "frameRate": 60,
+  "stage": {
+    "width": 1280,
+    "height": 720,
+    "background": "#ffccff"
+  },
+  "preview": {
+    "palette": 54
+  },
+  "shapes": {
+    "body": {
+      "paths": [
+        {
+          "d": "M-40 -30 L40 -30 L40 30 L-40 30 Z",
+          "fill": "gray:8",
+          "fillRule": "nonzero"
+        },
+        {
+          "d": "M-40 -30 L40 -30 L40 -18 L-40 -18 Z",
+          "fill": "gray:12",
+          "fillRule": "nonzero"
+        }
+      ]
+    },
+    "eye": {
+      "paths": [
+        {
+          "d": "M0 -8 C4.4 -8 8 -4.4 8 0 C8 4.4 4.4 8 0 8 C-4.4 8 -8 4.4 -8 0 C-8 -4.4 -4.4 -8 0 -8 Z",
+          "fill": "#ff2020"
+        }
+      ]
+    }
+  },
+  "bitmaps": {},
+  "sprites": {
+    "Starter": {
+      "frames": 24,
+      "labels": {
+        "idle": 0,
+        "blink": 12
+      },
+      "layers": [
+        {
+          "name": "body",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "body",
+              "x": 0,
+              "y": 0,
+              "tween": "linear"
+            },
+            {
+              "frame": 12,
+              "ref": "body",
+              "x": 0,
+              "y": -6,
+              "tween": "linear"
+            },
+            {
+              "frame": 23,
+              "ref": "body",
+              "x": 0,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "name": "eye",
+          "depth": 2,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "eye",
+              "x": 18,
+              "y": -6,
+              "tween": "linear"
+            },
+            {
+              "frame": 12,
+              "ref": "eye",
+              "x": 18,
+              "y": -12,
+              "sy": 0.2,
+              "tween": "linear"
+            },
+            {
+              "frame": 14,
+              "ref": "eye",
+              "x": 18,
+              "y": -11,
+              "sy": 1,
+              "tween": "linear"
+            },
+            {
+              "frame": 23,
+              "ref": "eye",
+              "x": 18,
+              "y": -6
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "exports": {
+    "Starter": "Starter",
+    "starter.png": "Starter"
+  },
+  "stage_instances": [
+    {
+      "frame": 0,
+      "ref": "Starter",
+      "x": 640,
+      "y": 360
+    }
+  ]
+}

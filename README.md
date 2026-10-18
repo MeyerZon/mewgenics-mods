@@ -1,0 +1,103 @@
+# mewgenics-mods
+
+A modding toolkit for **Mewgenics** (Steam app 686060, build 1.1.21239). The game ships no scripting runtime — its
+content is GON-data-driven C++ — so this repo mods it at three layers and adds an editor to make the data layer safe
+and fast to author.
+
+- **Data layer** (`mods/`) — GON/CSV overlays loaded through the game's own `-modpaths` loader. Zero injection; this
+  is the sanctioned path. New abilities, items, passives, events, balance, localization, art.
+- **Native layer** (`native/`) — `mewframework.dll`, chainloaded by [Mewjector](https://github.com/githubuser508/mewjector)
+  (`version.dll`), for mechanics the data layer can't express (new per-turn status logic, etc.). Activates **only** on
+  `-savesuffix` launches and **only** on a recognized game build; otherwise it stays inert.
+- **Editor** (`editor/`) — a local **data-layer mod editor**: a GON engine, overlay/merge engine, a four-check
+  validator, an MCP server (for agents), and a web UI (for humans). **Zero runtime dependencies.**
+
+> **Legal/ethics.** For your own single-player copy. Never redistribute game executables or assets; mods load from the
+> user's own install at runtime. This repo tracks no game bytes beyond short function signatures.
+
+## Repository layout
+
+| Path | What |
+|---|---|
+| `mods/` | Data-layer mods (GON/CSV overlays). Sample: `jokers-luck`, plus a `dev-sandbox`. |
+| `native/` | Native framework (`framework/`), the `version.dll` chainloader setup, and native mods (`mods/`). |
+| `editor/` | The data-layer mod editor (core + MCP server + web UI). See [editor usage](#the-editor). |
+| `tools/` | `gpak.py` (read-only pack reader), `make-signature.mjs`, `rea-mcp.mjs` (REA/Ghidra driver). |
+| `bindings/` | Per-build byte signatures + RVAs. Everything native is pinned to one game build. |
+| `docs/` | The authoritative notes — start here. |
+
+## Start here (docs)
+
+- **[`docs/engine-map.md`](docs/engine-map.md)** — what the binary is, verified facts, build identity, function RVAs,
+  the status-system model.
+- **[`docs/data-mods.md`](docs/data-mods.md)** — GON overlay semantics (`.append`/`.merge`/`.patch`), content shapes
+  for abilities/items/passives/etc., and how a data mod pairs with a native status.
+- **[`docs/automation-feasibility.md`](docs/automation-feasibility.md)** — whether the game can be driven for
+  automated testing (launching fights, AI auto-resolve, seeding, headless).
+
+## Sample mod: Joker's Luck
+
+A new status that rerolls the carrier's luck modifier to a non-zero value between −10 and +10 at the start of each of
+its turns — the full two-layer loop in one feature. The data half (`mods/jokers-luck/`) defines the ability, tooltip,
+and localization; the native half (`native/mods/jokers-luck/`) supplies the per-turn behavior; the registered name
+`JokersLuck` joins them. Grant it in a battle with the console command `bind JokersGambit`. Verified in combat.
+
+## The editor
+
+A zero-runtime-dependency tool whose **core is the single source of truth** — the MCP server and web UI are thin
+adapters over it, so there is one GON engine and one validator. The validator catches the mistake class that actually
+crashed the game once (a referenced name that doesn't resolve, a missing localization key, a `.merge` onto a
+non-existent key). VanJS is vendored as a single hash-pinned file; the only installed dependency is a dev-only
+TypeScript typechecker (JSDoc-typed ESM, no bundler).
+
+```sh
+cd editor
+npm install          # dev-only typescript@7.0.2
+npm run build:index  # generate the git-ignored data/ caches (component list + base-data index)
+npm test             # 24 checks (incl. an MCP spawn smoke test)
+npm run web          # http://127.0.0.1:4173/
+npm run mcp          # MCP stdio server (register with Claude Code as `mewgenics-editor`)
+```
+
+Register the MCP server so agents can author and validate mods through it:
+
+```sh
+claude mcp add mewgenics-editor -- node "<repo>/editor/src/mcp/server.mjs"
+```
+
+**Art mode** (web UI, top-bar switch *Data | Art*): author vector art as a JSON scene (`mods/<mod>/art/*.scene.json`,
+imported from any SVG), preview it exactly as the engine draws it (16-level grayscale remapped through the real
+`textures/palette.png` row, timeline playback with frame labels; raw WebGL, no dependencies), and build it into the
+uncompressed SWF v17 subset `glaiel::swf` reads (`mods/<mod>/swfs/<name>.swf` + `swflist.gon.append`), all with a
+zero-dependency emitter. Extract the palette first with `python -I tools/gpak.py extract .extracted --prefix
+textures/palette.png`. First-run onboarding covers both sides — a Data-mode tour and a dedicated Art-mode tour (with
+empty states, an Art section in the concepts drawer, and an illustrative SVG→preview→build worked example), all
+re-openable from the Help (`?`) menu. Plan, source model and open items: [`docs/art-preview-plan.md`](docs/art-preview-plan.md);
+the one unresolved engine question (does `SymbolClass` bind without a `DoABC`?) has a prepared dev-save test there
+(`node scripts/prepare-abc-gate.mjs` writes the fixtures).
+
+## Daily use (game)
+
+- `launch-dev.bat` — launches the game with `-savesuffix dev`, debug console, dev mode, and the sample mod paths.
+  Keep Steam launch options empty so plain launches stay vanilla.
+- `python -I tools/gpak.py list|cat|extract|stats` — read-only access to `resources.gpak`
+  (`extract .extracted --prefix data/` populates the reference copy the editor reads).
+- `native/framework/build.bat` — builds `mewframework.dll` (w64devkit GCC) into `native/framework/build/`; copy to
+  `native/dist/`. `tools/install-mewjector.bat` installs the chainloader into the game folder.
+
+## Reverse engineering (optional — maintenance only)
+
+Day-to-day use — the editor, data-layer mods, and running the sample — needs none of this. But a few tasks require a
+reverse-engineering pass with **[REA](https://github.com/morluto/rea)** + Ghidra (driven by `tools/rea-mcp.mjs`,
+Dockerized): **re-deriving the `bindings/` byte-signatures when Mewgenics updates** (the native layer fails closed
+until they are), and low-level binary analysis such as the SWF loader or new hook points. So **REA is a conditional
+requirement for those cases only**, not for normal modding. A full Ghidra import of the ~22 MB exe takes ~17 min, so
+raise `REA_GHIDRA_STARTUP_TIMEOUT_MS` (default 330000) well above that when starting a session.
+
+## Rules
+
+Never modify `Mewgenics.exe` or `resources.gpak`. Never touch save files — back up
+`%APPDATA%\Glaiel Games\Mewgenics\<steamid>` before any new mod build, and run modded play only through a save suffix.
+Never commit extracted assets or game bytes beyond short signatures. Everything native is pinned to Steam build
+`25143593`; when the game updates, signatures in `bindings/` must be re-derived and the framework fails closed until
+they are.

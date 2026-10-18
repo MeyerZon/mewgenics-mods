@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2022",
+    "lib": ["es2023", "dom"],
+    "types": [],
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": false,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "src/**/*.mjs",
+    "src/**/*.js",
+    "web/**/*.mjs",
+    "web/**/*.d.ts",
+    "scripts/**/*.mjs",
+    "test/**/*.mjs",
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "data"
+  ]
+}

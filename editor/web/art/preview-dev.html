@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Art preview dev page</title>
+    <style>
+      /* Standalone dev harness for web/art/preview-gl.mjs. Inline copies of the IDE-dark
+         tokens from web/index.html; no external resources. */
+      :root {
+        color-scheme: dark;
+        --bg: #0e1116;
+        --panel: #141a22;
+        --panel2: #1a212b;
+        --elev: #1f2733;
+        --line: #28313d;
+        --line2: #333e4c;
+        --ink: #e9edf3;
+        --ink2: #aeb8c6;
+        --muted: #8893a2;
+        --acc: #3f63d6;
+        --acc-ink: #8dadff;
+        --ok: #3fb950;
+        --warn: #d7a42b;
+        --err: #f85149;
+        --mono: ui-monospace, "Cascadia Code", "Consolas", "SFMono-Regular", Menlo, monospace;
+        --sans: system-ui, "Segoe UI", Roboto, -apple-system, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font: 14px/1.45 var(--sans);
+        background: var(--bg);
+        color: var(--ink);
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100%;
+      }
+      header {
+        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+      }
+      header h1 { font-size: 14px; margin: 0; font-weight: 700; }
+      .sec { font-size: 11px; font-weight: 600; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); }
+      main { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
+      @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+      .stage { position: relative; min-height: 360px; background: var(--bg); border-right: 1px solid var(--line); }
+      canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+      aside { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; overflow: auto; background: var(--panel); }
+      .group { display: flex; flex-direction: column; gap: 6px; }
+      .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      label { color: var(--ink2); font-size: 13px; }
+      .btn {
+        font: 600 13px var(--sans); border-radius: 8px; border: 1px solid var(--line2);
+        background: var(--panel2); color: var(--ink); padding: 6px 11px; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 6px; min-width: 34px; justify-content: center;
+      }
+      .btn:hover { border-color: var(--acc-ink); }
+      .btn.primary { background: var(--acc); border-color: transparent; color: #fff; }
+      .btn[aria-pressed="true"] { border-color: var(--acc-ink); background: rgba(63, 99, 214, 0.18); }
+      .btn svg { width: 12px; height: 12px; fill: currentColor; }
+      input[type="number"], select {
+        font: 13px var(--mono); color: var(--ink); background: var(--panel2);
+        border: 1px solid var(--line2); border-radius: 6px; padding: 5px 7px; width: 100%;
+      }
+      input[type="range"] { width: 100%; accent-color: var(--acc); }
+      input[type="checkbox"] { accent-color: var(--acc); }
+      .mono { font-family: var(--mono); font-size: 12px; }
+      footer {
+        padding: 8px 16px; border-top: 1px solid var(--line); background: var(--panel);
+        color: var(--muted); font: 12px var(--mono); display: flex; gap: 18px; flex-wrap: wrap;
+      }
+      footer .ok { color: var(--ok); }
+      footer .warn { color: var(--warn); }
+      footer .err { color: var(--err); }
+      .ticks { position: relative; height: 18px; }
+      .ticks button {
+        position: absolute; top: 0; transform: translateX(-50%);
+        font: 10.5px var(--mono); color: var(--acc-ink); background: none; border: none; padding: 0; cursor: pointer;
+      }
+      .ticks button::before { content: ""; display: block; width: 1px; height: 5px; margin: 0 auto 1px; background: var(--acc-ink); }
+      .ticks button:hover { text-decoration: underline; }
+      .ramp { display: grid; grid-template-columns: repeat(16, 1fr); gap: 1px; height: 16px; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
+      .ramp span { display: block; }
+      .hint { color: var(--muted); font-size: 12px; }
+      .frameLine { display: flex; justify-content: space-between; color: var(--ink2); font: 12px var(--mono); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Art preview dev page</h1>
+      <span class="sec">standalone harness for <span class="mono">web/art/preview-gl.mjs</span></span>
+      <span class="hint">Served by <span class="mono">node web/server.mjs</span>; the palette comes from <span class="mono">/api/art/palette</span> when available.</span>
+    </header>
+    <main>
+      <div class="stage">
+        <canvas id="canvas" aria-label="Animated preview of the selected sprite" role="img"></canvas>
+      </div>
+      <aside>
+        <div class="group">
+          <label for="target">Target</label>
+          <select id="target"></select>
+        </div>
+
+        <div class="group">
+          <span class="sec">Transport</span>
+          <div class="row">
+            <button class="btn" id="stepBack" type="button" aria-label="Step back one frame" title="Step back">
+              <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1h2v10H2zM11 1v10L4 6z"/></svg>
+            </button>
+            <button class="btn primary" id="play" type="button" aria-label="Play" aria-pressed="false" title="Play / pause">
+              <svg id="playIcon" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1l9 5-9 5z"/></svg>
+              <span id="playText">Play</span>
+            </button>
+            <button class="btn" id="stepFwd" type="button" aria-label="Step forward one frame" title="Step forward">
+              <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1h2v10H8zM1 1v10l7-5z"/></svg>
+            </button>
+            <label><input type="checkbox" id="loop" checked /> Loop</label>
+          </div>
+          <div class="frameLine"><span id="frameNow">0</span><span id="frameMax">/ 0</span></div>
+          <label for="frame" class="sec">Frame</label>
+          <input type="range" id="frame" min="0" max="0" value="0" step="1" aria-valuemin="0" aria-valuemax="0" />
+          <div class="ticks" id="ticks" aria-label="Frame labels"></div>
+        </div>
+
+        <div class="group">
+          <span class="sec">Palette</span>
+          <label for="row">Palette row (0–255)</label>
+          <input type="number" id="row" min="0" max="255" step="1" value="0" />
+          <div class="ramp" id="ramp" aria-label="16-colour ramp of the selected row"></div>
+          <label><input type="checkbox" id="gray" /> Show gray levels (bypass remap)</label>
+          <span class="hint" id="palStatus">palette: loading</span>
+        </div>
+
+        <div class="group">
+          <span class="sec">View</span>
+          <div class="row">
+            <button class="btn" id="fit" type="button" aria-label="Fit the target in the view">Fit</button>
+            <button class="btn" id="zoom1" type="button" aria-label="Zoom to 100 percent">100%</button>
+            <span class="mono" id="zoomText">zoom 1.00</span>
+          </div>
+          <label for="bg">Background</label>
+          <select id="bg">
+            <option value="checker">checker</option>
+            <option value="stage">stage colour (scene)</option>
+            <option value="#000000">black</option>
+            <option value="none">transparent</option>
+          </select>
+          <span class="hint">Drag to pan, wheel to zoom.</span>
+        </div>
+      </aside>
+    </main>
+    <footer>
+      <span id="backend">backend: -</span>
+      <span id="stats">frames 0 · draw calls 0 · fills 0</span>
+      <span id="status"></span>
+    </footer>
+    <script type="module" src="./preview-dev.mjs"></script>
+  </body>
+</html>

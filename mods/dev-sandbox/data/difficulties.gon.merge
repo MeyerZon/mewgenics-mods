@@ -1,0 +1,5 @@
+// Deep-merged into data/difficulties.gon: only the listed fields change.
+// Smoke test: default difficulty wallet cap 99 -> 999 (visible in the house UI).
+0 {
+	wallet_size 999
+}

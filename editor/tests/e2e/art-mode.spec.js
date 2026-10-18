@@ -1,0 +1,251 @@
+import { test, expect } from "@playwright/test";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { rmSync } from "node:fs";
+import { openApp, seedToursSeen, selectMod, readFrame, collectConsole } from "./helpers.js";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(HERE, "..", "..", "..");
+const SANDBOX = join(REPO_ROOT, "mods", "dev-sandbox");
+const SVG_FIXTURE = join(HERE, "fixtures", "e2e_import.svg");
+
+/** Enter Art mode on dev-sandbox and open the my_rat starter scene (24 frames). */
+async function openSandboxScene(page) {
+  await openApp(page, "?mode=art");
+  await selectMod(page, "dev-sandbox");
+  await page.locator(".explorer .srow", { hasText: "my_rat" }).first().click();
+  await expect(page.locator(".pvcanvasbox canvas")).toBeVisible();
+  // wait for the preview singleton to ingest the scene (frame count 24) before asserting
+  await expect.poll(async () => (await readFrame(page)).join("/"), { timeout: 5000 }).toBe("1/24");
+}
+
+test.beforeEach(async ({ page }) => {
+  await seedToursSeen(page);
+});
+
+test.describe("Art mode — explorer & scene authoring", () => {
+  test("scenes / built-SWFs / assets explorer and scene tabs", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openApp(page, "?mode=art");
+    await selectMod(page, "dev-sandbox");
+    await expect(page.locator(".explorer .sec", { hasText: "Art scenes" })).toBeVisible();
+    await expect(page.locator(".explorer .sec", { hasText: "Built SWFs" })).toBeVisible();
+    await expect(page.locator(".explorer .sec", { hasText: "Assets" })).toBeVisible();
+
+    await page.locator(".explorer .srow", { hasText: "my_rat" }).first().click();
+    await expect(page.locator(".artpanel h2")).toHaveText("my_rat");
+    // scene summary counts (2 shapes, 1 sprite, 2 exports)
+    await expect(page.locator(".arthead .meta")).toContainText("2 shapes");
+    await expect(page.locator(".arthead .meta")).toContainText("1 sprites");
+    await expect(page.locator(".arthead .meta")).toContainText("2 exports");
+
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await expect(page.locator(".artrow .id", { hasText: /^body$/ })).toBeVisible();
+    await expect(page.locator(".artrow .id", { hasText: /^eye$/ })).toBeVisible();
+
+    await page.locator(".subtabs .btn", { hasText: "Sprites" }).click();
+    await expect(page.locator(".artpanel")).toContainText("Starter");
+
+    await page.locator(".subtabs .btn", { hasText: "Exports" }).click();
+    await expect(page.locator(".artrow .id", { hasText: "starter.png" })).toBeVisible();
+
+    await page.waitForTimeout(300);
+    const glErrors = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(glErrors, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
+  test("empty states: no scene (jokers-luck) shows the Art empty hero", async ({ page }) => {
+    await openApp(page, "?mode=art");
+    await selectMod(page, "jokers-luck");
+    await expect(page.locator(".explorer")).toContainText("no scenes — create one");
+    await expect(page.locator(".emptycenter")).toContainText("Author art the engine can load");
+  });
+
+  test("empty state: a scene with no shapes shows the 'No shapes yet' guidance", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    // delete both shapes in-memory (not saved to disk)
+    const deletes = page.locator('.artrow button[aria-label^="Delete shape"]');
+    await expect(deletes).toHaveCount(2);
+    await deletes.first().click();
+    await page.locator('.artrow button[aria-label^="Delete shape"]').first().click();
+    await expect(page.locator(".artpanel")).toContainText("No shapes yet");
+  });
+
+  test("import an SVG via the file input adds a shape", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await page.locator("input#art-svg-file").first().setInputFiles(SVG_FIXTURE);
+    // toast confirms the import, and a new shape row appears
+    await expect(page.getByText(/imported e2e_import\.svg as shape/)).toBeVisible();
+    await expect(page.locator(".artrow .id", { hasText: "e2e_import" })).toBeVisible();
+  });
+});
+
+test.describe("Art mode — preview (loop/suspend/resume, play-pause, resize, palette)", () => {
+  test("canvas + transport + scrubber render; frame counter advances when playing", async ({ page }) => {
+    await openSandboxScene(page);
+    await expect(page.locator(".transport")).toBeVisible();
+    await expect(page.locator(".scrub input[type=range]")).toBeVisible();
+    expect(await readFrame(page)).toEqual([1, 24]);
+
+    await page.getByRole("button", { name: /^(Play|Pause)$/ }).click();
+    await expect(page.getByRole("button", { name: /^(Play|Pause)$/ })).toHaveText("Pause");
+    await expect.poll(async () => (await readFrame(page))[0], { timeout: 5000 }).toBeGreaterThan(1);
+  });
+
+  test("playback suspends on right-panel tab switch and resumes with a truthful button", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.getByRole("button", { name: /^(Play|Pause)$/ }).click();
+    await expect.poll(async () => (await readFrame(page))[0], { timeout: 5000 }).toBeGreaterThan(1);
+
+    // switch to Findings — the canvas detaches (the condition that suspends the rAF loop)
+    await page.locator(".rightpanel .tab", { hasText: "Findings" }).click();
+    await expect(page.locator(".pvcanvasbox canvas")).toHaveCount(0);
+
+    // back to Preview — intent preserved (button still "Pause", onPlaying NOT fired on suspend)
+    await page.locator(".rightpanel .tab", { hasText: "Preview" }).click();
+    await expect(page.locator(".pvcanvasbox canvas")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^(Play|Pause)$/ })).toHaveText("Pause");
+    // and it resumes on its own (frame keeps moving)
+    const f1 = (await readFrame(page))[0];
+    await expect.poll(async () => (await readFrame(page))[0], { timeout: 5000 }).not.toBe(f1);
+  });
+
+  test("playback suspends when leaving Art mode and resumes on return", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.getByRole("button", { name: /^(Play|Pause)$/ }).click();
+    await expect.poll(async () => (await readFrame(page))[0], { timeout: 5000 }).toBeGreaterThan(1);
+
+    await page.getByRole("button", { name: "Data", exact: true }).click();
+    await expect(page.locator(".pvcanvasbox canvas")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Art", exact: true }).click();
+    await expect(page.locator(".pvcanvasbox canvas")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^(Play|Pause)$/ })).toHaveText("Pause");
+  });
+
+  test("play/pause label is truthful: auto-stops on the last frame with loop OFF", async ({ page }) => {
+    await openSandboxScene(page);
+    // uncheck loop
+    const loop = page.locator(".transport label", { hasText: "loop" }).locator('input[type="checkbox"]');
+    await loop.uncheck();
+    // scrub to near the end
+    await page.evaluate(() => {
+      const r = /** @type {HTMLInputElement} */ (document.querySelector(".scrub input[type=range]"));
+      r.value = "22";
+      r.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await expect.poll(async () => (await readFrame(page))[0]).toBe(23); // "23 / 24"
+
+    await page.getByRole("button", { name: /^(Play|Pause)$/ }).click();
+    // it should run to the last frame and then STOP, flipping the button back to "Play"
+    await expect(page.getByRole("button", { name: /^(Play|Pause)$/ })).toHaveText("Play", { timeout: 5000 });
+    expect(await readFrame(page)).toEqual([24, 24]);
+  });
+
+  test("resize re-fits: the canvas backing store tracks its element size", async ({ page }) => {
+    await openSandboxScene(page);
+    const before = await page.evaluate(() => {
+      const c = /** @type {HTMLCanvasElement} */ (document.querySelector(".pvcanvasbox canvas"));
+      return { cw: c.clientWidth, w: c.width, dpr: window.devicePixelRatio || 1 };
+    });
+    expect(before.cw).toBeGreaterThan(0);
+    expect(Math.abs(before.w - Math.round(before.cw * before.dpr))).toBeLessThanOrEqual(2);
+
+    // collapse to single-column layout (<=1040px), which widens the right panel a lot
+    await page.setViewportSize({ width: 900, height: 820 });
+    await expect
+      .poll(async () => page.evaluate(() => {
+        const c = /** @type {HTMLCanvasElement} */ (document.querySelector(".pvcanvasbox canvas"));
+        const dpr = window.devicePixelRatio || 1;
+        return c.clientWidth > 0 && Math.abs(c.width - Math.round(c.clientWidth * dpr)) <= 2 ? c.clientWidth : 0;
+      }), { timeout: 5000 })
+      .toBeGreaterThan(before.cw);
+  });
+
+  test("palette row + 'show raw grayscale' toggle recolor the ramp", async ({ page }) => {
+    await openSandboxScene(page);
+    const swatches = page.locator(".pvwrap .ramp.big").first().locator("span");
+    await expect(swatches).toHaveCount(16);
+
+    const readRamp = () => page.evaluate(() => {
+      const spans = document.querySelectorAll(".pvwrap .ramp.big span");
+      return [...spans].map((s) => getComputedStyle(s).backgroundColor);
+    });
+    const parse = (c) => (c.match(/\d+/g) || []).map(Number);
+
+    // palette row 54 (from the scene) is not fully grayscale
+    const colored = await readRamp();
+    expect(colored.some((c) => { const [r, g, b] = parse(c); return r !== g || g !== b; })).toBe(true);
+
+    // show raw grayscale → every swatch becomes grayscale (r==g==b)
+    await page.locator(".pvwrap label", { hasText: "show raw gray" }).locator('input[type="checkbox"]').check();
+    await expect.poll(async () => {
+      const gray = await readRamp();
+      return gray.every((c) => { const [r, g, b] = parse(c); return r === g && g === b; });
+    }).toBe(true);
+
+    // toggle back off, then changing the palette row changes the swatches
+    await page.locator(".pvwrap label", { hasText: "show raw gray" }).locator('input[type="checkbox"]').uncheck();
+    const row54 = await readRamp();
+    await page.locator("#pv-row").fill("0");
+    await page.locator("#pv-row").blur();
+    await expect.poll(async () => JSON.stringify(await readRamp()) !== JSON.stringify(row54)).toBe(true);
+  });
+
+  test("Browse rows… opens the palette drawer and picking a row updates the input", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.getByRole("button", { name: /Browse rows/ }).click();
+    const drawer = page.locator(".drawer", { hasText: "palette.png rows" });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.locator(".palgrid .rowpick").first()).toBeVisible();
+    await drawer.locator(".palgrid .rowpick").first().click();
+    await expect(drawer).toBeHidden();
+    await expect(page.locator("#pv-row")).toHaveValue("0"); // first row is 0
+  });
+});
+
+test.describe("Art mode — build tab", () => {
+  test("DoABC radios, dry run, and inspect of a built SWF", async ({ page }) => {
+    // clean any prior build output
+    rmSync(join(SANDBOX, "swfs"), { recursive: true, force: true });
+    await openSandboxScene(page);
+    await page.locator(".rightpanel .tab", { hasText: "Build" }).click();
+
+    // default DoABC mode is "none"; the radios toggle
+    const none = page.locator('.rightpanel input[name="abcmode"]').first();
+    const stub = page.locator('.rightpanel input[name="abcmode"]').nth(1);
+    await expect(none).toBeChecked();
+    await stub.check();
+    await expect(stub).toBeChecked();
+    await none.check();
+
+    // "nothing built yet" empty state before any build
+    await expect(page.locator(".rightpanel .panelbody")).toContainText("Nothing built yet");
+
+    // dry run reports bytes without writing
+    await page.getByRole("button", { name: /Dry run/ }).click();
+    await expect(page.locator(".rightpanel .panelbody .summary")).toContainText(/bytes · DoABC/);
+    await expect(page.locator(".rightpanel .panelbody")).toContainText("Dry run");
+
+    // a real build, then inspect the emitted SWF from the explorer
+    // ("Build SWF" also appears in the scene tab bar, so scope to the Build panel)
+    await page.locator(".rightpanel").getByRole("button", { name: "Build SWF", exact: true }).click();
+    await expect(page.locator(".rightpanel .panelbody .summary")).toContainText(/bytes · DoABC/);
+    await expect(page.locator(".explorer .srow", { hasText: /my_rat\.swf/ })).toBeVisible();
+    await page.locator(".explorer .srow", { hasText: /my_rat\.swf/ }).click();
+    await expect(page.locator(".rightpanel .panelbody")).toContainText("Inspect");
+    await expect(page.locator(".rightpanel .panelbody")).toContainText(/FWS|CWS/); // SWF signature
+  });
+});
+
+test.afterAll(() => {
+  // remove build output + the imported SVG provenance copy from dev-sandbox
+  try {
+    rmSync(join(SANDBOX, "swfs"), { recursive: true, force: true });
+    rmSync(join(SANDBOX, "art", "e2e_import.svg"), { force: true });
+  } catch {
+    /* non-fatal */
+  }
+});

@@ -1,0 +1,22 @@
+// Dev helper for testing Joker's Luck: a self-targeted Spin variant that applies the status.
+// The status name JokersLuck must be registered by the native layer before data loads it.
+JokersGambit {
+    variant_of Spin
+
+    meta {
+        name "ABILITY_JOKERSGAMBIT_NAME"
+        desc "ABILITY_JOKERSGAMBIT_DESC"
+    }
+
+    cost {
+        infcantrip true
+        mana 0
+    }
+
+    damage_instance {
+        damage 0
+        effects {
+            JokersLuck 1
+        }
+    }
+}
