@@ -32,10 +32,25 @@ interface NodeWritable {
 
 declare class Buffer extends Uint8Array {
   static from(data: any, enc?: string): Buffer;
+  static alloc(size: number, fill?: number): Buffer;
   static concat(list: Uint8Array[]): Buffer;
   static isBuffer(x: unknown): boolean;
   toString(enc?: string, start?: number, end?: number): string;
   subarray(start?: number, end?: number): Buffer;
+  copy(target: Uint8Array, targetStart?: number, sourceStart?: number, sourceEnd?: number): number;
+  equals(other: Uint8Array): boolean;
+  indexOf(value: Uint8Array | number | string, byteOffset?: number, enc?: string): number;
+  write(str: string, offset?: number, enc?: string): number;
+  readUInt8(offset: number): number;
+  readUInt16LE(offset: number): number;
+  readInt32LE(offset: number): number;
+  readUInt32LE(offset: number): number;
+  readBigUInt64LE(offset: number): bigint;
+  writeUInt8(value: number, offset: number): number;
+  writeUInt16LE(value: number, offset: number): number;
+  writeInt32LE(value: number, offset: number): number;
+  writeUInt32LE(value: number, offset: number): number;
+  writeBigUInt64LE(value: bigint, offset: number): number;
 }
 
 declare module "node:fs" {
