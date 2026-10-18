@@ -309,6 +309,12 @@ await mcpSmoke();
   await runIngameTests(test, assert, eq);
 }
 
+// ---- 8. Bindings library (PE reader, scanner, manifest, port; fake PE + real exe T1) ---
+{
+  const { runBindingsTests } = await import("./bindings-tests.mjs");
+  await runBindingsTests(test, assert, eq);
+}
+
 // ---- summary ----------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 void pretty;
