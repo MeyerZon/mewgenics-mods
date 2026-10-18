@@ -44,7 +44,6 @@ static inline int MT_RUN_ALL(void) {
     setvbuf(stdout, NULL, _IONBF, 0); /* a crashing test must not take the earlier results with it */
     for (int i = 0; i < mt_count; i++) {
         mt_cur_failed = 0;
-        printf("  ..  %s\r", mt_tests[i].name);
         mt_tests[i].fn();
         printf("%s  %s\n", mt_cur_failed ? "FAIL" : "  ok", mt_tests[i].name);
         failed += mt_cur_failed;
