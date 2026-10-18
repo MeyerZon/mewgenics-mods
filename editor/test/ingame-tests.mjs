@@ -464,6 +464,217 @@ export async function runIngameTests(test, assert, eq) {
     });
   }
 
+  // ---- runner.mjs (against the fake game) ----------------------------------
+  console.log("\n# In-game: runner against the fake game");
+  const runner = await load("../src/core/ingame/runner.mjs");
+  if (runner.__error || script.__error) {
+    test("runner.mjs loads", () => assert(false, runner.__error || "script.mjs missing"));
+  } else {
+    const { runPlan, acquireLock, runDirName, decideVerdict, LOCK_FILE } = runner;
+    const FAKE = join(HERE, "fixtures", "fake-game.mjs");
+    const ROOT = join(FIX, "__tmp_runner");
+    rmSync(ROOT, { recursive: true, force: true });
+    const gameDir = join(ROOT, "game");
+    const appLogs = join(ROOT, "applogs");
+    const modsDir = join(ROOT, "mods");
+    const runsDir = join(ROOT, "runs");
+    const savePath = join(ROOT, "fake-save.sav");
+    mkdirSync(join(gameDir, "mod_logs"), { recursive: true });
+    mkdirSync(join(modsDir, "jokers-luck"), { recursive: true });
+    mkdirSync(join(modsDir, "dev-sandbox"), { recursive: true });
+    writeFileSync(savePath, fixture("sample-save.bin"));
+    const plan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 1s\ncmd listcmds\nexpect console \"listcmds\"\nquit\n", { owningMod: "jokers-luck", name: "smoke" });
+    /** @param {string} mode @param {Record<string,string>} [extraEnv] @param {Record<string, any>} [extra] */
+    const run = (mode, extraEnv = {}, extra = {}) =>
+      runPlan({
+        plan,
+        test: { mod: "jokers-luck", name: "smoke", scriptPath: null },
+        env: { MEWTEST_FAKE_GAME: FAKE, FAKE_GAME_MODE: mode, FAKE_GAME_APPDATA_LOGS: appLogs, PATH: process.env.PATH || "", ...extraEnv },
+        gameDir, appdataLogsDir: appLogs, modsDir, runsDir, realSavePath: savePath, backstopGraceMs: 500,
+        ...extra,
+      });
+
+    test("runDirName is sortable and names the test", () => {
+      const n = runDirName("jokers-luck", "smoke", Date.UTC(2026, 9, 18, 16, 5, 9));
+      assert(/^\d{8}-\d{6}-jokers-luck-smoke$/.test(n), n);
+    });
+
+    test("acquireLock: second acquire fails with the holder pid; stale pid is reclaimed", () => {
+      mkdirSync(runsDir, { recursive: true });
+      const a = acquireLock(runsDir);
+      assert(a.ok, "first lock");
+      const b = acquireLock(runsDir);
+      assert(!b.ok && b.pid === process.pid, `second lock should fail with pid ${process.pid}: ${JSON.stringify(b)}`);
+      a.release();
+      writeFileSync(join(runsDir, LOCK_FILE), "999999999");
+      const c = acquireLock(runsDir);
+      assert(c.ok, "stale lock reclaimed");
+      c.release();
+      assert(!existsSync(join(runsDir, LOCK_FILE)), "release removes the lock file");
+    });
+
+    test("decideVerdict precedence table", () => {
+      const pre = { ok: true, skipped: false, reasons: [], checks: {} };
+      const res = (/** @type {any} */ o) => ({ present: true, truncated: false, parseErrors: 0, events: [], start: {}, end: { code: 0 }, crash: null, scriptError: null, turns: 0, consoleLines: [], expects: { passed: 1, failed: 0, failures: [] }, units: null, ...o });
+      const logs = (/** @type {any} */ o) => ({ debugLog: { findings: [] }, frameworkLog: { active: true, present: true }, chainloaderLog: { crashLines: [] }, crashReports: [], ...o });
+      const safe = { saveSuffixOk: true, saveCheck: null };
+      const exit = (/** @type {number|null} */ code, backstop = false) => ({ code, signal: null, backstop });
+      /** @param {string} label @param {any} input @param {string} want */
+      const expectV = (label, input, want) => eq(decideVerdict(input).verdict, want, label);
+      expectV("skipped", { preflight: { ...pre, ok: false, skipped: true, reasons: ["MEWTEST_SKIP=1"] }, exit: exit(null), result: res({ present: false, end: null }), logs: null, safety: safe }, "skipped");
+      expectV("cannot-run", { preflight: { ...pre, ok: false, reasons: ["no exe"] }, exit: exit(null), result: res({ present: false, end: null }), logs: null, safety: safe }, "cannot-run");
+      expectV("launch-error", { preflight: pre, launchError: "bad suffix", exit: exit(null), result: res({ present: false, end: null }), logs: null, safety: safe }, "launch-error");
+      expectV("backstop", { preflight: pre, exit: exit(null, true), result: res({ end: null }), logs: logs({}), safety: safe }, "backstop-timeout");
+      expectV("safety suffix", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");
+      expectV("safety hash", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: { saveSuffixOk: true, saveCheck: { unchanged: false } } }, "safety-violation");
+      expectV("crash code", { preflight: pre, exit: exit(3), result: res({ crash: { code: "0xC0000005" }, end: { code: 3 } }), logs: logs({}), safety: safe }, "crash");
+      expectV("crash report only", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ crashReports: ["x.dmp"] }), safety: safe }, "crash");
+      expectV("abnormal exit", { preflight: pre, exit: exit(-1073741819), result: res({ end: null }), logs: logs({}), safety: safe }, "crash");
+      expectV("harness-error", { preflight: pre, exit: exit(4), result: res({ scriptError: { line: 2 }, end: { code: 4 } }), logs: logs({}), safety: safe }, "harness-error");
+      expectV("timeout", { preflight: pre, exit: exit(2), result: res({ end: { code: 2, reason: "timeout" } }), logs: logs({}), safety: safe }, "timeout");
+      expectV("fail", { preflight: pre, exit: exit(1), result: res({ end: { code: 1 }, expects: { passed: 0, failed: 1, failures: [{ line: 2, kind: "console", arg: "x", detail: "d" }] } }), logs: logs({}), safety: safe }, "fail");
+      expectV("no-result missing file", { preflight: pre, exit: exit(0), result: res({ present: false, end: null }), logs: logs({}), safety: safe }, "no-result");
+      expectV("no-result no end", { preflight: pre, exit: exit(0), result: res({ end: null }), logs: logs({}), safety: safe }, "no-result");
+      expectV("log-errors", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ debugLog: { findings: [{ marker: "NO_STATUS_NAMED", line: 1, text: "x" }] } }), safety: safe }, "log-errors");
+      expectV("pass", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe }, "pass");
+      // crash beats fail/timeout; safety beats crash
+      expectV("crash > fail", { preflight: pre, exit: exit(1), result: res({ crash: { code: "x" }, end: { code: 1 } }), logs: logs({}), safety: safe }, "crash");
+      expectV("safety > crash", { preflight: pre, exit: exit(3), result: res({ crash: { code: "x" }, end: { code: 3 } }), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");
+    });
+
+    const pass = await run("pass");
+    test("fake pass -> verdict pass, artifacts written, report.json present, header-stripped script", () => {
+      eq(pass.verdict, "pass", pass.reason);
+      assert(pass.ok, "ok");
+      eq(pass.code, 0);
+      assert(pass.launch && pass.launch.fake, "fake launch");
+      assert(existsSync(pass.artifacts.runDir), "run dir");
+      assert(existsSync(pass.artifacts.report), "report.json");
+      assert(pass.artifacts.resultFile && existsSync(pass.artifacts.resultFile), "result file");
+      const copied = readFileSync(pass.artifacts.script, "utf8");
+      assert(!copied.includes("mods:"), "header stripped from the run-dir script");
+      assert(copied.startsWith("cmd listcmds\n"), "directives only");
+      eq(pass.result.expects.passed, 1);
+      assert(pass.logFindings.frameworkLog.active, "framework active from the fake log");
+      eq(pass.logFindings.frameworkLog.symbols, 15);
+      eq(pass.safety.observedSuffix, "dev");
+      assert(pass.safety.saveSuffixOk, "suffix ok");
+      assert(pass.safety.saveCheck && pass.safety.saveCheck.unchanged, "save unchanged");
+      eq(pass.safety.modPathsObserved.length, 2);
+      assert(pass.durationMs >= 0 && typeof pass.startedAt === "string", "timing");
+      assert(pass.artifacts.debugLog && existsSync(pass.artifacts.debugLog), "debug.log copied into the run dir");
+      assert(!existsSync(join(runsDir, LOCK_FILE)), "lock released");
+    });
+
+    const pass2 = await run("pass");
+    test("framework log window: only the newest session is scanned", () => {
+      eq(pass2.verdict, "pass", pass2.reason);
+      assert(pass2.logFindings.frameworkLog.windowOffset > 0, "offset recorded");
+      eq(pass2.logFindings.frameworkLog.symbols, 15);
+    });
+
+    const fail = await run("fail");
+    test("fake fail -> verdict fail with the expectation failure", () => {
+      eq(fail.verdict, "fail", fail.reason);
+      eq(fail.code, 1);
+      eq(fail.result.expects.failures[0].line, 2);
+      assert(/line 2/.test(fail.reason), `reason mentions the line: ${fail.reason}`);
+    });
+
+    const crash = await run("crash");
+    test("fake crash -> verdict crash with the crash event", () => {
+      eq(crash.verdict, "crash", crash.reason);
+      eq(crash.result.crash.code, "0xC0000005");
+    });
+
+    const herr = await run("harness-error");
+    test("fake harness-error -> verdict harness-error naming the script error", () => {
+      eq(herr.verdict, "harness-error", herr.reason);
+      assert(/frobnicate/.test(herr.reason), herr.reason);
+    });
+
+    const inactive = await run("inactive");
+    test("fake framework-inactive -> harness-error mentioning the framework", () => {
+      eq(inactive.verdict, "harness-error", inactive.reason);
+      assert(!inactive.logFindings.frameworkLog.active, "inactive");
+      assert(/framework/i.test(inactive.reason), inactive.reason);
+    });
+
+    const to = await run("timeout");
+    test("fake timeout -> verdict timeout", () => eq(to.verdict, "timeout", to.reason));
+
+    const hang = await run("hang");
+    test("fake hang -> killed by the backstop, verdict backstop-timeout", () => {
+      eq(hang.verdict, "backstop-timeout", hang.reason);
+      assert(hang.durationMs < 10_000, `backstop fired in time (${hang.durationMs} ms)`);
+    });
+
+    const nores = await run("noresult");
+    test("fake noresult -> verdict no-result", () => eq(nores.verdict, "no-result", nores.reason));
+    const trunc = await run("truncated");
+    test("fake truncated -> no-result and result.truncated", () => {
+      eq(trunc.verdict, "no-result", trunc.reason);
+      assert(trunc.result.truncated, "truncated flagged");
+    });
+
+    const markers = await run("log-markers");
+    test("fake log-markers -> code 0 but verdict log-errors", () => {
+      eq(markers.verdict, "log-errors", markers.reason);
+      eq(markers.logFindings.debugLog.findings[0].marker, "NO_STATUS_NAMED");
+    });
+
+    const wrong = await run("wrong-suffix", { FAKE_GAME_SUFFIX_OVERRIDE: "other" });
+    test("fake wrong-suffix -> safety-violation", () => {
+      eq(wrong.verdict, "safety-violation", wrong.reason);
+      eq(wrong.safety.observedSuffix, "other");
+    });
+
+    const mutated = await run("savechange", { FAKE_GAME_TOUCH_FILE: savePath });
+    test("fake savechange -> safety-violation from the real-save hash", () => {
+      eq(mutated.verdict, "safety-violation", mutated.reason);
+      assert(mutated.safety.saveCheck && !mutated.safety.saveCheck.unchanged, "hash changed");
+    });
+    writeFileSync(savePath, fixture("sample-save.bin"));
+
+    const nocheck = await run("pass", {}, { saveCheck: false });
+    test("saveCheck:false -> safety.saveCheck is null", () => {
+      eq(nocheck.verdict, "pass", nocheck.reason);
+      eq(nocheck.safety.saveCheck, null);
+    });
+    const envoff = await run("pass", { MEWTEST_SAVECHECK: "0" });
+    test("MEWTEST_SAVECHECK=0 -> safety.saveCheck is null", () => eq(envoff.safety.saveCheck, null));
+
+    const skipped = await run("pass", { MEWTEST_SKIP: "1" });
+    test("MEWTEST_SKIP=1 -> verdict skipped, nothing spawned", () => {
+      eq(skipped.verdict, "skipped");
+      eq(skipped.launch, null);
+    });
+
+    const cannot = await run("pass", {}, { modsDir: join(ROOT, "nope") });
+    test("missing mod folder -> cannot-run with the reason", () => {
+      eq(cannot.verdict, "cannot-run");
+      assert(cannot.reason.includes("jokers-luck"), cannot.reason);
+    });
+
+    const badPlan = script.parseScript("frobnicate\n", { owningMod: "jokers-luck", name: "bad" });
+    const perr = await run("pass", {}, { plan: badPlan });
+    test("plan with errors -> launch-error listing them", () => {
+      eq(perr.verdict, "launch-error");
+      assert(/frobnicate/.test(perr.reason), perr.reason);
+    });
+
+    mkdirSync(runsDir, { recursive: true });
+    const held = acquireLock(runsDir);
+    const locked = await run("pass");
+    test("lock held by another run -> cannot-run naming the pid", () => {
+      eq(locked.verdict, "cannot-run");
+      assert(locked.reason.includes(String(process.pid)), locked.reason);
+    });
+    if (held.ok) held.release();
+
+    rmSync(ROOT, { recursive: true, force: true });
+  }
+
   void REPO_ROOT;
   void resolve;
 }
