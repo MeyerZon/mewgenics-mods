@@ -80,14 +80,57 @@ recombine existing behaviors; new behaviors need native code.
 `tools/make-signature.mjs` for: ProcessCmds `0x9b8bb0`, FileManager resolve `0x9a09f0`, GetFile `0x99ff50`,
 GetFileRawLoose `0x9a0300`, GetFileRawPak `0x9a0670`, FileExists `0x9a14c0`, gpak load `0x9b5380`,
 TurnControl::NextTurn `0x8e3c60`, Character::BeginTurn `0x10a9b0`, Ability::trigger `0x320a0`,
-MewSaveFile::open_or_create `0x229cd0`, SQLSaveFile::open `0xa0d3c0`, DebugConsole init `0x9b9970`,
-settings user-data path `0x745390`, settings load `0x745f60`, save selection `0x1ba060`.
+MewSaveFile::open_or_create `0x229cd0`, SQLSaveFile::open `0xa0d3c0`, ApplicationBase::appmain `0x9b9970`
+(previously mislabeled "DebugConsole init"; it is the main loop, see below), MewApplication ctor `0x745390`
+(labeled "settings user-data path"), MewApplication::OnLoad `0x745f60` (labeled "settings load"), save selection
+`0x1ba060`, and (v3, 2026-10-18) DebugConsole::Execute `0xa14aa0`, DebugConsole::init `0xa11ef0`,
+ApplicationBase::FrameBegin `0x9b7870`, FrameEnd `0x9b7d80`, Step `0x9bad00`, `std::_Allocate<16>` `0x52a40`,
+plus data rows for the App global `0x13c4a30` and the SDL3 DYNAPI slots.
 ParaboxAPI's `GameSymbols.h` (TheMegax/Mewtiplayer) targets this exact build and its RVAs matched the
 decompiled code. Known community hook points: `ApplicationBase::FrameBegin`, `TurnControl::NextTurn`,
 `StatusMenu::update`, SDL3 DYNAPI `SDL_GL_SwapWindow`.
 
 Full inventories from the Ghidra session live in `.analysis/` (git-ignored): `list_procedures.tsv` (56,360 rows),
 `list_names.tsv` (452,868 rows incl. RTTI vftables), `decompiled/*.c`.
+
+## Debug console and application loop (static decode 2026-10-18)
+
+Found by scanning the exe for references to the console strings and reading the result with objdump; drives the
+in-game test harness (`docs/ingame-testing.md`). Absolute addresses, image base `0x140000000`.
+
+- **App global** `0x1413c4a30` (`ApplicationBase*`). `appmain` `0x1409b9970` (the function `bindings/` used to
+  call `DebugConsole_init`) runs `*(char*)(app+0x10) = 1; while (*(char*)(app+0x10)) { pump SDL events;
+  Step(app, dt) }`, then writes `settings.txt` and calls `SDL_Quit`. Clearing `app+0x10` is therefore a clean quit.
+  `SDL_Window*` is at `app+0xdd0`. `Step` `0x1409bad00` calls **FrameBegin** `0x1409b7870` and FrameEnd
+  `0x1409b7d80` (both `void(ApplicationBase*)`, main thread, once per frame). FrameBegin's prologue is generic, so
+  its 20-byte signature is unique on this build only; `Step` (12 bytes) is the fallback hook point.
+- **DebugConsole** (`glaiel::DebugConsole : Component`, type id 21, vftable `0x141134448`) is created by the
+  DebugScene setup `0x140757bb0` through AddComponent `0x140a33050`, then `DebugConsole::init` `0x140a11ef0`
+  (rcx = the console; loads `debug_console_history.txt` / `debug_console_macros.txt`; sets `DC+0x174 = 1` when
+  the config key `enable_debugconsole` is true).
+- **Execute** `0x140a14aa0`: `void (DebugConsole* this, std::string* line)`. The string is an MSVC by-value
+  argument: the caller builds a temporary, **the callee destroys it** (frees the heap buffer when capacity > 15).
+  Splits on spaces; `tokens[0]` is the command name. Scans the registry vector at `DC+0xa8/+0xb0` (element
+  0x78 bytes: `+0x10` name, `+0x30` minimum argument count, `+0x38` `std::function`, impl at `+0x70`); every entry
+  whose name matches and whose arity fits is called, so overloads exist. Unmatched names fall through to the macro
+  map `DC+0x128`. Messages `No command named "X" found`, `command "X" needs at least N arguments` and
+  `Executed: ` are pushed to the console's own output `vector<string>` at `DC+0xc8/+0xd0/+0xd8` and are **not**
+  written to `debug.log`. The ImGui submit path `0x140a146b0` copies the input line from `DC+0x178`, calls Execute,
+  then appends to history `DC+0xe0`.
+- **By-value strings from a DLL**: allocate the buffer with the game's own `std::_Allocate<16>` `0x140052a40`
+  (`cap = len | 15`, request `cap + 1` bytes) so Execute's `_Tidy_deallocate` `0x140052780` frees it with the
+  matching allocator. Keep `cap + 1 < 0x1000`: the large-allocation path stores an alignment pointer at `ptr[-8]`.
+- **SDL3 DYNAPI**: SDL3 is static; every export is a thunk `48 FF 25 disp32` (`jmp [slot]`) through a `.data`
+  table at `0x1412e7078…0x1412e9678` (1,175 entries). Slots: `SDL_GL_SetSwapInterval` `0x1412e7648`,
+  `SDL_GL_SwapWindow` `0x1412e7650`, `SDL_HideWindow` `0x1412e82a0`, `SDL_ShowWindow` `0x1412e8c60`,
+  `SDL_MinimizeWindow` `0x1412e8438`, `SDL_PollEvent` `0x1412e8528`, `SDL_CreateWindow` `0x1412e73f0`,
+  `SDL_CreateWindowWithProperties` `0x1412e7400`. On disk (and until SDL initializes) the slots point at init
+  stubs, so read or patch them only once the window exists. Nothing in `mewframework` hooks these slots yet
+  (earlier notes claiming otherwise were wrong).
+- **RNG**: the global state lives at `TLS block + 0x178`; the save's `random_seed` property is loaded into it.
+- The framework exposes the code symbols as `FW_SYM_DebugConsole_Execute`, `FW_SYM_DebugConsole_init`,
+  `FW_SYM_ApplicationBase_FrameBegin`, `FW_SYM_string_Allocate` and the data addresses as `FW_DATA_*`
+  (`FW_GetData`, API v3).
 
 ## REA / Ghidra sessions
 

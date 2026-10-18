@@ -10,7 +10,7 @@ Character_BeginTurn	0x10a9b0	22	48 89 5C 24 08 89 54 24 10 55 56 57 41 54 41 55 
 Ability_trigger	0x320a0	24	48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 68 FD FF
 MewSaveFile_open_or_create	0x229cd0	26	48 8B C4 48 89 58 08 48 89 50 10 55 56 57 41 54 41 55 41 56 41 57 48 8D 68 A8
 SQLSaveFile_open	0xa0d3c0	26	48 89 5C 24 08 48 89 74 24 18 48 89 54 24 10 57 48 83 EC 20 48 8B DA 48 8B F1
-DebugConsole_init	0x9b9970	26	48 8B C4 48 89 58 10 48 89 48 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24
+ApplicationBase_appmain	0x9b9970	26	48 8B C4 48 89 58 10 48 89 48 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24
 Settings_UserDataPath	0x745390	22	48 89 5C 24 18 48 89 4C 24 08 55 56 57 48 8D 6C 24 B9 48 81 EC F0
 Settings_Load	0x745f60	32	48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 C8 48 81 EC 38 01 00 00 4C 8B E9
 SaveSelection_Build	0x1ba060	28	40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 58 EF FF FF B8 A8 11 00 00 E8 51
@@ -28,3 +28,18 @@ string_TidyDeallocate	0x52780	18	40 53 48 83 EC 20 48 8B 51 18 48 8B D9 48 83 FA
 LuckUp_vftable	0xf57ab8	data	(RTTI: glaiel::LuckUp, slot0 returns "LuckUp", slot1 returns 0x4d6)
 Status_vftable	0xed1960	data	(glaiel::Status::vftable, 172 slots)
 Status_GetCategory	0x4929c0	126	48 89 5C 24 20 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC D0 00 00 00 48 8B F9 45 33 E4 48 8B 71 10 48 8B D1 4C 8B 79 18 49 83 FF 0F 76 03 48 8B 11 49 B9 25 23 22 84 E4 9C F2 CB 49 8B CC 48 85 F6 74 26 49 B8 B3 01 00 00 00 01 00 00 66 0F 1F 84 00 00 00 00 00 0F B6 04 0A 4C 33 C8 4D 0F AF C8 48 FF C1 48 3B CE 72 ED 4C 8B C7 48 8D 55 F7 48 8D 0D 6F
+DebugConsole_Execute	0xa14aa0	40	48 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 58 FF FF FF 48 81 EC A8 01 00 00 48 89 55
+DebugConsole_init	0xa11ef0	38	48 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 F8 FE FF FF 48 81 EC 08 02 00 00 48
+ApplicationBase_FrameBegin	0x9b7870	20	48 8B C4 48 89 58 10 48 89 70 18 48 89 78 20 55 48 8D 68 A1
+ApplicationBase_FrameEnd	0x9b7d80	16	40 55 53 56 57 41 56 48 8B EC 48 83 EC 60 48 8B
+ApplicationBase_Step	0x9bad00	12	40 53 41 56 41 57 48 83 EC 40 80 B9
+string_Allocate	0x52a40	12	48 83 EC 28 48 85 C9 75 07 33 C0 48
+App_global	0x13c4a30	data
+SDL_GL_SetSwapInterval_slot	0x12e7648	data	DYNAPI slot; valid after SDL init
+SDL_GL_SwapWindow_slot	0x12e7650	data	DYNAPI slot; valid after SDL init
+SDL_HideWindow_slot	0x12e82a0	data	DYNAPI slot; valid after SDL init
+SDL_ShowWindow_slot	0x12e8c60	data	DYNAPI slot; valid after SDL init
+SDL_MinimizeWindow_slot	0x12e8438	data	DYNAPI slot; valid after SDL init
+SDL_PollEvent_slot	0x12e8528	data	DYNAPI slot; valid after SDL init
+SDL_CreateWindow_slot	0x12e73f0	data	DYNAPI slot; valid after SDL init
+SDL_CreateWindowWithProperties_slot	0x12e7400	data	DYNAPI slot; valid after SDL init

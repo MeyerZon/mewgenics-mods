@@ -40,8 +40,15 @@ the linked docs; this page is the map.
 ### Automation / testing levers
 - Debug console (`-enable_debugconsole`, backtick): `load <n|path.lvl>` launches a specific fight; `bind <Ability>`.
   **AI-brain auto-resolve** of combat is achievable *data-only* (e.g. `Uncontrollable` passive / `ai{brain GenericBrain}`).
-  **No** RNG-seed command and **no** headless/startup-macro mode. Tiers A–C feasible now. Details:
+  **No** RNG-seed command and **no** headless/startup-macro mode in the game itself. Details:
   **[automation-feasibility.md](automation-feasibility.md)**.
+- **The `mewtest` harness closes the headless/autoexec gap** (2026-10-18): the console dispatcher
+  `DebugConsole::Execute` (`0xa14aa0`) is called in-process from a `FrameBegin` hook, output is read from the console's
+  own vector, the window is hidden through the SDL3 DYNAPI slots (the sim keeps ticking), and a JSON-lines result +
+  exit code become a verdict. `npm run test:ingame` / MCP `run_ingame_test`. Only the engine's 11 commands exist at
+  the main menu; game commands need a run in progress. Details: **[ingame-testing.md](ingame-testing.md)**.
+- **How we work**: every change test-first, four tiers (T0 unit, T1 local data, T2 in-game, T3 human):
+  **[tdd-procedure.md](tdd-procedure.md)**.
 
 ### The toolkit we built (`editor/`)
 - A **zero-runtime-dependency** data-layer mod editor: a GON engine + overlay/merge engine + 4-check validator as the
@@ -65,7 +72,11 @@ the linked docs; this page is the map.
 
 - **SWF emitter**: fixes are *specified* but not yet *implemented* or re-tested in-game.
 - A few preview behaviors are **INFERRED** (nested-sprite framing, cxform-after-remap, the engine's fill rule, bitmap sampling).
-- **RNG seeding** and a **headless** mode: none found; deterministic test runs would need our DLL or a fixed save.
+- **RNG seeding**: no user-facing control; the global state is `TLS+0x178`, so pinning it from our DLL is possible but
+  not built. The **headless** gap is covered by the harness's hidden window, not by a game mode.
+- **Entering a run from the main menu through the console**: no command does it (the menu is mouse-driven), which
+  blocks in-combat harness assertions. Also unresolved: which file `-savesuffix dev` actually writes (dev launches
+  changed `campaign02.sav`; `steamcampaign01.sav` stayed untouched, which the harness verifies by hash every run).
 - **Ruffle (WASM)** as an optional dep to preview *vanilla* SWFs in-editor — not decided (would go through the dep-gate).
 - Not built: **animation-clip authoring** (DefineSprite timelines end-to-end), a **cat-rig** (part-indexed) UI, art MCP tools.
 - **Per-build fragility**: everything native (signatures, the status pipeline) is pinned to build `25143593`; a game
@@ -79,7 +90,7 @@ the linked docs; this page is the map.
 ### Daily modding (no reverse engineering needed)
 - `launch-dev.bat` — runs the game with `-savesuffix dev`, debug console, dev mode, and the sample mod paths.
 - `editor/`: `npm install` → `npm run build:index`, then `npm run web` (UI) / `npm run mcp` (agent server) /
-  `npm test` / `npm run test:e2e`.
+  `npm test` / `npm run test:e2e` / `npm run test:ingame` (real game, T2). Native host tests: `native\test-all.bat`.
 - `python -I tools/gpak.py list|cat|extract|stats` — read-only pack access.
 - Author/validate mods in the editor (or via the `mewgenics-editor` MCP tools); overlays live in `mods/<name>/`.
 
@@ -115,6 +126,8 @@ the linked docs; this page is the map.
 | [swf-emitter-fix-spec.md](swf-emitter-fix-spec.md) | Why the emitted SWF crashes; the exact emitter fixes |
 | [art-preview-plan.md](art-preview-plan.md) | Art-mode architecture, source model, preview render path, onboarding, perf |
 | [automation-feasibility.md](automation-feasibility.md) | Launching fights, AI auto-resolve, seeding, headless; tiered testing plan |
+| [ingame-testing.md](ingame-testing.md) | The `mewtest` harness: script grammar, JSONL events, exit codes, verdicts, verified facts |
+| [tdd-procedure.md](tdd-procedure.md) | The TDD rule in practice: tiers T0–T3, the red/green loop, PR evidence |
 | [../README.md](../README.md) | Project overview + quickstart | 
 | [../TODO.md](../TODO.md) | Living status checklist |
 | [../CLAUDE.md](../CLAUDE.md) | Guidance for AI agents + safety rules + flagged sources |

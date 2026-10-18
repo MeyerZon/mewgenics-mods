@@ -234,6 +234,15 @@ between fights, and dismissing reward/event screens still need driving (console
 
 ## Tiered testing recommendation
 
+> **Update 2026-10-18.** Tiers A–C now have a driver: the `mewtest` harness
+> (`docs/ingame-testing.md`). The debug-console dispatcher was located
+> (`DebugConsole::Execute`, `docs/engine-map.md` "Debug console and application
+> loop"), so a native DLL can run console commands in-process from the per-frame
+> hook, count turns, walk units and write a JSON-lines result the Node runner
+> turns into a verdict (`npm run test:ingame`, MCP `run_ingame_test`). The
+> "startup macro" and "headless" gaps below are closed by that DLL rather than by
+> the game; seed pinning (section 4) is still open.
+
 **Tier A — Crash/load smoke test. Feasible now. Difficulty: low.**
 Launch via `launch-dev.bat` (`-savesuffix dev`, `-modpaths …`), optionally with a
 `load <lvl>` console macro, let it run or `stress_test` (self-closes), then scan

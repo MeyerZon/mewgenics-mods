@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 #include "framework_internal.h"
+#include "fw_sig.h"
 
 MewjectorAPI g_mj;
 int g_mjAvailable = 0;
@@ -69,28 +70,13 @@ static const BuildInfo *identify_build(uintptr_t base) {
 }
 
 /* ----------------------------------------------------------------------- */
-/* signature scanning (IDA-style "48 8B ?? ?? 89" patterns, .text only)     */
+/* signature scanning (IDA-style "48 8B ?? ?? 89" patterns, exec sections)  */
+/* The parser and matcher live in fw_sig.c (host-tested); this adds the PE  */
+/* section walk.                                                            */
 /* ----------------------------------------------------------------------- */
-static int parse_pattern(const char *sig, uint8_t *bytes, uint8_t *mask, size_t cap) {
-    size_t n = 0;
-    while (*sig) {
-        while (*sig == ' ') sig++;
-        if (!*sig) break;
-        if (n >= cap) return -1;
-        if (sig[0] == '?') { bytes[n] = 0; mask[n] = 0; while (*sig == '?') sig++; }
-        else {
-            unsigned v;
-            if (sscanf(sig, "%2x", &v) != 1) return -1;
-            bytes[n] = (uint8_t)v; mask[n] = 1; sig += 2;
-        }
-        n++;
-    }
-    return (int)n;
-}
-
 static uintptr_t scan_unique(uintptr_t base, const char *pattern, int *matches) {
-    uint8_t bytes[128], mask[128];
-    int n = parse_pattern(pattern, bytes, mask, sizeof bytes);
+    uint8_t bytes[FW_SIG_MAX_BYTES], mask[FW_SIG_MAX_BYTES];
+    int n = fw_parse_pattern(pattern, bytes, mask, sizeof bytes);
     *matches = 0;
     if (n <= 0) return 0;
     const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)base;
@@ -100,12 +86,9 @@ static uintptr_t scan_unique(uintptr_t base, const char *pattern, int *matches) 
     for (unsigned s = 0; s < nt->FileHeader.NumberOfSections; s++) {
         if (!(sec[s].Characteristics & IMAGE_SCN_MEM_EXECUTE)) continue;
         const uint8_t *p = (const uint8_t *)(base + sec[s].VirtualAddress);
-        size_t len = sec[s].Misc.VirtualSize;
-        for (size_t i = 0; i + (size_t)n <= len; i++) {
-            size_t k = 0;
-            for (; k < (size_t)n; k++) if (mask[k] && p[i + k] != bytes[k]) break;
-            if (k == (size_t)n) { if (!found) found = (uintptr_t)(p + i); if (++*matches > 1) return found; }
-        }
+        const uint8_t *hit = fw_scan_buffer(p, sec[s].Misc.VirtualSize, bytes, mask, (size_t)n, matches);
+        if (hit && !found) found = (uintptr_t)hit;
+        if (*matches > 1) return found;
     }
     return found;
 }
@@ -189,6 +172,13 @@ FW_EXPORT uintptr_t FW_GetSymbol(int symbol) {
 }
 FW_EXPORT const char *FW_GetBuildName(void) { return g_build ? g_build->name : "unknown"; }
 
+/* --- API v3: per-build data addresses (globals, DYNAPI slots) --- */
+FW_EXPORT uintptr_t FW_GetData(int dataId) {
+    if (!g_active || !g_build || dataId < 0 || dataId >= (int)FW_DATA_COUNT_) return 0;
+    uint32_t rva = g_build->rva_data[dataId];
+    return rva ? g_base + rva : 0;
+}
+
 /* --- custom statuses (API v2) --- */
 #define FW_MAX_STATUS_DEFS 16
 static FwStatusDef g_statusDefs[FW_MAX_STATUS_DEFS];
@@ -235,7 +225,7 @@ static void init(void) {
     if (!install_hooks()) return;
 
     g_active = 1;
-    fw_log("framework active: %zu symbols resolved, mewjector api v%d", FW_SYMBOL_COUNT, g_mj.GetVersion());
+    fw_log("framework active: %zu symbols resolved, %d data addresses, mewjector api v%d", FW_SYMBOL_COUNT, (int)FW_DATA_COUNT_, g_mj.GetVersion());
 }
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {

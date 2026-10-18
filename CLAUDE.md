@@ -38,15 +38,44 @@ These are enforced in code and in the launch flow; keep them intact.
   sub-agent; it appears spoofed or compromised. For the record: the gpak is **not** encrypted — `tools/gpak.py` and
   community tools read it directly. If research needs TCRF-style data, use other sources and note the gap.
 
+## Git workflow: PRs only
+
+- **Every change goes through a pull request. Never commit directly to `main` or `master`** (both exist locally and on
+  `origin`). This applies to everything — code, docs, this file, one-line fixes.
+- Flow: create a branch (`feat/...`, `fix/...`, `docs/...`) → commit there → push → open a PR with `gh pr create` →
+  stop and report. Do not merge the PR yourself; merging requires the owner's explicit, per-PR say-so.
+- If you find yourself on `main`/`master` with uncommitted work, move it to a branch (`git switch -c <branch>`) before
+  committing. Never `git push` to `main`/`master`, and never force-push anything.
+
+## TDD: every change is test-first
+
+Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Reference: `docs/tdd-procedure.md`.
+- Write the failing test first and commit it red (`test(scope): red …`), then the smallest green change, then
+  refactor. Quote the exact summary lines (`0 passed, 6 failed` → `34 passed, 0 failed`) in the commit and PR body.
+- Tiers: **T0** pure unit (`npm test`, `native\test-all.bat`, `npm run typecheck`; always) · **T1** local data
+  (same commands; skip with a logged `(skipped: …)` when `.extracted/` or the game is absent) · **T2** in-game
+  (`npm run test:ingame` / MCP `run_ingame_test`; required for any change under `mods/`, `native/` or `bindings/`)
+  · **T3** human checklist in the PR body for what no test can see (look, feel, balance).
+- A reverse-engineering fact the code relies on is not done until it is in `docs/engine-map.md` **and** a test or
+  fixture (`editor/test/fixtures/ingame/`, `bindings/`, a host test).
+- Where to put tests: editor → `editor/test/*.mjs` (suites export `runXTests(test, assert, eq)`); data mod →
+  `mods/<mod>/tests/*.mewtest` (+ validator fixtures); native → the module's `test/` host suite plus a `.mewtest`.
+
 ## Build / run / test
 
 **Editor** (run from `editor/`; zero runtime deps, dev-only `typescript@7.0.2`):
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates).
-- `npm test` — the full suite (`node test/run-tests.mjs`, 24 checks incl. an MCP spawn smoke test). The runner takes
-  no filter flag; it is one file, edit it to narrow a run.
+- `npm test` — the full unit suite (`node test/run-tests.mjs`: GON, overlays, validator, art, the in-game runner
+  against a fake game, an MCP spawn smoke; 145 checks). The runner takes no filter flag; `node test/ingame-tests.mjs`
+  runs that suite alone.
 - `npm run typecheck` — `tsc --noEmit` over JSDoc-typed ESM (there are no `.ts` files and no bundler by design).
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor`.
+- `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
+  on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
+  Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
+  Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
+  before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (11 tools).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
 
 **Data access / tooling** (repo root):
@@ -56,7 +85,10 @@ These are enforced in code and in the launch flow; keep them intact.
 
 **Native layer** (Windows, w64devkit GCC; set the `GCC` env var to override the default `C:\raylib\w64devkit\bin\gcc.exe`):
 - `native/framework/build.bat` builds `mewframework.dll` into `native/framework/build/`; copy it to `native/dist/`
-  (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL.
+  (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
+  `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
+- `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner, the harness's
+  modules; 53 checks, `-Werror`), no game needed. Each suite is also runnable as `<dir>\test.bat`.
 - `tools/install-mewjector.bat` installs a user-verified Mewjector `version.dll` + `native/chainloader.ini` into the
   game folder.
 
@@ -112,6 +144,13 @@ fewer than all of them is the cause of a past divide-by-zero crash — `native/f
 tooltip, and localization (data), and `native/mods/jokers-luck/` supplies the per-turn behavior (native), joined by the
 registered name `JokersLuck`. See `docs/data-mods.md` "Pairing data with a native status".
 
+**The in-game harness is the T2 tier.** `mewtest.dll` (`native/mods/test-harness/`) runs `.mewtest` scripts inside the
+game through the real console dispatcher and writes a JSON-lines result; the editor's runner (`editor/src/core/ingame/`)
+launches, scans the logs, hashes the real save and decides the verdict. Contracts (grammar, events, exit codes,
+verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with that file. Known limit: only the engine's
+11 console commands exist at the main menu; entering a run via console is an open item, so combat assertions are not
+yet possible.
+
 Read `docs/engine-map.md` (binary facts, build identity, function RVAs, status model), `docs/data-mods.md` (overlay
-semantics and content shapes), and `docs/automation-feasibility.md` (whether the game can be driven for automated
-testing) before non-trivial work.
+semantics and content shapes), `docs/ingame-testing.md` (the harness) and `docs/tdd-procedure.md` (how to work) before
+non-trivial work.
