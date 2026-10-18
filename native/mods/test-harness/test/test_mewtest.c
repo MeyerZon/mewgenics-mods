@@ -184,10 +184,13 @@ TEST(msvcstr_alloc_failure_and_big_alloc_guard) {
 
 TEST(msvcstr_copy_out) {
     MtMsvcString s; char out[8];
-    mt_msvcstr_build(&s, "hello world", 11, fake_alloc);
+    mt_msvcstr_build(&s, "hello world", 11, fake_alloc);   /* 11 bytes: SSO, nothing to free */
     CHECK_EQ(mt_msvcstr_copy(&s, out, sizeof out), 7);
     CHECK_STR(out, "hello w");
     CHECK_EQ(mt_msvcstr_copy(&s, NULL, 0), 0);
+    mt_msvcstr_build(&s, "hello world, heap edition", 25, fake_alloc);
+    CHECK_EQ(mt_msvcstr_copy(&s, out, sizeof out), 7);
+    CHECK_STR(out, "hello w");
     free(s.u.ptr);
 }
 
