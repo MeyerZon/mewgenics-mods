@@ -7,7 +7,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { locateGameDir } from "../src/core/ingame/launch.mjs";
-import { REPO_ROOT } from "../src/core/repo.mjs";
+import { REPO_ROOT, SafetyError } from "../src/core/repo.mjs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 /** Known build 25143593 identity (docs/engine-map.md). */
 const KNOWN_TS = 0x6a9c51e5;
@@ -277,6 +279,207 @@ export async function runBindingsTests(test, assert, eq) {
       assert(r !== undefined, "row present");
       if (!r) return;
       eq(scanExec(p, exe, parsePattern(r.rest)).count, 2);
+    });
+  }
+  // ---- manifest.mjs: bindings/<build>.json, the single source of truth ------------
+  console.log("\n# Bindings: manifest (bindings/<steamBuildId>.json)");
+  const man = await load("../src/core/bindings/manifest.mjs");
+  if (man.__error) {
+    test("manifest.mjs loads", () => assert(false, man.__error));
+    return;
+  }
+  const { parseManifest, validateManifest, loadManifest, saveManifest, symbolTable, dataTable, lkTable, entry, BINDINGS_DIR, ManifestError } = man;
+
+  /** @param {any} overrides @returns {any} a minimal valid manifest object */
+  const mini = (overrides = {}) => ({
+    format: 1,
+    build: { steamBuildId: "1", gameVersion: "0.0.1", name: "0.0.1 (steam 1)", timeDateStamp: "0x11111111", sizeOfImage: "0x4000", imageBase: "0x140000000", exeSha256: "a".repeat(64), exeSize: 1, sdlVersion: "3.2.12" },
+    sigCap: 128,
+    entries: [
+      { name: "FnA", kind: "function", rva: "0x1010", signature: { pattern: "48 8B C4 55", exactLen: 4, offset: 0, wildcards: [] }, anchors: {}, consumers: [], exposure: [{ enum: "FW_SYM_FnA", index: 0 }], evidence: [] },
+      { name: "FnB", kind: "function", rva: "0x1040", signature: null, anchors: { callees: [{ name: "FnA", ordinal: 0 }] }, consumers: [], exposure: [{ table: "FW_LK", index: 0, shape: "A" }], evidence: [] },
+      { name: "Glob", kind: "data", rva: "0x2000", anchors: { witness: { function: "FnA", ripRefOrdinal: 0 } }, consumers: [], exposure: [{ enum: "FW_DATA_Glob", index: 0 }], evidence: [] },
+      { name: "Foo_vftable", kind: "vtable", rva: "0x3000", slots: 4, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
+      { name: "Foo_typeid", kind: "constant", value: "0x4d6", anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] },
+      { name: "Foo_stacks", kind: "offset", struct: "Foo", value: "0x5c", ctype: "int32", anchors: { witness: { function: "FnA", pattern: "01 ?? 5C", dispAt: 2, dispSize: 1, nth: 0 } }, consumers: [], exposure: [{ macro: "OFF_FOO_STACKS" }], evidence: [] },
+    ],
+    ...overrides,
+  });
+  /** @param {any} m @returns {string[]} */
+  const problems = (m) => validateManifest(m).problems;
+  /** @param {any} m @param {RegExp} re @param {string} what */
+  const rejects = (m, re, what) => {
+    const ps = problems(m);
+    assert(ps.some((x) => re.test(x)), `${what}: expected a problem matching ${re}, got ${JSON.stringify(ps)}`);
+  };
+
+  test("validateManifest: the minimal manifest is ok; parseManifest accepts text and objects", () => {
+    eq(problems(mini()).length, 0, JSON.stringify(problems(mini())));
+    const m = parseManifest(JSON.stringify(mini()));
+    eq(m.build.steamBuildId, "1");
+    eq(parseManifest(mini()).entries.length, 6);
+  });
+  test("validateManifest: rejects duplicate names, bad hex, unknown kind, bad format", () => {
+    const d = mini(); d.entries.push({ ...d.entries[0] });
+    rejects(d, /duplicate entry name FnA/, "dup");
+    const h = mini(); h.entries[0].rva = "0xZZ";
+    rejects(h, /FnA.*rva.*hex/, "bad hex");
+    const k = mini(); k.entries[0].kind = "symbol";
+    rejects(k, /FnA.*kind/, "kind");
+    const f = mini({ format: 2 });
+    rejects(f, /format/, "format");
+    const b = mini(); b.build.exeSha256 = "nope";
+    rejects(b, /exeSha256/, "sha");
+  });
+  test("validateManifest: enum/table indices must be contiguous from 0 (append-only tables)", () => {
+    const g = mini(); g.entries[0].exposure = [{ enum: "FW_SYM_FnA", index: 1 }];
+    rejects(g, /FW_SYM.*index.*0/, "gap");
+    const t = mini(); t.entries[1].exposure = [{ table: "FW_LK", index: 2, shape: "A" }];
+    rejects(t, /FW_LK.*index/, "table gap");
+  });
+  test("validateManifest: signatures must parse under sigCap and must not end in a wildcard", () => {
+    const long = mini({ sigCap: 4 }); long.entries[0].signature = { pattern: "48 8B C4 55 90", exactLen: 5, offset: 0, wildcards: [] };
+    rejects(long, /FnA.*sigCap|FnA.*longer/, "cap");
+    const tail = mini(); tail.entries[0].signature = { pattern: "48 8B C4 ??", exactLen: 4, offset: 0, wildcards: [{ at: 3, len: 1, why: "test" }] };
+    rejects(tail, /FnA.*wildcard/, "trailing wildcard");
+    const bad = mini(); bad.entries[0].signature = { pattern: "48 ZZ", exactLen: 2, offset: 0, wildcards: [] };
+    rejects(bad, /FnA.*pattern/, "bad pattern");
+  });
+  test("validateManifest: offsets need a struct and a witness (or an explicit unanchored flag); references must resolve", () => {
+    const o = mini(); o.entries[5].anchors = {};
+    rejects(o, /Foo_stacks.*witness|Foo_stacks.*unanchored/, "no witness");
+    const u = mini(); u.entries[5].anchors = { unanchored: true };
+    eq(problems(u).length, 0, "unanchored is allowed (reported, never silently ported)");
+    const w = mini(); w.entries[5].anchors.witness.function = "Nope";
+    rejects(w, /Foo_stacks.*Nope/, "unknown witness");
+    const c = mini(); c.entries[1].anchors = { callees: [{ name: "Ghost", ordinal: 0 }] };
+    rejects(c, /FnB.*Ghost/, "unknown callee");
+    const dv = mini(); dv.entries[4].anchors.derive.vtable = "Nope_vftable";
+    rejects(dv, /Foo_typeid.*Nope_vftable/, "unknown vtable");
+    const ns = mini(); delete ns.entries[5].struct;
+    rejects(ns, /Foo_stacks.*struct/, "no struct");
+  });
+  test("parseManifest throws ManifestError listing every problem", () => {
+    const d = mini(); d.entries.push({ ...d.entries[0] }); d.format = 9;
+    try { parseManifest(d); assert(false, "should throw"); }
+    catch (e) { assert(e instanceof ManifestError, String(e)); assert(/duplicate/.test(String(e)) && /format/.test(String(e)), String(e)); }
+  });
+  test("symbolTable / dataTable / lkTable return entries sorted by index", () => {
+    const m = parseManifest(mini());
+    eq(symbolTable(m).map((e) => e.name).join(","), "FnA");
+    eq(dataTable(m).map((e) => e.name).join(","), "Glob");
+    eq(lkTable(m).map((e) => e.name).join(","), "FnB");
+    eq(entry(m, "Foo_typeid").kind, "constant");
+    eq(entry(m, "Missing"), null);
+  });
+  test("saveManifest writes only under bindings/ (SafetyError elsewhere) and round-trips", () => {
+    const m = parseManifest(mini());
+    const tmp = mkdtempSync(join(tmpdir(), "bindings-"));
+    try {
+      let threw = false;
+      try { saveManifest(join(tmp, "x.json"), m); } catch (e) { threw = e instanceof SafetyError; }
+      assert(threw, "outside bindings/ must throw SafetyError");
+      const text = saveManifest(join(BINDINGS_DIR, "__test__.json"), m, { dryRun: true });
+      assert(text.endsWith("\n") && text.includes("\"steamBuildId\": \"1\""), "pretty JSON text");
+      eq(parseManifest(text).entries.length, 6);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
+
+  // ---- the real manifest for build 25143593 ---------------------------------------
+  console.log("\n# Bindings: bindings/25143593.json content");
+  const realPath = join(BINDINGS_DIR, "25143593.json");
+  const apiH = readFileSync(join(REPO_ROOT, "native", "framework", "src", "framework_api.h"), "utf8");
+  /** @param {string} prefix */
+  const enumerators = (prefix) => (apiH.match(new RegExp(`^\\s*(${prefix}[A-Za-z0-9_]+)\\s*,`, "gm")) || []).map((l) => l.trim().replace(/,$/, "")).filter((n) => !n.endsWith("_COUNT_"));
+  test("25143593.json loads and identifies the build", () => {
+    assert(existsSync(realPath), `${realPath} missing`);
+    const m = loadManifest(realPath);
+    eq(m.build.steamBuildId, "25143593");
+    eq(m.build.gameVersion, "1.1.21239");
+    eq(m.build.timeDateStamp, "0x6a9c51e5");
+    eq(m.build.sizeOfImage, "0x1574000");
+    eq(m.build.imageBase, "0x140000000");
+    eq(m.build.exeSha256, "4127cd6a792ae528bca6f65a8873dd61789591937d87656c2b586a5e30eb77ea");
+    eq(m.build.sdlVersion, "3.2.12");
+    eq(m.sigCap, 128);
+  });
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (15), each with a signature", () => {
+    const m = loadManifest(realPath);
+    const want = enumerators("FW_SYM_");
+    eq(want.length, 15);
+    const got = symbolTable(m);
+    eq(got.map((e) => e.exposure.find((/** @type {any} */ x) => x.enum).enum).join("\n"), want.join("\n"));
+    for (const e of got) assert(e.signature && e.signature.pattern, `${e.name} needs a signature`);
+    eq(entry(m, "TurnControl_NextTurn").rva, "0x8e3c60");
+    eq(entry(m, "Status_GetCategory").signature.exactLen, 126);
+  });
+  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (9); App_global first", () => {
+    const m = loadManifest(realPath);
+    const want = enumerators("FW_DATA_");
+    eq(want.length, 9);
+    const got = dataTable(m);
+    eq(got.map((e) => e.exposure.find((/** @type {any} */ x) => x.enum).enum).join("\n"), want.join("\n"));
+    eq(got[0].name, "App_global");
+    eq(got[0].rva, "0x13c4a30");
+    eq(entry(m, "SDL_HideWindow_slot").rva, "0x12e82a0");
+    const t = entry(m, "SDL_DYNAPI_table");
+    assert(t && t.rva === "0x12e7078", "the DYNAPI jump table is its own entry");
+    for (const e of got.slice(1)) assert(e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table", `${e.name} derives from the table`);
+  });
+  test("25143593.json: FW_LK table is the 13 status lookups in status_engine.c g_lk_rva order, shapes A-E", () => {
+    const m = loadManifest(realPath);
+    const lk = lkTable(m);
+    const rvas = ["0x4929c0", "0x492c20", "0x492e80", "0x492f20", "0x493190", "0x5028e0", "0x493690", "0x493910", "0x493b80", "0x493e00", "0x4933e0", "0x494080", "0x502b40"];
+    eq(lk.map((e) => e.rva).join(","), rvas.join(","));
+    eq(lk.map((e) => e.exposure.find((/** @type {any} */ x) => x.table).shape).join(""), "AAAAAABBBBCDE");
+    eq(lk[0].name, "Status_GetCategory", "index 0 is also FW_SYM_Status_GetCategory");
+    eq(lk[4].name, "Status_GetFlags");
+    assert(lk.filter((e) => e.anchors.strings && e.anchors.strings.some((/** @type {any} */ s) => s.role === "funcsig")).length >= 11, "funcsig anchors recorded for the lookups that have one");
+  });
+  test("25143593.json: vtables, type id, vtable slot constants and >= 30 struct offsets with macros", () => {
+    const m = loadManifest(realPath);
+    eq(entry(m, "LuckUp_vftable").rva, "0xf57ab8");
+    eq(entry(m, "LuckUp_vftable").anchors.rtti.typeDescriptorName, ".?AVLuckUp@glaiel@@");
+    eq(entry(m, "Status_vftable").rva, "0xed1960");
+    eq(entry(m, "LuckUp_typeid").value, "0x4d6");
+    eq(entry(m, "DefaultStatusSource").rva, "0x13c4d30");
+    eq(entry(m, "LuckUp_vtableSlots").value, "172");
+    eq(entry(m, "VT_OnStacksChanged").value, "170");
+    const offs = m.entries.filter((e) => e.kind === "offset");
+    assert(offs.length >= 30, `offsets: ${offs.length}`);
+    eq(entry(m, "Status_stacks").value, "0x5c");
+    eq(entry(m, "Status_stacks").exposure[0].macro, "OFF_STATUS_STACKS");
+    eq(entry(m, "X_charArray").value, "0x1f90");
+    eq(entry(m, "Character_touchedPassives").value, "0xe50");
+    for (const e of offs) assert(e.struct && e.exposure.some((/** @type {any} */ x) => x.macro), `${e.name} has struct + macro`);
+  });
+  if (exe) {
+    const m = loadManifest(realPath);
+    const p = parsePe(exe);
+    test("T1 real exe: every manifest function signature matches exactly once at its rva", () => {
+      /** @type {string[]} */
+      const bad = [];
+      for (const e of m.entries) {
+        if (e.kind !== "function" || !e.signature) continue;
+        const r = scanExec(p, exe, parsePattern(e.signature.pattern, m.sigCap));
+        if (r.count !== 1 || r.hits[0] !== parseInt(e.rva, 16)) bad.push(`${e.name}: ${r.count} hits, first 0x${(r.hits[0] ?? -1).toString(16)}`);
+      }
+      assert(bad.length === 0, bad.join("; "));
+      assert(m.entries.filter((e) => e.kind === "function" && e.signature).length >= 34, "all TSV code rows carried over (incl. Status_ApplyLuckUp, now unique at 76 bytes)");
+    });
+    test("T1 real exe: every function entry (signed or raw) begins a .pdata RUNTIME_FUNCTION; data/vtable entries map to a file byte", () => {
+      /** @type {string[]} */
+      const bad = [];
+      for (const e of m.entries) {
+        if (e.kind === "function") {
+          const rva = parseInt(e.rva, 16);
+          const f = p.pdata.find(rva);
+          if (!f || f.begin !== rva) bad.push(`${e.name} 0x${rva.toString(16)} is not a function start (${f ? "inside 0x" + f.begin.toString(16) : "no pdata"})`);
+        } else if (e.kind === "data" || e.kind === "vtable") {
+          if (p.rvaToOff(parseInt(e.rva, 16)) < 0) bad.push(`${e.name} has no file byte`);
+        }
+      }
+      assert(bad.length === 0, bad.join("; "));
     });
   }
 }
