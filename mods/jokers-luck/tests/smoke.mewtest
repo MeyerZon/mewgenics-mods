@@ -1,12 +1,13 @@
 mods: jokers-luck
 timeout: 90s
 
-# Proves the data+native pair loads: the console knows `bind` and the game
-# resolved the JokersGambit ability. Framework-active is asserted by the Node
-# runner from mewframework.log, not here.
+# Load smoke for the data+native pair: the game must reach the main menu with the
+# overlays applied and no NO_*_NAMED / GON_ERROR marker in debug.log (the runner turns
+# those into `log-errors`), with mewframework active (the runner checks the framework
+# log). `bind JokersGambit` needs a run in progress, which the console cannot start
+# from the main menu yet (docs/ingame-testing.md, "Game-state assumptions"), so the
+# in-combat assertions are not here.
 wait frames 120
-cmd bind JokersGambit
-wait frames 10
-expect noconsole "No command named"
-expect noconsole "NO_ABILITY_NAMED"
+cmd listcmds
+expect console "Executed: listcmds"
 quit

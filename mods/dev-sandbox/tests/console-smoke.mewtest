@@ -1,15 +1,18 @@
 mods: dev-sandbox
 timeout: 60s
 
-# Main-menu-safe console smoke. Asserts OBSERVED dispatcher strings
-# (docs/ingame-testing.md). "listcmds" output format is pinned after the
-# first real run.
+# Main-menu-safe console smoke. Only the engine's own console commands exist at the
+# main menu (listcmds, macro, clear, ...); game commands (spawn, bind, load, ...) are
+# registered when a run's scenes initialize. Asserts OBSERVED dispatcher strings
+# (docs/ingame-testing.md).
 wait frames 120
 cmd this_command_does_not_exist_xyz
 expect console "No command named \"this_command_does_not_exist_xyz\" found"
-cmd spawn
+cmd macro
 expect console "needs at least"
 cmd listcmds
 expect console "listcmds" within 5
+expect console "Executed: listcmds"
 dump
+expect units == 0
 quit

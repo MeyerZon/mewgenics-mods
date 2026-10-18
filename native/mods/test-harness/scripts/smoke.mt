@@ -4,9 +4,10 @@ log "smoke"
 wait frames 120
 cmd this_command_does_not_exist_xyz
 expect console "No command named \"this_command_does_not_exist_xyz\" found"
-cmd spawn
+cmd macro
 expect console "needs at least"
 cmd listcmds
 expect console "listcmds" within 5
+expect console "Executed: listcmds"
 dump
 quit

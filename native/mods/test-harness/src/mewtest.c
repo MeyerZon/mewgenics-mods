@@ -204,12 +204,15 @@ static void maybe_hide(void) {
     void **swapSlot = (void **)g_fw.GetData(FW_DATA_SDL_GL_SetSwapInterval);
     void *hideFn = NULL, *swapFn = NULL;
     if (!hideSlot || !swapSlot || !read_ptr(hideSlot, &hideFn) || !read_ptr(swapSlot, &swapFn)) return;
-    if (hideFn == g_sdlInitial[FW_DATA_SDL_HideWindow] || swapFn == g_sdlInitial[FW_DATA_SDL_GL_SetSwapInterval]) return; /* SDL not initialized yet */
+    /* The window exists, so SDL_Init has run and the DYNAPI table is populated. (The
+     * DllMain-time snapshot of the slots is only logged: Mewjector loads mods on the first
+     * proxy call, which may already be after SDL init, so "slot changed" is not a usable test.) */
     if (!code_ptr_ok(hideFn) || !code_ptr_ok(swapFn)) { logf_("SDL slots point outside the game image; not hiding"); g_hidden = 1; return; }
     int h = ((fn_SDL_HideWindow)hideFn)(window);
     int s = ((fn_SDL_SetSwapInterval)swapFn)(0);
     g_hidden = 1;
-    logf_("window hidden (SDL_HideWindow=%d, SDL_GL_SetSwapInterval(0)=%d)", h, s);
+    logf_("window hidden at frame %ld (SDL_HideWindow=%d, SDL_GL_SetSwapInterval(0)=%d; slot %p, DllMain-time value %p)",
+          g_runner.frame, h, s, hideFn, g_sdlInitial[FW_DATA_SDL_HideWindow]);
 }
 
 static void write_script_error_and_end(void);
