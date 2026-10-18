@@ -211,4 +211,48 @@ export const TOOLS = [
         obj(args, "options"),
       ),
   },
+  {
+    name: "list_ingame_tests",
+    description:
+      "List in-game test scripts (mods/<mod>/tests/*.mewtest) with their parsed header (mods, savesuffix, timeout, hide) and any parse errors. Running them needs Steam, Mewjector, native/dist/mewframework.dll + mewtest.dll; see docs/ingame-testing.md.",
+    inputSchema: {
+      type: "object",
+      properties: { mod: { type: "string", description: "optional mod folder to restrict to" } },
+      additionalProperties: false,
+    },
+    handler: (args) => api.listIngameTests(str(args, "mod")),
+  },
+  {
+    name: "run_ingame_test",
+    description:
+      "Launch Mewgenics once with -savesuffix (never the real save), the test's mod paths and the mewtest harness DLL, run one .mewtest script and return the report: verdict (pass | fail | timeout | crash | harness-error | backstop-timeout | launch-error | cannot-run | skipped | no-result | log-errors | safety-violation), expectation failures, console lines, debug.log / framework / chainloader findings and artifact paths. Pass `test` (a name under mods/<mod>/tests/) or an inline `script`. Blocks until the game exits (default 120 s timeout + 45 s backstop). Returns verdict skipped/cannot-run with the reason when the game, Steam or the harness DLL is absent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mod: { type: "string", description: "mod folder; its tests/ dir is searched and it is the default -modpaths entry" },
+        test: { type: "string", description: "script name without .mewtest, e.g. smoke" },
+        script: { type: "string", description: "inline .mewtest text (alternative to `test`)" },
+        timeoutMs: { type: "number", description: "override the script's timeout" },
+        hide: { type: "boolean", description: "hide the game window (default true)" },
+        savesuffix: { type: "string", description: "override the save suffix (default dev); never empty" },
+        includeEvents: { type: "boolean", description: "include the raw JSONL events in the report" },
+      },
+      required: ["mod"],
+      additionalProperties: false,
+    },
+    handler: (args) => {
+      const test = str(args, "test");
+      const script = str(args, "script");
+      if ((test && script) || (!test && !script)) throw new ToolError("pass exactly one of `test` or `script`");
+      return api.runIngameTest({
+        mod: str(args, "mod", true) ?? "",
+        test,
+        script,
+        timeoutMs: num(args, "timeoutMs"),
+        hide: bool(args, "hide"),
+        savesuffix: str(args, "savesuffix"),
+        includeEvents: bool(args, "includeEvents"),
+      });
+    },
+  },
 ];

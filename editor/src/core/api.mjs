@@ -11,6 +11,7 @@ import { loadRegisteredNames } from "./names.mjs";
 import * as artio from "./art/art-io.mjs";
 import { readPalette, knownRowHints } from "./art/palette.mjs";
 import { validateScene, exampleScene, DEFAULT_ABC_MODE } from "./art/scene.mjs";
+import * as ingame from "./ingame/index.mjs";
 
 /** List base-data categories with entry counts. */
 export function listBaseData() {
@@ -158,3 +159,47 @@ export function prepareAbcGateTest(modName) {
   return artio.prepareAbcGateTest(modName);
 }
 export { exampleScene as exampleArtScene };
+
+// ---- in-game test harness (docs/ingame-testing.md) --------------------------
+
+/**
+ * List committed in-game test scripts (mods/<mod>/tests/*.mewtest) with their parsed headers.
+ * @param {string} [modName]
+ */
+export function listIngameTests(modName) {
+  return ingame.listIngameTests(modName);
+}
+
+/**
+ * Launch the game once with the mewtest harness and run one script. Blocks until the
+ * game exits (or the timeout + backstop). Returns the report; `{ ok: false, error }` for
+ * bad arguments. `env` is for tests only (defaults to process.env).
+ * @param {{ mod: string, test?: string, script?: string, timeoutMs?: number, hide?: boolean,
+ *   savesuffix?: string, saveCheck?: boolean, includeEvents?: boolean,
+ *   env?: Record<string, string|undefined> }} args
+ */
+export async function runIngameTest(args) {
+  const { mod, test, script } = args || {};
+  if (!mod || typeof mod !== "string") return { ok: false, error: "mod is required" };
+  if ((test && script) || (!test && !script)) return { ok: false, error: "pass exactly one of `test` (a name under mods/<mod>/tests/) or `script` (inline .mewtest text)" };
+  /** @type {import("./ingame/script.mjs").Plan} */
+  let plan;
+  /** @type {string|null} */
+  let scriptPath = null;
+  let name = "inline";
+  if (test) {
+    const entry = ingame.listIngameTests(mod).tests.find((t) => t.name === test);
+    if (!entry) return { ok: false, error: `no test "${test}" under mods/${mod}/tests/ (${ingame.listIngameTests(mod).tests.map((t) => t.name).join(", ") || "none"})` };
+    plan = entry.plan;
+    scriptPath = entry.absPath;
+    name = entry.name;
+  } else {
+    plan = ingame.parseScript(String(script), { owningMod: mod, name });
+  }
+  if (args.timeoutMs !== undefined) plan = { ...plan, timeoutMs: args.timeoutMs };
+  if (args.hide !== undefined) plan = { ...plan, hide: args.hide };
+  if (args.savesuffix !== undefined) plan = { ...plan, savesuffix: args.savesuffix };
+  const report = await ingame.runPlan({ plan, test: { mod, name, scriptPath }, env: args.env, saveCheck: args.saveCheck });
+  if (!args.includeEvents) report.result = { ...report.result, events: [] };
+  return report;
+}
