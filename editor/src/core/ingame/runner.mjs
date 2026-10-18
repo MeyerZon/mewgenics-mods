@@ -1,0 +1,300 @@
+// Runs one .mewtest plan: preflight, lock, spawn the game (or the fake game),
+// wait with a backstop, then assemble a report from the JSONL result, the
+// three logs and the safety checks. One game instance at a time (lock file).
+//
+// Writes only under the runs dir (default editor/data/ingame-runs/, git-ignored).
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, copyFileSync } from "node:fs";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { DATA_CACHE_DIR } from "../repo.mjs";
+import { locateGameDir, preflight, buildLaunch, LaunchError } from "./launch.mjs";
+import { parseResults } from "./results.mjs";
+import { collectLogs, locateAppdataLogsDir, readWindow } from "./logs.mjs";
+import { snapshotFile, compareSnapshots, realSavePath } from "./savecheck.mjs";
+
+export const RUNS_DIR = join(DATA_CACHE_DIR, "ingame-runs");
+export const BACKSTOP_GRACE_MS = 45000;
+export const LOCK_FILE = ".lock";
+const TAIL_CHARS = 2000;
+
+/**
+ * @typedef {'pass'|'fail'|'timeout'|'crash'|'harness-error'|'backstop-timeout'|'launch-error'
+ *   |'cannot-run'|'skipped'|'no-result'|'log-errors'|'safety-violation'} Verdict
+ */
+/**
+ * @typedef {Object} IngameReport
+ * @property {boolean} ok
+ * @property {Verdict} verdict
+ * @property {string} reason
+ * @property {number|null} code
+ * @property {string|null} signal
+ * @property {{ mod: string, name: string, scriptPath: string|null, inline: boolean }} test
+ * @property {{ mods: string[], savesuffix: string, timeoutMs: number, hide: boolean, directives: number, warnings: any[] }} plan
+ * @property {import("./launch.mjs").Preflight} preflight
+ * @property {{ command: string, args: string[], cwd: string, gameDir: string, fake: boolean } | null} launch
+ * @property {string} startedAt
+ * @property {string} endedAt
+ * @property {number} durationMs
+ * @property {import("./results.mjs").ResultSummary} result
+ * @property {import("./logs.mjs").LogFindings | null} logFindings
+ * @property {{ expectedSuffix: string, observedSuffix: string|null, saveSuffixOk: boolean, saveSuffixReason?: string, modPathsObserved: string[], saveCheck: null | { path: string, unchanged: boolean, matchesKnownBaseline: boolean, detail: string, before: any, after: any } }} safety
+ * @property {{ runDir: string|null, script: string|null, resultFile: string|null, debugLog: string|null, frameworkLogWindow: string|null, chainloaderLog: string|null, report: string|null }} artifacts
+ * @property {string} stdoutTail
+ * @property {string} stderrTail
+ */
+
+/**
+ * @param {string} mod @param {string} name @param {number} nowMs
+ */
+export function runDirName(mod, name, nowMs) {
+  const d = new Date(nowMs);
+  const p = (/** @type {number} */ n) => String(n).padStart(2, "0");
+  const stamp = `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+  const safe = (/** @type {string} */ s) => s.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40) || "x";
+  return `${stamp}-${safe(mod)}-${safe(name)}`;
+}
+
+/** @param {number} pid */
+function pidAlive(pid) {
+  try {
+    return process.kill(pid, 0);
+  } catch (e) {
+    return /** @type {any} */ (e)?.code === "EPERM";
+  }
+}
+
+/**
+ * Pid-file lock so only one game runs at a time. A lock whose pid is dead is reclaimed.
+ * @param {string} runsDir
+ * @returns {{ ok: true, release: () => void } | { ok: false, pid: number }}
+ */
+export function acquireLock(runsDir) {
+  mkdirSync(runsDir, { recursive: true });
+  const lockPath = join(runsDir, LOCK_FILE);
+  if (existsSync(lockPath)) {
+    const pid = Number(readFileSync(lockPath, "utf8").trim());
+    if (Number.isFinite(pid) && pid > 0 && pidAlive(pid)) return { ok: false, pid };
+    rmSync(lockPath, { force: true });
+  }
+  writeFileSync(lockPath, String(process.pid));
+  return { ok: true, release: () => rmSync(lockPath, { force: true }) };
+}
+
+/**
+ * Pure verdict from the collected evidence. First match wins; see docs/ingame-testing.md.
+ * @param {{ preflight: import("./launch.mjs").Preflight, launchError?: string|null, exit: { code: number|null, signal: string|null, backstop: boolean }, result: import("./results.mjs").ResultSummary, logs: any, safety: { saveSuffixOk: boolean, saveSuffixReason?: string, saveCheck: null | { unchanged: boolean, detail?: string } } }} input
+ * @returns {{ verdict: Verdict, reason: string }}
+ */
+export function decideVerdict(input) {
+  const { preflight: pre, exit, result, logs, safety } = input;
+  if (pre.skipped) return { verdict: "skipped", reason: pre.reasons.join("; ") || "skipped" };
+  if (!pre.ok) return { verdict: "cannot-run", reason: pre.reasons.join("; ") };
+  if (input.launchError) return { verdict: "launch-error", reason: input.launchError };
+  if (exit.backstop) return { verdict: "backstop-timeout", reason: "the game did not exit by the script timeout plus the backstop grace; killed" };
+  if (!safety.saveSuffixOk) return { verdict: "safety-violation", reason: safety.saveSuffixReason || "save suffix mismatch" };
+  if (safety.saveCheck && !safety.saveCheck.unchanged) return { verdict: "safety-violation", reason: `real save changed: ${safety.saveCheck.detail || ""}` };
+  const code = exit.code;
+  const crashReports = logs && Array.isArray(logs.crashReports) ? logs.crashReports : [];
+  if (result.crash) return { verdict: "crash", reason: `crash ${result.crash.code || ""} at ${result.crash.module || "?"}+${result.crash.rva || "?"}` };
+  if (code === 3) return { verdict: "crash", reason: "harness exit code 3 (crash)" };
+  if (crashReports.length) return { verdict: "crash", reason: `crash report(s) written: ${crashReports.join(", ")}` };
+  if (code !== null && code !== 0 && code > 255) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
+  if (code !== null && code < 0) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
+  if (code === 4 || result.scriptError || (result.end && result.end.code === 4)) {
+    const fwInactive = logs && logs.frameworkLog && logs.frameworkLog.present && !logs.frameworkLog.active;
+    const detail = result.scriptError
+      ? `script error at line ${result.scriptError.line}: ${result.scriptError.msg}`
+      : fwInactive
+        ? "mewframework inactive (unknown build or a signature failed); see mod_logs/mewframework.log"
+        : (result.end && result.end.reason) || "harness error";
+    return { verdict: "harness-error", reason: detail };
+  }
+  if (code === 2 || (result.end && result.end.reason === "timeout")) return { verdict: "timeout", reason: `script timeout (end reason ${result.end ? result.end.reason : "?"})` };
+  if (code === 1 || result.expects.failed > 0 || (result.end && result.end.code === 1)) {
+    const f = result.expects.failures[0];
+    return { verdict: "fail", reason: f ? `expect ${f.kind} failed at line ${f.line}: ${f.detail}` : "harness exit code 1" };
+  }
+  if (!result.present) return { verdict: "no-result", reason: "no result file was written" };
+  if (!result.end) return { verdict: "no-result", reason: result.truncated ? "result file truncated (no end event)" : "result file has no end event" };
+  if (logs && logs.debugLog && logs.debugLog.findings.length) {
+    const f = logs.debugLog.findings[0];
+    return { verdict: "log-errors", reason: `${logs.debugLog.findings.length} debug.log marker(s), first: ${f.marker} at line ${f.line}` };
+  }
+  if (code !== 0 && code !== null) return { verdict: "fail", reason: `exit code ${code}` };
+  return { verdict: "pass", reason: `all ${result.expects.passed} expectation(s) passed` };
+}
+
+/** @param {string} p */
+function sizeOf(p) {
+  try {
+    return statSync(p).size;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * @param {{ plan: import("./script.mjs").Plan, test: { mod: string, name: string, scriptPath: string|null },
+ *   env?: Record<string, string|undefined>, gameDir?: string, appdataLogsDir?: string|null, modsDir?: string,
+ *   runsDir?: string, saveCheck?: boolean, realSavePath?: string|null, backstopGraceMs?: number,
+ *   exists?: (p: string) => boolean, steamRunning?: () => boolean|null }} args
+ * @returns {Promise<IngameReport>}
+ */
+export async function runPlan(args) {
+  const env = args.env || process.env;
+  const plan = args.plan;
+  const gameDir = args.gameDir || locateGameDir(env);
+  const appdataLogsDir = args.appdataLogsDir !== undefined ? args.appdataLogsDir : locateAppdataLogsDir(env);
+  const runsDir = args.runsDir || (env.MEWTEST_RESULTS_DIR ? String(env.MEWTEST_RESULTS_DIR) : RUNS_DIR);
+  const startedMs = Date.now();
+  const startedAt = new Date(startedMs).toISOString();
+  const expectedSuffix = plan.savesuffix;
+
+  /** @type {IngameReport} */
+  const report = {
+    ok: false,
+    verdict: "cannot-run",
+    reason: "",
+    code: null,
+    signal: null,
+    test: { mod: args.test.mod, name: args.test.name, scriptPath: args.test.scriptPath, inline: !args.test.scriptPath },
+    plan: { mods: plan.mods, savesuffix: plan.savesuffix, timeoutMs: plan.timeoutMs, hide: plan.hide, directives: plan.directives.length, warnings: plan.warnings },
+    preflight: { ok: false, skipped: false, reasons: [], checks: {} },
+    launch: null,
+    startedAt,
+    endedAt: startedAt,
+    durationMs: 0,
+    result: parseResults(null),
+    logFindings: null,
+    safety: { expectedSuffix, observedSuffix: null, saveSuffixOk: true, modPathsObserved: [], saveCheck: null },
+    artifacts: { runDir: null, script: null, resultFile: null, debugLog: null, frameworkLogWindow: null, chainloaderLog: null, report: null },
+    stdoutTail: "",
+    stderrTail: "",
+  };
+  /** @param {string|null} launchError @param {{ code: number|null, signal: string|null, backstop: boolean }} [exit] */
+  const finish = (launchError, exit = { code: null, signal: null, backstop: false }) => {
+    const v = decideVerdict({ preflight: report.preflight, launchError, exit, result: report.result, logs: report.logFindings, safety: report.safety });
+    report.verdict = v.verdict;
+    report.reason = v.reason;
+    report.ok = v.verdict === "pass";
+    report.code = exit.code;
+    report.signal = exit.signal;
+    const endMs = Date.now();
+    report.endedAt = new Date(endMs).toISOString();
+    report.durationMs = endMs - startedMs;
+    if (report.artifacts.runDir) {
+      const rp = join(report.artifacts.runDir, "report.json");
+      writeFileSync(rp, JSON.stringify(report, null, 2));
+      report.artifacts.report = rp;
+    }
+    return report;
+  };
+
+  // 1. plan + preflight
+  if (!plan.ok) {
+    report.preflight = { ok: true, skipped: false, reasons: [], checks: {} };
+    return finish(`script errors: ${plan.errors.map((e) => `line ${e.line}: ${e.message}`).join("; ")}`);
+  }
+  report.preflight = preflight(plan, { gameDir, env, exists: args.exists, steamRunning: args.steamRunning, modsDir: args.modsDir, appdataLogsDir });
+  if (!report.preflight.ok) return finish(null);
+
+  // 2. lock + run dir
+  const lock = acquireLock(runsDir);
+  if (!lock.ok) {
+    report.preflight = { ...report.preflight, ok: false, reasons: [`another in-game run is in progress (pid ${lock.pid}); lock ${join(runsDir, LOCK_FILE)}`] };
+    return finish(null);
+  }
+  try {
+    const runDir = join(runsDir, runDirName(args.test.mod, args.test.name, startedMs));
+    mkdirSync(runDir, { recursive: true });
+    const scriptPath = join(runDir, "script.mewtest");
+    const outPath = join(runDir, "result.jsonl");
+    writeFileSync(scriptPath, plan.body);
+    report.artifacts.runDir = runDir;
+    report.artifacts.script = scriptPath;
+
+    // 3. launch spec
+    let launch;
+    try {
+      launch = buildLaunch(plan, { gameDir, scriptPath, outPath, env, modsDir: args.modsDir });
+    } catch (e) {
+      return finish(e instanceof LaunchError ? e.message : String(e));
+    }
+    report.launch = { command: launch.command, args: launch.args, cwd: launch.cwd, gameDir, fake: launch.fake };
+
+    // 4. pre-run snapshots
+    const frameworkLogPath = join(gameDir, "mod_logs", "mewframework.log");
+    const frameworkLogOffset = sizeOf(frameworkLogPath);
+    const saveCheckEnabled = args.saveCheck !== false && env.MEWTEST_SAVECHECK !== "0";
+    const savePath = args.realSavePath !== undefined ? args.realSavePath : realSavePath(env);
+    const saveBefore = saveCheckEnabled && savePath ? snapshotFile(savePath) : null;
+
+    // 5. spawn + wait (backstop kill)
+    const launchedAtMs = Date.now();
+    const exit = await new Promise((resolve) => {
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+      let backstop = false;
+      const child = spawn(launch.command, launch.args, { cwd: launch.cwd, env: launch.env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+      const grace = args.backstopGraceMs !== undefined ? args.backstopGraceMs : BACKSTOP_GRACE_MS;
+      const timer = setTimeout(() => {
+        backstop = true;
+        try {
+          child.kill();
+        } catch {
+          /* already gone */
+        }
+      }, plan.timeoutMs + grace);
+      child.stdout.on("data", (/** @type {any} */ c) => { stdout = (stdout + c.toString("utf8")).slice(-TAIL_CHARS); });
+      child.stderr.on("data", (/** @type {any} */ c) => { stderr = (stderr + c.toString("utf8")).slice(-TAIL_CHARS); });
+      /** @param {number|null} code @param {string|null} signal @param {string|null} err */
+      const done = (code, signal, err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ code, signal, backstop, stdout, stderr, err });
+      };
+      child.on("error", (/** @type {any} */ e) => done(null, null, String(e && e.message ? e.message : e)));
+      child.on("exit", (/** @type {any} */ code, /** @type {any} */ signal) => done(typeof code === "number" ? code : null, signal || null, null));
+    });
+    report.stdoutTail = exit.stdout;
+    report.stderrTail = exit.stderr;
+
+    // 6. evidence
+    report.result = parseResults(existsSync(outPath) ? readFileSync(outPath, "utf8") : null);
+    report.artifacts.resultFile = existsSync(outPath) ? outPath : null;
+    const logs = collectLogs({ gameDir, appdataLogsDir, frameworkLogOffset, launchedAtMs, expectedSuffix });
+    report.logFindings = logs;
+    const saveAfter = saveBefore && savePath ? snapshotFile(savePath) : null;
+    report.safety = {
+      expectedSuffix,
+      observedSuffix: logs.debugLog.saveSuffix,
+      saveSuffixOk: logs.saveSuffix.ok,
+      saveSuffixReason: logs.saveSuffix.reason,
+      modPathsObserved: logs.debugLog.modPaths,
+      saveCheck: saveBefore && saveAfter && savePath ? { path: savePath, ...compareSnapshots(saveBefore, saveAfter), before: saveBefore, after: saveAfter } : null,
+    };
+    // copies for the record
+    if (logs.debugLog.path && logs.debugLog.present) {
+      const dst = join(runDir, "debug.log");
+      copyFileSync(logs.debugLog.path, dst);
+      report.artifacts.debugLog = dst;
+    }
+    const fwWindow = readWindow(frameworkLogPath, frameworkLogOffset);
+    if (fwWindow !== null) {
+      const dst = join(runDir, "mewframework.window.log");
+      writeFileSync(dst, fwWindow);
+      report.artifacts.frameworkLogWindow = dst;
+    }
+    if (logs.chainloaderLog.present) {
+      const dst = join(runDir, "chainloader.log");
+      copyFileSync(logs.chainloaderLog.path, dst);
+      report.artifacts.chainloaderLog = dst;
+    }
+    return finish(exit.err ? `spawn failed: ${exit.err}` : null, { code: exit.code, signal: exit.signal, backstop: exit.backstop });
+  } finally {
+    lock.release();
+  }
+}

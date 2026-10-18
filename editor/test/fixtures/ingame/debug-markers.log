@@ -1,0 +1,10 @@
+[file: C:\Users\Tyler\Desktop\SVN\Engine\code\engine\Startup\Application.cpp; line: 710;] Save File Suffix: dev
+[file: C:\Users\Tyler\Desktop\SVN\Engine\code\engine\Startup\Application.cpp; line: 744;] Mod Path: C:\repo\mods\broken
+[file: C:\Users\Tyler\Desktop\SVN\Engine\code\engine\Gon\gon.cpp; line: 120;] GON_ERROR: Field "effects" does not exist
+[file: C:\Users\Tyler\Desktop\SVN\Mewgenics\game\code\Status.cpp; line: 55;] NO_STATUS_NAMED NotARealStatusXYZ
+[file: C:\Users\Tyler\Desktop\SVN\Mewgenics\game\code\Brain.cpp; line: 12;] NO_BRAIN_NAMED FakeBrain
+[file: C:\Users\Tyler\Desktop\SVN\Mewgenics\game\code\Ability.cpp; line: 9;] NO_ABILITY_NAMED Nope
+[file: C:\Users\Tyler\Desktop\SVN\Mewgenics\game\code\Passive.cpp; line: 9;] NO_PASSIVE_NAMED Nope
+[file: C:\Users\Tyler\Desktop\SVN\Mewgenics\game\code\Level.cpp; line: 40;] No level named alley/nope
+[file: C:\Users\Tyler\Desktop\SVN\Mewgenics\game\code\Spawn.cpp; line: 40;] No enemy named Blorp
+[file: C:\Users\Tyler\Desktop\SVN\Mewgenics\game\code\Character.cpp; line: 2943;] BEGIN TURN: Lumee (Fighter)

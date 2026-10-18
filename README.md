@@ -34,6 +34,8 @@ and fast to author.
   for abilities/items/passives/etc., and how a data mod pairs with a native status.
 - **[`docs/automation-feasibility.md`](docs/automation-feasibility.md)** — whether the game can be driven for
   automated testing (launching fights, AI auto-resolve, seeding, headless).
+- **[`docs/ingame-testing.md`](docs/ingame-testing.md)** — the in-game test harness: `.mewtest` scripts that run
+  debug-console commands inside the game and come back with a verdict (`npm run test:ingame`, MCP `run_ingame_test`).
 
 ## Sample mod: Joker's Luck
 
@@ -54,7 +56,8 @@ TypeScript typechecker (JSDoc-typed ESM, no bundler).
 cd editor
 npm install          # dev-only typescript@7.0.2
 npm run build:index  # generate the git-ignored data/ caches (component list + base-data index)
-npm test             # 24 checks (incl. an MCP spawn smoke test)
+npm test             # unit suite (GON, overlays, validator, art, in-game runner against a fake game, MCP smoke)
+npm run test:ingame  # T2: launch the real game per mods/<mod>/tests/*.mewtest (needs Steam + native/dist/mewtest.dll)
 npm run web          # http://127.0.0.1:4173/
 npm run mcp          # MCP stdio server (register with Claude Code as `mewgenics-editor`)
 ```
@@ -84,6 +87,8 @@ the one unresolved engine question (does `SymbolClass` bind without a `DoABC`?) 
   (`extract .extracted --prefix data/` populates the reference copy the editor reads).
 - `native/framework/build.bat` — builds `mewframework.dll` (w64devkit GCC) into `native/framework/build/`; copy to
   `native/dist/`. `tools/install-mewjector.bat` installs the chainloader into the game folder.
+- `cd editor && npm run test:ingame` — runs each mod's `tests/*.mewtest` in the real game on the `dev` save and
+  reports a verdict per script; see [`docs/ingame-testing.md`](docs/ingame-testing.md).
 
 ## Reverse engineering (optional — maintenance only)
 

@@ -1,0 +1,18 @@
+mods: jokers-luck, dev-sandbox
+savesuffix: dev
+timeout: 90s
+hide: false
+
+# a comment
+wait frames 120
+cmd bind JokersGambit # not a comment, part of the command
+expect console "No command named \"bind\" found" within 5
+expect noconsole "NO_ABILITY_NAMED"
+expect status JokersLuck on "Mr Whiskers"
+expect status LuckUp on 0
+expect units >= 2
+dump
+log "hello \"world\""
+wait turns 2
+wait ms 500
+quit 0

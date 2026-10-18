@@ -275,7 +275,7 @@ async function mcpSmoke() {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = /** @type {any} */ (await req("tools/list", {}));
-    test("tools/list returns the 9 editor tools", () => eq(list.tools.length, 9));
+    test("tools/list returns the 11 editor tools", () => eq(list.tools.length, 11));
     const vres = /** @type {any} */ (await req("tools/call", { name: "validate_mod", arguments: { mod: "jokers-luck" } }));
     test("tools/call validate_mod jokers-luck -> ok", () => {
       const payload = JSON.parse(vres.content[0].text);
@@ -301,6 +301,12 @@ await mcpSmoke();
   const { runArtEmitterTests } = await import("./art-emitter-tests.mjs");
   runArtEmitterTests(test, assert, eq);
   runArtCoreTests(test, assert, eq);
+}
+
+// ---- 7. In-game test harness runner (fake game; never launches Mewgenics) ---
+{
+  const { runIngameTests } = await import("./ingame-tests.mjs");
+  await runIngameTests(test, assert, eq);
 }
 
 // ---- summary ----------------------------------------------------------------

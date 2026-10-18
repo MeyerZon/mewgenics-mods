@@ -13,6 +13,7 @@
     "mcp": "node src/mcp/server.mjs",
     "web": "node web/server.mjs",
     "test": "node test/run-tests.mjs",
+    "test:ingame": "node scripts/ingame.mjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

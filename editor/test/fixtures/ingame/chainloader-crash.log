@@ -1,0 +1,5 @@
+[16:23:24.650] [crash] Baseline crash handler installed (SEH+VEH). Reports -> mod_logs\crashes\
+[16:23:25.199] [LoadOrder]   Mod10 Loading: mewframework.dll
+[16:23:31.001] [VEH] tid=18600 code=0xC0000005 flags=0x0 addr=00007ff692d54a69 fatal=1
+[16:23:31.002] [crash] Report written: mod_logs\crashes\14664-20261018-162331.txt
+[16:23:31.900] [crash] Minidump written: mod_logs\crashes\14664-20261018-162331.dmp

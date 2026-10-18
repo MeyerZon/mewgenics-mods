@@ -1,0 +1,4 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"s","out":"o","pid":1,"hide":1,"timeout_ms":60000,"clean":0,"t":0,"frame":0}
+{"ev":"cmd","line":1,"text":"crash","t":10,"frame":1}
+{"ev":"crash","code":"0xC0000005","flags":"0x0","addr":"0x1404929c0","module":"Mewgenics.exe","rva":"0x4929c0","tid":4321,"t":11,"frame":1}
+{"ev":"end","code":3,"reason":"crash","frames":1,"turns":0,"elapsed_ms":12,"expect_pass":0,"expect_fail":0,"t":12,"frame":1}

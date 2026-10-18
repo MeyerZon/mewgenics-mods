@@ -34,9 +34,10 @@ function sendError(id, code, message) {
 }
 
 /**
+ * Handlers may be async (run_ingame_test blocks on the game), so this awaits them.
  * @param {any} msg
  */
-function handle(msg) {
+async function handle(msg) {
   const { id, method, params } = msg;
   const isRequest = id !== undefined && id !== null;
 
@@ -70,7 +71,7 @@ function handle(msg) {
       return;
     }
     try {
-      const result = tool.handler(args);
+      const result = await tool.handler(args);
       const text = typeof result === "string" ? result : JSON.stringify(result, null, 2);
       const isError = result && typeof result === "object" && result.ok === false;
       sendResult(id, { content: [{ type: "text", text }], isError: Boolean(isError) });
@@ -101,12 +102,10 @@ function main() {
         process.stderr.write(`[mcp] non-JSON line ignored: ${line.slice(0, 160)}\n`);
         continue;
       }
-      try {
-        handle(msg);
-      } catch (e) {
+      handle(msg).catch((e) => {
         process.stderr.write(`[mcp] handler error: ${String(e)}\n`);
         if (msg && msg.id !== undefined && msg.id !== null) sendError(msg.id, -32603, "internal error");
-      }
+      });
     }
   });
   process.stdin.on("end", () => process.exit(0));

@@ -12,6 +12,8 @@ declare const process: {
   env: Record<string, string | undefined>;
   cwd(): string;
   exit(code?: number): never;
+  kill(pid: number, signal?: number | string): boolean;
+  pid: number;
   platform: string;
   stdin: NodeReadable;
   stdout: NodeWritable;
@@ -33,6 +35,7 @@ declare class Buffer extends Uint8Array {
   static concat(list: Uint8Array[]): Buffer;
   static isBuffer(x: unknown): boolean;
   toString(enc?: string, start?: number, end?: number): string;
+  subarray(start?: number, end?: number): Buffer;
 }
 
 declare module "node:fs" {
@@ -45,6 +48,10 @@ declare module "node:fs" {
   export function statSync(path: string): { isDirectory(): boolean; isFile(): boolean; size: number; mtimeMs: number };
   export function realpathSync(path: string): string;
   export function rmSync(path: string, opts?: { recursive?: boolean; force?: boolean }): void;
+  export function copyFileSync(src: string, dest: string): void;
+  export function appendFileSync(path: string, data: string | Uint8Array): void;
+  export function utimesSync(path: string, atime: Date | number, mtime: Date | number): void;
+  export function unlinkSync(path: string): void;
 }
 
 declare module "node:path" {
@@ -80,9 +87,17 @@ declare module "node:child_process" {
     stdout: { on(event: string, cb: (chunk: any) => void): void };
     stderr: { on(event: string, cb: (chunk: any) => void): void };
     on(event: string, cb: (...args: any[]) => void): void;
-    kill(signal?: string): void;
+    kill(signal?: string | number): boolean;
+    pid?: number;
+    exitCode: number | null;
+    killed: boolean;
   }
   export function spawn(command: string, args?: string[], options?: any): ChildProcess;
+  export function spawnSync(
+    command: string,
+    args?: string[],
+    options?: any,
+  ): { status: number | null; signal: string | null; stdout: any; stderr: any; error?: Error };
 }
 
 declare module "node:http" {
