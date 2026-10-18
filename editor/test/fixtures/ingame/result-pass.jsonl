@@ -1,0 +1,12 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"C:\\x\\script.mewtest","out":"C:\\x\\result.jsonl","pid":1234,"hide":1,"timeout_ms":60000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":2001,"frame":120}
+{"ev":"cmd","line":2,"text":"this_command_does_not_exist_xyz","t":2017,"frame":121}
+{"ev":"console","text":"No command named \"this_command_does_not_exist_xyz\" found","t":2017,"frame":121}
+{"ev":"expect","line":3,"kind":"console","arg":"No command named \"this_command_does_not_exist_xyz\" found","ok":true,"detail":"matched console line 0","t":2033,"frame":122}
+{"ev":"cmd","line":4,"text":"listcmds","t":2050,"frame":123}
+{"ev":"console","text":"listcmds","t":2050,"frame":123}
+{"ev":"console","text":"load","t":2050,"frame":123}
+{"ev":"turn","n":1,"round":1,"t":2060,"frame":124}
+{"ev":"expect","line":5,"kind":"console","arg":"listcmds","ok":true,"detail":"matched console line 1","t":2066,"frame":124}
+{"ev":"units","available":true,"round":1,"count":2,"list":[{"i":0,"name":"Lumee","class":"Fighter","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"]},{"i":1,"name":"Rat","class":"Rat","faction":1,"move":2,"act":1,"turnkind":2,"statuses":[]}],"t":2083,"frame":125}
+{"ev":"end","code":0,"reason":"quit","frames":126,"turns":1,"elapsed_ms":2100,"expect_pass":2,"expect_fail":0,"t":2100,"frame":126}

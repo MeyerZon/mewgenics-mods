@@ -1,0 +1,10 @@
+[16:23:24.650] [crash] Baseline crash handler installed (SEH+VEH). Reports -> mod_logs\crashes\
+[16:23:24.650] === Mewjector v3.5 (API v3) ===
+[16:23:24.650] Process: PID 14664  TID 33420
+[16:23:25.199] [LoadOrder] Processing 1 entries...
+[16:23:25.199] [LoadOrder]   Mod10 Loading: mewframework.dll
+[16:23:25.200] [mewframework] mewframework 0.3.0 starting; mewjector=yes
+[16:23:25.384] [MJ] Hook installed: RVA 0x10A9B0  pri=20  owner=mewframework  fn=00007ffad1ba1290
+[16:23:25.500] [ScanPath] Loading: jokers_luck.dll
+[16:23:25.501] [ScanPath] Loading: mewtest.dll
+[16:23:25.502] [mewtest] mewtest 0.1.0 starting

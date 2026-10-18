@@ -1,0 +1,12 @@
+mods: jokers-luck
+timeout: 90s
+
+# Proves the data+native pair loads: the console knows `bind` and the game
+# resolved the JokersGambit ability. Framework-active is asserted by the Node
+# runner from mewframework.log, not here.
+wait frames 120
+cmd bind JokersGambit
+wait frames 10
+expect noconsole "No command named"
+expect noconsole "NO_ABILITY_NAMED"
+quit

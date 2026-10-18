@@ -1,0 +1,6 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"s","out":"o","pid":1,"hide":1,"timeout_ms":60000,"clean":0,"t":0,"frame":0}
+{"ev":"cmd","line":2,"text":"bind JokersGambit","t":10,"frame":1}
+{"ev":"console","text":"No command named \"bind\" found","t":10,"frame":1}
+{"ev":"expect","line":3,"kind":"noconsole","arg":"No command named","ok":false,"detail":"found in console line 0","t":20,"frame":2}
+{"ev":"expect","line":4,"kind":"console","arg":"Executed:","ok":true,"detail":"matched console line 1","t":30,"frame":3}
+{"ev":"end","code":1,"reason":"quit","frames":4,"turns":0,"elapsed_ms":40,"expect_pass":1,"expect_fail":1,"t":40,"frame":4}

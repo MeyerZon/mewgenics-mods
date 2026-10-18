@@ -1,0 +1,15 @@
+mods: dev-sandbox
+timeout: 60s
+
+# Main-menu-safe console smoke. Asserts OBSERVED dispatcher strings
+# (docs/ingame-testing.md). "listcmds" output format is pinned after the
+# first real run.
+wait frames 120
+cmd this_command_does_not_exist_xyz
+expect console "No command named \"this_command_does_not_exist_xyz\" found"
+cmd spawn
+expect console "needs at least"
+cmd listcmds
+expect console "listcmds" within 5
+dump
+quit

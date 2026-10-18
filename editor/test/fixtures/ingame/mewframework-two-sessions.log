@@ -1,0 +1,14 @@
+mewframework 0.2.0 starting; mewjector=yes
+build 1.1.21239 (steam 25143593) recognized (base 0x7ff691ff0000)
+hook installed: Character::BeginTurn rva 0x10a9b0
+status hooks: apply_status + 13/13 name lookups aliased
+hook installed: TurnControl::NextTurn rva 0x8e3c60, chain depth 1
+framework active: 11 symbols resolved, mewjector api v3
+RegisterStatus: JokersLuck registered (template LuckUp, type id 0x1000, vtable 0000019dae086e80)
+TurnControl::NextTurn #1 (tc=000001aea9fd0008)
+mewframework 0.3.0 starting; mewjector=yes
+build 1.1.21239 (steam 25143593) recognized (base 0x7ff691ff0000)
+hook installed: Character::BeginTurn rva 0x10a9b0
+status hooks: apply_status + 13/13 name lookups aliased
+hook installed: TurnControl::NextTurn rva 0x8e3c60, chain depth 1
+framework active: 15 symbols resolved, mewjector api v3
