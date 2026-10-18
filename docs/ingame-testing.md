@@ -7,14 +7,15 @@ verdict. Agents use it to TDD mods end to end without anyone at the keyboard.
 
 This file is the single source of truth for the contracts shared by the three parts:
 
-| Part | Where | Status |
-|---|---|---|
-| Node runner, MCP tools, CLI | `editor/src/core/ingame/`, `editor/src/mcp/tools.mjs`, `editor/scripts/ingame.mjs` | this PR |
-| Framework API v3 (new symbols + data addresses) | `native/framework/` | next PR |
-| `mewtest.dll` (the harness) | `native/mods/test-harness/` | after that |
+| Part | Where |
+|---|---|
+| Node runner, MCP tools, CLI | `editor/src/core/ingame/`, `editor/src/mcp/tools.mjs`, `editor/scripts/ingame.mjs` |
+| Framework API v3 (console/frame-loop symbols + data addresses) | `native/framework/` |
+| `mewtest.dll` (the harness) | `native/mods/test-harness/` (build with its `build.bat`, copy to `native/dist/`) |
 
-Until `native/dist/mewtest.dll` exists every real run reports `cannot-run` naming the missing piece; the runner itself
-is fully covered by `npm test` through a fake game (`editor/test/fixtures/fake-game.mjs`).
+Without `native/dist/mewtest.dll` every real run reports `cannot-run` naming the missing piece; the runner itself
+is fully covered by `npm test` through a fake game (`editor/test/fixtures/fake-game.mjs`), and the DLL's pure
+modules by `native/test-all.bat`.
 
 ## How a run works
 
@@ -155,15 +156,29 @@ under `mods/`.
 - The harness DLL is inert without `-mewtest` and without `-savesuffix` (the framework already refuses vanilla
   launches), and never writes anything but its result file and `mod_logs\mewtest.log`.
 
-## Game-state assumptions
+## Game-state assumptions (verified 2026-10-18 on build 25143593)
 
-- Launch lands on the main menu with the debug console available, so the committed smoke scripts only use
-  commands that are safe there (`listcmds`, unknown-command and arity errors, `bind`).
-- Combat commands (`load`, `spawn`, `win`, ...) need a run in progress on the `dev` save. How to enter that run
-  from the main menu via the console is an open item for the DLL PR; until it is settled, combat scripts stay out of
-  `mods/*/tests/`.
-- `listcmds` output format and whether a hidden window keeps the simulation ticking are confirmed on the first
-  real run and then pinned here.
+- Launch lands on the main menu with the debug console created (`DebugConsole::init` fires once, before the first
+  frame) and **only the engine's own 11 commands registered**: `listcmds`, `clear`, `clear_history`,
+  `record_macro arg0`, `end_recording_macro`, `save_commands_as_macro arg0 arg1`, `macro arg0`,
+  `clear_macros arg0`, `nofilter`, `toggle_filter`, `soundevent_debug arg0`. Game commands (`spawn`, `bind`,
+  `load`, `win`, `crash`, ...) are registered by the run's scenes (`MewDirector::init`, `GameBase::init`,
+  `TacticsTest::init`, ...) and answer `No command named "X" found` at the main menu.
+- `listcmds` pushes one line per command (`<name> arg0 arg1 ...`) followed by `Executed: listcmds`; every
+  successful command ends with `Executed: <line>`. An unknown name gives `No command named "X" found`; too few
+  arguments gives `command "X" needs at least N arguments`.
+- A hidden window keeps the simulation running: with `hide: true` the harness hides the window at frame 0 and
+  sets the swap interval to 0, after which the game ran ~180 frames per second (487 frames in 2.6 s) and every
+  expectation behaved as with a visible window.
+- Combat commands need a run in progress on the `dev` save. **Entering that run from the main menu through the
+  console is still open** (no console command does it; the menu is mouse-driven). Until it is solved, committed
+  scripts assert only main-menu-safe things, the unit walk (`dump`, `expect status`, `expect units`) is
+  exercised only with `available:false` / `0 units`, and the crash path (`cmd crash`) is unverified in-game.
+- With the default immediate exit the game's own `debug.log` is block-buffered and ends mid-line; load-time
+  markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works. Pass
+  `-mewtest_clean 1` (not yet exposed by the runner) when a complete `debug.log` matters.
+- Mewjector loads mods on the first `version.dll` proxy call, which on this machine is after SDL has initialized;
+  the DYNAPI slots therefore already hold their final values when `DllMain` runs.
 
 ## Writing a test (TDD)
 

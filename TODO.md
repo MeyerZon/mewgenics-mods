@@ -36,6 +36,8 @@ Two agents were in flight at last update: Playwright E2E/validation and the SWF-
 
 ### Testing
 - [x] **Playwright E2E suite** (`editor/tests/e2e/`, 33 tests) + real-browser validation — Data + Art flows + onboarding; `test:e2e` script; Chromium dev-only dep (user-authorized). typecheck + 77 unit + 33 e2e all green
+- [x] **In-game test harness `mewtest`** (2026-10-18, three stacked PRs) — `docs/ingame-testing.md`. Node runner + MCP `run_ingame_test` + `npm run test:ingame` (68 unit tests via a fake game); framework API v3 (console dispatcher `DebugConsole::Execute`, `FrameBegin`, SDL DYNAPI slots; 13 host tests); `mewtest.dll` (40 host tests). Verified in the real game: console commands executed in-process, output captured, exit codes/verdicts, hidden window keeps ticking, timeout path, real save untouched.
+- [ ] Harness follow-ups: enter a run from the main menu through the console (game commands only exist in-run), verify the unit walk + `expect status` in combat, the crash path, `-mewtest_clean` exposure, named-pipe interactive mode, RNG seed pinning
 - [x] **Fixed the real UI bug** the user was seeing: Art-mode Findings/Build tabs rendered JS source as literal text (VanJS binding returned a function into a child slot) — `editor/web/art-ui.mjs`
 
 ### Investigations run
