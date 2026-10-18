@@ -70,7 +70,7 @@ TEST(scan_wildcard_matches_both_and_reports_two) {
 TEST(scan_no_match_is_null_and_zero) {
     uint8_t b[8], m[8];
     int n = fw_parse_pattern("DE AD BE EF", b, m, sizeof b);
-    int matches = 7;
+    int matches = 0; /* the scanner ADDS to the counter (section walk); callers zero it */
     const uint8_t *hit = fw_scan_buffer(HAY, sizeof HAY, b, m, (size_t)n, &matches);
     CHECK(hit == NULL);
     CHECK_EQ(matches, 0);
@@ -107,7 +107,7 @@ TEST(scan_stops_counting_at_two) {
 }
 
 TEST(scan_zero_length_pattern_is_rejected) {
-    uint8_t b[4], m[4];
+    uint8_t b[4] = { 0 }, m[4] = { 0 };
     int matches = 0;
     CHECK(fw_scan_buffer(HAY, sizeof HAY, b, m, 0, &matches) == NULL);
     CHECK_EQ(matches, 0);
