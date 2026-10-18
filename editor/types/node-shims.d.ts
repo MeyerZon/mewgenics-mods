@@ -13,6 +13,7 @@ declare const process: {
   cwd(): string;
   exit(code?: number): never;
   kill(pid: number, signal?: number | string): boolean;
+  pid: number;
   platform: string;
   stdin: NodeReadable;
   stdout: NodeWritable;
@@ -48,6 +49,7 @@ declare module "node:fs" {
   export function realpathSync(path: string): string;
   export function rmSync(path: string, opts?: { recursive?: boolean; force?: boolean }): void;
   export function copyFileSync(src: string, dest: string): void;
+  export function appendFileSync(path: string, data: string | Uint8Array): void;
   export function utimesSync(path: string, atime: Date | number, mtime: Date | number): void;
   export function unlinkSync(path: string): void;
 }
