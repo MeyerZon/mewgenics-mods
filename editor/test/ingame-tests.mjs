@@ -140,7 +140,7 @@ export async function runIngameTests(test, assert, eq) {
     test("no quit -> warning, still ok", () => {
       const p = parseScript("cmd listcmds\n", { owningMod: "m" });
       assert(p.ok, "ok");
-      assert(p.warnings.some((w) => /quit/.test(w.message)), "warning mentions quit");
+      assert(p.warnings.some((/** @type {any} */ w) => /quit/.test(w.message)), "warning mentions quit");
     });
 
     test("empty / comment-only script is ok with zero directives and a warning", () => {
@@ -408,7 +408,7 @@ export async function runIngameTests(test, assert, eq) {
     });
     test("buildLaunch refuses: bad suffix, saves path in a mod dir, relative script path", () => {
       /** @param {() => void} fn */
-      const throws = (fn) => { try { fn(); return null; } catch (e) { return e; } };
+      const throws = (fn) => { try { fn(); return null; } catch (e) { return /** @type {any} */ (e); } };
       const bad = script.parseScript("cmd listcmds\nquit\n", { owningMod: "jokers-luck" });
       bad.savesuffix = "has space";
       const e1 = throws(() => buildLaunch(bad, ctx));
