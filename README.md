@@ -36,6 +36,8 @@ and fast to author.
   automated testing (launching fights, AI auto-resolve, seeding, headless).
 - **[`docs/ingame-testing.md`](docs/ingame-testing.md)** — the in-game test harness: `.mewtest` scripts that run
   debug-console commands inside the game and come back with a verdict (`npm run test:ingame`, MCP `run_ingame_test`).
+- **[`docs/tdd-procedure.md`](docs/tdd-procedure.md)** — how work is done here: test-first, four tiers (unit, local
+  data, in-game, human), and the evidence every PR carries.
 
 ## Sample mod: Joker's Luck
 
