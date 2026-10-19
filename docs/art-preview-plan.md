@@ -223,7 +223,7 @@ un-remapped 16-level art), background colour, zoom/fit. Playback runs at the sce
   opts)`, `buildSwf(mod, rel, {abc:"none"|"stub"})` → writes `swfs/<name>.swf` and
   returns a tag report + findings, `writeSwflistAppend(mod, names)`,
   `readPalette()` (rows from `.extracted/textures/palette.png`),
-  `prepareAbcGateTest(mod)` (writes the §7 fixtures). All writes go through
+  `prepareSwfGate({ mod, variant })` (writes or removes the §7 gate files). All writes go through
   `resolveModWritePath`, so they stay inside `mods/<mod>/` and can never touch saves or
   game files. `.swf` outputs are git-ignored already (`*.swf`).
 - **Web server (`web/server.mjs`, additive):** `/api/art/*` routes over those calls,
@@ -254,7 +254,7 @@ un-remapped 16-level art), background colour, zoom/fit. Playback runs at the sce
 | 7 | `svg-import.mjs` + `geometry.mjs` (SVG path → lines/quads; cubic→quad; arcs) | built |
 | 8 | WebGL preview (`web/art/preview-gl.mjs`) with palette remap, stencil fill, cxform, nesting, Canvas2D fallback | built |
 | 9 | Editor wiring: `/api/art/*`, Art + Preview panels | built |
-| 10 | §7 gate test fixtures + procedure | prepared (`node scripts/prepare-abc-gate.mjs`), **user runs it** |
+| 10 | §7 SWF gate | `npm run test:swfgate -- <variant>` (T2, agents may run); visual half is the owner's T3 |
 | 11 | Follow-ups: MCP tools, vanilla-SWF import via `swf-reader.mjs`, gradients, DefineShape4 line styles, part-indexed cat assembly UI | open |
 
 ---
@@ -286,65 +286,32 @@ this brief:
 
 ---
 
-## 7. The one gate test: does `SymbolClass` bind without a `DoABC`? (user runs this)
+## 7. The SWF gate (settled 2026-10-19; re-run with `npm run test:swfgate`)
 
-Why it matters: every vanilla file ships one Flash-generated `DoABC` declaring the
-SymbolClass classes (OBSERVED, §1.3). Whether `glaiel::swf` **requires** it is the only
-unresolved question that decides if the emitter must always include `abc-stub.mjs`.
-The emitter supports both (`abc: "none" | "stub"`); the default flips based on this
-result.
+The original question here — does `SymbolClass` bind without a `DoABC`? — is answered: it does
+(`DEFAULT_ABC_MODE = "none"`; the no-DoABC donor merges exactly like the stub one). The gate now
+checks the thing that actually went wrong on 2026-10-18: does an `_Append_AbilityIcon` donor
+survive the boot-time merge? See `swf-emitter-fix-spec.md` §0 for the findings.
 
-**Safety:** writes only under `mods/dev-sandbox/`; launches only through
-`launch-dev.bat` (`-savesuffix dev`); `Mewgenics.exe`, `resources.gpak`, real saves are
-not touched. The game is **not** launched by any agent.
+**Safety:** writes only under `mods/swf-gate/` (`swfs/gate.swf` + `swfs/swflist.gon.append`,
+both git-ignored); the game is launched through the in-game harness on `-savesuffix dev`,
+which hashes the real save before and after. Agents may run it.
 
-### 7.1 Fixtures (generated)
-From `editor/`: `node scripts/prepare-abc-gate.mjs` writes into `mods/dev-sandbox/`:
-- `swfs/mod_abc_gate_none.swf` — minimal SWF, **no DoABC**: one `DefineShape3` (64×64
-  square, `gray:8`) inside a `DefineSprite` with a `FrameLabel "JokersGambit"` on its
-  single frame; `SymbolClass {sprite → "_Append_AbilityIcon"}`.
-- `swfs/mod_abc_gate_stub.swf` — the identical file **plus a stub DoABC** declaring
-  `_Append_AbilityIcon extends flash.display.MovieClip`.
-- `swfs/swflist.gon.append.A`, `swfs/swflist.gon.append.B` — two candidates; copy one
-  to `swfs/swflist.gon.append` per run (the resolver only reads the exact `.append`
-  name — OBSERVED resolver behavior in `engine-map.md`).
-
-The `_Append_AbilityIcon` + frame-label pairing is the community "Moviescript
-Reliance" convention (COMMUNITY-SOURCED) applied to the icon clip whose labels are
-ability names (OBSERVED, §1.3). It is the visual half of the test; the log half does
-not depend on it.
+### 7.1 Variants (`editor/src/core/art/art-io.mjs` `SWF_GATE_VARIANTS`)
+`flat` (the fix: icon shape at depth 3, like every `AbilityIcon` frame) · `nested` (icon in a
+nested movieclip at depth 3) · `legacy` (depth 1, the pre-fix donor) · `probe` (same bytes under
+the non-append linkage `GateProbe`: load only) · `missing` (`_Append_NoSuchClipXYZ`: must
+stall the boot — the proof the merge ran) · `control` (removes the gate files).
 
 ### 7.2 Procedure
-0. Back up nothing — nothing outside `mods/dev-sandbox/` changes. Note the current
-   tail of `%APPDATA%\Glaiel Games\Mewgenics\<steamid>\logs\debug.log` (it is
-   overwritten per launch; copy it aside after each run).
-1. **Control run (C):** no `swflist.gon.append` present. `launch-dev.bat`. Reach the
-   main menu, open the Joker's Luck dev content (ability `JokersGambit` from
-   `mods/jokers-luck`) so an ability icon is drawn. Quit. Save the log as
-   `debug.C.log`.
-2. **Run A (no DoABC):** `copy swfs\swflist.gon.append.A swfs\swflist.gon.append`
-   (it appends `mod_abc_gate_none.swf` to `game [ ]`). Launch, same steps, quit.
-   Save as `debug.A.log`. Also check for a new `crash_*.txt` next to the log.
-3. **Run B (stub DoABC):** replace the append with `.B` (→ `mod_abc_gate_stub.swf`).
-   Launch, same steps, quit. Save as `debug.B.log`. Then delete
-   `swfs/swflist.gon.append` to return the sandbox to vanilla.
-4. **Read the results:**
-   - `findstr /i "mod_abc_gate" debug.A.log debug.B.log` — the engine logs per-SWF
-     tessellator/atlas lines with `swfs/<name>.swf` (OBSERVED format:
-     `[file: …glaielswf\renderer\Tesselator.cpp; line: 216;] … swfs/effects.swf (…)`).
-     A line mentioning our file = it was loaded.
-   - `findstr /i "glaielswf" debug.A.log | findstr /v "Tesselator GradientAtlas BitmapFillAtlas"`
-     — any new glaielswf line vs. `debug.C.log` is the loader complaining (compare all
-     three with `fc`).
-   - A `crash_*.txt` only in run A = ABC required (hard).
-   - **Visual:** does `JokersGambit`'s icon change from the `unknown` icon to a flat
-     square in the class palette colour? A → yes: **binding works without ABC**
-     (set `abc: "none"` as default). A → no, B → yes: **ABC required** (default
-     `"stub"`). Both no, no log errors: the `_Append_` icon convention is wrong but
-     loading is fine — the log half still answers the load question; binding needs a
-     second visual probe (a `spawns.gon` `image ["…png"]` entry) — ask before building.
-5. Report the three log diffs + the visual outcome; the emitter default is then set in
-   `scene.mjs` (`DEFAULT_ABC_MODE`).
+1. From `editor/`: `npm run test:swfgate -- <variant>` — writes the files, boots the game
+   through `mods/swf-gate/tests/boot.mewtest`, prints the verdict against the variant's
+   expected one, and the run dir (`editor/data/ingame-runs/<ts>-swf-gate-boot`).
+2. Visual half (owner, T3): `npm run test:swfgate -- flat --prepare-only`, then
+   `launch-dev.bat mods\swf-gate`, enter the dev run and look at `JokersGambit`: the flat
+   gray square instead of `unknown`, and no new `crash_*.txt` in
+   `%APPDATA%\Glaiel Games\Mewgenics\<steamid>\logs\`.
+3. Finish with `npm run test:swfgate -- control` so the mod is vanilla again.
 
 ---
 

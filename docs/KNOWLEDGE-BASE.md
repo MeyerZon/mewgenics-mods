@@ -57,14 +57,16 @@ the linked docs; this page is the map.
   WebGL in-game-faithful preview. Validated: 77 unit + 33 Playwright e2e tests, typecheck clean. Overview:
   **[../README.md](../README.md)**; art design/plan: **[art-preview-plan.md](art-preview-plan.md)**.
 
-### The SWF-emitter crash — understood
-- Our hand-emitted minimal SWF **parses cleanly**; the in-game crash is a **post-load null-deref**, not malformation.
-  Under linkage `_Append_AbilityIcon` the clip is merged into the live `AbilityIcon` sprite (`process_animation_merges`
-  0x9bc070); a **structurally-naive appended frame** (a bare shape instead of the clip's per-frame movieclip structure)
-  perturbs it so a post-load scene update fires a scripted call into the adventure-cutscene handler with no active run
-  → null double-deref. **Leading fix: wrap the icon in a nested `DefineSprite` mirroring `AbilityIcon`'s per-frame
-  structure** (not a bare `DefineShape3`), default `abc:"none"`, keep FWS + `_Append_<name>`. The `_Append_AbilityIcon`
-  name is correct; char-ID collision was ruled out. Full spec (with 6 decompiles): **[swf-emitter-fix-spec.md](swf-emitter-fix-spec.md)**.
+### The SWF-emitter crash — fix applied, boot-safe, display check owed
+- Our hand-emitted minimal SWF **parses cleanly** and the `_Append_AbilityIcon` merge into the live `AbilityIcon`
+  sprite (`process_animation_merges` 0x9bc070) **survives boot** with every donor layout we have (depth 1, depth 3,
+  nested) — `npm run test:swfgate -- <variant>` boots the game through the harness and hashes the real save.
+- `AbilityIcon` places a **bare shape at depth 3** on each labeled frame, never a nested clip (OBSERVED, T1-pinned);
+  the donor now mirrors that (`ABILITY_ICON_DEPTH`). The 2026-10-18 crash did **not** reproduce at the main menu with
+  the pre-fix donor, so it is tied to the appended frame being displayed in a run — owner's T3 check, or TODO target 1.
+- An unknown `_Append_` target is logged and then **stalls the boot** before the console (no crash report).
+  The `_Append_AbilityIcon` name is correct; a DoABC is not needed to bind; char-ID collision was ruled out.
+  Spec + gate table: **[swf-emitter-fix-spec.md](swf-emitter-fix-spec.md)** §0.
 
 ---
 

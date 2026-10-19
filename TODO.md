@@ -1,6 +1,6 @@
 # TODO — Mewgenics modding toolkit
 
-Living status snapshot (last updated 2026-10-18, evening: harness + TDD rule). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
+Living status snapshot (last updated 2026-10-19: SWF gate + emitter fix on `fix/swf-append-frame`). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 Two agents were in flight at last update: Playwright E2E/validation and the SWF-loader-crash RE.
 
 ## Done
@@ -90,7 +90,7 @@ Two agents were in flight at last update: Playwright E2E/validation and the SWF-
   fight (blocked by target 1).
 - [ ] **Crash path**: VEH + top-level filter + watchdog never ran against a real fault (`cmd crash` is in-run only).
   Expect: `crash` event, `end code 3`, Mewjector dump in `mod_logs\crashes\`, no WER dialog, exit 3.
-- [ ] **`-mewtest_clean 1`**: the clean-shutdown path (clear `app+0x10`, 3 s grace) is untested in-game.
+- [ ] **`-mewtest_clean 1`**: OBSERVED 2026-10-19 — the DLL logs `script finished with code N (clean exit)` and the game then **never exits** (killed after 7 min; no "grace elapsed" line). Fix the clean path before exposing it in the runner.
 - [ ] **Vanilla-launch gate** of framework 0.3.0: not re-verified (a vanilla launch opens the real save; verify with a
   copy of the install or accept the unchanged code path).
 - [ ] **One-off early exit**: the very first 0.3.0 launch exited with code 1 after ~5 s during loading with no crash
@@ -109,7 +109,7 @@ Two agents were in flight at last update: Playwright E2E/validation and the SWF-
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")
-- [ ] Apply the emitter fixes from `swf-emitter-fix-spec.md` — LEADING: wrap the icon in a nested `DefineSprite` mirroring `AbilityIcon`'s per-frame structure (not a bare `DefineShape3`); default `abc:"none"`; keep FWS + `_Append_<name>`. Then one controlled in-game SWF re-test — *emitter frontier*
+- [~] Emitter fix from `swf-emitter-fix-spec.md` (PR `fix/swf-append-frame`, 2026-10-19): `AbilityIcon` places a bare shape at **depth 3** per labeled frame (not nested clips) — donor now mirrors it; T2 gate `npm run test:swfgate -- <variant>` boots every layout (incl. the pre-fix one) without crashing, and `missing` proves the merge runs. **Owed:** the owner's T3 look at `JokersGambit` inside a run (the crash is display-time, not boot-time) — *emitter frontier*
 - [ ] Commit the uncommitted WIP (art pipeline + docs + `CLAUDE.md` flag) + open a PR for review (not merge)
 
 ### Go public (do LAST, after everything else lands — approved 2026-10-18)
@@ -131,7 +131,7 @@ Two agents were in flight at last update: Playwright E2E/validation and the SWF-
 - [ ] Testing frontier from `automation-feasibility.md`: AI-brain auto-resolve to smoke-test mods in a real fight (tiers B/C) → now TDD targets 1–3 above; an IPC action layer (tier D) → the named-pipe mode in target 12
 
 ### Open engine unknowns to resolve
-- [ ] Exact SWF-format + `_Append_`/SymbolClass convention the loader requires (being answered by the RE agent)
+- [~] Exact SWF-format + `_Append_`/SymbolClass convention the loader requires — binding needs no DoABC; `_Append_<Target>` merges at boot; an unknown target stalls the boot (OBSERVED 2026-10-19); what the display path needs is the open half
 - [ ] RNG seeding for deterministic test runs (no user-facing command; the state is `TLS+0x178`, pin it from the harness → target 12)
 - [x] Headless / startup-macro mode — solved by the harness (in-process console execution + hidden window), not by the game
 - [ ] Verify the INFERRED preview behaviors (nested-sprite framing, cxform-after-remap, engine fill rule, bitmap sampling)

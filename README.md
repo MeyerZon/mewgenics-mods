@@ -78,8 +78,8 @@ zero-dependency emitter. Extract the palette first with `python -I tools/gpak.py
 textures/palette.png`. First-run onboarding covers both sides — a Data-mode tour and a dedicated Art-mode tour (with
 empty states, an Art section in the concepts drawer, and an illustrative SVG→preview→build worked example), all
 re-openable from the Help (`?`) menu. Plan, source model and open items: [`docs/art-preview-plan.md`](docs/art-preview-plan.md);
-the one unresolved engine question (does `SymbolClass` bind without a `DoABC`?) has a prepared dev-save test there
-(`node scripts/prepare-abc-gate.mjs` writes the fixtures).
+the SWF append gate (`npm run test:swfgate -- <variant>` from `editor/`) boots the game through the in-game harness
+with a generated `_Append_AbilityIcon` donor and reports the verdict (`docs/swf-emitter-fix-spec.md` §0).
 
 ## Daily use (game)
 
