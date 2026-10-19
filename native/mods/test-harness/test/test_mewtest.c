@@ -643,4 +643,64 @@ TEST(runner_events_carry_t_and_frame) {
     CHECK(has(ev(0), "\"t\":250")); CHECK(has(ev(0), "\"frame\":1"));
 }
 
+/* ====================================================================== */
+/* mt_exit — the watchdog decision (TODO.md: -mewtest_clean never exited)   */
+/* ====================================================================== */
+static MtExitState xs(void) { MtExitState s; memset(&s, 0, sizeof s); s.exitCode = -1; s.timeoutMs = 120000; return s; }
+
+TEST(exit_clean_grace_fires_after_grace_without_any_active_flag) {
+    MtExitState s = xs();
+    s.cleanRequested = 1; s.cleanTick = 1000; s.exitCode = 1;
+    int code = -7;
+    CHECK_EQ(mt_exit_decide(&s, 1000 + MT_GRACE_CLEAN_MS, &code), MT_X_NONE);       /* exactly the grace: not yet */
+    CHECK_EQ(mt_exit_decide(&s, 1000 + MT_GRACE_CLEAN_MS + 1, &code), MT_X_EXIT_CLEAN);
+    CHECK_EQ(code, 1);
+}
+
+TEST(exit_clean_unset_code_becomes_4) {
+    MtExitState s = xs();
+    s.cleanRequested = 1; s.cleanTick = 0; s.exitCode = -1;
+    int code = 0;
+    CHECK_EQ(mt_exit_decide(&s, MT_GRACE_CLEAN_MS + 1, &code), MT_X_EXIT_CLEAN);
+    CHECK_EQ(code, 4);
+}
+
+TEST(exit_crash_grace_wins_over_clean) {
+    MtExitState s = xs();
+    s.crashed = 1; s.crashTick = 0; s.cleanRequested = 1; s.cleanTick = 0; s.exitCode = 0;
+    int code = 0;
+    CHECK_EQ(mt_exit_decide(&s, MT_GRACE_CRASH_MS, &code), MT_X_EXIT_CLEAN);          /* clean grace already over, crash not yet */
+    CHECK_EQ(mt_exit_decide(&s, MT_GRACE_CRASH_MS + 1, &code), MT_X_EXIT_CRASH);
+    CHECK_EQ(code, 3);
+}
+
+TEST(exit_timeout_only_while_running) {
+    MtExitState s = xs();
+    s.startTick = 0; s.timeoutMs = 1000;
+    int code = 0;
+    CHECK_EQ(mt_exit_decide(&s, 1000, &code), MT_X_NONE);
+    CHECK_EQ(mt_exit_decide(&s, 1001, &code), MT_X_TIMEOUT);
+    CHECK_EQ(code, 2);
+    s.runnerFinished = 1;
+    CHECK_EQ(mt_exit_decide(&s, 5000, &code), MT_X_NONE);                              /* end written: no timeout */
+    s.runnerFinished = 0; s.cleanRequested = 1; s.cleanTick = 4000;
+    CHECK_EQ(mt_exit_decide(&s, 5000, &code), MT_X_NONE);                              /* clean branch owns the exit now */
+}
+
+TEST(exit_fires_once) {
+    MtExitState s = xs();
+    s.fired = 1;
+    s.crashed = 1; s.cleanRequested = 1; s.timeoutMs = 1;
+    int code = 0;
+    CHECK_EQ(mt_exit_decide(&s, 100000, &code), MT_X_NONE);
+}
+
+TEST(exit_tick_wraparound) {
+    MtExitState s = xs();
+    s.cleanRequested = 1; s.cleanTick = 0xFFFFF000u; s.exitCode = 0;
+    int code = -1;
+    CHECK_EQ(mt_exit_decide(&s, 0x00000BB9u, &code), MT_X_EXIT_CLEAN);                /* 3001 ms later across the wrap */
+    CHECK_EQ(code, 0);
+}
+
 int main(void) { return MT_RUN_ALL(); }

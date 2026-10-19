@@ -60,7 +60,7 @@ function writeResult(events) {
   if (!outPath) return;
   writeFileSync(outPath, events.map((e) => JSON.stringify(e)).join("\n") + "\n");
 }
-const start = { ev: "start", harness: "fake-game", build: "fake", script: scriptPath, out: outPath, pid: process.pid, hide: 1, timeout_ms: 1000, clean: 0, t: 0, frame: 0 };
+const start = { ev: "start", harness: "fake-game", build: "fake", script: scriptPath, out: outPath, pid: process.pid, hide: 1, timeout_ms: 1000, clean: Number(argAfter("-mewtest_clean") || 0), t: 0, frame: 0 };
 /** @param {number} code @param {string} reason @param {number} pass @param {number} fail */
 const end = (code, reason, pass = 0, fail = 0) => ({ ev: "end", code, reason, frames: 3, turns: 0, elapsed_ms: 5, expect_pass: pass, expect_fail: fail, t: 5, frame: 3 });
 
@@ -108,6 +108,11 @@ switch (mode) {
   case "hang":
     writeResult([start]);
     setInterval(() => {}, 1000); // never exits; the runner's backstop must kill us
+    break;
+  case "end-hang":
+    // clean mode gone wrong: the full result incl. the end event is on disk, but the game never exits
+    writeResult([start, { ev: "cmd", line: 1, text: "listcmds", t: 1, frame: 1 }, { ev: "console", text: "listcmds", t: 1, frame: 1 }, { ev: "expect", line: 2, kind: "console", arg: "listcmds", ok: true, detail: "matched console line 0", t: 2, frame: 2 }, end(0, "quit", 1, 0)]);
+    setInterval(() => {}, 1000); // the runner must act on the end record, not wait for the backstop
     break;
   case "abnormal":
     writeResult([start]);
