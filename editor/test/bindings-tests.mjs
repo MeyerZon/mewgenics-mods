@@ -1200,7 +1200,9 @@ export async function runBindingsTests(test, assert, eq) {
       ],
     };
     const old = harvestManifest(hp, hvPe.buf, parseManifest(base)).manifest;
-    const same = portManifest(old, hp, hvPe.buf, { steamBuildId: "445", gameVersion: "4.4.5" });
+    // the two tiny functions carry no signature in this fixture: resolve them explicitly (the ladder is tested elsewhere)
+    const resolve = { FnB: "0x1040", FnD: "0x1080" };
+    const same = portManifest(old, hp, hvPe.buf, { steamBuildId: "445", gameVersion: "4.4.5", resolve });
     const r1 = row(same, "Foo_typeid");
     eq(r1.status, "ported-derived", r1.detail);
     assert(/agree/.test(r1.detail) && /0x4d6/.test(r1.detail), r1.detail);
@@ -1208,7 +1210,7 @@ export async function runBindingsTests(test, assert, eq) {
     const patched = new Uint8Array(hvText);
     patched[0x41] = 0xd7;
     const img2 = buildFakePe({ timeDateStamp: 0x44444445, sections: [{ name: ".text", bytes: patched, exec: true }, { name: ".hvRdata", bytes: hvRdata }, { name: ".data", bytes: hvData, write: true }], pdata: hvPdata });
-    const split = portManifest(old, parsePe(img2.buf), img2.buf, { steamBuildId: "446", gameVersion: "4.4.6" });
+    const split = portManifest(old, parsePe(img2.buf), img2.buf, { steamBuildId: "446", gameVersion: "4.4.6", resolve });
     const r2 = row(split, "Foo_typeid");
     eq(r2.status, "needs-human", r2.detail);
     assert(/0x4d6/.test(r2.detail) && /0x4d7/.test(r2.detail), r2.detail);

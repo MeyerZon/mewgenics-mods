@@ -211,7 +211,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   - [x] PR 4 `fix/harness-clean-exit`: `-mewtest_clean` exits (pure `mt_exit.c` + runner end-grace), `clean:` header,
     unique run dirs for same-second runs; finding: clean mode does not make the game shut down or flush `debug.log`
   - [ ] PR 5 `docs/save-suffix-mapping`: decode `MewSaveFile::open_or_create`, savecheck over every real save
-  - [ ] PR 6 `feat/bindings-typeid-witness`: second witness for `LuckUp_typeid`
+  - [x] PR 6 `feat/bindings-typeid-witness`: second witness for `LuckUp_typeid` (call-arg before Entity_FindComponentsByTypeId
+    in Status_ApplyLuckUp); harvest and port require every source of a constant to agree, else needs-human
 
 ### Go public (do LAST, after everything else lands — approved 2026-10-18)
 - [x] Scrub complete: mod `author` → "MeyerZon"; test scratch path → env/`""`; save-backup doc path → `%USERPROFILE%`; `chainloader.ini` personal path → `__REPO__` placeholder resolved at install time; `build.bat`/`CLAUDE.md` toolchain path made `GCC`-env-overridable. (Tyler Glaiel's `__FILE__` asserts embedded in the game binary are RE evidence, kept.)

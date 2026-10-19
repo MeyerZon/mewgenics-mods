@@ -255,6 +255,62 @@ export function deriveFromVtableSlot(pe, buf, vftableRva, slot, bodyPattern, imm
 }
 
 /**
+ * Read an imm32 from the instruction matching `pattern` within `maxBack` instructions before the first E8 call to
+ * `calleeRva` inside the function at `fnRva` (e.g. "41 B8 ?? ?? ?? ??" = mov r8d, imm32: the type id passed to
+ * Entity_FindComponentsByTypeId). A second, independent source for a constant that otherwise rests on one vtable slot body.
+ * @param {import("./pe.mjs").Pe} pe @param {Buffer} buf @param {number} fnRva @param {number} calleeRva @param {string} pattern @param {number} imm32At @param {number} [maxBack]
+ * @returns {number|null}
+ */
+export function deriveFromCallArg(pe, buf, fnRva, calleeRva, pattern, imm32At, maxBack = 8) {
+  const d = decodeFunction(pe, buf, fnRva);
+  const pat = parsePattern(pattern);
+  for (let i = 0; i < d.instrs.length; i++) {
+    const x = d.instrs[i];
+    if (!(x.ins.kind === "call" && x.ins.reloc && x.ins.reloc.why === "E8 rel32" && x.ins.relTarget !== null)) continue;
+    if (x.at + x.ins.length + /** @type {number} */ (x.ins.relTarget) !== calleeRva) continue;
+    for (let k = i - 1; k >= 0 && k >= i - maxBack; k--) {
+      const y = d.instrs[k];
+      const off = pe.rvaToOff(y.at);
+      if (off < 0 || y.ins.length < pat.length || off + pat.length > buf.length) continue;
+      let ok = true;
+      for (let j = 0; j < pat.length; j++) if (pat.mask[j] && buf[off + j] !== pat.bytes[j]) { ok = false; break; }
+      if (!ok) continue;
+      return off + imm32At + 4 <= buf.length ? buf.readUInt32LE(off + imm32At) : null;
+    }
+    return null; // only the first call to the callee counts
+  }
+  return null;
+}
+
+/**
+ * Every independent source of a constant's value on this image: the vtable slot body (anchors.derive) and the
+ * call-arg witness (anchors.witness with a callee). Entries that carry a port block must have ported for their
+ * value to be trusted. Shared by harvest (verify) and port (re-derive); the caller decides what agreement means.
+ * @param {import("./manifest.mjs").Manifest} manifest @param {import("./pe.mjs").Pe} pe @param {Buffer} buf @param {import("./manifest.mjs").Entry} e
+ * @returns {{ slot: number|null, arg: number|null, notes: string[] }}
+ */
+export function constantSources(manifest, pe, buf, e) {
+  const a = e.anchors;
+  /** @param {import("./manifest.mjs").Entry|null|undefined} x */
+  const usable = (x) => !!x && (!x.port || String(x.port.status).startsWith("ported"));
+  /** @type {{ slot: number|null, arg: number|null, notes: string[] }} */
+  const r = { slot: null, arg: null, notes: [] };
+  if (a.derive && a.derive.vtable) {
+    const vt = entry(manifest, a.derive.vtable);
+    r.slot = usable(vt) && vt ? deriveFromVtableSlot(pe, buf, parseInt(vt.rva || "0", 16), a.derive.slot, a.derive.bodyPattern, a.derive.imm32At) : null;
+    r.notes.push(r.slot === null ? (usable(vt) ? `slot ${a.derive.slot} of ${a.derive.vtable} does not match ${a.derive.bodyPattern}` : `${a.derive.vtable} did not port`) : `slot body gives ${hex(r.slot)}`);
+  }
+  if (a.witness && a.witness.callee) {
+    const w = a.witness;
+    const f = entry(manifest, w.function);
+    const c = entry(manifest, w.callee);
+    r.arg = usable(f) && usable(c) && f && c ? deriveFromCallArg(pe, buf, parseInt(f.rva || "0", 16), parseInt(c.rva || "0", 16), w.pattern, w.imm32At, w.maxBack ?? 8) : null;
+    r.notes.push(r.arg === null ? `call-arg witness ${w.pattern} before the call to ${w.callee} in ${w.function} not found` : `call-arg witness in ${w.function} gives ${hex(r.arg)}`);
+  }
+  return r;
+}
+
+/**
  * @typedef {{ name: string, kind: string, status: "harvested"|"verified"|"mismatch"|"unresolved"|"unanchored"|"skipped", detail: string }} HarvestRow
  */
 
@@ -317,12 +373,13 @@ export function harvestManifest(pe, buf, manifest) {
       report.push({ name: e.name, kind: e.kind, status: same ? "verified" : "mismatch", detail: `rtti gives ${hex(r.vftable)} (col ${hex(r.col)}, typedesc ${hex(r.typeDescriptor)}); manifest says ${e.rva}` });
       continue;
     }
-    if (e.kind === "constant" && a.derive && a.derive.vtable) {
-      const vt = entry(out, a.derive.vtable);
-      const v = vt ? deriveFromVtableSlot(pe, buf, parseInt(vt.rva || "0", 16), a.derive.slot, a.derive.bodyPattern, a.derive.imm32At) : null;
-      if (v === null) { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: `slot ${a.derive.slot} of ${a.derive.vtable} does not match ${a.derive.bodyPattern}` }); continue; }
-      const same = v === parseValue(e.value || "0");
-      report.push({ name: e.name, kind: e.kind, status: same ? "verified" : "mismatch", detail: `slot body gives ${hex(v)}; manifest says ${e.value}` });
+    if (e.kind === "constant" && ((a.derive && a.derive.vtable) || (a.witness && a.witness.callee))) {
+      const src = constantSources(out, pe, buf, e);
+      const vals = [src.slot, src.arg].filter((v) => v !== null);
+      if (!vals.length) { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: src.notes.join("; ") }); continue; }
+      const want = parseValue(e.value || "0");
+      const same = vals.every((v) => v === want);
+      report.push({ name: e.name, kind: e.kind, status: same ? "verified" : "mismatch", detail: `${src.notes.join("; ")}; manifest says ${e.value}` });
       continue;
     }
     if (e.kind === "data" && a.derive && a.derive.table) {

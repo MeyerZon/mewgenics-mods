@@ -37,7 +37,7 @@ and **anchors**, the evidence that finds it again:
 | function | `signature` (shortest unique masked prefix, rel32 / rip-relative disp32 / imm64 wildcarded, may start inside the function with a negative `offset`), `strings` (the MSVC `__FUNCSIG__` / `__FILE__` strings it references via rip-relative `lea`, with uniqueness; hand-added `literal` strings are kept), `callees` (calls to other manifest entries, by ordinal among all calls), `cfgLite` (bytes from `.pdata`, calls, rip refs), `prologue`, optionally `after` (the `.pdata` function it follows) |
 | data | `witness` (the function that references it and the ordinal of that rip-relative reference), or `derive { table, index }` |
 | vtable | `rtti { typeDescriptorName }` (TypeDescriptor → CompleteObjectLocator → vftable) + `slotChecks` |
-| constant | `derive { vtable, slot, bodyPattern, imm32At }` (read from the slot's code) |
+| constant | `derive { vtable, slot, bodyPattern, imm32At }` (read from the slot's code) and/or `witness { function, callee, pattern, imm32At, maxBack }` (the imm32 of the instruction matching `pattern` within `maxBack` instructions before the first call to `callee` inside `function`). With two sources the port applies a value only when both agree; a split is `needs-human` with both values. `LuckUp_typeid` carries both since 2026-10-19 (slot 1 body of the LuckUp vftable; `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in `Status_ApplyLuckUp`). |
 | offset | `witness { function, pattern, dispAt, dispSize, nth }` or `unanchored: true` |
 
 Facts the design rests on (verified on build 25143593): the exe's `.pdata` has 55,712 `RUNTIME_FUNCTION`
@@ -78,7 +78,8 @@ Per function, the first rung that yields exactly one answer wins:
 5. several candidates → `ambiguous` (each listed with RVA, size, calls, how found); none → `failed`;
    `--resolve Name=0xRVA` → `ported-anchor` (resolved)
 
-Then vtables via RTTI and constants via slot bodies (`ported-derived`), data via witness rip-ref ordinals
+Then vtables via RTTI and constants via their sources — slot body and/or call-arg witness; all present sources must
+agree (`ported-derived`, method `slot-body+call-arg`), otherwise `needs-human` with every value listed — data via witness rip-ref ordinals
 (`ported-witness`; a shifted ordinal is accepted only when exactly one reference of the same opcode remains) and
 table+index (`ported-derived`, or `needs-human` when the SDL version changed), struct offsets via their witness
 pattern (`ported-witness` when the displacement is unchanged, **`proposed` with the value NOT applied** when it
