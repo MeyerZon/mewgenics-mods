@@ -808,10 +808,10 @@ export async function runIngameTests(test, assert, eq) {
       }
       return out;
     })();
-    test("MCP tools/list returns the 12 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build)", () => {
+    test("MCP tools/list returns the 13 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings)", () => {
       assert(!mcp.error, mcp.error);
       const names = mcp.list.tools.map((/** @type {any} */ t) => t.name);
-      eq(names.length, 12, names.join(","));
+      eq(names.length, 13, names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {
