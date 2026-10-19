@@ -1295,4 +1295,21 @@ export async function runBindingsTests(test, assert, eq) {
       assert(!b.ok && !b.skipped && /build/.test(b.reason), JSON.stringify(b));
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
+  // ---- check.mjs identifyExe: identity from the PE header only (fast path for the validator) ---
+  console.log("\n# Bindings: identifyExe (header-only, memoized)");
+  test("identifyExe: reads only the headers, reports known/unknown + identity; memoized per path+mtime; absent -> null", () => {
+    assert(typeof ck.identifyExe === "function", "check.mjs exports identifyExe");
+    const tmp = mkdtempSync(join(tmpdir(), "mewid-"));
+    try {
+      writeFileSync(join(tmp, "Mewgenics.exe"), fakeKnownPe.buf);
+      const r = ck.identifyExe(join(tmp, "Mewgenics.exe"), [fakeManifest]);
+      assert(r && r.known === true && r.matched && r.matched.steamBuildId === "777", JSON.stringify(r));
+      eq(r.identity.timeDateStamp, "0x11111111");
+      const again = ck.identifyExe(join(tmp, "Mewgenics.exe"), [fakeManifest]);
+      assert(again === r, "memoized object identity for the same path + mtime");
+      const u = ck.identifyExe(join(tmp, "Mewgenics.exe"), []);
+      assert(u && u.known === false && u.matched === null, "no manifests -> unknown");
+      eq(ck.identifyExe(join(tmp, "nope.exe"), [fakeManifest]), null);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
 }
