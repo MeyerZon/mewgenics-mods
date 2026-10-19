@@ -4,6 +4,7 @@
 // server cannot write under saves/ or touch Mewgenics.exe / resources.gpak.
 
 import * as api from "../core/api.mjs";
+import { resolveReadPath } from "../core/repo.mjs";
 
 export class ToolError extends Error {
   /** @param {string} message */
@@ -253,6 +254,22 @@ export const TOOLS = [
         savesuffix: str(args, "savesuffix"),
         includeEvents: bool(args, "includeEvents"),
       });
+    },
+  },
+  {
+    name: "check_game_build",
+    description:
+      "Is the installed Mewgenics.exe a game build the native bindings know (bindings/<steamBuildId>.json), and does every byte signature still match exactly once at its RVA? Read-only, never launches the game. Returns { ok, known, build: { timeDateStamp, sizeOfImage, matched, scannedWith, knownBuilds }, entries: [{ name, status: ok|moved|missing|ambiguous, expected, hit }], summary }. known:false means a game update broke the native layer (mewframework disables itself; data mods still load) and the bindings must be ported (docs/binding-port.md). Returns ok:false with skipped:true when the exe or the manifests are absent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        exe: { type: "string", description: "optional path to a Mewgenics.exe to check instead of the installed one (read-only)" },
+      },
+      additionalProperties: false,
+    },
+    handler: (args) => {
+      const exe = str(args, "exe");
+      return api.checkGameBuild({ exe: exe ? resolveReadPath(exe) : undefined });
     },
   },
 ];
