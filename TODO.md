@@ -68,7 +68,7 @@ Two agents were in flight at last update: Playwright E2E/validation and the SWF-
 5. [ ] **Framework pure parts**: extract the build gate (`identify_build` over a synthetic PE header) and the status
    definition table/name rules from `framework.c`/`status_engine.c` into host-testable units like `fw_sig.c`.
 6. [ ] **Tools tests (T0)**: `tools/gpak.py` against a synthetic archive built in-test (python `unittest`, stdlib
-   only); `tools/make-signature.mjs` against a synthetic PE (uniqueness, min/max length, rel32 note).
+   only); `tools/bindings/make-signature.mjs` against a synthetic PE (uniqueness, min/max length, rel32 wildcards) — done in editor/test/bindings-tests.mjs (siggen section).
 7. [ ] **Validator fixtures per check**: one failing fixture per finding code (`unknown-status`, `missing-loc-key`,
    `merge-target-missing`, …) so the four checks are each pinned by a T0 test instead of only by the sample mods.
 8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
