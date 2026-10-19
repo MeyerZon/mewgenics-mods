@@ -27,7 +27,7 @@ editor runner                                   Mewgenics.exe + Mewjector + mewf
   take the lock (one game at a time)              cmd -> DebugConsole::Execute(console, msvc_string)
   write the directive body to the run dir         console output diffed from the console's own vector<string>
   record mewframework.log size (append-mode)      expect/dump read combat state through guarded memory reads
-  snapshot the real save (read-only sha256)       every event appended to the JSONL file and flushed
+  hash every *.sav in the saves dir (read-only)     every event appended to the JSONL file and flushed
   spawn with cwd = game dir, SteamAppId=686060    quit / end of script / timeout / crash -> end event + exit code
   backstop kill at timeout + 45 s; kill 5 s after the end record if the game lingers (clean mode)
   read JSONL, scan the three logs, re-hash the save, decide the verdict, write report.json

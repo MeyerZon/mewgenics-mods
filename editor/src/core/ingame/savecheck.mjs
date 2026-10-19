@@ -59,15 +59,20 @@ export function realSavesDir(env) {
 }
 
 /**
- * The save files a launch with `-savesuffix <suffix>` may legitimately write. Everything else under saves/ must
- * stay byte-identical across a harness run. Decoded from `MewSaveFile::open_or_create` (docs/engine-map.md
- * "Save safety"); OBSERVED 2026-10-18: a dev launch wrote `campaign02.sav`, never a `*dev*` file.
+ * The save files a launch with `-savesuffix <suffix>` may legitimately write; everything else under saves/ must stay
+ * byte-identical across a harness run. Decoded on build 25143593 (docs/engine-map.md "Save safety"):
+ * MewDirector::init(name) -> MewSaveFile::open_or_create(name) -> <userdata>/saves/<name>, where name is a
+ * save-selection slot (campaign0N.sav local, steamcampaign0N.sav Steam-cloud), the test director's test00.sav or
+ * the house test's housetest01.sav. The suffix string (ApplicationBase+0x370) is read by NO save-path code on this
+ * build: it does not rename or relocate saves. So the allow-list is the local/test families; the Steam-cloud slots
+ * (the real saves) are always protected. The <suffix>-prefixed forms stay in case a future build does use it.
+ * OBSERVED 2026-10-18: dev launches wrote campaign02.sav and test00.sav; steamcampaign01.sav untouched.
  * @param {string} suffix
  * @returns {RegExp}
  */
 export function devSavePattern(suffix) {
   const s = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^(campaign\\d+\\.sav|${s}\\d*\\.sav|${s}campaign\\d+\\.sav)$`, "i");
+  return new RegExp(`^(campaign\\d+\\.sav|test\\d+\\.sav|housetest\\d+\\.sav|${s}campaign\\d+\\.sav|${s}\\d+\\.sav)$`, "i");
 }
 
 /** @typedef {{ dir: string, present: boolean, files: (SaveSnapshot & { name: string })[], skipped: string[] }} SaveSetSnapshot */
