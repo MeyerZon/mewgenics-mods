@@ -29,10 +29,10 @@ Evidence tags as in the sibling docs: **OBSERVED** (measured on this machine),
                                        ▼                     │ abc-stub.mjs / swf-bits.mjs
                  geometry.mjs + timeline.mjs (pure, shared)  │
                         │                                    │
-      browser ◄─────────┘ served read-only at /core-art/*    └── swf-reader.mjs (self-check)
-      editor/web/art/preview-gl.mjs  (raw WebGL: stencil fill + paletted_full remap)
-      editor/web/app.mjs             Art panel + Preview panel (VanJS, no build step)
-      editor/web/server.mjs          additive /api/art/* routes → src/core/api.mjs
+      browser ◄─────────┘ bundled by Vite (imports the pure modules)  └── swf-reader.mjs (self-check)
+      editor/web/src/art/preview-gl.ts  (raw WebGL: stencil fill + paletted_full remap)
+      editor/web/src/art/*.tsx          Art panel + Preview panel (React; was VanJS, see editor-ts-react-plan.md)
+      editor/web/server.mjs             additive /api/art/* routes → src/core/api.mjs (zod-gated bodies)
 ```
 
 Dependency direction is unchanged from the rest of the editor: `core` owns parsing,
@@ -42,9 +42,10 @@ preview imports only the **pure** modules (`geometry.mjs`, `timeline.mjs`,
 emitter writes into `PlaceObject2` tags. Nothing in the preview re-interprets SVG or
 SWF bytes.
 
-Zero new dependencies: Node built-ins (`node:zlib` for the `DefineBitsLossless2`
+No art-specific dependencies: Node built-ins (`node:zlib` for the `DefineBitsLossless2`
 deflate and PNG inflate; `node:fs`) and browser built-ins (WebGL1, Canvas2D fallback).
-VanJS stays the only vendored browser lib; `typescript@7.0.2` stays the only dev dep.
+(Written when the UI was VanJS with no build step; since 2026-10-20 the UI is React built
+by Vite — `editor-ts-react-plan.md` — and the preview module is `web/src/art/preview-gl.ts`.)
 
 ### 1.1 Why "render from the source model", not from the SWF
 The engine tessellates SWF shapes itself (`glaielswf\renderer\Tesselator.cpp`,
@@ -341,8 +342,9 @@ components, tokens, and `localStorage` key family (`mewged.onboard.*`):
 
 ## 7b. Performance
 
-The web UI is VanJS with no build step, so performance work is about scoping reactive
-bindings and coalescing event work (all with built-ins; zero new dependencies):
+The web UI was VanJS with no build step when this was written (it is React now, with the
+same DOM and the same imperative hot paths), so performance work is about scoping reactive
+updates and coalescing event work (all with built-ins):
 
 - **GON highlight overlay** — previously re-tokenized the whole buffer on every
   keystroke and wrote scroll transforms on every scroll event. It now paints on a single

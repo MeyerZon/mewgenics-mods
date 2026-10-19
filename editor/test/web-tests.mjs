@@ -37,7 +37,7 @@ export const POST_ROUTES = [
 
 /**
  * Start web/server.mjs on an OS-chosen port and return { port, stop }.
- * @returns {Promise<{port:number, stop:()=>void, stderr:string}>}
+ * @returns {Promise<{port:number, stop:()=>Promise<void>, stderr:string}>}
  */
 function startServer() {
   return new Promise((resolve, reject) => {
@@ -56,7 +56,8 @@ function startServer() {
       const m = /http:\/\/127\.0\.0\.1:(\d+)\//.exec(err);
       if (m && Number(m[1]) > 0) {
         clearTimeout(timer);
-        resolve({ port: Number(m[1]), stop: () => child.kill(), stderr: err });
+        const stop = () => /** @type {Promise<void>} */ (new Promise((done) => { child.on("exit", () => done(undefined)); child.kill(); }));
+        resolve({ port: Number(m[1]), stop, stderr: err });
       }
     });
     child.on("exit", (code) => {
@@ -194,7 +195,7 @@ export async function runWebTests(test, assert, eq) {
   });
 
   // ---- server request gate (spawns web/server.mjs on an OS-chosen port) --------------
-  /** @type {{port:number, stop:()=>void, stderr:string}|null} */
+  /** @type {{port:number, stop:()=>Promise<void>, stderr:string}|null} */
   let srv = null;
   try {
     srv = await startServer();
@@ -206,7 +207,7 @@ export async function runWebTests(test, assert, eq) {
     /** @type {{status:number, json:any, text:string}} */
     let w = { status: 0, json: null, text: "" };
     try {
-      const r = await fetch(`${base}/api/write`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const r = await fetch(`${base}/api/write`, { method: "POST", headers: { "Content-Type": "application/json", Connection: "close" }, body: "{}" });
       w = { status: r.status, text: await r.text(), json: null };
       try { w.json = JSON.parse(w.text); } catch { /* asserted below */ }
     } catch (e) {
@@ -222,7 +223,7 @@ export async function runWebTests(test, assert, eq) {
     /** @type {{status:number, text:string}} */
     let nf = { status: 0, text: "" };
     try {
-      const r = await fetch(`${base}/api/nope`);
+      const r = await fetch(`${base}/api/nope`, { headers: { Connection: "close" } });
       nf = { status: r.status, text: await r.text() };
     } catch (e) {
       nf.text = String(e instanceof Error ? e.message : e);
@@ -235,7 +236,7 @@ export async function runWebTests(test, assert, eq) {
       /** @type {{status:number, text:string}} */
       let idx = { status: 0, text: "" };
       try {
-        const r = await fetch(`${base}/`);
+        const r = await fetch(`${base}/`, { headers: { Connection: "close" } });
         idx = { status: r.status, text: await r.text() };
       } catch (e) {
         idx.text = String(e instanceof Error ? e.message : e);
@@ -247,6 +248,6 @@ export async function runWebTests(test, assert, eq) {
     } else {
       console.log("  (skipped: web/dist/index.html missing — run `npm run build` to test the served page)");
     }
-    srv.stop();
+    await srv.stop();
   }
 }

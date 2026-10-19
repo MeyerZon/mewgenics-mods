@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync, rmSync } from "node:fs";
-import { openApp, seedToursSeen, selectMod, collectConsole } from "./helpers.js";
+import { openApp, seedToursSeen, selectMod, collectConsole } from "./helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..", ".."); // editor/tests/e2e -> repo root
@@ -11,7 +12,7 @@ const TMP_MOD = "e2e-tmp-mod";
 
 /** The "abilities" base-data category button. Base categories uniquely carry a `.count`
  *  child (mod-tree folders — e.g. dev-sandbox's own "abilities" dir — do not). */
-function abilitiesCategory(page) {
+function abilitiesCategory(page: Page) {
   return page
     .locator(".explorer button.srow")
     .filter({ has: page.getByText("abilities", { exact: true }) })
@@ -19,7 +20,7 @@ function abilitiesCategory(page) {
 }
 
 /** Open the template scaffolder with an empty mod via the top-bar "New mod…" item. */
-async function openNewModScaffolder(page) {
+async function openNewModScaffolder(page: Page) {
   const switcher = page.locator(".topbar .dropdown").first().locator("button").first();
   await switcher.click();
   await page.getByRole("button", { name: /New mod/ }).click();
@@ -45,8 +46,7 @@ test.describe("Data mode — base explorer", () => {
     await abilitiesCategory(page).click();
     await expect(page.locator(".explorer .entries")).toBeVisible();
 
-    /** @type {string[]} */
-    const filterReqs = [];
+        const filterReqs: string[] = [];
     page.on("request", (r) => {
       const u = r.url();
       if (u.includes("/api/base?") && u.includes("filter=")) filterReqs.push(u);
@@ -69,10 +69,10 @@ test.describe("Data mode — base explorer", () => {
     await page.evaluate(() => {
       for (const b of document.querySelectorAll(".explorer button.srow")) {
         const t = (b.textContent || "").trim();
-        if (t.startsWith("abilities")) /** @type {any} */ (b).__e2e = "abilities";
+        if (t.startsWith("abilities")) (b as any).__e2e = "abilities";
       }
       const acc = document.querySelector(".explorer .srow.acc");
-      if (acc) /** @type {any} */ (acc).__e2e = "components";
+      if (acc) (acc as any).__e2e = "components";
     });
 
     // filter (rebuilds only the entries), then open an entry (opens a drawer)
@@ -83,8 +83,8 @@ test.describe("Data mode — base explorer", () => {
 
     // the category list nodes must be the SAME nodes (not rebuilt)
     const markers = await page.evaluate(() => {
-      const ab = [...document.querySelectorAll(".explorer button.srow")].find((b) => /** @type {any} */ (b).__e2e === "abilities");
-      const acc = /** @type {any} */ (document.querySelector(".explorer .srow.acc"));
+      const ab = [...document.querySelectorAll(".explorer button.srow")].find((b) => (b as any).__e2e === "abilities");
+      const acc = (document.querySelector(".explorer .srow.acc") as any);
       return { abilities: !!ab, components: acc && acc.__e2e === "components" };
     });
     expect(markers.abilities).toBe(true);
@@ -93,7 +93,7 @@ test.describe("Data mode — base explorer", () => {
 });
 
 test.describe("Data mode — editor, validation, preview, save", () => {
-  async function openJokersFile(page) {
+  async function openJokersFile(page: Page) {
     await openApp(page);
     await selectMod(page, "jokers-luck");
     await page.locator(".explorer button.srow", { hasText: "fighter_abilities.gon.append" }).first().click();
@@ -136,14 +136,14 @@ test.describe("Data mode — editor, validation, preview, save", () => {
 
     // mark the persistent editor nodes so we can prove they are never rebuilt
     await page.evaluate(() => {
-      /** @type {any} */ (document.querySelector("textarea.code")).__e2e = 1;
-      /** @type {any} */ (document.querySelector(".edmain pre.hl")).__e2e = 1;
-      /** @type {any} */ (document.querySelector(".edgutter pre")).__e2e = 1;
+      (document.querySelector("textarea.code") as any).__e2e = 1;
+      (document.querySelector(".edmain pre.hl") as any).__e2e = 1;
+      (document.querySelector(".edgutter pre") as any).__e2e = 1;
     });
 
     // inject a large GON buffer (3000 wide lines) and fire input, like a big file loaded
     const total = await page.evaluate((n) => {
-      const ta = /** @type {HTMLTextAreaElement} */ (document.querySelector("textarea.code"));
+      const ta = (document.querySelector("textarea.code") as HTMLTextAreaElement);
       const lines = [];
       for (let i = 0; i < n; i++) lines.push(`Entry_${i} { variant_of Spin; cost { mana ${i} } meta { name "ABILITY_${i}_NAME" } } // row ${i} ${"x".repeat(80)}`);
       ta.value = lines.join("\n");
@@ -154,7 +154,7 @@ test.describe("Data mode — editor, validation, preview, save", () => {
 
     // after a paint, the gutter is windowed (far fewer than 3000 numbers rendered)
     const windowed = await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => {
-      const g = /** @type {HTMLElement} */ (document.querySelector(".edgutter pre"));
+      const g = (document.querySelector(".edgutter pre") as HTMLElement);
       const nums = (g.textContent || "").split("\n").filter((s) => /^\d+$/.test(s));
       res(nums.length);
     }))));
@@ -162,14 +162,14 @@ test.describe("Data mode — editor, validation, preview, save", () => {
     expect(windowed, `gutter rendered ${windowed} line numbers (expected windowed, not all 3000)`).toBeLessThan(400);
 
     // scroll both axes, then assert the overlay + gutter transforms track the scroll exactly
-    const align = await page.evaluate(() => new Promise((res) => {
-      const ta = /** @type {HTMLTextAreaElement} */ (document.querySelector("textarea.code"));
+    const align = await page.evaluate(() => new Promise<{ st: number; sl: number; hlX: number; hlY: number; gutY: number; sameFont: boolean; samePadTop: boolean; samePadLeft: boolean }>((res) => {
+      const ta = (document.querySelector("textarea.code") as HTMLTextAreaElement);
       ta.scrollTop = 4000;
       ta.scrollLeft = 140;
       ta.dispatchEvent(new Event("scroll", { bubbles: true }));
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        const hl = /** @type {HTMLElement} */ (document.querySelector(".edmain pre.hl"));
-        const gut = /** @type {HTMLElement} */ (document.querySelector(".edgutter pre"));
+        const hl = (document.querySelector(".edmain pre.hl") as HTMLElement);
+        const gut = (document.querySelector(".edgutter pre") as HTMLElement);
         const mh = new DOMMatrixReadOnly(getComputedStyle(hl).transform);
         const mg = new DOMMatrixReadOnly(getComputedStyle(gut).transform);
         const csTa = getComputedStyle(ta), csHl = getComputedStyle(hl), csGut = getComputedStyle(gut);
@@ -191,9 +191,9 @@ test.describe("Data mode — editor, validation, preview, save", () => {
 
     // the editor nodes were never rebuilt by typing/scrolling
     const stable = await page.evaluate(() => ({
-      ta: /** @type {any} */ (document.querySelector("textarea.code")).__e2e === 1,
-      hl: /** @type {any} */ (document.querySelector(".edmain pre.hl")).__e2e === 1,
-      gut: /** @type {any} */ (document.querySelector(".edgutter pre")).__e2e === 1,
+      ta: (document.querySelector("textarea.code") as any).__e2e === 1,
+      hl: (document.querySelector(".edmain pre.hl") as any).__e2e === 1,
+      gut: (document.querySelector(".edgutter pre") as any).__e2e === 1,
     }));
     expect(stable).toEqual({ ta: true, hl: true, gut: true });
   });

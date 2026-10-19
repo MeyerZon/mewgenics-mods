@@ -1,5 +1,6 @@
 // Shared helpers for the editor e2e suite.
 import { expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 /** onboarding localStorage keys the app reads at first run. */
 export const LS = {
@@ -12,11 +13,9 @@ export const LS = {
 /**
  * Attach a console/pageerror collector. Returns an array that fills with
  * {type,text} for console errors/warnings and uncaught exceptions.
- * @param {import('@playwright/test').Page} page
  */
-export function collectConsole(page) {
-  /** @type {{type:string,text:string}[]} */
-  const errors = [];
+export function collectConsole(page: Page): { type: string; text: string }[] {
+  const errors: { type: string; text: string }[] = [];
   page.on("console", (msg) => {
     const type = msg.type();
     if (type === "error" || type === "warning") errors.push({ type, text: msg.text() });
@@ -28,10 +27,8 @@ export function collectConsole(page) {
 /**
  * Seed onboarding keys before any app script runs, so a test that isn't about
  * onboarding never has a tour modal pop over the UI.
- * @param {import('@playwright/test').Page} page
- * @param {Record<string,string>} entries
  */
-export async function seedLocalStorage(page, entries) {
+export async function seedLocalStorage(page: Page, entries: Record<string, string>): Promise<void> {
   await page.addInitScript((kv) => {
     try {
       for (const [k, v] of Object.entries(kv)) window.localStorage.setItem(k, v);
@@ -42,7 +39,7 @@ export async function seedLocalStorage(page, entries) {
 }
 
 /** Seed both tours as already-seen (used by non-onboarding tests). */
-export async function seedToursSeen(page) {
+export async function seedToursSeen(page: Page): Promise<void> {
   await seedLocalStorage(page, {
     [LS.tourSeen]: "1",
     [LS.tourDontShow]: "1",
@@ -53,20 +50,17 @@ export async function seedToursSeen(page) {
 
 /**
  * Open the app and wait for the initial data loads (mods + base categories).
- * @param {import('@playwright/test').Page} page
- * @param {string} [query] e.g. "?mode=art"
+ * @param query e.g. "?mode=art"
  */
-export async function openApp(page, query = "") {
+export async function openApp(page: Page, query = ""): Promise<void> {
   await page.goto("/" + query, { waitUntil: "networkidle" });
   await expect(page.locator(".shell")).toBeVisible();
 }
 
 /**
  * Switch the top-bar mod switcher to a given mod.
- * @param {import('@playwright/test').Page} page
- * @param {string} mod
  */
-export async function selectMod(page, mod) {
+export async function selectMod(page: Page, mod: string): Promise<void> {
   // the mod switcher button shows the current mod name or "No mod open"
   const switcher = page.locator(".topbar .dropdown").first().locator("button").first();
   await switcher.click();
@@ -76,9 +70,8 @@ export async function selectMod(page, mod) {
 
 /**
  * Read the current preview frame counter ("N / M") as [frame, total].
- * @param {import('@playwright/test').Page} page
  */
-export async function readFrame(page) {
+export async function readFrame(page: Page): Promise<[number, number]> {
   const txt = (await page.locator(".transport .frame").innerText()).trim();
   const m = /(\d+)\s*\/\s*(\d+)/.exec(txt);
   return m ? [Number(m[1]), Number(m[2])] : [NaN, NaN];

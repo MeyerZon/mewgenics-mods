@@ -414,4 +414,6 @@ if (!process.env.MEWGENICS_EXTRACTED_DATA) {
 console.log(`\n${passed} passed, ${failed} failed${filter.only ? ` (${skipped} skipped by --only ${JSON.stringify(filter.only)})` : ""}`);
 void pretty;
 void HERE;
-process.exit(failed > 0 ? 1 : 0);
+// exitCode, not process.exit(): on Windows, Node 26 fail-fasts (libuv async.c assertion) when exit() runs while
+// the undici/fetch and child-process handles from web-tests.mjs are still closing; letting the loop drain is clean.
+process.exitCode = failed > 0 ? 1 : 0;

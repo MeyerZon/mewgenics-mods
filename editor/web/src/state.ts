@@ -4,6 +4,17 @@
 // ./actions.ts; art-mode state and actions live in ./art/art-state.ts.
 
 import { createStore } from "./store.ts";
+import type {
+  ModFileInfo,
+  Report,
+  Finding,
+  PreviewResult,
+  ComponentSearchResult,
+  BaseCategory,
+  BaseEntryView,
+  TemplateResult,
+  TemplateKindName,
+} from "./types.ts";
 
 export type Tab = "validation" | "preview" | "components";
 export type OpenMenu = "" | "mod" | "help";
@@ -11,10 +22,10 @@ export type OpenMenu = "" | "mod" | "help";
 export interface AppState {
   mods: string[];
   mod: string;
-  files: ModFile[];
+  files: ModFileInfo[];
   file: string;
   saved: boolean;
-  report: ValidationReport | null;
+  report: Report | null;
   preview: PreviewResult | null;
   tab: Tab;
   baseCats: BaseCategory[];
@@ -47,47 +58,10 @@ export interface AppState {
   artExampleStep: number;
 }
 
-// ---- response shapes the app reads (from the core's JSDoc; see src/core/api.mjs) ----------
-export interface ModFile {
-  relPath: string;
-  mode: string; // replace | append | merge | patch
-  fileType: string;
-  [k: string]: unknown;
-}
-export interface BaseCategory {
-  name: string;
-  count: number;
-  [k: string]: unknown;
-}
-export interface BaseEntryView {
-  category: string;
-  name: string;
-  text?: string;
-  error?: string;
-  [k: string]: unknown;
-}
-export interface ValidationReport {
-  ok: boolean;
-  errors: Finding[];
-  warnings: Finding[];
-  [k: string]: unknown;
-}
-export interface Finding {
-  code?: string;
-  message: string;
-  file?: string;
-  line?: number;
-  [k: string]: unknown;
-}
-export interface PreviewResult {
-  ok: boolean;
-  [k: string]: unknown;
-}
-export interface ComponentSearchResult {
-  total: number;
-  results: unknown[];
-  [k: string]: unknown;
-}
+// ---- response shapes the app reads: see ./types.ts (kept under these names for callers) ----
+export type ModFile = ModFileInfo;
+export type ValidationReport = Report;
+export type { Finding, PreviewResult, ComponentSearchResult, BaseCategory, BaseEntryView };
 
 export const S = createStore<AppState>({
   mods: [],
@@ -129,13 +103,13 @@ export const S = createStore<AppState>({
 // template-scaffolder fields (module-level so onboarding can prefill them)
 export interface TemplateForm {
   mod: string;
-  kind: string;
+  kind: TemplateKindName;
   name: string;
   display: string;
   desc: string;
   parent: string;
   status: string;
-  result: unknown | null;
+  result: TemplateResult | null;
 }
 export const tpl = createStore<TemplateForm>({
   mod: "",
@@ -173,7 +147,11 @@ export function toast(msg: string): void {
   toastTimer = setTimeout(() => S.set({ message: "" }), 5000);
 }
 
+/** Once the Art tour has been opened or deliberately suppressed, entering Art mode no longer auto-opens it. */
+export const onboarding = { artTourTriggered: false };
+
 /** Open the Art tour at step 0 (Help menu, art worked example, first Art entry). */
 export function openArtTour(): void {
+  onboarding.artTourTriggered = true;
   S.set({ artTourStep: 0, artTourOpen: true, openMenu: "" });
 }

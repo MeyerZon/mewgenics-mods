@@ -12,6 +12,7 @@ declare const process: {
   env: Record<string, string | undefined>;
   cwd(): string;
   exit(code?: number): never;
+  exitCode: number | undefined;
   kill(pid: number, signal?: number | string): boolean;
   pid: number;
   platform: string;

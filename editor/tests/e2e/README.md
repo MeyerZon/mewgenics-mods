@@ -1,8 +1,9 @@
 # End-to-end tests (Playwright)
 
 A real-browser end-to-end suite for the editor web UI. It drives the actual
-`node web/server.mjs` + `web/*.mjs` UI in headless Chromium and asserts the Data
-mode, Art mode, preview, and onboarding flows behave correctly.
+`node web/server.mjs` serving the Vite build (`web/dist/`, built from the React
+UI in `web/src/*.tsx`) in headless Chromium and asserts the Data mode, Art mode,
+preview, and onboarding flows behave correctly.
 
 **Dev-only.** Playwright is a `devDependency`; it never ships with the tool and
 adds zero runtime dependencies. The UI itself still loads no external resources.
@@ -12,12 +13,14 @@ adds zero runtime dependencies. The UI itself still loads no external resources.
 ```sh
 npm ci                         # installs @playwright/test (dev-only)
 npx playwright install chromium   # one-time: downloads Chromium ONLY
-npm run test:e2e               # runs the suite (headless Chromium)
+npm run test:e2e               # = vite build && playwright test (headless Chromium)
 ```
 
-`npm run test:e2e` launches the editor server itself (via the config's
-`webServer`) on port **4191** and tears it down afterward, so you don't need a
-server running first. Only Chromium is required — the config pins a single
+`npm run test:e2e` first builds the UI (`vite build` → `web/dist/`), then
+launches the editor server itself (via the config's `webServer`) on port
+**4191** and tears it down afterward, so you don't need a server running first.
+Running `npx playwright test` directly skips the build, so make sure `web/dist/`
+is current. Only Chromium is required — the config pins a single
 `chromium` project and the browser must be installed with the command above.
 
 Useful variants:
@@ -29,7 +32,7 @@ npx playwright test --ui                # the Playwright UI runner
 npx playwright show-report              # open the last HTML report
 ```
 
-## What it covers (`tests/e2e/*.spec.js`)
+## What it covers (`tests/e2e/*.spec.ts`)
 
 - **smoke** — app loads with no console errors in Data and Art mode; the Art
   preview renders a `<canvas>` and plays.

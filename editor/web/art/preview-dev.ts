@@ -1,43 +1,38 @@
-// Dev harness for preview-gl.mjs: plain DOM, no VanJS, no app state.
+// Dev harness for preview-gl.ts: plain DOM, no React, no app state.
 // Loads exampleScene(), the real palette from /api/art/palette (falls back to the
 // identity ramp), and drives the renderer through its public API only.
+// Second Vite entry (web/art/preview-dev.html).
 
-import { createPreview, paletteBytes } from "./preview-gl.mjs";
+import { createPreview, paletteBytes } from "../src/art/preview-gl.ts";
+import type { PaletteRows } from "../src/art/preview-gl.ts";
 import { exampleScene, validateScene } from "../../src/core/art/scene.mjs";
 
-/** @typedef {import('./preview-gl.mjs').PaletteRows} PaletteRows */
-
-/**
- * @template {HTMLElement} T
- * @param {string} id
- * @returns {T}
- */
-function el(id) {
+function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const node = document.getElementById(id);
   if (!node) throw new Error(`missing #${id}`);
-  return /** @type {T} */ (node);
+  return node as T;
 }
 
-const canvas = /** @type {HTMLCanvasElement} */ (el("canvas"));
-const targetSel = /** @type {HTMLSelectElement} */ (el("target"));
-const playBtn = /** @type {HTMLButtonElement} */ (el("play"));
+const canvas = el<HTMLCanvasElement>("canvas");
+const targetSel = el<HTMLSelectElement>("target");
+const playBtn = el<HTMLButtonElement>("play");
 const playText = el("playText");
 const playIcon = el("playIcon");
-const stepBack = /** @type {HTMLButtonElement} */ (el("stepBack"));
-const stepFwd = /** @type {HTMLButtonElement} */ (el("stepFwd"));
-const loopBox = /** @type {HTMLInputElement} */ (el("loop"));
-const frameRange = /** @type {HTMLInputElement} */ (el("frame"));
+const stepBack = el<HTMLButtonElement>("stepBack");
+const stepFwd = el<HTMLButtonElement>("stepFwd");
+const loopBox = el<HTMLInputElement>("loop");
+const frameRange = el<HTMLInputElement>("frame");
 const frameNow = el("frameNow");
 const frameMax = el("frameMax");
 const ticks = el("ticks");
-const rowInput = /** @type {HTMLInputElement} */ (el("row"));
+const rowInput = el<HTMLInputElement>("row");
 const ramp = el("ramp");
-const grayBox = /** @type {HTMLInputElement} */ (el("gray"));
+const grayBox = el<HTMLInputElement>("gray");
 const palStatus = el("palStatus");
-const fitBtn = /** @type {HTMLButtonElement} */ (el("fit"));
-const zoom1Btn = /** @type {HTMLButtonElement} */ (el("zoom1"));
+const fitBtn = el<HTMLButtonElement>("fit");
+const zoom1Btn = el<HTMLButtonElement>("zoom1");
 const zoomText = el("zoomText");
-const bgSel = /** @type {HTMLSelectElement} */ (el("bg"));
+const bgSel = el<HTMLSelectElement>("bg");
 const backendOut = el("backend");
 const statsOut = el("stats");
 const statusOut = el("status");
@@ -45,8 +40,7 @@ const statusOut = el("status");
 const PLAY_PATH = "M2 1l9 5-9 5z";
 const PAUSE_PATH = "M2 1h3v10H2zM7 1h3v10H7z";
 
-/** @type {PaletteRows | null} */
-let paletteRows = null;
+let paletteRows: PaletteRows | null = null;
 
 const validated = validateScene(exampleScene("devpage"));
 const scene = validated.scene;
@@ -68,7 +62,7 @@ preview.setScene(scene);
 preview.setLoop(loopBox.checked);
 
 // ---- targets ----
-function fillTargets() {
+function fillTargets(): void {
   targetSel.textContent = "";
   for (const t of preview.getTargets()) {
     const o = document.createElement("option");
@@ -84,7 +78,7 @@ targetSel.addEventListener("change", () => {
 });
 
 // ---- timeline ----
-function refreshTimeline() {
+function refreshTimeline(): void {
   const n = preview.getFrameCount();
   frameRange.max = String(Math.max(0, n - 1));
   frameRange.setAttribute("aria-valuemax", String(Math.max(0, n - 1)));
@@ -112,8 +106,7 @@ frameRange.addEventListener("input", () => {
 });
 
 // ---- transport ----
-/** @param {boolean} playing */
-function setPlayUi(playing) {
+function setPlayUi(playing: boolean): void {
   playBtn.setAttribute("aria-pressed", String(playing));
   playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
   playText.textContent = playing ? "Pause" : "Play";
@@ -138,7 +131,7 @@ stepFwd.addEventListener("click", () => {
 loopBox.addEventListener("change", () => preview.setLoop(loopBox.checked));
 
 // ---- palette ----
-function refreshRamp() {
+function refreshRamp(): void {
   const row = preview.getPaletteRow();
   const bytes = paletteBytes(paletteRows);
   ramp.textContent = "";
@@ -164,13 +157,13 @@ grayBox.addEventListener("change", () => {
   refreshStats();
 });
 
-async function loadPalette() {
+async function loadPalette(): Promise<void> {
   try {
     const res = await fetch("/api/art/palette");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
+    const json = (await res.json()) as { ok?: boolean; rows?: unknown; error?: unknown } | null;
     if (json && json.ok && Array.isArray(json.rows)) {
-      paletteRows = /** @type {PaletteRows} */ (json.rows);
+      paletteRows = json.rows as PaletteRows;
       preview.setPalette(paletteRows);
       palStatus.textContent = `palette: ${paletteRows.length} rows from /api/art/palette`;
     } else {
@@ -204,8 +197,7 @@ bgSel.addEventListener("change", () => {
 });
 
 // drag to pan, wheel to zoom (dev-page conveniences built on setZoom/setCenter)
-/** @type {{ x: number, y: number, cx: number, cy: number } | null} */
-let drag = null;
+let drag: { x: number; y: number; cx: number; cy: number } | null = null;
 canvas.addEventListener("pointerdown", (e) => {
   const c = preview.getCenter();
   drag = { x: e.clientX, y: e.clientY, cx: c[0], cy: c[1] };
@@ -242,7 +234,7 @@ canvas.addEventListener(
 );
 
 // ---- readouts ----
-function refreshStats() {
+function refreshStats(): void {
   const i = preview.info();
   backendOut.textContent = `backend: ${i.backend} · masks: ${i.masks}`;
   backendOut.className = i.backend === "webgl" ? "ok" : i.backend === "canvas2d" ? "warn" : "err";
@@ -257,7 +249,7 @@ window.addEventListener("resize", () => {
 
 // keyboard: space toggles play, arrows step (when focus is not in a form control)
 window.addEventListener("keydown", (e) => {
-  const t = /** @type {HTMLElement | null} */ (e.target);
+  const t = e.target as HTMLElement | null;
   if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "BUTTON")) return;
   if (e.key === " ") {
     e.preventDefault();
