@@ -2,10 +2,11 @@
 // Test harness for the Mewgenics mod editor core (+ an MCP smoke test).
 // Node built-ins only; plain assertions. Exits non-zero on any failure.
 
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, mkdtempSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 import { parse } from "../src/core/gon/parser.mjs";
 import { serialize } from "../src/core/gon/parser.mjs";
@@ -57,7 +58,52 @@ function v(s) {
   return toValue(parse(s));
 }
 
+// ---- 0. Runner self-tests ---------------------------------------------------
+console.log("\n# Runner (name filter)");
+{
+  /** @type {any} */
+  let fm = null;
+  try { fm = await import("./filter.mjs"); } catch (e) { test("filter.mjs loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (fm) {
+    test("makeTestFilter: no --only and no TEST_ONLY -> everything runs", () => {
+      const f = fm.makeTestFilter([], {});
+      eq(f.only, null);
+      assert(f.matches("anything at all"), "matches");
+    });
+    test("makeTestFilter: --only <substring> is a case-insensitive substring match; TEST_ONLY is the env form; argv wins", () => {
+      const f = fm.makeTestFilter(["--only", "GPAK"], {});
+      eq(f.only, "GPAK");
+      assert(f.matches("gpak.py list prints offset/size/path") && !f.matches("round-trips all base .gon files"), "substring, case-insensitive");
+      eq(fm.makeTestFilter([], { TEST_ONLY: "filter" }).only, "filter");
+      eq(fm.makeTestFilter(["--only", "a"], { TEST_ONLY: "b" }).only, "a");
+    });
+    test("makeTestFilter: a dangling --only is an error (not 'run nothing')", () => {
+      let threw = false;
+      try { fm.makeTestFilter(["--only"], {}); } catch { threw = true; }
+      assert(threw, "expected a throw");
+    });
+  }
+}
+
 // ---- 1. GON round-trip ------------------------------------------------------
+{
+  /** @type {any} */
+  let rt = null;
+  try { rt = await import("./gon-roundtrip-tests.mjs"); } catch (e) { test("gon-roundtrip-tests.mjs loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (rt) {
+    rt.runGonRoundTripTests(test, assert, eq);
+    test("round-trip suite skips (logs '(skipped: …)', fails nothing) when the extracted dir has no .gon files", () => {
+      const empty = mkdtempSync(join(tmpdir(), "mewged-noextracted-"));
+      /** @type {string[]} */
+      const logs = [];
+      let fails = 0, ran = 0;
+      rt.runGonRoundTripTests((/** @type {string} */ _n, /** @type {() => void} */ fn) => { ran++; try { fn(); } catch { fails++; } }, assert, eq, { extractedDir: empty, log: (/** @type {string} */ l) => logs.push(l) });
+      eq(fails, 0, "no failing test");
+      eq(ran, 0, "no test ran at all (skipped)");
+      assert(logs.some((l) => /\(skipped: no \.gon files under/.test(l)), `expected a skip line, got: ${logs.join(" / ")}`);
+    });
+  }
+}
 console.log("\n# GON round-trip (parse -> serialize is byte-exact)");
 {
   /** @param {string} dir @param {string[]} acc */
@@ -355,6 +401,27 @@ await mcpSmoke();
 {
   const { runBindingsTests } = await import("./bindings-tests.mjs");
   await runBindingsTests(test, assert, eq);
+}
+
+// ---- 9. tools/gpak.py (synthetic archive; python -I; skips without python) ---
+{
+  /** @type {any} */
+  let gp = null;
+  try { gp = await import("./gpak-tests.mjs"); } catch (e) { test("gpak-tests.mjs loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (gp) await gp.runGpakTests(test, assert, eq);
+}
+
+// ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
+if (!process.env.MEWGENICS_EXTRACTED_DATA) {
+  console.log("\n# T0 without .extracted/ (nested run with MEWGENICS_EXTRACTED_DATA pointing at an empty dir)");
+  test("npm test skips, not fails, when no base data is extracted (CI shape)", () => {
+    const empty = mkdtempSync(join(tmpdir(), "mewged-noextracted-"));
+    const r = spawnSync(process.execPath, [join(HERE, "run-tests.mjs")], { env: { ...process.env, MEWGENICS_EXTRACTED_DATA: empty }, encoding: "utf8", timeout: 600000, maxBuffer: 64 << 20 });
+    const out = (r.stdout || "") + (r.stderr || "");
+    const fails = out.split("\n").filter((l) => l.startsWith("FAIL")).slice(0, 6);
+    assert(/\(skipped: no \.gon files under/.test(out), "inner run: expected a '(skipped: no .gon files under …)' line (env override honoured)");
+    assert(r.status === 0 && /, 0 failed/.test(out), `inner run exit ${r.status}: ${fails.join(" | ") || out.slice(-300)}`);
+  });
 }
 
 // ---- summary ----------------------------------------------------------------
