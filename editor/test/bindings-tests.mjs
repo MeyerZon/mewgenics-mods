@@ -817,12 +817,12 @@ export async function runBindingsTests(test, assert, eq) {
   const { findString, findStringXrefs, harvestFunction, findRtti, vtableSlotTarget, deriveFromVtableSlot, harvestManifest } = hv;
 
   /**
-   * A fake image: .hvText at 0x1000, .rdata at 0x2000, .data at 0x3000 (builder layout, each section < 1 page).
+   * A fake image: .hvText at 0x1000, .hvRdata at 0x2000, .hvData at 0x3000 (builder layout, each section < 1 page).
    *   hvFnA 0x1010: lea rcx,[rip->funcsig]; call fnB; mov rax,[rip->Glob]; ret
    *   fnB 0x1040: mov eax,0x4d6; ret            (vtable slot 1 body)
    *   fnC 0x1060: push rbx; ...; ret            (vtable slot 0 body)
-   *   .rdata: funcsig string @+0x10, "Dup" twice, COL @+0x40, vftable @+0x80 (COL pointer @+0x78)
-   *   .data:  TypeDescriptor @+0x20 (name @+0x30), Glob @+0x100
+   *   .hvRdata: funcsig string @+0x10, "Dup" twice, COL @+0x40, vftable @+0x80 (COL pointer @+0x78)
+   *   .hvData:  TypeDescriptor @+0x20 (name @+0x30), Glob @+0x100
    */
   const FUNCSIG = "int __cdecl glaiel::foo(void)";
   const TEXT = 0x1000, RDATA = 0x2000, DATA = 0x3000, BASE = 0x140000000;
@@ -837,32 +837,32 @@ export async function runBindingsTests(test, assert, eq) {
   hvText.set(hvFnA, 0x10);
   hvText.set([0xb8, 0xd6, 0x04, 0x00, 0x00, 0xc3], 0x40);
   hvText.set([0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3], 0x60);
-  const rdata = Buffer.alloc(0x100);
-  rdata.write(FUNCSIG + "\0", 0x10, "latin1");
-  rdata.write("Dup\0", 0x30, "latin1");
-  rdata.write("Dup\0", 0x36, "latin1");
-  rdata.writeUInt32LE(1, 0x40);            // COL.signature (x64)
-  rdata.writeUInt32LE(0, 0x44);            // COL.offset
-  rdata.writeUInt32LE(0, 0x48);            // COL.cdOffset
-  rdata.writeUInt32LE(DATA + 0x20, 0x4c);  // COL.pTypeDescriptor (image-relative)
-  rdata.writeUInt32LE(0, 0x50);            // COL.pClassDescriptor
-  rdata.writeUInt32LE(RDATA + 0x40, 0x54); // COL.pSelf
-  rdata.writeBigUInt64LE(BigInt(BASE + RDATA + 0x40), 0x78); // vftable[-1] = &COL
-  rdata.writeBigUInt64LE(BigInt(BASE + TEXT + 0x60), 0x80);  // slot 0 -> fnC
-  rdata.writeBigUInt64LE(BigInt(BASE + TEXT + 0x40), 0x88);  // slot 1 -> fnB
-  const data = Buffer.alloc(0x120);
-  data.writeBigUInt64LE(BigInt(BASE + RDATA + 0xf0), 0x20);  // TypeDescriptor.pVFTable (any)
-  data.write(".?AVFoo@glaiel@@\0", 0x30, "latin1");
+  const hvRdata = Buffer.alloc(0x100);
+  hvRdata.write(FUNCSIG + "\0", 0x10, "latin1");
+  hvRdata.write("Dup\0", 0x30, "latin1");
+  hvRdata.write("Dup\0", 0x36, "latin1");
+  hvRdata.writeUInt32LE(1, 0x40);            // COL.signature (x64)
+  hvRdata.writeUInt32LE(0, 0x44);            // COL.offset
+  hvRdata.writeUInt32LE(0, 0x48);            // COL.cdOffset
+  hvRdata.writeUInt32LE(DATA + 0x20, 0x4c);  // COL.pTypeDescriptor (image-relative)
+  hvRdata.writeUInt32LE(0, 0x50);            // COL.pClassDescriptor
+  hvRdata.writeUInt32LE(RDATA + 0x40, 0x54); // COL.pSelf
+  hvRdata.writeBigUInt64LE(BigInt(BASE + RDATA + 0x40), 0x78); // vftable[-1] = &COL
+  hvRdata.writeBigUInt64LE(BigInt(BASE + TEXT + 0x60), 0x80);  // slot 0 -> fnC
+  hvRdata.writeBigUInt64LE(BigInt(BASE + TEXT + 0x40), 0x88);  // slot 1 -> fnB
+  const hvData = Buffer.alloc(0x120);
+  hvData.writeBigUInt64LE(BigInt(BASE + RDATA + 0xf0), 0x20);  // TypeDescriptor.pVFTable (any)
+  hvData.write(".?AVFoo@glaiel@@\0", 0x30, "latin1");
   const hvPe = buildFakePe({
     timeDateStamp: 0x44444444,
-    sections: [{ name: ".hvText", bytes: hvText, exec: true }, { name: ".rdata", bytes: rdata }, { name: ".data", bytes: data, write: true }],
+    sections: [{ name: ".hvText", bytes: hvText, exec: true }, { name: ".hvRdata", bytes: hvRdata }, { name: ".hvData", bytes: hvData, write: true }],
     pdata: [{ section: ".hvText", begin: 0x10, end: 0x30 }, { section: ".hvText", begin: 0x40, end: 0x46 }, { section: ".hvText", begin: 0x60, end: 0x80 }],
   });
   const hp = parsePe(hvPe.buf);
-  eq(hvPe.rva(".rdata", 0), RDATA, "fake layout assumption");
-  eq(hvPe.rva(".data", 0), DATA, "fake layout assumption");
+  eq(hvPe.rva(".hvRdata", 0), RDATA, "fake layout assumption");
+  eq(hvPe.rva(".hvData", 0), DATA, "fake layout assumption");
 
-  test("findString: NUL-terminated string -> rva + occurrence count (data sections only)", () => {
+  test("findString: NUL-terminated string -> rva + occurrence count (hvData sections only)", () => {
     const s = findString(hp, hvPe.buf, FUNCSIG);
     eq(s.rva, RDATA + 0x10);
     eq(s.count, 1);
@@ -918,12 +918,12 @@ export async function runBindingsTests(test, assert, eq) {
       entries: [
         { name: "FnA", kind: "function", rva: "0x1010", signature: null, anchors: {}, consumers: [], exposure: [{ table: "FW_LK", index: 0, shape: "A" }], evidence: [] },
         { name: "FnB", kind: "function", rva: "0x1040", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
-        { name: "Glob", kind: "data", rva: "0x3100", anchors: { witness: { function: "FnA", kind: "rip-mov", ripRefOrdinal: null, needsHarvest: true } }, consumers: [], exposure: [{ enum: "FW_DATA_Glob", index: 0 }], evidence: [] },
+        { name: "Glob", kind: "hvData", rva: "0x3100", anchors: { witness: { function: "FnA", kind: "rip-mov", ripRefOrdinal: null, needsHarvest: true } }, consumers: [], exposure: [{ enum: "FW_DATA_Glob", index: 0 }], evidence: [] },
         { name: "Foo_vftable", kind: "vtable", rva: "0x2080", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
         { name: "Foo_typeid", kind: "constant", value: "0x4d6", anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] },
         { name: "Wrong_vftable", kind: "vtable", rva: "0x2090", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [], evidence: [] },
-        { name: "Tbl", kind: "data", rva: "0x2000", anchors: {}, consumers: [], exposure: [], evidence: [] },
-        { name: "Tbl_slot3", kind: "data", rva: "0x2018", anchors: { derive: { table: "Tbl", index: 3 } }, consumers: [], exposure: [], evidence: [] },
+        { name: "Tbl", kind: "hvData", rva: "0x2000", anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "Tbl_slot3", kind: "hvData", rva: "0x2018", anchors: { derive: { table: "Tbl", index: 3 } }, consumers: [], exposure: [], evidence: [] },
       ],
     });
     const { manifest: out, report } = harvestManifest(hp, hvPe.buf, m);
@@ -972,7 +972,7 @@ export async function runBindingsTests(test, assert, eq) {
       eq(deriveFromVtableSlot(p, exe, 0xf57ab8, 1, "B8 ?? ?? ?? ?? C3", 1), 0x4d6);
       const t = entry(m, "SDL_DYNAPI_table");
       for (const e of m.entries) {
-        if (e.kind === "data" && e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table") eq(parseInt(e.rva, 16), parseInt(t.rva, 16) + 8 * e.anchors.derive.index, e.name);
+        if (e.kind === "hvData" && e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table") eq(parseInt(e.rva, 16), parseInt(t.rva, 16) + 8 * e.anchors.derive.index, e.name);
       }
     });
     test("T1 real exe: harvestManifest resolves App_global / DefaultStatusSource witnesses, verifies every rtti/derive, and the committed manifest is already harvested", () => {
