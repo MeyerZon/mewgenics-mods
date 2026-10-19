@@ -517,6 +517,19 @@ export async function runIngameTests(test, assert, eq) {
         ...extra,
       });
 
+    test("uniqueRunDir: a second run in the same second gets a distinct dir (-2, -3 …), never a reused result file", () => {
+      assert(typeof runner.uniqueRunDir === "function", "uniqueRunDir exported from runner.mjs");
+      const base = join(runsDir, "unique-" + process.pid);
+      mkdirSync(base, { recursive: true });
+      const t = Date.UTC(2026, 9, 19, 20, 0, 0);
+      const first = runner.uniqueRunDir(base, "jokers-luck", "smoke", t);
+      eq(first, join(base, runDirName("jokers-luck", "smoke", t)), "free name used as is");
+      mkdirSync(first, { recursive: true });
+      const second = runner.uniqueRunDir(base, "jokers-luck", "smoke", t);
+      eq(second, first + "-2", "taken -> -2");
+      mkdirSync(second, { recursive: true });
+      eq(runner.uniqueRunDir(base, "jokers-luck", "smoke", t), first + "-3", "taken twice -> -3");
+    });
     test("runDirName is sortable and names the test", () => {
       const n = runDirName("jokers-luck", "smoke", Date.UTC(2026, 9, 18, 16, 5, 9));
       assert(/^\d{8}-\d{6}-jokers-luck-smoke$/.test(n), n);
