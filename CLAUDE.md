@@ -68,7 +68,10 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   list and base-data index the validator needs; regenerate after the base game updates).
 - `npm test` — the full unit suite (`node test/run-tests.mjs`: GON, overlays, validator, art, the in-game runner
   against a fake game, an MCP spawn smoke, the bindings library against fake PE images and the installed exe;
-  230 checks). The runner takes no filter flag; `node test/ingame-tests.mjs` runs that suite alone.
+  ~250 checks). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
+  reports the skipped count. Without `.extracted/` the data-dependent sections print `(skipped: …)` and the suite
+  still exits 0 (a nested run with `MEWGENICS_EXTRACTED_DATA` pointing at an empty dir checks that on every run).
+  `tools/gpak.py` is covered by `test/gpak-tests.mjs` on a synthetic archive (needs a Python 3 on PATH, else skips).
 - `npm run bindings:gen` / `bindings:check` — regenerate / verify `native/framework/src/signatures.h` + `offsets.h`
   from `bindings/*.json` (see "Everything native is pinned" below).
 - `npm run typecheck` — `tsc --noEmit` over JSDoc-typed ESM (there are no `.ts` files and no bundler by design).

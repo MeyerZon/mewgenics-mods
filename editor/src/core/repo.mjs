@@ -13,7 +13,11 @@ import { existsSync, mkdirSync } from "node:fs";
 const here = dirname(fileURLToPath(import.meta.url)); // <repo>/editor/src/core
 export const REPO_ROOT = resolve(here, "..", "..", "..");
 export const EDITOR_DIR = join(REPO_ROOT, "editor");
-export const EXTRACTED_DATA = join(REPO_ROOT, ".extracted", "data");
+// MEWGENICS_EXTRACTED_DATA exists for the test runner only (T0 without game data: run-tests.mjs points it at an
+// empty dir); it is not a user-facing setting. Default: <repo>/.extracted/data.
+export const EXTRACTED_DATA = process.env.MEWGENICS_EXTRACTED_DATA
+  ? resolve(process.env.MEWGENICS_EXTRACTED_DATA)
+  : join(REPO_ROOT, ".extracted", "data");
 export const MODS_DIR = join(REPO_ROOT, "mods");
 export const DATA_CACHE_DIR = join(EDITOR_DIR, "data");
 export const REGISTERED_NAMES_PATH = join(EDITOR_DIR, "registered-names.json");
