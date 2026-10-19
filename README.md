@@ -22,7 +22,7 @@ and fast to author.
 | `mods/` | Data-layer mods (GON/CSV overlays). Sample: `jokers-luck`, plus a `dev-sandbox`. |
 | `native/` | Native framework (`framework/`), the `version.dll` chainloader setup, and native mods (`mods/`). |
 | `editor/` | The data-layer mod editor (core + MCP server + web UI). See [editor usage](#the-editor). |
-| `tools/` | `gpak.py` (read-only pack reader), `make-signature.mjs`, `rea-mcp.mjs` (REA/Ghidra driver). |
+| `tools/` | `gpak.py` (read-only pack reader), `bindings/make-signature.mjs` + `bindings/gen-headers.mjs` (signature + header generators), `rea-mcp.mjs` (REA/Ghidra driver). |
 | `bindings/` | Per-build byte signatures + RVAs. Everything native is pinned to one game build. |
 | `docs/` | The authoritative notes — start here. |
 

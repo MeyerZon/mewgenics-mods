@@ -77,7 +77,7 @@ recombine existing behaviors; new behaviors need native code.
 ## Functions and signatures
 
 `bindings/25143593.sig.tsv` holds unique byte prefixes (name, RVA, length, bytes) produced by
-`tools/make-signature.mjs` for: ProcessCmds `0x9b8bb0`, FileManager resolve `0x9a09f0`, GetFile `0x99ff50`,
+`tools/bindings/make-signature.mjs` for: ProcessCmds `0x9b8bb0`, FileManager resolve `0x9a09f0`, GetFile `0x99ff50`,
 GetFileRawLoose `0x9a0300`, GetFileRawPak `0x9a0670`, FileExists `0x9a14c0`, gpak load `0x9b5380`,
 TurnControl::NextTurn `0x8e3c60`, Character::BeginTurn `0x10a9b0`, Ability::trigger `0x320a0`,
 MewSaveFile::open_or_create `0x229cd0`, SQLSaveFile::open `0xa0d3c0`, ApplicationBase::appmain `0x9b9970`

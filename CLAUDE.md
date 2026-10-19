@@ -94,8 +94,9 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 
 **Reverse engineering** (optional, read-only): `tools/rea-mcp.mjs` drives a long-lived REA/Ghidra session against
 `Mewgenics.exe` via Docker image `rea-ghidra:12.1.4`. Import takes ~17 min, so use its `watch <queueDir>` mode. See
-`docs/engine-map.md` "REA / Ghidra sessions" for the exact invocation. `tools/make-signature.mjs <exe> name=rva ...`
-derives unique byte signatures for `bindings/`.
+`docs/engine-map.md` "REA / Ghidra sessions" for the exact invocation. `tools/bindings/make-signature.mjs <exe> name=rva ...`
+derives unique byte signatures (rel32 / rip-relative bytes wildcarded); `--manifest bindings/<build>.json --write` regenerates every
+signature in the manifest, then `npm run bindings:gen` (editor/) regenerates `signatures.h` / `offsets.h`.
 
 **Ghidra sessions are shared infrastructure — never interrupt another agent's.** Several Claude sessions and
 subagents work in this repo at once, each with its own ~17-minute import running. Rules (enforced by convention, see
@@ -117,7 +118,7 @@ subagents work in this repo at once, each with its own ~17-minute import running
 **Everything native is pinned to one game build.** `bindings/25143593.sig.tsv` and `native/framework/src/signatures.h`
 encode byte signatures + RVAs for Steam build `25143593` (PE TimeDateStamp `0x6a9c51e5`). The framework **gates on the
 build identity and fails closed** (logs "unknown build, disabled", installs no hooks) on any other build. When the game
-updates, signatures must be re-derived (REA/Ghidra + `make-signature.mjs`) — a broken signature is a disabled mod, not a
+updates, signatures must be re-derived (REA/Ghidra + `tools/bindings/make-signature.mjs`, then `npm run bindings:gen`) — a broken signature is a disabled mod, not a
 crash. Signatures must be copied at their full unique length.
 
 **GON overlay semantics are the game's, reproduced in two places.** The `-modpaths` loader resolves a file as the pack
