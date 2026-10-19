@@ -10,7 +10,7 @@
 #define MT_ARENA_BYTES 65536
 #define MT_MAX_LINE 4096              /* a cmd line may carry MT_MAX_CMD bytes */
 #define MT_MAX_CMD 4078              /* the game's std::string large-allocation boundary (cap+1 < 0x1000) */
-#define MT_CONSOLE_WAIT_FRAMES 1800  /* frames a `cmd` waits for the debug console before giving up (code 4) */
+#define MT_CONSOLE_WAIT_MS 30000      /* wall-clock ms a `cmd` waits for the debug console before giving up (code 4) */
 #define MT_DEFAULT_TIMEOUT_MS 120000
 #define MT_PATH_MAX 520
 
@@ -126,7 +126,7 @@ typedef struct MtRunner {
     uint64_t waitDeadline;  /* ms */
     uint64_t waitStartMs;
     int withinLeft;
-    int consoleWaitFrames;
+    uint64_t consoleWaitSince;    /* now_ms when the pending cmd first found no console; 0 = not waiting */
     int expectPass, expectFail;
     int exitCode;
     int finished;

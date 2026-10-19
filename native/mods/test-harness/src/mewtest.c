@@ -509,6 +509,45 @@ static int install_hook(int sym, void *fn, void **tramp, int prio, const char *n
     return 1;
 }
 
+static void write_start_event(const char *build) {
+    char buf[1200];
+    MtJsonW w;
+    mt_jw_begin(&w, buf, sizeof buf, "start");
+    mt_jw_str(&w, "harness", MT_VERSION);
+    mt_jw_str(&w, "build", build ? build : "unknown");
+    mt_jw_str(&w, "script", g_args.script);
+    mt_jw_str(&w, "out", g_args.out);
+    mt_jw_int(&w, "pid", (long long)GetCurrentProcessId());
+    mt_jw_int(&w, "hide", g_args.hide);
+    mt_jw_int(&w, "timeout_ms", g_args.timeoutMs);
+    mt_jw_int(&w, "clean", g_args.clean);
+    mt_jw_int(&w, "t", 0);
+    mt_jw_int(&w, "frame", 0);
+    mt_jw_end(&w);
+    emit_locked(buf);
+}
+
+/* The framework is missing or inactive (unknown build, failed signature): still leave a result file
+ * (start + end{code 4, reason}) so the runner can name the cause instead of waiting for its backstop,
+ * then exit 4 from a helper thread once DllMain has returned (never ExitProcess under the loader lock). */
+static DWORD WINAPI inactive_exit_thread(LPVOID p) { (void)p; Sleep(1500); ExitProcess(4); return 0; }
+static void inactive_exit(const char *reason) {
+    g_out = CreateFileA(g_args.out, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (g_out == INVALID_HANDLE_VALUE) {
+        logf_("cannot create result file %s (err %lu)", g_args.out, GetLastError());
+    } else {
+        write_start_event(g_fw.GetBuildName ? g_fw.GetBuildName() : "unknown");
+        EnterCriticalSection(&g_outLock);
+        write_end_once(4, reason);
+        FlushFileBuffers(g_out);
+        CloseHandle(g_out);
+        g_out = INVALID_HANDLE_VALUE;
+        LeaveCriticalSection(&g_outLock);
+    }
+    logf_("%s: result written with code 4; exiting in 1.5 s", reason);
+    CreateThread(NULL, 0, inactive_exit_thread, NULL, 0, NULL);
+}
+
 static void init(void) {
     g_startTick = GetTickCount();
     InitializeCriticalSection(&g_outLock);
@@ -528,8 +567,8 @@ static void init(void) {
         if (!present) { logf_("no -mewtest on the command line; inert"); return; }
         if (!g_args.hasSaveSuffix) { logf_("-mewtest without -savesuffix; refusing to run against the real save; inert"); return; }
     }
-    if (!FW_Resolve(&g_fw)) { logf_("mewframework.dll not loaded or older than API v%d; inert", FW_API_VERSION); return; }
-    if (!g_fw.IsActive()) { logf_("framework inactive (unknown build or a signature failed); inert"); return; }
+    if (!FW_Resolve(&g_fw)) { logf_("mewframework.dll not loaded or older than API v%d; inert", FW_API_VERSION); inactive_exit("framework_missing"); return; }
+    if (!g_fw.IsActive()) { logf_("framework inactive (unknown build or a signature failed); inert"); inactive_exit("framework_inactive"); return; }
     if (!g_mjOk) { logf_("Mewjector API unavailable; inert"); return; }
 
     g_base = (uintptr_t)GetModuleHandleW(NULL);
@@ -574,23 +613,7 @@ static void init(void) {
     g_prevFilter = SetUnhandledExceptionFilter(top_filter);
     CreateThread(NULL, 0, watchdog, NULL, 0, NULL);
 
-    {
-        char buf[1200];
-        MtJsonW w;
-        mt_jw_begin(&w, buf, sizeof buf, "start");
-        mt_jw_str(&w, "harness", MT_VERSION);
-        mt_jw_str(&w, "build", g_fw.GetBuildName());
-        mt_jw_str(&w, "script", g_args.script);
-        mt_jw_str(&w, "out", g_args.out);
-        mt_jw_int(&w, "pid", (long long)GetCurrentProcessId());
-        mt_jw_int(&w, "hide", g_args.hide);
-        mt_jw_int(&w, "timeout_ms", g_args.timeoutMs);
-        mt_jw_int(&w, "clean", g_args.clean);
-        mt_jw_int(&w, "t", 0);
-        mt_jw_int(&w, "frame", 0);
-        mt_jw_end(&w);
-        emit_locked(buf);
-    }
+    write_start_event(g_fw.GetBuildName());
     g_active = 1;
     logf_("active: script %s (%d directive(s), parse %s), out %s, hide %d, timeout %u ms, clean %d",
           g_args.script, g_script.count, g_scriptOk ? "ok" : "FAILED", g_args.out, g_args.hide, g_args.timeoutMs, g_args.clean);
