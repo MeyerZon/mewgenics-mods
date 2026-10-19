@@ -1184,4 +1184,61 @@ export async function runBindingsTests(test, assert, eq) {
       eq(validateManifest(r.manifest).ok, true);
     });
   }
+  // ---- seed.mjs: REA_GHIDRA_SEED_FILE from a manifest (Windows Ghidra is read-only) -------
+  console.log("\n# Bindings: REA seed file (address<TAB>kind<TAB>name)");
+  const sd = await load("../src/core/bindings/seed.mjs");
+  if (sd.__error) {
+    test("seed.mjs loads", () => assert(false, sd.__error));
+    return;
+  }
+  const { seedFromManifest, parseSeed } = sd;
+
+  test("seedFromManifest: functions as `function`, data/vtables as `label`, absolute addresses, highest first, comments, trailing newline", () => {
+    const m = parseManifest(mini());
+    const text = seedFromManifest(m);
+    assert(text.endsWith("\n"), "trailing newline");
+    const lines = text.split("\n").filter(Boolean);
+    assert(lines[0].startsWith("# "), "header comment");
+    assert(lines.some((l) => /^# .*steam 1\b/.test(l) || /steamBuildId 1\b/.test(l)), "names the build");
+    const rows = lines.filter((l) => !l.startsWith("#"));
+    eq(rows.join("|"), ["0x140003000\tlabel\tFoo_vftable", "0x140002000\tlabel\tGlob", "0x140001040\tfunction\tFnB", "0x140001010\tfunction\tFnA"].join("|"));
+    assert(!text.includes("Foo_typeid") && !text.includes("Foo_stacks"), "constants and offsets are not addresses");
+    const parsed = parseSeed(text);
+    eq(parsed.length, 4);
+    eq(parsed[3].address, 0x140001010);
+    eq(parsed[3].kind, "function");
+    eq(parsed[3].name, "FnA");
+  });
+  test("seedFromManifest on a ported manifest: ambiguous entries become one `function` seed per candidate, named Name__cand_<rva>", () => {
+    /** @type {any} */
+    const m = parseManifest(mini());
+    const a = entry(m, "FnA");
+    a.port = { from: "1", status: "ambiguous", method: "candidates", note: "2 candidates", candidates: [{ rva: "0x1200", bytes: 40, calls: 1, via: "funcsig xref" }, { rva: "0x1300", bytes: 44, calls: 1, via: "funcsig xref" }] };
+    const b = entry(m, "FnB");
+    b.port = { from: "1", status: "ported-rescan", method: "signature", note: "" };
+    const text = seedFromManifest(m);
+    assert(text.includes("0x140001300\tfunction\tFnA__cand_0x1300") && text.includes("0x140001200\tfunction\tFnA__cand_0x1200"), text);
+    assert(!/\tFnA\n/.test(text), "no seed at the stale FnA address");
+    assert(text.includes("0x140001040\tfunction\tFnB"), "ported entries keep their names");
+    const failed = parseManifest(mini());
+    entry(failed, "FnA").port = { from: "1", status: "failed", method: "none", note: "no anchor" };
+    assert(!seedFromManifest(failed).includes("\tFnA"), "a failed entry has no trustworthy address");
+  });
+  test("parseSeed: ignores comments and blank lines, rejects a bad line with the line number", () => {
+    const p = parseSeed("# c\n\n0x140001000\tfunction\tA\n0x140002000\tcode\n0x140003000\tlabel\tL\n");
+    eq(p.map((x) => `${x.kind}:${x.name || ""}`).join(","), "function:A,code:,label:L");
+    let err = "";
+    try { parseSeed("0x1\tfunction\tA\nnope\n"); } catch (e) { err = String(e); }
+    assert(/line 2/.test(err), err);
+  });
+  if (exe) {
+    test("T1: the real manifest seeds every function and vtable/data address (>= 46 functions), e.g. TurnControl_NextTurn and LuckUp_vftable", () => {
+      const text = seedFromManifest(loadManifest(realPath));
+      const rows = parseSeed(text);
+      assert(rows.filter((x) => x.kind === "function").length >= 46, `functions: ${rows.filter((x) => x.kind === "function").length}`);
+      assert(text.includes("0x1408e3c60\tfunction\tTurnControl_NextTurn"), "NextTurn");
+      assert(text.includes("0x140f57ab8\tlabel\tLuckUp_vftable"), "LuckUp vftable");
+      assert(text.includes("0x1413c4a30\tlabel\tApp_global"), "App global");
+    });
+  }
 }
