@@ -28,15 +28,12 @@ Things no test can see: they need a human at the game, a decision, or an account
 Things no test on this machine can decide. Tick them off here; each links to where the detail lives.
 
 ### Needs a second game build
-- [ ] **Run the real cross-build port.** Fetch the previous public build in the Steam client console
-  (`steam://open/console`): `download_depot 686060 686061 8229879464648565847` (build 23372843, 1.1, pushed
-  2026-05-23; fallback build 22590112 = manifest `7439062808803962475`; the only content depot is 686061 — ids read
-  from this PC's `Steam\logs\content_log.txt` on 2026-10-19). It lands under
-  `Steam\steamapps\content\app_686060\depot_686061\`. Copy its `Mewgenics.exe` to `.analysis/exe/<build>/` (git-ignored), then
-  `node tools/bindings/cross-build.mjs --old "<installed Mewgenics.exe>" --new .analysis\exe\<build>\Mewgenics.exe`
-  (or `BINDINGS_NEW_EXE=... npm test` from `editor/`). Expected: no `ambiguous`/`failed` rows outside struct offsets.
-  Any such row is a ladder improvement to make; the candidates are already listed. Record the outcome in
-  `docs/binding-port.md` "T1 cross-build".
+- [x] **Run the real cross-build port.** Done 2026-10-19 against build 23372843 (`download_depot 686060 686061
+  8229879464648565847`, exe kept at `.analysis/exe/23372843/`): `0 non-offset entries ambiguous/failed`, exit 0;
+  opt-in `npm test` `235 passed, 0 failed`. Only `LuckUp_typeid` differs (`0x4d5` vs `0x4d6`) and the derivation
+  caught it. Caveat: every anchored function had identical size/call counts on both builds, so only the relink case
+  is proven. Result and the ladder candidates it suggests: `docs/binding-port.md` "T1 cross-build result". Repeat
+  with any build that changes SDL or function bodies.
 - [x] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` (done 2026-10-19, git-ignored,
   sha256 `4127cd6a…`). Redo this before every Steam update: the anchors are committed, the binary is not, and the
   self-port/harvest tests need it once the install moves on.
@@ -216,10 +213,17 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [ ] Verify the INFERRED preview behaviors (nested-sprite framing, cxform-after-remap, engine fill rule, bitmap sampling)
 - [x] Per-build fragility: `docs/binding-port.md` + the `port-bindings` skill (manifest `bindings/<build>.json`, generated
   headers, harvest/port/check/seed tools, `unknown-build` verdict, `native-build-unknown` validator warning). 2026-10-19.
-- [ ] **Cross-build port, for real**: fetch an older build with Steam `download_depot 686060 <depot> <manifest>` into
-  `.analysis/exe/<build>/` and run the opt-in T1 (`BINDINGS_OLD_EXE`/`BINDINGS_NEW_EXE`) to prove the anchors survive a
-  genuine recompile; record the result in `docs/binding-port.md`.
+- [x] **Cross-build port, for real**: done 2026-10-19, 25143593 → 23372843, clean (see the owner checklist above and
+  `docs/binding-port.md` "T1 cross-build result"). Proves anchors survive a relink; a body-changing build is still wanted.
+- [ ] **Port-report `old` column bug** (found by the cross-build run): `portFunction` in `editor/src/core/bindings/port.mjs`
+  sets `e.rva` before `finish` reads `oldValue`, so every ported row shows the new value as "old" (the real one only
+  survives in the `was 0x…` detail). TDD: a fake-PE T0 test asserting the column, then capture `oldValue` first.
+- [ ] **Harden rung 3 (caller ordinal)**: `Status_ApplyLuckUp` / `LuckUp_ctor` port only by call ordinal with no fallback.
+  Candidates from the cross-build run: a callee-set rung, a tolerant ordinal window, a vftable-store rung for
+  constructors (needs the RTTI phase before the function rungs). Pass `--gameVersion` through `cross-build.mjs` and
+  record rung-2 size/call deltas in the report while there.
 - [ ] **Witness patterns for the 38 unanchored entries** (struct offsets, vtable slot constants) so the port stops
-  reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.mjs`.
+  reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.mjs`. Also a
+  second witness for `LuckUp_typeid` (imm32 at call #4 of `Status_ApplyLuckUp`) now that it is known to change.
 - [x] **Runtime anchor locator in the DLL** (optional): string → lea xref → `.pdata` so anchored-but-unsigned entries
   survive a relink before anyone runs the port. **Dropped** by owner decision 2026-10-19 (see "Decisions").
