@@ -1,0 +1,7 @@
+{
+  "title": "SWF Gate",
+  "author": "MeyerZon",
+  "version": "0.1.0",
+  "description": "Test-only mod for the SWF append gate (docs/swf-emitter-fix-spec.md §8): holds one generated donor SWF and a one-entry swflist.gon.append so the in-game harness can check that an _Append_AbilityIcon clip boots the game. Files are written by `npm run test:swfgate -- <variant>`; never ship this mod.",
+  "requirements": []
+}

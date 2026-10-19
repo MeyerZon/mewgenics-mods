@@ -186,9 +186,9 @@ async function handleApi(req, res, url) {
       const bytes = new Uint8Array(Buffer.from(String(b.base64 || ""), "base64"));
       return sendJson(res, 200, api.writeArtAsset(b.mod, b.path, bytes));
     }
-    if (method === "POST" && url.pathname === "/api/art/prepare-abc-gate") {
+    if (method === "POST" && url.pathname === "/api/art/prepare-swf-gate") {
       const b = await readBody(req);
-      return sendJson(res, 200, api.prepareAbcGateTest(b.mod || "dev-sandbox"));
+      return sendJson(res, 200, api.prepareSwfGate({ mod: b.mod || undefined, variant: b.variant || "flat" }));
     }
     return sendJson(res, 404, { error: `no route: ${method} ${url.pathname}` });
   } catch (e) {

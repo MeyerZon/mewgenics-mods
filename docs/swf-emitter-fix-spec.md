@@ -1,5 +1,44 @@
 # SWF emitter fix spec — why the hand-emitted gate SWF crashes `glaielswf`
 
+## 0. Status 2026-10-19 — implemented, gated in-game, crash not reproducible at boot
+
+Branch `fix/swf-append-frame` (worktree). What changed since the spec below was written:
+
+- **§8.1's premise was wrong (OBSERVED, read-only parse of `swfs/ability_icons.swf`, pinned by a T1 test in
+  `editor/test/art-emitter-tests.mjs`):** `AbilityIcon` (sprite 1346, 901 frames, 842 unique labels, first
+  `unknown`) places **no nested movieclips**. Every labeled icon frame is `FrameLabel` + exactly one
+  `PlaceObject2` at **depth 3** of a bare `DefineShape/2/3/4` — flags 6 (HasCharacter|HasMatrix, identity) on
+  first use, flags 3 (Move|HasCharacter) on swaps (one scaled outlier). Frame 0 adds a background shape at depth 1,
+  a `DefineEditText` named `label` at depth 2 (removed at frame 1) and a border `DefineShape4` at depth 5; the
+  tail removes depths 5 and 1 and ends with seven empty frames; the ABC only registers `frame1 → stop()`.
+  `PassiveIcon` (id 515) is the same pattern at depth 4. Our donor's one mismatch was **depth 1 instead of 3**.
+- **Fix applied:** `minimalGateSwf` places the icon as a bare shape at depth 3 with an identity matrix
+  (`ABILITY_ICON_DEPTH`); `layout: "nested"` (this spec's §8.1 form) and `layout: "legacy"` (the pre-fix depth-1
+  donor) are kept as gate variants. `DEFAULT_ABC_MODE` was already `"none"`.
+- **Gate (T2, `npm run test:swfgate -- <variant>`, mod `mods/swf-gate/`, harness boot to the main menu), all
+  with the real save hash-verified unchanged:**
+
+  | variant | donor | harness verdict |
+  |---|---|---|
+  | control | no gate files | pass |
+  | probe | same bytes, linkage `GateProbe` (no merge) | pass |
+  | flat | shape at depth 3 (the fix) | pass |
+  | nested | nested movieclip at depth 3 (§8.1) | pass |
+  | legacy | shape at depth 1 (the 2026-10-18 donor) | **pass** — also with dev-sandbox + jokers-luck loaded, a visible window, and 10 s at the menu |
+  | missing | linkage `_Append_NoSuchClipXYZ` | harness-error / console_unavailable: the engine logs `Append movieclip: _Append_NoSuchClipXYZ could not locate original movieclip to append to` (`Application.cpp:1363`) and the boot never reaches the console (no crash report) |
+
+  The `missing` stall proves the harness launch loads `swfs/swflist.gon.append` and runs
+  `process_animation_merges` over our SymbolClass; `legacy` passing means **the 2026-10-18 crash is not a
+  boot-time merge fault**. The crash chain's outer frames (`appmain → FUN_9bad00 → FUN_9bb110`) are the running
+  frame loop, so the fault most likely fires when the appended frame is *displayed* (the 10-18 procedure opened the
+  Joker's Luck content so the icon was drawn), which the harness cannot do yet (TODO target 1: enter a run).
+- **Open:** the T3 visual check (owner): `npm run test:swfgate -- flat --prepare-only`, then
+  `launch-dev.bat mods\swf-gate`, enter the dev run, view `JokersGambit` — icon drawn and no `crash_*.txt` =
+  fixed; a crash = decompile `FUN_140a58440` (merge) and `0x9a8f30` (movieclip advance) next.
+- Also observed on the way: `-mewtest_clean 1` logs "script finished … (clean exit)" and then never exits
+  (killed after 7 min; TODO verification item updated); an unknown `_Append_` target is a silent boot stall for
+  modders, not a warning.
+
 Status of reverse-engineering method (read this first):
 
 - **Crash offsets, call chain, fault instruction, and the `_Append_` convention were
@@ -320,17 +359,12 @@ The decompile (§7) established that the merge is an **object-level timeline app
 (`FUN_140a58440(targetClip, sourceClip)`), so the fix is about the donor's **frame/clip
 structure**, not its byte/ID layout.
 
-1. **Make the append donor mirror `AbilityIcon`'s per-frame append structure** (leading fix).
-   `minimalGateSwf` (and the real icon path in `art-io.mjs`) place a **bare `DefineShape3`**
-   directly on the donor sprite's one labeled frame. Instead: wrap the icon graphic in its
-   **own nested `DefineSprite`** and place that movieclip on the labeled frame, so the appended
-   frame matches how `AbilityIcon` lays out its 901 labeled frames (icon = a nested movieclip;
-   the ability name on the frame label) and the community rule "set every appended object to a
-   movieclip". Keep exactly one `ShowFrame` and one `FrameLabel` = the ability name. This fixes
-   the producing boundary identified in §6 (a mismatched appended frame perturbing
-   `AbilityIcon`'s playback/frame-script table). Before finalizing, confirm the exact expected
-   per-frame layout against `ability_icons.swf`'s own labeled frames (read-only) and, if more
-   certainty is wanted, against `FUN_140a58440`.
+1. **Make the append donor mirror `AbilityIcon`'s per-frame layout** (leading fix — **corrected 2026-10-19,
+   see §0**). The original text here assumed `AbilityIcon` placed nested movieclips on its labeled frames; the
+   read-only parse shows it places a **bare shape at depth 3** per labeled frame. The donor now does exactly that
+   (`ABILITY_ICON_DEPTH = 3`, identity matrix, one `ShowFrame`, one `FrameLabel` = the ability name). The nested
+   form is kept only as the `nested` gate variant. Both forms boot and merge; neither the fix nor the pre-fix
+   donor crashes at the main menu (§0), so the display-time check is what remains.
 
 2. **Default `abc:"none"` for append donors; never emit a DoABC solely to bind.**
    `emitSwf`/`minimalGateSwf` should treat `SymbolClass` as sufficient for linkage
@@ -362,10 +396,10 @@ structure**, not its byte/ID layout.
 
 ### Validation to run after implementing (no game bytes modified)
 
-- Re-emit and re-parse with `swf-reader.mjs`; assert each appended object is a nested movieclip
-  and the donor frame's label = the ability name.
-- Re-run the §7.2 gate procedure (control C, run A, run B) and confirm no `crash_*.txt` and no
-  new `glaielswf` log lines; confirm the `JokersGambit` icon renders instead of `unknown`.
+- Done (2026-10-19): `npm test` re-parses the donor and asserts depth 3 / flags 6 / identity / bare
+  `DefineShape3` on the labeled frame, plus parity with `AbilityIcon`'s first labeled frame (T1).
+- Done (2026-10-19): `npm run test:swfgate -- control|probe|flat|nested|legacy|missing` (§0 table). Still owed:
+  the visual check that the `JokersGambit` icon renders instead of `unknown` inside a run (T3, owner).
 - If the crash persists after #1, decompile `FUN_140a58440` (the merge) and `0x9a8f30` (the
   movieclip advance) to pin the exact perturbation.
 
@@ -381,7 +415,8 @@ structure**, not its byte/ID layout.
   `analyze-frames.mjs`, `dump-sites.mjs`, `probe-append.mjs`, `find-vtables.mjs`,
   `callers.mjs`, `emit-and-diff.mjs`, `parse-abilityicons.mjs`.
 - Gate fixtures: `editor/src/core/art/swf-emitter.mjs#minimalGateSwf`,
-  `editor/src/core/art/art-io.mjs#prepareAbcGateTest`.
+  `editor/src/core/art/art-io.mjs#prepareSwfGate` (variants flat/nested/legacy/probe/missing/control, mod
+  `mods/swf-gate/`, runner `editor/scripts/swf-gate.mjs`).
 - Append convention corroboration (COMMUNITY-SOURCED):
   `github.com/CVS-otherwise-Callie/mewgenics-modding-documents` (`docs/SWF_appendation.md`,
   `SWF_home.md`, `SWFOverview.md`); `ombrellus/MewgenicsScriptResources`;

@@ -14,6 +14,7 @@
     "web": "node web/server.mjs",
     "test": "node test/run-tests.mjs",
     "test:ingame": "node scripts/ingame.mjs",
+    "test:swfgate": "node scripts/swf-gate.mjs",
     "test:e2e": "playwright test",
     "bindings:gen": "node ../tools/bindings/gen-headers.mjs",
     "bindings:check": "node ../tools/bindings/gen-headers.mjs --check"

@@ -1,0 +1,11 @@
+mods: swf-gate
+timeout: 90s
+
+# SWF gate (docs/swf-emitter-fix-spec.md §8): the only question is whether the game boots to the
+# main menu with mods/swf-gate/swfs/gate.swf listed in swflist.gon.append. The failing case is a
+# post-load null-deref during the _Append_AbilityIcon merge, which the harness reports as `crash`
+# before any directive runs. Generate the variant first: `npm run test:swfgate -- <variant>`.
+wait frames 120
+cmd listcmds
+expect console "Executed: listcmds"
+quit
