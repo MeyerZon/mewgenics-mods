@@ -1,66 +1,67 @@
 # TODO — Mewgenics modding toolkit
 
-Living status snapshot (last updated 2026-10-19: binding-port stack #7–#19 and the SWF gate #21 merged). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
-Two agents were in flight at last update: Playwright E2E/validation and the SWF-loader-crash RE.
+Living status snapshot (last updated 2026-10-19 evening: owner ran the game-side checks; every PR through #23 is merged, none open). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 
 ## Owner checks — only you can do these (agents cannot)
 
 Things no test can see: they need a human at the game, a decision, or an account. Tick them here; the agent-side work they unblock is named.
 
-- [ ] **SWF gate, visual half (T3 of PR #21).** From `editor/`: `npm run test:swfgate -- flat --prepare-only`, then
-  `launch-dev.bat mods\swf-gate`. Start/continue the `dev` run and view the `JokersGambit` ability: expected a flat gray
-  square instead of `unknown`, and no new `crash_*.txt` under `%APPDATA%\Glaiel Games\Mewgenics\<steamid>\logs\`.
-  Afterwards `npm run test:swfgate -- control`. If it crashes, tell the agent: next is decompiling `FUN_140a58440`
-  (merge) and `0x9a8f30` (movieclip advance).
-- [ ] **The 2026-10-18 crash context.** Was a run in progress on the `dev` save when the gate SWF crashed, and did it
-  crash at boot or when you opened the ability? (The harness could not reproduce it at the main menu with the
-  pre-fix donor; the answer decides where the agent looks next.)
-- [ ] **Joker's Luck in combat on the current framework build**: the real feature test (target 2) stays blocked on
-  target 1, so until then a play-check that the `JokersLuck` status still ticks is a human look.
-- [ ] **Vanilla-launch gate** of the framework: a plain Steam launch opens the real save, so only you decide whether
-  to verify it on a copy of the install or accept the unchanged code path (see "Verification still owed").
+- [x] **SWF gate, visual half (T3 of PR #21).** Owner, 2026-10-19: the `flat` variant shows a flat gray square for
+  `JokersGambit` inside a run, no new `crash_*.txt`, and `npm run test:swfgate -- control` passed. The emitter fix is
+  verified end to end (boot via the harness, display by eye).
+- [x] **The 2026-10-18 crash context.** Owner was not at the PC when it happened, so boot-vs-display is unknown.
+  Closed: unreproducible with the pre-fix donor at the main menu, and not seen since the fix (gate result above).
+- [x] **Joker's Luck in combat on the current framework build**: owner play-check 2026-10-19 — the cat's luck changes
+  at the start of each turn on the rebuilt DLLs.
+- [x] **Vanilla-launch gate** of the framework: owner decision 2026-10-19 — accept the unchanged code path (the
+  `-savesuffix` check in `framework.c` has not changed since it was verified; no plain launch will be run for this).
 - [ ] **Hidden window on another machine**: confirm the harness keeps ticking hidden on a non-NVIDIA PC before any
   CI-like use.
 - [ ] **Binding-port series** (second build, decisions, play-checks): the detailed checklist is the next section.
-- [ ] **Decisions pending** (section below): GitHub Actions for T0; the Ruffle (WASM) dependency; the dead
-  `mewged.onboard.conceptsDontShowStart` key; mechanical TDD enforcement (PR template / CI).
-- [ ] **Merges.** Every PR waits for your explicit per-PR word (`CLAUDE.md`); open now: #20.
+- [x] **Decisions pending** — all decided 2026-10-19 (see "Decisions" and "Decisions made" below): GitHub Actions
+  for T0 **yes, path-filtered**; Ruffle **yes, via the dep-gate**; dead `conceptsDontShowStart` key **remove the
+  button**; mechanical TDD enforcement **yes** (PR template + CI).
+- [ ] **Merges.** Every PR waits for your explicit per-PR word (`CLAUDE.md`); none open as of 2026-10-19 evening.
 
 ## Owner checklist — what only you can check (binding-port series, merged 2026-10-19)
 
 Things no test on this machine can decide. Tick them off here; each links to where the detail lives.
 
 ### Needs a second game build
-- [ ] **Run the real cross-build port.** Fetch any other build in the Steam client console (`steam://open/console`):
-  `download_depot 686060 <depotId> <manifestId>` (ids from SteamDB's depot history for app 686060). Copy its
-  `Mewgenics.exe` to `.analysis/exe/<build>/` (git-ignored), then
+- [ ] **Run the real cross-build port.** Fetch the previous public build in the Steam client console
+  (`steam://open/console`): `download_depot 686060 686061 8229879464648565847` (build 23372843, 1.1, pushed
+  2026-05-23; fallback build 22590112 = manifest `7439062808803962475`; the only content depot is 686061 — ids read
+  from this PC's `Steam\logs\content_log.txt` on 2026-10-19). It lands under
+  `Steam\steamapps\content\app_686060\depot_686061\`. Copy its `Mewgenics.exe` to `.analysis/exe/<build>/` (git-ignored), then
   `node tools/bindings/cross-build.mjs --old "<installed Mewgenics.exe>" --new .analysis\exe\<build>\Mewgenics.exe`
   (or `BINDINGS_NEW_EXE=... npm test` from `editor/`). Expected: no `ambiguous`/`failed` rows outside struct offsets.
   Any such row is a ladder improvement to make; the candidates are already listed. Record the outcome in
   `docs/binding-port.md` "T1 cross-build".
-- [ ] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` *before* the next Steam update: the
-  anchors are committed, the old binary is not, and the self-port/harvest tests need it once the install moves on.
+- [x] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` (done 2026-10-19, git-ignored,
+  sha256 `4127cd6a…`). Redo this before every Steam update: the anchors are committed, the binary is not, and the
+  self-port/harvest tests need it once the install moves on.
 
 ### Decisions
-- [ ] **`sigCap` / `FW_SIG_MAX_BYTES` stays at 128?** `Status_GetCategory` needs 126 bytes; a longer unique pattern on a
-  future build fails to parse ("0 matches"). Raising it means `fw_sig.h` + `native/framework/test/test_sig.c` together
-  (`docs/binding-port.md` "Known limits").
-- [ ] **One DLL for several builds, or one per build?** `signatures.h` can carry several `BuildInfo` rows, but `offsets.h`
-  is shared `#define`s and the generator refuses when manifests disagree on an offset (then: one DLL per build).
+- [x] **`sigCap` / `FW_SIG_MAX_BYTES` stays at 128** (owner, 2026-10-19): wait until a port actually reports a pattern
+  over the cap, then raise `fw_sig.h` + `native/framework/test/test_sig.c` together (`docs/binding-port.md` "Known
+  limits"). `Status_GetCategory` needs 126 bytes today.
+- [x] **One DLL per build** (owner, 2026-10-19): the manifest set and `signatures.h` carry only the current build;
+  `offsets.h` stays shared `#define`s and the generator keeps refusing mixed manifests.
 - [ ] **SDL version policy**: when `port_bindings` reports the 8 SDL slots as `needs-human` (SDL version changed), the
   DYNAPI slot order must be re-verified by hand (`SDL_dynapi_procs.h` of that SDL version) before trusting the indices.
-- [ ] **Optional PR 15 — runtime anchor locator in the DLL** (string → lea xref → `.pdata`), so anchored-but-unsigned
-  entries survive a relink before anyone runs the port. Worth the native complexity, or not?
+- [x] **Optional PR 15 — runtime anchor locator in the DLL**: **skipped** (owner, 2026-10-19). The offline port tool
+  plus the fail-closed build gate already give "broken binding = disabled mod, not a crash"; a game update needs a
+  rebuild and a T2 pass anyway, so in-process string→xref resolution is not worth the native surface.
 - [ ] **`FW_API_VERSION` bump policy** when the manifest exposes new `FW_SYM_*`/`FW_DATA_*` entries (append-only enums).
 
 ### Verify by eye / by playing
-- [ ] **Joker's Luck still rerolls luck every turn** on the `dev` save after the rebuilt DLLs (combat assertions are
-  blocked until TDD target 1; this is the T3 for every PR that touched `native/`).
+- [x] **Joker's Luck still rerolls luck every turn** on the `dev` save after the rebuilt DLLs (owner play-check
+  2026-10-19; combat assertions stay blocked until TDD target 1, so this remains the T3 for every PR touching `native/`).
 - [ ] **The `port-bindings` skill triggers when you say "the game updated"** (and on `unknown-build` /
   `native-build-unknown`); fix the description wording in `.claude/skills/port-bindings/SKILL.md` if it does not.
 - [ ] **Read `docs/binding-port.md` once as the person who will run the next port**; anything unclear is a doc bug.
-- [ ] **`check_game_build` from Claude Code** returns `known: true` with 35 `ok` signatures on your install (MCP
-  `mewgenics-editor`, 13 tools).
+- [x] **`check_game_build` from Claude Code** returned `known: true`, 35 `ok` / 0 moved / 0 missing / 0 ambiguous on
+  the install (2026-10-19; MCP `mewgenics-editor`, 13 tools).
 - [ ] **A `proposed` struct offset is never applied by the tool**: when a port reports one, apply it only with
   `--resolve Name=0x..` after a green `npm run test:ingame` that exercises it (`docs/binding-port.md` "The ladder").
 
@@ -143,11 +144,13 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    (via a `.mewtest` that reads the live value, once 1 lands) so the overlay engine is tested against the game, not
    only against the decompile.
 9. [ ] **`npm test` without `.extracted/`**: the GON round-trip section fails instead of skipping; make it a logged
-   `(skipped: …)` so T0 is runnable (and CI-able) without game data. Decision pending: GitHub Actions for T0.
+   `(skipped: …)` so T0 is runnable (and CI-able) without game data. Decided 2026-10-19: GitHub Actions for T0, **yes**,
+   triggered only when relevant paths change (`editor/`, `native/`, `bindings/`, `tools/`, `mods/`), not on docs-only PRs.
 10. [ ] **Test runner ergonomics**: a name filter for `run-tests.mjs` (or migrate to built-in `node:test`, zero deps,
     gives `--test-name-pattern`/`--watch`) so red/green per test is cheap.
-11. [ ] **Mechanical enforcement** (decision pending): a PR template with the red/green table + T3 checklist; a check
-    that a change under `src/`/`native/*/src/`/`mods/` comes with a test change; CI running T0 on every PR.
+11. [ ] **Mechanical enforcement** (decided **yes** 2026-10-19): a PR template with the red/green table + T3 checklist; a
+    check that a change under `src/`/`native/*/src/`/`mods/` comes with a test change; CI running T0 on relevant PRs
+    (shares the workflow from target 9).
 12. [ ] **Harness features**: expose `-mewtest_clean` in the runner (`clean: true` header) for a complete `debug.log`;
     named-pipe interactive mode (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`); RNG seed pinning via `TLS+0x178`
     for exact numeric assertions; `expect log "<substr>"` against `debug.log` from the runner side.
@@ -159,8 +162,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [ ] **Crash path**: VEH + top-level filter + watchdog never ran against a real fault (`cmd crash` is in-run only).
   Expect: `crash` event, `end code 3`, Mewjector dump in `mod_logs\crashes\`, no WER dialog, exit 3.
 - [ ] **`-mewtest_clean 1`**: OBSERVED 2026-10-19 — the DLL logs `script finished with code N (clean exit)` and the game then **never exits** (killed after 7 min; no "grace elapsed" line). Fix the clean path before exposing it in the runner.
-- [ ] **Vanilla-launch gate** of framework 0.3.0: not re-verified (a vanilla launch opens the real save; verify with a
-  copy of the install or accept the unchanged code path).
+- [x] **Vanilla-launch gate** of framework 0.3.0: not re-run; owner accepted the unchanged code path 2026-10-19 (the
+  inactive-without-`-savesuffix` branch in `framework.c` is untouched since it was verified).
 - [ ] **One-off early exit**: the very first 0.3.0 launch exited with code 1 after ~5 s during loading with no crash
   report; never reproduced in 8 later launches. Watch for it; if it recurs, capture `debug.log` with `-mewtest_clean`.
 - [ ] **Which file `-savesuffix dev` writes**: dev launches changed `campaign02.sav`, not a `*dev*` file; the real
@@ -178,7 +181,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")
-- [~] Emitter fix from `swf-emitter-fix-spec.md` (PR `fix/swf-append-frame`, 2026-10-19): `AbilityIcon` places a bare shape at **depth 3** per labeled frame (not nested clips) — donor now mirrors it; T2 gate `npm run test:swfgate -- <variant>` boots every layout (incl. the pre-fix one) without crashing, and `missing` proves the merge runs. **Owed:** the owner's T3 look at `JokersGambit` inside a run (the crash is display-time, not boot-time) — *emitter frontier*
+- [x] Emitter fix from `swf-emitter-fix-spec.md` (PR #21, 2026-10-19): `AbilityIcon` places a bare shape at **depth 3** per labeled frame (not nested clips) — donor mirrors it; T2 gate `npm run test:swfgate -- <variant>` boots every layout (incl. the pre-fix one) without crashing, and `missing` proves the merge runs. T3 done the same day: owner saw the gray square for `JokersGambit` inside a run, no crash.
 - [ ] Commit the uncommitted WIP (art pipeline + docs + `CLAUDE.md` flag) + open a PR for review (not merge)
 
 ### Go public (do LAST, after everything else lands — approved 2026-10-18)
@@ -187,9 +190,16 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] New **public** repo created + pushed; verified clean history identity, tree grep = 0 for name tokens, nothing ignored/binary slipped in
 - [x] Old private repo renamed + **archived** (not deleted — per user); its email-bearing history is retired
 
-### Decisions pending
-- [ ] Ruffle (WASM) dependency — only if we want to preview *vanilla* SWFs in-editor; would go through the skeptic dep-gate
-- [ ] Dead key `mewged.onboard.conceptsDontShowStart` — the concepts drawer's "Don't show on start" button writes it but nothing reads it (concepts never auto-opens). Decide: wire concepts auto-open-on-start, or remove the button/key (recommend: remove the dead button)
+### Decisions made (2026-10-19) — work items that fall out of them
+- [ ] Ruffle (WASM) dependency for previewing *vanilla* SWFs in-editor — **approved in principle**. Still goes through
+  the skeptic dep-gate (source review, no injection, vuln scan) and the owner's explicit per-install go before anything
+  is added to `editor/package.json`.
+- [ ] Dead key `mewged.onboard.conceptsDontShowStart` — **remove the "Don't show on start" button and the key** (nothing
+  reads it; the concepts drawer never auto-opens). TDD: red e2e/unit test asserting the button is gone, then the removal.
+- [ ] GitHub Actions running T0 (`npm test`, `npm run typecheck`, `native\test-all.bat` where a Windows runner allows)
+  on PRs that touch `editor/`, `native/`, `bindings/`, `tools/` or `mods/`; docs-only PRs skip it. Depends on target 9
+  (T0 must skip, not fail, without `.extracted/`).
+- [ ] PR template with the red→green table and the T3 checklist (`.github/pull_request_template.md`).
 
 ### Larger build-out
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
@@ -211,5 +221,5 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   genuine recompile; record the result in `docs/binding-port.md`.
 - [ ] **Witness patterns for the 38 unanchored entries** (struct offsets, vtable slot constants) so the port stops
   reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.mjs`.
-- [ ] **Runtime anchor locator in the DLL** (optional): string → lea xref → `.pdata` so anchored-but-unsigned entries
-  survive a relink before anyone runs the port.
+- [x] **Runtime anchor locator in the DLL** (optional): string → lea xref → `.pdata` so anchored-but-unsigned entries
+  survive a relink before anyone runs the port. **Dropped** by owner decision 2026-10-19 (see "Decisions").
