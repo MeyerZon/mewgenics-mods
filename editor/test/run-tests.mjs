@@ -275,7 +275,20 @@ async function mcpSmoke() {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = /** @type {any} */ (await req("tools/list", {}));
-    test("tools/list returns the 12 editor tools", () => eq(list.tools.length, 12));
+    test("tools/list returns the 13 editor tools", () => eq(list.tools.length, 13));
+    /** @type {any} */
+    let pres2 = null;
+    let perr2 = "";
+    try { pres2 = await req("tools/call", { name: "port_bindings", arguments: { build: "25143593", dryRun: true } }); } catch (e) { perr2 = String(e); }
+    test("tools/call port_bindings (self-port dry run) -> { ok, dryRun, summary, rows, report } (or ok:false skipped without the game)", () => {
+      assert(pres2 !== null, perr2);
+      const payload = JSON.parse(pres2.content[0].text);
+      assert(typeof payload.ok === "boolean", "ok flag");
+      if (payload.ok) {
+        assert(payload.dryRun === true && payload.summary && Array.isArray(payload.rows) && typeof payload.report === "string", "shape");
+        assert(!payload.needsAgent.length, `self-port needs no agent: ${JSON.stringify(payload.needsAgent).slice(0, 200)}`);
+      } else assert(payload.skipped === true, JSON.stringify(payload));
+    });
     /** @type {any} */
     let cres = null;
     let cerr = "";

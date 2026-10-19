@@ -1241,4 +1241,58 @@ export async function runBindingsTests(test, assert, eq) {
       assert(text.includes("0x1413c4a30\tlabel\tApp_global"), "App global");
     });
   }
+  // ---- api.portBindings + MCP port_bindings ---------------------------------------------
+  console.log("\n# Bindings: api.portBindings (dry run / apply under bindings/ only)");
+  test("api.portBindings: dry run on a fake exe + manifest file returns rows, summary, needsAgent and the markdown report; writes nothing", () => {
+    assert(!apiMod.__error && typeof apiMod.portBindings === "function", "api.portBindings exists");
+    const tmp = mkdtempSync(join(tmpdir(), "mewport-"));
+    try {
+      const v2 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], textPad: 0x50, stamp: 0x59595959 });
+      writeFileSync(join(tmp, "new.exe"), v2.img.buf);
+      writeFileSync(join(tmp, "old.json"), JSON.stringify(old));
+      const r = apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "200", version: "2.0.0", dryRun: true });
+      assert(r.ok, JSON.stringify(r).slice(0, 300));
+      if (!r.ok) return;
+      eq(r.dryRun, true);
+      eq(r.build, "200");
+      eq(r.summary["ported-rescan"], 3);
+      assert(Array.isArray(r.rows) && r.rows.length === 6 && Array.isArray(r.needsAgent), "rows + needsAgent");
+      assert(typeof r.report === "string" && r.report.startsWith("# Port report 100 -> 200"), "markdown report");
+      assert(!r.written, "dry run writes nothing");
+      assert(!existsSync(join(BINDINGS_DIR, "200.json")), "no file under bindings/");
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
+  test("api.portBindings: apply writes bindings/<build>.json + .port-report.md and refuses any other location", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "mewport-"));
+    const outJson = join(BINDINGS_DIR, "999.json");
+    const outMd = join(BINDINGS_DIR, "999.port-report.md");
+    try {
+      const v2 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x60606060 });
+      writeFileSync(join(tmp, "new.exe"), v2.img.buf);
+      writeFileSync(join(tmp, "old.json"), JSON.stringify(old));
+      let threw = false;
+      try { apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "999", dryRun: false, out: join(tmp, "999.json") }); } catch (e) { threw = e instanceof SafetyError; }
+      assert(threw, "out outside bindings/ must throw SafetyError");
+      assert(!existsSync(join(tmp, "999.json")), "nothing written outside");
+      const r = apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "999", dryRun: false });
+      assert(r.ok && r.written && r.written.manifest === outJson && r.written.report === outMd, JSON.stringify(r.written));
+      assert(existsSync(outJson) && existsSync(outMd), "files written under bindings/");
+      eq(loadManifest(outJson).build.steamBuildId, "999");
+      assert(readFileSync(outMd, "utf8").startsWith("# Port report 100 -> 999"), "report content");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+      rmSync(outJson, { force: true });
+      rmSync(outMd, { force: true });
+    }
+  });
+  test("api.portBindings: missing exe -> ok:false skipped; bad build id -> ok:false error", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "mewport-"));
+    try {
+      writeFileSync(join(tmp, "old.json"), JSON.stringify(old));
+      const r = apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "missing.exe"), build: "200" });
+      assert(!r.ok && r.skipped && /missing\.exe/.test(r.reason), JSON.stringify(r));
+      const b = apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "old.json"), build: "abc" });
+      assert(!b.ok && !b.skipped && /build/.test(b.reason), JSON.stringify(b));
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
 }

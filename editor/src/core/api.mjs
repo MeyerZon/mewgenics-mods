@@ -13,6 +13,13 @@ import { readPalette, knownRowHints } from "./art/palette.mjs";
 import { validateScene, exampleScene, DEFAULT_ABC_MODE } from "./art/scene.mjs";
 import * as ingame from "./ingame/index.mjs";
 import { checkInstalledBuild } from "./bindings/check.mjs";
+import { portManifest, renderPortReport } from "./bindings/port.mjs";
+import { loadManifest, saveManifest, listManifests, BINDINGS_DIR } from "./bindings/manifest.mjs";
+import { parsePe, PeError } from "./bindings/pe.mjs";
+import { locateGameDir } from "./ingame/launch.mjs";
+import { isInside, touchesSaves, SafetyError } from "./repo.mjs";
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
+import { join, resolve as resolvePath } from "node:path";
 
 /** List base-data categories with entry counts. */
 export function listBaseData() {
@@ -216,4 +223,50 @@ export async function runIngameTest(args) {
  */
 export function checkGameBuild(args = {}) {
   return checkInstalledBuild({ exePath: args.exe, env: args.env, manifests: args.manifests });
+}
+
+/**
+ * Port the bindings manifest of a known build to a new exe (docs/binding-port.md). Walks the
+ * resolution ladder for every entry and returns the rows, the summary, the entries that need an
+ * agent or a human, and the markdown report. `dryRun` (default true) writes nothing; otherwise
+ * bindings/<build>.json and bindings/<build>.port-report.md are written (never anywhere else:
+ * SafetyError). `from` defaults to the newest manifest, `exe` to the installed game.
+ * @param {{ build: string, from?: string, exe?: string, version?: string, resolve?: Record<string, string>, dryRun?: boolean, out?: string, env?: Record<string, string|undefined> }} args
+ */
+export function portBindings(args) {
+  const build = String(args.build ?? "");
+  if (!/^\d+$/.test(build)) return { ok: false, skipped: false, reason: `build must be the new Steam build id (digits only), got ${JSON.stringify(args.build)}` };
+  const exePath = resolvePath(args.exe || join(locateGameDir(args.env || process.env), "Mewgenics.exe"));
+  if (touchesSaves(exePath)) throw new SafetyError(`refusing to read a saves path: ${exePath}`);
+  if (!existsSync(exePath)) return { ok: false, skipped: true, reason: `exe not found: ${exePath}` };
+  let fromPath = args.from;
+  if (!fromPath) {
+    const all = listManifests();
+    if (!all.length) return { ok: false, skipped: true, reason: "no bindings/<build>.json manifests to port from" };
+    fromPath = all[all.length - 1].path;
+  }
+  const old = loadManifest(fromPath);
+  const buf = readFileSync(exePath);
+  /** @type {import("./bindings/pe.mjs").Pe} */
+  let pe;
+  try {
+    pe = parsePe(buf);
+  } catch (e) {
+    if (e instanceof PeError) return { ok: false, skipped: false, reason: `not a PE32+ image: ${e.message}` };
+    throw e;
+  }
+  const dryRun = args.dryRun !== false;
+  const result = portManifest(old, pe, buf, { steamBuildId: build, gameVersion: args.version, resolve: args.resolve || {} });
+  const report = renderPortReport(result, { generatedAt: new Date().toISOString() });
+  /** @type {{ ok: true, dryRun: boolean, from: string, exe: string, build: string, summary: Record<string, number>, rows: any[], needsAgent: any[], report: string, written?: { manifest: string, report: string } }} */
+  const out = { ok: true, dryRun, from: fromPath, exe: exePath, build, summary: result.summary, rows: result.rows, needsAgent: result.needsAgent, report };
+  if (!dryRun) {
+    const outPath = resolvePath(args.out || join(BINDINGS_DIR, `${build}.json`));
+    if (!isInside(BINDINGS_DIR, outPath)) throw new SafetyError(`refusing to write a manifest outside bindings/: ${outPath}`);
+    saveManifest(outPath, result.manifest);
+    const reportPath = outPath.replace(/\.json$/i, ".port-report.md");
+    writeFileSync(reportPath, report);
+    out.written = { manifest: outPath, report: reportPath };
+  }
+  return out;
 }
