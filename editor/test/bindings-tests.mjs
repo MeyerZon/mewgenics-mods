@@ -1283,4 +1283,29 @@ export async function runBindingsTests(test, assert, eq) {
       eq(ck.identifyExe(join(tmp, "nope.exe"), [fakeManifest]), null);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
+  // ---- opt-in T1: a real cross-build port (needs two genuine builds) ----------------------
+  console.log("\n# Bindings: cross-build port (opt-in: BINDINGS_OLD_EXE / BINDINGS_NEW_EXE)");
+  {
+    const oldExe = process.env.BINDINGS_OLD_EXE || (exe ? join(locateGameDir(process.env), "Mewgenics.exe") : "");
+    const newExe = process.env.BINDINGS_NEW_EXE || "";
+    if (!newExe || !existsSync(newExe) || !oldExe || !existsSync(oldExe)) {
+      console.log("  (skipped: set BINDINGS_NEW_EXE (and BINDINGS_OLD_EXE unless the installed exe is the old build) to a second genuine Mewgenics.exe; see docs/binding-port.md \"T1 cross-build\")");
+    } else {
+      test("T1 cross-build: the manifest harvested on the old exe ports onto the new exe with nothing ambiguous or failed among functions, data, vtables and constants", () => {
+        const oldBuf = readFileSync(oldExe);
+        const newBuf = readFileSync(newExe);
+        const oldPe = parsePe(oldBuf);
+        const newPe = parsePe(newBuf);
+        const m = loadManifest(realPath);
+        assert(parseInt(m.build.timeDateStamp, 16) === oldPe.timeDateStamp && parseInt(m.build.sizeOfImage, 16) === oldPe.sizeOfImage, `BINDINGS_OLD_EXE is not build ${m.build.steamBuildId}`);
+        assert(newPe.timeDateStamp !== oldPe.timeDateStamp || newPe.sizeOfImage !== oldPe.sizeOfImage, "BINDINGS_NEW_EXE must be a different build");
+        const r = portManifest(m, newPe, newBuf, { steamBuildId: process.env.BINDINGS_NEW_BUILD || "999999999" });
+        const bad = r.rows.filter((/** @type {any} */ x) => (x.status === "ambiguous" || x.status === "failed") && x.kind !== "offset");
+        const proposed = r.rows.filter((/** @type {any} */ x) => x.status === "proposed");
+        console.log(`      ${Object.entries(r.summary).map(([k, v]) => `${k} ${v}`).join(", ")}${proposed.length ? `; proposed: ${proposed.map((/** @type {any} */ x) => x.name).join(",")}` : ""}`);
+        assert(bad.length === 0, bad.map((/** @type {any} */ x) => `${x.name}: ${x.status} (${x.detail.slice(0, 160)})`).join("; "));
+        eq(validateManifest(r.manifest).ok, true);
+      });
+    }
+  }
 }
