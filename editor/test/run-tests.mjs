@@ -275,7 +275,15 @@ async function mcpSmoke() {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = /** @type {any} */ (await req("tools/list", {}));
-    test("tools/list returns the 11 editor tools", () => eq(list.tools.length, 11));
+    test("tools/list returns the 12 editor tools", () => eq(list.tools.length, 12));
+    const cres = /** @type {any} */ (await req("tools/call", { name: "check_game_build", arguments: {} }));
+    test("tools/call check_game_build -> { ok, known, build, entries } (or ok:false skipped without the game)", () => {
+      const payload = JSON.parse(cres.content[0].text);
+      assert(typeof payload.ok === "boolean", "ok flag");
+      if (payload.ok) {
+        assert(typeof payload.known === "boolean" && Array.isArray(payload.entries) && payload.build, "shape");
+      } else assert(payload.skipped === true && typeof payload.reason === "string", JSON.stringify(payload));
+    });
     const vres = /** @type {any} */ (await req("tools/call", { name: "validate_mod", arguments: { mod: "jokers-luck" } }));
     test("tools/call validate_mod jokers-luck -> ok", () => {
       const payload = JSON.parse(vres.content[0].text);

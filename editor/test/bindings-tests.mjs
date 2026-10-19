@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { locateGameDir } from "../src/core/ingame/launch.mjs";
 import { REPO_ROOT, SafetyError } from "../src/core/repo.mjs";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 /** Known build 25143593 identity (docs/engine-map.md). */
@@ -710,6 +710,101 @@ export async function runBindingsTests(test, assert, eq) {
       assert(n >= 34, `functions with signatures: ${n}`);
       assert(wild >= 5, `only ${wild} of ${n} signatures needed wildcards (6 on build 25143593)`);
       console.log(`      Status_GetCategory: ${cat}; ${wild}/${n} signatures carry wildcards`);
+    });
+  }
+  // ---- check.mjs: is the installed exe a known build, and do the signatures still hold? ----
+  console.log("\n# Bindings: check-build (identity + per-signature scan)");
+  const ck = await load("../src/core/bindings/check.mjs");
+  if (ck.__error) {
+    test("check.mjs loads", () => assert(false, ck.__error));
+    return;
+  }
+  const { checkBuild, checkInstalledBuild } = ck;
+  const apiMod = await load("../src/core/api.mjs");
+
+  /** A fake build with two signed functions, as a manifest + PE pair. */
+  const fakeKnownPe = twoFns(fnA, fnB);
+  const fakeKnownParsed = parsePe(fakeKnownPe.buf);
+  const sigA = makeSignature(fakeKnownParsed, fakeKnownPe.buf, fakeKnownPe.rva(".text", 0x10), { minLen: 12 });
+  const sigB = makeSignature(fakeKnownParsed, fakeKnownPe.buf, fakeKnownPe.rva(".text", 0x80), { minLen: 12 });
+  assert(sigA.ok && sigB.ok, "fake signatures");
+  /** @type {any} */
+  const fakeManifest = parseManifest({
+    format: 1,
+    build: { steamBuildId: "777", gameVersion: "7.7.7", name: "7.7.7 (steam 777)", timeDateStamp: "0x11111111", sizeOfImage: "0x" + fakeKnownParsed.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "c".repeat(64), exeSize: fakeKnownPe.buf.length, sdlVersion: "3.2.12" },
+    sigCap: 128,
+    entries: [
+      { name: "FnA", kind: "function", rva: "0x" + fakeKnownPe.rva(".text", 0x10).toString(16), signature: sigA.ok ? sigA.signature : null, anchors: {}, consumers: [], exposure: [{ enum: "FW_SYM_FnA", index: 0 }], evidence: [] },
+      { name: "FnB", kind: "function", rva: "0x" + fakeKnownPe.rva(".text", 0x80).toString(16), signature: sigB.ok ? sigB.signature : null, anchors: {}, consumers: [], exposure: [{ enum: "FW_SYM_FnB", index: 1 }], evidence: [] },
+      { name: "FnRaw", kind: "function", rva: "0x" + fakeKnownPe.rva(".text", 0x80).toString(16), signature: null, anchors: {}, consumers: [], exposure: [{ table: "FW_LK", index: 0, shape: "A" }], evidence: [] },
+      { name: "Glob", kind: "data", rva: "0x" + fakeKnownPe.rva(".text", 0x100).toString(16), anchors: { unanchored: true }, consumers: [], exposure: [{ enum: "FW_DATA_Glob", index: 0 }], evidence: [] },
+    ],
+  });
+
+  test("checkBuild: a known build -> known:true, matched manifest, every signature ok", () => {
+    const r = checkBuild(fakeKnownPe.buf, [fakeManifest]);
+    eq(r.known, true);
+    eq(r.build.matched && r.build.matched.steamBuildId, "777");
+    eq(r.build.timeDateStamp, "0x11111111");
+    eq(r.entries.map((/** @type {any} */ e) => `${e.name}:${e.status}`).join(","), "FnA:ok,FnB:ok");
+    eq(r.summary.ok, 2);
+    eq(r.summary.unscanned, 2, "raw-RVA function + data entry are not scannable");
+    eq(r.summary.total, 4);
+  });
+  test("checkBuild: a relinked build -> known:false, signatures reported as moved / missing / ok", () => {
+    // fnA moves 0x20 bytes later; fnB stays; the stamp changes
+    const text = new Uint8Array(0x200);
+    text.set(fnA, 0x30);
+    text.set(fnB, 0x80);
+    const shifted = buildFakePe({ timeDateStamp: 0x22222222, sections: [{ name: ".text", bytes: text, exec: true }], pdata: [{ section: ".text", begin: 0x30, end: 0x30 + fnA.length }, { section: ".text", begin: 0x80, end: 0x80 + fnB.length }] });
+    const r = checkBuild(shifted.buf, [fakeManifest]);
+    eq(r.known, false);
+    eq(r.build.matched, null);
+    eq(r.build.timeDateStamp, "0x22222222");
+    eq(r.build.scannedWith, "777", "falls back to the newest manifest to show how many signatures survive");
+    const by = Object.fromEntries(r.entries.map((/** @type {any} */ e) => [e.name, e]));
+    eq(by.FnA.status, "moved");
+    eq(by.FnA.hit, "0x" + shifted.rva(".text", 0x30).toString(16));
+    eq(by.FnB.status, "ok");
+    // a build where fnA is gone entirely
+    const gone = buildFakePe({ timeDateStamp: 0x33333333, sections: [{ name: ".text", bytes: (() => { const t = new Uint8Array(0x200); t.set(fnB, 0x80); return t; })(), exec: true }] });
+    const g = checkBuild(gone.buf, [fakeManifest]);
+    eq(g.entries.find((/** @type {any} */ e) => e.name === "FnA").status, "missing");
+    eq(g.summary.missing, 1);
+  });
+  test("checkInstalledBuild: reads <gameDir>/Mewgenics.exe (MEWGENICS_DIR); absent -> ok:false, skipped", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "mewcheck-"));
+    try {
+      const empty = checkInstalledBuild({ env: { MEWGENICS_DIR: tmp }, manifests: [fakeManifest] });
+      assert(!empty.ok && empty.skipped, JSON.stringify(empty));
+      assert(/Mewgenics\.exe/.test(empty.reason), empty.reason);
+      writeFileSync(join(tmp, "Mewgenics.exe"), fakeKnownPe.buf);
+      const r = checkInstalledBuild({ env: { MEWGENICS_DIR: tmp }, manifests: [fakeManifest] });
+      assert(r.ok, JSON.stringify(r));
+      if (!r.ok) return;
+      eq(r.known, true);
+      eq(r.exePath, join(tmp, "Mewgenics.exe"));
+      eq(typeof r.sha256, "string");
+      eq(r.sha256.length, 64);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
+  test("api.checkGameBuild forwards env/manifests and never throws on a missing exe", () => {
+    assert(!apiMod.__error, apiMod.__error || "");
+    const tmp = mkdtempSync(join(tmpdir(), "mewcheck-"));
+    try {
+      const r = apiMod.checkGameBuild({ env: { MEWGENICS_DIR: tmp }, manifests: [fakeManifest] });
+      assert(!r.ok && r.skipped, JSON.stringify(r));
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
+  if (exe) {
+    test("T1 real exe: checkInstalledBuild against bindings/*.json -> known build 25143593, every signature ok", () => {
+      const r = checkInstalledBuild({ env: process.env });
+      assert(r.ok, JSON.stringify(r));
+      if (!r.ok) return;
+      eq(r.known, true);
+      eq(r.build.matched && r.build.matched.steamBuildId, "25143593");
+      eq(r.summary.ok, r.entries.length, r.entries.filter((/** @type {any} */ e) => e.status !== "ok").map((/** @type {any} */ e) => `${e.name}:${e.status}`).join(","));
+      assert(r.summary.ok >= 34, `ok ${r.summary.ok}`);
     });
   }
 }
