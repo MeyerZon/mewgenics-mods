@@ -11,7 +11,7 @@ import { DATA_CACHE_DIR } from "../repo.mjs";
 import { locateGameDir, preflight, buildLaunch, LaunchError } from "./launch.mjs";
 import { parseResults } from "./results.mjs";
 import { collectLogs, locateAppdataLogsDir, readWindow } from "./logs.mjs";
-import { snapshotFile, compareSnapshots, realSavePath } from "./savecheck.mjs";
+import { snapshotFile, compareSnapshots, realSavePath, realSavesDir, snapshotSaves, compareSaveSets, devSavePattern } from "./savecheck.mjs";
 
 export const RUNS_DIR = join(DATA_CACHE_DIR, "ingame-runs");
 export const BACKSTOP_GRACE_MS = 45000;
@@ -42,7 +42,7 @@ const TAIL_CHARS = 2000;
  * @property {number} durationMs
  * @property {import("./results.mjs").ResultSummary} result
  * @property {import("./logs.mjs").LogFindings | null} logFindings
- * @property {{ expectedSuffix: string, observedSuffix: string|null, saveSuffixOk: boolean, saveSuffixReason?: string, modPathsObserved: string[], saveCheck: null | { path: string, unchanged: boolean, matchesKnownBaseline: boolean, detail: string, before: any, after: any } }} safety
+ * @property {{ expectedSuffix: string, observedSuffix: string|null, saveSuffixOk: boolean, saveSuffixReason?: string, modPathsObserved: string[], saveCheck: null | { path: string, unchanged: boolean, matchesKnownBaseline: boolean, detail: string, before: any, after: any }, saveSet: null | { dir: string, unchanged: boolean, changed: string[], detail: string, files: number, skipped: string[] } }} safety
  * @property {{ runDir: string|null, script: string|null, resultFile: string|null, debugLog: string|null, frameworkLogWindow: string|null, chainloaderLog: string|null, report: string|null }} artifacts
  * @property {string} stdoutTail
  * @property {string} stderrTail
@@ -99,7 +99,7 @@ export function acquireLock(runsDir) {
 
 /**
  * Pure verdict from the collected evidence. First match wins; see docs/ingame-testing.md.
- * @param {{ preflight: import("./launch.mjs").Preflight, launchError?: string|null, exit: { code: number|null, signal: string|null, backstop: boolean }, result: import("./results.mjs").ResultSummary, logs: any, safety: { saveSuffixOk: boolean, saveSuffixReason?: string, saveCheck: null | { unchanged: boolean, detail?: string } } }} input
+ * @param {{ preflight: import("./launch.mjs").Preflight, launchError?: string|null, exit: { code: number|null, signal: string|null, backstop: boolean }, result: import("./results.mjs").ResultSummary, logs: any, safety: { saveSuffixOk: boolean, saveSuffixReason?: string, saveCheck: null | { unchanged: boolean, detail?: string }, saveSet?: null | { unchanged: boolean, detail?: string } } }} input
  * @returns {{ verdict: Verdict, reason: string }}
  */
 export function decideVerdict(input) {
@@ -117,6 +117,7 @@ export function decideVerdict(input) {
   if (exit.backstop) return { verdict: "backstop-timeout", reason: "the game did not exit by the script timeout plus the backstop grace; killed" };
   if (!safety.saveSuffixOk) return { verdict: "safety-violation", reason: safety.saveSuffixReason || "save suffix mismatch" };
   if (safety.saveCheck && !safety.saveCheck.unchanged) return { verdict: "safety-violation", reason: `real save changed: ${safety.saveCheck.detail || ""}` };
+  if (safety.saveSet && !safety.saveSet.unchanged) return { verdict: "safety-violation", reason: `a real save file changed: ${safety.saveSet.detail || ""}` };
   const code = exit.code;
   const crashReports = logs && Array.isArray(logs.crashReports) ? logs.crashReports : [];
   if (result.crash) return { verdict: "crash", reason: `crash ${result.crash.code || ""} at ${result.crash.module || "?"}+${result.crash.rva || "?"}` };
@@ -167,7 +168,7 @@ function sizeOf(p) {
 /**
  * @param {{ plan: import("./script.mjs").Plan, test: { mod: string, name: string, scriptPath: string|null },
  *   env?: Record<string, string|undefined>, gameDir?: string, appdataLogsDir?: string|null, modsDir?: string,
- *   runsDir?: string, saveCheck?: boolean, realSavePath?: string|null, backstopGraceMs?: number, endGraceMs?: number,
+ *   runsDir?: string, saveCheck?: boolean, realSavePath?: string|null, realSavesDir?: string|null, backstopGraceMs?: number, endGraceMs?: number,
  *   exists?: (p: string) => boolean, steamRunning?: () => boolean|null }} args
  * @returns {Promise<IngameReport>}
  */
@@ -198,7 +199,7 @@ export async function runPlan(args) {
     durationMs: 0,
     result: parseResults(null),
     logFindings: null,
-    safety: { expectedSuffix, observedSuffix: null, saveSuffixOk: true, modPathsObserved: [], saveCheck: null },
+    safety: { expectedSuffix, observedSuffix: null, saveSuffixOk: true, modPathsObserved: [], saveCheck: null, saveSet: null },
     artifacts: { runDir: null, script: null, resultFile: null, debugLog: null, frameworkLogWindow: null, chainloaderLog: null, report: null },
     stdoutTail: "",
     stderrTail: "",
@@ -261,6 +262,9 @@ export async function runPlan(args) {
     const saveCheckEnabled = args.saveCheck !== false && env.MEWTEST_SAVECHECK !== "0";
     const savePath = args.realSavePath !== undefined ? args.realSavePath : realSavePath(env);
     const saveBefore = saveCheckEnabled && savePath ? snapshotFile(savePath) : null;
+    const savesDir = args.realSavesDir !== undefined ? args.realSavesDir : realSavesDir(env);
+    const allow = devSavePattern(expectedSuffix);
+    const setBefore = saveCheckEnabled && savesDir ? snapshotSaves(savesDir, { allow }) : null;
 
     // 5. spawn + wait (backstop kill)
     const launchedAtMs = Date.now();
@@ -319,6 +323,7 @@ export async function runPlan(args) {
     const logs = collectLogs({ gameDir, appdataLogsDir, frameworkLogOffset, launchedAtMs, expectedSuffix });
     report.logFindings = logs;
     const saveAfter = saveBefore && savePath ? snapshotFile(savePath) : null;
+    const setAfter = setBefore && savesDir ? snapshotSaves(savesDir, { allow }) : null;
     report.safety = {
       expectedSuffix,
       observedSuffix: logs.debugLog.saveSuffix,
@@ -326,6 +331,7 @@ export async function runPlan(args) {
       saveSuffixReason: logs.saveSuffix.reason,
       modPathsObserved: logs.debugLog.modPaths,
       saveCheck: saveBefore && saveAfter && savePath ? { path: savePath, ...compareSnapshots(saveBefore, saveAfter), before: saveBefore, after: saveAfter } : null,
+      saveSet: setBefore && setAfter && savesDir ? { dir: savesDir, ...compareSaveSets(setBefore, setAfter), files: setAfter.files.length, skipped: setAfter.skipped } : null,
     };
     // copies for the record
     if (logs.debugLog.path && logs.debugLog.present) {
