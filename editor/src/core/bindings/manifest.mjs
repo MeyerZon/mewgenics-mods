@@ -43,7 +43,7 @@ const VALUE_RE = /^-?(0x[0-9a-fA-F]+|\d+)$/;
  *   evidence: string[],
  *   verify?: Record<string, any>,
  *   note?: string,
- *   port?: { from: string, status: string, method: string, note?: string },
+ *   port?: { from: string, status: string, method: string, note?: string, candidates?: { rva: string, bytes: number, calls: number, via: string }[] },
  * }} Entry
  * @typedef {{
  *   steamBuildId: string, gameVersion: string, name: string, timeDateStamp: string, sizeOfImage: string,

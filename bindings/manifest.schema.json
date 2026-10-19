@@ -90,7 +90,7 @@
         "evidence": { "type": "array", "items": { "type": "string" }, "description": "decompile paths under .analysis/, doc sections, REA evidence ids" },
         "verify": { "type": "object" },
         "note": { "type": "string" },
-        "port": { "type": "object", "required": ["from", "status", "method"], "properties": { "from": { "type": "string" }, "status": { "enum": ["ported-exact", "ported-rescan", "ported-anchor", "ported-witness", "ported-derived", "proposed", "ambiguous", "failed", "needs-human"] }, "method": { "type": "string" }, "note": { "type": "string" } } }
+        "port": { "type": "object", "required": ["from", "status", "method"], "properties": { "from": { "type": "string" }, "status": { "enum": ["ported-exact", "ported-rescan", "ported-anchor", "ported-witness", "ported-derived", "proposed", "ambiguous", "failed", "needs-human"] }, "method": { "type": "string" }, "note": { "type": "string" }, "candidates": { "type": "array", "description": "ambiguous only: each candidate's rva, size, call count and how it was found; seed-file.mjs turns them into Name__cand_<rva> seeds", "items": { "type": "object", "required": ["rva"], "properties": { "rva": { "type": "string" }, "bytes": { "type": "integer" }, "calls": { "type": "integer" }, "via": { "type": "string" } } } } } }
       }
     }
   }
