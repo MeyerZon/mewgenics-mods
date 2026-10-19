@@ -271,17 +271,46 @@ export function runArtCoreTests(test, assert, eq) {
     assert(stub.ok, stub.error || "");
     eq(/** @type {any} */ (api.inspectSwf(tmpMod, "swfs/starter.swf")).doAbc, 1, "stub mode adds exactly one DoABC");
   });
-  test("prepareAbcGateTest writes only the four fixtures into the mod (no swflist.gon.append)", () => {
-    const r = /** @type {any} */ (api.prepareAbcGateTest(tmpMod));
-    assert(r.ok, r.error || "");
-    eq(r.written.length, 4);
-    assert(!existsSync(join(tmpDir, "swfs", "swflist.gon.append.A")) === false, "candidate A exists");
-    const none = /** @type {any} */ (api.inspectSwf(tmpMod, "swfs/mod_abc_gate_none.swf"));
-    const stub = /** @type {any} */ (api.inspectSwf(tmpMod, "swfs/mod_abc_gate_stub.swf"));
-    eq(none.doAbc, 0);
-    eq(stub.doAbc, 1);
-    eq(none.exports[0].name, "_Append_AbilityIcon");
-    assert(none.labels.includes("JokersGambit"), "frame label present");
+  test("prepareSwfGate writes swfs/gate.swf + a one-entry swflist.gon.append per variant; 'control' removes both", () => {
+    const expectLinkage = { flat: "_Append_AbilityIcon", nested: "_Append_AbilityIcon", legacy: "_Append_AbilityIcon", probe: "GateProbe", missing: "_Append_NoSuchClipXYZ" };
+    const expectLayout = { flat: "flat", nested: "nested", legacy: "legacy", probe: "flat", missing: "flat" };
+    // what the harness boot must report for the variant to count as expected (OBSERVED 2026-10-19):
+    // every real target boots to the menu; an unknown append target stalls the boot before the console appears
+    const expectVerdict = { flat: "pass", nested: "pass", legacy: "pass", probe: "pass", missing: "harness-error" };
+    for (const variant of /** @type {const} */ (["flat", "nested", "legacy", "probe", "missing"])) {
+      const r = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant }));
+      assert(r.ok, `${variant}: ${r.error || ""}`);
+      eq(r.variant, variant);
+      eq(r.written.join(","), `mods/${tmpMod}/swfs/gate.swf,mods/${tmpMod}/swfs/swflist.gon.append`, variant);
+      const list = readFileSync(join(tmpDir, "swfs", "swflist.gon.append"), "utf8");
+      assert(/game \[\n\s+gate\.swf\n\]/.test(list), `${variant}: swflist lists exactly gate.swf: ${list}`);
+      const swf = /** @type {any} */ (api.inspectSwf(tmpMod, "swfs/gate.swf"));
+      eq(swf.doAbc, 0, `${variant}: no DoABC`);
+      eq(swf.exports.map((/** @type {{name: string}} */ e) => e.name).join(","), expectLinkage[variant], `${variant}: linkage`);
+      assert(swf.labels.includes("JokersGambit"), `${variant}: frame label present`);
+      eq(r.linkage, expectLinkage[variant]);
+      eq(r.layout, expectLayout[variant]);
+      eq(r.expect, expectVerdict[variant], `${variant}: expected harness verdict`);
+    }
+    const c = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: "control" }));
+    assert(c.ok, c.error || "");
+    eq(c.removed.join(","), `mods/${tmpMod}/swfs/gate.swf,mods/${tmpMod}/swfs/swflist.gon.append`);
+    eq(c.expect, "pass", "control: expected harness verdict");
+    assert(!existsSync(join(tmpDir, "swfs", "gate.swf")) && !existsSync(join(tmpDir, "swfs", "swflist.gon.append")), "control leaves no gate files");
+    const again = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: "control" }));
+    assert(again.ok && again.removed.length === 0, "control is idempotent");
+    const bad = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: /** @type {any} */ ("stub") }));
+    assert(!bad.ok && /variant/.test(bad.error), "unknown variant refused");
+    assert(!/** @type {any} */ (api.prepareSwfGate({ mod: "../evil", variant: "flat" })).ok, "mod path confinement holds");
+  });
+  test("mods/swf-gate: the boot .mewtest the gate runs parses and loads only swf-gate", () => {
+    const l = api.listIngameTests("swf-gate");
+    const boot = l.tests.find((t) => t.name === "boot");
+    assert(!!boot, `mods/swf-gate/tests/boot.mewtest listed (have: ${l.tests.map((t) => t.name).join(",") || "none"})`);
+    if (!boot) return;
+    assert(boot.plan.ok, boot.plan.errors.map((e) => e.message).join("; "));
+    eq(boot.plan.mods.join(","), "swf-gate");
+    assert(boot.plan.directives.some((d) => d.kind === "quit"), "script quits on its own");
   });
   test("art writes cannot escape mods/<mod>/ (path traversal, saves, protected files)", () => {
     assert(!/** @type {any} */ (api.writeArtScene(tmpMod, "../evil.scene.json", exampleScene("x"))).ok, "traversal refused");

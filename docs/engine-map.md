@@ -242,10 +242,27 @@ functions resolved while diagnosing the emitter crash (static PE decode + Ghidra
   handler `0x3c0210` → team-name / cat-quote builder `0x8e130` (reads `data/catquotes.gon`) → **null double-deref**
   when there is no active adventure run.
 
-Conclusion: the emitted SWF is not malformed; the crash is a post-load null-deref caused by an appended frame that
-does not mirror the target sprite's per-frame movieclip structure. Leading fix (wrap the icon in a nested
-`DefineSprite` mirroring `AbilityIcon`, default `abc:"none"`, keep FWS + `_Append_<name>`) and the full evidence:
-`docs/swf-emitter-fix-spec.md`. The `_Append_AbilityIcon` name is correct; char-ID collision was ruled out.
+- **`AbilityIcon` per-frame layout (OBSERVED 2026-10-19, read-only parse of `swfs/ability_icons.swf`; T1 test in
+  `editor/test/art-emitter-tests.mjs`):** sprite 1346, 901 frames, 842 unique labels (first `unknown`; `Spin`
+  present, `JokersGambit` absent). Every labeled icon frame = `FrameLabel` + one `PlaceObject2` at **depth 3** of a
+  bare `DefineShape/2/3/4` (flags 6 HasCharacter|HasMatrix identity on first use, flags 3 Move|HasCharacter on
+  swaps); **no nested movieclip is ever placed**. Frame 0 also holds a background shape at depth 1, a
+  `DefineEditText` named `label` at depth 2 (removed at frame 1) and a border `DefineShape4` at depth 5; the tail
+  removes depths 5 and 1 then runs seven empty frames; the ABC registers only `frame1 → stop()`. `PassiveIcon`
+  (id 515, 915 frames) is the same pattern at depth 4. An `_Append_AbilityIcon` donor therefore mirrors a vanilla
+  frame by placing its icon shape at depth 3 (`ABILITY_ICON_DEPTH` in `swf-emitter.mjs`).
+- **Append merge witness (OBSERVED 2026-10-19 via the harness):** an `_Append_<unknown>` SymbolClass logs
+  `Application.cpp; line: 1363;] Append movieclip: _Append_<unknown> could not locate original movieclip to append
+  to` and the boot then never reaches the console / main menu (no crash report) — a silent stall, not a warning,
+  for modders who mistype the target. Real targets (`_Append_AbilityIcon` with the icon at depth 1 or 3, nested or
+  bare) all boot to the main menu.
+
+Conclusion: the emitted SWF is not malformed and the merge itself is survivable: the 2026-10-18 null-deref did not
+reproduce at boot with the exact pre-fix donor (`npm run test:swfgate -- legacy`), so the fault is tied to the
+appended frame being *displayed* inside a run (outer crash frames are the running frame loop), which the harness
+cannot drive yet (TODO target 1). The donor now mirrors the vanilla frame (depth 3); the remaining check is the T3
+visual one. Evidence and gate table: `docs/swf-emitter-fix-spec.md` §0. The `_Append_AbilityIcon` name is correct;
+char-ID collision was ruled out.
 
 ## Save safety
 

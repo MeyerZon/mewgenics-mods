@@ -4,7 +4,8 @@
 // and skip when the files are absent; set MEWGENICS_VANILLA_SWF_DIR to point elsewhere.
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 
 import { BitWriter, nbitsForSigned, nbitsForUnsigned, tag, writeMatrix, writeRect, concat } from "../src/core/art/swf-bits.mjs";
@@ -18,9 +19,10 @@ import { exampleScene, validateScene } from "../src/core/art/scene.mjs";
 import { normalizePath, signedArea, flattenSubpath } from "../src/core/art/geometry.mjs";
 import { bakeSprite, diffFrames } from "../src/core/art/timeline.mjs";
 
-// Set MEWGENICS_VANILLA_SWF_DIR to a folder of extracted vanilla .swf files to enable the byte-diff tests;
-// otherwise they skip. e.g. `python -I tools/gpak.py extract .extracted --prefix swfs/` then point this at it.
-const VANILLA_DIR = process.env.MEWGENICS_VANILLA_SWF_DIR || "";
+// Vanilla SWFs (T1) are read from the git-ignored `.extracted/swfs/` (populate with
+// `python -I tools/gpak.py extract .extracted --prefix swfs/ability_icons.swf`); set MEWGENICS_VANILLA_SWF_DIR to
+// point elsewhere. Tests that need them skip with a logged `(skipped: …)` when the file is absent.
+const VANILLA_DIR = process.env.MEWGENICS_VANILLA_SWF_DIR || resolve(dirname(fileURLToPath(import.meta.url)), "../../.extracted/swfs");
 
 /** @param {string} name @returns {Uint8Array | null} */
 function vanilla(name) {
@@ -28,6 +30,46 @@ function vanilla(name) {
   if (!existsSync(p)) return null;
   return new Uint8Array(readFileSync(p));
 }
+
+/** @typedef {import('../src/core/art/swf-reader.mjs').Tag} Tag */
+
+/**
+ * Split a DefineSprite's tag stream into frames: `{ index, label, places, removes }` per ShowFrame.
+ * @param {Tag} sprite
+ * @returns {{ index: number, label: string | null, places: Tag[], removes: number[] }[]}
+ */
+function spriteFrames(sprite) {
+  /** @type {{ index: number, label: string | null, places: Tag[], removes: number[] }[]} */
+  const frames = [];
+  let cur = { index: 0, label: /** @type {string | null} */ (null), places: /** @type {Tag[]} */ ([]), removes: /** @type {number[]} */ ([]) };
+  for (const t of sprite.tags || []) {
+    if (t.name === "FrameLabel") cur.label = t.label || null;
+    else if (t.name === "PlaceObject2") cur.places.push(t);
+    else if (t.name === "RemoveObject2") cur.removes.push(t.depth || 0);
+    else if (t.name === "ShowFrame") {
+      frames.push(cur);
+      cur = { index: frames.length, label: null, places: [], removes: [] };
+    }
+  }
+  return frames;
+}
+
+/**
+ * The donor sprite a SymbolClass entry binds, plus the id → definition map of the file.
+ * @param {{ tags: Tag[] }} swf @param {string} linkage
+ */
+function boundSprite(swf, linkage) {
+  /** @type {Map<number, Tag>} */
+  const byId = new Map();
+  for (const t of swf.tags) if (t.id !== undefined) byId.set(t.id, t);
+  const sym = swf.tags.find((t) => t.name === "SymbolClass");
+  const entry = sym && sym.entries && sym.entries.find((e) => e.name === linkage);
+  const sprite = entry ? byId.get(entry.id) : undefined;
+  return { byId, entry, sprite: sprite && sprite.name === "DefineSprite" ? sprite : undefined };
+}
+
+/** The (depth, flags, matrix) shape of one PlaceObject2, for layout parity checks. @param {Tag} t */
+const placeShape = (t) => `d${t.depth} f${t.place ? t.place.flags : "?"} m${t.place && t.place.matrix ? t.place.matrix.join(",") : "-"}`;
 
 /** @param {Uint8Array} b */
 const hex = (b) => [...b].map((x) => x.toString(16).padStart(2, "0")).join(" ");
@@ -543,33 +585,90 @@ export function runArtEmitterTests(test, assert, eq) {
     const pic = swf.tags.find((t) => t.shape && t.shape.fillStyles.some((f) => f.type === 0x41));
     assert(!!pic && !!pic.shape && pic.shape.fillStyles[0].bitmapId === 1, "shape fill references bitmap char 1");
   });
-  test("minimalGateSwf parses and binds the linkage name; stub variant carries a DoABC", () => {
-    const none = readSwf(minimalGateSwf({ withAbc: false, linkage: "_Append_AbilityIcon", label: "JokersGambit" }));
-    eq(none.tags.filter((t) => t.name === "DoABC").length, 0);
-    const sym = none.tags.find((t) => t.name === "SymbolClass");
-    assert(!!sym && !!sym.entries, "SymbolClass");
-    if (sym && sym.entries) {
-      eq(sym.entries.length, 1);
-      eq(sym.entries[0].name, "_Append_AbilityIcon");
-      const sprite = none.tags.find((t) => t.name === "DefineSprite");
-      assert(!!sprite && sprite.id === sym.entries[0].id, "linkage → sprite id");
-      const label = sprite && sprite.tags && sprite.tags.find((t) => t.name === "FrameLabel");
-      eq(label && label.label, "JokersGambit");
-      eq(sprite && sprite.frameCount, 1);
+  console.log("\n# Art: append donor (the _Append_<Clip> SWF mirrors the target's labeled-frame layout)");
+  const GATE = { withAbc: false, linkage: "_Append_AbilityIcon", label: "JokersGambit" };
+  test("minimalGateSwf default (flat): one labeled frame placing a bare DefineShape3 at depth 3 with an identity matrix, like AbilityIcon", () => {
+    const bytes = minimalGateSwf(GATE);
+    eq(String.fromCharCode(bytes[0], bytes[1], bytes[2]), "FWS", "uncompressed");
+    const swf = readSwf(bytes);
+    eq(swf.tags.filter((t) => t.name === "DoABC").length, 0, "SymbolClass binds without a DoABC");
+    const sym = swf.tags.find((t) => t.name === "SymbolClass");
+    eq(sym && sym.entries && sym.entries.map((e) => e.name).join(","), "_Append_AbilityIcon", "linkage spelling untouched");
+    const { byId, sprite } = boundSprite(swf, "_Append_AbilityIcon");
+    assert(!!sprite, "linkage → a DefineSprite");
+    if (!sprite) return;
+    eq(sprite.frameCount, 1);
+    const frames = spriteFrames(sprite);
+    eq(frames.length, 1);
+    eq(frames[0].label, "JokersGambit");
+    eq(frames[0].places.length, 1, "exactly one PlaceObject2 on the labeled frame");
+    const p = frames[0].places[0];
+    eq(placeShape(p), "d3 f6 m1,0,0,1,0,0", "depth 3, HasCharacter|HasMatrix, identity — AbilityIcon's icon slot");
+    const icon = p.place && p.place.characterId !== undefined ? byId.get(p.place.characterId) : undefined;
+    eq(icon && icon.name, "DefineShape3", "the icon is a bare shape, not a nested clip");
+    if (icon && icon.shape) {
+      eq(JSON.stringify(icon.shape.bounds), JSON.stringify({ xmin: 0, xmax: 1280, ymin: 0, ymax: 1280 }));
+      eq(icon.shape.fillStyles[0].color && icon.shape.fillStyles[0].color.r, 136);
     }
-    const shape = none.tags.find((t) => t.shape);
-    assert(!!shape && !!shape.shape, "shape");
-    if (shape && shape.shape) {
-      eq(JSON.stringify(shape.shape.bounds), JSON.stringify({ xmin: 0, xmax: 1280, ymin: 0, ymax: 1280 }));
-      eq(shape.shape.fillStyles[0].color && shape.shape.fillStyles[0].color.r, 136);
-    }
-    const stub = readSwf(minimalGateSwf({ withAbc: true, linkage: "_Append_AbilityIcon", label: "JokersGambit" }));
+  });
+  test("minimalGateSwf layout 'nested' (spec §8.1 variant): the depth-3 character is a one-frame DefineSprite holding the shape", () => {
+    const swf = readSwf(minimalGateSwf({ ...GATE, layout: "nested" }));
+    const { byId, sprite } = boundSprite(swf, "_Append_AbilityIcon");
+    assert(!!sprite, "linkage → a DefineSprite");
+    if (!sprite) return;
+    const frames = spriteFrames(sprite);
+    eq(frames.length, 1);
+    eq(frames[0].label, "JokersGambit");
+    eq(frames[0].places.length, 1);
+    const p = frames[0].places[0];
+    eq(placeShape(p), "d3 f6 m1,0,0,1,0,0");
+    const inner = p.place && p.place.characterId !== undefined ? byId.get(p.place.characterId) : undefined;
+    eq(inner && inner.name, "DefineSprite", "nested movieclip");
+    if (!inner) return;
+    eq(inner.frameCount, 1);
+    const innerFrames = spriteFrames(inner);
+    eq(innerFrames.length, 1);
+    eq(innerFrames[0].places.length, 1);
+    const shapeTag = innerFrames[0].places[0].place && innerFrames[0].places[0].place.characterId !== undefined ? byId.get(/** @type {number} */ (innerFrames[0].places[0].place.characterId)) : undefined;
+    eq(shapeTag && shapeTag.name, "DefineShape3");
+  });
+  test("minimalGateSwf layout 'legacy' reproduces the pre-fix donor (bare shape at depth 1) so the gate can show it still crashes", () => {
+    const swf = readSwf(minimalGateSwf({ ...GATE, layout: "legacy" }));
+    const { byId, sprite } = boundSprite(swf, "_Append_AbilityIcon");
+    assert(!!sprite, "linkage → a DefineSprite");
+    if (!sprite) return;
+    const frames = spriteFrames(sprite);
+    eq(frames.length, 1);
+    eq(frames[0].label, "JokersGambit");
+    eq(frames[0].places.length, 1);
+    eq(placeShape(frames[0].places[0]), "d1 f6 m1,0,0,1,0,0", "depth 1: the layout that crashed on 2026-10-18");
+    const icon = frames[0].places[0].place && frames[0].places[0].place.characterId !== undefined ? byId.get(/** @type {number} */ (frames[0].places[0].place.characterId)) : undefined;
+    eq(icon && icon.name, "DefineShape3");
+  });
+  test("minimalGateSwf withAbc keeps the byte-exact linkage stub (explicit gate experiment only)", () => {
+    const stub = readSwf(minimalGateSwf({ ...GATE, withAbc: true }));
     const doabc = stub.tags.find((t) => t.name === "DoABC");
     assert(!!doabc && !!doabc.abcBytes, "DoABC in stub variant");
     if (doabc && doabc.abcBytes) {
       const p = parseAbc(doabc.abcBytes);
       eq(multinameToString(p, p.instances[0].name), ":_Append_AbilityIcon");
     }
+    assert(!!boundSprite(stub, "_Append_AbilityIcon").sprite, "still binds the sprite");
+  });
+  test("flat donor's labeled frame has the same (depth, flags, matrix) as AbilityIcon's first labeled icon frame (T1)", () => {
+    const bytes = vanilla("ability_icons.swf");
+    if (!bytes) {
+      console.log("      (skipped: ability_icons.swf not present)");
+      return;
+    }
+    const target = boundSprite(readSwf(bytes), "AbilityIcon").sprite;
+    const donor = boundSprite(readSwf(minimalGateSwf(GATE)), "_Append_AbilityIcon").sprite;
+    assert(!!target && !!donor, "both sprites resolve");
+    if (!target || !donor) return;
+    const firstIcon = spriteFrames(target).find((f) => f.index > 0 && f.label && f.places.length === 1);
+    assert(!!firstIcon, "a labeled icon frame after 'unknown'");
+    if (!firstIcon) return;
+    eq(placeShape(spriteFrames(donor)[0].places[0]), placeShape(firstIcon.places[0]), `donor frame vs AbilityIcon frame ${firstIcon.index} (${firstIcon.label})`);
   });
 
   console.log("\n# Art: reader on vanilla files (skipped when absent)");
@@ -593,4 +692,51 @@ export function runArtEmitterTests(test, assert, eq) {
       assert(swf.tags.filter((t) => t.name === "SymbolClass").length >= 1, "SymbolClass present");
     });
   }
+  test("AbilityIcon per-frame layout (T1 pin, docs/engine-map.md 'Art / SWF subsystem'): bare shape at depth 3 per labeled frame, no nested clips", () => {
+    const bytes = vanilla("ability_icons.swf");
+    if (!bytes) {
+      console.log("      (skipped: ability_icons.swf not present)");
+      return;
+    }
+    const swf = readSwf(bytes);
+    const { byId, entry, sprite } = boundSprite(swf, "AbilityIcon");
+    eq(entry && entry.id, 1346, "SymbolClass AbilityIcon → sprite 1346");
+    assert(!!sprite, "sprite 1346 is a DefineSprite");
+    if (!sprite) return;
+    eq(sprite.frameCount, 901);
+    const frames = spriteFrames(sprite);
+    eq(frames.length, 901);
+    const labels = frames.filter((f) => f.label).map((f) => /** @type {string} */ (f.label));
+    eq(labels.length, 842);
+    eq(new Set(labels).size, 842, "labels are unique");
+    eq(frames[0].label, "unknown", "frame 0 is the fallback icon");
+    assert(labels.includes("Spin"), "vanilla ability label present");
+    assert(!labels.includes("JokersGambit"), "the mod ability has no vanilla icon frame");
+    // frame 0 carries the chrome: background shape @1, the 'label' text @2, border @5 — none of it is a movieclip
+    eq(frames[0].places.map((p) => `${p.depth}:${p.place && p.place.name ? p.place.name : ""}`).join(","), "1:,2:label,5:");
+    // every placed character in the whole clip is a shape or the text field; no DefineSprite is ever placed
+    const placedKinds = new Set();
+    for (const f of frames) for (const p of f.places) if (p.place && p.place.characterId !== undefined) placedKinds.add((byId.get(p.place.characterId) || { name: "?" }).name);
+    assert(!placedKinds.has("DefineSprite"), `no nested movieclips (placed kinds: ${[...placedKinds].join(",")})`);
+    // the icon slot: labeled frames place exactly one shape at depth 3, flags 6 (char+identity matrix) or 3 (move+char)
+    const iconFrames = frames.filter((f) => f.index > 0 && f.label && f.places.length === 1 && f.places[0].depth === 3);
+    assert(iconFrames.length >= 780, `≥780 single-place depth-3 labeled frames (got ${iconFrames.length} of ${labels.length})`);
+    const canonical = iconFrames.filter((f) => f.places[0].place && (f.places[0].place.flags === 3 || placeShape(f.places[0]) === "d3 f6 m1,0,0,1,0,0"));
+    const outliers = iconFrames.filter((f) => !canonical.includes(f)).map((f) => `${f.label}: ${placeShape(f.places[0])}`);
+    assert(canonical.length >= 780 && outliers.length <= 1, `canonical forms: ${canonical.length}; outliers: ${outliers.join("; ")}`);
+    assert(iconFrames.every((f) => /^DefineShape[234]?$/.test((byId.get(/** @type {number} */ (f.places[0].place && f.places[0].place.characterId)) || { name: "?" }).name)), "icon characters are DefineShape*");
+    // icon extent (twips): a 64 px square (1280 twips) fits the vanilla slot
+    const first = iconFrames[0];
+    const icon = byId.get(/** @type {number} */ (first.places[0].place && first.places[0].place.characterId));
+    assert(!!icon && !!icon.shape && icon.shape.bounds.xmax <= 1320 && icon.shape.bounds.ymax <= 1200, `icon bounds ${icon && icon.shape && JSON.stringify(icon.shape.bounds)}`);
+    // the root places the clip at depth 1 and the clip's tail removes the chrome
+    const rootPlace = swf.tags.find((t) => t.name === "PlaceObject2" && t.place && t.place.characterId === 1346);
+    eq(rootPlace && rootPlace.depth, 1);
+    const tail = sprite.tags ? sprite.tags.slice(-12).map((t) => (t.name === "RemoveObject2" ? `Remove@${t.depth}` : t.name)).join(",") : "";
+    eq(tail, "ShowFrame,Remove@5,ShowFrame,Remove@1,ShowFrame,ShowFrame,ShowFrame,ShowFrame,ShowFrame,ShowFrame,ShowFrame,End");
+    // the only frame script is frame1 → stop (ABC strings); nothing reacts to appended frames
+    const abc = swf.tags.find((t) => t.name === "DoABC");
+    const text = abc && abc.abcBytes ? Buffer.from(abc.abcBytes).toString("latin1") : "";
+    assert(/addFrameScript/.test(text) && /frame1/.test(text) && /\bstop\b/.test(text), "AbilityIcon ABC: addFrameScript(frame1 → stop)");
+  });
 }
