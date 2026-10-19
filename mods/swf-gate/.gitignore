@@ -1,0 +1,2 @@
+# generated per variant by `npm run test:swfgate -- <variant>` (editor/); gate.swf is covered by the root *.swf rule
+swfs/swflist.gon.append

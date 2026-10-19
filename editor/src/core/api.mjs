@@ -154,10 +154,14 @@ export function readArtPalette(which) {
   const p = readPalette(which);
   return { ...p, hints: knownRowHints(), defaultAbc: DEFAULT_ABC_MODE };
 }
-/** @param {string} [modName] */
-export function prepareAbcGateTest(modName) {
-  return artio.prepareAbcGateTest(modName);
+/**
+ * Write (or remove, for `control`) the SWF-gate files in mods/<mod>/swfs/ (docs/swf-emitter-fix-spec.md §8).
+ * @param {{ mod?: string, variant: "flat" | "nested" | "probe" | "control" }} o
+ */
+export function prepareSwfGate(o) {
+  return artio.prepareSwfGate(o);
 }
+export { SWF_GATE_MOD, SWF_GATE_VARIANTS } from "./art/art-io.mjs";
 export { exampleScene as exampleArtScene };
 
 // ---- in-game test harness (docs/ingame-testing.md) --------------------------

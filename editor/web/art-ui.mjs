@@ -568,7 +568,7 @@ function OverviewTab() {
     div({ class: "card plain", style: "font-size:12.5px;color:var(--ink2);line-height:1.6" },
       "Build writes ", span({ class: "mono" }, `mods/${ctx.S.mod.val}/swfs/${sc.name}.swf`), " (FWS v17, DefineShape3 + DefineSprite + PlaceObject2 + SymbolClass",
       () => span({}, A.abc.val === "stub" ? " + a stub DoABC" : ", no DoABC"), ") and appends it to ", span({ class: "mono" }, "swfs/swflist.gon.append"),
-      ". GON addresses your art by the export names. Whether a DoABC is required is the open gate test — see the Build tab.",
+      ". GON addresses your art by the export names; SymbolClass alone binds them (no DoABC needed). An export named _Append_<Clip> is merged into that vanilla clip at boot — see the Build tab.",
     ),
   );
 }
@@ -800,7 +800,7 @@ function BuildPanel() {
     return div(
       div({ class: "sec", style: "margin-bottom:8px" }, "Emit"),
       div({ class: "card plain" },
-        div({ style: "font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:8px" }, "Every vanilla file carries one Flash-generated DoABC. Whether the engine needs it to bind SymbolClass names is the open gate test (plan §7). Build both ways and run the dev-save procedure."),
+        div({ style: "font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:8px" }, "Every vanilla file carries a Flash-generated DoABC, but SymbolClass alone binds the names: build with none. The SWF gate (fix spec §8) checks an _Append_AbilityIcon donor boots the game: write a variant here, then run `npm run test:swfgate -- <variant>` from editor/."),
         div({ class: "pvrow" },
           label(input({ type: "radio", name: "abcmode", checked: () => A.abc.val === "none", onchange: () => (A.abc.val = "none") }), "no DoABC"),
           label(input({ type: "radio", name: "abcmode", checked: () => A.abc.val === "stub", onchange: () => (A.abc.val = "stub") }), "stub DoABC (Flash-faithful linkage classes)"),
@@ -808,7 +808,7 @@ function BuildPanel() {
         div({ style: "display:flex;gap:8px;margin-top:10px;flex-wrap:wrap" },
           button({ class: "btn primary sm", disabled: () => !A.scene, onclick: () => build(false) }, "Build SWF"),
           button({ class: "btn sm", disabled: () => !A.scene, onclick: () => build(true) }, "Dry run"),
-          button({ class: "btn ghost sm", title: "Writes the two gate-test SWFs + swflist candidates into mods/dev-sandbox/swfs/", onclick: async () => { const g = await ctx.postJson("/api/art/prepare-abc-gate", { mod: "dev-sandbox" }); toast(g.ok ? `gate fixtures written: ${g.written.length} files (see plan §7.2)` : `failed: ${g.error}`); } }, "Prepare gate test"),
+          button({ class: "btn ghost sm", title: "Writes mods/swf-gate/swfs/gate.swf + swflist.gon.append (flat variant); run it with npm run test:swfgate -- flat", onclick: async () => { const g = await ctx.postJson("/api/art/prepare-swf-gate", { variant: "flat" }); toast(g.ok ? `gate files written: ${g.written.join(", ")} — next: ${g.next}` : `failed: ${g.error}`); } }, "Prepare SWF gate"),
         ),
       ),
       !r && !ins
