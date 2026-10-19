@@ -1205,7 +1205,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "40 53 48 83 EC 30 48 83 79 18 0F 48"
+        "prologue": "40 53 48 83 EC 30 48 83 79 18 0F 48",
+        "after": {
+          "function": "Status_GetStackMode"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[2]"
@@ -1221,7 +1224,7 @@
       "evidence": [
         "docs/engine-map.md#status-effects"
       ],
-      "note": "bool predicate: FNV-1a hash of the name, map lookup (map global at 0x13c3c30, end sentinel at 0x13c3c38); no __FUNCSIG__ string; sits between get_status_stackmode and get_status_value."
+      "note": "bool predicate: FNV-1a hash of the name, map lookup (map global at 0x13c3c30, end sentinel at 0x13c3c38); no __FUNCSIG__ string; sits between get_status_stackmode and get_status_value. Anchored as the .pdata function right after Status_GetStackMode (no string of its own)."
     },
     {
       "name": "Status_GetValue",
@@ -3013,16 +3016,15 @@
     {
       "name": "SDL_DYNAPI_table",
       "kind": "data",
-      "rva": "0x12e7078",
+      "rva": "0x12e7000",
       "anchors": {
-        "strings": [
-          {
-            "text": "SDL3_DYNAMIC_API",
-            "role": "literal",
-            "unique": true
-          }
-        ],
-        "note": "SDL3 jump table (1,175 slots x 8 bytes) filled by SDL_InitDynamicAPI, which reads the SDL3_DYNAMIC_API env var; slot order is SDL_dynapi_procs.h of build.sdlVersion. Every SDL export is a thunk `48 FF 25 disp32` through its slot."
+        "note": "SDL3 dynapi jump_table struct (1,233 pointers into .text on this build; the exported slots start at +0x78 = index 15). Filled by SDL_InitDynamicAPI; slot order is SDL_dynapi_procs.h of build.sdlVersion. Every SDL export is a thunk `48 FF 25 disp32` through its slot.",
+        "witness": {
+          "function": "SDL_InitDynamicAPI",
+          "kind": "rip-lea",
+          "ripRefOrdinal": 6,
+          "needsHarvest": false
+        }
       },
       "consumers": [],
       "exposure": [],
@@ -3037,7 +3039,7 @@
       "anchors": {
         "derive": {
           "table": "SDL_DYNAPI_table",
-          "index": 186
+          "index": 201
         }
       },
       "consumers": [
@@ -3063,7 +3065,7 @@
       "anchors": {
         "derive": {
           "table": "SDL_DYNAPI_table",
-          "index": 187
+          "index": 202
         }
       },
       "consumers": [],
@@ -3087,7 +3089,7 @@
       "anchors": {
         "derive": {
           "table": "SDL_DYNAPI_table",
-          "index": 581
+          "index": 596
         }
       },
       "consumers": [
@@ -3113,7 +3115,7 @@
       "anchors": {
         "derive": {
           "table": "SDL_DYNAPI_table",
-          "index": 893
+          "index": 908
         }
       },
       "consumers": [],
@@ -3137,7 +3139,7 @@
       "anchors": {
         "derive": {
           "table": "SDL_DYNAPI_table",
-          "index": 632
+          "index": 647
         }
       },
       "consumers": [],
@@ -3161,7 +3163,7 @@
       "anchors": {
         "derive": {
           "table": "SDL_DYNAPI_table",
-          "index": 662
+          "index": 677
         }
       },
       "consumers": [],
@@ -3185,7 +3187,7 @@
       "anchors": {
         "derive": {
           "table": "SDL_DYNAPI_table",
-          "index": 111
+          "index": 126
         }
       },
       "consumers": [],
@@ -3209,7 +3211,7 @@
       "anchors": {
         "derive": {
           "table": "SDL_DYNAPI_table",
-          "index": 113
+          "index": 128
         }
       },
       "consumers": [],
@@ -4182,6 +4184,40 @@
         "docs/engine-map.md#debug-console-and-application-loop"
       ],
       "note": "set to 1 to force a stat recompute"
+    },
+    {
+      "name": "SDL_InitDynamicAPI",
+      "kind": "function",
+      "rva": "0xba6fd0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC 20",
+        "exactLen": 20,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "SDL3_DYNAMIC_API",
+            "role": "literal",
+            "unique": true
+          }
+        ],
+        "callees": [],
+        "cfgLite": {
+          "bytes": 308,
+          "calls": 4,
+          "ripRefs": 11,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 48 89 6C 24 10 48 89"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "SDL3's SDL_InitDynamicAPI: reads the SDL3_DYNAMIC_API env var and fills the jump table; its rip-relative lea to the table start is the SDL_DYNAPI_table witness."
     }
   ]
 }

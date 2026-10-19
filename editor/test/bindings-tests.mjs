@@ -423,7 +423,8 @@ export async function runBindingsTests(test, assert, eq) {
     eq(got[0].rva, "0x13c4a30");
     eq(entry(m, "SDL_HideWindow_slot").rva, "0x12e82a0");
     const t = entry(m, "SDL_DYNAPI_table");
-    assert(t && t.rva === "0x12e7078", "the DYNAPI jump table is its own entry");
+    assert(t && t.rva === "0x12e7000", "the DYNAPI jump_table struct is its own entry (exported slots start at +0x78)");
+    assert(t && t.anchors.witness && t.anchors.witness.function === "SDL_InitDynamicAPI", "anchored by the function that fills it");
     for (const e of got.slice(1)) assert(e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table", `${e.name} derives from the table`);
   });
   test("25143593.json: FW_LK table is the 13 status lookups in status_engine.c g_lk_rva order, shapes A-E", () => {
@@ -986,6 +987,201 @@ export async function runBindingsTests(test, assert, eq) {
       const withSig = out.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.anchors.strings && e.anchors.strings.some((/** @type {any} */ s) => s.role === "funcsig")).length;
       assert(withSig >= 20, `funcsig anchors: ${withSig}`);
       assert(JSON.stringify(out) === JSON.stringify(m), "committed anchors are stale: run node tools/bindings/harvest.mjs <exe> --manifest bindings/25143593.json --write");
+    });
+  }
+  // ---- port.mjs: the resolution ladder, old manifest -> new exe ----------------------------
+  console.log("\n# Bindings: port ladder (rescan -> anchor -> caller ordinal; witnesses; report)");
+  const pt = await load("../src/core/bindings/port.mjs");
+  if (pt.__error) {
+    test("port.mjs loads", () => assert(false, pt.__error));
+    return;
+  }
+  const { portManifest, renderPortReport, PORT_STATUSES } = pt;
+
+  /**
+   * Mini linker for fake builds. Items in `code` are bytes or placeholders resolved after layout:
+   *   { call: "Fn" } -> E8 rel32, { lea: "str:NAME" } -> 48 8D 0D disp32, { mov: "glob:NAME" } -> 48 8B 05 disp32
+   * @param {{ fns: { name: string, code: (number|{call:string}|{lea:string}|{mov:string})[] }[], strings?: Record<string,string>, globs?: string[], textPad?: number, rdataPad?: number, stamp?: number }} spec
+   */
+  const link = (spec) => {
+    const TEXT = 0x1000, RDATA = 0x2000, DATA = 0x3000;
+    const size = (/** @type {any} */ it) => (typeof it === "number" ? 1 : it.call ? 5 : 7);
+    /** @type {Record<string, number>} */
+    const fnAt = {};
+    let pc = TEXT + (spec.textPad || 0x10);
+    for (const f of spec.fns) { pc = (pc + 15) & ~15; fnAt[f.name] = pc; pc += f.code.reduce((/** @type {number} */ n, it) => n + size(it), 0); }
+    /** @type {Record<string, number>} */
+    const strAt = {};
+    let sp = RDATA + 0x10 + (spec.rdataPad || 0);
+    for (const [k, v] of Object.entries(spec.strings || {})) { strAt[k] = sp; sp += v.length + 1; sp = (sp + 3) & ~3; }
+    /** @type {Record<string, number>} */
+    const globAt = {};
+    let gp = DATA + 0x10;
+    for (const g of spec.globs || []) { globAt[g] = gp; gp += 8; }
+    const textBytes = new Uint8Array(0x400);
+    /** @type {{ section: string, begin: number, end: number }[]} */
+    const pdata = [];
+    for (const f of spec.fns) {
+      let at = fnAt[f.name];
+      const begin = at;
+      for (const it0 of f.code) {
+        const it = /** @type {any} */ (it0);
+        if (typeof it === "number") { textBytes[at - TEXT] = it; at += 1; continue; }
+        /** @type {number[]} */
+        let bytes;
+        if (it.call) { const next = at + 5; bytes = [0xe8, ...le32(fnAt[it.call] - next)]; }
+        else if (it.lea) { const next = at + 7; bytes = [0x48, 0x8d, 0x0d, ...le32(strAt[it.lea.slice(4)] - next)]; }
+        else { const next = at + 7; bytes = [0x48, 0x8b, 0x05, ...le32(globAt[it.mov.slice(5)] - next)]; }
+        textBytes.set(bytes, at - TEXT);
+        at += bytes.length;
+      }
+      pdata.push({ section: ".text", begin: begin - TEXT, end: at - TEXT });
+    }
+    const rdataBytes = Buffer.alloc(0x400);
+    for (const [k, v] of Object.entries(spec.strings || {})) rdataBytes.write(v + "\0", strAt[k] - RDATA, "latin1");
+    const dataBytes = Buffer.alloc(0x100);
+    const img = buildFakePe({ timeDateStamp: spec.stamp ?? 0x51515151, sections: [{ name: ".text", bytes: textBytes, exec: true }, { name: ".rdata", bytes: rdataBytes }, { name: ".data", bytes: dataBytes, write: true }], pdata });
+    return { img, pe: parsePe(img.buf), fnAt, strAt, globAt };
+  };
+  const SIG_A = "int __cdecl glaiel::alpha(void)";
+  const SIG_B = "int __cdecl glaiel::beta(int)";
+  const PRO = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20];           // push rbx; sub rsp,0x20
+  const EPI = [0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3];           // add rsp,0x20; pop rbx; ret
+  const PRO2 = [0x40, 0x53, 0x48, 0x83, 0xec, 0x30];          // a recompiled prologue (frame 0x30): breaks the v1 signature
+  const bodyA = (/** @type {number[]} */ extra = [], pro = PRO) => [...pro, { lea: "str:A" }, { call: "FnB" }, { mov: "glob:G" }, 0x48, 0x8b, 0xd8, ...extra, ...EPI];
+  const bodyB = (/** @type {number[]} */ extra = []) => [...PRO, { lea: "str:B" }, 0x48, 0x8b, 0xf8, ...extra, ...EPI];
+  const bodyC = (/** @type {number} */ disp = 0x5c) => [...PRO, 0x8b, 0x41, disp, 0x48, 0x8b, 0xc8, 0x48, 0x8b, 0xd0, ...EPI]; // mov eax,[rcx+disp]
+  const v1 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"] });
+  /** the v1 manifest: signatures generated and anchors harvested on v1 */
+  const mkOld = () => {
+    const sig = (/** @type {number} */ rva) => { const r = makeSignature(v1.pe, v1.img.buf, rva, { minLen: 8 }); return r.ok ? r.signature : null; };
+    /** @type {any} */
+    const m = parseManifest({
+      format: 1,
+      build: { steamBuildId: "100", gameVersion: "1.0.0", name: "1.0.0 (steam 100)", timeDateStamp: "0x51515151", sizeOfImage: "0x" + v1.pe.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "e".repeat(64), exeSize: v1.img.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        { name: "FnA", kind: "function", rva: hex(v1.fnAt.FnA), signature: sig(v1.fnAt.FnA), anchors: {}, consumers: [], exposure: [{ enum: "FW_SYM_FnA", index: 0 }], evidence: [] },
+        { name: "FnB", kind: "function", rva: hex(v1.fnAt.FnB), signature: sig(v1.fnAt.FnB), anchors: {}, consumers: [], exposure: [{ enum: "FW_SYM_FnB", index: 1 }], evidence: [] },
+        { name: "FnC", kind: "function", rva: hex(v1.fnAt.FnC), signature: sig(v1.fnAt.FnC), anchors: {}, consumers: [], exposure: [{ table: "FW_LK", index: 0, shape: "A" }], evidence: [] },
+        { name: "G", kind: "data", rva: hex(v1.globAt.G), anchors: { witness: { function: "FnA", kind: "rip-mov", ripRefOrdinal: null, needsHarvest: true } }, consumers: [], exposure: [{ enum: "FW_DATA_G", index: 0 }], evidence: [] },
+        { name: "Foo_stacks", kind: "offset", struct: "Foo", value: "0x5c", ctype: "int32", anchors: { witness: { function: "FnC", pattern: "8B 41 ??", dispAt: 2, dispSize: 1, nth: 0 } }, consumers: [], exposure: [{ macro: "OFF_FOO_STACKS" }], evidence: [] },
+        { name: "Mystery", kind: "offset", struct: "Foo", value: "0x10", ctype: "int32", anchors: { unanchored: true }, consumers: [], exposure: [{ macro: "OFF_FOO_MYSTERY" }], evidence: [] },
+      ],
+    });
+    return harvestManifest(v1.pe, v1.img.buf, m).manifest;
+  };
+  const old = mkOld();
+  /** @param {any} v2 @param {Record<string, any>} [opts] */
+  const port = (v2, opts = {}) => portManifest(old, v2.pe, v2.img.buf, { steamBuildId: "200", gameVersion: "2.0.0", ...opts });
+  /** @param {any} r @param {string} name */
+  const row = (r, name) => r.rows.find((/** @type {any} */ x) => x.name === name);
+
+  test("PORT_STATUSES is the closed set the report and the manifest schema use", () => {
+    eq(PORT_STATUSES.join(","), "ported-exact,ported-rescan,ported-anchor,ported-witness,ported-derived,proposed,ambiguous,failed,needs-human");
+  });
+  test("self-port (same image) -> every anchored entry ported-exact with the same value; unanchored offsets needs-human", () => {
+    const r = port(v1, { steamBuildId: "100", gameVersion: "1.0.0" });
+    eq(row(r, "FnA").status, "ported-exact");
+    eq(row(r, "FnB").status, "ported-exact");
+    eq(row(r, "FnC").status, "ported-exact");
+    eq(row(r, "G").status, "ported-witness");
+    eq(row(r, "Foo_stacks").status, "ported-witness");
+    eq(row(r, "Mystery").status, "needs-human");
+    eq(entry(r.manifest, "FnA").rva, hex(v1.fnAt.FnA));
+    eq(entry(r.manifest, "Mystery").value, "0x10", "value carried over, flagged");
+    eq(validateManifest(r.manifest).ok, true, JSON.stringify(validateManifest(r.manifest).problems));
+    eq(r.manifest.build.steamBuildId, "100");
+    assert(r.manifest.entries.every((/** @type {any} */ e) => e.port && e.port.from === "100" && PORT_STATUSES.includes(e.port.status)), "every entry carries a port block");
+  });
+  test("relink (code and strings shifted, bytes unchanged) -> ported-rescan with the new RVAs; witnesses follow", () => {
+    const v2 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], textPad: 0x50, rdataPad: 0x20, stamp: 0x52525252 });
+    const r = port(v2);
+    for (const n of ["FnA", "FnB", "FnC"]) { eq(row(r, n).status, "ported-rescan", n); eq(entry(r.manifest, n).rva, hex(v2.fnAt[n]), n); }
+    eq(row(r, "G").status, "ported-witness");
+    eq(entry(r.manifest, "G").rva, hex(v2.globAt.G));
+    eq(row(r, "Foo_stacks").status, "ported-witness");
+    eq(r.manifest.build.timeDateStamp, "0x52525252");
+    eq(r.manifest.build.steamBuildId, "200");
+    assert(entry(r.manifest, "FnA").signature && entry(r.manifest, "FnA").signature.pattern, "signature regenerated on the new image");
+    eq(r.summary["ported-rescan"], 3);
+  });
+  test("body changed beyond the mask -> found by its unique funcsig xref (ported-anchor); its callee recovered by caller ordinal", () => {
+    // FnA is recompiled (new frame size + two nops: signature breaks); FnB loses its funcsig AND changes -> only reachable as FnA's call #0
+    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnB", code: [...PRO, 0x48, 0x8b, 0xf8, 0x90, 0x90, 0x90, ...EPI] }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A }, globs: ["G"], stamp: 0x53535353 });
+    const r = port(v2);
+    eq(row(r, "FnA").status, "ported-anchor", row(r, "FnA").detail);
+    eq(row(r, "FnA").method, "funcsig-xref");
+    eq(entry(r.manifest, "FnA").rva, hex(v2.fnAt.FnA));
+    eq(row(r, "FnB").status, "ported-anchor", row(r, "FnB").detail);
+    eq(row(r, "FnB").method, "caller-ordinal");
+    eq(entry(r.manifest, "FnB").rva, hex(v2.fnAt.FnB));
+    eq(row(r, "G").status, "ported-witness");
+  });
+  test("a clone referencing the same funcsig -> ambiguous with both candidates listed for the agent", () => {
+    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x54545454 });
+    const r = port(v2);
+    const a = row(r, "FnA");
+    eq(a.status, "ambiguous", a.detail);
+    eq(a.candidates.length, 2);
+    eq(a.candidates.map((/** @type {any} */ c) => c.rva).sort().join(","), [hex(v2.fnAt.FnA), hex(v2.fnAt.FnA2)].sort().join(","));
+    assert(a.candidates.every((/** @type {any} */ c) => Number.isInteger(c.bytes) && Number.isInteger(c.calls)), "candidate stats");
+    assert(r.needsAgent.some((/** @type {any} */ x) => x.name === "FnA"), "listed for the agent");
+    eq(entry(r.manifest, "FnA").rva, hex(v1.fnAt.FnA), "old value kept until resolved");
+    eq(row(r, "G").status, "failed", "witness function unresolved -> the global cannot be ported");
+  });
+  test("string gone and bytes changed -> failed with the reason; --resolve supplies the answer and re-anchors", () => {
+    const v2 = link({ fns: [{ name: "FnA", code: [...PRO, { call: "FnB" }, { mov: "glob:G" }, 0x48, 0x8b, 0xd8, 0x90, 0x90, ...EPI] }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { B: SIG_B }, globs: ["G"], stamp: 0x55555555 });
+    const r = port(v2);
+    eq(row(r, "FnA").status, "failed", row(r, "FnA").detail);
+    assert(/funcsig|string/.test(row(r, "FnA").detail), row(r, "FnA").detail);
+    const fixed = port(v2, { resolve: { FnA: hex(v2.fnAt.FnA) } });
+    eq(row(fixed, "FnA").status, "ported-anchor");
+    eq(row(fixed, "FnA").method, "resolved");
+    eq(entry(fixed.manifest, "FnA").rva, hex(v2.fnAt.FnA));
+    eq(row(fixed, "G").status, "ported-witness", "the witness now resolves through the supplied function");
+    assert(entry(fixed.manifest, "FnA").anchors.cfgLite.bytes > 0, "anchors re-harvested on the new image");
+  });
+  test("struct offset witness: same displacement -> ported-witness; changed -> proposed (value NOT applied)", () => {
+    const same = port(link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x5c) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x56565656 }));
+    eq(row(same, "Foo_stacks").status, "ported-witness");
+    const moved = port(link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x57575757 }));
+    const o = row(moved, "Foo_stacks");
+    eq(o.status, "proposed", o.detail);
+    assert(/0x5c/.test(o.detail) && /0x60/.test(o.detail), o.detail);
+    eq(entry(moved.manifest, "Foo_stacks").value, "0x5c", "proposed values are never applied without a green T2");
+    eq(entry(moved.manifest, "Foo_stacks").port.note && /0x60/.test(entry(moved.manifest, "Foo_stacks").port.note), true, "the proposal is recorded in the port block");
+  });
+  test("renderPortReport: summary line, one row per entry, needs-attention sections with candidates and next steps", () => {
+    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x58585858 });
+    const r = port(v2);
+    const md = renderPortReport(r);
+    assert(md.startsWith("# Port report 100 -> 200"), md.split("\n")[0]);
+    assert(/^Summary: 6 entries/m.test(md), "summary");
+    assert(/\| FnA \| function \|/.test(md) && /\| Mystery \| offset \|/.test(md), "rows");
+    assert(/## Needs attention/.test(md) && /### FnA \(function, old 0x[0-9a-f]+\) -- ambiguous/.test(md), "attention section");
+    assert(/candidates:/.test(md) && /next:/.test(md), "candidates + next step");
+    assert(/### Foo_stacks \(offset\) -- proposed 0x5c -> 0x60/.test(md), "proposal");
+    assert(/## Next steps/.test(md) && /npm run bindings:gen/.test(md), "next steps");
+  });
+  if (exe) {
+    test("T1 real exe: self-port of bindings/25143593.json onto the installed exe -> every anchored entry ported with identical values; nothing ambiguous or failed", () => {
+      const m = loadManifest(realPath);
+      const p = parsePe(exe);
+      const r = portManifest(m, p, exe, { steamBuildId: "25143593", gameVersion: "1.1.21239" });
+      /** @type {string[]} */
+      const bad = [];
+      for (const rw of r.rows) {
+        if (rw.status === "ambiguous" || rw.status === "failed") bad.push(`${rw.name}: ${rw.status} (${rw.detail})`);
+        const o = entry(m, rw.name);
+        const n = entry(r.manifest, rw.name);
+        if (o && n && (o.rva !== n.rva || o.value !== n.value)) bad.push(`${rw.name}: value changed ${o.rva || o.value} -> ${n.rva || n.value}`);
+      }
+      assert(bad.length === 0, bad.join("; "));
+      eq(r.summary["ported-exact"], m.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.signature).length, "every signed function ported-exact");
+      assert((r.summary["ported-witness"] || 0) >= 2 && (r.summary["ported-derived"] || 0) >= 11, JSON.stringify(r.summary));
+      eq(r.summary["needs-human"], m.entries.filter((/** @type {any} */ e) => e.anchors.unanchored).length, "exactly the unanchored entries need a human");
+      eq(validateManifest(r.manifest).ok, true);
     });
   }
 }
