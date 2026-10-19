@@ -7,6 +7,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { locateGameDir } from "../src/core/ingame/launch.mjs";
+import { REPO_ROOT } from "../src/core/repo.mjs";
 
 /** Known build 25143593 identity (docs/engine-map.md). */
 const KNOWN_TS = 0x6a9c51e5;
@@ -132,6 +133,150 @@ export async function runBindingsTests(test, assert, eq) {
       const f = p.pdata.find(0x8e3c60); // TurnControl::NextTurn
       assert(f !== null && f.begin === 0x8e3c60, `NextTurn should start a RUNTIME_FUNCTION, got ${JSON.stringify(f)}`);
       eq(p.rvaToOff(0x1000), 0x400, ".text raw offset");
+    });
+  }
+
+  // ---- scan.mjs: the DLL's scanner semantics (fw_sig.c) in node ----------------
+  console.log("\n# Bindings: signature scanner (parity with native/framework/test/test_sig.c)");
+  const scan = await load("../src/core/bindings/scan.mjs");
+  if (scan.__error) {
+    test("scan.mjs loads", () => assert(false, scan.__error));
+    return;
+  }
+  const { parsePattern, scanBuffer, scanExec, scanSection, patternToString, PatternError, FW_SIG_MAX_BYTES } = scan;
+  /** @param {() => void} fn */
+  const throwsPattern = (fn) => {
+    try { fn(); } catch (e) { return e instanceof PatternError; }
+    return false;
+  };
+
+  test("parsePattern: plain bytes -> bytes + all-set mask; cap defaults to FW_SIG_MAX_BYTES 128", () => {
+    eq(FW_SIG_MAX_BYTES, 128);
+    const p = parsePattern("48 8B C4 55");
+    eq(p.length, 4);
+    eq(Array.from(p.bytes).join(","), "72,139,196,85");
+    eq(Array.from(p.mask).join(","), "1,1,1,1");
+  });
+  test("parsePattern: wildcards (?, ??) and odd spacing; lowercase hex", () => {
+    const p = parsePattern("  48 ?? 8B  ? C4 ");
+    eq(p.length, 5);
+    eq(Array.from(p.mask).join(","), "1,0,1,0,1");
+    eq(p.bytes[2], 0x8b);
+    eq(p.bytes[1], 0);
+    const l = parsePattern("ff 0a");
+    eq(l.bytes[0], 0xff);
+    eq(l.bytes[1], 0x0a);
+  });
+  test("parsePattern: bad hex, junk after a token, and overflow throw PatternError; empty -> length 0", () => {
+    assert(throwsPattern(() => parsePattern("48 ZZ")), "bad hex");
+    assert(throwsPattern(() => parsePattern("4")), "half byte");
+    assert(throwsPattern(() => parsePattern("48x 8B")), "junk after token");
+    assert(throwsPattern(() => parsePattern("01 02 03 04 05", 4)), "overflow");
+    eq(parsePattern("01 02 03 04", 4).length, 4);
+    eq(parsePattern("").length, 0);
+    eq(parsePattern("   ").length, 0);
+  });
+  test("patternToString round-trips, uppercase hex and ?? for wildcards", () => {
+    eq(patternToString(parsePattern("48 ?? 8b ? c4")), "48 ?? 8B ?? C4");
+  });
+
+  const HAY = Buffer.from([0x00, 0x48, 0x8b, 0xc4, 0x55, 0x90, 0x48, 0x8b, 0xc5, 0x55, 0x00]);
+  test("scanBuffer: unique hit returns its offset and counts 1", () => {
+    const st = { matches: 0 };
+    eq(scanBuffer(HAY, parsePattern("48 8B C4 55"), st), 1);
+    eq(st.matches, 1);
+  });
+  test("scanBuffer: wildcard matches both, returns the FIRST, reports 2", () => {
+    const st = { matches: 0 };
+    eq(scanBuffer(HAY, parsePattern("48 8B ?? 55"), st), 1);
+    eq(st.matches, 2);
+  });
+  test("scanBuffer: no match -> -1 and 0; pattern longer than buffer -> -1; zero-length -> -1", () => {
+    const st = { matches: 0 };
+    eq(scanBuffer(HAY, parsePattern("DE AD BE EF"), st), -1);
+    eq(st.matches, 0);
+    eq(scanBuffer(HAY, parsePattern("00 48 8B C4 55 90 48 8B C5 55 00 11"), st), -1);
+    eq(scanBuffer(HAY, parsePattern(""), st), -1);
+    eq(st.matches, 0);
+  });
+  test("scanBuffer: a leading wildcard still matches (no first-byte prefilter bug)", () => {
+    const st = { matches: 0 };
+    eq(scanBuffer(HAY, parsePattern("?? 8B C4 55"), st), 1);
+    eq(st.matches, 1);
+  });
+  test("scanBuffer: matches accumulate across buffers and stop counting at two", () => {
+    const st = { matches: 0 };
+    const pat = parsePattern("48 8B C4 55");
+    eq(scanBuffer(HAY, pat, st), 1);
+    eq(scanBuffer(HAY, pat, st), 1);
+    eq(st.matches, 2);
+    const rep = Buffer.alloc(64, 0x90);
+    const st2 = { matches: 0 };
+    scanBuffer(rep, parsePattern("90 90"), st2);
+    eq(st2.matches, 2);
+  });
+
+  test("scanExec: scans executable sections only, as the loader sees them, with RVA hits", () => {
+    const text2 = new Uint8Array(0x30);
+    text2.set([0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0xc3], 0x08); // same prologue as fn B of .text
+    const rdata2 = new Uint8Array(0x20);
+    rdata2.set([0x48, 0x8b, 0xc4, 0x55, 0xc3], 0x04); // fn A's bytes in a data section: must not count
+    const f = buildFakePe({
+      sections: [
+        { name: ".text", bytes: text, exec: true },
+        { name: ".rdata", bytes: rdata2 },
+        { name: ".text2", bytes: text2, exec: true },
+      ],
+    });
+    const p = parsePe(f.buf);
+    const a = scanExec(p, f.buf, parsePattern("48 8B C4 55 C3"));
+    eq(a.count, 1);
+    eq(a.hits[0], f.rva(".text", 0x10));
+    const b = scanExec(p, f.buf, parsePattern("40 53 48 83 EC 20 C3"));
+    eq(b.count, 2, "one hit per exec section");
+    eq(b.hits.join(","), [f.rva(".text", 0x40), f.rva(".text2", 0x08)].join(","));
+    const none = scanExec(p, f.buf, parsePattern("DE AD BE EF"));
+    eq(none.count, 0);
+    eq(none.hits.length, 0);
+    // a data section can be scanned explicitly (strings later)
+    const st = { matches: 0 };
+    const hits = scanSection(f.buf, p.sections[1], parsePattern("48 8B C4 55"), st);
+    eq(hits[0], f.rva(".rdata", 0x04));
+  });
+  test("scanExec: a pattern that only appears in a section's zero padding beyond the raw size still counts (loader view)", () => {
+    // VirtualSize > raw bytes is modelled by a trailing run of zeros in .text; the needle crosses into it.
+    const f = buildFakePe({ sections: [{ name: ".text", bytes: [0xc3, 0xc3, 0xc3, 0xaa], exec: true }] });
+    const p = parsePe(f.buf);
+    eq(scanExec(p, f.buf, parsePattern("C3 AA")).count, 1);
+  });
+
+  if (!exe) {
+    console.log("  (skipped: Mewgenics.exe not found; TSV regression test needs the game)");
+  } else {
+    const tsv = readFileSync(join(REPO_ROOT, "bindings", "25143593.sig.tsv"), "utf8");
+    const rows = tsv.split(/\r?\n/).filter(Boolean).map((line) => {
+      const [name, rva, len, rest] = line.split("\t");
+      return { name, rva: parseInt(rva, 16), len, rest: rest || "" };
+    });
+    const code = rows.filter((r) => /^\d+$/.test(r.len));
+    const p = parsePe(exe);
+    test(`T1 real exe: each of the ${code.length} TSV code signatures matches exactly once, at its RVA (TODO #4)`, () => {
+      assert(code.length >= 33, `expected >= 33 code rows, got ${code.length}`);
+      /** @type {string[]} */
+      const bad = [];
+      for (const r of code) {
+        const pat = parsePattern(r.rest);
+        eq(pat.length, Number(r.len), `${r.name}: hex length matches the len column`);
+        const res = scanExec(p, exe, pat);
+        if (res.count !== 1 || res.hits[0] !== r.rva) bad.push(`${r.name}: ${res.count} matches, first 0x${(res.hits[0] ?? -1).toString(16)} (want 0x${r.rva.toString(16)})`);
+      }
+      assert(bad.length === 0, bad.join("; "));
+    });
+    test("T1 real exe: the NOT-UNIQUE row's 64-byte prefix indeed matches more than once", () => {
+      const r = rows.find((x) => x.len.startsWith("NOT-UNIQUE"));
+      assert(r !== undefined, "row present");
+      if (!r) return;
+      eq(scanExec(p, exe, parsePattern(r.rest)).count, 2);
     });
   }
 }
