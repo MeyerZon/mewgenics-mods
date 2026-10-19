@@ -4,13 +4,24 @@
 // shifts code. Uniqueness is always verified by scanning (scan.mjs), so a wrong wildcard
 // guess can only loosen a pattern, never mis-locate a function.
 //
-// decodeRelocs is an x64-lite decoder: it knows the operand layout of the instructions MSVC
-// emits in prologues and ordinary code and stops at the first opcode it does not know, leaving
-// the rest of the bytes exact. Pure; node built-ins only.
+// decodeInstruction is an x64-lite decoder: it knows the operand layout of the instructions
+// MSVC emits in prologues and ordinary code and returns null at an opcode it does not know.
+// decodeRelocs (signatures) stops there; harvest.mjs resyncs one byte later for counting.
+// Pure; node built-ins only.
 
 import { scanExec, patternToString } from "./scan.mjs";
 
 /** @typedef {{ at: number, len: number, why: string }} Reloc  byte range (relative to the decoded buffer) to wildcard */
+/**
+ * One decoded instruction. `relTarget` is the signed rel32 / rip disp32 when present:
+ * absolute target = instruction rva + length + relTarget.
+ * @typedef {{
+ *   length: number,
+ *   kind: "call"|"jmp"|"jcc"|"ret"|"lea"|"mov"|"movabs"|"other",
+ *   reloc: Reloc|null,
+ *   relTarget: number|null,
+ * }} Instruction
+ */
 
 const PREFIXES = new Set([0x66, 0x67, 0xf2, 0xf3, 0xf0, 0x2e, 0x3e, 0x26, 0x36, 0x64, 0x65]);
 
@@ -26,7 +37,7 @@ const MODRM_IMM32 = new Set([0x69, 0x81, 0xc7]);
 /** no ModRM, no immediate */
 const PLAIN = new Set([
   0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
-  0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9c, 0x9d, 0xc3, 0xc9, 0xcc, 0xf4, 0xf5, 0xf8, 0xf9, 0xfc, 0xfd,
+  0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9c, 0x9d, 0xc9, 0xcc, 0xf4, 0xf5, 0xf8, 0xf9, 0xfc, 0xfd,
 ]);
 const IMM8 = new Set([0x04, 0x0c, 0x14, 0x1c, 0x24, 0x2c, 0x34, 0x3c, 0x6a, 0xa8, 0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xcd, 0xe3]);
 const IMM32 = new Set([0x05, 0x0d, 0x15, 0x1d, 0x25, 0x2d, 0x35, 0x3d, 0x68, 0xa9]);
@@ -74,68 +85,99 @@ function modrm(b, i) {
   return { len, ripAt, reg: (m >> 3) & 7 };
 }
 
+/** @param {Uint8Array} b @param {number} i signed little-endian int32 at i, or null when truncated */
+function i32(b, i) {
+  if (i + 4 > b.length) return null;
+  return (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) | 0;
+}
+
 /**
+ * Decode one instruction at index i. Returns null for an opcode the decoder does not know (or a
+ * truncated instruction); callers decide whether to stop or resync.
+ * @param {Uint8Array} bytes
+ * @param {number} start
+ * @returns {Instruction|null}
+ */
+export function decodeInstruction(bytes, start) {
+  const n = bytes.length;
+  let i = start;
+  let rexW = false;
+  while (i < n && PREFIXES.has(bytes[i])) i++;
+  if (i < n && bytes[i] >= 0x40 && bytes[i] <= 0x4f) { rexW = (bytes[i] & 8) !== 0; i++; }
+  if (i >= n) return null;
+  const op = bytes[i++];
+  /** @param {number} end @param {Instruction["kind"]} kind @param {Reloc|null} reloc @param {number|null} rel */
+  const done = (end, kind, reloc = null, rel = null) => (end <= n ? { length: end - start, kind, reloc, relTarget: rel } : null);
+  /** @param {number} at @param {string} why @param {Instruction["kind"]} kind */
+  const withRel32 = (at, why, kind) => done(at + 4, kind, { at, len: 4, why }, i32(bytes, at));
+  /** @param {number} after @param {ReturnType<typeof modrm>} m @param {Instruction["kind"]} kind */
+  const withModrm = (after, m, kind) => {
+    if (!m) return null;
+    const end = after + m.len;
+    if (m.ripAt >= 0) return done(end, kind, { at: m.ripAt, len: 4, why: "rip-relative disp32" }, i32(bytes, m.ripAt));
+    return done(end, kind);
+  };
+  if (op === 0x0f) {
+    if (i >= n) return null;
+    const op2 = bytes[i++];
+    if (op2 >= 0x80 && op2 <= 0x8f) return withRel32(i, "Jcc rel32", "jcc");
+    if (PLAIN_0F.has(op2)) return done(i, "other");
+    if (op2 === 0x38 || op2 === 0x3a) {
+      if (i >= n) return null;
+      i++;
+      const m = modrm(bytes, i);
+      if (!m) return null;
+      const r = withModrm(i, m, "other");
+      return r && op2 === 0x3a ? done(start + r.length + 1, "other", r.reloc, r.relTarget) : r;
+    }
+    if (MODRM_0F.has(op2)) return withModrm(i, modrm(bytes, i), "other");
+    if (MODRM_IMM8_0F.has(op2)) {
+      const r = withModrm(i, modrm(bytes, i), "other");
+      return r ? done(start + r.length + 1, "other", r.reloc, r.relTarget) : null;
+    }
+    return null;
+  }
+  if (op === 0xe8) return withRel32(i, "E8 rel32", "call");
+  if (op === 0xe9) return withRel32(i, "E9 rel32", "jmp");
+  if (op === 0xc3 || op === 0xc2) return done(op === 0xc2 ? i + 2 : i, "ret");
+  if (op >= 0xb8 && op <= 0xbf) {
+    if (rexW) return done(i + 8, "movabs", { at: i, len: 8, why: "movabs imm64" });
+    return done(i + 4, "other");
+  }
+  if (PLAIN.has(op)) return done(i, "other");
+  if (IMM8.has(op) || REL8.has(op)) return done(i + 1, op === 0xeb ? "jmp" : (op >= 0x70 && op <= 0x7f) ? "jcc" : "other");
+  if (IMM32.has(op)) return done(i + 4, "other");
+  if (MODRM.has(op) || MODRM_IMM8.has(op) || MODRM_IMM32.has(op) || op === 0xf6 || op === 0xf7) {
+    const m = modrm(bytes, i);
+    if (!m) return null;
+    /** @type {Instruction["kind"]} */
+    let kind = op === 0x8d ? "lea" : op === 0x8b || op === 0x89 ? "mov" : op === 0xff && m.reg === 2 ? "call" : op === 0xff && m.reg === 4 ? "jmp" : "other";
+    const r = withModrm(i, m, kind);
+    if (!r) return null;
+    let extra = 0;
+    if (MODRM_IMM8.has(op)) extra = 1;
+    else if (MODRM_IMM32.has(op)) extra = 4;
+    else if (op === 0xf6 && m.reg <= 1) extra = 1;
+    else if (op === 0xf7 && m.reg <= 1) extra = 4;
+    return extra ? done(start + r.length + extra, kind, r.reloc, r.relTarget) : r;
+  }
+  return null;
+}
+
+/**
+ * Relocation byte ranges from the start of `bytes` up to the first unknown opcode.
  * @param {Uint8Array} bytes
  * @returns {Reloc[]}
  */
 export function decodeRelocs(bytes) {
   /** @type {Reloc[]} */
   const out = [];
-  const n = bytes.length;
   let i = 0;
-  /** @param {number} at @param {number} len @param {string} why */
-  const add = (at, len, why) => { if (at + len <= n) out.push({ at, len, why }); };
-  while (i < n) {
-    let rexW = false;
-    while (i < n && PREFIXES.has(bytes[i])) i++;
-    if (i < n && bytes[i] >= 0x40 && bytes[i] <= 0x4f) { rexW = (bytes[i] & 8) !== 0; i++; }
-    if (i >= n) break;
-    const op = bytes[i++];
-    if (op === 0x0f) {
-      if (i >= n) break;
-      const op2 = bytes[i++];
-      if (op2 >= 0x80 && op2 <= 0x8f) { add(i, 4, "Jcc rel32"); i += 4; continue; }
-      if (PLAIN_0F.has(op2)) continue;
-      if (op2 === 0x38 || op2 === 0x3a) {
-        if (i >= n) break;
-        i++; // third opcode byte
-        const m = modrm(bytes, i);
-        if (!m) break;
-        if (m.ripAt >= 0) add(m.ripAt, 4, "rip-relative disp32");
-        i += m.len + (op2 === 0x3a ? 1 : 0);
-        continue;
-      }
-      if (MODRM_0F.has(op2) || MODRM_IMM8_0F.has(op2)) {
-        const m = modrm(bytes, i);
-        if (!m) break;
-        if (m.ripAt >= 0) add(m.ripAt, 4, "rip-relative disp32");
-        i += m.len + (MODRM_IMM8_0F.has(op2) ? 1 : 0);
-        continue;
-      }
-      break; // unknown two-byte opcode: leave the rest exact
-    }
-    if (op === 0xe8) { add(i, 4, "E8 rel32"); i += 4; continue; }
-    if (op === 0xe9) { add(i, 4, "E9 rel32"); i += 4; continue; }
-    if (op >= 0xb8 && op <= 0xbf) {
-      if (rexW) { add(i, 8, "movabs imm64"); i += 8; } else i += 4;
-      continue;
-    }
-    if (PLAIN.has(op)) continue;
-    if (IMM8.has(op) || REL8.has(op)) { i += 1; continue; }
-    if (IMM32.has(op)) { i += 4; continue; }
-    if (op === 0xc2) { i += 2; continue; }
-    if (MODRM.has(op) || MODRM_IMM8.has(op) || MODRM_IMM32.has(op) || op === 0xf6 || op === 0xf7) {
-      const m = modrm(bytes, i);
-      if (!m) break;
-      if (m.ripAt >= 0) add(m.ripAt, 4, op === 0xff && (m.reg === 2 || m.reg === 4) ? "FF /2|/4 rip-relative disp32" : "rip-relative disp32");
-      i += m.len;
-      if (MODRM_IMM8.has(op)) i += 1;
-      else if (MODRM_IMM32.has(op)) i += 4;
-      else if (op === 0xf6 && m.reg <= 1) i += 1;
-      else if (op === 0xf7 && m.reg <= 1) i += 4;
-      continue;
-    }
-    break; // unknown opcode: stop; later bytes stay exact
+  while (i < bytes.length) {
+    const ins = decodeInstruction(bytes, i);
+    if (!ins) break;
+    if (ins.reloc && ins.reloc.at + ins.reloc.len <= bytes.length) out.push(ins.reloc);
+    i += ins.length;
   }
   return out;
 }

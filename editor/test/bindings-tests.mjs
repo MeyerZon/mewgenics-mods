@@ -288,7 +288,7 @@ export async function runBindingsTests(test, assert, eq) {
     test("manifest.mjs loads", () => assert(false, man.__error));
     return;
   }
-  const { parseManifest, validateManifest, loadManifest, saveManifest, symbolTable, dataTable, lkTable, entry, BINDINGS_DIR, ManifestError } = man;
+  const { parseManifest, validateManifest, loadManifest, saveManifest, symbolTable, dataTable, lkTable, entry, hex, BINDINGS_DIR, ManifestError } = man;
 
   /** @param {any} overrides @returns {any} a minimal valid manifest object */
   const mini = (overrides = {}) => ({
@@ -805,6 +805,187 @@ export async function runBindingsTests(test, assert, eq) {
       eq(r.build.matched && r.build.matched.steamBuildId, "25143593");
       eq(r.summary.ok, r.entries.length, r.entries.filter((/** @type {any} */ e) => e.status !== "ok").map((/** @type {any} */ e) => `${e.name}:${e.status}`).join(","));
       assert(r.summary.ok >= 34, `ok ${r.summary.ok}`);
+    });
+  }
+  // ---- harvest.mjs: anchors that survive a recompile ------------------------------------
+  console.log("\n# Bindings: harvest (strings, callees, rip refs, RTTI, vtable slots, witnesses)");
+  const hv = await load("../src/core/bindings/harvest.mjs");
+  if (hv.__error) {
+    test("harvest.mjs loads", () => assert(false, hv.__error));
+    return;
+  }
+  const { findString, findStringXrefs, harvestFunction, findRtti, vtableSlotTarget, deriveFromVtableSlot, harvestManifest } = hv;
+
+  /**
+   * A fake image: .text at 0x1000, .hvRdata at 0x2000, .hvData at 0x3000 (builder layout, each section < 1 page).
+   *   hvFnA 0x1010: lea rcx,[rip->funcsig]; call fnB; mov rax,[rip->Glob]; ret
+   *   fnB 0x1040: mov eax,0x4d6; ret            (vtable slot 1 body)
+   *   fnC 0x1060: push rbx; ...; ret            (vtable slot 0 body)
+   *   .hvRdata: funcsig string @+0x10, "Dup" twice, COL @+0x40, vftable @+0x80 (COL pointer @+0x78)
+   *   .hvData:  TypeDescriptor @+0x20 (name @+0x30), Glob @+0x100
+   */
+  const FUNCSIG = "int __cdecl glaiel::foo(void)";
+  const TEXT = 0x1000, RDATA = 0x2000, DATA = 0x3000, BASE = 0x140000000;
+  const le32 = (/** @type {number} */ v) => [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
+  const hvText = new Uint8Array(0x100);
+  const hvFnA = [
+    0x48, 0x8d, 0x0d, ...le32((RDATA + 0x10) - (TEXT + 0x17)),   // lea rcx,[rip+disp] -> funcsig
+    0xe8, ...le32((TEXT + 0x40) - (TEXT + 0x1c)),                 // call fnB
+    0x48, 0x8b, 0x05, ...le32((DATA + 0x100) - (TEXT + 0x23)),   // mov rax,[rip+disp] -> Glob
+    0xc3,
+  ];
+  hvText.set(hvFnA, 0x10);
+  hvText.set([0xb8, 0xd6, 0x04, 0x00, 0x00, 0xc3], 0x40);
+  hvText.set([0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3], 0x60);
+  const hvRdata = Buffer.alloc(0x100);
+  hvRdata.write(FUNCSIG + "\0", 0x10, "latin1");
+  hvRdata.write("Dup\0", 0x30, "latin1");
+  hvRdata.write("Dup\0", 0x36, "latin1");
+  hvRdata.writeUInt32LE(1, 0x40);            // COL.signature (x64)
+  hvRdata.writeUInt32LE(0, 0x44);            // COL.offset
+  hvRdata.writeUInt32LE(0, 0x48);            // COL.cdOffset
+  hvRdata.writeUInt32LE(DATA + 0x20, 0x4c);  // COL.pTypeDescriptor (image-relative)
+  hvRdata.writeUInt32LE(0, 0x50);            // COL.pClassDescriptor
+  hvRdata.writeUInt32LE(RDATA + 0x40, 0x54); // COL.pSelf
+  hvRdata.writeBigUInt64LE(BigInt(BASE + RDATA + 0x40), 0x78); // vftable[-1] = &COL
+  hvRdata.writeBigUInt64LE(BigInt(BASE + TEXT + 0x60), 0x80);  // slot 0 -> fnC
+  hvRdata.writeBigUInt64LE(BigInt(BASE + TEXT + 0x40), 0x88);  // slot 1 -> fnB
+  const hvData = Buffer.alloc(0x120);
+  hvData.writeBigUInt64LE(BigInt(BASE + RDATA + 0xf0), 0x20);  // TypeDescriptor.pVFTable (any)
+  hvData.write(".?AVFoo@glaiel@@\0", 0x30, "latin1");
+  const hvPe = buildFakePe({
+    timeDateStamp: 0x44444444,
+    sections: [{ name: ".text", bytes: hvText, exec: true }, { name: ".hvRdata", bytes: hvRdata }, { name: ".data", bytes: hvData, write: true }],
+    pdata: [{ section: ".text", begin: 0x10, end: 0x30 }, { section: ".text", begin: 0x40, end: 0x46 }, { section: ".text", begin: 0x60, end: 0x80 }],
+  });
+  const hp = parsePe(hvPe.buf);
+  eq(hvPe.rva(".hvRdata", 0), RDATA, "fake layout assumption");
+  eq(hvPe.rva(".data", 0), DATA, "fake layout assumption");
+
+  test("findString: NUL-terminated string -> rva + occurrence count (data sections only)", () => {
+    const s = findString(hp, hvPe.buf, FUNCSIG);
+    eq(s.rva, RDATA + 0x10);
+    eq(s.count, 1);
+    eq(findString(hp, hvPe.buf, "Dup").count, 2);
+    eq(findString(hp, hvPe.buf, "Nope").count, 0);
+    eq(findString(hp, hvPe.buf, "Nope").rva, null);
+  });
+  test("findStringXrefs: rip-relative lea sites that point at the string, with their containing function", () => {
+    const x = findStringXrefs(hp, hvPe.buf, RDATA + 0x10);
+    eq(x.length, 1);
+    eq(x[0].at, TEXT + 0x10);
+    eq(x[0].fn && x[0].fn.begin, TEXT + 0x10);
+    eq(findStringXrefs(hp, hvPe.buf, RDATA + 0x30).length, 0);
+  });
+  test("harvestFunction: funcsig string anchor, callees by ordinal, rip refs by ordinal, cfgLite and prologue", () => {
+    const h = harvestFunction(hp, hvPe.buf, TEXT + 0x10, { names: new Map([[TEXT + 0x40, "FnB"]]) });
+    eq(h.strings.length, 1);
+    eq(h.strings[0].text, FUNCSIG);
+    eq(h.strings[0].role, "funcsig");
+    eq(h.strings[0].unique, true);
+    eq(h.callees.map((/** @type {any} */ c) => `${c.ordinal}:${c.name}:${c.target}`).join(","), "0:FnB:0x1040");
+    eq(h.ripRefs.map((/** @type {any} */ r) => `${r.ordinal}:${r.opcode}:${r.target}`).join(","), "0:lea:0x2010,1:mov:0x3100");
+    eq(h.cfgLite.bytes, 0x20);
+    eq(h.cfgLite.calls, 1);
+    eq(h.cfgLite.ripRefs, 2);
+    eq(h.prologue, "48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ??");
+    const b = harvestFunction(hp, hvPe.buf, TEXT + 0x40, { names: new Map() });
+    eq(b.strings.length, 0);
+    eq(b.callees.length, 0);
+    eq(b.cfgLite.bytes, 6);
+  });
+  test("findRtti: TypeDescriptor name -> COL -> vftable (x64 image-relative RTTI)", () => {
+    const r = findRtti(hp, hvPe.buf, ".?AVFoo@glaiel@@");
+    assert(r !== null, "found");
+    if (!r) return;
+    eq(r.typeDescriptor, DATA + 0x20);
+    eq(r.col, RDATA + 0x40);
+    eq(r.vftable, RDATA + 0x80);
+    eq(findRtti(hp, hvPe.buf, ".?AVBar@glaiel@@"), null);
+  });
+  test("vtableSlotTarget / deriveFromVtableSlot: slot pointers resolve to RVAs; imm32 read from the slot body", () => {
+    eq(vtableSlotTarget(hp, hvPe.buf, RDATA + 0x80, 0), TEXT + 0x60);
+    eq(vtableSlotTarget(hp, hvPe.buf, RDATA + 0x80, 1), TEXT + 0x40);
+    eq(deriveFromVtableSlot(hp, hvPe.buf, RDATA + 0x80, 1, "B8 ?? ?? ?? ?? C3", 1), 0x4d6);
+    eq(deriveFromVtableSlot(hp, hvPe.buf, RDATA + 0x80, 0, "B8 ?? ?? ?? ?? C3", 1), null, "body does not match");
+  });
+  test("harvestManifest: fills function anchors, resolves witness ordinals, verifies rtti/derive, reports mismatches", () => {
+    /** @type {any} */
+    const m = parseManifest({
+      format: 1,
+      build: { steamBuildId: "444", gameVersion: "4.4.4", name: "4.4.4 (steam 444)", timeDateStamp: "0x44444444", sizeOfImage: "0x" + hp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "d".repeat(64), exeSize: hvPe.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        { name: "FnA", kind: "function", rva: "0x1010", signature: null, anchors: {}, consumers: [], exposure: [{ table: "FW_LK", index: 0, shape: "A" }], evidence: [] },
+        { name: "FnB", kind: "function", rva: "0x1040", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "Glob", kind: "data", rva: "0x3100", anchors: { witness: { function: "FnA", kind: "rip-mov", ripRefOrdinal: null, needsHarvest: true } }, consumers: [], exposure: [{ enum: "FW_DATA_Glob", index: 0 }], evidence: [] },
+        { name: "Foo_vftable", kind: "vtable", rva: "0x2080", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
+        { name: "Foo_typeid", kind: "constant", value: "0x4d6", anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] },
+        { name: "Wrong_vftable", kind: "vtable", rva: "0x2090", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [], evidence: [] },
+        { name: "Tbl", kind: "data", rva: "0x2000", anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "Tbl_slot3", kind: "data", rva: "0x2018", anchors: { derive: { table: "Tbl", index: 3 } }, consumers: [], exposure: [], evidence: [] },
+      ],
+    });
+    const { manifest: out, report } = harvestManifest(hp, hvPe.buf, m);
+    const a = entry(out, "FnA");
+    eq(a.anchors.strings[0].text, FUNCSIG);
+    eq(a.anchors.callees[0].name, "FnB");
+    eq(a.anchors.cfgLite.bytes, 0x20);
+    const g = entry(out, "Glob");
+    eq(g.anchors.witness.ripRefOrdinal, 1);
+    eq(g.anchors.witness.needsHarvest, false);
+    eq(report.find((/** @type {any} */ r) => r.name === "Foo_vftable").status, "verified");
+    eq(report.find((/** @type {any} */ r) => r.name === "Foo_typeid").status, "verified");
+    eq(report.find((/** @type {any} */ r) => r.name === "Tbl_slot3").status, "verified");
+    const w = report.find((/** @type {any} */ r) => r.name === "Wrong_vftable");
+    eq(w.status, "mismatch");
+    assert(/0x2080/.test(w.detail), w.detail);
+    eq(entry(out, "Wrong_vftable").rva, "0x2090", "a mismatch never rewrites the value");
+    eq(validateManifest(out).ok, true, "output validates");
+    eq(report.filter((/** @type {any} */ r) => r.status === "mismatch").length, 1);
+  });
+  if (exe) {
+    const m = loadManifest(realPath);
+    const p = parsePe(exe);
+    test("T1 real exe: 12 of the 13 FW_LK lookups are found by a unique __FUNCSIG__ string xref'd from exactly their function; Status_NameExists has none", () => {
+      /** @type {string[]} */
+      const bad = [];
+      let found = 0;
+      for (const e of lkTable(m)) {
+        const h = harvestFunction(p, exe, parseInt(e.rva, 16), { names: new Map() });
+        const sig = h.strings.find((/** @type {any} */ s) => s.role === "funcsig" && s.unique);
+        if (e.name === "Status_NameExists") { if (sig) bad.push("Status_NameExists unexpectedly has a funcsig"); continue; }
+        if (!sig) { bad.push(`${e.name}: no unique funcsig`); continue; }
+        const x = findStringXrefs(p, exe, findString(p, exe, sig.text).rva);
+        const fns = [...new Set(x.map((/** @type {any} */ r) => (r.fn ? r.fn.begin : -1)))];
+        if (fns.length !== 1 || fns[0] !== parseInt(e.rva, 16)) bad.push(`${e.name}: xrefs from ${fns.map((f) => "0x" + f.toString(16)).join(",")}`);
+        else found++;
+      }
+      assert(bad.length === 0, bad.join("; "));
+      eq(found, 12);
+    });
+    test("T1 real exe: RTTI chain gives both vftables; LuckUp type id derives from slot 1; SDL slots derive from the table", () => {
+      const l = findRtti(p, exe, ".?AVLuckUp@glaiel@@");
+      eq(l && hex(l.vftable), "0xf57ab8");
+      const s = findRtti(p, exe, ".?AVStatus@glaiel@@");
+      eq(s && hex(s.vftable), "0xed1960");
+      eq(deriveFromVtableSlot(p, exe, 0xf57ab8, 1, "B8 ?? ?? ?? ?? C3", 1), 0x4d6);
+      const t = entry(m, "SDL_DYNAPI_table");
+      for (const e of m.entries) {
+        if (e.kind === "hvData" && e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table") eq(parseInt(e.rva, 16), parseInt(t.rva, 16) + 8 * e.anchors.derive.index, e.name);
+      }
+    });
+    test("T1 real exe: harvestManifest resolves App_global / DefaultStatusSource witnesses, verifies every rtti/derive, and the committed manifest is already harvested", () => {
+      const { manifest: out, report } = harvestManifest(p, exe, m);
+      const mism = report.filter((/** @type {any} */ r) => r.status === "mismatch");
+      assert(mism.length === 0, mism.map((/** @type {any} */ r) => `${r.name}: ${r.detail}`).join("; "));
+      const app = entry(out, "App_global");
+      assert(Number.isInteger(app.anchors.witness.ripRefOrdinal) && app.anchors.witness.needsHarvest === false, `App_global witness ${JSON.stringify(app.anchors.witness)}`);
+      const dss = entry(out, "DefaultStatusSource");
+      assert(Number.isInteger(dss.anchors.witness.ripRefOrdinal) && dss.anchors.witness.needsHarvest === false, `DefaultStatusSource witness ${JSON.stringify(dss.anchors.witness)}`);
+      const withSig = out.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.anchors.strings && e.anchors.strings.some((/** @type {any} */ s) => s.role === "funcsig")).length;
+      assert(withSig >= 20, `funcsig anchors: ${withSig}`);
+      assert(JSON.stringify(out) === JSON.stringify(m), "committed anchors are stale: run node tools/bindings/harvest.mjs <exe> --manifest bindings/25143593.json --write");
     });
   }
 }
