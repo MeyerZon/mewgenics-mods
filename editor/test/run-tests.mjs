@@ -397,6 +397,14 @@ await mcpSmoke();
   if (wt) await wt.runWebTests(test, assert, eq);
 }
 
+// ---- 9c. TypeScript migration: structural + MCP schemas from zod ----
+{
+  /** @type {any} */
+  let mt = null;
+  try { mt = await import("./ts-migration-tests.mjs"); } catch (e) { test("ts-migration-tests.mjs loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mt) await mt.runTsMigrationTests(test, assert, eq);
+}
+
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
 if (!process.env.MEWGENICS_EXTRACTED_DATA) {
   console.log("\n# T0 without .extracted/ (nested run with MEWGENICS_EXTRACTED_DATA pointing at an empty dir)");

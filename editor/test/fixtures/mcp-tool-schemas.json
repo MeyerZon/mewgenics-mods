@@ -1,0 +1,307 @@
+[
+  {
+    "name": "list_base_data",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "description": "optional category to list entries for"
+        },
+        "filter": {
+          "type": "string",
+          "description": "optional case-insensitive substring filter"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_base_entry",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "description": "e.g. abilities, passives, items, characters, statuses"
+        },
+        "name": {
+          "type": "string",
+          "description": "the entry's GON key, e.g. Spin"
+        }
+      },
+      "required": [
+        "category",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "search_components",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "substring to match against component class names"
+        },
+        "whereUsed": {
+          "type": "boolean",
+          "description": "also return where the top matches are referenced"
+        },
+        "limit": {
+          "type": "number",
+          "description": "max names to return (default 50)"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_mod",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "mod folder name under mods/"
+        },
+        "includeText": {
+          "type": "boolean",
+          "description": "include overlay file contents"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "write_overlay",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "path relative to the mod folder"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mod",
+        "path",
+        "content"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "validate_mod",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "optional overlay path to override with unsaved text"
+        },
+        "text": {
+          "type": "string",
+          "description": "optional unsaved content for `path`"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "preview_merge",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "overlay path relative to the mod folder"
+        },
+        "text": {
+          "type": "string",
+          "description": "optional unsaved overlay content"
+        },
+        "includeFullGon": {
+          "type": "boolean",
+          "description": "include the full effective GON text"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_registered_native_names",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "new_from_template",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ability",
+            "passive",
+            "item",
+            "status-data"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "description": "the new entry's GON key, e.g. MyCoolSpin"
+        },
+        "options": {
+          "type": "object",
+          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)"
+        }
+      },
+      "required": [
+        "mod",
+        "kind",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_ingame_tests",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "optional mod folder to restrict to"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "run_ingame_test",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "mod folder; its tests/ dir is searched and it is the default -modpaths entry"
+        },
+        "test": {
+          "type": "string",
+          "description": "script name without .mewtest, e.g. smoke"
+        },
+        "script": {
+          "type": "string",
+          "description": "inline .mewtest text (alternative to `test`)"
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "override the script's timeout"
+        },
+        "hide": {
+          "type": "boolean",
+          "description": "hide the game window (default true)"
+        },
+        "clean": {
+          "type": "boolean",
+          "description": "clean exit: after the end event let the game shut itself down for a complete debug.log (default false: exit immediately); the harness exits after 3 s and the runner kills after 5 s if it lingers"
+        },
+        "savesuffix": {
+          "type": "string",
+          "description": "override the save suffix (default dev); never empty"
+        },
+        "includeEvents": {
+          "type": "boolean",
+          "description": "include the raw JSONL events in the report"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "check_game_build",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "exe": {
+          "type": "string",
+          "description": "optional path to a Mewgenics.exe to check instead of the installed one (read-only)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "port_bindings",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "build": {
+          "type": "string",
+          "description": "the NEW Steam build id (digits), e.g. 25200000; names bindings/<build>.json"
+        },
+        "exe": {
+          "type": "string",
+          "description": "path to the new Mewgenics.exe (default: the installed game)"
+        },
+        "from": {
+          "type": "string",
+          "description": "the manifest to port from (default: the newest bindings/<build>.json)"
+        },
+        "version": {
+          "type": "string",
+          "description": "the new game version string, e.g. 1.1.21300"
+        },
+        "resolve": {
+          "type": "object",
+          "description": "name -> 0xRVA answers for ambiguous/failed entries",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "default true; false writes bindings/<build>.json + the report"
+        }
+      },
+      "required": [
+        "build"
+      ],
+      "additionalProperties": false
+    }
+  }
+]
