@@ -27,7 +27,7 @@ and classification on the way there.
 
 ## Phase 0 — confirm the unknowns (days)
 
-- [ ] **Sign the hook functions into `bindings/25143593.sig.tsv` + `signatures.h`.**
+- [ ] **Sign the hook functions into `bindings/25143593.json` (`signatures.h` is generated from it).**
       What: `FUN_14078d600` (iso local mat4), `FUN_1409b4c90` (plain mat4), `FUN_1409b4a30`
       (interpolated transform), `FUN_1409785e0` (camera VP), `FUN_1409787c0` (Camera::render),
       `FUN_14078d480` (iso depth key), `FUN_1409896f0` (layer render), `FUN_140a47e50` (instance

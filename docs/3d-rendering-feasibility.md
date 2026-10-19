@@ -373,7 +373,7 @@ particle depth sorter and `DepthTrackingBehindEffect`; the uniform-path upload a
 
 ## 7. Plan, effort and risks
 
-**Phase 0 — confirm (days).** Sign the §6 functions into `bindings/25143593.sig.tsv` /
+**Phase 0 — confirm (days).** Sign the §6 functions into `bindings/25143593.json` (then `npm run bindings:gen`) /
 `signatures.h` (data addresses go in `BuildInfo`, as the vtables do today). Log a few instance
 records from `FUN_140a47e50` to confirm the mat4 layout in a live frame, and log each
 `Camera::render` (layer bitset, RTT flag, zoom) to confirm which of the three combat cameras is the

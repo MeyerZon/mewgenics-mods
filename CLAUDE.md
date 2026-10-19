@@ -67,15 +67,18 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates).
 - `npm test` — the full unit suite (`node test/run-tests.mjs`: GON, overlays, validator, art, the in-game runner
-  against a fake game, an MCP spawn smoke; 145 checks). The runner takes no filter flag; `node test/ingame-tests.mjs`
-  runs that suite alone.
+  against a fake game, an MCP spawn smoke, the bindings library against fake PE images and the installed exe;
+  230 checks). The runner takes no filter flag; `node test/ingame-tests.mjs` runs that suite alone.
+- `npm run bindings:gen` / `bindings:check` — regenerate / verify `native/framework/src/signatures.h` + `offsets.h`
+  from `bindings/*.json` (see "Everything native is pinned" below).
 - `npm run typecheck` — `tsc --noEmit` over JSDoc-typed ESM (there are no `.ts` files and no bundler by design).
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (11 tools).
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (13 tools, incl.
+  `check_game_build` and `port_bindings`).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
 
 **Data access / tooling** (repo root):
@@ -87,16 +90,16 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 - `native/framework/build.bat` builds `mewframework.dll` into `native/framework/build/`; copy it to `native/dist/`
   (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
-- `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner, the harness's
-  modules; 53 checks, `-Werror`), no game needed. Each suite is also runnable as `<dir>\test.bat`.
+- `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
+  and generated tables, the harness's modules; 59 checks, `-Werror`), no game needed. Each suite is also runnable as
+  `<dir>\test.bat`.
 - `tools/install-mewjector.bat` installs a user-verified Mewjector `version.dll` + `native/chainloader.ini` into the
   game folder.
 
 **Reverse engineering** (optional, read-only): `tools/rea-mcp.mjs` drives a long-lived REA/Ghidra session against
 `Mewgenics.exe` via Docker image `rea-ghidra:12.1.4`. Import takes ~17 min, so use its `watch <queueDir>` mode. See
-`docs/engine-map.md` "REA / Ghidra sessions" for the exact invocation. `tools/bindings/make-signature.mjs <exe> name=rva ...`
-derives unique byte signatures (rel32 / rip-relative bytes wildcarded); `--manifest bindings/<build>.json --write` regenerates every
-signature in the manifest, then `npm run bindings:gen` (editor/) regenerates `signatures.h` / `offsets.h`.
+`docs/engine-map.md` "REA / Ghidra sessions" for the exact invocation. `tools/bindings/` holds the manifest tools
+(`check-build`, `make-signature`, `harvest`, `port`, `seed-file`, `gen-headers`; `docs/binding-port.md`).
 
 **Ghidra sessions are shared infrastructure — never interrupt another agent's.** Several Claude sessions and
 subagents work in this repo at once, each with its own ~17-minute import running. Rules (enforced by convention, see
@@ -115,11 +118,15 @@ subagents work in this repo at once, each with its own ~17-minute import running
 
 ## Architecture notes that span multiple files
 
-**Everything native is pinned to one game build.** `bindings/25143593.sig.tsv` and `native/framework/src/signatures.h`
-encode byte signatures + RVAs for Steam build `25143593` (PE TimeDateStamp `0x6a9c51e5`). The framework **gates on the
-build identity and fails closed** (logs "unknown build, disabled", installs no hooks) on any other build. When the game
-updates, signatures must be re-derived (REA/Ghidra + `tools/bindings/make-signature.mjs`, then `npm run bindings:gen`) — a broken signature is a disabled mod, not a
-crash. Signatures must be copied at their full unique length.
+**Everything native is pinned to one game build, and all of it lives in one manifest.** `bindings/<steamBuildId>.json`
+(currently `25143593.json`, PE TimeDateStamp `0x6a9c51e5`) holds every signature, raw hook RVA, data/vtable address,
+type id and struct offset together with the anchors that find them again; `native/framework/src/signatures.h` and
+`offsets.h` are **generated** from it (`cd editor && npm run bindings:gen`; a golden test fails while they are stale).
+Never type a build-specific number into native code. The framework **gates on the build identity and fails closed**
+(logs "unknown build ...", installs no hooks) on any other build; the in-game runner then reports `unknown-build` and
+the validator warns `native-build-unknown`. When the game updates, port the manifest with the `port-bindings` skill
+(`docs/binding-port.md`: `check_game_build` → `port_bindings` → `bindings:gen` → rebuild → T1/T2) — a broken binding
+is a disabled mod, not a crash. Harvest anchors (`tools/bindings/harvest.mjs --write`) before every update.
 
 **GON overlay semantics are the game's, reproduced in two places.** The `-modpaths` loader resolves a file as the pack
 copy first, then applies mod overlays (later paths override earlier) named `X.gon.append` / `.merge` / `.patch` →
@@ -153,5 +160,5 @@ verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with tha
 yet possible.
 
 Read `docs/engine-map.md` (binary facts, build identity, function RVAs, status model), `docs/data-mods.md` (overlay
-semantics and content shapes), `docs/ingame-testing.md` (the harness) and `docs/tdd-procedure.md` (how to work) before
-non-trivial work.
+semantics and content shapes), `docs/ingame-testing.md` (the harness), `docs/binding-port.md` (the bindings manifest and
+how a game update is ported) and `docs/tdd-procedure.md` (how to work) before non-trivial work.
