@@ -135,3 +135,20 @@ typedef struct MtRunner {
 void mt_runner_init(MtRunner *r, const MtScript *s, uint64_t now);
 int  mt_runner_step(MtRunner *r, const MtHost *h);                                 /* 1 running, 0 finished */
 void mt_runner_abort(MtRunner *r, const MtHost *h, int code, const char *reason);  /* emits end once; no request_exit */
+
+/* ---- mt_exit.c --------------------------------------------------------- */
+/* The watchdog's decision, evaluated every tick from the glue's globals. Deliberately has no "active" input: once a
+ * clean exit or a crash was requested the grace must elapse no matter what else the glue has switched off. Ticks are
+ * GetTickCount-style unsigned ms (wraparound-safe). Priority: crash > clean > timeout. Fires at most once (fired). */
+#define MT_GRACE_CLEAN_MS 3000
+#define MT_GRACE_CRASH_MS 5000
+typedef enum MtExitAction { MT_X_NONE = 0, MT_X_EXIT_CRASH = 1, MT_X_EXIT_CLEAN = 2, MT_X_TIMEOUT = 3 } MtExitAction;
+typedef struct MtExitState {
+    int crashed;          uint32_t crashTick;     /* a crash event was written at crashTick */
+    int cleanRequested;   uint32_t cleanTick;     /* h_request_exit in clean mode at cleanTick */
+    int exitCode;                                 /* code passed to request_exit; -1 = unset -> 4 */
+    int runnerFinished;                           /* the end event was written */
+    uint32_t startTick;   uint32_t timeoutMs;     /* script wall-clock budget */
+    int fired;                                    /* the glue acted on a previous decision */
+} MtExitState;
+MtExitAction mt_exit_decide(const MtExitState *s, uint32_t nowMs, int *codeOut); /* codeOut: process exit code for EXIT_* */

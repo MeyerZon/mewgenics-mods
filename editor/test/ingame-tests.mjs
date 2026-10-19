@@ -66,6 +66,17 @@ export async function runIngameTests(test, assert, eq) {
       assert(p.body.endsWith("quit 0\n"), "body ends with trailing newline");
     });
 
+    test("header: clean parsed (true/1/false/0), default false, bad value is a line error", () => {
+      eq(parseScript("cmd listcmds\nquit\n", { owningMod: "x" }).clean, false, "default");
+      for (const [v, want] of [["true", true], ["1", true], ["false", false], ["0", false]]) {
+        const p = parseScript(`clean: ${v}\ncmd listcmds\nquit\n`, { owningMod: "x" });
+        assert(p.ok, `clean: ${v}: ${JSON.stringify(p.errors)}`);
+        eq(p.clean, want, `clean: ${v}`);
+      }
+      const bad = parseScript("clean: maybe\ncmd listcmds\nquit\n", { owningMod: "x" });
+      assert(!bad.ok && bad.errors.some((/** @type {any} */ e) => e.line === 1 && /clean must be true or false/.test(e.message)), JSON.stringify(bad.errors));
+    });
+
     test("every directive kind parses with its line number", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const d = p.directives;
@@ -403,6 +414,8 @@ export async function runIngameTests(test, assert, eq) {
       eq(a[a.indexOf("-mewtest_out") + 1], ctx.outPath);
       eq(a[a.indexOf("-mewtest_hide") + 1], "1");
       eq(a[a.indexOf("-mewtest_timeout") + 1], "30000");
+      eq(a[a.indexOf("-mewtest_clean") + 1], "0", "-mewtest_clean 0 by default");
+      assert(a.indexOf("-mewtest_clean") > a.indexOf("-mewtest_timeout") && a.indexOf("-mewtest_clean") < iMod, "-mewtest_clean after -mewtest_timeout and before -modpaths");
       eq(a.slice(iMod).join("|"), "-modpaths|C:\\re po\\mods\\jokers-luck|C:\\re po\\mods\\dev-sandbox");
       assert(!l.fake, "not fake");
     });
@@ -413,6 +426,8 @@ export async function runIngameTests(test, assert, eq) {
       eq(l.env.PATH, "x");
       const p2 = script.parseScript("hide: false\ncmd listcmds\nquit\n", { owningMod: "jokers-luck" });
       eq(buildLaunch(p2, ctx).args[buildLaunch(p2, ctx).args.indexOf("-mewtest_hide") + 1], "0");
+      const p3 = script.parseScript("clean: true\ncmd listcmds\nquit\n", { owningMod: "jokers-luck" });
+      eq(buildLaunch(p3, ctx).args[buildLaunch(p3, ctx).args.indexOf("-mewtest_clean") + 1], "1", "clean: true -> -mewtest_clean 1");
     });
     test("buildLaunch refuses: bad suffix, saves path in a mod dir, relative script path", () => {
       /** @param {() => void} fn */
@@ -502,6 +517,19 @@ export async function runIngameTests(test, assert, eq) {
         ...extra,
       });
 
+    test("uniqueRunDir: a second run in the same second gets a distinct dir (-2, -3 …), never a reused result file", () => {
+      assert(typeof runner.uniqueRunDir === "function", "uniqueRunDir exported from runner.mjs");
+      const base = join(runsDir, "unique-" + process.pid);
+      mkdirSync(base, { recursive: true });
+      const t = Date.UTC(2026, 9, 19, 20, 0, 0);
+      const first = runner.uniqueRunDir(base, "jokers-luck", "smoke", t);
+      eq(first, join(base, runDirName("jokers-luck", "smoke", t)), "free name used as is");
+      mkdirSync(first, { recursive: true });
+      const second = runner.uniqueRunDir(base, "jokers-luck", "smoke", t);
+      eq(second, first + "-2", "taken -> -2");
+      mkdirSync(second, { recursive: true });
+      eq(runner.uniqueRunDir(base, "jokers-luck", "smoke", t), first + "-3", "taken twice -> -3");
+    });
     test("runDirName is sortable and names the test", () => {
       const n = runDirName("jokers-luck", "smoke", Date.UTC(2026, 9, 18, 16, 5, 9));
       assert(/^\d{8}-\d{6}-jokers-luck-smoke$/.test(n), n);
@@ -549,6 +577,9 @@ export async function runIngameTests(test, assert, eq) {
       expectV("harness-error", { preflight: pre, exit: exit(4), result: res({ scriptError: { line: 2 }, end: { code: 4 } }), logs: logs({}), safety: safe }, "harness-error");
       expectV("timeout", { preflight: pre, exit: exit(2), result: res({ end: { code: 2, reason: "timeout" } }), logs: logs({}), safety: safe }, "timeout");
       expectV("fail", { preflight: pre, exit: exit(1), result: res({ end: { code: 1 }, expects: { passed: 0, failed: 1, failures: [{ line: 2, kind: "console", arg: "x", detail: "d" }] } }), logs: logs({}), safety: safe }, "fail");
+      expectV("quit 7 with a null exit code (clean mode: the game's own exit, or killed after end) is a fail", { preflight: pre, exit: exit(null), result: res({ end: { code: 7, reason: "quit" } }), logs: logs({}), safety: safe }, "fail");
+      expectV("quit 7 with exit code 0 (clean mode: the game exited 0 on its own) is a fail", { preflight: pre, exit: exit(0), result: res({ end: { code: 7, reason: "quit" } }), logs: logs({}), safety: safe }, "fail");
+      expectV("end code 0 with a null exit code (clean mode, killed after end) is a pass", { preflight: pre, exit: exit(null), result: res({}), logs: logs({}), safety: safe }, "pass");
       expectV("no-result missing file", { preflight: pre, exit: exit(0), result: res({ present: false, end: null }), logs: logs({}), safety: safe }, "no-result");
       expectV("no-result no end", { preflight: pre, exit: exit(0), result: res({ end: null }), logs: logs({}), safety: safe }, "no-result");
       expectV("log-errors", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ debugLog: { findings: [{ marker: "NO_STATUS_NAMED", line: 1, text: "x" }] } }), safety: safe }, "log-errors");
@@ -635,6 +666,13 @@ export async function runIngameTests(test, assert, eq) {
     test("fake hang -> killed by the backstop, verdict backstop-timeout", () => {
       eq(hang.verdict, "backstop-timeout", hang.reason);
       assert(hang.durationMs < 10_000, `backstop fired in time (${hang.durationMs} ms)`);
+    });
+
+    const endHang = await run("end-hang", {}, { endGraceMs: 500, backstopGraceMs: 3000 });
+    test("fake end-hang (end written, process lingers) -> JSONL verdict pass within the end grace, killedAfterEnd, not backstop-timeout", () => {
+      eq(endHang.verdict, "pass", endHang.reason);
+      assert(endHang.killedAfterEnd === true, "killedAfterEnd flagged on the report");
+      assert(endHang.durationMs < 3000, `ended by the end grace (${endHang.durationMs} ms), not by the 1 s timeout + 3 s backstop`);
     });
 
     const nores = await run("noresult");

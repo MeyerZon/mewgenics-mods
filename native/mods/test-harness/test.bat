@@ -8,7 +8,7 @@ set "OUT=%HERE%build"
 if not exist "%OUT%" mkdir "%OUT%"
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -DMT_HOST_TEST -I"%HERE%src" ^
   "%HERE%test\test_mewtest.c" ^
-  "%HERE%src\mt_jsonl.c" "%HERE%src\mt_args.c" "%HERE%src\mt_msvcstr.c" "%HERE%src\mt_script.c" "%HERE%src\mt_console.c" "%HERE%src\mt_runner.c" ^
+  "%HERE%src\mt_jsonl.c" "%HERE%src\mt_args.c" "%HERE%src\mt_msvcstr.c" "%HERE%src\mt_script.c" "%HERE%src\mt_console.c" "%HERE%src\mt_runner.c" "%HERE%src\mt_exit.c" ^
   -o "%OUT%\test_mewtest.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mewtest.exe"

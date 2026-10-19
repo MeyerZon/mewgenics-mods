@@ -215,7 +215,7 @@ export const TOOLS = [
   {
     name: "list_ingame_tests",
     description:
-      "List in-game test scripts (mods/<mod>/tests/*.mewtest) with their parsed header (mods, savesuffix, timeout, hide) and any parse errors. Running them needs Steam, Mewjector, native/dist/mewframework.dll + mewtest.dll; see docs/ingame-testing.md.",
+      "List in-game test scripts (mods/<mod>/tests/*.mewtest) with their parsed header (mods, savesuffix, timeout, hide, clean) and any parse errors. Running them needs Steam, Mewjector, native/dist/mewframework.dll + mewtest.dll; see docs/ingame-testing.md.",
     inputSchema: {
       type: "object",
       properties: { mod: { type: "string", description: "optional mod folder to restrict to" } },
@@ -235,6 +235,7 @@ export const TOOLS = [
         script: { type: "string", description: "inline .mewtest text (alternative to `test`)" },
         timeoutMs: { type: "number", description: "override the script's timeout" },
         hide: { type: "boolean", description: "hide the game window (default true)" },
+        clean: { type: "boolean", description: "clean exit: after the end event let the game shut itself down for a complete debug.log (default false: exit immediately); the harness exits after 3 s and the runner kills after 5 s if it lingers" },
         savesuffix: { type: "string", description: "override the save suffix (default dev); never empty" },
         includeEvents: { type: "boolean", description: "include the raw JSONL events in the report" },
       },
@@ -251,6 +252,7 @@ export const TOOLS = [
         script,
         timeoutMs: num(args, "timeoutMs"),
         hide: bool(args, "hide"),
+        clean: bool(args, "clean"),
         savesuffix: str(args, "savesuffix"),
         includeEvents: bool(args, "includeEvents"),
       });

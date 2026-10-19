@@ -120,6 +120,7 @@ export function buildLaunch(plan, ctx) {
     "-mewtest_out", ctx.outPath,
     "-mewtest_hide", plan.hide ? "1" : "0",
     "-mewtest_timeout", String(plan.timeoutMs),
+    "-mewtest_clean", plan.clean ? "1" : "0",
     "-modpaths", ...modPaths,
   ];
   /** @type {Record<string, string>} */

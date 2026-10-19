@@ -7,7 +7,7 @@
 
 export const DEFAULT_SAVESUFFIX = "dev";
 export const DEFAULT_TIMEOUT_MS = 120000;
-export const HEADER_KEYS = ["mods", "savesuffix", "timeout", "hide"];
+export const HEADER_KEYS = ["mods", "savesuffix", "timeout", "hide", "clean"];
 export const SAVESUFFIX_RE = /^[A-Za-z0-9_-]{1,32}$/;
 export const MAX_CMD_BYTES = 4078; // the game's std::string small/large allocation boundary
 export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
@@ -31,6 +31,7 @@ export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
  * @property {string} savesuffix
  * @property {number} timeoutMs
  * @property {boolean} hide
+ * @property {boolean} clean  -mewtest_clean 1: after the end event the harness lets the game shut itself down (complete debug.log); default false
  * @property {Directive[]} directives
  * @property {string} body  directive lines only (no header, no comments), "\n"-terminated
  * @property {Finding[]} errors
@@ -166,6 +167,7 @@ export function parseScript(text, opts = {}) {
   let savesuffix = DEFAULT_SAVESUFFIX;
   let timeoutMs = DEFAULT_TIMEOUT_MS;
   let hide = true;
+  let clean = false;
   let inHeader = true;
 
   const lines = String(text).split(/\r?\n/);
@@ -193,6 +195,10 @@ export function parseScript(text, opts = {}) {
         if (val === "true" || val === "1") hide = true;
         else if (val === "false" || val === "0") hide = false;
         else errors.push({ line: lineNo, message: `hide must be true or false` });
+      } else if (key === "clean") {
+        if (val === "true" || val === "1") clean = true;
+        else if (val === "false" || val === "0") clean = false;
+        else errors.push({ line: lineNo, message: `clean must be true or false` });
       } else {
         errors.push({ line: lineNo, message: `unknown header key "${hm[1]}" (${HEADER_KEYS.join(", ")})` });
       }
@@ -218,6 +224,7 @@ export function parseScript(text, opts = {}) {
     savesuffix,
     timeoutMs,
     hide,
+    clean,
     directives,
     body: bodyLines.length ? bodyLines.join("\n") + "\n" : "",
     errors,

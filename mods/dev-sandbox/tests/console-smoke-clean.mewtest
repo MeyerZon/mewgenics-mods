@@ -1,0 +1,15 @@
+mods: dev-sandbox
+timeout: 60s
+clean: true
+
+# The console smoke in clean-exit mode: the harness clears the app's running flag after the end event
+# and lets the game shut down (complete debug.log); the DLL's watchdog exits after 3 s if it does not,
+# the runner kills it 5 s after the end record if even that fails. TODO.md item: -mewtest_clean never exited.
+wait frames 120
+cmd this_command_does_not_exist_xyz
+expect console "No command named \"this_command_does_not_exist_xyz\" found"
+cmd listcmds
+expect console "Executed: listcmds"
+dump
+expect units == 0
+quit

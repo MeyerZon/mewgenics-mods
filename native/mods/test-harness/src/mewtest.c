@@ -23,8 +23,7 @@
 #include "mt_pure.h"
 
 #define MOD_OWNER "mewtest"
-#define MT_GRACE_CLEAN_MS 3000
-#define MT_GRACE_CRASH_MS 5000
+/* MT_GRACE_CLEAN_MS / MT_GRACE_CRASH_MS live in mt_pure.h next to mt_exit_decide, which owns the decision */
 
 /* --- game layout: struct offsets and vtable slots come from the generated offsets.h (bindings/<build>.json) --- */
 #include "offsets.h"
@@ -75,6 +74,7 @@ static DWORD g_crashTick;
 static volatile LONG g_endWritten;
 static int g_exitCode = -1;
 static DWORD g_cleanExitTick;
+static volatile LONG g_exitFired;   /* the watchdog acted on an mt_exit_decide answer */
 static LPTOP_LEVEL_EXCEPTION_FILTER g_prevFilter;
 
 /* ----------------------------------------------------------------------- */
@@ -329,20 +329,31 @@ static int h_unit_has_status(void *u, int i, const char *status) {
     return 0;
 }
 static void h_emit(void *u, const char *json) { (void)u; emit_locked(json); }
+/* Called once by the runner after the end event (quit / eof / console_unavailable) and by the script-error path.
+ * The result file is complete here, whatever happens to the process afterwards: close it first, in both modes. */
 static void h_request_exit(void *u, int code) {
     (void)u;
     g_exitCode = code;
+    g_endWritten = 1; /* a crash during the game's own shutdown must not append a second end record */
     logf_("script finished with code %d (%s exit)", code, g_args.clean ? "clean" : "immediate");
-    if (g_args.clean) {
-        void *appGlobal = (void *)g_fw.GetData(FW_DATA_App);
-        void *app = NULL;
-        if (appGlobal && read_ptr(appGlobal, &app) && app) *(volatile char *)((char *)app + OFF_APP_RUNNING) = 0;
-        g_cleanExitTick = GetTickCount();
-        return;
-    }
     EnterCriticalSection(&g_outLock);
     if (g_out != INVALID_HANDLE_VALUE) { FlushFileBuffers(g_out); CloseHandle(g_out); g_out = INVALID_HANDLE_VALUE; }
     LeaveCriticalSection(&g_outLock);
+    if (g_args.clean) {
+        /* clear the app's running flag so appmain returns and the game shuts itself down (complete debug.log);
+         * the watchdog (mt_exit_decide) terminates the process MT_GRACE_CLEAN_MS later if it does not */
+        void *appGlobal = (void *)g_fw.GetData(FW_DATA_App);
+        void *app = NULL;
+        int cleared = 0;
+        if (appGlobal && read_ptr(appGlobal, &app) && app) { *(volatile char *)((char *)app + OFF_APP_RUNNING) = 0; cleared = 1; }
+        logf_("clean exit: app=%p, running flag %s; watchdog exits %d in %d ms if the game does not",
+              app, cleared ? "cleared" : "NOT cleared (no app pointer; exiting now instead)", code, MT_GRACE_CLEAN_MS);
+        if (cleared) {
+            DWORD t = GetTickCount();
+            g_cleanExitTick = t ? t : 1; /* 0 means "not requested" */
+            return;
+        }
+    }
     ExitProcess((UINT)code);
 }
 
@@ -457,30 +468,47 @@ static LONG WINAPI top_filter(EXCEPTION_POINTERS *ep) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+/* Leave from the watchdog thread without running atexit/DLL-detach code: ExitProcess from a helper thread can
+ * block on the loader lock while the main thread is mid-shutdown, which is one way a "clean" exit never ends. */
+static __attribute__((noreturn)) void exit_now(int code) {
+    if (g_out != INVALID_HANDLE_VALUE) FlushFileBuffers(g_out);
+    if (g_log) fflush(g_log);
+    TerminateProcess(GetCurrentProcess(), (UINT)code);
+    ExitProcess((UINT)code); /* only if TerminateProcess somehow returned */
+}
+
 static DWORD WINAPI watchdog(LPVOID p) {
     (void)p;
     for (;;) {
         Sleep(250);
-        if (!g_active) continue;
-        DWORD now = GetTickCount();
-        if (g_crashed && now - g_crashTick > MT_GRACE_CRASH_MS) { logf_("crash grace elapsed; exiting 3"); ExitProcess(3); }
-        if (g_cleanExitTick && now - g_cleanExitTick > MT_GRACE_CLEAN_MS) { logf_("clean exit grace elapsed; exiting %d", g_exitCode); ExitProcess((UINT)(g_exitCode < 0 ? 4 : g_exitCode)); }
-        if (!g_runner.finished && !g_cleanExitTick && now - g_startTick > g_args.timeoutMs) {
-            if (TryEnterCriticalSection(&g_runLock)) {
-                EnterCriticalSection(&g_outLock);
-                if (!g_runner.finished) { mt_runner_abort(&g_runner, &HOST, 2, "timeout"); g_endWritten = 1; }
-                LeaveCriticalSection(&g_outLock);
-                LeaveCriticalSection(&g_runLock);
-            } else {
-                EnterCriticalSection(&g_outLock);
-                write_end_once(2, "timeout");
-                LeaveCriticalSection(&g_outLock);
-            }
-            logf_("timeout after %u ms; exiting 2", g_args.timeoutMs);
-            if (g_out != INVALID_HANDLE_VALUE) FlushFileBuffers(g_out);
-            ExitProcess(2);
+        MtExitState s;
+        s.crashed = g_crashed != 0;             s.crashTick = g_crashTick;
+        s.cleanRequested = g_cleanExitTick != 0; s.cleanTick = g_cleanExitTick;
+        s.exitCode = g_exitCode;                s.runnerFinished = g_runner.finished;
+        s.startTick = g_startTick;              s.timeoutMs = g_args.timeoutMs;
+        s.fired = g_exitFired != 0;
+        int code = 0;
+        MtExitAction act = mt_exit_decide(&s, GetTickCount(), &code);
+        if (act == MT_X_NONE) continue;
+        if (InterlockedCompareExchange(&g_exitFired, 1, 0) != 0) continue;
+        if (act == MT_X_EXIT_CRASH) { logf_("crash grace elapsed; exiting %d", code); exit_now(code); }
+        if (act == MT_X_EXIT_CLEAN) { logf_("clean exit grace elapsed (the game did not shut down within %d ms); exiting %d", MT_GRACE_CLEAN_MS, code); exit_now(code); }
+        /* MT_X_TIMEOUT */
+        if (TryEnterCriticalSection(&g_runLock)) {
+            EnterCriticalSection(&g_outLock);
+            if (!g_runner.finished) { mt_runner_abort(&g_runner, &HOST, 2, "timeout"); g_endWritten = 1; }
+            LeaveCriticalSection(&g_outLock);
+            LeaveCriticalSection(&g_runLock);
+        } else {
+            EnterCriticalSection(&g_outLock);
+            write_end_once(2, "timeout");
+            LeaveCriticalSection(&g_outLock);
         }
+        logf_("timeout after %u ms; exiting 2", g_args.timeoutMs);
+        exit_now(2);
     }
+    /* not reached: the loop only leaves through exit_now */
+    return 0;
 }
 
 /* ----------------------------------------------------------------------- */

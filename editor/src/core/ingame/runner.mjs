@@ -15,6 +15,9 @@ import { snapshotFile, compareSnapshots, realSavePath } from "./savecheck.mjs";
 
 export const RUNS_DIR = join(DATA_CACHE_DIR, "ingame-runs");
 export const BACKSTOP_GRACE_MS = 45000;
+/** after the harness wrote its end record the verdict is on disk; a game that still lingers this long is killed
+ *  (above the DLL's own 3 s clean-exit grace, so the DLL normally wins and this is the fallback) */
+export const END_GRACE_MS = 5000;
 export const LOCK_FILE = ".lock";
 const TAIL_CHARS = 2000;
 
@@ -29,8 +32,9 @@ const TAIL_CHARS = 2000;
  * @property {string} reason
  * @property {number|null} code
  * @property {string|null} signal
+ * @property {boolean} killedAfterEnd  the game lingered after writing its end record and was killed after END_GRACE_MS
  * @property {{ mod: string, name: string, scriptPath: string|null, inline: boolean }} test
- * @property {{ mods: string[], savesuffix: string, timeoutMs: number, hide: boolean, directives: number, warnings: any[] }} plan
+ * @property {{ mods: string[], savesuffix: string, timeoutMs: number, hide: boolean, clean: boolean, directives: number, warnings: any[] }} plan
  * @property {import("./launch.mjs").Preflight} preflight
  * @property {{ command: string, args: string[], cwd: string, gameDir: string, fake: boolean } | null} launch
  * @property {string} startedAt
@@ -53,6 +57,18 @@ export function runDirName(mod, name, nowMs) {
   const stamp = `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
   const safe = (/** @type {string} */ s) => s.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40) || "x";
   return `${stamp}-${safe(mod)}-${safe(name)}`;
+}
+
+/**
+ * The run dir for this launch: runDirName, or the first free "-2", "-3", … variant when a run of the same test
+ * started in the same second (a reused dir would hand the new run the previous result.jsonl).
+ * @param {string} runsDir @param {string} mod @param {string} name @param {number} nowMs
+ */
+export function uniqueRunDir(runsDir, mod, name, nowMs) {
+  const base = join(runsDir, runDirName(mod, name, nowMs));
+  let dir = base;
+  for (let n = 2; existsSync(dir); n++) dir = `${base}-${n}`;
+  return dir;
 }
 
 /** @param {number} pid */
@@ -104,7 +120,7 @@ export function decideVerdict(input) {
   const code = exit.code;
   const crashReports = logs && Array.isArray(logs.crashReports) ? logs.crashReports : [];
   if (result.crash) return { verdict: "crash", reason: `crash ${result.crash.code || ""} at ${result.crash.module || "?"}+${result.crash.rva || "?"}` };
-  if (code === 3) return { verdict: "crash", reason: "harness exit code 3 (crash)" };
+  if (code === 3 || (result.end && result.end.code === 3)) return { verdict: "crash", reason: code === 3 ? "harness exit code 3 (crash)" : `end code 3 (${result.end && result.end.reason})` };
   if (crashReports.length) return { verdict: "crash", reason: `crash report(s) written: ${crashReports.join(", ")}` };
   if (code !== null && code !== 0 && code > 255) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   if (code !== null && code < 0) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
@@ -124,6 +140,10 @@ export function decideVerdict(input) {
   if (code === 1 || result.expects.failed > 0 || (result.end && result.end.code === 1)) {
     const f = result.expects.failures[0];
     return { verdict: "fail", reason: f ? `expect ${f.kind} failed at line ${f.line}: ${f.detail}` : "harness exit code 1" };
+  }
+  // clean mode: the process exit code is the game's own (or null after the end-grace kill); the end record is authoritative
+  if (result.end && typeof result.end.code === "number" && result.end.code !== 0 && (code === null || code === 0)) {
+    return { verdict: "fail", reason: `end code ${result.end.code} (${result.end.reason || "?"}); process exit code ${code === null ? "unavailable" : code}` };
   }
   if (!result.present) return { verdict: "no-result", reason: "no result file was written" };
   if (!result.end) return { verdict: "no-result", reason: result.truncated ? "result file truncated (no end event)" : "result file has no end event" };
@@ -147,7 +167,7 @@ function sizeOf(p) {
 /**
  * @param {{ plan: import("./script.mjs").Plan, test: { mod: string, name: string, scriptPath: string|null },
  *   env?: Record<string, string|undefined>, gameDir?: string, appdataLogsDir?: string|null, modsDir?: string,
- *   runsDir?: string, saveCheck?: boolean, realSavePath?: string|null, backstopGraceMs?: number,
+ *   runsDir?: string, saveCheck?: boolean, realSavePath?: string|null, backstopGraceMs?: number, endGraceMs?: number,
  *   exists?: (p: string) => boolean, steamRunning?: () => boolean|null }} args
  * @returns {Promise<IngameReport>}
  */
@@ -168,8 +188,9 @@ export async function runPlan(args) {
     reason: "",
     code: null,
     signal: null,
+    killedAfterEnd: false,
     test: { mod: args.test.mod, name: args.test.name, scriptPath: args.test.scriptPath, inline: !args.test.scriptPath },
-    plan: { mods: plan.mods, savesuffix: plan.savesuffix, timeoutMs: plan.timeoutMs, hide: plan.hide, directives: plan.directives.length, warnings: plan.warnings },
+    plan: { mods: plan.mods, savesuffix: plan.savesuffix, timeoutMs: plan.timeoutMs, hide: plan.hide, clean: plan.clean, directives: plan.directives.length, warnings: plan.warnings },
     preflight: { ok: false, skipped: false, reasons: [], checks: {} },
     launch: null,
     startedAt,
@@ -182,11 +203,12 @@ export async function runPlan(args) {
     stdoutTail: "",
     stderrTail: "",
   };
-  /** @param {string|null} launchError @param {{ code: number|null, signal: string|null, backstop: boolean }} [exit] */
+  /** @param {string|null} launchError @param {{ code: number|null, signal: string|null, backstop: boolean, killedAfterEnd?: boolean }} [exit] */
   const finish = (launchError, exit = { code: null, signal: null, backstop: false }) => {
     const v = decideVerdict({ preflight: report.preflight, launchError, exit, result: report.result, logs: report.logFindings, safety: report.safety });
     report.verdict = v.verdict;
-    report.reason = v.reason;
+    report.killedAfterEnd = !!exit.killedAfterEnd;
+    report.reason = v.reason + (exit.killedAfterEnd ? "; the game lingered after its end record and was killed after the end grace" : "");
     report.ok = v.verdict === "pass";
     report.code = exit.code;
     report.signal = exit.signal;
@@ -216,7 +238,7 @@ export async function runPlan(args) {
     return finish(null);
   }
   try {
-    const runDir = join(runsDir, runDirName(args.test.mod, args.test.name, startedMs));
+    const runDir = uniqueRunDir(runsDir, args.test.mod, args.test.name, startedMs);
     mkdirSync(runDir, { recursive: true });
     const scriptPath = join(runDir, "script.mewtest");
     const outPath = join(runDir, "result.jsonl");
@@ -247,8 +269,25 @@ export async function runPlan(args) {
       let stderr = "";
       let settled = false;
       let backstop = false;
+      let killedAfterEnd = false;
       const child = spawn(launch.command, launch.args, { cwd: launch.cwd, env: launch.env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
       const grace = args.backstopGraceMs !== undefined ? args.backstopGraceMs : BACKSTOP_GRACE_MS;
+      const endGrace = args.endGraceMs !== undefined ? args.endGraceMs : END_GRACE_MS;
+      // the harness flushes every record; once `end` is on disk the verdict exists and only the process lifetime is
+      // open. Clean mode relies on this: the game may shut itself down (any exit code), or never exit -> kill it.
+      /** @type {ReturnType<typeof setTimeout>|null} */
+      let endTimer = null;
+      const poll = setInterval(() => {
+        if (endTimer || settled) return;
+        let seen = false;
+        try { seen = existsSync(outPath) && !!parseResults(readFileSync(outPath, "utf8")).end; } catch { seen = false; }
+        if (!seen) return;
+        endTimer = setTimeout(() => {
+          if (settled) return;
+          killedAfterEnd = true;
+          try { child.kill(); } catch { /* already gone */ }
+        }, endGrace);
+      }, 250);
       const timer = setTimeout(() => {
         backstop = true;
         try {
@@ -264,7 +303,9 @@ export async function runPlan(args) {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        resolve({ code, signal, backstop, stdout, stderr, err });
+        clearInterval(poll);
+        if (endTimer) clearTimeout(endTimer);
+        resolve({ code, signal, backstop, killedAfterEnd, stdout, stderr, err });
       };
       child.on("error", (/** @type {any} */ e) => done(null, null, String(e && e.message ? e.message : e)));
       child.on("exit", (/** @type {any} */ code, /** @type {any} */ signal) => done(typeof code === "number" ? code : null, signal || null, null));
@@ -303,7 +344,7 @@ export async function runPlan(args) {
       copyFileSync(logs.chainloaderLog.path, dst);
       report.artifacts.chainloaderLog = dst;
     }
-    return finish(exit.err ? `spawn failed: ${exit.err}` : null, { code: exit.code, signal: exit.signal, backstop: exit.backstop });
+    return finish(exit.err ? `spawn failed: ${exit.err}` : null, { code: exit.code, signal: exit.signal, backstop: exit.backstop, killedAfterEnd: exit.killedAfterEnd });
   } finally {
     lock.release();
   }
