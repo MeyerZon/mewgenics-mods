@@ -1,0 +1,4 @@
+mewframework 0.3.0 starting; mewjector=yes
+build 1.1.21239 (steam 25143593) recognized (base 0x7ff691ff0000)
+signature DebugConsole_Execute: 0 matches (need exactly 1); framework disabled
+signature ApplicationBase_FrameBegin: 2 matches (need exactly 1); framework disabled

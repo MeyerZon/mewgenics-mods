@@ -153,9 +153,11 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
         case MT_D_CMD: {
             if (!h->console_ready(h->user)) {
                 r->state = MT_S_WAIT_CONSOLE;
-                if (++r->consoleWaitFrames > MT_CONSOLE_WAIT_FRAMES) { finish(r, h, 4, "console_unavailable"); h->request_exit(h->user, 4); return 0; }
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince > MT_CONSOLE_WAIT_MS) { finish(r, h, 4, "console_unavailable"); h->request_exit(h->user, 4); return 0; }
                 return 1;
             }
+            r->consoleWaitSince = 0;
             r->state = MT_S_RUN;
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "cmd");

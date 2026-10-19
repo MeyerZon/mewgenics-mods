@@ -62,7 +62,9 @@ export function checkSaveSuffix(observed, expected) {
  * Parse mewframework.log text. When the text holds several sessions (append
  * mode, no window offset known) the LAST session is reported.
  * @param {string} text
- * @returns {{ active: boolean, symbols: number|null, hooks: string[], unknownBuild: boolean, sessions: number, build: string|null, version: string|null }}
+ * `identity` is the PE identity printed on an "unknown build:" line; `signatureFailures` lists every
+ * "signature X: N matches (need exactly 1)" line (a known build whose bytes changed).
+ * @returns {{ active: boolean, symbols: number|null, hooks: string[], unknownBuild: boolean, identity: { timeDateStamp: string, sizeOfImage: string }|null, signatureFailures: { name: string, matches: number }[], sessions: number, build: string|null, version: string|null }}
  */
 export function scanFrameworkLog(text) {
   const lines = String(text).split(/\r?\n/);
@@ -77,6 +79,10 @@ export function scanFrameworkLog(text) {
   /** @type {string[]} */
   const hooks = [];
   let unknownBuild = false;
+  /** @type {{ timeDateStamp: string, sizeOfImage: string }|null} */
+  let identity = null;
+  /** @type {{ name: string, matches: number }[]} */
+  const signatureFailures = [];
   /** @type {string|null} */
   let build = null;
   /** @type {string|null} */
@@ -86,10 +92,12 @@ export function scanFrameworkLog(text) {
     if ((m = /^mewframework (\S+) starting/.exec(l))) version = m[1];
     else if ((m = /^framework active: (\d+) symbols/.exec(l))) { active = true; symbols = Number(m[1]); }
     else if ((m = /^hook installed: (.+?) rva/.exec(l))) hooks.push(m[1]);
+    else if ((m = /^unknown build: TimeDateStamp=(0x[0-9a-fA-F]+) SizeOfImage=(0x[0-9a-fA-F]+)/.exec(l))) { unknownBuild = true; identity = { timeDateStamp: m[1], sizeOfImage: m[2] }; }
     else if (/^unknown build/.test(l)) unknownBuild = true;
+    else if ((m = /^signature (\S+): (\d+) matches/.exec(l))) signatureFailures.push({ name: m[1], matches: Number(m[2]) });
     else if ((m = /^build (.+?) recognized/.exec(l))) build = m[1];
   }
-  return { active, symbols, hooks, unknownBuild, sessions: starts.length, build, version };
+  return { active, symbols, hooks, unknownBuild, identity, signatureFailures, sessions: starts.length, build, version };
 }
 
 /**
@@ -151,7 +159,7 @@ function mtimeOf(p) {
 /**
  * @typedef {Object} LogFindings
  * @property {{ path: string|null, present: boolean, fresh: boolean, findings: Array<{marker:string,line:number,text:string}>, saveSuffix: string|null, modPaths: string[] }} debugLog
- * @property {{ path: string, present: boolean, windowOffset: number, active: boolean, symbols: number|null, hooks: string[], unknownBuild: boolean, build: string|null, version: string|null }} frameworkLog
+ * @property {{ path: string, present: boolean, windowOffset: number, active: boolean, symbols: number|null, hooks: string[], unknownBuild: boolean, identity: { timeDateStamp: string, sizeOfImage: string }|null, signatureFailures: { name: string, matches: number }[], build: string|null, version: string|null }} frameworkLog
  * @property {{ path: string, present: boolean, fresh: boolean, modsLoaded: string[], crashLines: string[] }} chainloaderLog
  * @property {string[]} crashReports  crash files newer than the launch
  * @property {{ ok: boolean, reason?: string }} saveSuffix
@@ -172,7 +180,7 @@ export function collectLogs(ctx) {
 
   const fwPath = join(ctx.gameDir, "mod_logs", "mewframework.log");
   const fwText = readWindow(fwPath, ctx.frameworkLogOffset);
-  const fw = fwText !== null ? scanFrameworkLog(fwText) : { active: false, symbols: null, hooks: [], unknownBuild: false, build: null, version: null, sessions: 0 };
+  const fw = fwText !== null ? scanFrameworkLog(fwText) : { active: false, symbols: null, hooks: [], unknownBuild: false, identity: null, signatureFailures: [], build: null, version: null, sessions: 0 };
 
   const clPath = join(ctx.gameDir, "mod_logs", "chainloader.log");
   const clText = existsSync(clPath) ? readFileSync(clPath, "utf8") : null;
@@ -200,7 +208,7 @@ export function collectLogs(ctx) {
 
   return {
     debugLog: { path: debugPath, present: debugText !== null, fresh: debugM !== null && debugM >= since, findings: dbg.findings, saveSuffix: dbg.saveSuffix, modPaths: dbg.modPaths },
-    frameworkLog: { path: fwPath, present: fwText !== null, windowOffset: ctx.frameworkLogOffset, active: fw.active, symbols: fw.symbols, hooks: fw.hooks, unknownBuild: fw.unknownBuild, build: fw.build, version: fw.version },
+    frameworkLog: { path: fwPath, present: fwText !== null, windowOffset: ctx.frameworkLogOffset, active: fw.active, symbols: fw.symbols, hooks: fw.hooks, unknownBuild: fw.unknownBuild, identity: fw.identity, signatureFailures: fw.signatureFailures, build: fw.build, version: fw.version },
     chainloaderLog: { path: clPath, present: clText !== null, fresh: clM !== null && clM >= since, modsLoaded: cl.modsLoaded, crashLines: cl.crashLines },
     crashReports,
     saveSuffix: checkSaveSuffix(dbg.saveSuffix, ctx.expectedSuffix),

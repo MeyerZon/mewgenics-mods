@@ -22,17 +22,18 @@ const cwd = process.cwd();
 
 // --- logs the real stack would leave behind ---------------------------------
 mkdirSync(join(cwd, "mod_logs"), { recursive: true });
-appendFileSync(
-  join(cwd, "mod_logs", "mewframework.log"),
-  [
-    "mewframework 0.3.0 starting; mewjector=yes",
-    "build 1.1.21239 (steam 25143593) recognized (base 0x7ff691ff0000)",
-    "hook installed: Character::BeginTurn rva 0x10a9b0",
-    "hook installed: TurnControl::NextTurn rva 0x8e3c60, chain depth 1",
-    mode === "inactive" ? "signature DebugConsole_Execute: 0 matches (need exactly 1); framework disabled" : "framework active: 15 symbols resolved, mewjector api v3",
-    "",
-  ].join("\n"),
-);
+// one appended session per launch, exactly as the real DLL writes it (the runner reads the window after launch)
+const fwSession =
+  mode === "unknown-build" || mode === "unknown-build-hang"
+    ? ["mewframework 0.3.0 starting; mewjector=yes", "unknown build: TimeDateStamp=0x6b000000 SizeOfImage=0x01580000; framework disabled"]
+    : [
+        "mewframework 0.3.0 starting; mewjector=yes",
+        "build 1.1.21239 (steam 25143593) recognized (base 0x7ff691ff0000)",
+        "hook installed: Character::BeginTurn rva 0x10a9b0",
+        "hook installed: TurnControl::NextTurn rva 0x8e3c60, chain depth 1",
+        mode === "signature-failed" ? "signature DebugConsole_Execute: 0 matches (need exactly 1); framework disabled" : "framework active: 15 symbols resolved, mewjector api v3",
+      ];
+appendFileSync(join(cwd, "mod_logs", "mewframework.log"), fwSession.join("\n") + "\n");
 writeFileSync(
   join(cwd, "mod_logs", "chainloader.log"),
   ["[00:00:00.000] === Mewjector v3.5 (API v3) ===", "[00:00:00.001] [LoadOrder]   Mod10 Loading: mewframework.dll", "[00:00:00.002] [ScanPath] Loading: mewtest.dll", ""].join("\n"),
@@ -68,9 +69,18 @@ switch (mode) {
   case "log-markers":
   case "wrong-suffix":
   case "savechange":
-  case "inactive":
     writeResult([start, { ev: "cmd", line: 1, text: "listcmds", t: 1, frame: 1 }, { ev: "console", text: "listcmds", t: 1, frame: 1 }, { ev: "expect", line: 2, kind: "console", arg: "listcmds", ok: true, detail: "matched console line 0", t: 2, frame: 2 }, end(0, "quit", 1, 0)]);
-    process.exit(mode === "inactive" ? 4 : 0);
+    process.exit(0);
+    break;
+  case "signature-failed":
+  case "unknown-build":
+    // mewtest with an inactive framework: writes start + end{4, framework_inactive} and exits 4
+    writeResult([{ ...start, build: "unknown" }, end(4, "framework_inactive")]);
+    process.exit(4);
+    break;
+  case "unknown-build-hang":
+    // an older harness: inert, no result file, the game sits at the main menu until the backstop kills it
+    setInterval(() => {}, 1000);
     break;
   case "fail":
     writeResult([start, { ev: "cmd", line: 1, text: "bind X", t: 1, frame: 1 }, { ev: "console", text: 'No command named "bind" found', t: 1, frame: 1 }, { ev: "expect", line: 2, kind: "noconsole", arg: "No command named", ok: false, detail: "found in console line 0", t: 2, frame: 2 }, end(1, "quit", 0, 1)]);

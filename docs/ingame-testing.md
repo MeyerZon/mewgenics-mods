@@ -83,11 +83,15 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"]}]}
 {"ev":"log","text":"..."}
 {"ev":"crash","code":"0xC0000005","addr":"0x...","module":"Mewgenics.exe","rva":"0x...","tid":N}
-{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
+{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
 ```
 
 Harness exit codes: `0` pass, `1` an expect failed or `quit 1`, `2` script timeout, `3` crash, `4` harness error
-(script parse error, console never appeared, framework inactive), `N` from `quit N`.
+(script parse error, console never appeared, framework inactive or missing), `N` from `quit N`. When mewframework is
+inactive (unknown build or a failed signature) the harness still writes `start` + `end{code 4, reason
+framework_inactive}` and exits 4 from a helper thread ~1.5 s after load, so the runner never waits for the backstop.
+A `cmd` waits up to 30 s of wall clock (`MT_CONSOLE_WAIT_MS`) for the debug console to appear: with the window hidden
+the game runs hundreds of frames per second, so a frame budget was never a time budget.
 
 ## Verdicts (runner side, first match wins)
 
@@ -96,10 +100,11 @@ Harness exit codes: `0` pass, `1` an expect failed or `quit 1`, `2` script timeo
 | `skipped` | `MEWTEST_SKIP=1` |
 | `cannot-run` | preflight failed (missing exe / `version.dll` / `chainloader.ini` / DLLs / appdata logs dir / Steam not running / mod folder) or another run holds the lock |
 | `launch-error` | script errors, bad suffix, a path under `saves/`, spawn failure |
+| `unknown-build` | `mewframework.log` says `unknown build: TimeDateStamp=… SizeOfImage=…`: the game updated and the native layer fails closed (data mods still load). Decided before `backstop-timeout` because an older harness sits at the menu. Next: `check_game_build`, then `docs/binding-port.md` |
 | `backstop-timeout` | the game outlived the script timeout plus 45 s and was killed |
 | `safety-violation` | `debug.log` reports a different `Save File Suffix:` than requested, or the real save's hash changed |
 | `crash` | crash event, exit code 3, an abnormal exit code, or a new crash report under `mod_logs/crashes/` or the appdata logs |
-| `harness-error` | exit code 4 / `script_error` / framework inactive |
+| `harness-error` | exit code 4 / `script_error` / framework inactive on a *known* build (the reason names the failed signature(s)) |
 | `timeout` | exit code 2 |
 | `fail` | exit code 1 or any failed `expect` |
 | `no-result` | exit 0 but no result file or no `end` event (truncated) |

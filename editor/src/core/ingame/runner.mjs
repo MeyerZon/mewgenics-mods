@@ -20,7 +20,7 @@ const TAIL_CHARS = 2000;
 
 /**
  * @typedef {'pass'|'fail'|'timeout'|'crash'|'harness-error'|'backstop-timeout'|'launch-error'
- *   |'cannot-run'|'skipped'|'no-result'|'log-errors'|'safety-violation'} Verdict
+ *   |'cannot-run'|'skipped'|'no-result'|'log-errors'|'safety-violation'|'unknown-build'} Verdict
  */
 /**
  * @typedef {Object} IngameReport
@@ -91,6 +91,13 @@ export function decideVerdict(input) {
   if (pre.skipped) return { verdict: "skipped", reason: pre.reasons.join("; ") || "skipped" };
   if (!pre.ok) return { verdict: "cannot-run", reason: pre.reasons.join("; ") };
   if (input.launchError) return { verdict: "launch-error", reason: input.launchError };
+  const fw = logs && logs.frameworkLog ? logs.frameworkLog : null;
+  if (fw && fw.present && fw.unknownBuild) {
+    // the game updated: mewframework fails closed and mewtest goes inert (an older harness sits at the
+    // menu until the backstop; the current one exits 4). Decided before the backstop so the cause is named.
+    const id = fw.identity ? ` (TimeDateStamp ${fw.identity.timeDateStamp}, SizeOfImage ${fw.identity.sizeOfImage})` : "";
+    return { verdict: "unknown-build", reason: `mewframework does not know this game build${id}; port the bindings (docs/binding-port.md); data mods still load` };
+  }
   if (exit.backstop) return { verdict: "backstop-timeout", reason: "the game did not exit by the script timeout plus the backstop grace; killed" };
   if (!safety.saveSuffixOk) return { verdict: "safety-violation", reason: safety.saveSuffixReason || "save suffix mismatch" };
   if (safety.saveCheck && !safety.saveCheck.unchanged) return { verdict: "safety-violation", reason: `real save changed: ${safety.saveCheck.detail || ""}` };
@@ -102,12 +109,15 @@ export function decideVerdict(input) {
   if (code !== null && code !== 0 && code > 255) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   if (code !== null && code < 0) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   if (code === 4 || result.scriptError || (result.end && result.end.code === 4)) {
-    const fwInactive = logs && logs.frameworkLog && logs.frameworkLog.present && !logs.frameworkLog.active;
+    const fwInactive = fw && fw.present && !fw.active;
+    const sigs = fw && Array.isArray(fw.signatureFailures) ? fw.signatureFailures : [];
     const detail = result.scriptError
       ? `script error at line ${result.scriptError.line}: ${result.scriptError.msg}`
-      : fwInactive
-        ? "mewframework inactive (unknown build or a signature failed); see mod_logs/mewframework.log"
-        : (result.end && result.end.reason) || "harness error";
+      : fwInactive && sigs.length
+        ? `mewframework inactive: signature ${sigs.map((/** @type {{ name: string, matches: number }} */ s) => `${s.name} (${s.matches} matches)`).join(", ")} failed on build ${fw.build || "?"}; re-derive with tools/bindings/make-signature.mjs`
+        : fwInactive
+          ? "mewframework inactive (see mod_logs/mewframework.log)"
+          : (result.end && result.end.reason) || "harness error";
     return { verdict: "harness-error", reason: detail };
   }
   if (code === 2 || (result.end && result.end.reason === "timeout")) return { verdict: "timeout", reason: `script timeout (end reason ${result.end ? result.end.reason : "?"})` };
