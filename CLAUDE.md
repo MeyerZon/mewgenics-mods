@@ -115,6 +115,12 @@ subagents work in this repo at once, each with its own ~17-minute import running
   exists for a function you need, read it instead of re-decompiling.
 - Save every decompiled function you rely on to `.analysis/decompiled/` (git-ignored) so the next agent can skip the
   import entirely.
+- **Worktrees with junctions are a data-loss trap.** Secondary worktrees here get PowerShell junctions for
+  `.extracted`, `.analysis`, `editor/node_modules`, `native/dist` pointing into the main checkout. `git worktree
+  remove`, `rm -rf` and `Remove-Item -Recurse` follow them and empty the **targets** — on 2026-10-19 one removal wiped
+  `.analysis/` (209 decompiles, saved exes) and `.extracted/data`. Before removing any worktree: list reparse points
+  (`Get-ChildItem -Force -Recurse -Depth 2 -Attributes ReparsePoint <worktree>`), unlink each with
+  `cmd /c rmdir "<junction>"`, confirm the targets still have contents, then remove the worktree.
 
 ## Architecture notes that span multiple files
 
