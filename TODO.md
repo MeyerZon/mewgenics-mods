@@ -1,7 +1,37 @@
 # TODO — Mewgenics modding toolkit
 
-Living status snapshot (last updated 2026-10-19: SWF gate + emitter fix on `fix/swf-append-frame`). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
+Living status snapshot (last updated 2026-10-19: binding-port stack #7–#19 and the SWF gate #21 merged). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 Two agents were in flight at last update: Playwright E2E/validation and the SWF-loader-crash RE.
+
+## Owner checks — only you can do these (agents cannot)
+
+Things no test can see: they need a human at the game, a decision, or an account. Tick them here; the agent-side work they unblock is named.
+
+- [ ] **SWF gate, visual half (T3 of PR #21).** From `editor/`: `npm run test:swfgate -- flat --prepare-only`, then
+  `launch-dev.bat mods\swf-gate`. Start/continue the `dev` run and view the `JokersGambit` ability: expected a flat gray
+  square instead of `unknown`, and no new `crash_*.txt` under `%APPDATA%\Glaiel Games\Mewgenics\<steamid>\logs\`.
+  Afterwards `npm run test:swfgate -- control`. If it crashes, tell the agent: next is decompiling `FUN_140a58440`
+  (merge) and `0x9a8f30` (movieclip advance).
+- [ ] **The 2026-10-18 crash context.** Was a run in progress on the `dev` save when the gate SWF crashed, and did it
+  crash at boot or when you opened the ability? (The harness could not reproduce it at the main menu with the
+  pre-fix donor; the answer decides where the agent looks next.)
+- [ ] **Joker's Luck in combat on the current framework build**: the real feature test (target 2) stays blocked on
+  target 1, so until then a play-check that the `JokersLuck` status still ticks is a human look.
+- [ ] **Vanilla-launch gate** of the framework: a plain Steam launch opens the real save, so only you decide whether
+  to verify it on a copy of the install or accept the unchanged code path (see "Verification still owed").
+- [ ] **Hidden window on another machine**: confirm the harness keeps ticking hidden on a non-NVIDIA PC before any
+  CI-like use.
+- [ ] **Older depot for the cross-build check (PR #20).** Fetch it with the Steam console
+  (`download_depot 686060 <depot> <manifest>`) into a git-ignored `.analysis/exe/<build>/`, then run the opt-in T1
+  (`BINDINGS_OLD_EXE` / `BINDINGS_NEW_EXE`); PR #20 cannot be judged without it. Also: approve keeping exe copies
+  under `.analysis/exe/` at all.
+- [ ] **Binding-port human decisions** (plan "Remains a human decision"): any `ambiguous`/`failed` entry after a
+  port, any `proposed` struct offset (apply only with a green T2), an SDL version bump (DYNAPI table order), raising
+  `sigCap` to 256, shipping the optional PR 15 locator, the `FW_API_VERSION` bump policy, and a T3 play-check per
+  real port.
+- [ ] **Decisions pending** (section below): GitHub Actions for T0; the Ruffle (WASM) dependency; the dead
+  `mewged.onboard.conceptsDontShowStart` key; mechanical TDD enforcement (PR template / CI).
+- [ ] **Merges.** Every PR waits for your explicit per-PR word (`CLAUDE.md`); open now: #20.
 
 ## Done
 
