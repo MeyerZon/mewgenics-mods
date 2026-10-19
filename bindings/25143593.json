@@ -1,0 +1,2618 @@
+{
+  "format": 1,
+  "build": {
+    "steamBuildId": "25143593",
+    "gameVersion": "1.1.21239",
+    "name": "1.1.21239 (steam 25143593)",
+    "timeDateStamp": "0x6a9c51e5",
+    "sizeOfImage": "0x1574000",
+    "imageBase": "0x140000000",
+    "exeSha256": "4127cd6a792ae528bca6f65a8873dd61789591937d87656c2b586a5e30eb77ea",
+    "exeSize": 22019072,
+    "sdlVersion": "3.2.12",
+    "linked": "2026-09-05",
+    "note": "First manifest; converted from bindings/25143593.sig.tsv + native/framework/src/signatures.h + status_engine.c g_lk_rva + mewtest.c OFF_* on 2026-10-19. Offsets are unanchored until the harvest step records witnesses."
+  },
+  "sigCap": 128,
+  "entries": [
+    {
+      "name": "TurnControl_NextTurn",
+      "kind": "function",
+      "rva": "0x8e3c60",
+      "signature": {
+        "pattern": "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 28 EF FF FF B8 D8 11 00 00 E8 4D",
+        "exactLen": 32,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 4474
+        }
+      },
+      "consumers": [
+        "native/framework/src/framework.c:hook_TurnControl_NextTurn",
+        "native/mods/test-harness/src/mewtest.c:hook_NextTurn"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_TurnControl_NextTurn",
+          "index": 0
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ],
+      "verify": {
+        "log": "hook installed: TurnControl::NextTurn"
+      }
+    },
+    {
+      "name": "Character_BeginTurn",
+      "kind": "function",
+      "rva": "0x10a9b0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 89 54 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\Character.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::Character::BeginTurn(enum glaiel::TurnKind)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 4773
+        }
+      },
+      "consumers": [
+        "native/framework/src/framework.c:hook_Character_BeginTurn"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Character_BeginTurn",
+          "index": 1
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/Character_BeginTurn.c"
+      ],
+      "verify": {
+        "log": "hook installed: Character::BeginTurn"
+      }
+    },
+    {
+      "name": "Ability_trigger",
+      "kind": "function",
+      "rva": "0x320a0",
+      "signature": {
+        "pattern": "48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 68 FD FF",
+        "exactLen": 24,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\Ability.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::Ability::trigger(struct glaiel::TurnAction)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 7831
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Ability_trigger",
+          "index": 2
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "FileManager_GetFile",
+      "kind": "function",
+      "rva": "0x99ff50",
+      "signature": {
+        "pattern": "48 89 5C 24 18 44 88 4C 24 20 48 89 54 24 10 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC A0 00 00 00 41",
+        "exactLen": 44,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 929
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_SYM_FileManager_GetFile",
+          "index": 3
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "FileManager_ResolveWithOverlays",
+      "kind": "function",
+      "rva": "0x9a09f0",
+      "signature": {
+        "pattern": "44 88 4C 24 20 4C 89 44 24 18 48 89 54 24 10 48 89 4C 24 08 55 53",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 2761
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_SYM_FileManager_ResolveWithOverlays",
+          "index": 4
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "Status_ApplyByName",
+      "kind": "function",
+      "rva": "0x483120",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 74 24 18 48 89 4C 24 08 55 57 41 56 48 8D 6C",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "class glaiel::Status *__cdecl glaiel::apply_status(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,class glaiel::Character *,int,const class GonObject *,class glaiel::Character *,struct glaiel::DamageInstance *,bool,bool)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 63638
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:hook_ApplyByName"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Status_ApplyByName",
+          "index": 5
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/ApplyStatusByName_140483120.c"
+      ],
+      "verify": {
+        "log": "status hooks: apply_status + 13/13 name lookups aliased"
+      }
+    },
+    {
+      "name": "Status_GetCategory",
+      "kind": "function",
+      "rva": "0x4929c0",
+      "signature": {
+        "pattern": "48 89 5C 24 20 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC D0 00 00 00 48 8B F9 45 33 E4 48 8B 71 10 48 8B D1 4C 8B 79 18 49 83 FF 0F 76 03 48 8B 11 49 B9 25 23 22 84 E4 9C F2 CB 49 8B CC 48 85 F6 74 26 49 B8 B3 01 00 00 00 01 00 00 66 0F 1F 84 00 00 00 00 00 0F B6 04 0A 4C 33 C8 4D 0F AF C8 48 FF C1 48 3B CE 72 ED 4C 8B C7 48 8D 55 F7 48 8D 0D 6F",
+        "exactLen": 126,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "enum glaiel::Status::StatusType __cdecl glaiel::get_status_type(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 597
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[0]"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Status_GetCategory",
+          "index": 6
+        },
+        {
+          "table": "FW_LK",
+          "index": 0,
+          "shape": "A",
+          "prototype": "uint64_t (*)(MsvcString *)"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "glaiel::get_status_type(std::string) -> StatusType; FNV-1a name lookup; unknown names log NO STATUS NAMED. Also FW_LK[0]."
+    },
+    {
+      "name": "Status_GetFlags",
+      "kind": "function",
+      "rva": "0x493190",
+      "signature": {
+        "pattern": "48 89 4C 24 08 55 53 56 57 41 54 41 56 41 57 48 8D 6C 24 D9 48 81 EC C0 00 00 00 48 8B F9",
+        "exactLen": 30,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "unsigned int __cdecl glaiel::get_status_flags(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 578
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[4]"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Status_GetFlags",
+          "index": 7
+        },
+        {
+          "table": "FW_LK",
+          "index": 4,
+          "shape": "A",
+          "prototype": "uint64_t (*)(MsvcString *)"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/Lookup_140493190.c"
+      ],
+      "note": "glaiel::get_status_flags(std::string) hit-effect flag bits. Also FW_LK[4]."
+    },
+    {
+      "name": "LuckUp_ctor",
+      "kind": "function",
+      "rva": "0x711c90",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 4D 8B F1 4D 8B F8 48 8B F2 48 8B F9 33 ED 40 38 A9 B0 04 00 00 74 07 33 C0 E9 D5 00 00 00 48 8D 0D 73 31 D0",
+        "exactLen": 60,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 292
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_LuckUp_ctor"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_LuckUp_ctor",
+          "index": 8
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/LuckUp_ctor_140711c90.c"
+      ]
+    },
+    {
+      "name": "Status_Remove",
+      "kind": "function",
+      "rva": "0x767fa0",
+      "signature": {
+        "pattern": "40 53 48 83 EC 20 80 79 75 00 48 8B",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 86
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_StatusRemove"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Status_Remove",
+          "index": 9
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "string_TidyDeallocate",
+      "kind": "function",
+      "rva": "0x52780",
+      "signature": {
+        "pattern": "40 53 48 83 EC 20 48 8B 51 18 48 8B D9 48 83 FA 0F 76",
+        "exactLen": 18,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 94
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_TidyDeallocate",
+        "native/mods/test-harness/src/mewtest.c:g_Tidy"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_string_TidyDeallocate",
+          "index": 10
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ],
+      "note": "std::string::_Tidy_deallocate: frees heap-backed by-value strings (cap > 15)."
+    },
+    {
+      "name": "DebugConsole_Execute",
+      "kind": "function",
+      "rva": "0xa14aa0",
+      "signature": {
+        "pattern": "48 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 58 FF FF FF 48 81 EC A8 01 00 00 48 89 55",
+        "exactLen": 40,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 3066
+        }
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:g_Execute"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_DebugConsole_Execute",
+          "index": 11
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ],
+      "note": "void (DebugConsole* this, std::string line) by value: callee destroys. Output vector at this+OFF_DC_OUT_BEGIN."
+    },
+    {
+      "name": "DebugConsole_init",
+      "kind": "function",
+      "rva": "0xa11ef0",
+      "signature": {
+        "pattern": "48 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 F8 FE FF FF 48 81 EC 08 02 00 00 48",
+        "exactLen": 38,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 3468
+        }
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:hook_DCInit"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_DebugConsole_init",
+          "index": 12
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/debugconsole_init.c"
+      ]
+    },
+    {
+      "name": "ApplicationBase_FrameBegin",
+      "kind": "function",
+      "rva": "0x9b7870",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 10 48 89 70 18 48 89 78 20 55 48 8D 68 A1",
+        "exactLen": 20,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 1290
+        }
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:hook_FrameBegin"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_ApplicationBase_FrameBegin",
+          "index": 13
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ],
+      "note": "prologue is generic; the 20-byte signature is unique on this build only. ApplicationBase_Step is the fallback hook point."
+    },
+    {
+      "name": "string_Allocate",
+      "kind": "function",
+      "rva": "0x52a40",
+      "signature": {
+        "pattern": "48 83 EC 28 48 85 C9 75 07 33 C0 48",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 88
+        }
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:g_Allocate"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_string_Allocate",
+          "index": 14
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ],
+      "note": "std::_Allocate<16>(size_t): the game's string heap; use for by-value std::string arguments."
+    },
+    {
+      "name": "Status_GetStackMode",
+      "kind": "function",
+      "rva": "0x492c20",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "enum glaiel::Status::StackMode __cdecl glaiel::get_status_stackmode(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 597
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[1]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 1,
+          "shape": "A",
+          "prototype": "uint64_t (*)(MsvcString *)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_140492c20.c"
+      ]
+    },
+    {
+      "name": "Status_NameExists",
+      "kind": "function",
+      "rva": "0x492e80",
+      "signature": null,
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 145
+        },
+        "callees": []
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[2]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 2,
+          "shape": "A",
+          "prototype": "uint64_t (*)(MsvcString *)"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "bool predicate: FNV-1a hash of the name, map lookup (map global at 0x13c3c30, end sentinel at 0x13c3c38); no __FUNCSIG__ string; sits between get_status_stackmode and get_status_value."
+    },
+    {
+      "name": "Status_GetValue",
+      "kind": "function",
+      "rva": "0x492f20",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "double __cdecl glaiel::get_status_value(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 612
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[3]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 3,
+          "shape": "A",
+          "prototype": "uint64_t (*)(MsvcString *)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_140492f20.c"
+      ]
+    },
+    {
+      "name": "Status_IsHitEffect",
+      "kind": "function",
+      "rva": "0x5028e0",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "bool __cdecl glaiel::IsHitEffect(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 599
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[5]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 5,
+          "shape": "A",
+          "prototype": "uint64_t (*)(MsvcString *)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_1405028e0.c"
+      ]
+    },
+    {
+      "name": "Status_OnAppliedToDamageInstance",
+      "kind": "function",
+      "rva": "0x493690",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::OnStatusAppliedToDamageInstance(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,struct glaiel::DamageInstance &,class glaiel::Character *,int,const class GonObject *,bool)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 631
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[6]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 6,
+          "shape": "B",
+          "prototype": "void (*)(MsvcString *, void *, void *, uint32_t, void *, void *)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_140493690.c"
+      ]
+    },
+    {
+      "name": "Status_OnAppliedToTile",
+      "kind": "function",
+      "rva": "0x493910",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::OnStatusAppliedToTile(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,const struct glaiel::DamageInstance &,struct iVec2D,int,const class GonObject *)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 616
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[7]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 7,
+          "shape": "B",
+          "prototype": "void (*)(MsvcString *, void *, void *, uint32_t, void *, void *)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_140493910.c"
+      ]
+    },
+    {
+      "name": "Status_OnKilledCharacter",
+      "kind": "function",
+      "rva": "0x493b80",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::OnStatusKilledCharacter(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,struct glaiel::DamageInstance &,class glaiel::Character *,int,const class GonObject *,bool)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 631
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[8]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 8,
+          "shape": "B",
+          "prototype": "void (*)(MsvcString *, void *, void *, uint32_t, void *, void *)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_140493b80.c"
+      ]
+    },
+    {
+      "name": "Status_OnDamageReport",
+      "kind": "function",
+      "rva": "0x493e00",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::OnStatusDamageReport(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,class glaiel::Character *,class glaiel::Character *,const struct glaiel::DamageReport &,int,const class GonObject *)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 632
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[9]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 9,
+          "shape": "B",
+          "prototype": "void (*)(MsvcString *, void *, void *, uint32_t, void *, void *)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_140493e00.c"
+      ]
+    },
+    {
+      "name": "Status_GetIcon",
+      "kind": "function",
+      "rva": "0x4933e0",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "struct glaiel::StatusIconInfo __cdecl glaiel::get_status_icon(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,bool)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 680
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[10]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 10,
+          "shape": "C",
+          "prototype": "void *(*)(void *, MsvcString *, char)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_1404933e0.c"
+      ]
+    },
+    {
+      "name": "Status_AttachPassive",
+      "kind": "function",
+      "rva": "0x494080",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "class glaiel::Passive *__cdecl glaiel::attach_passive(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,class glaiel::Character *,const class GonObject &,bool)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 232096
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[11]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 11,
+          "shape": "D",
+          "prototype": "uint64_t (*)(MsvcString *, void *, void *, uint8_t)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_140494080.c"
+      ]
+    },
+    {
+      "name": "Status_SpawnTile",
+      "kind": "function",
+      "rva": "0x502b40",
+      "signature": null,
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\ConstructionHelpers.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "class glaiel::TacticsTile *__cdecl glaiel::SpawnTile(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,class glaiel::Scene *)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 3550
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_lk_rva[12]"
+      ],
+      "exposure": [
+        {
+          "table": "FW_LK",
+          "index": 12,
+          "shape": "E",
+          "prototype": "uint64_t (*)(MsvcString *, void *)"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Lookup_140502b40.c"
+      ]
+    },
+    {
+      "name": "ApplicationBase_ProcessCmds",
+      "kind": "function",
+      "rva": "0x9b8bb0",
+      "signature": {
+        "pattern": "4C 89 44 24 18 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 38 FF",
+        "exactLen": 32,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Engine\\code\\engine\\Startup\\Application.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::ApplicationBase::ProcessCmds(int,char *[])",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 3507
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/ProcessCmds.c"
+      ]
+    },
+    {
+      "name": "FileManager_GetFileRawLoose",
+      "kind": "function",
+      "rva": "0x9a0300",
+      "signature": {
+        "pattern": "44 88 4C 24 20 44 88 44 24 18 48 89 54 24 10 48 89 4C 24 08 55 53",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 878
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "FileManager_GetFileRawPak",
+      "kind": "function",
+      "rva": "0x9a0670",
+      "signature": {
+        "pattern": "44 88 44 24 18 48 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC 98 00 00 00 48 8B FA 33 DB",
+        "exactLen": 44,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 886
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "FileManager_FileExists",
+      "kind": "function",
+      "rva": "0x9a14c0",
+      "signature": {
+        "pattern": "48 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC 98 00 00 00 48 8B FA 33 DB 48 8D 05 72 43",
+        "exactLen": 44,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 711
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "Gpak_Load",
+      "kind": "function",
+      "rva": "0x9b5380",
+      "signature": {
+        "pattern": "40 55 53 56 57 41 54 41 56 41 57 48 8D 6C 24 D9 48 81 EC E0",
+        "exactLen": 20,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Engine\\code\\engine\\Startup\\Application.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::ApplicationBase::initSystems(void)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1323
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/gpak_load.c"
+      ]
+    },
+    {
+      "name": "MewSaveFile_open_or_create",
+      "kind": "function",
+      "rva": "0x229cd0",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 08 48 89 50 10 55 56 57 41 54 41 55 41 56 41 57 48 8D 68 A8",
+        "exactLen": 26,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Engine\\code\\util\\SQLSaveFile.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::SQLSaveFile::LoadDataFromTable(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,void *,unsigned __int64)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1808
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "SQLSaveFile_open",
+      "kind": "function",
+      "rva": "0xa0d3c0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 74 24 18 48 89 54 24 10 57 48 83 EC 20 48 8B DA 48 8B F1",
+        "exactLen": 26,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 188
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "ApplicationBase_appmain",
+      "kind": "function",
+      "rva": "0x9b9970",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 10 48 89 48 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24",
+        "exactLen": 26,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Engine\\code\\engine\\Startup\\Application.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::ApplicationBase::appmain(int,char *[])",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 4399
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "Settings_UserDataPath",
+      "kind": "function",
+      "rva": "0x745390",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 4C 24 08 55 56 57 48 8D 6C 24 B9 48 81 EC F0",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 1568
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "Settings_Load",
+      "kind": "function",
+      "rva": "0x745f60",
+      "signature": {
+        "pattern": "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 C8 48 81 EC 38 01 00 00 4C 8B E9",
+        "exactLen": 32,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\App.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::MewApplication::OnLoad(void)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "cfgLite": {
+          "bytes": 2633
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "SaveSelection_Build",
+      "kind": "function",
+      "rva": "0x1ba060",
+      "signature": {
+        "pattern": "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 58 EF FF FF B8 A8 11 00 00 E8 51",
+        "exactLen": 28,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 5860
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "Gon_PatchMerge_a",
+      "kind": "function",
+      "rva": "0x944cc0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 55 48 8B EC 48 83 EC 20 4C",
+        "exactLen": 14,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 653
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/Gon_merge_a.c"
+      ]
+    },
+    {
+      "name": "Gon_PatchMerge_b",
+      "kind": "function",
+      "rva": "0x944f50",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 74 24 20 55 48 8B EC 48 83 EC 40 48 8B F9 0F",
+        "exactLen": 32,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 622
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/Gon_merge_b.c"
+      ]
+    },
+    {
+      "name": "Gon_DeepMerge",
+      "kind": "function",
+      "rva": "0x946680",
+      "signature": {
+        "pattern": "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 E0 FE FF FF 48 81 EC 20 02 00 00 48",
+        "exactLen": 32,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 3295
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/Gon_merge_c.c"
+      ]
+    },
+    {
+      "name": "Status_ApplyLuckUp",
+      "kind": "function",
+      "rva": "0x5f9760",
+      "signature": {
+        "pattern": "4C 89 4C 24 20 89 54 24 10 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F9 48 81 EC 98 00 00 00 49 8B F1 89 55 AF 48 8B F9 45 33 FF 48 8B 41 20 44 38 B8 B0 04 00 00 74 07 33 C0 E9 67 02 00 00 4C 8D 2D 83 B5 DC",
+        "exactLen": 76,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 711
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/Dispatcher_1405f9760.c"
+      ]
+    },
+    {
+      "name": "Status_ctor",
+      "kind": "function",
+      "rva": "0x71db80",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 4D 8B F1 4D 8B F8 48 8B F2 48 8B F9 33 ED 40 38 A9 B0 04 00 00 74 07 33 C0 E9 D5 00 00 00 48 8D 0D C3 9E CA",
+        "exactLen": 60,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 292
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "Entity_FindComponentsByTypeId",
+      "kind": "function",
+      "rva": "0x969f90",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 08 48 89 68 18 48 89 70 20 48 89 50 10 57 41 54 41 55 41 56 41 57 48 83 EC 40 0F 29 70 C8 41 8B",
+        "exactLen": 38,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 361
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "ApplicationBase_FrameEnd",
+      "kind": "function",
+      "rva": "0x9b7d80",
+      "signature": {
+        "pattern": "40 55 53 56 57 41 56 48 8B EC 48 83 EC 60 48 8B",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 1111
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "ApplicationBase_Step",
+      "kind": "function",
+      "rva": "0x9bad00",
+      "signature": {
+        "pattern": "40 53 41 56 41 57 48 83 EC 40 80 B9",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "cfgLite": {
+          "bytes": 194
+        }
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#functions-and-signatures"
+      ]
+    },
+    {
+      "name": "App_global",
+      "kind": "data",
+      "rva": "0x13c4a30",
+      "anchors": {
+        "witness": {
+          "function": "DebugConsole_init",
+          "kind": "rip-mov",
+          "ripRefOrdinal": null,
+          "needsHarvest": true
+        },
+        "note": "ApplicationBase* global; DebugConsole::init reads it (DAT_1413c4a30)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:FW_DATA_App"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_App",
+          "index": 0
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/debugconsole_init.c",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "layout": "+OFF_APP_RUNNING running flag (char), +OFF_APP_WINDOW SDL_Window*"
+      }
+    },
+    {
+      "name": "SDL_DYNAPI_table",
+      "kind": "data",
+      "rva": "0x12e7078",
+      "anchors": {
+        "strings": [
+          {
+            "text": "SDL3_DYNAMIC_API",
+            "role": "literal",
+            "unique": true
+          }
+        ],
+        "note": "SDL3 jump table (1,175 slots x 8 bytes) filled by SDL_InitDynamicAPI, which reads the SDL3_DYNAMIC_API env var; slot order is SDL_dynapi_procs.h of build.sdlVersion. Every SDL export is a thunk `48 FF 25 disp32` through its slot."
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "SDL_GL_SetSwapInterval_slot",
+      "kind": "data",
+      "rva": "0x12e7648",
+      "anchors": {
+        "derive": {
+          "table": "SDL_DYNAPI_table",
+          "index": 186
+        }
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:FW_DATA_SDL_GL_SetSwapInterval"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_SDL_GL_SetSwapInterval",
+          "index": 1
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "runtime": "holds an init stub until SDL starts; after the window exists it must point inside .text"
+      }
+    },
+    {
+      "name": "SDL_GL_SwapWindow_slot",
+      "kind": "data",
+      "rva": "0x12e7650",
+      "anchors": {
+        "derive": {
+          "table": "SDL_DYNAPI_table",
+          "index": 187
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_DATA_SDL_GL_SwapWindow",
+          "index": 2
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "runtime": "holds an init stub until SDL starts; after the window exists it must point inside .text"
+      }
+    },
+    {
+      "name": "SDL_HideWindow_slot",
+      "kind": "data",
+      "rva": "0x12e82a0",
+      "anchors": {
+        "derive": {
+          "table": "SDL_DYNAPI_table",
+          "index": 581
+        }
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:FW_DATA_SDL_HideWindow"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_SDL_HideWindow",
+          "index": 3
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "runtime": "holds an init stub until SDL starts; after the window exists it must point inside .text"
+      }
+    },
+    {
+      "name": "SDL_ShowWindow_slot",
+      "kind": "data",
+      "rva": "0x12e8c60",
+      "anchors": {
+        "derive": {
+          "table": "SDL_DYNAPI_table",
+          "index": 893
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_DATA_SDL_ShowWindow",
+          "index": 4
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "runtime": "holds an init stub until SDL starts; after the window exists it must point inside .text"
+      }
+    },
+    {
+      "name": "SDL_MinimizeWindow_slot",
+      "kind": "data",
+      "rva": "0x12e8438",
+      "anchors": {
+        "derive": {
+          "table": "SDL_DYNAPI_table",
+          "index": 632
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_DATA_SDL_MinimizeWindow",
+          "index": 5
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "runtime": "holds an init stub until SDL starts; after the window exists it must point inside .text"
+      }
+    },
+    {
+      "name": "SDL_PollEvent_slot",
+      "kind": "data",
+      "rva": "0x12e8528",
+      "anchors": {
+        "derive": {
+          "table": "SDL_DYNAPI_table",
+          "index": 662
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_DATA_SDL_PollEvent",
+          "index": 6
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "runtime": "holds an init stub until SDL starts; after the window exists it must point inside .text"
+      }
+    },
+    {
+      "name": "SDL_CreateWindow_slot",
+      "kind": "data",
+      "rva": "0x12e73f0",
+      "anchors": {
+        "derive": {
+          "table": "SDL_DYNAPI_table",
+          "index": 111
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_DATA_SDL_CreateWindow",
+          "index": 7
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "runtime": "holds an init stub until SDL starts; after the window exists it must point inside .text"
+      }
+    },
+    {
+      "name": "SDL_CreateWindowWithProperties_slot",
+      "kind": "data",
+      "rva": "0x12e7400",
+      "anchors": {
+        "derive": {
+          "table": "SDL_DYNAPI_table",
+          "index": 113
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_DATA_SDL_CreateWindowWithProperties",
+          "index": 8
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "verify": {
+        "runtime": "holds an init stub until SDL starts; after the window exists it must point inside .text"
+      }
+    },
+    {
+      "name": "DefaultStatusSource",
+      "kind": "data",
+      "rva": "0x13c4d30",
+      "anchors": {
+        "witness": {
+          "function": "Status_ApplyByName",
+          "kind": "rip-lea",
+          "ripRefOrdinal": null,
+          "needsHarvest": true
+        },
+        "note": "default applier source object used when the caller passes null (DAT_1413c4d30 in apply_status and the LuckUp branch)"
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_defaultSource"
+      ],
+      "exposure": [
+        {
+          "field": "rva_DefaultStatusSource"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/ApplyStatusByName_140483120.c:18",
+        ".analysis/decompiled/Dispatcher_1405f9760.c:31"
+      ]
+    },
+    {
+      "name": "LuckUp_vftable",
+      "kind": "vtable",
+      "rva": "0xf57ab8",
+      "slots": 172,
+      "anchors": {
+        "rtti": {
+          "typeDescriptorName": ".?AVLuckUp@glaiel@@",
+          "method": "typedesc-col-vftable"
+        },
+        "slotChecks": [
+          {
+            "slot": 0,
+            "returnsSsoString": "LuckUp"
+          },
+          {
+            "slot": 1,
+            "returnsImm32": "LuckUp_typeid"
+          }
+        ]
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_luckUpVt"
+      ],
+      "exposure": [
+        {
+          "field": "rva_LuckUp_vftable"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        ".analysis/decompiled/LuckUpVT0_140566ed0.c",
+        ".analysis/decompiled/LuckUpVT1_140566ec0.c",
+        ".analysis/luckup-vtable.hex"
+      ],
+      "verify": {
+        "runtime": "status_engine_install_hooks: slot0(NULL,&s) == \"LuckUp\" && slot1(NULL) == LuckUp_typeid, else custom statuses disabled"
+      }
+    },
+    {
+      "name": "Status_vftable",
+      "kind": "vtable",
+      "rva": "0xed1960",
+      "slots": 172,
+      "anchors": {
+        "rtti": {
+          "typeDescriptorName": ".?AVStatus@glaiel@@",
+          "method": "typedesc-col-vftable"
+        }
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "field": "rva_Status_vftable"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ]
+    },
+    {
+      "name": "LuckUp_typeid",
+      "kind": "constant",
+      "value": "0x4d6",
+      "anchors": {
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slot": 1,
+          "bodyPattern": "B8 ?? ?? ?? ?? C3",
+          "imm32At": 1
+        }
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:g_build->luckUpTypeId"
+      ],
+      "exposure": [
+        {
+          "field": "luckUpTypeId"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/LuckUpVT1_140566ec0.c"
+      ],
+      "note": "slot 1 body on this build: B8 D6 04 00 00 C3 (mov eax, 0x4d6; ret)"
+    },
+    {
+      "name": "LuckUp_vtableSlots",
+      "kind": "constant",
+      "value": "172",
+      "anchors": {
+        "unanchored": true,
+        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_SLOTS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "slot count copied for a custom status vtable (glaiel::Status hierarchy)"
+    },
+    {
+      "name": "VT_GetTypeName",
+      "kind": "constant",
+      "value": "0",
+      "anchors": {
+        "unanchored": true,
+        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c",
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_GETTYPENAME"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "GetTypeName(this, std::string* out)"
+    },
+    {
+      "name": "VT_GetTypeId",
+      "kind": "constant",
+      "value": "1",
+      "anchors": {
+        "unanchored": true,
+        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_GETTYPEID"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "GetTypeId()"
+    },
+    {
+      "name": "VT_IsA",
+      "kind": "constant",
+      "value": "2",
+      "anchors": {
+        "unanchored": true,
+        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c",
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_ISA"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "IsA(this, std::string*)"
+    },
+    {
+      "name": "VT_GetTypeHierarchy",
+      "kind": "constant",
+      "value": "3",
+      "anchors": {
+        "unanchored": true,
+        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_GETTYPEHIERARCHY"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "GetTypeHierarchy() -> {int ids[16]; uint64 count}"
+    },
+    {
+      "name": "VT_OnStacksChanged",
+      "kind": "constant",
+      "value": "170",
+      "anchors": {
+        "unanchored": true,
+        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_ONSTACKSCHANGED"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "OnStacksChanged(this)"
+    },
+    {
+      "name": "App_running",
+      "kind": "offset",
+      "struct": "ApplicationBase",
+      "value": "0x10",
+      "ctype": "char",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APP_RUNNING"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "main loop runs while set; clearing it is a clean quit"
+    },
+    {
+      "name": "App_window",
+      "kind": "offset",
+      "struct": "ApplicationBase",
+      "value": "0xdd0",
+      "ctype": "SDL_Window*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APP_WINDOW"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "DebugConsole_outBegin",
+      "kind": "offset",
+      "struct": "DebugConsole",
+      "value": "0xc8",
+      "ctype": "std::string*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_DC_OUT_BEGIN"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "vector<string> output begin"
+    },
+    {
+      "name": "DebugConsole_outEnd",
+      "kind": "offset",
+      "struct": "DebugConsole",
+      "value": "0xd0",
+      "ctype": "std::string*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_DC_OUT_END"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "TurnControl_scene",
+      "kind": "offset",
+      "struct": "TurnControl",
+      "value": "0x18",
+      "ctype": "Scene*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TC_SCENE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Scene_entityManager",
+      "kind": "offset",
+      "struct": "Scene",
+      "value": "0x8",
+      "ctype": "EntityManager*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_SCENE_EM"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "EntityManager_x",
+      "kind": "offset",
+      "struct": "EntityManager",
+      "value": "0x20",
+      "ctype": "void*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_EM_X"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "X_charArray",
+      "kind": "offset",
+      "struct": "X",
+      "value": "0x1f90",
+      "ctype": "RefArray*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_X_CHARARRAY"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "ref-counted array object of Character*"
+    },
+    {
+      "name": "RefArray_count",
+      "kind": "offset",
+      "struct": "RefArray",
+      "value": "0xc",
+      "ctype": "uint32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_ARR_COUNT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "RefArray_data",
+      "kind": "offset",
+      "struct": "RefArray",
+      "value": "0x10",
+      "ctype": "Character**",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_ARR_DATA"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "TurnControl_round",
+      "kind": "offset",
+      "struct": "TurnControl",
+      "value": "0x158",
+      "ctype": "int32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TC_ROUND"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Character_entity",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x18",
+      "ctype": "Entity*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c",
+        "native/framework/src/status_engine.c:char_entity"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_ENTITY"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Character_catData",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x88",
+      "ctype": "CatData*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_CATDATA"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "CatData_class",
+      "kind": "offset",
+      "struct": "CatData",
+      "value": "0xc10",
+      "ctype": "std::string",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CATDATA_CLASS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Character_name",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x290",
+      "ctype": "std::wstring",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_NAME"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Character_faction",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x350",
+      "ctype": "int32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_FACTION"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Character_move",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0xd10",
+      "ctype": "int32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_MOVE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Character_act",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0xd14",
+      "ctype": "int32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_ACT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Character_turnKind",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0xdf0",
+      "ctype": "int32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_TURNKIND"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Entity_componentCount",
+      "kind": "offset",
+      "struct": "Entity",
+      "value": "0x24",
+      "ctype": "uint32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c",
+        "native/framework/src/status_engine.c:entity_count"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_ENT_COMPCOUNT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Entity_components",
+      "kind": "offset",
+      "struct": "Entity",
+      "value": "0x28",
+      "ctype": "Component**",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c",
+        "native/framework/src/status_engine.c:entity_components"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_ENT_COMPS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Status_removing",
+      "kind": "offset",
+      "struct": "Status",
+      "value": "0x75",
+      "ctype": "char",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c",
+        "native/framework/src/status_engine.c:status_removing"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_STATUS_REMOVING"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Status_stacks",
+      "kind": "offset",
+      "struct": "Status",
+      "value": "0x5c",
+      "ctype": "int32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:status_stacks"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_STATUS_STACKS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Status_character",
+      "kind": "offset",
+      "struct": "Status",
+      "value": "0x38",
+      "ctype": "Character*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:status_character"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_STATUS_CHARACTER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Status_temporary",
+      "kind": "offset",
+      "struct": "Status",
+      "value": "0xe9",
+      "ctype": "char",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:find_status_on",
+        "native/framework/src/status_engine.c:hook_ApplyByName"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_STATUS_TEMPORARY"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "the p7 'temporary' flag from apply_status"
+    },
+    {
+      "name": "Status_applier",
+      "kind": "offset",
+      "struct": "Status",
+      "value": "0xc8",
+      "ctype": "void*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:hook_ApplyByName"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_STATUS_APPLIER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "Status_applierOwner",
+      "kind": "offset",
+      "struct": "Status",
+      "value": "0xd0",
+      "ctype": "void*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:hook_ApplyByName"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_STATUS_APPLIER_OWNER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "= *(applier + OFF_APPLIER_OWNER)"
+    },
+    {
+      "name": "ApplyCtx_character",
+      "kind": "offset",
+      "struct": "ApplyContext",
+      "value": "0x20",
+      "ctype": "Character*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:hook_ApplyByName"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APPLYCTX_CHARACTER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "ctx argument of apply_status"
+    },
+    {
+      "name": "ApplyCtx_entity",
+      "kind": "offset",
+      "struct": "ApplyContext",
+      "value": "0x18",
+      "ctype": "Entity*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:hook_ApplyByName"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APPLYCTX_ENTITY"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ]
+    },
+    {
+      "name": "ApplyP6_applier",
+      "kind": "offset",
+      "struct": "ApplyP6",
+      "value": "0x10",
+      "ctype": "void*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:hook_ApplyByName"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APPLYP6_APPLIER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "p6 argument of apply_status"
+    },
+    {
+      "name": "Applier_owner",
+      "kind": "offset",
+      "struct": "Applier",
+      "value": "-0x8",
+      "ctype": "void*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:hook_ApplyByName"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APPLIER_OWNER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "read at applier - 8"
+    },
+    {
+      "name": "Character_touchedPassives",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0xe50",
+      "ctype": "char",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/framework/src/status_engine.c:status_engine_set_stacks"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_TOUCHED_PASSIVES"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects",
+        "docs/engine-map.md#debug-console-and-application-loop"
+      ],
+      "note": "set to 1 to force a stat recompute"
+    }
+  ]
+}
