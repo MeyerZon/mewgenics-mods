@@ -23,7 +23,8 @@ layer, which tier of test covers what, where a human still has to look, and what
   test; the harness load smoke is the T2 test (no `NO_*_NAMED` / `GON_ERROR` marker, framework active).
 - **Native framework**: the signature scanner is a pure unit with 13 host tests; everything else is verified by the
   harness run (15 symbols resolve, hooks install, Joker's Luck registers).
-- **Harness DLL**: 40 host tests for the pure modules; the glue by the real runs recorded in `docs/ingame-testing.md`.
+- **Harness DLL**: 46 host tests for the pure modules (incl. the watchdog's exit decision); the glue by the real runs
+  recorded in `docs/ingame-testing.md`.
 - **Bindings** (`bindings/<build>.json`): T0 on fake PE images (scanner parity with `fw_sig.c`, wildcarder, RTTI /
   witness / table derivations, the port ladder, the report), T1 against the installed exe (every signature matches
   once at its RVA, every anchor re-verifies, a self-port changes nothing, the generated headers are current), a native

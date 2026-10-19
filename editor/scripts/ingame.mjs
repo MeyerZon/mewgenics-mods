@@ -2,7 +2,7 @@
 // CLI for the in-game test harness (tier T2): runs mods/<mod>/tests/*.mewtest
 // scripts one game instance at a time and prints a summary.
 //
-//   npm run test:ingame -- [<mod> [<test>]] [--timeout <ms>] [--no-hide] [--no-savecheck] [--json]
+//   npm run test:ingame -- [<mod> [<test>]] [--timeout <ms>] [--no-hide] [--clean] [--no-savecheck] [--json]
 //
 // Exit codes: 0 all passed (or all skipped), 1 any failure, 2 usage error.
 // Skips (exit 0) with one message when the game, Steam or the harness DLL is
@@ -12,11 +12,11 @@ import * as api from "../src/core/api.mjs";
 
 /** @param {string} msg */
 function usage(msg) {
-  process.stderr.write(`${msg}\nusage: node scripts/ingame.mjs [<mod> [<test>]] [--timeout <ms>] [--no-hide] [--no-savecheck] [--json]\n`);
+  process.stderr.write(`${msg}\nusage: node scripts/ingame.mjs [<mod> [<test>]] [--timeout <ms>] [--no-hide] [--clean] [--no-savecheck] [--json]\n`);
   process.exit(2);
 }
 
-/** @type {{ mod?: string, test?: string, timeoutMs?: number, hide?: boolean, saveCheck?: boolean, json: boolean }} */
+/** @type {{ mod?: string, test?: string, timeoutMs?: number, hide?: boolean, clean?: boolean, saveCheck?: boolean, json: boolean }} */
 const opts = { json: false };
 /** @type {string[]} */
 const positional = [];
@@ -26,6 +26,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a === "--json") opts.json = true;
   else if (a === "--no-hide") opts.hide = false;
   else if (a === "--hide") opts.hide = true;
+  else if (a === "--clean") opts.clean = true;
   else if (a === "--no-savecheck") opts.saveCheck = false;
   else if (a === "--timeout") {
     const v = Number(argv[++i]);
@@ -58,7 +59,7 @@ for (const t of tests) {
     if (!opts.json) process.stdout.write(`FAIL  ${label}  (script errors: ${t.plan.errors.map((e) => `line ${e.line}: ${e.message}`).join("; ")})\n`);
     continue;
   }
-  const r = await api.runIngameTest({ mod: t.mod, test: t.name, timeoutMs: opts.timeoutMs, hide: opts.hide, saveCheck: opts.saveCheck });
+  const r = await api.runIngameTest({ mod: t.mod, test: t.name, timeoutMs: opts.timeoutMs, hide: opts.hide, clean: opts.clean, saveCheck: opts.saveCheck });
   if (!("verdict" in r)) {
     failed++;
     reports.push({ test: { mod: t.mod, name: t.name }, verdict: "launch-error", reason: r.error });

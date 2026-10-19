@@ -699,7 +699,7 @@ TEST(exit_tick_wraparound) {
     MtExitState s = xs();
     s.cleanRequested = 1; s.cleanTick = 0xFFFFF000u; s.exitCode = 0;
     int code = -1;
-    CHECK_EQ(mt_exit_decide(&s, 0x00000BB9u, &code), MT_X_EXIT_CLEAN);                /* 3001 ms later across the wrap */
+    CHECK_EQ(mt_exit_decide(&s, 0x00000BB9u, &code), MT_X_EXIT_CLEAN);                /* 7097 ms later, across the wrap */
     CHECK_EQ(code, 0);
 }
 

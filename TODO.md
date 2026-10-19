@@ -159,7 +159,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 11. [~] **Mechanical enforcement** (decided **yes** 2026-10-19): PR template with the red/green table + T3 checklist
     **done** (PR #26); still open: a check that a change under `src/`/`native/*/src/`/`mods/` comes with a test
     change, and CI running T0 on relevant PRs (shares the workflow from target 9).
-12. [ ] **Harness features**: expose `-mewtest_clean` in the runner (`clean: true` header) for a complete `debug.log`;
+12. [~] **Harness features**: ~~expose `-mewtest_clean` in the runner (`clean: true` header)~~ done 2026-10-19 (leftovers
+    PR 4) — but it does not yield a complete `debug.log` (the game never shuts itself down; see `ingame-testing.md`
+    "Clean mode"), so a log flush needs another lever;
     named-pipe interactive mode (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`); RNG seed pinning via `TLS+0x178`
     for exact numeric assertions; `expect log "<substr>"` against `debug.log` from the runner side.
 
@@ -169,11 +171,15 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   fight (blocked by target 1).
 - [ ] **Crash path**: VEH + top-level filter + watchdog never ran against a real fault (`cmd crash` is in-run only).
   Expect: `crash` event, `end code 3`, Mewjector dump in `mod_logs\crashes\`, no WER dialog, exit 3.
-- [ ] **`-mewtest_clean 1`**: OBSERVED 2026-10-19 — the DLL logs `script finished with code N (clean exit)` and the game then **never exits** (killed after 7 min; no "grace elapsed" line). Fix the clean path before exposing it in the runner.
+- [x] **`-mewtest_clean 1`** never exited (OBSERVED 2026-10-19: no "grace elapsed" line, killed after 7 min). Fixed in
+  leftovers PR 4: the decision is the pure `mt_exit_decide` (no dependence on `g_active`), the watchdog leaves via
+  `TerminateProcess`, the runner kills 5 s after the `end` record as a fallback. T2 `dev-sandbox/console-smoke-clean`:
+  `pass`, 6.5 s, `clean exit grace elapsed … exiting 0` — the game still does not shut itself down when its running
+  flag is cleared, and `debug.log` stays truncated.
 - [x] **Vanilla-launch gate** of framework 0.3.0: not re-run; owner accepted the unchanged code path 2026-10-19 (the
   inactive-without-`-savesuffix` branch in `framework.c` is untouched since it was verified).
 - [ ] **One-off early exit**: the very first 0.3.0 launch exited with code 1 after ~5 s during loading with no crash
-  report; never reproduced in 8 later launches. Watch for it; if it recurs, capture `debug.log` with `-mewtest_clean`.
+  report; never reproduced in 8 later launches. Watch for it (`clean: true` does not give a fuller `debug.log`, see above).
 - [ ] **Which file `-savesuffix dev` writes**: dev launches changed `campaign02.sav`, not a `*dev*` file; the real
   `steamcampaign01.sav` stays untouched (hash-verified every run). Resolve the suffix→filename mapping from
   `MewSaveFile::open_or_create` (`0x229cd0`) and document it in `engine-map.md` "Save safety".
@@ -202,7 +208,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   - [x] PR 2 `fix/port-report-old-column`: port report `old` column, `--gameVersion`, size/call drift on anchor rows
     (rung-3 hardening — callee-set / vftable-store rungs — stays open; needs a body-changing build to test against)
   - [x] PR 3 `test/t0-skips-gpak-filter`: targets 9 + 10, `tools/gpak.py` T0 suite (characterization: no defect found)
-  - [ ] PR 4 `fix/harness-clean-exit`: `-mewtest_clean` exits (pure `mt_exit.c` + runner end-grace), `clean:` header
+  - [x] PR 4 `fix/harness-clean-exit`: `-mewtest_clean` exits (pure `mt_exit.c` + runner end-grace), `clean:` header,
+    unique run dirs for same-second runs; finding: clean mode does not make the game shut down or flush `debug.log`
   - [ ] PR 5 `docs/save-suffix-mapping`: decode `MewSaveFile::open_or_create`, savecheck over every real save
   - [ ] PR 6 `feat/bindings-typeid-witness`: second witness for `LuckUp_typeid`
 

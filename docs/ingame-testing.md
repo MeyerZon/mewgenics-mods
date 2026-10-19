@@ -29,7 +29,7 @@ editor runner                                   Mewgenics.exe + Mewjector + mewf
   record mewframework.log size (append-mode)      expect/dump read combat state through guarded memory reads
   snapshot the real save (read-only sha256)       every event appended to the JSONL file and flushed
   spawn with cwd = game dir, SteamAppId=686060    quit / end of script / timeout / crash -> end event + exit code
-  backstop kill at timeout + 45 s
+  backstop kill at timeout + 45 s; kill 5 s after the end record if the game lingers (clean mode)
   read JSONL, scan the three logs, re-hash the save, decide the verdict, write report.json
 ```
 
@@ -38,7 +38,7 @@ the runner always emits
 
 ```
 -savesuffix <s> -enable_debugconsole true -dev_mode true
--mewtest <script> -mewtest_out <jsonl> -mewtest_hide 0|1 -mewtest_timeout <ms>
+-mewtest <script> -mewtest_out <jsonl> -mewtest_hide 0|1 -mewtest_timeout <ms> -mewtest_clean 0|1
 -modpaths <abs mod dir>...
 ```
 
@@ -53,6 +53,8 @@ mods: jokers-luck, dev-sandbox   # -modpaths order, later overrides earlier; def
 savesuffix: dev                  # /^[A-Za-z0-9_-]{1,32}$/, default dev (the existing dev save; never the real save)
 timeout: 120s                    # 5000 | 90s | 2m, default 120000 ms
 hide: true                       # default true: hide the window + swap interval 0
+clean: false                     # default false: ExitProcess right after the end event. true: clear the app's running
+                                 # flag and let the game shut down; the DLL terminates after 3 s, the runner kills after 5 s
 
 cmd <rest of line verbatim, 1..4078 bytes>       run a debug-console command
 wait frames|turns|ms <N>                         N >= 1; turns = TurnControl::NextTurn calls
@@ -93,6 +95,20 @@ framework_inactive}` and exits 4 from a helper thread ~1.5 s after load, so the 
 A `cmd` waits up to 30 s of wall clock (`MT_CONSOLE_WAIT_MS`) for the debug console to appear: with the window hidden
 the game runs hundreds of frames per second, so a frame budget was never a time budget.
 
+**Clean mode** (`clean: true` / `-mewtest_clean 1`): after the `end` record the harness closes the result file, clears
+the app's running flag and lets the game shut itself down. The process exit code is then the game's own (or the
+harness's after its grace), so the runner treats the `end` record as authoritative: `end.code` ≠ 0 with a 0/absent
+exit code is still a `fail`. The exit/grace decision is the pure `mt_exit_decide` (`src/mt_exit.c`, host-tested):
+crash grace 5 s > clean grace 3 s > script timeout, fired once, independent of any other harness state (the old inline
+version skipped the grace when the script-error path had already deactivated the harness — the "never exits" bug). The
+watchdog leaves via `TerminateProcess` (an `ExitProcess` from a helper thread can block on the loader lock). The runner
+has its own fallback: once `end` is on disk it kills a game that still lingers after 5 s (`END_GRACE_MS`) and reports
+`killedAfterEnd`. OBSERVED 2026-10-19 (build 25143593, `dev-sandbox/console-smoke-clean`): the flag is cleared and the
+game does **not** shut down within 3 s; the DLL grace ends it with the script's code (`clean exit grace elapsed … exiting
+0`), run time 6.5 s vs 3.2 s immediate. The hoped-for complete `debug.log` did not materialise: it is still cut
+mid-line, because the game never reaches its own shutdown/flush. Clean mode is therefore safe but currently useless
+for logs; a flush of the game's log stream would need a different lever.
+
 ## Verdicts (runner side, first match wins)
 
 | Verdict | Meaning |
@@ -101,12 +117,12 @@ the game runs hundreds of frames per second, so a frame budget was never a time 
 | `cannot-run` | preflight failed (missing exe / `version.dll` / `chainloader.ini` / DLLs / appdata logs dir / Steam not running / mod folder) or another run holds the lock |
 | `launch-error` | script errors, bad suffix, a path under `saves/`, spawn failure |
 | `unknown-build` | `mewframework.log` says `unknown build: TimeDateStamp=… SizeOfImage=…`: the game updated and the native layer fails closed (data mods still load). Decided before `backstop-timeout` because an older harness sits at the menu. Next: `check_game_build`, then `docs/binding-port.md` |
-| `backstop-timeout` | the game outlived the script timeout plus 45 s and was killed |
+| `backstop-timeout` | the game outlived the script timeout plus 45 s and was killed (a game that lingers *after* writing `end` is killed after 5 s instead and keeps its JSONL verdict, `killedAfterEnd: true`) |
 | `safety-violation` | `debug.log` reports a different `Save File Suffix:` than requested, or the real save's hash changed |
 | `crash` | crash event, exit code 3, an abnormal exit code, or a new crash report under `mod_logs/crashes/` or the appdata logs |
 | `harness-error` | exit code 4 / `script_error` / framework inactive on a *known* build (the reason names the failed signature(s)) |
 | `timeout` | exit code 2 |
-| `fail` | exit code 1 or any failed `expect` |
+| `fail` | exit code 1, any failed `expect`, or an `end` code ≠ 0 while the process exit code is 0/absent (clean mode) |
 | `no-result` | exit 0 but no result file or no `end` event (truncated) |
 | `log-errors` | exit 0 but `debug.log` contains a known marker: `NO_STATUS_NAMED`, `NO_BRAIN_NAMED`, `NO_ABILITY_NAMED`, `NO_PASSIVE_NAMED`, `No level named`, `No enemy named`, `GON_ERROR:` |
 | `pass` | everything above is clean |
@@ -119,14 +135,14 @@ npm run test:ingame                      # every mods/*/tests/*.mewtest, one gam
 npm run test:ingame -- jokers-luck       # one mod
 npm run test:ingame -- jokers-luck smoke # one script
 npm run test:ingame -- --json            # machine-readable reports
-#   --timeout <ms>  --no-hide  --no-savecheck
+#   --timeout <ms>  --no-hide  --clean  --no-savecheck
 ```
 
 Exit 0 when everything passed or was skipped, 1 on any failure, 2 on a usage error. A machine-level reason (no game,
 no DLL, Steam down, lock held) is printed once and the rest is skipped.
 
 MCP (`mewgenics-editor`): `list_ingame_tests { mod? }` and
-`run_ingame_test { mod, test | script, timeoutMs?, hide?, savesuffix?, includeEvents? }`. The call blocks until the
+`run_ingame_test { mod, test | script, timeoutMs?, hide?, clean?, savesuffix?, includeEvents? }`. The call blocks until the
 game exits and returns the full report.
 
 `npm test` never launches the game: it covers the runner through the fake game only. In-game runs are the T2 tier,
@@ -179,9 +195,9 @@ under `mods/`.
   console is still open** (no console command does it; the menu is mouse-driven). Until it is solved, committed
   scripts assert only main-menu-safe things, the unit walk (`dump`, `expect status`, `expect units`) is
   exercised only with `available:false` / `0 units`, and the crash path (`cmd crash`) is unverified in-game.
-- With the default immediate exit the game's own `debug.log` is block-buffered and ends mid-line; load-time
-  markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works. Pass
-  `-mewtest_clean 1` (not yet exposed by the runner) when a complete `debug.log` matters.
+- The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
+  mode" above: the game does not shut itself down when its running flag is cleared, so nothing flushes). Load-time
+  markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.
 - Mewjector loads mods on the first `version.dll` proxy call, which on this machine is after SDL has initialized;
   the DYNAPI slots therefore already hold their final values when `DllMain` runs.
 

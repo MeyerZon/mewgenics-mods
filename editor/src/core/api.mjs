@@ -186,7 +186,7 @@ export function listIngameTests(modName) {
  * Launch the game once with the mewtest harness and run one script. Blocks until the
  * game exits (or the timeout + backstop). Returns the report; `{ ok: false, error }` for
  * bad arguments. `env` is for tests only (defaults to process.env).
- * @param {{ mod: string, test?: string, script?: string, timeoutMs?: number, hide?: boolean,
+ * @param {{ mod: string, test?: string, script?: string, timeoutMs?: number, hide?: boolean, clean?: boolean,
  *   savesuffix?: string, saveCheck?: boolean, includeEvents?: boolean,
  *   env?: Record<string, string|undefined> }} args
  */
@@ -210,6 +210,7 @@ export async function runIngameTest(args) {
   }
   if (args.timeoutMs !== undefined) plan = { ...plan, timeoutMs: args.timeoutMs };
   if (args.hide !== undefined) plan = { ...plan, hide: args.hide };
+  if (args.clean !== undefined) plan = { ...plan, clean: args.clean };
   if (args.savesuffix !== undefined) plan = { ...plan, savesuffix: args.savesuffix };
   const report = await ingame.runPlan({ plan, test: { mod, name, scriptPath }, env: args.env, saveCheck: args.saveCheck });
   if (!args.includeEvents) report.result = { ...report.result, events: [] };
