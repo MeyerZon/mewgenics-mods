@@ -272,9 +272,12 @@ export function runArtCoreTests(test, assert, eq) {
     eq(/** @type {any} */ (api.inspectSwf(tmpMod, "swfs/starter.swf")).doAbc, 1, "stub mode adds exactly one DoABC");
   });
   test("prepareSwfGate writes swfs/gate.swf + a one-entry swflist.gon.append per variant; 'control' removes both", () => {
-    const expectLinkage = { flat: "_Append_AbilityIcon", nested: "_Append_AbilityIcon", legacy: "_Append_AbilityIcon", probe: "GateProbe" };
-    const expectLayout = { flat: "flat", nested: "nested", legacy: "legacy", probe: "flat" };
-    for (const variant of /** @type {const} */ (["flat", "nested", "legacy", "probe"])) {
+    const expectLinkage = { flat: "_Append_AbilityIcon", nested: "_Append_AbilityIcon", legacy: "_Append_AbilityIcon", probe: "GateProbe", missing: "_Append_NoSuchClipXYZ" };
+    const expectLayout = { flat: "flat", nested: "nested", legacy: "legacy", probe: "flat", missing: "flat" };
+    // what the harness boot must report for the variant to count as expected (OBSERVED 2026-10-19):
+    // every real target boots to the menu; an unknown append target stalls the boot before the console appears
+    const expectVerdict = { flat: "pass", nested: "pass", legacy: "pass", probe: "pass", missing: "harness-error" };
+    for (const variant of /** @type {const} */ (["flat", "nested", "legacy", "probe", "missing"])) {
       const r = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant }));
       assert(r.ok, `${variant}: ${r.error || ""}`);
       eq(r.variant, variant);
@@ -287,7 +290,9 @@ export function runArtCoreTests(test, assert, eq) {
       assert(swf.labels.includes("JokersGambit"), `${variant}: frame label present`);
       eq(r.linkage, expectLinkage[variant]);
       eq(r.layout, expectLayout[variant]);
+      eq(r.expect, expectVerdict[variant], `${variant}: expected harness verdict`);
     }
+    eq(/** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: "control" })).expect, "pass");
     const c = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: "control" }));
     assert(c.ok, c.error || "");
     eq(c.removed.join(","), `mods/${tmpMod}/swfs/gate.swf,mods/${tmpMod}/swfs/swflist.gon.append`);
