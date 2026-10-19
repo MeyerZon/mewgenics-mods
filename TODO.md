@@ -25,8 +25,38 @@ Things no test can see: they need a human at the game, a decision, or an account
   `download_depot 686060 686061 8229879464648565847`, then copy): lost on 2026-10-19 when a worktree removal followed a
   junction and emptied `.analysis/` (`CLAUDE.md` "Worktrees with junctions"). Needed again only for the opt-in
   cross-build T1 (`BINDINGS_NEW_EXE`).
-- [ ] **Merges.** Every PR waits for your explicit per-PR word (`CLAUDE.md`). Open as of 2026-10-19 night: PR #27
-  (docs, cross-build port) and the leftovers stack listed under "Next, directly queued".
+- [x] **Merges.** The leftovers stack (#28–#33, #32) was merged on your word, 2026-10-19 night. Still open: PR #27
+  (docs, cross-build port, from another session) — its TODO.md hunk now overlaps tonight's edits and needs a rebase
+  before it can merge; say so per PR as always (`CLAUDE.md`).
+
+### Only you can do these — added 2026-10-19 night (after the leftovers stack)
+
+- [ ] **Dev-play policy after the save-suffix decode.** `-savesuffix` does not rename or relocate saves on build
+  25143593 (`docs/engine-map.md` "Save safety"); a dev session that enters a Steam-cloud slot writes the real
+  `steamcampaign0N.sav`, and the harness only catches it after the fact. Decide: dev play only through the test director
+  (`test00.sav`) / a copied local slot / ask the developer what the suffix is for. Until then: do not enter a Steam slot
+  in a dev launch.
+- [ ] **Eyeball the saves dir after one dev run** (T3 of PR #33): `%APPDATA%\Glaiel Games\Mewgenics\<id>\saves\` —
+  only `campaign0N.sav` / `test00.sav` may have moved; `steamcampaign01.sav` keeps its 2026-03-31 mtime.
+- [ ] **Watch one clean-mode run end** (T3 of PR #31): `cd editor && npm run test:ingame -- dev-sandbox
+  console-smoke-clean` should finish ~3 s after "script finished" (the DLL grace), never the old 7-minute hang, and
+  leave no stray `Mewgenics.exe` in Task Manager.
+- [ ] **Re-fetch build 23372843** (item above) — then, optionally, rerun the cross-build:
+  `node tools/bindings/cross-build.mjs --old <installed exe> --new .analysis/exe/23372843/Mewgenics.exe --build 23372843
+  --gameVersion 1.1.21039` and confirm the `old` column shows 25143593's values, the 14 anchor rows read `size +0 /
+  calls +0 vs old`, and `LuckUp_typeid` is `ported-derived … (agree)` with `0x4d5` from both sources (T3 of #29, #32).
+- [ ] **Remove the leftover agent worktree safely**: `.claude/worktrees/agent-ac7ac5f970624f89d` (PR #27's branch) still
+  holds junctions to `.analysis` and `.extracted`. Only after #27 is merged: `cmd /c rmdir` each junction, confirm the
+  targets still have contents, then `git worktree remove` (`CLAUDE.md` "Worktrees with junctions"). Never before.
+- [ ] **Delete the merged local/remote branches** when convenient: `chore/leftovers-hygiene`, `fix/port-report-old-column`,
+  `test/t0-skips-gpak-filter`, `fix/harness-clean-exit`, `docs/save-suffix-mapping`, `feat/bindings-typeid-witness`
+  (all 0 commits ahead of `main`; `git branch -d` refuses anything unmerged).
+- [ ] **A fuller `debug.log`**: clean mode does not make the game shut down or flush its log. If you still want load-time
+  diagnostics past the truncation, the lever has to come from you (a game setting, a console command that flushes,
+  or asking the developer); agents have no safe handle on the game's log stream.
+- [ ] **Permission rule for merges** (optional): the harness's auto-mode classifier blocked `gh pr merge` once tonight
+  even with your go-ahead in the chat; if you want agents to merge on your word without a retry, add a Bash allow rule
+  for `gh pr merge` in `.claude/settings.json` — otherwise keep merging yourself.
 
 ## Owner checklist — what only you can check (binding-port series, merged 2026-10-19)
 
