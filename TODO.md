@@ -141,17 +141,20 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    changes nothing; `check_game_build` reports it live. (2026-10-19, binding-port series)
 5. [~] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
    the status definition table / name rules are still inside `status_engine.c`.
-6. [~] **Tools tests (T0)**: `tools/bindings/make-signature.mjs` is covered by the siggen section of
-   `bindings-tests.mjs` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` still untested.
+6. [x] **Tools tests (T0)**: `tools/bindings/make-signature.mjs` is covered by the siggen section of
+   `bindings-tests.mjs` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` by
+   `editor/test/gpak-tests.mjs` on a synthetic archive (2026-10-19; list/cat/extract/stats, truncation, path escapes).
 7. [ ] **Validator fixtures per check**: one failing fixture per finding code (`unknown-status`, `missing-loc-key`,
    `merge-target-missing`, …) so the four checks are each pinned by a T0 test instead of only by the sample mods.
 8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
    (via a `.mewtest` that reads the live value, once 1 lands) so the overlay engine is tested against the game, not
    only against the decompile.
-9. [ ] **`npm test` without `.extracted/`**: the GON round-trip section fails instead of skipping; make it a logged
+9. [x] **`npm test` without `.extracted/`** (done 2026-10-19, leftovers PR 3: round-trip, real-overlay, validator and the two
+   base-data MCP calls skip with a logged `(skipped: …)`; a nested run with `MEWGENICS_EXTRACTED_DATA` = empty dir is
+   itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged
    `(skipped: …)` so T0 is runnable (and CI-able) without game data. Decided 2026-10-19: GitHub Actions for T0, **yes**,
    triggered only when relevant paths change (`editor/`, `native/`, `bindings/`, `tools/`, `mods/`), not on docs-only PRs.
-10. [ ] **Test runner ergonomics**: a name filter for `run-tests.mjs` (or migrate to built-in `node:test`, zero deps,
+10. [x] **Test runner ergonomics** (done 2026-10-19, leftovers PR 3: `npm test -- --only <substring>` / `TEST_ONLY`): a name filter for `run-tests.mjs` (or migrate to built-in `node:test`, zero deps,
     gives `--test-name-pattern`/`--watch`) so red/green per test is cheap.
 11. [~] **Mechanical enforcement** (decided **yes** 2026-10-19): PR template with the red/green table + T3 checklist
     **done** (PR #26); still open: a check that a change under `src/`/`native/*/src/`/`mods/` comes with a test
@@ -198,7 +201,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
     in `engine-map.md`): one import with an own `rea_ghidra_<tag>`, then `batch_decompile`; fold into PR 5's import.
   - [x] PR 2 `fix/port-report-old-column`: port report `old` column, `--gameVersion`, size/call drift on anchor rows
     (rung-3 hardening — callee-set / vftable-store rungs — stays open; needs a body-changing build to test against)
-  - [ ] PR 3 `test/t0-skips-gpak-filter`: targets 9 + 10, `tools/gpak.py` T0 suite
+  - [x] PR 3 `test/t0-skips-gpak-filter`: targets 9 + 10, `tools/gpak.py` T0 suite (characterization: no defect found)
   - [ ] PR 4 `fix/harness-clean-exit`: `-mewtest_clean` exits (pure `mt_exit.c` + runner end-grace), `clean:` header
   - [ ] PR 5 `docs/save-suffix-mapping`: decode `MewSaveFile::open_or_create`, savecheck over every real save
   - [ ] PR 6 `feat/bindings-typeid-witness`: second witness for `LuckUp_typeid`

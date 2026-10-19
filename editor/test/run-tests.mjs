@@ -9,20 +9,30 @@ import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 
 import { parse } from "../src/core/gon/parser.mjs";
-import { serialize } from "../src/core/gon/parser.mjs";
 import { toValue, pretty } from "../src/core/gon/value.mjs";
 import { append, deepMerge, patchMerge } from "../src/core/overlay/merge.mjs";
 import { applyGonOverlay } from "../src/core/overlay/overlay.mjs";
 import { parsePolicy } from "../src/core/overlay/policy.mjs";
 import { validateMod } from "../src/core/validate/validator.mjs";
 import { EXTRACTED_DATA, REPO_ROOT, MODS_DIR } from "../src/core/repo.mjs";
+import { makeTestFilter } from "./filter.mjs";
+import { runGonRoundTripTests } from "./gon-roundtrip-tests.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+/** `npm test -- --only <substring>` or TEST_ONLY=<substring>: run only matching test names (others count as skipped) */
+const filter = (() => {
+  try { return makeTestFilter(process.argv.slice(2), process.env); }
+  catch (e) { console.error(String(e instanceof Error ? e.message : e)); process.exit(2); }
+})();
+/** base data present? sections 3/4 and two MCP calls need it; without it they log "(skipped: …)" so T0 stays runnable */
+const BASE_READY = existsSync(join(EXTRACTED_DATA, "abilities", "fighter_abilities.gon")) && existsSync(join(EXTRACTED_DATA, "difficulties.gon"));
 
 let passed = 0;
 let failed = 0;
+let skipped = 0;
 /** @param {string} name @param {() => void} fn */
 function test(name, fn) {
+  if (!filter.matches(name)) { skipped++; return; }
   try {
     fn();
     passed++;
@@ -61,10 +71,8 @@ function v(s) {
 // ---- 0. Runner self-tests ---------------------------------------------------
 console.log("\n# Runner (name filter)");
 {
-  /** @type {any} */
-  let fm = null;
-  try { fm = await import("./filter.mjs"); } catch (e) { test("filter.mjs loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
-  if (fm) {
+  const fm = { makeTestFilter };
+  {
     test("makeTestFilter: no --only and no TEST_ONLY -> everything runs", () => {
       const f = fm.makeTestFilter([], {});
       eq(f.only, null);
@@ -87,10 +95,8 @@ console.log("\n# Runner (name filter)");
 
 // ---- 1. GON round-trip ------------------------------------------------------
 {
-  /** @type {any} */
-  let rt = null;
-  try { rt = await import("./gon-roundtrip-tests.mjs"); } catch (e) { test("gon-roundtrip-tests.mjs loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
-  if (rt) {
+  const rt = { runGonRoundTripTests };
+  {
     rt.runGonRoundTripTests(test, assert, eq);
     test("round-trip suite skips (logs '(skipped: …)', fails nothing) when the extracted dir has no .gon files", () => {
       const empty = mkdtempSync(join(tmpdir(), "mewged-noextracted-"));
@@ -102,38 +108,6 @@ console.log("\n# Runner (name filter)");
       eq(ran, 0, "no test ran at all (skipped)");
       assert(logs.some((l) => /\(skipped: no \.gon files under/.test(l)), `expected a skip line, got: ${logs.join(" / ")}`);
     });
-  }
-}
-console.log("\n# GON round-trip (parse -> serialize is byte-exact)");
-{
-  /** @param {string} dir @param {string[]} acc */
-  const listGon = (dir, acc) => {
-    if (!existsSync(dir)) return acc;
-    for (const ent of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, ent.name);
-      if (ent.isDirectory()) listGon(full, acc);
-      else if (ent.isFile() && ent.name.endsWith(".gon")) acc.push(full);
-    }
-    return acc;
-  };
-  /** @type {string[]} */
-  const all = listGon(EXTRACTED_DATA, []);
-  if (all.length === 0) {
-    test("base data present", () => assert(false, `no .gon files under ${EXTRACTED_DATA}`));
-  } else {
-    let checked = 0;
-    let exact = 0;
-    /** @type {string[]} */
-    const failures = [];
-    for (const f of all) {
-      const src = readFileSync(f, "utf8");
-      const out = serialize(parse(src));
-      checked++;
-      if (out === src) exact++;
-      else if (failures.length < 5) failures.push(f.slice(EXTRACTED_DATA.length + 1));
-    }
-    test(`round-trips all ${checked} base .gon files byte-exact`, () =>
-      assert(exact === checked, `${checked - exact} differed, e.g. ${failures.join(", ")}`));
   }
 }
 
@@ -225,7 +199,7 @@ console.log("\n# Real overlays applied to extracted base data");
       eq(getPath(effective, ["0", "wallet_size"]).num, 999);
       eq(getPath(effective, ["0", "boss_health_multiplier"]).num, 1, "other fields preserved");
     });
-  }
+  } else console.log(`  (skipped: ${existsSync(baseDiff) ? "mods/dev-sandbox difficulties.gon.merge absent" : "difficulties.gon not extracted"})`);
   const baseAb = join(EXTRACTED_DATA, "abilities", "fighter_abilities.gon");
   const modAb = join(MODS_DIR, "jokers-luck", "data", "abilities", "fighter_abilities.gon.append");
   if (existsSync(baseAb) && existsSync(modAb)) {
@@ -234,18 +208,19 @@ console.log("\n# Real overlays applied to extracted base data");
       eq(getPath(effective, ["JokersGambit", "damage_instance", "effects", "JokersLuck"]).num, 1);
       assert(getPath(effective, ["Spin"]) !== null, "base Spin still present");
     });
-  }
+  } else console.log(`  (skipped: ${existsSync(baseAb) ? "mods/jokers-luck fighter_abilities.gon.append absent" : "abilities/fighter_abilities.gon not extracted"})`);
 }
 
 // ---- 4. Validator -----------------------------------------------------------
 console.log("\n# Validator");
-if (existsSync(join(MODS_DIR, "jokers-luck"))) {
+if (!BASE_READY) console.log("  (skipped: base data not extracted; the validator resolves parents/statuses against .extracted/data)");
+if (BASE_READY && existsSync(join(MODS_DIR, "jokers-luck"))) {
   test("jokers-luck validates with zero errors", () => {
     const r = validateMod("jokers-luck");
     assert(r.ok, `expected ok, got ${r.counts.errors} errors: ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
   });
 }
-if (existsSync(join(MODS_DIR, "dev-sandbox"))) {
+if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
   test("dev-sandbox validates with zero errors", () => {
     const r = validateMod("dev-sandbox");
     assert(r.ok, `expected ok, got ${r.counts.errors} errors: ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
@@ -364,6 +339,8 @@ async function mcpSmoke() {
         assert(typeof payload.known === "boolean" && Array.isArray(payload.entries) && payload.build, "shape");
       } else assert(payload.skipped === true && typeof payload.reason === "string", JSON.stringify(payload));
     });
+    if (!BASE_READY) console.log("  (skipped: validate_mod / preview_merge need extracted base data)");
+    else {
     const vres = /** @type {any} */ (await req("tools/call", { name: "validate_mod", arguments: { mod: "jokers-luck" } }));
     test("tools/call validate_mod jokers-luck -> ok", () => {
       const payload = JSON.parse(vres.content[0].text);
@@ -375,6 +352,7 @@ async function mcpSmoke() {
       assert(payload.kind === "gon", "expected gon preview");
       assert(payload.touched.some((/** @type {any} */ t) => t.key === "JokersGambit" && t.status === "added"), "JokersGambit should be added");
     });
+    }
   } finally {
     child.stdin.end();
     setTimeout(() => child.kill(), 500);
@@ -416,16 +394,16 @@ if (!process.env.MEWGENICS_EXTRACTED_DATA) {
   console.log("\n# T0 without .extracted/ (nested run with MEWGENICS_EXTRACTED_DATA pointing at an empty dir)");
   test("npm test skips, not fails, when no base data is extracted (CI shape)", () => {
     const empty = mkdtempSync(join(tmpdir(), "mewged-noextracted-"));
-    const r = spawnSync(process.execPath, [join(HERE, "run-tests.mjs")], { env: { ...process.env, MEWGENICS_EXTRACTED_DATA: empty }, encoding: "utf8", timeout: 600000, maxBuffer: 64 << 20 });
+    const r = spawnSync(process.argv[0], [join(HERE, "run-tests.mjs")], { env: { ...process.env, MEWGENICS_EXTRACTED_DATA: empty }, encoding: "utf8", timeout: 600000, maxBuffer: 64 << 20 });
     const out = (r.stdout || "") + (r.stderr || "");
-    const fails = out.split("\n").filter((l) => l.startsWith("FAIL")).slice(0, 6);
+    const fails = out.split("\n").filter((/** @type {string} */ l) => l.startsWith("FAIL")).slice(0, 6);
     assert(/\(skipped: no \.gon files under/.test(out), "inner run: expected a '(skipped: no .gon files under …)' line (env override honoured)");
     assert(r.status === 0 && /, 0 failed/.test(out), `inner run exit ${r.status}: ${fails.join(" | ") || out.slice(-300)}`);
   });
 }
 
 // ---- summary ----------------------------------------------------------------
-console.log(`\n${passed} passed, ${failed} failed`);
+console.log(`\n${passed} passed, ${failed} failed${filter.only ? ` (${skipped} skipped by --only ${JSON.stringify(filter.only)})` : ""}`);
 void pretty;
 void HERE;
 process.exit(failed > 0 ? 1 : 0);
