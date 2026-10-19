@@ -276,8 +276,12 @@ async function mcpSmoke() {
     notify("notifications/initialized", {});
     const list = /** @type {any} */ (await req("tools/list", {}));
     test("tools/list returns the 12 editor tools", () => eq(list.tools.length, 12));
-    const cres = /** @type {any} */ (await req("tools/call", { name: "check_game_build", arguments: {} }));
+    /** @type {any} */
+    let cres = null;
+    let cerr = "";
+    try { cres = await req("tools/call", { name: "check_game_build", arguments: {} }); } catch (e) { cerr = String(e); }
     test("tools/call check_game_build -> { ok, known, build, entries } (or ok:false skipped without the game)", () => {
+      assert(cres !== null, cerr);
       const payload = JSON.parse(cres.content[0].text);
       assert(typeof payload.ok === "boolean", "ok flag");
       if (payload.ok) {
