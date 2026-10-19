@@ -103,6 +103,7 @@ export function portManifest(old, pe, buf, opts) {
     const row = { name: e.name, kind: e.kind, oldValue, newValue, status, method, detail, candidates };
     rows.push(row);
     e.port = { from, status, method, note: detail };
+    if (candidates && candidates.length) e.port.candidates = candidates; // lets seed.mjs name the new side
     return row;
   };
   /** @param {import("./manifest.mjs").Entry} e @param {number} rva @param {string} status @param {string} method @param {string} detail */

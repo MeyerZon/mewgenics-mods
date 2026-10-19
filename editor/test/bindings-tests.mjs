@@ -1199,8 +1199,8 @@ export async function runBindingsTests(test, assert, eq) {
     assert(text.endsWith("\n"), "trailing newline");
     const lines = text.split("\n").filter(Boolean);
     assert(lines[0].startsWith("# "), "header comment");
-    assert(lines.some((l) => /^# .*steam 1\b/.test(l) || /steamBuildId 1\b/.test(l)), "names the build");
-    const rows = lines.filter((l) => !l.startsWith("#"));
+    assert(lines.some((/** @type {any} */ l) => /^# .*steam 1\b/.test(l) || /steamBuildId 1\b/.test(l)), "names the build");
+    const rows = lines.filter((/** @type {any} */ l) => !l.startsWith("#"));
     eq(rows.join("|"), ["0x140003000\tlabel\tFoo_vftable", "0x140002000\tlabel\tGlob", "0x140001040\tfunction\tFnB", "0x140001010\tfunction\tFnA"].join("|"));
     assert(!text.includes("Foo_typeid") && !text.includes("Foo_stacks"), "constants and offsets are not addresses");
     const parsed = parseSeed(text);
@@ -1226,7 +1226,7 @@ export async function runBindingsTests(test, assert, eq) {
   });
   test("parseSeed: ignores comments and blank lines, rejects a bad line with the line number", () => {
     const p = parseSeed("# c\n\n0x140001000\tfunction\tA\n0x140002000\tcode\n0x140003000\tlabel\tL\n");
-    eq(p.map((x) => `${x.kind}:${x.name || ""}`).join(","), "function:A,code:,label:L");
+    eq(p.map((/** @type {any} */ x) => `${x.kind}:${x.name || ""}`).join(","), "function:A,code:,label:L");
     let err = "";
     try { parseSeed("0x1\tfunction\tA\nnope\n"); } catch (e) { err = String(e); }
     assert(/line 2/.test(err), err);
@@ -1235,7 +1235,7 @@ export async function runBindingsTests(test, assert, eq) {
     test("T1: the real manifest seeds every function and vtable/data address (>= 46 functions), e.g. TurnControl_NextTurn and LuckUp_vftable", () => {
       const text = seedFromManifest(loadManifest(realPath));
       const rows = parseSeed(text);
-      assert(rows.filter((x) => x.kind === "function").length >= 46, `functions: ${rows.filter((x) => x.kind === "function").length}`);
+      assert(rows.filter((/** @type {any} */ x) => x.kind === "function").length >= 46, `functions: ${rows.filter((/** @type {any} */ x) => x.kind === "function").length}`);
       assert(text.includes("0x1408e3c60\tfunction\tTurnControl_NextTurn"), "NextTurn");
       assert(text.includes("0x140f57ab8\tlabel\tLuckUp_vftable"), "LuckUp vftable");
       assert(text.includes("0x1413c4a30\tlabel\tApp_global"), "App global");
