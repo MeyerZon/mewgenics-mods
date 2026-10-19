@@ -2,11 +2,14 @@
 // harness run, so "the harness never touched the real save" is an automated
 // assertion instead of a promise.
 //
-// This is the one place in the editor that reads a path under saves/. It was
+// This is the one place in the editor that reads paths under saves/. It was
 // approved by the owner (2026-10-18) for this purpose only. It uses node:fs
 // directly and deliberately does NOT go through repo.resolveReadPath, whose
 // touchesSaves() guard stays as strict as ever for everything else. It never
-// opens the file for writing and never lists or touches other save files.
+// opens anything for writing. Since 2026-10-19 (leftovers PR 5) it also lists the
+// saves dir and hashes every *.sav the suffixed launch is NOT allowed to write
+// (snapshotSaves / compareSaveSets), because a dev launch was seen writing
+// campaign02.sav while only steamcampaign01.sav was checked.
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -43,6 +46,84 @@ export function realSavePath(env) {
     .map((/** @type {any} */ d) => d.name);
   if (ids.length !== 1) return null;
   return join(base, ids[0], "saves", REAL_SAVE_FILE);
+}
+
+/**
+ * %APPDATA%\Glaiel Games\Mewgenics\<single steamid>\saves, or null (two ids: never guess).
+ * @param {Record<string, string|undefined>} env
+ * @returns {string|null}
+ */
+export function realSavesDir(env) {
+  const p = realSavePath(env);
+  return p ? p.slice(0, p.length - REAL_SAVE_FILE.length - 1) : null;
+}
+
+/**
+ * The save files a launch with `-savesuffix <suffix>` may legitimately write; everything else under saves/ must stay
+ * byte-identical across a harness run. Decoded on build 25143593 (docs/engine-map.md "Save safety"):
+ * MewDirector::init(name) -> MewSaveFile::open_or_create(name) -> <userdata>/saves/<name>, where name is a
+ * save-selection slot (campaign0N.sav local, steamcampaign0N.sav Steam-cloud), the test director's test00.sav or
+ * the house test's housetest01.sav. The suffix string (ApplicationBase+0x370) is read by NO save-path code on this
+ * build: it does not rename or relocate saves. So the allow-list is the local/test families; the Steam-cloud slots
+ * (the real saves) are always protected. The <suffix>-prefixed forms stay in case a future build does use it.
+ * OBSERVED 2026-10-18: dev launches wrote campaign02.sav and test00.sav; steamcampaign01.sav untouched.
+ * @param {string} suffix
+ * @returns {RegExp}
+ */
+export function devSavePattern(suffix) {
+  const s = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^(campaign\\d+\\.sav|test\\d+\\.sav|housetest\\d+\\.sav|${s}campaign\\d+\\.sav|${s}\\d+\\.sav)$`, "i");
+}
+
+/** @typedef {{ dir: string, present: boolean, files: (SaveSnapshot & { name: string })[], skipped: string[] }} SaveSetSnapshot */
+
+/**
+ * Hash every *.sav in `dir` except the names `allow` matches (the suffixed launch's own files, listed in `skipped`).
+ * Read-only; never follows into other directories.
+ * @param {string} dir @param {{ allow: RegExp }} opts
+ * @returns {SaveSetSnapshot}
+ */
+export function snapshotSaves(dir, opts) {
+  if (!existsSync(dir)) return { dir, present: false, files: [], skipped: [] };
+  const names = readdirSync(dir, { withFileTypes: true })
+    .filter((/** @type {any} */ d) => d.isFile() && /\.sav$/i.test(d.name))
+    .map((/** @type {any} */ d) => d.name)
+    .sort();
+  /** @type {string[]} */
+  const skipped = [];
+  /** @type {(SaveSnapshot & { name: string })[]} */
+  const files = [];
+  for (const name of names) {
+    if (opts.allow.test(name)) { skipped.push(name); continue; }
+    files.push({ name, ...snapshotFile(join(dir, name)) });
+  }
+  return { dir, present: true, files, skipped };
+}
+
+/**
+ * @param {SaveSetSnapshot} before @param {SaveSetSnapshot} after
+ * @returns {{ unchanged: boolean, changed: string[], detail: string }}
+ */
+export function compareSaveSets(before, after) {
+  /** @type {Map<string, SaveSnapshot>} */
+  const b = new Map(before.files.map((f) => [f.name, f]));
+  /** @type {Map<string, SaveSnapshot>} */
+  const a = new Map(after.files.map((f) => [f.name, f]));
+  /** @type {string[]} */
+  const changed = [];
+  /** @type {string[]} */
+  const why = [];
+  for (const [name, x] of b) {
+    const y = a.get(name);
+    if (!y) { changed.push(name); why.push(`${name} vanished`); continue; }
+    if (x.sha256 !== y.sha256 || x.bytes !== y.bytes) { changed.push(name); why.push(`${name} CHANGED ${String(x.sha256).slice(0, 12)}… (${x.bytes} B) -> ${String(y.sha256).slice(0, 12)}… (${y.bytes} B)`); }
+  }
+  for (const name of a.keys()) if (!b.has(name)) { changed.push(name); why.push(`${name} appeared`); }
+  changed.sort();
+  const detail = changed.length
+    ? why.join("; ")
+    : `${after.files.length} real save file(s) unchanged${after.skipped.length ? ` (${after.skipped.join(", ")} belong to the suffixed launch)` : ""}`;
+  return { unchanged: changed.length === 0, changed, detail };
 }
 
 /**
