@@ -32,10 +32,25 @@ interface NodeWritable {
 
 declare class Buffer extends Uint8Array {
   static from(data: any, enc?: string): Buffer;
+  static alloc(size: number, fill?: number): Buffer;
   static concat(list: Uint8Array[]): Buffer;
   static isBuffer(x: unknown): boolean;
   toString(enc?: string, start?: number, end?: number): string;
   subarray(start?: number, end?: number): Buffer;
+  copy(target: Uint8Array, targetStart?: number, sourceStart?: number, sourceEnd?: number): number;
+  equals(other: Uint8Array): boolean;
+  indexOf(value: Uint8Array | number | string, byteOffset?: number, enc?: string): number;
+  write(str: string, offset?: number, enc?: string): number;
+  readUInt8(offset: number): number;
+  readUInt16LE(offset: number): number;
+  readInt32LE(offset: number): number;
+  readUInt32LE(offset: number): number;
+  readBigUInt64LE(offset: number): bigint;
+  writeUInt8(value: number, offset: number): number;
+  writeUInt16LE(value: number, offset: number): number;
+  writeInt32LE(value: number, offset: number): number;
+  writeUInt32LE(value: number, offset: number): number;
+  writeBigUInt64LE(value: bigint, offset: number): number;
 }
 
 declare module "node:fs" {
@@ -43,6 +58,10 @@ declare module "node:fs" {
   export function readFileSync(path: string): Buffer;
   export function writeFileSync(path: string, data: string | Uint8Array): void;
   export function existsSync(path: string): boolean;
+  export function mkdtempSync(prefix: string): string;
+  export function openSync(path: string, flags: string): number;
+  export function readSync(fd: number, buffer: Uint8Array, offset: number, length: number, position: number | null): number;
+  export function closeSync(fd: number): void;
   export function readdirSync(path: string, opts?: any): any[];
   export function mkdirSync(path: string, opts?: { recursive?: boolean }): void;
   export function statSync(path: string): { isDirectory(): boolean; isFile(): boolean; size: number; mtimeMs: number };
@@ -124,4 +143,8 @@ declare module "node:http" {
 declare module "node:zlib" {
   export function deflateSync(data: Uint8Array, opts?: { level?: number }): Buffer;
   export function inflateSync(data: Uint8Array): Buffer;
+}
+
+declare module "node:os" {
+  export function tmpdir(): string;
 }

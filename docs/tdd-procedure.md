@@ -24,8 +24,11 @@ layer, which tier of test covers what, where a human still has to look, and what
 - **Native framework**: the signature scanner is a pure unit with 13 host tests; everything else is verified by the
   harness run (15 symbols resolve, hooks install, Joker's Luck registers).
 - **Harness DLL**: 40 host tests for the pure modules; the glue by the real runs recorded in `docs/ingame-testing.md`.
-- **Bindings** (`bindings/*.sig.tsv`): checked indirectly every time the framework activates (a signature that does
-  not match exactly once disables the framework and the harness reports `harness-error`).
+- **Bindings** (`bindings/<build>.json`): T0 on fake PE images (scanner parity with `fw_sig.c`, wildcarder, RTTI /
+  witness / table derivations, the port ladder, the report), T1 against the installed exe (every signature matches
+  once at its RVA, every anchor re-verifies, a self-port changes nothing, the generated headers are current), a native
+  host test re-validates every generated pattern, and the framework's own activation is the T2 check (`unknown-build`
+  / `harness-error` naming the signature when it is not). Cross-build T1 is opt-in (`BINDINGS_OLD_EXE`/`BINDINGS_NEW_EXE`).
 
 ## What cannot be automated, and the closest substitute
 

@@ -20,7 +20,8 @@
  * IsA that also answers to the new name, a hierarchy with the template id swapped for ours). Objects are built
  * with the template's constructor and then re-pointed to the custom vtable, so all gameplay behavior (stat
  * contribution, display, expiry) is the template's, while identity is ours. Only "LuckUp" is supported as a
- * template in this build (its constructor and vtable are pinned); others need their ctor added to signatures.h.
+ * template in this build (its constructor and vtable are pinned); others need their ctor added to the
+ * bindings manifest. Every build-specific number here comes from signatures.h / offsets.h (generated).
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -28,7 +29,6 @@
 #include <stdio.h>
 #include "framework_internal.h"
 
-#define VT_SLOTS 172
 #define MAX_DEFS 8
 #define HIER_WORDS 16
 
@@ -85,12 +85,12 @@ static CustomStatus *find_def_by_vt(void **vt) {
     for (int i = 0; i < g_defCount; i++) if (g_defs[i].vt == vt) return &g_defs[i];
     return NULL;
 }
-static inline void *char_entity(void *character) { return *(void **)((char *)character + 0x18); }
-static inline uint32_t entity_count(void *entity) { return *(uint32_t *)((char *)entity + 0x24); }
-static inline void **entity_components(void *entity) { return *(void ***)((char *)entity + 0x28); }
-static inline int *status_stacks(void *st) { return (int *)((char *)st + 0x5c); }
-static inline void *status_character(void *st) { return *(void **)((char *)st + 0x38); }
-static inline char status_removing(void *st) { return *((char *)st + 0x75); }
+static inline void *char_entity(void *character) { return *(void **)((char *)character + OFF_CH_ENTITY); }
+static inline uint32_t entity_count(void *entity) { return *(uint32_t *)((char *)entity + OFF_ENT_COMPCOUNT); }
+static inline void **entity_components(void *entity) { return *(void ***)((char *)entity + OFF_ENT_COMPS); }
+static inline int *status_stacks(void *st) { return (int *)((char *)st + OFF_STATUS_STACKS); }
+static inline void *status_character(void *st) { return *(void **)((char *)st + OFF_STATUS_CHARACTER); }
+static inline char status_removing(void *st) { return *((char *)st + OFF_STATUS_REMOVING); }
 
 static void *find_status_on(void *character, const CustomStatus *d) {
     void *ent = char_entity(character);
@@ -98,7 +98,7 @@ static void *find_status_on(void *character, const CustomStatus *d) {
     uint32_t n = entity_count(ent); void **comps = entity_components(ent);
     for (uint32_t i = 0; i < n; i++) {
         void *c = comps[i];
-        if (c && *(void ***)c == d->vt && !status_removing(c) && *((char *)c + 0xe9) == 0) return c;
+        if (c && *(void ***)c == d->vt && !status_removing(c) && *((char *)c + OFF_STATUS_TEMPORARY) == 0) return c;
     }
     return NULL;
 }
@@ -139,16 +139,9 @@ typedef void    *(*fnC)(void *, MsvcString *, char);
 typedef uint64_t (*fnD)(MsvcString *, void *, void *, uint8_t);
 typedef uint64_t (*fnE)(MsvcString *, void *);
 
-#define FW_LK_COUNT 13
+/* The per-build RVAs live in BuildInfo.lkRvas (signatures.h, generated from bindings/<build>.json);
+ * FW_LK_COUNT and the A-E order are fixed by the manifest's FW_LK table. */
 static void *g_lk_orig[FW_LK_COUNT];
-/* Build-specific (1.1.21239); reached only when the build-id gate has already matched. */
-static const uint32_t g_lk_rva[FW_LK_COUNT] = {
-    0x4929c0, 0x492c20, 0x492e80, 0x492f20, 0x493190, 0x5028e0,   /* shape A */
-    0x493690, 0x493910, 0x493b80, 0x493e00,                       /* shape B */
-    0x4933e0,                                                      /* shape C */
-    0x494080,                                                      /* shape D */
-    0x502b40,                                                      /* shape E */
-};
 
 #define LKA(i) static uint64_t lk##i(MsvcString *s){ AliasSave sv; alias_in(s,&sv); uint64_t r=((fnA)g_lk_orig[i])(s); alias_out(s,&sv); return r; }
 #define LKB(i) static void     lk##i(MsvcString *s,void*a,void*b,uint32_t c,void*d,void*e){ AliasSave sv; alias_in(s,&sv); ((fnB)g_lk_orig[i])(s,a,b,c,d,e); alias_out(s,&sv); }
@@ -171,7 +164,7 @@ static void *const g_lk_hook[FW_LK_COUNT] = { lk0, lk1, lk2, lk3, lk4, lk5, lk6,
     static uintptr_t vt##I##_GetTypeId(void *self) { (void)self; return g_defs[I].typeId; } \
     static int vt##I##_IsA(void *self, MsvcString *name) { \
         if (msvc_eq(name, g_defs[I].name)) { g_TidyDeallocate(name); return 1; } \
-        return ((fn_IsA)g_defs[I].templateVt[2])(self, name); } \
+        return ((fn_IsA)g_defs[I].templateVt[VT_ISA])(self, name); } \
     static TypeHierarchy *vt##I##_GetHier(void *self) { (void)self; return &g_defs[I].hier; }
 DEF_THUNKS(0) DEF_THUNKS(1) DEF_THUNKS(2) DEF_THUNKS(3) DEF_THUNKS(4) DEF_THUNKS(5) DEF_THUNKS(6) DEF_THUNKS(7)
 #define THUNK_ROW(I) { (void *)vt##I##_GetTypeName, (void *)vt##I##_GetTypeId, (void *)vt##I##_IsA, (void *)vt##I##_GetHier }
@@ -184,18 +177,18 @@ static void *hook_ApplyByName(MsvcString *name, void *ctx, int stacks, void *src
     CustomStatus *d = find_def_by_string(name);
     if (!d) return g_orig_ApplyByName(name, ctx, stacks, src, p5, p6, p7, p8);
 
-    void *character = *(void **)((char *)ctx + 0x20);
-    void *entity = *(void **)((char *)ctx + 0x18);
+    void *character = *(void **)((char *)ctx + OFF_APPLYCTX_CHARACTER);
+    void *entity = *(void **)((char *)ctx + OFF_APPLYCTX_ENTITY);
     void *source = src ? src : g_defaultSource;
-    void *applier = p5 ? p5 : (p6 ? *(void **)((char *)p6 + 0x10) : NULL);
+    void *applier = p5 ? p5 : (p6 ? *(void **)((char *)p6 + OFF_APPLYP6_APPLIER) : NULL);
     void *result = NULL;
 
     void *existing = find_status_on(character, d);
     if (existing && p7 == 0) {
         *status_stacks(existing) += stacks;
-        *(void **)((char *)existing + 0xc8) = applier;
-        *(void **)((char *)existing + 0xd0) = applier ? *(void **)((char *)applier - 8) : NULL;
-        if (stacks != 0) ((fn_OnStacksChanged)d->vt[170])(existing);
+        *(void **)((char *)existing + OFF_STATUS_APPLIER) = applier;
+        *(void **)((char *)existing + OFF_STATUS_APPLIER_OWNER) = applier ? *(void **)((char *)applier + OFF_APPLIER_OWNER) : NULL;
+        if (stacks != 0) ((fn_OnStacksChanged)d->vt[VT_ONSTACKSCHANGED])(existing);
         if (*status_stacks(existing) == 0) g_StatusRemove(existing);
         result = existing;
         fw_log("%s: +%d stacks on existing (now %d)", d->name, stacks, *status_stacks(existing));
@@ -204,7 +197,7 @@ static void *hook_ApplyByName(MsvcString *name, void *ctx, int stacks, void *src
         void *obj = g_LuckUp_ctor(character, entity, &st, &source, &applier);
         if (obj) {
             *(void ***)obj = d->vt;          /* identity swap: template behavior, our name/type */
-            *((char *)obj + 0xe9) = p7;
+            *((char *)obj + OFF_STATUS_TEMPORARY) = p7;
             result = obj;
             fw_log("%s: created on %p with %d stacks (obj %p)", d->name, character, stacks, obj);
         } else {
@@ -231,8 +224,8 @@ int status_engine_install_hooks(void) {
     g_defaultSource = (void *)(g_base + g_build->rva_DefaultStatusSource);
 
     MsvcString nm = {{{0}}, 0, 15};
-    ((fn_GetTypeName)g_luckUpVt[0])(NULL, &nm);
-    uintptr_t id = ((fn_GetTypeId)g_luckUpVt[1])(NULL);
+    ((fn_GetTypeName)g_luckUpVt[VT_GETTYPENAME])(NULL, &nm);
+    uintptr_t id = ((fn_GetTypeId)g_luckUpVt[VT_GETTYPEID])(NULL);
     if (!msvc_eq(&nm, "LuckUp") || id != g_build->luckUpTypeId) {
         fw_log("LuckUp vtable sanity check failed (name '%s', id 0x%llx); custom statuses disabled", msvc_str(&nm), (unsigned long long)id);
         return 0;
@@ -242,7 +235,7 @@ int status_engine_install_hooks(void) {
     ok &= hook_rva(g_sym[FW_SYM_Status_ApplyByName] - g_base, (void *)hook_ApplyByName, (void **)&g_orig_ApplyByName, 20, "apply_status");
     int lk = 0;
     for (int i = 0; i < FW_LK_COUNT; i++)
-        if (hook_rva(g_lk_rva[i], g_lk_hook[i], &g_lk_orig[i], 20, "status lookup")) lk++;
+        if (hook_rva(g_build->lkRvas[i], g_lk_hook[i], &g_lk_orig[i], 20, "status lookup")) lk++;
     fw_log("status hooks: apply_status + %d/%d name lookups aliased", lk, FW_LK_COUNT);
     return ok && lk == FW_LK_COUNT;
 }
@@ -267,7 +260,7 @@ int status_engine_register(const FwStatusDef *def) {
     memcpy(d->vt, g_luckUpVt, VT_SLOTS * sizeof(void *));
     for (int s = 0; s < 4; s++) d->vt[s] = g_thunks[g_defCount][s];
 
-    TypeHierarchy *th = ((fn_GetHier)g_luckUpVt[3])(NULL);
+    TypeHierarchy *th = ((fn_GetHier)g_luckUpVt[VT_GETTYPEHIERARCHY])(NULL);
     d->hier = *th;
     for (uint64_t i = 0; i < d->hier.count && i < HIER_WORDS; i++)
         if ((uintptr_t)d->hier.ids[i] == g_build->luckUpTypeId) d->hier.ids[i] = (int)d->typeId;
@@ -283,9 +276,9 @@ int status_engine_set_stacks(void *status, int value) {
     CustomStatus *d = find_def_by_vt(vt);
     if (!d) return 0;
     *status_stacks(status) = value;
-    ((fn_OnStacksChanged)vt[170])(status);
+    ((fn_OnStacksChanged)vt[VT_ONSTACKSCHANGED])(status);
     void *ch = status_character(status);
-    if (ch) *((char *)ch + 0xe50) = 1;   /* touched_passives: ask the engine to recompute stats */
+    if (ch) *((char *)ch + OFF_CH_TOUCHED_PASSIVES) = 1;   /* ask the engine to recompute stats */
     if (value == 0) g_StatusRemove(status);
     return 1;
 }

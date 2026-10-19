@@ -270,6 +270,14 @@ export async function runIngameTests(test, assert, eq) {
       assert(!r.unknownBuild, "known build");
       const u = scanFrameworkLog(fixture("mewframework-unknown-build.log"));
       assert(u.unknownBuild && !u.active, "unknown build -> inactive");
+      assert(u.identity && u.identity.timeDateStamp === "0x6b000000" && u.identity.sizeOfImage === "0x01580000", `identity parsed: ${JSON.stringify(u.identity)}`);
+      eq(u.signatureFailures.length, 0);
+      const sf = scanFrameworkLog(fixture("mewframework-signature-failed.log"));
+      assert(!sf.unknownBuild && !sf.active, "known build, inactive");
+      eq(sf.build, "1.1.21239 (steam 25143593)");
+      eq(sf.signatureFailures.map((/** @type {any} */ f) => `${f.name}=${f.matches}`).join(","), "DebugConsole_Execute=0,ApplicationBase_FrameBegin=2");
+      eq(r.signatureFailures.length, 0, "active session has none");
+      eq(r.identity, null, "identity only reported for an unknown build");
       const both = scanFrameworkLog(all);
       eq(both.sessions, 2);
       eq(both.symbols, 15, "last session wins when not windowed");
@@ -525,6 +533,14 @@ export async function runIngameTests(test, assert, eq) {
       expectV("cannot-run", { preflight: { ...pre, ok: false, reasons: ["no exe"] }, exit: exit(null), result: res({ present: false, end: null }), logs: null, safety: safe }, "cannot-run");
       expectV("launch-error", { preflight: pre, launchError: "bad suffix", exit: exit(null), result: res({ present: false, end: null }), logs: null, safety: safe }, "launch-error");
       expectV("backstop", { preflight: pre, exit: exit(null, true), result: res({ end: null }), logs: logs({}), safety: safe }, "backstop-timeout");
+      const unknownFw = { active: false, present: true, unknownBuild: true, identity: { timeDateStamp: "0x6b000000", sizeOfImage: "0x01580000" }, signatureFailures: [] };
+      expectV("unknown build beats backstop (real DLL hangs at the menu)", { preflight: pre, exit: exit(null, true), result: res({ present: false, end: null }), logs: logs({ frameworkLog: unknownFw }), safety: safe }, "unknown-build");
+      expectV("unknown build with exit 4", { preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "framework_inactive" } }), logs: logs({ frameworkLog: unknownFw }), safety: safe }, "unknown-build");
+      assert(/0x6b000000/.test(decideVerdict({ preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "framework_inactive" } }), logs: logs({ frameworkLog: unknownFw }), safety: safe }).reason), "reason names the identity");
+      const sigFw = { active: false, present: true, unknownBuild: false, identity: null, signatureFailures: [{ name: "DebugConsole_Execute", matches: 0 }] };
+      const sigV = decideVerdict({ preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "framework_inactive" } }), logs: logs({ frameworkLog: sigFw }), safety: safe });
+      eq(sigV.verdict, "harness-error", "known build + signature failure");
+      assert(/DebugConsole_Execute/.test(sigV.reason), sigV.reason);
       expectV("safety suffix", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");
       expectV("safety hash", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: { saveSuffixOk: true, saveCheck: { unchanged: false } } }, "safety-violation");
       expectV("crash code", { preflight: pre, exit: exit(3), result: res({ crash: { code: "0xC0000005" }, end: { code: 3 } }), logs: logs({}), safety: safe }, "crash");
@@ -593,11 +609,23 @@ export async function runIngameTests(test, assert, eq) {
       assert(/frobnicate/.test(herr.reason), herr.reason);
     });
 
-    const inactive = await run("inactive");
-    test("fake framework-inactive -> harness-error mentioning the framework", () => {
-      eq(inactive.verdict, "harness-error", inactive.reason);
-      assert(!inactive.logFindings.frameworkLog.active, "inactive");
-      assert(/framework/i.test(inactive.reason), inactive.reason);
+    const sigfail = await run("signature-failed");
+    test("fake signature-failed (known build) -> harness-error naming the signature", () => {
+      eq(sigfail.verdict, "harness-error", sigfail.reason);
+      assert(!sigfail.logFindings.frameworkLog.active, "inactive");
+      assert(/DebugConsole_Execute/.test(sigfail.reason), sigfail.reason);
+    });
+    const unknown = await run("unknown-build");
+    test("fake unknown-build (harness writes end code 4 framework_inactive, exits 4) -> verdict unknown-build", () => {
+      eq(unknown.verdict, "unknown-build", unknown.reason);
+      assert(/0x6b000000/.test(unknown.reason), unknown.reason);
+      eq(unknown.code, 4);
+      assert(!unknown.ok, "not ok");
+    });
+    const unknownHang = await run("unknown-build-hang");
+    test("fake unknown-build-hang (older DLL: no result, sits at the menu) -> still unknown-build via the backstop", () => {
+      eq(unknownHang.verdict, "unknown-build", unknownHang.reason);
+      assert(unknownHang.durationMs < 10_000, `backstop fired in time (${unknownHang.durationMs} ms)`);
     });
 
     const to = await run("timeout");
@@ -780,10 +808,10 @@ export async function runIngameTests(test, assert, eq) {
       }
       return out;
     })();
-    test("MCP tools/list returns the 11 editor tools (9 + list_ingame_tests + run_ingame_test)", () => {
+    test("MCP tools/list returns the 13 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings)", () => {
       assert(!mcp.error, mcp.error);
       const names = mcp.list.tools.map((/** @type {any} */ t) => t.name);
-      eq(names.length, 11, names.join(","));
+      eq(names.length, 13, names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {

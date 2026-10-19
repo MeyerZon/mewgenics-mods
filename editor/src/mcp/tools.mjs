@@ -4,6 +4,7 @@
 // server cannot write under saves/ or touch Mewgenics.exe / resources.gpak.
 
 import * as api from "../core/api.mjs";
+import { resolveReadPath } from "../core/repo.mjs";
 
 export class ToolError extends Error {
   /** @param {string} message */
@@ -252,6 +253,54 @@ export const TOOLS = [
         hide: bool(args, "hide"),
         savesuffix: str(args, "savesuffix"),
         includeEvents: bool(args, "includeEvents"),
+      });
+    },
+  },
+  {
+    name: "check_game_build",
+    description:
+      "Is the installed Mewgenics.exe a game build the native bindings know (bindings/<steamBuildId>.json), and does every byte signature still match exactly once at its RVA? Read-only, never launches the game. Returns { ok, known, build: { timeDateStamp, sizeOfImage, matched, scannedWith, knownBuilds }, entries: [{ name, status: ok|moved|missing|ambiguous, expected, hit }], summary }. known:false means a game update broke the native layer (mewframework disables itself; data mods still load) and the bindings must be ported (docs/binding-port.md). Returns ok:false with skipped:true when the exe or the manifests are absent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        exe: { type: "string", description: "optional path to a Mewgenics.exe to check instead of the installed one (read-only)" },
+      },
+      additionalProperties: false,
+    },
+    handler: (args) => {
+      const exe = str(args, "exe");
+      return api.checkGameBuild({ exe: exe ? resolveReadPath(exe) : undefined });
+    },
+  },
+  {
+    name: "port_bindings",
+    description:
+      "Port the native bindings manifest of a known game build to a new Mewgenics.exe (docs/binding-port.md). Walks the resolution ladder per entry (signature rescan -> unique __FUNCSIG__ string xref -> caller ordinal -> .pdata neighbour; witnesses / RTTI / vtable slots / table indices for data) and returns { ok, dryRun, summary, rows: [{ name, kind, oldValue, newValue, status, method, detail, candidates? }], needsAgent: [...ambiguous/failed rows], report (markdown) }. Statuses: ported-exact | ported-rescan | ported-anchor | ported-witness | ported-derived | proposed (value NOT applied) | ambiguous | failed | needs-human. dryRun (default true) writes nothing; dryRun:false writes bindings/<build>.json and bindings/<build>.port-report.md and nothing else. Resolve ambiguous/failed entries by passing resolve: { name: \"0xRVA\" } after examining the candidates (REA compare_functions with tools/bindings/seed-file.mjs, or .analysis/decompiled). Afterwards: npm run bindings:gen, rebuild the DLLs, npm test, run_ingame_test.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        build: { type: "string", description: "the NEW Steam build id (digits), e.g. 25200000; names bindings/<build>.json" },
+        exe: { type: "string", description: "path to the new Mewgenics.exe (default: the installed game)" },
+        from: { type: "string", description: "the manifest to port from (default: the newest bindings/<build>.json)" },
+        version: { type: "string", description: "the new game version string, e.g. 1.1.21300" },
+        resolve: { type: "object", description: "name -> 0xRVA answers for ambiguous/failed entries", additionalProperties: { type: "string" } },
+        dryRun: { type: "boolean", description: "default true; false writes bindings/<build>.json + the report" },
+      },
+      required: ["build"],
+      additionalProperties: false,
+    },
+    handler: (args) => {
+      const exe = str(args, "exe");
+      const from = str(args, "from");
+      const resolve = obj(args, "resolve");
+      for (const [k, v] of Object.entries(resolve)) if (typeof v !== "string" || !/^0x[0-9a-fA-F]+$/.test(v)) throw new ToolError(`resolve.${k} must be a 0x hex RVA string`);
+      return api.portBindings({
+        build: str(args, "build", true) ?? "",
+        exe: exe ? resolveReadPath(exe) : undefined,
+        from: from ? resolveReadPath(from) : undefined,
+        version: str(args, "version"),
+        resolve: /** @type {Record<string, string>} */ (resolve),
+        dryRun: bool(args, "dryRun"),
       });
     },
   },

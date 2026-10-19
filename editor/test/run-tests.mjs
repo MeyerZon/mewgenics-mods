@@ -222,6 +222,23 @@ if (existsSync(join(MODS_DIR, "dev-sandbox"))) {
     const codes = r.findings.map((f) => f.code);
     assert(codes.includes("merge-target-missing"), `expected merge-target-missing, got ${codes.join(",")}`);
   });
+  test("native-build-unknown: a mod using a native-registered name warns when the installed exe is not a known build", () => {
+    const unknown = { known: false, identity: { timeDateStamp: "0x6b000000", sizeOfImage: "0x01580000" }, matched: null };
+    const r = validateMod("jokers-luck", undefined, { nativeBuild: unknown });
+    const w = r.findings.filter((f) => f.code === "native-build-unknown");
+    assert(w.length >= 1, `expected native-build-unknown, got ${r.findings.map((f) => f.code).join(",")}`);
+    eq(w[0].severity, "warning");
+    assert(/JokersLuck/.test(w[0].message) && /0x6b000000/.test(w[0].message) && /binding-port/.test(w[0].message), w[0].message);
+    assert(r.ok, "a warning keeps the mod valid for the data layer");
+    eq(new Set(w.map((f) => f.message)).size, w.length, "one warning per name per file");
+  });
+  test("native-build-unknown: nothing when the build is known, when no exe is installed, or when the mod uses no native names", () => {
+    const codes = (/** @type {any} */ r) => r.findings.map((/** @type {any} */ f) => f.code);
+    assert(!codes(validateMod("jokers-luck", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } })).includes("native-build-unknown"), "known");
+    assert(!codes(validateMod("jokers-luck", undefined, { nativeBuild: null })).includes("native-build-unknown"), "no exe");
+    assert(!codes(validateMod("dev-sandbox", undefined, { nativeBuild: { known: false, identity: null, matched: null } })).includes("native-build-unknown"), "no native names");
+    assert(!codes(validateMod("jokers-luck")).includes("native-build-unknown"), "default on this machine (known build or no exe)");
+  });
 }
 
 // ---- 5. MCP smoke test ------------------------------------------------------
@@ -275,7 +292,32 @@ async function mcpSmoke() {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = /** @type {any} */ (await req("tools/list", {}));
-    test("tools/list returns the 11 editor tools", () => eq(list.tools.length, 11));
+    test("tools/list returns the 13 editor tools", () => eq(list.tools.length, 13));
+    /** @type {any} */
+    let pres2 = null;
+    let perr2 = "";
+    try { pres2 = await req("tools/call", { name: "port_bindings", arguments: { build: "25143593", dryRun: true } }); } catch (e) { perr2 = String(e); }
+    test("tools/call port_bindings (self-port dry run) -> { ok, dryRun, summary, rows, report } (or ok:false skipped without the game)", () => {
+      assert(pres2 !== null, perr2);
+      const payload = JSON.parse(pres2.content[0].text);
+      assert(typeof payload.ok === "boolean", "ok flag");
+      if (payload.ok) {
+        assert(payload.dryRun === true && payload.summary && Array.isArray(payload.rows) && typeof payload.report === "string", "shape");
+        assert(!payload.needsAgent.length, `self-port needs no agent: ${JSON.stringify(payload.needsAgent).slice(0, 200)}`);
+      } else assert(payload.skipped === true, JSON.stringify(payload));
+    });
+    /** @type {any} */
+    let cres = null;
+    let cerr = "";
+    try { cres = await req("tools/call", { name: "check_game_build", arguments: {} }); } catch (e) { cerr = String(e); }
+    test("tools/call check_game_build -> { ok, known, build, entries } (or ok:false skipped without the game)", () => {
+      assert(cres !== null, cerr);
+      const payload = JSON.parse(cres.content[0].text);
+      assert(typeof payload.ok === "boolean", "ok flag");
+      if (payload.ok) {
+        assert(typeof payload.known === "boolean" && Array.isArray(payload.entries) && payload.build, "shape");
+      } else assert(payload.skipped === true && typeof payload.reason === "string", JSON.stringify(payload));
+    });
     const vres = /** @type {any} */ (await req("tools/call", { name: "validate_mod", arguments: { mod: "jokers-luck" } }));
     test("tools/call validate_mod jokers-luck -> ok", () => {
       const payload = JSON.parse(vres.content[0].text);
@@ -307,6 +349,12 @@ await mcpSmoke();
 {
   const { runIngameTests } = await import("./ingame-tests.mjs");
   await runIngameTests(test, assert, eq);
+}
+
+// ---- 8. Bindings library (PE reader, scanner, manifest, port; fake PE + real exe T1) ---
+{
+  const { runBindingsTests } = await import("./bindings-tests.mjs");
+  await runBindingsTests(test, assert, eq);
 }
 
 // ---- summary ----------------------------------------------------------------

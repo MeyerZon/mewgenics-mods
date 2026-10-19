@@ -587,12 +587,27 @@ TEST(runner_cmd_waits_for_console_then_gives_up_with_4) {
     fk.ready = 1;
     mt_runner_step(&rr, &HOST);
     CHECK_EQ(fk.cmdCount, 1);
+    /* the wait is wall-clock, not frame-count: with vsync off and a hidden window the game runs
+     * hundreds of frames per second and a cold-cache load outlasted the old 1800-frame budget */
     fk_reset("cmd listcmds\nquit\n");
     fk.ready = 0;
-    int n = steps_until_done(MT_CONSOLE_WAIT_FRAMES + 10);
-    CHECK_EQ(n, MT_CONSOLE_WAIT_FRAMES);
+    int n = steps_until_done(5000);
+    CHECK_EQ(n, 5000); /* time did not advance: still waiting after 5000 frames */
+    CHECK_EQ(fk.exitCalls, 0);
+    fk.now += MT_CONSOLE_WAIT_MS;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1); /* exactly at the budget: still waiting */
+    fk.now += 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
     CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"console_unavailable\""));
     CHECK_EQ(fk.exitCode, 4);
+    /* the console appearing late is fine */
+    fk_reset("cmd listcmds\nquit\n");
+    fk.ready = 0;
+    fk.now += MT_CONSOLE_WAIT_MS - 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    fk.ready = 1;
+    mt_runner_step(&rr, &HOST);
+    CHECK_EQ(fk.cmdCount, 1);
 }
 
 TEST(runner_one_directive_per_step) {

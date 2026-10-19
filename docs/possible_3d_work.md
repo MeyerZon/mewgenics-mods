@@ -27,7 +27,7 @@ and classification on the way there.
 
 ## Phase 0 — confirm the unknowns (days)
 
-- [ ] **Sign the hook functions into `bindings/25143593.sig.tsv` + `signatures.h`.**
+- [ ] **Sign the hook functions into `bindings/25143593.json` (`signatures.h` is generated from it).**
       What: `FUN_14078d600` (iso local mat4), `FUN_1409b4c90` (plain mat4), `FUN_1409b4a30`
       (interpolated transform), `FUN_1409785e0` (camera VP), `FUN_1409787c0` (Camera::render),
       `FUN_14078d480` (iso depth key), `FUN_1409896f0` (layer render), `FUN_140a47e50` (instance
@@ -35,7 +35,7 @@ and classification on the way there.
       state flags `0x1412f714c`, mat stack `0x1413c5bd0`, GLEW table `0x1413bc370`.
       Why: the framework only activates on a verified build; code addresses are pattern-scanned, data
       addresses live in `BuildInfo` and are sanity-checked (e.g. ISO m0 ≈ 0.8944).
-      Takes: `tools/make-signature.mjs` runs; copy full unique lengths (lesson from the status engine).
+      Takes: `tools/bindings/make-signature.mjs` runs; the manifest + `npm run bindings:gen` carry the full unique pattern (lesson from the status engine).
 - [ ] **Log a few instance records in-process.**
       What: observer hook on `FUN_140a47e50`, dump 10 mat4s + depth_bias to the framework log, once.
       Why: confirms the column-major layout and m14 = 0 for iso objects in a live frame. The z

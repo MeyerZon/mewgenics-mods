@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "mewgenics-mods/bindings/manifest.schema.json",
+  "title": "Mewgenics native bindings manifest",
+  "description": "One file per game build (bindings/<steamBuildId>.json): every value the native layer pins to that build, plus the anchors that let tools/bindings/port.mjs find each value again in a new build. native/framework/src/signatures.h and offsets.h are generated from it. The validator in editor/src/core/bindings/manifest.mjs is authoritative; this schema documents the shape.",
+  "type": "object",
+  "required": ["format", "build", "sigCap", "entries"],
+  "properties": {
+    "format": { "const": 1 },
+    "build": {
+      "type": "object",
+      "required": ["steamBuildId", "gameVersion", "name", "timeDateStamp", "sizeOfImage", "imageBase", "exeSha256", "exeSize", "sdlVersion"],
+      "properties": {
+        "steamBuildId": { "type": "string", "pattern": "^[0-9]+$", "description": "Steam build id; also the file name" },
+        "gameVersion": { "type": "string", "description": "e.g. 1.1.21239" },
+        "name": { "type": "string", "description": "FW_GetBuildName() text, e.g. \"1.1.21239 (steam 25143593)\"" },
+        "timeDateStamp": { "$ref": "#/definitions/hex", "description": "IMAGE_FILE_HEADER.TimeDateStamp; with sizeOfImage this is the identity gate" },
+        "sizeOfImage": { "$ref": "#/definitions/hex" },
+        "imageBase": { "$ref": "#/definitions/hex" },
+        "exeSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "exeSize": { "type": "integer", "minimum": 0 },
+        "sdlVersion": { "type": "string", "description": "statically linked SDL3 version (from release-x.y.z path strings); gates the DYNAPI slot derivation" },
+        "linked": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "sigCap": { "type": "integer", "minimum": 1, "description": "max pattern bytes the DLL parser accepts (FW_SIG_MAX_BYTES)" },
+    "entries": { "type": "array", "items": { "$ref": "#/definitions/entry" } }
+  },
+  "definitions": {
+    "hex": { "type": "string", "pattern": "^0x[0-9a-fA-F]+$" },
+    "value": { "type": "string", "pattern": "^-?(0x[0-9a-fA-F]+|[0-9]+)$" },
+    "entry": {
+      "type": "object",
+      "required": ["name", "kind", "anchors", "consumers", "exposure", "evidence"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "kind": { "enum": ["function", "data", "vtable", "constant", "offset"] },
+        "rva": { "$ref": "#/definitions/hex", "description": "function/data/vtable: RVA in this build" },
+        "value": { "$ref": "#/definitions/value", "description": "constant/offset: the value (offsets may be negative)" },
+        "struct": { "type": "string", "description": "offset: the owning struct" },
+        "ctype": { "type": "string" },
+        "slots": { "type": "integer", "minimum": 1, "description": "vtable: slot count" },
+        "signature": {
+          "description": "function only; null when the entry is located by anchors alone (raw RVA in offsets.h)",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["pattern", "exactLen", "offset", "wildcards"],
+              "properties": {
+                "pattern": { "type": "string", "description": "IDA-style bytes with ?? wildcards; must match exactly once in executable sections; must not end in a wildcard" },
+                "exactLen": { "type": "integer" },
+                "offset": { "type": "integer", "description": "added to the hit address (0 = pattern starts at the function)" },
+                "wildcards": { "type": "array", "items": { "type": "object", "required": ["at", "len", "why"], "properties": { "at": { "type": "integer" }, "len": { "type": "integer" }, "why": { "type": "string" } } } }
+              }
+            }
+          ]
+        },
+        "anchors": {
+          "type": "object",
+          "description": "how to find this entry again after a recompile",
+          "properties": {
+            "strings": { "type": "array", "items": { "type": "object", "required": ["text", "role"], "properties": { "text": { "type": "string" }, "role": { "enum": ["funcsig", "file", "literal"] }, "unique": { "type": "boolean" } } } },
+            "callees": { "type": "array", "items": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "ordinal": { "type": "integer" } } } },
+            "cfgLite": { "type": "object", "properties": { "bytes": { "type": "integer" }, "calls": { "type": "integer" }, "ripRefs": { "type": "integer" } } },
+            "prologue": { "type": "string" },
+            "rtti": { "type": "object", "required": ["typeDescriptorName"], "properties": { "typeDescriptorName": { "type": "string" }, "method": { "type": "string" } } },
+            "slotChecks": { "type": "array" },
+            "derive": { "type": "object", "description": "constant from a vtable slot body, or data from a table + index", "properties": { "vtable": { "type": "string" }, "slot": { "type": "integer" }, "bodyPattern": { "type": "string" }, "imm32At": { "type": "integer" }, "table": { "type": "string" }, "index": { "type": "integer" } } },
+            "witness": { "type": "object", "required": ["function"], "description": "the (signed) function whose code proves this offset/global", "properties": { "function": { "type": "string" }, "pattern": { "type": "string" }, "dispAt": { "type": "integer" }, "dispSize": { "type": "integer" }, "nth": { "type": "integer" }, "kind": { "type": "string" }, "ripRefOrdinal": { "type": ["integer", "null"] }, "needsHarvest": { "type": "boolean" } } },
+            "after": { "type": "object", "required": ["function"], "description": "function: the .pdata function that immediately follows the named (ported) entry; for small helpers without strings of their own", "properties": { "function": { "type": "string" } } },
+            "unanchored": { "type": "boolean", "description": "true = no anchor yet; the port step reports it as needs-human instead of guessing" },
+            "note": { "type": "string" }
+          }
+        },
+        "consumers": { "type": "array", "items": { "type": "string" }, "description": "C symbols that use the value (file:symbol)" },
+        "exposure": {
+          "type": "array",
+          "description": "where the value surfaces in generated headers",
+          "items": {
+            "oneOf": [
+              { "type": "object", "required": ["enum", "index"], "properties": { "enum": { "type": "string", "pattern": "^FW_(SYM|DATA)_" }, "index": { "type": "integer", "minimum": 0 } }, "additionalProperties": false },
+              { "type": "object", "required": ["table", "index", "shape"], "properties": { "table": { "const": "FW_LK" }, "index": { "type": "integer", "minimum": 0 }, "shape": { "enum": ["A", "B", "C", "D", "E"] }, "prototype": { "type": "string" } }, "additionalProperties": false },
+              { "type": "object", "required": ["field"], "properties": { "field": { "type": "string" } }, "additionalProperties": false },
+              { "type": "object", "required": ["macro"], "properties": { "macro": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" } }, "additionalProperties": false }
+            ]
+          }
+        },
+        "evidence": { "type": "array", "items": { "type": "string" }, "description": "decompile paths under .analysis/, doc sections, REA evidence ids" },
+        "verify": { "type": "object" },
+        "note": { "type": "string" },
+        "port": { "type": "object", "required": ["from", "status", "method"], "properties": { "from": { "type": "string" }, "status": { "enum": ["ported-exact", "ported-rescan", "ported-anchor", "ported-witness", "ported-derived", "proposed", "ambiguous", "failed", "needs-human"] }, "method": { "type": "string" }, "note": { "type": "string" }, "candidates": { "type": "array", "description": "ambiguous only: each candidate's rva, size, call count and how it was found; seed-file.mjs turns them into Name__cand_<rva> seeds", "items": { "type": "object", "required": ["rva"], "properties": { "rva": { "type": "string" }, "bytes": { "type": "integer" }, "calls": { "type": "integer" }, "via": { "type": "string" } } } } } }
+      }
+    }
+  }
+}
