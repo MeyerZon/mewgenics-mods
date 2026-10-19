@@ -156,7 +156,7 @@ export function readArtPalette(which) {
 }
 /**
  * Write (or remove, for `control`) the SWF-gate files in mods/<mod>/swfs/ (docs/swf-emitter-fix-spec.md §8).
- * @param {{ mod?: string, variant: "flat" | "nested" | "probe" | "control" }} o
+ * @param {{ mod?: string, variant: "flat" | "nested" | "legacy" | "probe" | "missing" | "control" }} o
  */
 export function prepareSwfGate(o) {
   return artio.prepareSwfGate(o);

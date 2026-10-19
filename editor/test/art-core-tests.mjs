@@ -292,10 +292,10 @@ export function runArtCoreTests(test, assert, eq) {
       eq(r.layout, expectLayout[variant]);
       eq(r.expect, expectVerdict[variant], `${variant}: expected harness verdict`);
     }
-    eq(/** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: "control" })).expect, "pass");
     const c = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: "control" }));
     assert(c.ok, c.error || "");
     eq(c.removed.join(","), `mods/${tmpMod}/swfs/gate.swf,mods/${tmpMod}/swfs/swflist.gon.append`);
+    eq(c.expect, "pass", "control: expected harness verdict");
     assert(!existsSync(join(tmpDir, "swfs", "gate.swf")) && !existsSync(join(tmpDir, "swfs", "swflist.gon.append")), "control leaves no gate files");
     const again = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: "control" }));
     assert(again.ok && again.removed.length === 0, "control is idempotent");

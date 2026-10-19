@@ -4,9 +4,9 @@
 // "does an _Append_AbilityIcon donor of this shape survive the post-load merge?"
 // (docs/swf-emitter-fix-spec.md §8).
 //
-//   npm run test:swfgate -- <flat|nested|probe|control> [--prepare-only] [--no-hide] [--json]
+//   npm run test:swfgate -- <flat|nested|legacy|probe|missing|control> [--prepare-only] [--no-hide] [--json]
 //
-// Exit codes: 0 pass (or skipped), 1 any other verdict, 2 usage error. Only mods/swf-gate/ is
+// Exit codes: 0 the variant's expected verdict (or skipped), 1 any other verdict, 2 usage error. Only mods/swf-gate/ is
 // written; the runner hashes the real save before and after, like every in-game test.
 
 import * as api from "../src/core/api.mjs";
@@ -29,7 +29,7 @@ for (const a of process.argv.slice(2)) {
   else opts.variant = a;
 }
 if (!opts.variant) usage("a variant is required");
-const variant = /** @type {"flat" | "nested" | "probe" | "control"} */ (opts.variant);
+const variant = /** @type {"flat" | "nested" | "legacy" | "probe" | "missing" | "control"} */ (opts.variant);
 
 const prep = /** @type {any} */ (api.prepareSwfGate({ variant }));
 if (!prep.ok) {
@@ -41,6 +41,7 @@ if (!opts.json) {
   for (const w of prep.written) process.stdout.write(`  wrote   ${w}\n`);
   for (const r of prep.removed) process.stdout.write(`  removed ${r}\n`);
   if (prep.linkage) process.stdout.write(`  linkage ${prep.linkage}, label ${prep.label}, layout ${prep.layout}\n`);
+  process.stdout.write(`  expected harness verdict: ${prep.expect}\n`);
 }
 if (opts.prepareOnly) {
   if (opts.json) process.stdout.write(JSON.stringify({ prepared: prep }, null, 2) + "\n");
@@ -56,9 +57,11 @@ const crashReports = (r.logs && Array.isArray(r.logs.crashReports) && r.logs.cra
 if (opts.json) {
   process.stdout.write(JSON.stringify({ prepared: prep, report: r }, null, 2) + "\n");
 } else {
-  const tag = r.verdict === "pass" ? "  ok" : r.verdict === "skipped" || r.verdict === "cannot-run" ? "skip" : "FAIL";
-  process.stdout.write(`${tag}  swf-gate/boot [${variant}]  ${r.verdict}: ${r.reason}${r.durationMs ? ` (${r.durationMs} ms)` : ""}\n`);
+  const skipped = r.verdict === "skipped" || r.verdict === "cannot-run";
+  const asExpected = r.verdict === prep.expect;
+  const tag = asExpected ? "  ok" : skipped ? "skip" : "FAIL";
+  process.stdout.write(`${tag}  swf-gate/boot [${variant}]  ${r.verdict}: ${r.reason}${r.durationMs ? ` (${r.durationMs} ms)` : ""}${asExpected ? "" : ` — expected ${prep.expect}`}\n`);
   if (crashReports.length) process.stdout.write(`      crash reports: ${crashReports.join(", ")}\n`);
   if (r.artifacts && r.artifacts.runDir) process.stdout.write(`      artifacts: ${r.artifacts.runDir}\n`);
 }
-process.exit(r.verdict === "pass" || r.verdict === "skipped" || r.verdict === "cannot-run" ? 0 : 1);
+process.exit(r.verdict === prep.expect || r.verdict === "skipped" || r.verdict === "cannot-run" ? 0 : 1);

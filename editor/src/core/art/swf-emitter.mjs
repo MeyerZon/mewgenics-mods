@@ -329,12 +329,15 @@ export const ABILITY_ICON_DEPTH = 3;
  * - `"flat"` (default): the shape itself at depth 3 with an identity matrix — exactly how `AbilityIcon` lays out
  *   its own 842 labeled frames;
  * - `"nested"`: the shape wrapped in its own one-frame `DefineSprite`, placed at depth 3 — the spec's §8.1
- *   alternative, kept as a gate variant.
- * @param {{ withAbc: boolean, linkage: string, label: string, layout?: "flat" | "nested" }} o
+ *   alternative, kept as a gate variant;
+ * - `"legacy"`: the shape at depth 1 — the pre-fix donor that crashed the game on 2026-10-18, kept so the gate
+ *   can show the crash still reproduces (a negative control).
+ * @param {{ withAbc: boolean, linkage: string, label: string, layout?: "flat" | "nested" | "legacy" }} o
  * @returns {Uint8Array}
  */
 export function minimalGateSwf(o) {
   const nested = o.layout === "nested";
+  const depth = o.layout === "legacy" ? 1 : ABILITY_ICON_DEPTH;
   /** @type {Scene} */
   const scene = {
     version: 1,
@@ -345,7 +348,7 @@ export function minimalGateSwf(o) {
     bitmaps: {},
     sprites: {
       ...(nested ? { Icon: { frames: 1, labels: {}, layers: [{ depth: 1, keys: [{ frame: 0, ref: "square", x: 0, y: 0 }] }] } } : {}),
-      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth: ABILITY_ICON_DEPTH, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0 }] }] },
+      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0 }] }] },
     },
     exports: { [o.linkage]: "Clip" },
     stage_instances: [],

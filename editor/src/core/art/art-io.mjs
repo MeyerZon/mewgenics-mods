@@ -354,18 +354,27 @@ export const SWF_GATE_FILE = "gate.swf";
 /** The frame label = the ability whose icon the donor appends (a jokers-luck ability with no vanilla icon). */
 export const SWF_GATE_LABEL = "JokersGambit";
 
-/** @type {Record<string, { linkage: string, layout: "flat" | "nested", note: string }>} */
+/**
+ * `expect` is the harness verdict the variant must produce (OBSERVED 2026-10-19; runs recorded in the PR for
+ * fix/swf-append-frame): every real-target donor boots to the main menu; an unknown target logs
+ * "Append movieclip: … could not locate original movieclip to append to" (Application.cpp:1363) and the boot then
+ * never reaches the console (verdict `harness-error`, reason `console_unavailable`, no crash report) — which
+ * doubles as the proof that process_animation_merges ran over our SymbolClass.
+ * @type {Record<string, { linkage: string, layout: "flat" | "nested" | "legacy", expect: string, note: string }>}
+ */
 export const SWF_GATE_VARIANTS = {
-  flat: { linkage: "_Append_AbilityIcon", layout: "flat", note: "the fix: bare shape at depth 3, exactly like AbilityIcon's own labeled frames" },
-  nested: { linkage: "_Append_AbilityIcon", layout: "nested", note: "spec §8.1 alternative: the shape wrapped in a nested movieclip at depth 3" },
-  probe: { linkage: "GateProbe", layout: "flat", note: "load-only control: the same bytes under a non-_Append_ linkage, so nothing is merged" },
+  flat: { linkage: "_Append_AbilityIcon", layout: "flat", expect: "pass", note: "the fix: bare shape at depth 3, exactly like AbilityIcon's own labeled frames" },
+  nested: { linkage: "_Append_AbilityIcon", layout: "nested", expect: "pass", note: "spec §8.1 alternative: the shape wrapped in a nested movieclip at depth 3" },
+  legacy: { linkage: "_Append_AbilityIcon", layout: "legacy", expect: "pass", note: "the pre-fix donor (shape at depth 1); it boots too, so the 2026-10-18 crash is not a boot-time merge fault" },
+  probe: { linkage: "GateProbe", layout: "flat", expect: "pass", note: "load-only control: the same bytes under a non-_Append_ linkage, so nothing is merged" },
+  missing: { linkage: "_Append_NoSuchClipXYZ", layout: "flat", expect: "harness-error", note: "merge witness: an unknown append target is logged and then stalls the boot before the console appears" },
 };
 
 /**
  * Write (or, for `control`, remove) the gate files in `mods/<mod>/swfs/`: `gate.swf` and a
  * `swflist.gon.append` listing only it. Nothing is launched here; `npm run test:swfgate -- <variant>`
  * does both. Only `mods/<mod>/` is ever written.
- * @param {{ mod?: string, variant: "flat" | "nested" | "probe" | "control" }} o
+ * @param {{ mod?: string, variant: "flat" | "nested" | "legacy" | "probe" | "missing" | "control" }} o
  */
 export function prepareSwfGate(o) {
   const modName = (o && o.mod) || SWF_GATE_MOD;
@@ -393,7 +402,7 @@ export function prepareSwfGate(o) {
         removed.push(`mods/${modName}/${rel}`);
       }
     });
-    return { ok: true, variant, mod: modName, written: [], removed, note: "no gate files: a vanilla boot with the mod path present", next };
+    return { ok: true, variant, mod: modName, written: [], removed, expect: "pass", note: "no gate files: a vanilla boot with the mod path present", next };
   }
   if (!spec) return { ok: false, error: "unreachable" };
   const bytes = minimalGateSwf({ withAbc: false, linkage: spec.linkage, label: SWF_GATE_LABEL, layout: spec.layout });
@@ -406,5 +415,5 @@ export function prepareSwfGate(o) {
     writeFileSync(abs[i], payload[i]);
     written.push(`mods/${modName}/${rel}`);
   });
-  return { ok: true, variant, mod: modName, written, removed: [], linkage: spec.linkage, label: SWF_GATE_LABEL, layout: spec.layout, note: spec.note, next };
+  return { ok: true, variant, mod: modName, written, removed: [], linkage: spec.linkage, label: SWF_GATE_LABEL, layout: spec.layout, expect: spec.expect, note: spec.note, next };
 }
