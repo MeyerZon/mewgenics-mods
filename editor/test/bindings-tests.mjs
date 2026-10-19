@@ -485,4 +485,83 @@ export async function runBindingsTests(test, assert, eq) {
       assert(bad.length === 0, bad.join("; "));
     });
   }
+  // ---- gen-headers.mjs: signatures.h / offsets.h generated from the manifests -------------
+  console.log("\n# Bindings: header generator (signatures.h / offsets.h from bindings/*.json)");
+  const gen = await load("../src/core/bindings/gen-headers.mjs");
+  if (gen.__error) {
+    test("gen-headers.mjs loads", () => assert(false, gen.__error));
+    return;
+  }
+  const { genSignaturesH, genOffsetsH, generateHeaders, GenError, HEADER_PATHS } = gen;
+  const m25 = loadManifest(realPath);
+  /** @returns {any} a second build that only differs in identity */
+  const cloneBuild = () => {
+    const c = JSON.parse(JSON.stringify(m25));
+    c.build = { ...c.build, steamBuildId: "99", name: "9.9.9 (steam 99)", timeDateStamp: "0x22222222", sizeOfImage: "0x1580000", exeSha256: "b".repeat(64) };
+    return c;
+  };
+  /** @param {string} t */
+  const nl = (t) => t.replace(/\r\n/g, "\n");
+
+  test("genSignaturesH: one SymbolSig table per build in FwSymbol order, FW_LK rva table, FW_BUILDS row with pointers", () => {
+    const h = genSignaturesH([m25]);
+    assert(h.includes("GENERATED"), "banner");
+    assert(h.includes("static const SymbolSig FW_SYMBOLS_25143593[FW_SYMBOL_COUNT_]"), "symbol table");
+    const first = h.indexOf("\"TurnControl_NextTurn\"");
+    const second = h.indexOf("\"Character_BeginTurn\"");
+    const last = h.indexOf("\"string_Allocate\"");
+    assert(first > 0 && second > first && last > second, "FwSymbol order");
+    assert(h.includes("\"48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 28 EF FF FF B8 D8 11 00 00 E8 4D\", 0, 0x8e3c60u"), "pattern, offset, expectedRva");
+    assert(h.includes("#define FW_LK_COUNT 13"), "lk count");
+    assert(h.includes("static const uint32_t FW_LK_RVAS_25143593[FW_LK_COUNT]"), "lk table");
+    assert(/FW_LK_RVAS_25143593\[FW_LK_COUNT\] = \{\s*0x4929c0u,[^\n]*\n\s*0x492c20u,[\s\S]*0x502b40u,[^\n]*\n\s*\}/.test(h), "lk order");
+    assert(h.includes("0x6a9c51e5u, 0x01574000u"), "identity");
+    assert(h.includes("0x00f57ab8u") && h.includes("0x00ed1960u") && h.includes("0x013c4d30u") && h.includes("0x4d6u"), "vtables, default source, type id");
+    assert(/0x013c4a30u,\s*\/\* FW_DATA_App \*\//.test(h), "rva_data in FwData order with enumerator comments");
+    assert(h.includes("FW_SYMBOLS_25143593, FW_LK_RVAS_25143593"), "BuildInfo points at its own tables");
+    assert(h.includes("#define FW_BUILD_COUNT"), "count macro");
+    assert(!h.includes("FW_SYMBOLS["), "no global FW_SYMBOLS table any more");
+  });
+  test("genSignaturesH: two manifests -> two BuildInfo rows and two symbol tables", () => {
+    const h = genSignaturesH([m25, cloneBuild()]);
+    assert(h.includes("FW_SYMBOLS_25143593[") && h.includes("FW_SYMBOLS_99["), "both tables");
+    assert(h.includes("0x22222222u, 0x01580000u"), "second identity");
+    eq((h.match(/\{ "1\.1\.21239 \(steam 25143593\)"|\{ "9\.9\.9 \(steam 99\)"/g) || []).length, 2);
+  });
+  test("genOffsetsH: every offset/constant macro once, negative offsets parenthesised", () => {
+    const h = genOffsetsH([m25]);
+    assert(/^#define OFF_STATUS_STACKS\s+0x5c/m.test(h), "stacks");
+    assert(/^#define VT_SLOTS\s+172/m.test(h), "slots");
+    assert(/^#define OFF_APPLIER_OWNER\s+\(-0x8\)/m.test(h), "negative");
+    assert(/^#define OFF_X_CHARARRAY\s+0x1f90/m.test(h), "mewtest offset");
+    assert(/^#define VT_ONSTACKSCHANGED\s+170/m.test(h), "vtable slot");
+    const macros = m25.entries.flatMap((/** @type {any} */ e) => e.exposure.filter((/** @type {any} */ x) => x.macro).map((/** @type {any} */ x) => x.macro));
+    for (const mac of macros) eq((h.match(new RegExp(`^#define ${mac} `, "gm")) || []).length, 1, mac);
+    assert(/\/\* Status \+0x5c int32 .*status_stacks/.test(h) || h.includes("Status_stacks"), "comment names the struct/entry");
+  });
+  test("genOffsetsH: manifests that disagree on a macro throw GenError naming the entry and builds", () => {
+    const other = cloneBuild();
+    const st = other.entries.find((/** @type {any} */ e) => e.name === "Status_stacks");
+    st.value = "0x60";
+    let err = null;
+    try { genOffsetsH([m25, other]); } catch (e) { err = e; }
+    assert(err instanceof GenError, `expected GenError, got ${String(err)}`);
+    assert(/Status_stacks/.test(String(err)) && /25143593/.test(String(err)) && /99/.test(String(err)), String(err));
+    eq(typeof genOffsetsH([m25, cloneBuild()]), "string", "agreeing manifests are fine");
+  });
+  test("generateHeaders returns both files keyed by repo-relative path", () => {
+    const out = generateHeaders([m25]);
+    eq(Object.keys(out).sort().join(","), [HEADER_PATHS.offsets, HEADER_PATHS.signatures].sort().join(","));
+    eq(HEADER_PATHS.signatures, "native/framework/src/signatures.h");
+    eq(HEADER_PATHS.offsets, "native/framework/src/offsets.h");
+  });
+  test("golden: committed signatures.h and offsets.h equal the generated text (else run `npm run bindings:gen`)", () => {
+    const { listManifests } = man;
+    const out = generateHeaders(listManifests().map((/** @type {any} */ x) => x.manifest));
+    for (const [rel, text] of Object.entries(out)) {
+      const p = join(REPO_ROOT, rel);
+      assert(existsSync(p), `${rel} missing`);
+      eq(nl(readFileSync(p, "utf8")), nl(/** @type {string} */ (text)), `${rel} is stale`);
+    }
+  });
 }

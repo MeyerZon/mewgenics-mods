@@ -4,6 +4,7 @@
 #include "mewjector.h"
 #include "framework_api.h"
 #include "signatures.h"
+#include "offsets.h"
 
 extern MewjectorAPI g_mj;
 extern int g_mjAvailable;

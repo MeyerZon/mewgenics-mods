@@ -26,31 +26,8 @@
 #define MT_GRACE_CLEAN_MS 3000
 #define MT_GRACE_CRASH_MS 5000
 
-/* --- game layout (build 25143593; see docs/engine-map.md) ---------------------------- */
-#define OFF_APP_RUNNING        0x10    /* ApplicationBase: char, main loop runs while set */
-#define OFF_APP_WINDOW         0xdd0   /* ApplicationBase: SDL_Window* */
-#define OFF_DC_OUT_BEGIN       0xc8    /* DebugConsole: vector<string> output begin */
-#define OFF_DC_OUT_END         0xd0
-#define OFF_TC_SCENE           0x18    /* TurnControl: scene */
-#define OFF_SCENE_EM           0x8     /* scene: entity manager */
-#define OFF_EM_X               0x20
-#define OFF_X_CHARARRAY        0x1f90  /* -> ref-counted array object */
-#define OFF_ARR_COUNT          0xc     /* uint32 */
-#define OFF_ARR_DATA           0x10    /* Character** */
-#define OFF_TC_ROUND           0x158
-#define OFF_CH_ENTITY          0x18
-#define OFF_CH_CATDATA         0x88
-#define OFF_CATDATA_CLASS      0xc10   /* std::string */
-#define OFF_CH_NAME            0x290   /* std::wstring */
-#define OFF_CH_FACTION         0x350
-#define OFF_CH_MOVE            0xd10
-#define OFF_CH_ACT             0xd14
-#define OFF_CH_TURNKIND        0xdf0
-#define OFF_ENT_COMPCOUNT      0x24
-#define OFF_ENT_COMPS          0x28
-#define OFF_STATUS_REMOVING    0x75
-#define VT_GETTYPENAME         0
-#define VT_ISA                 2
+/* --- game layout: struct offsets and vtable slots come from the generated offsets.h (bindings/<build>.json) --- */
+#include "offsets.h"
 #define MAX_UNITS              64
 
 typedef void (*fn_Execute)(void *dc, MtMsvcString *line);
