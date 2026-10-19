@@ -12,6 +12,7 @@ import * as artio from "./art/art-io.mjs";
 import { readPalette, knownRowHints } from "./art/palette.mjs";
 import { validateScene, exampleScene, DEFAULT_ABC_MODE } from "./art/scene.mjs";
 import * as ingame from "./ingame/index.mjs";
+import { checkInstalledBuild } from "./bindings/check.mjs";
 
 /** List base-data categories with entry counts. */
 export function listBaseData() {
@@ -202,4 +203,17 @@ export async function runIngameTest(args) {
   const report = await ingame.runPlan({ plan, test: { mod, name, scriptPath }, env: args.env, saveCheck: args.saveCheck });
   if (!args.includeEvents) report.result = { ...report.result, events: [] };
   return report;
+}
+
+// ---- native bindings (bindings/<build>.json, docs/binding-port.md) ------------
+
+/**
+ * Is the installed Mewgenics.exe (or `exe`) a build the bindings manifests know, and does every
+ * signature still match exactly once at its RVA? Read-only; never launches the game. Returns
+ * `{ ok: false, skipped: true, reason }` when the exe or the manifests are absent.
+ * `env` / `manifests` are for tests (default: process.env and bindings/*.json).
+ * @param {{ exe?: string, env?: Record<string, string|undefined>, manifests?: import("./bindings/manifest.mjs").Manifest[] }} [args]
+ */
+export function checkGameBuild(args = {}) {
+  return checkInstalledBuild({ exePath: args.exe, env: args.env, manifests: args.manifests });
 }
