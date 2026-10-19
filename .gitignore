@@ -19,6 +19,8 @@ launch-*.local.bat
 # editor: generated caches and dev-only toolchain (never committed)
 editor/data/
 editor/node_modules/
+# editor: the Vite build of the web UI (npm run build); served by web/server.mjs
+editor/web/dist/
 # editor: Playwright (dev-only) run output
 editor/test-results/
 editor/playwright-report/

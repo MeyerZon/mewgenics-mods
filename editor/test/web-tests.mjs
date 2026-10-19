@@ -103,7 +103,7 @@ export async function runWebTests(test, assert, eq) {
     const before = s.get();
     let n = 0;
     const off = s.subscribe(() => n++);
-    s.set((cur) => ({ a: cur.a + 10 }));
+    s.set((/** @type {{a:number}} */ cur) => ({ a: cur.a + 10 }));
     eq(s.get().a, 11);
     assert(s.get() !== before, "state identity must change so React sees the update");
     off();
