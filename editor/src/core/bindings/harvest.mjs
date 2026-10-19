@@ -285,7 +285,9 @@ export function harvestManifest(pe, buf, manifest) {
     const a = e.anchors;
     if (e.kind === "function") {
       const h = harvestOf(e);
-      a.strings = h.strings;
+      // hand-written literal anchors (e.g. a config key the function reads) are kept and re-checked
+      const manual = (Array.isArray(a.strings) ? a.strings : []).filter((/** @type {any} */ s) => s && s.role === "literal").map((/** @type {any} */ s) => ({ text: s.text, role: "literal", unique: findString(pe, buf, s.text).count === 1 }));
+      a.strings = [...manual, ...h.strings];
       a.callees = h.callees;
       a.cfgLite = h.cfgLite;
       a.prologue = h.prologue;

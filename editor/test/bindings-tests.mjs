@@ -423,7 +423,8 @@ export async function runBindingsTests(test, assert, eq) {
     eq(got[0].rva, "0x13c4a30");
     eq(entry(m, "SDL_HideWindow_slot").rva, "0x12e82a0");
     const t = entry(m, "SDL_DYNAPI_table");
-    assert(t && t.rva === "0x12e7078", "the DYNAPI jump table is its own entry");
+    assert(t && t.rva === "0x12e7000", "the DYNAPI jump_table struct is its own entry (exported slots start at +0x78)");
+    assert(t && t.anchors.witness && t.anchors.witness.function === "SDL_InitDynamicAPI", "anchored by the function that fills it");
     for (const e of got.slice(1)) assert(e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table", `${e.name} derives from the table`);
   });
   test("25143593.json: FW_LK table is the 13 status lookups in status_engine.c g_lk_rva order, shapes A-E", () => {
@@ -1023,7 +1024,8 @@ export async function runBindingsTests(test, assert, eq) {
     for (const f of spec.fns) {
       let at = fnAt[f.name];
       const begin = at;
-      for (const it of f.code) {
+      for (const it0 of f.code) {
+        const it = /** @type {any} */ (it0);
         if (typeof it === "number") { textBytes[at - TEXT] = it; at += 1; continue; }
         /** @type {number[]} */
         let bytes;
@@ -1045,7 +1047,8 @@ export async function runBindingsTests(test, assert, eq) {
   const SIG_B = "int __cdecl glaiel::beta(int)";
   const PRO = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20];           // push rbx; sub rsp,0x20
   const EPI = [0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3];           // add rsp,0x20; pop rbx; ret
-  const bodyA = (/** @type {number[]} */ extra = []) => [...PRO, { lea: "str:A" }, { call: "FnB" }, { mov: "glob:G" }, 0x48, 0x8b, 0xd8, ...extra, ...EPI];
+  const PRO2 = [0x40, 0x53, 0x48, 0x83, 0xec, 0x30];          // a recompiled prologue (frame 0x30): breaks the v1 signature
+  const bodyA = (/** @type {number[]} */ extra = [], pro = PRO) => [...pro, { lea: "str:A" }, { call: "FnB" }, { mov: "glob:G" }, 0x48, 0x8b, 0xd8, ...extra, ...EPI];
   const bodyB = (/** @type {number[]} */ extra = []) => [...PRO, { lea: "str:B" }, 0x48, 0x8b, 0xf8, ...extra, ...EPI];
   const bodyC = (/** @type {number} */ disp = 0x5c) => [...PRO, 0x8b, 0x41, disp, 0x48, 0x8b, 0xc8, 0x48, 0x8b, 0xd0, ...EPI]; // mov eax,[rcx+disp]
   const v1 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"] });
@@ -1104,8 +1107,8 @@ export async function runBindingsTests(test, assert, eq) {
     eq(r.summary["ported-rescan"], 3);
   });
   test("body changed beyond the mask -> found by its unique funcsig xref (ported-anchor); its callee recovered by caller ordinal", () => {
-    // FnA gains two nops (signature breaks); FnB loses its funcsig AND changes -> only reachable as FnA's call #0
-    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90]) }, { name: "FnB", code: [...PRO, 0x48, 0x8b, 0xf8, 0x90, 0x90, 0x90, ...EPI] }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A }, globs: ["G"], stamp: 0x53535353 });
+    // FnA is recompiled (new frame size + two nops: signature breaks); FnB loses its funcsig AND changes -> only reachable as FnA's call #0
+    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnB", code: [...PRO, 0x48, 0x8b, 0xf8, 0x90, 0x90, 0x90, ...EPI] }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A }, globs: ["G"], stamp: 0x53535353 });
     const r = port(v2);
     eq(row(r, "FnA").status, "ported-anchor", row(r, "FnA").detail);
     eq(row(r, "FnA").method, "funcsig-xref");
@@ -1116,7 +1119,7 @@ export async function runBindingsTests(test, assert, eq) {
     eq(row(r, "G").status, "ported-witness");
   });
   test("a clone referencing the same funcsig -> ambiguous with both candidates listed for the agent", () => {
-    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90]) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90]) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x54545454 });
+    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x54545454 });
     const r = port(v2);
     const a = row(r, "FnA");
     eq(a.status, "ambiguous", a.detail);
@@ -1150,7 +1153,7 @@ export async function runBindingsTests(test, assert, eq) {
     eq(entry(moved.manifest, "Foo_stacks").port.note && /0x60/.test(entry(moved.manifest, "Foo_stacks").port.note), true, "the proposal is recorded in the port block");
   });
   test("renderPortReport: summary line, one row per entry, needs-attention sections with candidates and next steps", () => {
-    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90]) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90]) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x58585858 });
+    const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x58585858 });
     const r = port(v2);
     const md = renderPortReport(r);
     assert(md.startsWith("# Port report 100 -> 200"), md.split("\n")[0]);
@@ -1175,9 +1178,9 @@ export async function runBindingsTests(test, assert, eq) {
         if (o && n && (o.rva !== n.rva || o.value !== n.value)) bad.push(`${rw.name}: value changed ${o.rva || o.value} -> ${n.rva || n.value}`);
       }
       assert(bad.length === 0, bad.join("; "));
-      eq(r.summary["ported-exact"], m.entries.filter((e) => e.kind === "function" && e.signature).length, "every signed function ported-exact");
+      eq(r.summary["ported-exact"], m.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.signature).length, "every signed function ported-exact");
       assert((r.summary["ported-witness"] || 0) >= 2 && (r.summary["ported-derived"] || 0) >= 11, JSON.stringify(r.summary));
-      eq(r.summary["needs-human"], m.entries.filter((e) => e.anchors.unanchored).length, "exactly the unanchored entries need a human");
+      eq(r.summary["needs-human"], m.entries.filter((/** @type {any} */ e) => e.anchors.unanchored).length, "exactly the unanchored entries need a human");
       eq(validateManifest(r.manifest).ok, true);
     });
   }

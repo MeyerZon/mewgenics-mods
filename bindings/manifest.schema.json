@@ -69,6 +69,7 @@
             "slotChecks": { "type": "array" },
             "derive": { "type": "object", "description": "constant from a vtable slot body, or data from a table + index", "properties": { "vtable": { "type": "string" }, "slot": { "type": "integer" }, "bodyPattern": { "type": "string" }, "imm32At": { "type": "integer" }, "table": { "type": "string" }, "index": { "type": "integer" } } },
             "witness": { "type": "object", "required": ["function"], "description": "the (signed) function whose code proves this offset/global", "properties": { "function": { "type": "string" }, "pattern": { "type": "string" }, "dispAt": { "type": "integer" }, "dispSize": { "type": "integer" }, "nth": { "type": "integer" }, "kind": { "type": "string" }, "ripRefOrdinal": { "type": ["integer", "null"] }, "needsHarvest": { "type": "boolean" } } },
+            "after": { "type": "object", "required": ["function"], "description": "function: the .pdata function that immediately follows the named (ported) entry; for small helpers without strings of their own", "properties": { "function": { "type": "string" } } },
             "unanchored": { "type": "boolean", "description": "true = no anchor yet; the port step reports it as needs-human instead of guessing" },
             "note": { "type": "string" }
           }
