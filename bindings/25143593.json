@@ -34,8 +34,54 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 4474
-        }
+          "bytes": 4474,
+          "calls": 93,
+          "ripRefs": 43,
+          "resyncs": 1
+        },
+        "callees": [
+          {
+            "ordinal": 5,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 10,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 15,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 20,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 25,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 39,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 44,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 51,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
       },
       "consumers": [
         "native/framework/src/framework.c:hook_TurnControl_NextTurn",
@@ -78,8 +124,44 @@
           }
         ],
         "cfgLite": {
-          "bytes": 4773
-        }
+          "bytes": 4773,
+          "calls": 81,
+          "ripRefs": 40,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 12,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 15,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 24,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 46,
+            "name": "Status_ApplyByName",
+            "target": "0x483120"
+          },
+          {
+            "ordinal": 47,
+            "name": "Status_ApplyByName",
+            "target": "0x483120"
+          },
+          {
+            "ordinal": 60,
+            "name": "Ability_trigger",
+            "target": "0x320a0"
+          }
+        ],
+        "prologue": "48 89 5C 24 08 89 54 24 10 55 56 57"
       },
       "consumers": [
         "native/framework/src/framework.c:hook_Character_BeginTurn"
@@ -122,8 +204,169 @@
           }
         ],
         "cfgLite": {
-          "bytes": 7831
-        }
+          "bytes": 7831,
+          "calls": 186,
+          "ripRefs": 62,
+          "resyncs": 2
+        },
+        "callees": [
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 6,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 21,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 23,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 24,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 25,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 29,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 65,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 66,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 80,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 81,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 87,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 88,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 96,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 97,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 102,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 104,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 105,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 107,
+            "name": "Status_ApplyByName",
+            "target": "0x483120"
+          },
+          {
+            "ordinal": 109,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 111,
+            "name": "Status_AttachPassive",
+            "target": "0x494080"
+          },
+          {
+            "ordinal": 139,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 140,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 143,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 146,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 151,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 155,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 156,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 158,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 164,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "prologue": "48 89 54 24 10 55 53 56 57 41 54 41"
       },
       "consumers": [],
       "exposure": [
@@ -149,8 +392,49 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 929
-        }
+          "bytes": 929,
+          "calls": 32,
+          "ripRefs": 12,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 3,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 9,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 12,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 16,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 23,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 27,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 18 44 88 4C 24 20 48 89"
       },
       "consumers": [],
       "exposure": [
@@ -176,8 +460,74 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 2761
-        }
+          "bytes": 2761,
+          "calls": 49,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "FileManager_GetFileRawPak",
+            "target": "0x9a0670"
+          },
+          {
+            "ordinal": 4,
+            "name": "FileManager_GetFileRawLoose",
+            "target": "0x9a0300"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 9,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 13,
+            "name": "FileManager_GetFileRawLoose",
+            "target": "0x9a0300"
+          },
+          {
+            "ordinal": 16,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 20,
+            "name": "FileManager_GetFileRawLoose",
+            "target": "0x9a0300"
+          },
+          {
+            "ordinal": 23,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 27,
+            "name": "FileManager_GetFileRawLoose",
+            "target": "0x9a0300"
+          },
+          {
+            "ordinal": 29,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 33,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 37,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "44 88 4C 24 20 4C 89 44 24 18 48 89"
       },
       "consumers": [],
       "exposure": [
@@ -214,8 +564,34 @@
           }
         ],
         "cfgLite": {
-          "bytes": 63638
-        }
+          "bytes": 63638,
+          "calls": 2384,
+          "ripRefs": 799,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 8,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1261,
+            "name": "Status_ApplyLuckUp",
+            "target": "0x5f9760"
+          }
+        ],
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
       },
       "consumers": [
         "native/framework/src/status_engine.c:hook_ApplyByName"
@@ -269,8 +645,29 @@
           }
         ],
         "cfgLite": {
-          "bytes": 597
-        }
+          "bytes": 597,
+          "calls": 10,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[0]"
@@ -317,8 +714,34 @@
           }
         ],
         "cfgLite": {
-          "bytes": 578
-        }
+          "bytes": 578,
+          "calls": 11,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 8,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[4]"
@@ -380,8 +803,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 292
-        }
+          "bytes": 292,
+          "calls": 6,
+          "ripRefs": 2,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_LuckUp_ctor"
@@ -410,8 +838,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 86
-        }
+          "bytes": 86,
+          "calls": 1,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "40 53 48 83 EC 20 80 79 75 00 48 8B"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_StatusRemove"
@@ -439,8 +872,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 94
-        }
+          "bytes": 94,
+          "calls": 2,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "40 53 48 83 EC 20 48 8B 51 18 48 8B"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_TidyDeallocate",
@@ -470,8 +908,69 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 3066
-        }
+          "bytes": 3066,
+          "calls": 64,
+          "ripRefs": 8,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 3,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 4,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 12,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 24,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 28,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 30,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 37,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 44,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 47,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 49,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 54 24 10 48 89 4C 24 08 55 53"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:g_Execute"
@@ -500,8 +999,44 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 3468
-        }
+          "bytes": 3468,
+          "calls": 56,
+          "ripRefs": 50,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 3,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 17,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 33,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 39,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 48,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "prologue": "48 89 54 24 10 48 89 4C 24 08 55 53"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:hook_DCInit"
@@ -530,8 +1065,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 1290
-        }
+          "bytes": 1290,
+          "calls": 7,
+          "ripRefs": 71,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "48 8B C4 48 89 58 10 48 89 70 18 48"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:hook_FrameBegin"
@@ -560,8 +1100,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 88
-        }
+          "bytes": 88,
+          "calls": 3,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "48 83 EC 28 48 85 C9 75 07 33 C0 48"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:g_Allocate"
@@ -596,8 +1141,29 @@
           }
         ],
         "cfgLite": {
-          "bytes": 597
-        }
+          "bytes": 597,
+          "calls": 10,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[1]"
@@ -622,9 +1188,24 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 145
+          "bytes": 145,
+          "calls": 3,
+          "ripRefs": 3,
+          "resyncs": 0
         },
-        "callees": []
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 2,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "40 53 48 83 EC 30 48 83 79 18 0F 48"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[2]"
@@ -661,8 +1242,34 @@
           }
         ],
         "cfgLite": {
-          "bytes": 612
-        }
+          "bytes": 612,
+          "calls": 11,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 8,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[3]"
@@ -698,8 +1305,29 @@
           }
         ],
         "cfgLite": {
-          "bytes": 599
-        }
+          "bytes": 599,
+          "calls": 10,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[5]"
@@ -735,8 +1363,24 @@
           }
         ],
         "cfgLite": {
-          "bytes": 631
-        }
+          "bytes": 631,
+          "calls": 9,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[6]"
@@ -772,8 +1416,24 @@
           }
         ],
         "cfgLite": {
-          "bytes": 616
-        }
+          "bytes": 616,
+          "calls": 9,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[7]"
@@ -809,8 +1469,24 @@
           }
         ],
         "cfgLite": {
-          "bytes": 631
-        }
+          "bytes": 631,
+          "calls": 9,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[8]"
@@ -846,8 +1522,24 @@
           }
         ],
         "cfgLite": {
-          "bytes": 632
-        }
+          "bytes": 632,
+          "calls": 9,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[9]"
@@ -883,8 +1575,29 @@
           }
         ],
         "cfgLite": {
-          "bytes": 680
-        }
+          "bytes": 680,
+          "calls": 10,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[10]"
@@ -920,8 +1633,19 @@
           }
         ],
         "cfgLite": {
-          "bytes": 232096
-        }
+          "bytes": 232096,
+          "calls": 6438,
+          "ripRefs": 1884,
+          "resyncs": 6
+        },
+        "callees": [
+          {
+            "ordinal": 3439,
+            "name": "Status_ApplyLuckUp",
+            "target": "0x5f9760"
+          }
+        ],
+        "prologue": "44 88 4C 24 20 4C 89 44 24 18 48 89"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[11]"
@@ -957,8 +1681,209 @@
           }
         ],
         "cfgLite": {
-          "bytes": 3550
-        }
+          "bytes": 3550,
+          "calls": 151,
+          "ripRefs": 44,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 3,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 11,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 15,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 23,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 27,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 31,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 35,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 39,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 43,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 47,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 51,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 55,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 59,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 63,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 67,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 71,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 75,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 79,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 83,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 87,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 91,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 95,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 99,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 103,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 107,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 111,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 115,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 119,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 123,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 126,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 130,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 134,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 138,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 142,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 143,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 147,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 149,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[12]"
@@ -999,8 +1924,49 @@
           }
         ],
         "cfgLite": {
-          "bytes": 3507
-        }
+          "bytes": 3507,
+          "calls": 61,
+          "ripRefs": 45,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 6,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 15,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 18,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 45,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 46,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 49,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "prologue": "4C 89 44 24 18 89 54 24 10 48 89 4C"
       },
       "consumers": [],
       "exposure": [],
@@ -1022,8 +1988,44 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 878
-        }
+          "bytes": 878,
+          "calls": 28,
+          "ripRefs": 8,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 9,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 11,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 16,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 18,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 21,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "44 88 4C 24 20 44 88 44 24 18 48 89"
       },
       "consumers": [],
       "exposure": [],
@@ -1044,8 +2046,39 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 886
-        }
+          "bytes": 886,
+          "calls": 27,
+          "ripRefs": 12,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 11,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 13,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 18,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 20,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "44 88 44 24 18 48 89 54 24 10 48 89"
       },
       "consumers": [],
       "exposure": [],
@@ -1072,8 +2105,29 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 711
-        }
+          "bytes": 711,
+          "calls": 20,
+          "ripRefs": 12,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 4,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 12,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 14,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 54 24 10 48 89 4C 24 08 55 53"
       },
       "consumers": [],
       "exposure": [],
@@ -1105,8 +2159,49 @@
           }
         ],
         "cfgLite": {
-          "bytes": 1323
-        }
+          "bytes": 1323,
+          "calls": 34,
+          "ripRefs": 31,
+          "resyncs": 4
+        },
+        "callees": [
+          {
+            "ordinal": 10,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 13,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 14,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 20,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 23,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 29,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 30,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "40 55 53 56 57 41 54 41 56 41 57 48"
       },
       "consumers": [],
       "exposure": [],
@@ -1139,8 +2234,54 @@
           }
         ],
         "cfgLite": {
-          "bytes": 1808
-        }
+          "bytes": 1808,
+          "calls": 38,
+          "ripRefs": 40,
+          "resyncs": 2
+        },
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 2,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 4,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 11,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 14,
+            "name": "SQLSaveFile_open",
+            "target": "0xa0d3c0"
+          },
+          {
+            "ordinal": 24,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 25,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 28,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "prologue": "48 8B C4 48 89 58 08 48 89 50 10 55"
       },
       "consumers": [],
       "exposure": [],
@@ -1161,8 +2302,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 188
-        }
+          "bytes": 188,
+          "calls": 2,
+          "ripRefs": 3,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "48 89 5C 24 08 48 89 74 24 18 48 89"
       },
       "consumers": [],
       "exposure": [],
@@ -1194,8 +2340,94 @@
           }
         ],
         "cfgLite": {
-          "bytes": 4399
-        }
+          "bytes": 4399,
+          "calls": 81,
+          "ripRefs": 76,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Gpak_Load",
+            "target": "0x9b5380"
+          },
+          {
+            "ordinal": 1,
+            "name": "ApplicationBase_ProcessCmds",
+            "target": "0x9b8bb0"
+          },
+          {
+            "ordinal": 2,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 8,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 9,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 16,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 22,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 25,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 30,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 53,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 55,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 60,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 63,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 68,
+            "name": "ApplicationBase_Step",
+            "target": "0x9bad00"
+          }
+        ],
+        "prologue": "48 8B C4 48 89 58 10 48 89 48 08 55"
       },
       "consumers": [],
       "exposure": [],
@@ -1216,8 +2448,19 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 1568
-        }
+          "bytes": 1568,
+          "calls": 31,
+          "ripRefs": 8,
+          "resyncs": 1
+        },
+        "callees": [
+          {
+            "ordinal": 15,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "prologue": "48 89 5C 24 18 48 89 4C 24 08 55 56"
       },
       "consumers": [],
       "exposure": [],
@@ -1249,8 +2492,54 @@
           }
         ],
         "cfgLite": {
-          "bytes": 2633
-        }
+          "bytes": 2633,
+          "calls": 42,
+          "ripRefs": 33,
+          "resyncs": 2
+        },
+        "callees": [
+          {
+            "ordinal": 3,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 11,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 13,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 17,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 23,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 25,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 27,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
       },
       "consumers": [],
       "exposure": [],
@@ -1277,8 +2566,79 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 5860
-        }
+          "bytes": 5860,
+          "calls": 105,
+          "ripRefs": 73,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 13,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 14,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 15,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 18,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 24,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 28,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 32,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 33,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 55,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 66,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 77,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 79,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 81,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "prologue": "40 55 53 56 57 41 54 41 55 41 56 41"
       },
       "consumers": [],
       "exposure": [],
@@ -1299,8 +2659,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 653
-        }
+          "bytes": 653,
+          "calls": 0,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "48 89 5C 24 08 55 48 8B EC 48 83 EC"
       },
       "consumers": [],
       "exposure": [],
@@ -1322,8 +2687,24 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 622
-        }
+          "bytes": 622,
+          "calls": 9,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 6,
+            "name": "Gon_PatchMerge_b",
+            "target": "0x944f50"
+          },
+          {
+            "ordinal": 8,
+            "name": "Gon_PatchMerge_b",
+            "target": "0x944f50"
+          }
+        ],
+        "prologue": "48 89 5C 24 08 48 89 74 24 10 48 89"
       },
       "consumers": [],
       "exposure": [],
@@ -1345,8 +2726,69 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 3295
-        }
+          "bytes": 3295,
+          "calls": 70,
+          "ripRefs": 13,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Gon_PatchMerge_a",
+            "target": "0x944cc0"
+          },
+          {
+            "ordinal": 2,
+            "name": "Gon_PatchMerge_a",
+            "target": "0x944cc0"
+          },
+          {
+            "ordinal": 14,
+            "name": "Gon_DeepMerge",
+            "target": "0x946680"
+          },
+          {
+            "ordinal": 20,
+            "name": "Gon_DeepMerge",
+            "target": "0x946680"
+          },
+          {
+            "ordinal": 24,
+            "name": "Gon_PatchMerge_b",
+            "target": "0x944f50"
+          },
+          {
+            "ordinal": 34,
+            "name": "Gon_DeepMerge",
+            "target": "0x946680"
+          },
+          {
+            "ordinal": 37,
+            "name": "Gon_PatchMerge_b",
+            "target": "0x944f50"
+          },
+          {
+            "ordinal": 42,
+            "name": "Gon_PatchMerge_b",
+            "target": "0x944f50"
+          },
+          {
+            "ordinal": 50,
+            "name": "Gon_DeepMerge",
+            "target": "0x946680"
+          },
+          {
+            "ordinal": 55,
+            "name": "Gon_PatchMerge_b",
+            "target": "0x944f50"
+          },
+          {
+            "ordinal": 63,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 89 5C 24 18 55 56 57 41 54 41 55"
       },
       "consumers": [],
       "exposure": [],
@@ -1368,8 +2810,34 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 711
-        }
+          "bytes": 711,
+          "calls": 12,
+          "ripRefs": 5,
+          "resyncs": 0
+        },
+        "callees": [
+          {
+            "ordinal": 4,
+            "name": "Entity_FindComponentsByTypeId",
+            "target": "0x969f90"
+          },
+          {
+            "ordinal": 5,
+            "name": "Status_Remove",
+            "target": "0x767fa0"
+          },
+          {
+            "ordinal": 6,
+            "name": "LuckUp_ctor",
+            "target": "0x711c90"
+          },
+          {
+            "ordinal": 9,
+            "name": "Status_ApplyByName",
+            "target": "0x483120"
+          }
+        ],
+        "prologue": "4C 89 4C 24 20 89 54 24 10 48 89 4C"
       },
       "consumers": [],
       "exposure": [],
@@ -1417,8 +2885,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 292
-        }
+          "bytes": 292,
+          "calls": 6,
+          "ripRefs": 3,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89"
       },
       "consumers": [],
       "exposure": [],
@@ -1439,8 +2912,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 361
-        }
+          "bytes": 361,
+          "calls": 1,
+          "ripRefs": 1,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "48 8B C4 48 89 58 08 48 89 68 18 48"
       },
       "consumers": [],
       "exposure": [],
@@ -1461,8 +2939,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 1111
-        }
+          "bytes": 1111,
+          "calls": 15,
+          "ripRefs": 40,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "40 55 53 56 57 41 56 48 8B EC 48 83"
       },
       "consumers": [],
       "exposure": [],
@@ -1483,8 +2966,13 @@
       "anchors": {
         "strings": [],
         "cfgLite": {
-          "bytes": 194
-        }
+          "bytes": 194,
+          "calls": 6,
+          "ripRefs": 1,
+          "resyncs": 0
+        },
+        "callees": [],
+        "prologue": "40 53 41 56 41 57 48 83 EC 40 80 B9"
       },
       "consumers": [],
       "exposure": [],
@@ -1500,8 +2988,8 @@
         "witness": {
           "function": "DebugConsole_init",
           "kind": "rip-mov",
-          "ripRefOrdinal": null,
-          "needsHarvest": true
+          "ripRefOrdinal": 44,
+          "needsHarvest": false
         },
         "note": "ApplicationBase* global; DebugConsole::init reads it (DAT_1413c4a30)"
       },
@@ -1746,8 +3234,8 @@
         "witness": {
           "function": "Status_ApplyByName",
           "kind": "rip-lea",
-          "ripRefOrdinal": null,
-          "needsHarvest": true
+          "ripRefOrdinal": 0,
+          "needsHarvest": false
         },
         "note": "default applier source object used when the caller passes null (DAT_1413c4d30 in apply_status and the LuckUp branch)"
       },

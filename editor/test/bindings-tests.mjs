@@ -817,7 +817,7 @@ export async function runBindingsTests(test, assert, eq) {
   const { findString, findStringXrefs, harvestFunction, findRtti, vtableSlotTarget, deriveFromVtableSlot, harvestManifest } = hv;
 
   /**
-   * A fake image: .hvText at 0x1000, .hvRdata at 0x2000, .hvData at 0x3000 (builder layout, each section < 1 page).
+   * A fake image: .text at 0x1000, .hvRdata at 0x2000, .hvData at 0x3000 (builder layout, each section < 1 page).
    *   hvFnA 0x1010: lea rcx,[rip->funcsig]; call fnB; mov rax,[rip->Glob]; ret
    *   fnB 0x1040: mov eax,0x4d6; ret            (vtable slot 1 body)
    *   fnC 0x1060: push rbx; ...; ret            (vtable slot 0 body)
@@ -855,14 +855,14 @@ export async function runBindingsTests(test, assert, eq) {
   hvData.write(".?AVFoo@glaiel@@\0", 0x30, "latin1");
   const hvPe = buildFakePe({
     timeDateStamp: 0x44444444,
-    sections: [{ name: ".hvText", bytes: hvText, exec: true }, { name: ".hvRdata", bytes: hvRdata }, { name: ".hvData", bytes: hvData, write: true }],
-    pdata: [{ section: ".hvText", begin: 0x10, end: 0x30 }, { section: ".hvText", begin: 0x40, end: 0x46 }, { section: ".hvText", begin: 0x60, end: 0x80 }],
+    sections: [{ name: ".text", bytes: hvText, exec: true }, { name: ".hvRdata", bytes: hvRdata }, { name: ".data", bytes: hvData, write: true }],
+    pdata: [{ section: ".text", begin: 0x10, end: 0x30 }, { section: ".text", begin: 0x40, end: 0x46 }, { section: ".text", begin: 0x60, end: 0x80 }],
   });
   const hp = parsePe(hvPe.buf);
   eq(hvPe.rva(".hvRdata", 0), RDATA, "fake layout assumption");
-  eq(hvPe.rva(".hvData", 0), DATA, "fake layout assumption");
+  eq(hvPe.rva(".data", 0), DATA, "fake layout assumption");
 
-  test("findString: NUL-terminated string -> rva + occurrence count (hvData sections only)", () => {
+  test("findString: NUL-terminated string -> rva + occurrence count (data sections only)", () => {
     const s = findString(hp, hvPe.buf, FUNCSIG);
     eq(s.rva, RDATA + 0x10);
     eq(s.count, 1);
@@ -880,7 +880,7 @@ export async function runBindingsTests(test, assert, eq) {
   test("harvestFunction: funcsig string anchor, callees by ordinal, rip refs by ordinal, cfgLite and prologue", () => {
     const h = harvestFunction(hp, hvPe.buf, TEXT + 0x10, { names: new Map([[TEXT + 0x40, "FnB"]]) });
     eq(h.strings.length, 1);
-    eq(h.strings[0].hvText, FUNCSIG);
+    eq(h.strings[0].text, FUNCSIG);
     eq(h.strings[0].role, "funcsig");
     eq(h.strings[0].unique, true);
     eq(h.callees.map((/** @type {any} */ c) => `${c.ordinal}:${c.name}:${c.target}`).join(","), "0:FnB:0x1040");
@@ -918,17 +918,17 @@ export async function runBindingsTests(test, assert, eq) {
       entries: [
         { name: "FnA", kind: "function", rva: "0x1010", signature: null, anchors: {}, consumers: [], exposure: [{ table: "FW_LK", index: 0, shape: "A" }], evidence: [] },
         { name: "FnB", kind: "function", rva: "0x1040", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
-        { name: "Glob", kind: "hvData", rva: "0x3100", anchors: { witness: { function: "FnA", kind: "rip-mov", ripRefOrdinal: null, needsHarvest: true } }, consumers: [], exposure: [{ enum: "FW_DATA_Glob", index: 0 }], evidence: [] },
+        { name: "Glob", kind: "data", rva: "0x3100", anchors: { witness: { function: "FnA", kind: "rip-mov", ripRefOrdinal: null, needsHarvest: true } }, consumers: [], exposure: [{ enum: "FW_DATA_Glob", index: 0 }], evidence: [] },
         { name: "Foo_vftable", kind: "vtable", rva: "0x2080", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
         { name: "Foo_typeid", kind: "constant", value: "0x4d6", anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] },
         { name: "Wrong_vftable", kind: "vtable", rva: "0x2090", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [], evidence: [] },
-        { name: "Tbl", kind: "hvData", rva: "0x2000", anchors: {}, consumers: [], exposure: [], evidence: [] },
-        { name: "Tbl_slot3", kind: "hvData", rva: "0x2018", anchors: { derive: { table: "Tbl", index: 3 } }, consumers: [], exposure: [], evidence: [] },
+        { name: "Tbl", kind: "data", rva: "0x2000", anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "Tbl_slot3", kind: "data", rva: "0x2018", anchors: { derive: { table: "Tbl", index: 3 } }, consumers: [], exposure: [], evidence: [] },
       ],
     });
     const { manifest: out, report } = harvestManifest(hp, hvPe.buf, m);
     const a = entry(out, "FnA");
-    eq(a.anchors.strings[0].hvText, FUNCSIG);
+    eq(a.anchors.strings[0].text, FUNCSIG);
     eq(a.anchors.callees[0].name, "FnB");
     eq(a.anchors.cfgLite.bytes, 0x20);
     const g = entry(out, "Glob");
@@ -956,7 +956,7 @@ export async function runBindingsTests(test, assert, eq) {
         const sig = h.strings.find((/** @type {any} */ s) => s.role === "funcsig" && s.unique);
         if (e.name === "Status_NameExists") { if (sig) bad.push("Status_NameExists unexpectedly has a funcsig"); continue; }
         if (!sig) { bad.push(`${e.name}: no unique funcsig`); continue; }
-        const x = findStringXrefs(p, exe, findString(p, exe, sig.hvText).rva);
+        const x = findStringXrefs(p, exe, findString(p, exe, sig.text).rva);
         const fns = [...new Set(x.map((/** @type {any} */ r) => (r.fn ? r.fn.begin : -1)))];
         if (fns.length !== 1 || fns[0] !== parseInt(e.rva, 16)) bad.push(`${e.name}: xrefs from ${fns.map((f) => "0x" + f.toString(16)).join(",")}`);
         else found++;
@@ -985,7 +985,7 @@ export async function runBindingsTests(test, assert, eq) {
       assert(Number.isInteger(dss.anchors.witness.ripRefOrdinal) && dss.anchors.witness.needsHarvest === false, `DefaultStatusSource witness ${JSON.stringify(dss.anchors.witness)}`);
       const withSig = out.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.anchors.strings && e.anchors.strings.some((/** @type {any} */ s) => s.role === "funcsig")).length;
       assert(withSig >= 20, `funcsig anchors: ${withSig}`);
-      eq(JSON.stringify(out), JSON.stringify(m), "committed anchors are current (else: node tools/bindings/harvest.mjs <exe> --manifest bindings/25143593.json --write)");
+      assert(JSON.stringify(out) === JSON.stringify(m), "committed anchors are stale: run node tools/bindings/harvest.mjs <exe> --manifest bindings/25143593.json --write");
     });
   }
 }
