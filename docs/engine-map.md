@@ -150,6 +150,12 @@ background, with **your own** container name and queue directory:
 node tools/rea-mcp.mjs --server "docker run --rm -i --name rea_ghidra_<tag> -v \"C:\Program Files (x86)\Steam\steamapps\common\Mewgenics:/game:ro\" -e REA_GHIDRA_STARTUP_TIMEOUT_MS=1800000 rea-ghidra:12.1.4 --mcp" watch .analysis/queue-<tag>
 ```
 
+`.analysis/` is git-ignored and has no backup: the decompiles, `list_procedures.tsv` and the saved exes under
+`.analysis/exe/<build>/` exist only on this disk. On 2026-10-19 a `git worktree remove` of a worktree that held a
+junction to `.analysis` emptied the directory (see `CLAUDE.md` "Worktrees with junctions"); every decompile the docs
+cite now has to be re-done from a fresh import, and the old-build exe re-fetched with Steam `download_depot`. Keep
+junctions out of worktrees, or unlink them (`cmd /c rmdir`) before deleting the tree.
+
 Protocol (see `tools/rea-mcp.mjs`): drop `req-<name>.json` — a JSON array of `{id, tool, arguments, timeoutMs}` —
 into the queue dir; results appear as `res-<name>.json` and the request is renamed `done-<name>.json`. The first
 request must be `open_binary {"path":"/game/Mewgenics.exe","provider_id":"ghidra"}` (timeoutMs 3600000) followed by

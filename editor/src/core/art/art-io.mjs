@@ -1,6 +1,7 @@
 // Mod-side IO for the art pipeline: scenes live at mods/<mod>/art/*.scene.json,
-// built SWFs at mods/<mod>/swfs/<name>.swf (git-ignored by *.swf), and the manifest
-// overlay at mods/<mod>/swfs/swflist.gon.append. Every path goes through
+// built SWFs at mods/<mod>/swfs/<name>.swf and the manifest overlay at
+// mods/<mod>/swfs/swflist.gon.append (the whole swfs/ dir is build output, git-ignored
+// as mods/*/swfs/; art/*.scene.json is the source). Every path goes through
 // resolveModWritePath, so nothing can land outside mods/<mod>/ or near saves/ or the
 // protected game files.
 

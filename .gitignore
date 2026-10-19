@@ -2,6 +2,8 @@
 .extracted/
 *.gpak
 *.swf
+# art-pipeline build output: built SWFs + the generated swflist.gon.append (rebuilt by the editor / e2e)
+mods/*/swfs/
 *.wav
 *.ogg
 *.sav

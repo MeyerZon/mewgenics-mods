@@ -39,6 +39,8 @@ fragile when the base game adds rows. Prefer `.append` with new localization key
 - **Classes** (`data/classes/classes.gon`): `Fighter { meta {...}; graphics { palette 54; alt_animations [...] }; attack_pool [...]; ability_pool [...] }`.
 - **Difficulties** (`data/difficulties.gon`): numeric keys `0..N { boss_health_multiplier; wallet_size; easy {...}; hard {...} }`.
 - **SWF list** (`swfs/swflist.gon`): `game [ ... ]` array of SWF files; add art with `swflist.gon.append`.
+  In this repo `mods/<mod>/swfs/` is **build output** of the editor's art pipeline (the SWF and the generated
+  `swflist.gon.append`) and is git-ignored; the source is `mods/<mod>/art/*.scene.json`.
 - **Text** (`data/text/combined.csv`): `KEY,en,notes,sp,fr,de,it,pt-br,ru,ko,ja,zh-cn`.
 
 Extract reference copies with `python -I tools/gpak.py extract .extracted --prefix data/` (git-ignored).

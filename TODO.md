@@ -21,7 +21,12 @@ Things no test can see: they need a human at the game, a decision, or an account
 - [x] **Decisions pending** — all decided 2026-10-19 (see "Decisions" and "Decisions made" below): GitHub Actions
   for T0 **yes, path-filtered**; Ruffle **yes, via the dep-gate**; dead `conceptsDontShowStart` key **remove the
   button**; mechanical TDD enforcement **yes** (PR template + CI).
-- [ ] **Merges.** Every PR waits for your explicit per-PR word (`CLAUDE.md`); none open as of 2026-10-19 evening.
+- [ ] **Re-fetch the older build exe** into `.analysis/exe/23372843/Mewgenics.exe` (Steam console
+  `download_depot 686060 686061 8229879464648565847`, then copy): lost on 2026-10-19 when a worktree removal followed a
+  junction and emptied `.analysis/` (`CLAUDE.md` "Worktrees with junctions"). Needed again only for the opt-in
+  cross-build T1 (`BINDINGS_NEW_EXE`).
+- [ ] **Merges.** Every PR waits for your explicit per-PR word (`CLAUDE.md`). Open as of 2026-10-19 night: PR #27
+  (docs, cross-build port) and the leftovers stack listed under "Next, directly queued".
 
 ## Owner checklist — what only you can check (binding-port series, merged 2026-10-19)
 
@@ -96,7 +101,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] Flag `tcrf.net/Mewgenics` as a do-not-fetch source (prompt injection) in `CLAUDE.md`
 - [x] Research: `docs/automation-feasibility.md`, `docs/art-pipeline.md`, `docs/swf-tooling-options.md`
 
-### Art pipeline foundation (uncommitted WIP in working tree)
+### Art pipeline foundation (landed 2026-10-18/19)
 - [x] Hand-written SWF emitter (DefineShape + DefineSprite timelines + DefineBitsLossless2 PNG + optional stub DoABC)
 - [x] SVG import, verification SWF reader, raw-WebGL in-game-faithful preview, Art-mode editor panels
 - [x] Art-mode onboarding (dedicated art tour, empty states, concepts, worked example)
@@ -148,9 +153,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    triggered only when relevant paths change (`editor/`, `native/`, `bindings/`, `tools/`, `mods/`), not on docs-only PRs.
 10. [ ] **Test runner ergonomics**: a name filter for `run-tests.mjs` (or migrate to built-in `node:test`, zero deps,
     gives `--test-name-pattern`/`--watch`) so red/green per test is cheap.
-11. [ ] **Mechanical enforcement** (decided **yes** 2026-10-19): a PR template with the red/green table + T3 checklist; a
-    check that a change under `src/`/`native/*/src/`/`mods/` comes with a test change; CI running T0 on relevant PRs
-    (shares the workflow from target 9).
+11. [~] **Mechanical enforcement** (decided **yes** 2026-10-19): PR template with the red/green table + T3 checklist
+    **done** (PR #26); still open: a check that a change under `src/`/`native/*/src/`/`mods/` comes with a test
+    change, and CI running T0 on relevant PRs (shares the workflow from target 9).
 12. [ ] **Harness features**: expose `-mewtest_clean` in the runner (`clean: true` header) for a complete `debug.log`;
     named-pipe interactive mode (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`); RNG seed pinning via `TLS+0x178`
     for exact numeric assertions; `expect log "<substr>"` against `debug.log` from the runner side.
@@ -182,7 +187,20 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")
 - [x] Emitter fix from `swf-emitter-fix-spec.md` (PR #21, 2026-10-19): `AbilityIcon` places a bare shape at **depth 3** per labeled frame (not nested clips) — donor mirrors it; T2 gate `npm run test:swfgate -- <variant>` boots every layout (incl. the pre-fix one) without crashing, and `missing` proves the merge runs. T3 done the same day: owner saw the gray square for `JokersGambit` inside a run, no crash.
-- [ ] Commit the uncommitted WIP (art pipeline + docs + `CLAUDE.md` flag) + open a PR for review (not merge)
+- [x] Commit the uncommitted WIP (art pipeline + docs + `CLAUDE.md` flag) — landed; `mods/*/swfs/` is build output
+  and git-ignored since the leftovers stack (2026-10-19).
+- **Leftovers stack (2026-10-19 night)** — one PR per concern, stacked, owner merges:
+  - [x] PR 1 `chore/leftovers-hygiene`: ignore `mods/*/swfs/`, TODO truth, prune merged branches + stale worktree
+    (the removal emptied `.analysis/`, `.extracted/data`, `editor/node_modules`, `native/dist` through junctions;
+    data and DLLs regenerated the same night, decompiles and the old exe are not — rule added to `CLAUDE.md`)
+  - [ ] **Rebuild `.analysis/decompiled/`** for the functions the docs cite (`Gon_merge_{a,b,c}`,
+    `FileManager_resolve_overlays`, `ProcessCmds`, `SaveSelection_Build`, the status pipeline, `p2_*`, `r3d_*`, every RVA
+    in `engine-map.md`): one import with an own `rea_ghidra_<tag>`, then `batch_decompile`; fold into PR 5's import.
+  - [ ] PR 2 `fix/port-report-old-column`: port report `old` column, `--gameVersion`, rung-2 deltas in the report
+  - [ ] PR 3 `test/t0-skips-gpak-filter`: targets 9 + 10, `tools/gpak.py` T0 suite
+  - [ ] PR 4 `fix/harness-clean-exit`: `-mewtest_clean` exits (pure `mt_exit.c` + runner end-grace), `clean:` header
+  - [ ] PR 5 `docs/save-suffix-mapping`: decode `MewSaveFile::open_or_create`, savecheck over every real save
+  - [ ] PR 6 `feat/bindings-typeid-witness`: second witness for `LuckUp_typeid`
 
 ### Go public (do LAST, after everything else lands — approved 2026-10-18)
 - [x] Scrub complete: mod `author` → "MeyerZon"; test scratch path → env/`""`; save-backup doc path → `%USERPROFILE%`; `chainloader.ini` personal path → `__REPO__` placeholder resolved at install time; `build.bat`/`CLAUDE.md` toolchain path made `GCC`-env-overridable. (Tyler Glaiel's `__FILE__` asserts embedded in the game binary are RE evidence, kept.)
@@ -194,12 +212,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [ ] Ruffle (WASM) dependency for previewing *vanilla* SWFs in-editor — **approved in principle**. Still goes through
   the skeptic dep-gate (source review, no injection, vuln scan) and the owner's explicit per-install go before anything
   is added to `editor/package.json`.
-- [ ] Dead key `mewged.onboard.conceptsDontShowStart` — **remove the "Don't show on start" button and the key** (nothing
-  reads it; the concepts drawer never auto-opens). TDD: red e2e/unit test asserting the button is gone, then the removal.
+- [x] Dead key `mewged.onboard.conceptsDontShowStart` — button and key removed (PR #25, 2026-10-19, red unit test first).
 - [ ] GitHub Actions running T0 (`npm test`, `npm run typecheck`, `native\test-all.bat` where a Windows runner allows)
   on PRs that touch `editor/`, `native/`, `bindings/`, `tools/` or `mods/`; docs-only PRs skip it. Depends on target 9
   (T0 must skip, not fail, without `.extracted/`).
-- [ ] PR template with the red→green table and the T3 checklist (`.github/pull_request_template.md`).
+- [x] PR template with the red→green table and the T3 checklist (`.github/pull_request_template.md`) — PR #26, 2026-10-19.
 
 ### Larger build-out
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
