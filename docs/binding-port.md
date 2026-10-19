@@ -21,7 +21,7 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 
 ## The manifest: `bindings/<steamBuildId>.json`
 
-One file per build (schema: `bindings/manifest.schema.json`; validator: `editor/src/core/bindings/manifest.mjs`).
+One file per build (schema: `bindings/manifest.schema.json`; validator: `editor/src/core/bindings/manifest.ts`).
 `native/framework/src/signatures.h` (one `BuildInfo` + signature/lookup tables per manifest, so one DLL can know
 several builds) and `native/framework/src/offsets.h` (shared `#define`s; the generator refuses when two manifests
 disagree) are **generated** from it: `cd editor && npm run bindings:gen` (`bindings:check` for CI). Nothing
@@ -32,7 +32,7 @@ surfaces (`exposure`: `FW_SYM_*` / `FW_DATA_*` enumerators, the `FW_LK` table wi
 field or an `OFF_*`/`VT_*` macro), who uses it (`consumers`), `evidence[]` (decompile paths under `.analysis/`),
 and **anchors**, the evidence that finds it again:
 
-| Entry kind | Anchors recorded by `tools/bindings/harvest.mjs` |
+| Entry kind | Anchors recorded by `tools/bindings/harvest.ts` |
 |---|---|
 | function | `signature` (shortest unique masked prefix, rel32 / rip-relative disp32 / imm64 wildcarded, may start inside the function with a negative `offset`), `strings` (the MSVC `__FUNCSIG__` / `__FILE__` strings it references via rip-relative `lea`, with uniqueness; hand-added `literal` strings are kept), `callees` (calls to other manifest entries, by ordinal among all calls), `cfgLite` (bytes from `.pdata`, calls, rip refs), `prologue`, optionally `after` (the `.pdata` function it follows) |
 | data | `witness` (the function that references it and the ordinal of that rip-relative reference), or `derive { table, index }` |
@@ -47,26 +47,26 @@ unique funcsig string (`enum glaiel::Status::StackMode __cdecl glaiel::get_statu
 x64 RTTI; the SDL jump table is referenced by the function that reads `SDL3_DYNAMIC_API`.
 
 **Harvest the current build before the game updates** — the old exe disappears from the install:
-`node tools/bindings/harvest.mjs <exe> --manifest bindings/<build>.json --write` (a T1 test fails when the
+`node tools/bindings/harvest.ts <exe> --manifest bindings/<build>.json --write` (a T1 test fails when the
 committed anchors are stale). Keep a copy of the exe under `.analysis/exe/<build>/` (git-ignored).
 
 ## Tools
 
 | Tool | Does |
 |---|---|
-| `tools/bindings/check-build.mjs [exe]`, MCP `check_game_build` | identity + every signature scanned (`ok / moved / missing / ambiguous`); on an unknown build scans with the newest manifest to show what survived |
-| `tools/bindings/make-signature.mjs <exe> name=rva ...` / `--manifest <m> --write` | regenerate signatures (wildcards; old kept on failure) |
-| `tools/bindings/harvest.mjs <exe> --manifest <m> [--write]` | fill/verify anchors; reports mismatches without rewriting values |
-| `tools/bindings/port.mjs --from <old> --exe <new> --build <id> [--resolve N=0x..] [--apply]`, MCP `port_bindings` | the ladder below; writes `bindings/<id>.json` + `.port-report.md` only with `--apply` |
-| `tools/bindings/seed-file.mjs --manifest <m> [--out p]` | `REA_GHIDRA_SEED_FILE` (old names; on a ported manifest also `Name__cand_<rva>` per candidate) |
-| `tools/bindings/gen-headers.mjs [--check]` (`npm run bindings:gen`) | `signatures.h` / `offsets.h` |
+| `tools/bindings/check-build.ts [exe]`, MCP `check_game_build` | identity + every signature scanned (`ok / moved / missing / ambiguous`); on an unknown build scans with the newest manifest to show what survived |
+| `tools/bindings/make-signature.ts <exe> name=rva ...` / `--manifest <m> --write` | regenerate signatures (wildcards; old kept on failure) |
+| `tools/bindings/harvest.ts <exe> --manifest <m> [--write]` | fill/verify anchors; reports mismatches without rewriting values |
+| `tools/bindings/port.ts --from <old> --exe <new> --build <id> [--resolve N=0x..] [--apply]`, MCP `port_bindings` | the ladder below; writes `bindings/<id>.json` + `.port-report.md` only with `--apply` |
+| `tools/bindings/seed-file.ts --manifest <m> [--out p]` | `REA_GHIDRA_SEED_FILE` (old names; on a ported manifest also `Name__cand_<rva>` per candidate) |
+| `tools/bindings/gen-headers.ts [--check]` (`npm run bindings:gen`) | `signatures.h` / `offsets.h` |
 | validator finding `native-build-unknown` | a mod uses a native-registered name but the installed exe is unknown |
 
 The library behind them is `editor/src/core/bindings/` (`pe`, `scan` with the DLL's exact scanner semantics,
-`siggen`, `manifest`, `harvest`, `port`, `check`, `seed`, `gen-headers`), tested in `editor/test/bindings-tests.mjs`
+`siggen`, `manifest`, `harvest`, `port`, `check`, `seed`, `gen-headers`), tested in `editor/test/bindings-tests.ts`
 (fake PE images built in-test; T1 against the installed exe).
 
-## The ladder (`port.mjs`)
+## The ladder (`port.ts`)
 
 Per function, the first rung that yields exactly one answer wins:
 
@@ -111,9 +111,9 @@ Summary: 98 entries · ported-exact 35 · ported-anchor 12 · ported-witness 5 �
 - **T1 self-port**: the manifest ported onto its own exe must change no value (every signed function
   `ported-exact`, exactly the unanchored entries `needs-human`).
 - **T1 cross-build**: the only tier that proves anchors survive a real recompile. Opt-in test in
-  `bindings-tests.mjs` driven by `BINDINGS_OLD_EXE` / `BINDINGS_NEW_EXE` (git-ignored copies under
+  `bindings-tests.ts` driven by `BINDINGS_OLD_EXE` / `BINDINGS_NEW_EXE` (git-ignored copies under
   `.analysis/exe/<build>/`); fetch an older build with Steam's `download_depot 686060 <depot> <manifest>`. The same
-  run as a CLI: `node tools/bindings/cross-build.mjs --old <exe> --new <exe> [--build <id>] [--gameVersion <x.y.z>]`
+  run as a CLI: `node tools/bindings/cross-build.ts --old <exe> --new <exe> [--build <id>] [--gameVersion <x.y.z>]`
   (nothing written; exit 1 when a non-offset entry is ambiguous/failed). In the report every anchor-ported row records
   the candidate's drift from the old cfgLite (`size +N / calls +M vs old`), so a run whose anchors all drifted by 0
   is recognisable as a relink that never stressed the tolerances; the `old` column is the pre-port value.
@@ -127,7 +127,7 @@ First run against a second genuine build. The committed manifest (Steam build 25
 2026-09-05, SizeOfImage `0x1574000`) was ported onto the **older** build 23372843 (~1.1.21039, public push
 2026-05-23, TimeDateStamp `0x6a10f6ca`, SizeOfImage `0x156b000`, depot 686061 manifest 8229879464648565847, exe
 kept under `.analysis/exe/23372843/`; SDL 3.2.12 on both). Both forms agree:
-`node tools/bindings/cross-build.mjs --old <25143593 exe> --new <23372843 exe> --build 23372843` exited 0 with
+`node tools/bindings/cross-build.ts --old <25143593 exe> --new <23372843 exe> --build 23372843` exited 0 with
 `cross-build 25143593 -> new exe: 0 non-offset entries ambiguous/failed`, and `BINDINGS_OLD_EXE=… BINDINGS_NEW_EXE=…
 npm test` passed the opt-in test (`235 passed, 0 failed`). Full report: `.analysis/cross-build/25143593-to-23372843.txt`
 (git-ignored).
@@ -173,8 +173,8 @@ What the run suggests for the ladder (candidates, not implemented):
   moved. Harvest `witness { function, pattern, dispAt }` per offset from its consumer (`Status_ctor`,
   `Character_BeginTurn`, `DebugConsole_init`, …) so the next run reports `ported-witness` / `proposed` instead of
   `needs-human`.
-- `cross-build.mjs` has no `--gameVersion`, so the ported build block keeps the old manifest's `1.1.21239`;
-  `port.mjs` already accepts `opts.gameVersion`, pass it through.
+- `cross-build.ts` has no `--gameVersion`, so the ported build block keeps the old manifest's `1.1.21239`;
+  `port.ts` already accepts `opts.gameVersion`, pass it through.
 - Record the size/call deltas rung 2 saw in the report (all 0 here) so the tolerances can be tightened on evidence,
   and keep a build with a changed SDL on the wishlist — the `table` derivation's `needs-human` path is still
   untested on a real image.

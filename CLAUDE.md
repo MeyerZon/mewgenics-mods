@@ -67,12 +67,12 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 `@playwright/test`; see `docs/editor-ts-react-plan.md`):
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates).
-- `npm test` — the full unit suite (`node test/run-tests.mjs`: GON, overlays, validator, art, the in-game runner
+- `npm test` — the full unit suite (`node test/run-tests.ts`: GON, overlays, validator, art, the in-game runner
   against a fake game, an MCP spawn smoke, the bindings library against fake PE images and the installed exe;
   ~250 checks). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
   reports the skipped count. Without `.extracted/` the data-dependent sections print `(skipped: …)` and the suite
   still exits 0 (a nested run with `MEWGENICS_EXTRACTED_DATA` pointing at an empty dir checks that on every run).
-  `tools/gpak.py` is covered by `test/gpak-tests.mjs` on a synthetic archive (needs a Python 3 on PATH, else skips).
+  `tools/gpak.py` is covered by `test/gpak-tests.ts` on a synthetic archive (needs a Python 3 on PATH, else skips).
 - `npm run bindings:gen` / `bindings:check` — regenerate / verify `native/framework/src/signatures.h` + `offsets.h`
   from `bindings/*.json` (see "Everything native is pinned" below).
 - `npm run typecheck` — `tsc --noEmit` (strict) over the TS/TSX web UI and the JSDoc-typed core. The Node side runs
@@ -141,7 +141,7 @@ Never type a build-specific number into native code. The framework **gates on th
 (logs "unknown build ...", installs no hooks) on any other build; the in-game runner then reports `unknown-build` and
 the validator warns `native-build-unknown`. When the game updates, port the manifest with the `port-bindings` skill
 (`docs/binding-port.md`: `check_game_build` → `port_bindings` → `bindings:gen` → rebuild → T1/T2) — a broken binding
-is a disabled mod, not a crash. Harvest anchors (`tools/bindings/harvest.mjs --write`) before every update.
+is a disabled mod, not a crash. Harvest anchors (`tools/bindings/harvest.ts --write`) before every update.
 
 **GON overlay semantics are the game's, reproduced in two places.** The `-modpaths` loader resolves a file as the pack
 copy first, then applies mod overlays (later paths override earlier) named `X.gon.append` / `.merge` / `.patch` →
@@ -150,7 +150,7 @@ GON's Append / DeepMerge / PatchMerge. The exact behavior (incl. `.patch` per-fi
 `.analysis/decompiled/Gon_merge_{a,b,c}.c`. The editor's `editor/src/core/overlay/` re-implements these; changes there
 must stay faithful to the decompiled functions.
 
-**The editor's core is the single source of truth.** `editor/src/core/api.mjs` is the one app surface; the MCP server
+**The editor's core is the single source of truth.** `editor/src/core/api.ts` is the one app surface; the MCP server
 (`editor/src/mcp/`) and the web UI (`editor/web/`) are thin adapters over it and must not re-implement GON parsing or
 validation. The GON engine is `editor/src/core/gon/` (tokenizer → parser → AST that preserves comments and positions →
 byte-faithful serializer). The validator (`editor/src/core/validate/`) runs four checks: reference integrity,

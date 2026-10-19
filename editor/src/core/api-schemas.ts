@@ -1,7 +1,7 @@
 // Request-body schemas for the editor's HTTP bridge (web/server) — one zod schema per POST
 // route, shared with the browser client so a request is typed at both ends. The server
 // answers a body that fails here with 400 + the zod issues; the handlers then only ever see
-// data of the declared shape. The core API itself keeps its own safety checks (repo.mjs):
+// data of the declared shape. The core API itself keeps its own safety checks (repo.ts):
 // this is the transport gate, not the authority.
 //
 // Pure TS, no DOM: Node runs it directly for the web server and the tests; Vite bundles it

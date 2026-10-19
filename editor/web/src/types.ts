@@ -1,5 +1,5 @@
 // Response shapes of the /api bridge as the data-mode UI reads them. Derived from the core's
-// JSDoc (src/core/api.mjs → mod-io, validate/result, preview-merge, base-data, components,
+// JSDoc (src/core/api.ts → mod-io, validate/result, preview-merge, base-data, components,
 // templates). Type aliases (not interfaces) where a value must also satisfy an index-signature
 // parameter such as buildTree's.
 

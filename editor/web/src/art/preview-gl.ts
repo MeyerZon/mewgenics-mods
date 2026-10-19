@@ -6,7 +6,7 @@
 // outside a browser.
 //
 // Render model (docs/art-preview-plan.md §3, docs/art-pipeline.md §5):
-//   * frames come from the SAME pure baking the SWF emitter uses (`timeline.mjs`), so
+//   * frames come from the SAME pure baking the SWF emitter uses (`timeline.ts`), so
 //     the pixels on screen are computed from the matrices/cxforms the SWF will carry;
 //   * shapes are filled with the stencil technique (no triangulation): one TRIANGLE_FAN
 //     per sub-path writes winding counts (nonzero: INCR_WRAP/DECR_WRAP by facing;
@@ -38,12 +38,12 @@ import {
   invert,
   signedArea,
   IDENTITY,
-} from "../../../src/core/art/geometry.mjs";
-import { parseFill, fillToRgba, parseColor } from "../../../src/core/art/scene.mjs";
-import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline.mjs";
-import type { Scene, Fill, SceneShape } from "../../../src/core/art/scene.mjs";
-import type { Mat, SubPath } from "../../../src/core/art/geometry.mjs";
-import type { BakedSprite, Cxform, Placement } from "../../../src/core/art/timeline.mjs";
+} from "../../../src/core/art/geometry.ts";
+import { parseFill, fillToRgba, parseColor } from "../../../src/core/art/scene.ts";
+import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline.ts";
+import type { Scene, Fill, SceneShape } from "../../../src/core/art/scene.ts";
+import type { Mat, SubPath } from "../../../src/core/art/geometry.ts";
+import type { BakedSprite, Cxform, Placement } from "../../../src/core/art/timeline.ts";
 
 export type { Scene, Fill, Mat, SubPath, BakedSprite, Cxform, Placement };
 
@@ -231,7 +231,7 @@ interface PreparedShape {
   bounds: Bounds | null;
 }
 
-/** Normalize a shape's paths once per scene (geometry.mjs owns the interpretation). */
+/** Normalize a shape's paths once per scene (geometry.ts owns the interpretation). */
 function prepareShape(shape: SceneShape): PreparedShape {
   const paths: PreparedPath[] = [];
   let bounds: Bounds | null = null;

@@ -10,7 +10,7 @@ import { createStore } from "../store.ts";
 import { S, toast } from "../state.ts";
 import { getJson, post, url } from "../api.ts";
 import { createPreview, type Preview } from "./preview-gl.ts";
-import { grayLevelToByte } from "../../../src/core/art/scene.mjs";
+import { grayLevelToByte } from "../../../src/core/art/scene.ts";
 import type {
   AbcMode,
   ArtAssets,

@@ -9,12 +9,12 @@ This file is the single source of truth for the contracts shared by the three pa
 
 | Part | Where |
 |---|---|
-| Node runner, MCP tools, CLI | `editor/src/core/ingame/`, `editor/src/mcp/tools.mjs`, `editor/scripts/ingame.mjs` |
+| Node runner, MCP tools, CLI | `editor/src/core/ingame/`, `editor/src/mcp/tools.ts`, `editor/scripts/ingame.ts` |
 | Framework API v3 (console/frame-loop symbols + data addresses) | `native/framework/` |
 | `mewtest.dll` (the harness) | `native/mods/test-harness/` (build with its `build.bat`, copy to `native/dist/`) |
 
 Without `native/dist/mewtest.dll` every real run reports `cannot-run` naming the missing piece; the runner itself
-is fully covered by `npm test` through a fake game (`editor/test/fixtures/fake-game.mjs`), and the DLL's pure
+is fully covered by `npm test` through a fake game (`editor/test/fixtures/fake-game.ts`), and the DLL's pure
 modules by `native/test-all.bat`.
 
 ## How a run works
@@ -172,7 +172,7 @@ under `mods/`.
 - Every path handed to the game (script, result file, game dir, mod dirs) is refused if any segment is `saves`
   (`repo.touchesSaves`, unchanged).
 - The real save (`steamcampaign01.sav`) is hashed read-only before and after each run; a change is a
-  `safety-violation`. This read lives in `editor/src/core/ingame/savecheck.mjs` only, approved by the owner on
+  `safety-violation`. This read lives in `editor/src/core/ingame/savecheck.ts` only, approved by the owner on
   2026-10-18 for this purpose; the editor's no-saves rules are not loosened anywhere else.
 - The harness DLL is inert without `-mewtest` and without `-savesuffix` (the framework already refuses vanilla
   launches), and never writes anything but its result file and `mod_logs\mewtest.log`.

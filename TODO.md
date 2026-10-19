@@ -42,7 +42,7 @@ Things no test can see: they need a human at the game, a decision, or an account
   console-smoke-clean` should finish ~3 s after "script finished" (the DLL grace), never the old 7-minute hang, and
   leave no stray `Mewgenics.exe` in Task Manager.
 - [ ] **Re-fetch build 23372843** (item above) — then, optionally, rerun the cross-build:
-  `node tools/bindings/cross-build.mjs --old <installed exe> --new .analysis/exe/23372843/Mewgenics.exe --build 23372843
+  `node tools/bindings/cross-build.ts --old <installed exe> --new .analysis/exe/23372843/Mewgenics.exe --build 23372843
   --gameVersion 1.1.21039` and confirm the `old` column shows 25143593's values, the 14 anchor rows read `size +0 /
   calls +0 vs old`, and `LuckUp_typeid` is `ported-derived … (agree)` with `0x4d5` from both sources (T3 of #29, #32).
 - [ ] **Remove the leftover agent worktree safely**: `.claude/worktrees/agent-ac7ac5f970624f89d` (PR #27's branch) still
@@ -163,14 +163,14 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    value in the units event: add `stacks` per status to `MtUnit`/the JSONL, host-tested first).
 3. [ ] **Auto-resolve overlay mod** `mods/_autoplay/` (`player_cat.gon.merge` → `passives { Uncontrollable 1 }`) so
    combat scripts run without input; validator test for the overlay, T2 test that a fight reaches round 2 unattended.
-4. [x] **Bindings regression test (T1)** — `editor/test/bindings-tests.mjs`: every manifest signature matches exactly
+4. [x] **Bindings regression test (T1)** — `editor/test/bindings-tests.ts`: every manifest signature matches exactly
    once at its RVA in the installed exe, every function RVA begins a `.pdata` entry, anchors re-verify, self-port
    changes nothing; `check_game_build` reports it live. (2026-10-19, binding-port series)
 5. [~] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
    the status definition table / name rules are still inside `status_engine.c`.
-6. [x] **Tools tests (T0)**: `tools/bindings/make-signature.mjs` is covered by the siggen section of
-   `bindings-tests.mjs` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` by
-   `editor/test/gpak-tests.mjs` on a synthetic archive (2026-10-19; list/cat/extract/stats, truncation, path escapes).
+6. [x] **Tools tests (T0)**: `tools/bindings/make-signature.ts` is covered by the siggen section of
+   `bindings-tests.ts` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` by
+   `editor/test/gpak-tests.ts` on a synthetic archive (2026-10-19; list/cat/extract/stats, truncation, path escapes).
 7. [ ] **Validator fixtures per check**: one failing fixture per finding code (`unknown-status`, `missing-loc-key`,
    `merge-target-missing`, …) so the four checks are each pinned by a T0 test instead of only by the sample mods.
 8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
@@ -181,7 +181,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged
    `(skipped: …)` so T0 is runnable (and CI-able) without game data. Decided 2026-10-19: GitHub Actions for T0, **yes**,
    triggered only when relevant paths change (`editor/`, `native/`, `bindings/`, `tools/`, `mods/`), not on docs-only PRs.
-10. [x] **Test runner ergonomics** (done 2026-10-19, leftovers PR 3: `npm test -- --only <substring>` / `TEST_ONLY`): a name filter for `run-tests.mjs` (or migrate to built-in `node:test`, zero deps,
+10. [x] **Test runner ergonomics** (done 2026-10-19, leftovers PR 3: `npm test -- --only <substring>` / `TEST_ONLY`): a name filter for `run-tests.ts` (or migrate to built-in `node:test`, zero deps,
     gives `--test-name-pattern`/`--watch`) so red/green per test is cheap.
 11. [~] **Mechanical enforcement** (decided **yes** 2026-10-19): PR template with the red/green table + T3 checklist
     **done** (PR #26); still open: a check that a change under `src/`/`native/*/src/`/`mods/` comes with a test
@@ -281,15 +281,15 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   headers, harvest/port/check/seed tools, `unknown-build` verdict, `native-build-unknown` validator warning). 2026-10-19.
 - [x] **Cross-build port, for real**: done 2026-10-19, 25143593 → 23372843, clean (see the owner checklist above and
   `docs/binding-port.md` "T1 cross-build result"). Proves anchors survive a relink; a body-changing build is still wanted.
-- [ ] **Port-report `old` column bug** (found by the cross-build run): `portFunction` in `editor/src/core/bindings/port.mjs`
+- [ ] **Port-report `old` column bug** (found by the cross-build run): `portFunction` in `editor/src/core/bindings/port.ts`
   sets `e.rva` before `finish` reads `oldValue`, so every ported row shows the new value as "old" (the real one only
   survives in the `was 0x…` detail). TDD: a fake-PE T0 test asserting the column, then capture `oldValue` first.
 - [ ] **Harden rung 3 (caller ordinal)**: `Status_ApplyLuckUp` / `LuckUp_ctor` port only by call ordinal with no fallback.
   Candidates from the cross-build run: a callee-set rung, a tolerant ordinal window, a vftable-store rung for
-  constructors (needs the RTTI phase before the function rungs). Pass `--gameVersion` through `cross-build.mjs` and
+  constructors (needs the RTTI phase before the function rungs). Pass `--gameVersion` through `cross-build.ts` and
   record rung-2 size/call deltas in the report while there.
 - [ ] **Witness patterns for the 38 unanchored entries** (struct offsets, vtable slot constants) so the port stops
-  reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.mjs`. Also a
+  reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.ts`. Also a
   second witness for `LuckUp_typeid` (imm32 at call #4 of `Status_ApplyLuckUp`) now that it is known to change.
 - [x] **Runtime anchor locator in the DLL** (optional): string → lea xref → `.pdata` so anchored-but-unsigned entries
   survive a relink before anyone runs the port. **Dropped** by owner decision 2026-10-19 (see "Decisions").

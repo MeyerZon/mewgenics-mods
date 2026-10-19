@@ -1,7 +1,5 @@
 {
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": true,
     "noEmit": true,
     "strict": true,
     "module": "nodenext",
@@ -11,7 +9,9 @@
       "es2023",
       "dom"
     ],
-    "types": [],
+    "types": [
+      "node"
+    ],
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": false,
@@ -22,18 +22,13 @@
     "noUncheckedIndexedAccess": false
   },
   "include": [
-    "src/**/*.mjs",
-    "src/**/*.js",
     "src/**/*.ts",
-    "web/**/*.mjs",
     "web/**/*.ts",
     "web/**/*.tsx",
-    "web/**/*.d.ts",
-    "scripts/**/*.mjs",
-    "test/**/*.mjs",
-    "types/**/*.d.ts",
-    "vite.config.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts",
     "tests/**/*.ts",
+    "vite.config.ts",
     "playwright.config.ts"
   ],
   "exclude": [

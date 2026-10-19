@@ -1,8 +1,8 @@
 // Shapes the art UI reads: the core's scene model (re-exported from the JSDoc typedefs in
-// src/core/art/scene.mjs) and the /api/art/* response shapes (src/core/art/art-io.mjs,
-// src/core/art/palette.mjs, src/core/api.mjs).
+// src/core/art/scene.ts) and the /api/art/* response shapes (src/core/art/art-io.ts,
+// src/core/art/palette.ts, src/core/api.ts).
 
-import type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, Finding, Fill } from "../../../src/core/art/scene.mjs";
+import type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, Finding, Fill } from "../../../src/core/art/scene.ts";
 
 export type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, Finding, Fill };
 

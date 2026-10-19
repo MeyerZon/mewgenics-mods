@@ -21,7 +21,7 @@ so a stale manifest is a disabled mod, never a crash. Your job is to produce
 
 ## Before you start
 
-- Confirm the situation: MCP `check_game_build {}` (or `node tools/bindings/check-build.mjs`).
+- Confirm the situation: MCP `check_game_build {}` (or `node tools/bindings/check-build.ts`).
   `known:true` and all signatures `ok` means nothing to port. `known:false` prints the identity
   and how many signatures survived the relink (the first porting signal).
 - You need: the new `Mewgenics.exe` (installed, or a copy; Steam console `download_depot 686060
@@ -34,7 +34,7 @@ so a stale manifest is a disabled mod, never a crash. Your job is to produce
 
 ## Procedure
 
-1. **Dry run.** `node tools/bindings/port.mjs --from bindings/<old>.json --exe <new exe>
+1. **Dry run.** `node tools/bindings/port.ts --from bindings/<old>.json --exe <new exe>
    --build <newBuild> [--version <gameVersion>]` or MCP `port_bindings { build, exe?, version?,
    dryRun: true }`. Read the report: one row per entry with a status from the closed set
    `ported-exact | ported-rescan | ported-anchor | ported-witness | ported-derived | proposed |
@@ -47,7 +47,7 @@ so a stale manifest is a disabled mod, never a crash. Your job is to produce
    - REA/Ghidra only when needed (one ~17 min import per exe): start **your own** containers
      (`rea_ghidra_<tag>`, own queue dir, read-only mounts: `docs/engine-map.md` "REA / Ghidra
      sessions"; never stop anyone else's). Windows Ghidra is read-only, so name things with seed
-     files: `node tools/bindings/seed-file.mjs --manifest bindings/<old>.json --out
+     files: `node tools/bindings/seed-file.ts --manifest bindings/<old>.json --out
      .analysis/seeds-<old>.tsv` for the OLD exe, and after a `--apply` dry run on the new side,
      `--manifest bindings/<newBuild>.json` which emits `Name__cand_<rva>` seeds for every
      candidate. Then `analyze_function` old + candidates, `compare_functions` (only `cfg` and
@@ -65,7 +65,7 @@ so a stale manifest is a disabled mod, never a crash. Your job is to produce
    `native/mods/jokers-luck` → copy the DLLs to `native/dist/` → `npm test` (T1: every signature
    matches once on the new exe, anchors re-verified) → `npm run test:ingame` (T2: the verdict
    must be `pass`, never `unknown-build`).
-6. **Harvest the new build** so the *next* update has anchors: `node tools/bindings/harvest.mjs
+6. **Harvest the new build** so the *next* update has anchors: `node tools/bindings/harvest.ts
    <new exe> --manifest bindings/<newBuild>.json --write` (0 mismatches expected), regenerate
    headers, re-run the tests.
 7. **PR.** Include the port report, the red→green evidence table, the T2 verdict lines, the

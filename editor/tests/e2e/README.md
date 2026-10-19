@@ -1,7 +1,7 @@
 # End-to-end tests (Playwright)
 
 A real-browser end-to-end suite for the editor web UI. It drives the actual
-`node web/server.mjs` serving the Vite build (`web/dist/`, built from the React
+`node web/server.ts` serving the Vite build (`web/dist/`, built from the React
 UI in `web/src/*.tsx`) in headless Chromium and asserts the Data mode, Art mode,
 preview, and onboarding flows behave correctly.
 
