@@ -3,7 +3,7 @@
 // what the check_game_build MCP tool, tools/bindings/check-build.mjs and the validator's
 // native-build warning use. It never writes and never launches anything.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { parsePe, PeError } from "./pe.mjs";
@@ -77,6 +77,52 @@ export function checkBuild(buf, manifests) {
     entries,
     summary,
   };
+}
+
+/**
+ * @typedef {{ known: boolean, identity: { timeDateStamp: string, sizeOfImage: string }, matched: { steamBuildId: string, name: string }|null, exePath: string }} ExeIdentity
+ */
+
+/** @type {Map<string, ExeIdentity>} */
+const identityCache = new Map();
+
+/**
+ * Identity only, from the PE headers (first 64 KB), memoized per path + mtime + manifest set.
+ * This is the validator's fast path: it never reads the whole exe and never scans.
+ * @param {string} path
+ * @param {import("./manifest.mjs").Manifest[]} manifests
+ * @returns {ExeIdentity|null} null when the file is absent or not a PE image
+ */
+export function identifyExe(path, manifests) {
+  if (!existsSync(path)) return null;
+  const st = statSync(path);
+  const key = `${path}|${st.mtimeMs}|${st.size}|${manifests.map((m) => m.build.steamBuildId).join(",")}`;
+  const hit = identityCache.get(key);
+  if (hit) return hit;
+  const head = Buffer.alloc(Math.min(65536, st.size));
+  const fd = openSync(path, "r");
+  try {
+    readSync(fd, head, 0, head.length, 0);
+  } finally {
+    closeSync(fd);
+  }
+  /** @type {import("./pe.mjs").Pe} */
+  let pe;
+  try {
+    pe = parsePe(head);
+  } catch (e) {
+    if (e instanceof PeError) return null;
+    throw e;
+  }
+  const matched = manifests.find((m) => parseInt(m.build.timeDateStamp, 16) === pe.timeDateStamp && parseInt(m.build.sizeOfImage, 16) === pe.sizeOfImage) || null;
+  const r = {
+    known: matched !== null,
+    identity: { timeDateStamp: hex(pe.timeDateStamp), sizeOfImage: hex(pe.sizeOfImage) },
+    matched: matched ? { steamBuildId: matched.build.steamBuildId, name: matched.build.name } : null,
+    exePath: path,
+  };
+  identityCache.set(key, r);
+  return r;
 }
 
 /**

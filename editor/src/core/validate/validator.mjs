@@ -22,6 +22,9 @@ import { findIndex } from "../gon/value.mjs";
 import { resolutionSets } from "../names.mjs";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.mjs";
 import { ReportBuilder } from "./result.mjs";
+import { identifyExe } from "../bindings/check.mjs";
+import { listManifests } from "../bindings/manifest.mjs";
+import { locateGameDir } from "../ingame/launch.mjs";
 
 /** @typedef {import('../gon/types.mjs').VObject} VObject */
 /** @typedef {import('../gon/types.mjs').VNode} VNode */
@@ -154,12 +157,34 @@ function modLocalNames(overlays) {
 }
 
 /**
+ * @typedef {{ known: boolean, identity?: { timeDateStamp: string, sizeOfImage: string }|null, matched?: { steamBuildId: string, name?: string }|null }} NativeBuild
+ */
+
+/**
+ * The installed exe's identity against bindings/*.json (header-only, memoized), or null when no
+ * exe is installed. A mod that uses a native-registered name only works when this is a known build.
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {NativeBuild|null}
+ */
+export function installedNativeBuild(env = process.env) {
+  try {
+    const r = identifyExe(join(locateGameDir(env), "Mewgenics.exe"), listManifests().map((m) => m.manifest));
+    return r ? { known: r.known, identity: r.identity, matched: r.matched } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Validate one mod. Pass an override to validate unsaved text for one file.
+ * `opts.nativeBuild` injects the installed-exe identity (tests); undefined means "look it up",
+ * null means "no exe installed".
  * @param {string} modName
  * @param {{ relPath?: string, text?: string }} [override]
+ * @param {{ nativeBuild?: NativeBuild|null, env?: Record<string, string|undefined> }} [opts]
  * @returns {Report}
  */
-export function validateMod(modName, override) {
+export function validateMod(modName, override, opts = {}) {
   const rb = new ReportBuilder();
   const modDir = join(MODS_DIR, modName);
   if (!existsSync(modDir)) {
@@ -174,6 +199,7 @@ export function validateMod(modName, override) {
   const sets = resolutionSets();
   const local = modLocalNames(overlays);
   const loc = loadLocalization();
+  const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
 
   // Union of localization keys available: base + mod-added.
   /** @type {(key: string) => string[] | undefined} */
@@ -182,7 +208,7 @@ export function validateMod(modName, override) {
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
     if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -199,8 +225,9 @@ export function validateMod(modName, override) {
  * @param {ReturnType<typeof modLocalNames>} local
  * @param {(key: string) => string[] | undefined} findLocRow
  * @param {string} modName
+ * @param {NativeBuild|null} nativeBuild  installed-exe identity; null = no exe
  */
-function validateGonOverlay(o, rb, sets, local, findLocRow, modName) {
+function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild) {
   const file = `mods/${modName}/${o.relPath}`;
   let root;
   try {
@@ -298,7 +325,7 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName) {
           }
         } else if (!sets.components.has(value.raw)) {
           rb.warn("unknown-component", `class "${value.raw}" is not a known component`, at);
-        }
+        } else checkNative(value.raw, at);
       }
       return;
     }
@@ -314,10 +341,28 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName) {
    * @param {string} name
    * @param {import('./result.mjs').SourceLocation} at
    */
+  /** names provided only by native mod code (editor/registered-names.json), warned once per file */
+  const nativeWarned = new Set();
+  /**
+   * @param {string} name
+   * @param {import('./result.mjs').SourceLocation} at
+   */
+  const checkNative = (name, at) => {
+    if (!sets.registered.has(name) || !nativeBuild || nativeBuild.known || nativeWarned.has(name)) return;
+    nativeWarned.add(name);
+    const id = nativeBuild.identity ? ` (TimeDateStamp ${nativeBuild.identity.timeDateStamp}, SizeOfImage ${nativeBuild.identity.sizeOfImage})` : "";
+    rb.warn("native-build-unknown", `"${name}" is provided by native mod code (mewframework), but the installed Mewgenics.exe is not a build the bindings know${id}: the framework will stay inactive and the game will report NO_*_NAMED. Port the bindings first (docs/binding-port.md, check_game_build / port_bindings).`, at);
+  };
+  /**
+   * @param {string} name
+   * @param {import('./result.mjs').SourceLocation} at
+   */
   const checkStatus = (name, at) => {
     if (!statusSet.has(name)) {
       rb.error("unknown-status", `status "${name}" is not defined in base data, not native-registered, and not added by this mod`, at);
+      return;
     }
+    checkNative(name, at);
   };
 
   /**

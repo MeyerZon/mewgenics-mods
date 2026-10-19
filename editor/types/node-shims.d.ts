@@ -59,6 +59,9 @@ declare module "node:fs" {
   export function writeFileSync(path: string, data: string | Uint8Array): void;
   export function existsSync(path: string): boolean;
   export function mkdtempSync(prefix: string): string;
+  export function openSync(path: string, flags: string): number;
+  export function readSync(fd: number, buffer: Uint8Array, offset: number, length: number, position: number | null): number;
+  export function closeSync(fd: number): void;
   export function readdirSync(path: string, opts?: any): any[];
   export function mkdirSync(path: string, opts?: { recursive?: boolean }): void;
   export function statSync(path: string): { isDirectory(): boolean; isFile(): boolean; size: number; mtimeMs: number };

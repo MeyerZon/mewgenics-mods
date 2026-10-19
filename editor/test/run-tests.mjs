@@ -222,6 +222,23 @@ if (existsSync(join(MODS_DIR, "dev-sandbox"))) {
     const codes = r.findings.map((f) => f.code);
     assert(codes.includes("merge-target-missing"), `expected merge-target-missing, got ${codes.join(",")}`);
   });
+  test("native-build-unknown: a mod using a native-registered name warns when the installed exe is not a known build", () => {
+    const unknown = { known: false, identity: { timeDateStamp: "0x6b000000", sizeOfImage: "0x01580000" }, matched: null };
+    const r = validateMod("jokers-luck", undefined, { nativeBuild: unknown });
+    const w = r.findings.filter((f) => f.code === "native-build-unknown");
+    assert(w.length >= 1, `expected native-build-unknown, got ${r.findings.map((f) => f.code).join(",")}`);
+    eq(w[0].severity, "warning");
+    assert(/JokersLuck/.test(w[0].message) && /0x6b000000/.test(w[0].message) && /binding-port/.test(w[0].message), w[0].message);
+    assert(r.ok, "a warning keeps the mod valid for the data layer");
+    eq(new Set(w.map((f) => f.message)).size, w.length, "one warning per name per file");
+  });
+  test("native-build-unknown: nothing when the build is known, when no exe is installed, or when the mod uses no native names", () => {
+    const codes = (/** @type {any} */ r) => r.findings.map((/** @type {any} */ f) => f.code);
+    assert(!codes(validateMod("jokers-luck", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } })).includes("native-build-unknown"), "known");
+    assert(!codes(validateMod("jokers-luck", undefined, { nativeBuild: null })).includes("native-build-unknown"), "no exe");
+    assert(!codes(validateMod("dev-sandbox", undefined, { nativeBuild: { known: false, identity: null, matched: null } })).includes("native-build-unknown"), "no native names");
+    assert(!codes(validateMod("jokers-luck")).includes("native-build-unknown"), "default on this machine (known build or no exe)");
+  });
 }
 
 // ---- 5. MCP smoke test ------------------------------------------------------
