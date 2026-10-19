@@ -389,6 +389,14 @@ await mcpSmoke();
   if (gp) await gp.runGpakTests(test, assert, eq);
 }
 
+// ---- 9b. web layer: React store, pure UI helpers, zod request schemas, server gate ----
+{
+  /** @type {any} */
+  let wt = null;
+  try { wt = await import("./web-tests.mjs"); } catch (e) { test("web-tests.mjs loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (wt) await wt.runWebTests(test, assert, eq);
+}
+
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
 if (!process.env.MEWGENICS_EXTRACTED_DATA) {
   console.log("\n# T0 without .extracted/ (nested run with MEWGENICS_EXTRACTED_DATA pointing at an empty dir)");
