@@ -632,6 +632,19 @@ export function runArtEmitterTests(test, assert, eq) {
     const shapeTag = innerFrames[0].places[0].place && innerFrames[0].places[0].place.characterId !== undefined ? byId.get(/** @type {number} */ (innerFrames[0].places[0].place.characterId)) : undefined;
     eq(shapeTag && shapeTag.name, "DefineShape3");
   });
+  test("minimalGateSwf layout 'legacy' reproduces the pre-fix donor (bare shape at depth 1) so the gate can show it still crashes", () => {
+    const swf = readSwf(minimalGateSwf({ ...GATE, layout: "legacy" }));
+    const { byId, sprite } = boundSprite(swf, "_Append_AbilityIcon");
+    assert(!!sprite, "linkage → a DefineSprite");
+    if (!sprite) return;
+    const frames = spriteFrames(sprite);
+    eq(frames.length, 1);
+    eq(frames[0].label, "JokersGambit");
+    eq(frames[0].places.length, 1);
+    eq(placeShape(frames[0].places[0]), "d1 f6 m1,0,0,1,0,0", "depth 1: the layout that crashed on 2026-10-18");
+    const icon = frames[0].places[0].place && frames[0].places[0].place.characterId !== undefined ? byId.get(/** @type {number} */ (frames[0].places[0].place.characterId)) : undefined;
+    eq(icon && icon.name, "DefineShape3");
+  });
   test("minimalGateSwf withAbc keeps the byte-exact linkage stub (explicit gate experiment only)", () => {
     const stub = readSwf(minimalGateSwf({ ...GATE, withAbc: true }));
     const doabc = stub.tags.find((t) => t.name === "DoABC");

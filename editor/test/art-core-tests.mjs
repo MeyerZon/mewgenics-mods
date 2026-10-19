@@ -272,8 +272,9 @@ export function runArtCoreTests(test, assert, eq) {
     eq(/** @type {any} */ (api.inspectSwf(tmpMod, "swfs/starter.swf")).doAbc, 1, "stub mode adds exactly one DoABC");
   });
   test("prepareSwfGate writes swfs/gate.swf + a one-entry swflist.gon.append per variant; 'control' removes both", () => {
-    const expectLinkage = { flat: "_Append_AbilityIcon", nested: "_Append_AbilityIcon", probe: "GateProbe" };
-    for (const variant of /** @type {const} */ (["flat", "nested", "probe"])) {
+    const expectLinkage = { flat: "_Append_AbilityIcon", nested: "_Append_AbilityIcon", legacy: "_Append_AbilityIcon", probe: "GateProbe" };
+    const expectLayout = { flat: "flat", nested: "nested", legacy: "legacy", probe: "flat" };
+    for (const variant of /** @type {const} */ (["flat", "nested", "legacy", "probe"])) {
       const r = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant }));
       assert(r.ok, `${variant}: ${r.error || ""}`);
       eq(r.variant, variant);
@@ -285,7 +286,7 @@ export function runArtCoreTests(test, assert, eq) {
       eq(swf.exports.map((/** @type {{name: string}} */ e) => e.name).join(","), expectLinkage[variant], `${variant}: linkage`);
       assert(swf.labels.includes("JokersGambit"), `${variant}: frame label present`);
       eq(r.linkage, expectLinkage[variant]);
-      eq(r.layout, variant === "nested" ? "nested" : "flat");
+      eq(r.layout, expectLayout[variant]);
     }
     const c = /** @type {any} */ (api.prepareSwfGate({ mod: tmpMod, variant: "control" }));
     assert(c.ok, c.error || "");
