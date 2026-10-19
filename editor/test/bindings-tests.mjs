@@ -327,6 +327,8 @@ export async function runBindingsTests(test, assert, eq) {
     rejects(c, /FnB.*Ghost/, "unknown callee");
     const dv = mini(); dv.entries[4].anchors.derive.vtable = "Nope_vftable";
     rejects(dv, /Foo_typeid.*Nope_vftable/, "unknown vtable");
+    const dw = mini(); dw.entries[4].anchors.witness = { function: "FnA", callee: "Nope_fn", pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, maxBack: 6 };
+    rejects(dw, /Foo_typeid.*Nope_fn/, "unknown witness callee");
     const ns = mini(); delete ns.entries[5].struct;
     rejects(ns, /Foo_stacks.*struct/, "no struct");
   });
@@ -809,6 +811,9 @@ export async function runBindingsTests(test, assert, eq) {
   hvText.set(hvFnA, 0x10);
   hvText.set([0xb8, 0xd6, 0x04, 0x00, 0x00, 0xc3], 0x40);
   hvText.set([0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3], 0x60);
+  //   hvFnD 0x1080: mov r8d,0x4d6; call fnB; ret   (passes the type id as an argument: the call-arg witness)
+  hvText.set([0x41, 0xb8, 0xd6, 0x04, 0x00, 0x00, 0xe8, ...le32((TEXT + 0x40) - (TEXT + 0x8b)), 0xc3], 0x80);
+  const hvPdata = [{ section: ".text", begin: 0x10, end: 0x30 }, { section: ".text", begin: 0x40, end: 0x46 }, { section: ".text", begin: 0x60, end: 0x80 }, { section: ".text", begin: 0x80, end: 0x8c }];
   const hvRdata = Buffer.alloc(0x100);
   hvRdata.write(FUNCSIG + "\0", 0x10, "latin1");
   hvRdata.write("Dup\0", 0x30, "latin1");
@@ -828,7 +833,7 @@ export async function runBindingsTests(test, assert, eq) {
   const hvPe = buildFakePe({
     timeDateStamp: 0x44444444,
     sections: [{ name: ".text", bytes: hvText, exec: true }, { name: ".hvRdata", bytes: hvRdata }, { name: ".data", bytes: hvData, write: true }],
-    pdata: [{ section: ".text", begin: 0x10, end: 0x30 }, { section: ".text", begin: 0x40, end: 0x46 }, { section: ".text", begin: 0x60, end: 0x80 }],
+    pdata: hvPdata,
   });
   const hp = parsePe(hvPe.buf);
   eq(hvPe.rva(".hvRdata", 0), RDATA, "fake layout assumption");
@@ -915,6 +920,36 @@ export async function runBindingsTests(test, assert, eq) {
     eq(entry(out, "Wrong_vftable").rva, "0x2090", "a mismatch never rewrites the value");
     eq(validateManifest(out).ok, true, "output validates");
     eq(report.filter((/** @type {any} */ r) => r.status === "mismatch").length, 1);
+  });
+  test("deriveFromCallArg: the imm32 of the matching instruction within maxBack instructions before the call to callee", () => {
+    assert(typeof hv.deriveFromCallArg === "function", "deriveFromCallArg exported");
+    eq(hv.deriveFromCallArg(hp, hvPe.buf, TEXT + 0x80, TEXT + 0x40, "41 B8 ?? ?? ?? ??", 2, 6), 0x4d6);
+    eq(hv.deriveFromCallArg(hp, hvPe.buf, TEXT + 0x80, TEXT + 0x60, "41 B8 ?? ?? ?? ??", 2, 6), null, "no call to that callee");
+    eq(hv.deriveFromCallArg(hp, hvPe.buf, TEXT + 0x80, TEXT + 0x40, "BA ?? ?? ?? ??", 1, 6), null, "pattern not before the call");
+    eq(hv.deriveFromCallArg(hp, hvPe.buf, TEXT + 0x10, TEXT + 0x40, "41 B8 ?? ?? ?? ??", 2, 6), null, "FnA calls fnB without the mov");
+  });
+  test("harvestManifest: a constant with a slot-body derivation AND a call-arg witness is verified by both; a value neither gives is a mismatch naming both", () => {
+    const base = {
+      format: 1,
+      build: { steamBuildId: "444", gameVersion: "4.4.4", name: "4.4.4 (steam 444)", timeDateStamp: "0x44444444", sizeOfImage: "0x" + hp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "d".repeat(64), exeSize: hvPe.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+    };
+    const typeid = (/** @type {string} */ value) => ({ name: "Foo_typeid", kind: "constant", value, anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 }, witness: { function: "FnD", callee: "FnB", pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, maxBack: 6 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] });
+    const entries = (/** @type {string} */ value) => [
+      { name: "FnB", kind: "function", rva: "0x1040", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+      { name: "FnD", kind: "function", rva: "0x1080", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+      { name: "Foo_vftable", kind: "vtable", rva: "0x2080", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
+      typeid(value),
+    ];
+    const ok = harvestManifest(hp, hvPe.buf, parseManifest({ ...base, entries: entries("0x4d6") }));
+    const r1 = ok.report.find((/** @type {any} */ r) => r.name === "Foo_typeid");
+    eq(r1.status, "verified", r1.detail);
+    assert(/slot body gives 0x4d6/.test(r1.detail) && /call-arg witness .*0x4d6/.test(r1.detail), r1.detail);
+    const bad = harvestManifest(hp, hvPe.buf, parseManifest({ ...base, entries: entries("0x4d7") }));
+    const r2 = bad.report.find((/** @type {any} */ r) => r.name === "Foo_typeid");
+    eq(r2.status, "mismatch", r2.detail);
+    assert(/0x4d6/.test(r2.detail) && /0x4d7/.test(r2.detail), r2.detail);
+    eq(entry(bad.manifest, "Foo_typeid").value, "0x4d7", "never rewritten");
   });
   if (exe) {
     const m = loadManifest(realPath);
@@ -1152,6 +1187,48 @@ export async function runBindingsTests(test, assert, eq) {
     assert(/### Foo_stacks \(offset\) -- proposed 0x5c -> 0x60/.test(md), "proposal");
     assert(/## Next steps/.test(md) && /npm run bindings:gen/.test(md), "next steps");
   });
+  test("port: a constant with two derivations -> ported-derived when slot body and call-arg witness agree; needs-human with both values when they disagree", () => {
+    const base = {
+      format: 1,
+      build: { steamBuildId: "444", gameVersion: "4.4.4", name: "4.4.4 (steam 444)", timeDateStamp: "0x44444444", sizeOfImage: "0x" + hp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "d".repeat(64), exeSize: hvPe.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        { name: "FnB", kind: "function", rva: "0x1040", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "FnD", kind: "function", rva: "0x1080", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "Foo_vftable", kind: "vtable", rva: "0x2080", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
+        { name: "Foo_typeid", kind: "constant", value: "0x4d6", anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 }, witness: { function: "FnD", callee: "FnB", pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, maxBack: 6 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] },
+      ],
+    };
+    const old = harvestManifest(hp, hvPe.buf, parseManifest(base)).manifest;
+    // the two tiny functions carry no signature in this fixture: resolve them explicitly (the ladder is tested elsewhere)
+    const resolve = { FnB: "0x1040", FnD: "0x1080" };
+    const same = portManifest(old, hp, hvPe.buf, { steamBuildId: "445", gameVersion: "4.4.5", resolve });
+    const r1 = row(same, "Foo_typeid");
+    eq(r1.status, "ported-derived", r1.detail);
+    assert(/agree/.test(r1.detail) && /0x4d6/.test(r1.detail), r1.detail);
+    // a build where the slot body says 0x4d7 but the call site still passes 0x4d6: nobody may pick blindly
+    const patched = new Uint8Array(hvText);
+    patched[0x41] = 0xd7;
+    const img2 = buildFakePe({ timeDateStamp: 0x44444445, sections: [{ name: ".text", bytes: patched, exec: true }, { name: ".hvRdata", bytes: hvRdata }, { name: ".data", bytes: hvData, write: true }], pdata: hvPdata });
+    const split = portManifest(old, parsePe(img2.buf), img2.buf, { steamBuildId: "446", gameVersion: "4.4.6", resolve });
+    const r2 = row(split, "Foo_typeid");
+    eq(r2.status, "needs-human", r2.detail);
+    assert(/0x4d6/.test(r2.detail) && /0x4d7/.test(r2.detail), r2.detail);
+    eq(entry(split.manifest, "Foo_typeid").value, "0x4d6", "old value kept until a human decides");
+  });
+  if (exe) {
+    test("T1 real exe: LuckUp type id 0x4d6 is also the imm32 passed to Entity_FindComponentsByTypeId inside Status_ApplyLuckUp (second witness)", () => {
+      const m = loadManifest(realPath);
+      const p = parsePe(exe);
+      const fn = entry(m, "Status_ApplyLuckUp"), callee = entry(m, "Entity_FindComponentsByTypeId");
+      eq(hv.deriveFromCallArg(p, exe, parseInt(fn.rva, 16), parseInt(callee.rva, 16), "41 B8 ?? ?? ?? ??", 2, 8), 0x4d6);
+      const w = entry(m, "LuckUp_typeid").anchors.witness;
+      assert(w && w.function === "Status_ApplyLuckUp" && w.callee === "Entity_FindComponentsByTypeId", "the committed manifest carries the second witness");
+      const rep = harvestManifest(p, exe, m).report.find((/** @type {any} */ r) => r.name === "LuckUp_typeid");
+      eq(rep.status, "verified", rep.detail);
+      assert(/call-arg witness/.test(rep.detail), rep.detail);
+    });
+  }
   const cba = await load("../../tools/bindings/cross-build-args.mjs");
   test("cross-build.mjs args: --old/--new required, --build defaults to 999999999, --gameVersion passed through", () => {
     assert(!cba.__error, cba.__error || "");

@@ -151,6 +151,7 @@ export function validateManifest(m) {
         else if (kind && t.kind !== kind) bad(`${n}: ${what} ${target} must be a ${kind} entry`);
       };
       if (anchors.witness) ref("witness.function", anchors.witness.function, "function");
+      if (anchors.witness && anchors.witness.callee !== undefined) ref("witness.callee", anchors.witness.callee, "function");
       if (Array.isArray(anchors.callees)) for (const c of anchors.callees) ref("callee", c && c.name, "function");
       if (anchors.derive) {
         if (anchors.derive.vtable !== undefined) ref("derive.vtable", anchors.derive.vtable, "vtable");

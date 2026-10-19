@@ -3324,6 +3324,13 @@
           "slot": 1,
           "bodyPattern": "B8 ?? ?? ?? ?? C3",
           "imm32At": 1
+        },
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "callee": "Entity_FindComponentsByTypeId",
+          "pattern": "41 B8 ?? ?? ?? ??",
+          "imm32At": 2,
+          "maxBack": 8
         }
       },
       "consumers": [
@@ -3337,7 +3344,7 @@
       "evidence": [
         ".analysis/decompiled/LuckUpVT1_140566ec0.c"
       ],
-      "note": "slot 1 body on this build: B8 D6 04 00 00 C3 (mov eax, 0x4d6; ret)"
+      "note": "slot 1 body on this build: B8 D6 04 00 00 C3 (mov eax, 0x4d6; ret); second source: mov r8d, 0x4d6 (41 B8 D6 04 00 00) four instructions before the call to Entity_FindComponentsByTypeId in Status_ApplyLuckUp (call #4). Both must agree or the port reports needs-human."
     },
     {
       "name": "LuckUp_vtableSlots",

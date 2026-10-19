@@ -18,7 +18,7 @@
 import { createHash } from "node:crypto";
 import { parsePattern, scanExec } from "./scan.mjs";
 import { makeSignature } from "./siggen.mjs";
-import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, deriveFromVtableSlot, decodeFunction } from "./harvest.mjs";
+import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, deriveFromVtableSlot, decodeFunction, constantSources } from "./harvest.mjs";
 import { hex, parseValue, entry } from "./manifest.mjs";
 
 export const PORT_STATUSES = ["ported-exact", "ported-rescan", "ported-anchor", "ported-witness", "ported-derived", "proposed", "ambiguous", "failed", "needs-human"];
@@ -232,15 +232,18 @@ export function portManifest(old, pe, buf, opts) {
   // ---- constants --------------------------------------------------------------------
   for (const e of out.entries) {
     if (e.kind !== "constant") continue;
-    const d = e.anchors.derive;
-    if (d && d.vtable) {
-      const vt = entry(out, d.vtable);
-      const ok = vt && vt.port && vt.port.status.startsWith("ported");
-      const v = ok ? deriveFromVtableSlot(pe, buf, parseInt(vt.rva || "0", 16), d.slot, d.bodyPattern, d.imm32At) : null;
-      if (v === null) { finish(e, "failed", "slot-body", ok ? `slot ${d.slot} of ${d.vtable} does not match ${d.bodyPattern}` : `${d.vtable} did not port`, null); continue; }
-      const was = e.value;
+    const a = e.anchors;
+    if ((a.derive && a.derive.vtable) || (a.witness && a.witness.callee)) {
+      // every independent source must agree; a split is a human decision, never a coin toss
+      const src = constantSources(out, pe, buf, e);
+      const vals = [src.slot, src.arg].filter((v) => v !== null);
+      const was = e.value || "";
+      if (!vals.length) { finish(e, "failed", "derive", src.notes.join("; "), null); continue; }
+      if (vals.some((v) => v !== vals[0])) { finish(e, "needs-human", "derive", `sources disagree: ${src.notes.join("; ")}; value ${was} kept`, null); continue; }
+      const v = vals[0];
       e.value = hex(v);
-      finish(e, "ported-derived", "slot-body", `slot ${d.slot} of ${d.vtable} gives ${hex(v)}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.value, undefined, was || "");
+      const method = src.slot !== null && src.arg !== null ? "slot-body+call-arg" : src.slot !== null ? "slot-body" : "call-arg";
+      finish(e, "ported-derived", method, `${src.notes.join("; ")}${vals.length > 1 ? " (agree)" : ""}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.value, undefined, was);
       continue;
     }
     finish(e, "needs-human", "none", e.anchors.unanchored ? "unanchored constant carried over unchanged; verify by hand" : "no derivation anchor", e.value || null);
