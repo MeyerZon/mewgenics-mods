@@ -180,9 +180,13 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   inactive-without-`-savesuffix` branch in `framework.c` is untouched since it was verified).
 - [ ] **One-off early exit**: the very first 0.3.0 launch exited with code 1 after ~5 s during loading with no crash
   report; never reproduced in 8 later launches. Watch for it (`clean: true` does not give a fuller `debug.log`, see above).
-- [ ] **Which file `-savesuffix dev` writes**: dev launches changed `campaign02.sav`, not a `*dev*` file; the real
-  `steamcampaign01.sav` stays untouched (hash-verified every run). Resolve the suffix→filename mapping from
-  `MewSaveFile::open_or_create` (`0x229cd0`) and document it in `engine-map.md` "Save safety".
+- [x] **Which file `-savesuffix dev` writes** — decoded 2026-10-19 (leftovers PR 5): the suffix is not part of any save
+  path; names come from the slot list (`campaign0N` / `steamcampaign0N`), `test00.sav`, `housetest01.sav`
+  (`engine-map.md` "Save safety"). The harness now hashes every `*.sav` and allows only the local/test families to change.
+- [ ] **`-savesuffix` gives no save isolation on this build** (finding of the decode above): a dev launch that enters a
+  Steam-cloud slot would write the real `steamcampaign0N.sav`. The hash check catches it after the fact; decide whether
+  dev play should go through `test00.sav` only (test director) or a copied slot, and whether to ask the developer what
+  the suffix is meant to do.
 - [ ] **`FrameBegin` signature on a future build**: 19 generic prologue bytes; fallback is `ApplicationBase_Step`
   (both in the manifest). The port ladder regenerates them; if `FrameBegin` ends up `ambiguous`, switch the harness
   hook to `Step`.
@@ -202,15 +206,18 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   - [x] PR 1 `chore/leftovers-hygiene`: ignore `mods/*/swfs/`, TODO truth, prune merged branches + stale worktree
     (the removal emptied `.analysis/`, `.extracted/data`, `editor/node_modules`, `native/dist` through junctions;
     data and DLLs regenerated the same night, decompiles and the old exe are not — rule added to `CLAUDE.md`)
-  - [ ] **Rebuild `.analysis/decompiled/`** for the functions the docs cite (`Gon_merge_{a,b,c}`,
-    `FileManager_resolve_overlays`, `ProcessCmds`, `SaveSelection_Build`, the status pipeline, `p2_*`, `r3d_*`, every RVA
-    in `engine-map.md`): one import with an own `rea_ghidra_<tag>`, then `batch_decompile`; fold into PR 5's import.
+  - [~] **Rebuild `.analysis/decompiled/`**: 2026-10-19 PR 5's import (`rea_ghidra_leftovers`) re-decompiled every
+    bindings function (46), `process_animation_merges` + caller, `ProcessCmds`, the save chain (`MewSaveFile_*`,
+    `SaveSelection_Build`, `MewDirector::init` and its 3 callers) — 60+ files. Still missing: `Gon_merge_{a,b,c}` under
+    those names (the bindings names are `Gon_PatchMerge_a/b`, `Gon_DeepMerge`), `FileManager_resolve_overlays`
+    (= `FileManager_ResolveWithOverlays`), `p2_*`, `r3d_*`, the SWF-crash set (`0xa58440`, `0x9a8f30`).
   - [x] PR 2 `fix/port-report-old-column`: port report `old` column, `--gameVersion`, size/call drift on anchor rows
     (rung-3 hardening — callee-set / vftable-store rungs — stays open; needs a body-changing build to test against)
   - [x] PR 3 `test/t0-skips-gpak-filter`: targets 9 + 10, `tools/gpak.py` T0 suite (characterization: no defect found)
   - [x] PR 4 `fix/harness-clean-exit`: `-mewtest_clean` exits (pure `mt_exit.c` + runner end-grace), `clean:` header,
     unique run dirs for same-second runs; finding: clean mode does not make the game shut down or flush `debug.log`
-  - [ ] PR 5 `docs/save-suffix-mapping`: decode `MewSaveFile::open_or_create`, savecheck over every real save
+  - [x] PR 5 `docs/save-suffix-mapping`: decode `MewSaveFile::open_or_create`, savecheck over every real save
+    (finding: the suffix never reaches a save path; the whole-dir hash is the real guard)
   - [ ] PR 6 `feat/bindings-typeid-witness`: second witness for `LuckUp_typeid`
 
 ### Go public (do LAST, after everything else lands — approved 2026-10-18)

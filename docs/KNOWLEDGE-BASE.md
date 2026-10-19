@@ -77,8 +77,10 @@ the linked docs; this page is the map.
 - **RNG seeding**: no user-facing control; the global state is `TLS+0x178`, so pinning it from our DLL is possible but
   not built. The **headless** gap is covered by the harness's hidden window, not by a game mode.
 - **Entering a run from the main menu through the console**: no command does it (the menu is mouse-driven), which
-  blocks in-combat harness assertions. Also unresolved: which file `-savesuffix dev` actually writes (dev launches
-  changed `campaign02.sav`; `steamcampaign01.sav` stayed untouched, which the harness verifies by hash every run).
+  blocks in-combat harness assertions. Resolved 2026-10-19: `-savesuffix` does **not** rename or relocate saves on
+  build 25143593 (no code reads it besides `ProcessCmds`); save names come from the slot list / test director
+  (`engine-map.md` "Save safety"), so the harness now hashes every `*.sav` in the saves dir and allows only the
+  local/test families to change.
 - **Ruffle (WASM)** as an optional dep to preview *vanilla* SWFs in-editor — not decided (would go through the dep-gate).
 - Not built: **animation-clip authoring** (DefineSprite timelines end-to-end), a **cat-rig** (part-indexed) UI, art MCP tools.
 - **Per-build fragility** (now a procedure, not a dead end): everything native is pinned to build `25143593` through
