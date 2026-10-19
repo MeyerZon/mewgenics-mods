@@ -128,6 +128,22 @@ test.describe("Onboarding — concepts drawer (ramp + mode-aware ordering)", () 
     await expect(drawer.locator(".dbody > div").first()).toContainText("Art mode — vector scenes the engine recolors");
     await expect(drawer.locator(".ramp.big").first().locator("span")).toHaveCount(16);
   });
+
+  // The drawer never auto-opens, so a "Don't show on start" switch has nothing to switch off. The button and the
+  // mewged.onboard.conceptsDontShowStart key it wrote are gone (owner decision 2026-10-19); "Got it" is the only
+  // dismiss control in the footer.
+  test("footer has no dead 'Don't show on start' button and writes no conceptsDontShowStart key", async ({ page }) => {
+    await openApp(page);
+    await openHelp(page);
+    await page.getByRole("button", { name: /Concepts explainer/ }).click();
+    const drawer = page.locator(".drawer");
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole("button", { name: /Don't show on start/ })).toHaveCount(0);
+    await expect(drawer.locator(".dfoot button")).toHaveCount(1);
+    await drawer.getByRole("button", { name: /^Got it$/ }).click();
+    await expect(drawer).toBeHidden();
+    expect(await lsValue(page, "mewged.onboard.conceptsDontShowStart")).toBeNull();
+  });
 });
 
 test.describe("Onboarding — worked examples (jump buttons land in the right place)", () => {
