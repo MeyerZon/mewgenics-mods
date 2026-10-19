@@ -4,7 +4,8 @@
 // or the native DLLs. Wired into run-tests.mjs; also runnable standalone:
 //   node test/ingame-tests.mjs
 
-import { existsSync, readFileSync, mkdirSync, rmSync, writeFileSync, utimesSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, utimesSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODS_DIR, REPO_ROOT } from "../src/core/repo.mjs";
@@ -476,6 +477,48 @@ export async function runIngameTests(test, assert, eq) {
       assert(compareSnapshots(missing, missing).unchanged, "missing before and after is unchanged");
       eq(KNOWN_REAL_SAVE_SHA256.length, 64);
     });
+    test("snapshotSaves: every *.sav in the dir except the suffixed launch's own files; compareSaveSets flags changed, added and removed", () => {
+      assert(typeof savecheck.snapshotSaves === "function" && typeof savecheck.compareSaveSets === "function" && typeof savecheck.devSavePattern === "function", "snapshotSaves / compareSaveSets / devSavePattern exported");
+      const dir = mkdtempSync(join(tmpdir(), "mewged-saves-"));
+      writeFileSync(join(dir, "steamcampaign01.sav"), "real one");
+      writeFileSync(join(dir, "steamcampaign02.sav"), "real two");
+      writeFileSync(join(dir, "campaign02.sav"), "dev slot");
+      writeFileSync(join(dir, "steam_autocloud.vdf"), "not a save");
+      const allow = /^campaign0\d\.sav$/i; // stands in for devSavePattern("dev") until the mapping is decoded
+      const before = savecheck.snapshotSaves(dir, { allow });
+      eq(before.files.map((/** @type {any} */ f) => f.name).join(","), "steamcampaign01.sav,steamcampaign02.sav", "sorted, allowed and non-.sav files excluded");
+      assert(before.files.every((/** @type {any} */ f) => f.present && f.sha256 && f.sha256.length === 64), "hashed");
+      eq(before.skipped.join(","), "campaign02.sav", "the allowed (dev) file is listed as skipped, not hashed");
+      // nothing changed
+      const same = savecheck.compareSaveSets(before, savecheck.snapshotSaves(dir, { allow }));
+      assert(same.unchanged && same.changed.length === 0, same.detail);
+      // the dev file may change freely
+      writeFileSync(join(dir, "campaign02.sav"), "dev slot progressed");
+      assert(savecheck.compareSaveSets(before, savecheck.snapshotSaves(dir, { allow })).unchanged, "dev file changes are allowed");
+      // a real file changed
+      writeFileSync(join(dir, "steamcampaign02.sav"), "real two MUTATED");
+      const changed = savecheck.compareSaveSets(before, savecheck.snapshotSaves(dir, { allow }));
+      assert(!changed.unchanged && changed.changed.join(",") === "steamcampaign02.sav", changed.detail);
+      assert(/steamcampaign02\.sav/.test(changed.detail), changed.detail);
+      writeFileSync(join(dir, "steamcampaign02.sav"), "real two");
+      // a new non-dev save appeared / a real save vanished
+      writeFileSync(join(dir, "steamcampaign03.sav"), "new real");
+      const added = savecheck.compareSaveSets(before, savecheck.snapshotSaves(dir, { allow }));
+      assert(!added.unchanged && added.changed.join(",") === "steamcampaign03.sav", added.detail);
+      rmSync(join(dir, "steamcampaign03.sav"));
+      rmSync(join(dir, "steamcampaign01.sav"));
+      const removed = savecheck.compareSaveSets(before, savecheck.snapshotSaves(dir, { allow }));
+      assert(!removed.unchanged && removed.changed.join(",") === "steamcampaign01.sav", removed.detail);
+    });
+    test("realSavesDir: the saves dir of the single steamid; null otherwise", () => {
+      assert(typeof savecheck.realSavesDir === "function", "realSavesDir exported");
+      const app = mkdtempSync(join(tmpdir(), "mewged-appdata-"));
+      eq(savecheck.realSavesDir({ APPDATA: app }), null, "no Mewgenics dir");
+      mkdirSync(join(app, "Glaiel Games", "Mewgenics", "76561198000000000", "saves"), { recursive: true });
+      eq(savecheck.realSavesDir({ APPDATA: app }), join(app, "Glaiel Games", "Mewgenics", "76561198000000000", "saves"));
+      mkdirSync(join(app, "Glaiel Games", "Mewgenics", "76561198000000001"), { recursive: true });
+      eq(savecheck.realSavesDir({ APPDATA: app }), null, "two ids -> null (never guess)");
+    });
     test("realSavePath: derived from the single steamid dir; null otherwise", () => {
       const root = join(FIX, "__tmp_save");
       rmSync(root, { recursive: true, force: true });
@@ -695,6 +738,15 @@ export async function runIngameTests(test, assert, eq) {
       eq(wrong.safety.observedSuffix, "other");
     });
 
+    const savesDir = join(ROOT, "saves-dir");
+    mkdirSync(savesDir, { recursive: true });
+    writeFileSync(join(savesDir, "steamcampaign01.sav"), fixture("sample-save.bin"));
+    writeFileSync(join(savesDir, "steamcampaign02.sav"), "second real slot");
+    const otherReal = await run("savechange", { FAKE_GAME_TOUCH_FILE: join(savesDir, "steamcampaign02.sav") }, { realSavesDir: savesDir });
+    test("fake savechange on another real save in the saves dir -> safety-violation naming the file (whole-dir check)", () => {
+      eq(otherReal.verdict, "safety-violation", otherReal.reason);
+      assert(/steamcampaign02.sav/.test(otherReal.reason), otherReal.reason);
+    });
     const mutated = await run("savechange", { FAKE_GAME_TOUCH_FILE: savePath });
     test("fake savechange -> safety-violation from the real-save hash", () => {
       eq(mutated.verdict, "safety-violation", mutated.reason);
