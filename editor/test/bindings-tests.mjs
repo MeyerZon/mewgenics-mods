@@ -1076,6 +1076,19 @@ export async function runBindingsTests(test, assert, eq) {
     eq(r.manifest.build.steamBuildId, "200");
     assert(entry(r.manifest, "FnA").signature && entry(r.manifest, "FnA").signature.pattern, "signature regenerated on the new image");
     eq(r.summary["ported-rescan"], 3);
+    // the report's "old" column must keep the pre-port value (found by the 2026-10-19 cross-build run)
+    eq(row(r, "FnA").oldValue, hex(v1.fnAt.FnA), "function row: old = the v1 RVA, not the ported one");
+    eq(row(r, "FnA").newValue, hex(v2.fnAt.FnA), "function row: new = the v2 RVA");
+    assert(renderPortReport(r).includes(`| FnA | function | ${hex(v1.fnAt.FnA)} | ${hex(v2.fnAt.FnA)} |`), "report table row shows old -> new");
+  });
+  test("a moved global -> the witness row's old column keeps the v1 address", () => {
+    const v2 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["H", "G"], stamp: 0x5a5a5a5a });
+    const r = port(v2);
+    eq(row(r, "G").status, "ported-witness");
+    eq(entry(r.manifest, "G").rva, hex(v2.globAt.G));
+    assert(v2.globAt.G !== v1.globAt.G, "fixture: G moved");
+    eq(row(r, "G").oldValue, hex(v1.globAt.G), "witness row: old = the v1 address");
+    eq(row(r, "G").newValue, hex(v2.globAt.G));
   });
   test("body changed beyond the mask -> found by its unique funcsig xref (ported-anchor); its callee recovered by caller ordinal", () => {
     // FnA is recompiled (new frame size + two nops: signature breaks); FnB loses its funcsig AND changes -> only reachable as FnA's call #0
@@ -1088,6 +1101,10 @@ export async function runBindingsTests(test, assert, eq) {
     eq(row(r, "FnB").method, "caller-ordinal");
     eq(entry(r.manifest, "FnB").rva, hex(v2.fnAt.FnB));
     eq(row(r, "G").status, "ported-witness");
+    // anchor-ported rows record how far the candidate drifted from the old cfgLite (size/calls), so a cross-build
+    // report shows whether the tolerances were exercised at all
+    assert(/size [+-]\d+ \/ calls [+-]\d+ vs old/.test(row(r, "FnA").detail), `FnA detail: ${row(r, "FnA").detail}`);
+    assert(/size [+-]\d+ \/ calls [+-]\d+ vs old/.test(row(r, "FnB").detail), `FnB detail: ${row(r, "FnB").detail}`);
   });
   test("a clone referencing the same funcsig -> ambiguous with both candidates listed for the agent", () => {
     const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x54545454 });
@@ -1134,6 +1151,17 @@ export async function runBindingsTests(test, assert, eq) {
     assert(/candidates:/.test(md) && /next:/.test(md), "candidates + next step");
     assert(/### Foo_stacks \(offset\) -- proposed 0x5c -> 0x60/.test(md), "proposal");
     assert(/## Next steps/.test(md) && /npm run bindings:gen/.test(md), "next steps");
+  });
+  const cba = await load("../../tools/bindings/cross-build-args.mjs");
+  test("cross-build.mjs args: --old/--new required, --build defaults to 999999999, --gameVersion passed through", () => {
+    assert(!cba.__error, cba.__error || "");
+    const p = cba.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe", "--build", "123", "--gameVersion", "1.1.9"]);
+    eq(p.error, null);
+    eq(p.oldPath, "a.exe"); eq(p.newPath, "b.exe"); eq(p.build, "123"); eq(p.gameVersion, "1.1.9");
+    const d = cba.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe"]);
+    eq(d.error, null); eq(d.build, "999999999"); eq(d.gameVersion, undefined);
+    assert(/usage/.test(cba.parseCrossBuildArgs(["--old", "a.exe"]).error || ""), "missing --new -> usage error");
+    assert(/usage/.test(cba.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe", "--gameVersion"]).error || ""), "dangling flag -> usage error");
   });
   if (exe) {
     test("T1 real exe: self-port of bindings/25143593.json onto the installed exe -> every anchored entry ported with identical values; nothing ambiguous or failed", () => {
