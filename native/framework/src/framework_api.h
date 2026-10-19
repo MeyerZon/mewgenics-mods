@@ -5,7 +5,9 @@
  * The framework itself exports the FW_* functions declared under FW_BUILDING. */
 #pragma once
 #include <stdint.h>
+#ifndef FW_NO_WINDOWS
 #include <windows.h>
+#endif
 
 #define FW_OWNER "mewframework"
 #define FW_VERSION_MAJOR 0
@@ -114,6 +116,7 @@ typedef struct FwApi {
 
 /* Resolve the framework's exports from the loaded module. Returns 1 when every function of
  * FW_API_VERSION is available, 0 when the framework is absent or older. */
+#ifndef FW_NO_WINDOWS
 static inline int FW_Resolve(FwApi *api) {
     HMODULE h = GetModuleHandleA("mewframework.dll");
     if (!h || !api) return 0;
@@ -126,6 +129,7 @@ static inline int FW_Resolve(FwApi *api) {
 #undef FW__R
     return 1;
 }
+#endif /* FW_NO_WINDOWS */
 
 #ifdef __cplusplus
 }

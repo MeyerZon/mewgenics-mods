@@ -21,6 +21,7 @@
 
 #include "framework_internal.h"
 #include "fw_sig.h"
+#include "fw_build.h"
 
 MewjectorAPI g_mj;
 int g_mjAvailable = 0;
@@ -62,9 +63,8 @@ static const BuildInfo *identify_build(uintptr_t base) {
     if (nt->Signature != IMAGE_NT_SIGNATURE) return NULL;
     uint32_t ts = nt->FileHeader.TimeDateStamp;
     uint32_t size = nt->OptionalHeader.SizeOfImage;
-    for (size_t i = 0; i < FW_BUILD_COUNT; i++) {
-        if (FW_BUILDS[i].timeDateStamp == ts && FW_BUILDS[i].sizeOfImage == size) return &FW_BUILDS[i];
-    }
+    int idx = fw_identify_build(ts, size, FW_BUILDS, FW_BUILD_COUNT);
+    if (idx >= 0) return &FW_BUILDS[idx];
     fw_log("unknown build: TimeDateStamp=0x%08x SizeOfImage=0x%08x; framework disabled", ts, size);
     return NULL;
 }
@@ -97,7 +97,7 @@ static uintptr_t scan_unique(uintptr_t base, const char *pattern, int *matches) 
 static int resolve_symbols(void) {
     int ok = 1;
     for (size_t i = 0; i < FW_SYMBOL_COUNT; i++) {
-        const SymbolSig *s = &FW_SYMBOLS[i];
+        const SymbolSig *s = &g_build->symbols[i];
         int matches = 0;
         uintptr_t hit = scan_unique(g_base, s->pattern, &matches);
         if (matches != 1) {

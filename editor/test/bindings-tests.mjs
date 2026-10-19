@@ -514,7 +514,7 @@ export async function runBindingsTests(test, assert, eq) {
     assert(h.includes("\"48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 28 EF FF FF B8 D8 11 00 00 E8 4D\", 0, 0x8e3c60u"), "pattern, offset, expectedRva");
     assert(h.includes("#define FW_LK_COUNT 13"), "lk count");
     assert(h.includes("static const uint32_t FW_LK_RVAS_25143593[FW_LK_COUNT]"), "lk table");
-    assert(/FW_LK_RVAS_25143593\[FW_LK_COUNT\] = \{\s*0x4929c0u,\s*0x492c20u,[\s\S]*0x502b40u,?\s*\}/.test(h), "lk order");
+    assert(/FW_LK_RVAS_25143593\[FW_LK_COUNT\] = \{\s*0x4929c0u,[^\n]*\n\s*0x492c20u,[\s\S]*0x502b40u,[^\n]*\n\s*\}/.test(h), "lk order");
     assert(h.includes("0x6a9c51e5u, 0x01574000u"), "identity");
     assert(h.includes("0x00f57ab8u") && h.includes("0x00ed1960u") && h.includes("0x013c4d30u") && h.includes("0x4d6u"), "vtables, default source, type id");
     assert(/0x013c4a30u,\s*\/\* FW_DATA_App \*\//.test(h), "rva_data in FwData order with enumerator comments");
@@ -530,12 +530,12 @@ export async function runBindingsTests(test, assert, eq) {
   });
   test("genOffsetsH: every offset/constant macro once, negative offsets parenthesised", () => {
     const h = genOffsetsH([m25]);
-    assert(h.includes("#define OFF_STATUS_STACKS 0x5c"), "stacks");
-    assert(h.includes("#define VT_SLOTS 172"), "slots");
-    assert(h.includes("#define OFF_APPLIER_OWNER (-0x8)"), "negative");
-    assert(h.includes("#define OFF_X_CHARARRAY 0x1f90"), "mewtest offset");
-    assert(h.includes("#define VT_ONSTACKSCHANGED 170"), "vtable slot");
-    const macros = m25.entries.flatMap((e) => e.exposure.filter((/** @type {any} */ x) => x.macro).map((/** @type {any} */ x) => x.macro));
+    assert(/^#define OFF_STATUS_STACKS\s+0x5c/m.test(h), "stacks");
+    assert(/^#define VT_SLOTS\s+172/m.test(h), "slots");
+    assert(/^#define OFF_APPLIER_OWNER\s+\(-0x8\)/m.test(h), "negative");
+    assert(/^#define OFF_X_CHARARRAY\s+0x1f90/m.test(h), "mewtest offset");
+    assert(/^#define VT_ONSTACKSCHANGED\s+170/m.test(h), "vtable slot");
+    const macros = m25.entries.flatMap((/** @type {any} */ e) => e.exposure.filter((/** @type {any} */ x) => x.macro).map((/** @type {any} */ x) => x.macro));
     for (const mac of macros) eq((h.match(new RegExp(`^#define ${mac} `, "gm")) || []).length, 1, mac);
     assert(/\/\* Status \+0x5c int32 .*status_stacks/.test(h) || h.includes("Status_stacks"), "comment names the struct/entry");
   });
