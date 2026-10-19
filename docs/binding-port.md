@@ -116,6 +116,64 @@ Summary: 98 entries · ported-exact 35 · ported-anchor 12 · ported-witness 5 �
   identity gate still fails; `harness-error` naming a signature means that signature does not match once.
 - **T3**: a played fight on the `dev` save for anything that touches combat (Joker's Luck).
 
+### T1 cross-build result, 2026-10-19: 25143593 -> 23372843
+
+First run against a second genuine build. The committed manifest (Steam build 25143593, 1.1.21239, linked
+2026-09-05, SizeOfImage `0x1574000`) was ported onto the **older** build 23372843 (~1.1.21039, public push
+2026-05-23, TimeDateStamp `0x6a10f6ca`, SizeOfImage `0x156b000`, depot 686061 manifest 8229879464648565847, exe
+kept under `.analysis/exe/23372843/`; SDL 3.2.12 on both). Both forms agree:
+`node tools/bindings/cross-build.mjs --old <25143593 exe> --new <23372843 exe> --build 23372843` exited 0 with
+`cross-build 25143593 -> new exe: 0 non-offset entries ambiguous/failed`, and `BINDINGS_OLD_EXE=… BINDINGS_NEW_EXE=…
+npm test` passed the opt-in test (`235 passed, 0 failed`). Full report: `.analysis/cross-build/25143593-to-23372843.txt`
+(git-ignored).
+
+Per status, 98 entries: `ported-rescan` 32 · `ported-anchor` 14 · `ported-witness` 3 · `ported-derived` 11 ·
+`needs-human` 38 · `ported-exact` / `ambiguous` / `failed` / `proposed` 0.
+
+- Every one of the 32 signed functions moved (the image shifted; `ported-exact` does not happen across real builds)
+  and every stored signature still matched exactly once — rung 1 held for all of them.
+- Rung 2 (funcsig xref) found 11: nine `Status_*` lookups plus `Status_AttachPassive` and `Status_SpawnTile`. Rung 4
+  found `Status_NameExists` as the `.pdata` successor of `Status_GetStackMode`. Rung 3 found the two string-less
+  functions by caller ordinal: `Status_ApplyLuckUp` = call #1261 of `Status_ApplyByName` (a 2,384-call function) and
+  `LuckUp_ctor` = call #6 of `Status_ApplyLuckUp`.
+- RTTI found both vftables. The slot body of `LuckUp_vftable` slot 1 gave `LuckUp_typeid` **`0x4d5`, not `0x4d6`** —
+  the one value that genuinely differs between the builds, and the derivation caught it. The three data witnesses
+  held at their rip-ref ordinals (#44, #6, #0); the 8 DYNAPI slots ported by table index, which proves nothing yet
+  because SDL did not change.
+- No non-offset entry fell off the ladder. The 38 `needs-human` rows are the known unanchored set (`LuckUp_vtableSlots`,
+  the five `VT_*` slot indices, 32 struct offsets) carried over unchanged — this run verifies none of them.
+- Caveat on what was proven: all 14 anchor-ported functions have **byte-identical size and call counts** on both
+  builds (e.g. `Status_AttachPassive` 232,096 bytes / 6,438 calls on each), so this update was a layout shift around
+  unchanged bodies. The signature rung and the anchors survived a relink; the ±35 % / ±25 % tolerances, the
+  `ambiguous` path and the `proposed` path were not stressed by a real image.
+
+What the run suggests for the ladder (candidates, not implemented):
+
+- **Report bug**: `portFunction` writes `e.rva` before `finish` reads `oldValue = e.rva`, so the table's `old` column
+  shows the ported value for every ported row (data and derived rows too); the real old value survives only in the
+  `was 0x…` detail. Capture `oldValue` before the mutation and assert the column in the fake-PE T0 tests.
+- **Rung 3 is the weakest rung that carried weight.** `Status_ApplyLuckUp` and `LuckUp_ctor` have no strings and no
+  `after`, so one call added or removed before ordinal 1261 in `apply_status` fails both with no fallback.
+  Candidates: a *callee-set* rung (match a candidate by the already-ported functions it calls at matching ordinals —
+  `Status_ApplyLuckUp` calls `Entity_FindComponentsByTypeId` #4, `Status_Remove` #5, `LuckUp_ctor` #6,
+  `Status_ApplyByName` #9); a tolerant ordinal window (±k calls, accepted only when exactly one candidate passes the
+  cfgLite tolerance); a *vftable-store* rung for constructors (`LuckUp_ctor` is the `.pdata` function that stores
+  `LuckUp_vftable` through a rip-relative `lea`) — RTTI has no function dependency, so the vtable phase could run
+  before the function rungs to make that possible.
+- **Anchor the six constants**: `LuckUp_vtableSlots` from the vftable's extent (next RTTI object or first non-`.text`
+  pointer), the `VT_*` indices by slot-body pattern or by the slot whose code references a known string; and
+  corroborate the derived `LuckUp_typeid` with a second witness (the imm32 passed to `Entity_FindComponentsByTypeId`
+  at call #4 of `Status_ApplyLuckUp`) now that it is known to change between builds.
+- **The 32 offsets are the real gap**: a cross-build run cannot say whether `Status_stacks` or `Character_turnKind`
+  moved. Harvest `witness { function, pattern, dispAt }` per offset from its consumer (`Status_ctor`,
+  `Character_BeginTurn`, `DebugConsole_init`, …) so the next run reports `ported-witness` / `proposed` instead of
+  `needs-human`.
+- `cross-build.mjs` has no `--gameVersion`, so the ported build block keeps the old manifest's `1.1.21239`;
+  `port.mjs` already accepts `opts.gameVersion`, pass it through.
+- Record the size/call deltas rung 2 saw in the report (all 0 here) so the tolerances can be tightened on evidence,
+  and keep a build with a changed SDL on the wishlist — the `table` derivation's `needs-human` path is still
+  untested on a real image.
+
 ## Known limits and human decisions
 
 - `FW_SIG_MAX_BYTES` / `sigCap` is 128; `Status_GetCategory` needs 126. Raising it means changing `fw_sig.h`
