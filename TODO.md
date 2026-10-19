@@ -1,22 +1,18 @@
 # TODO — Mewgenics modding toolkit
 
-Living status snapshot (last updated 2026-10-19: binding-port stack #7–#19 and the SWF gate #21 merged). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
-Two agents were in flight at last update: Playwright E2E/validation and the SWF-loader-crash RE.
+Living status snapshot (last updated 2026-10-19 evening: owner ran the game-side checks; every PR through #23 is merged, none open). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 
 ## Owner checks — only you can do these (agents cannot)
 
 Things no test can see: they need a human at the game, a decision, or an account. Tick them here; the agent-side work they unblock is named.
 
-- [ ] **SWF gate, visual half (T3 of PR #21).** From `editor/`: `npm run test:swfgate -- flat --prepare-only`, then
-  `launch-dev.bat mods\swf-gate`. Start/continue the `dev` run and view the `JokersGambit` ability: expected a flat gray
-  square instead of `unknown`, and no new `crash_*.txt` under `%APPDATA%\Glaiel Games\Mewgenics\<steamid>\logs\`.
-  Afterwards `npm run test:swfgate -- control`. If it crashes, tell the agent: next is decompiling `FUN_140a58440`
-  (merge) and `0x9a8f30` (movieclip advance).
-- [ ] **The 2026-10-18 crash context.** Was a run in progress on the `dev` save when the gate SWF crashed, and did it
-  crash at boot or when you opened the ability? (The harness could not reproduce it at the main menu with the
-  pre-fix donor; the answer decides where the agent looks next.)
-- [ ] **Joker's Luck in combat on the current framework build**: the real feature test (target 2) stays blocked on
-  target 1, so until then a play-check that the `JokersLuck` status still ticks is a human look.
+- [x] **SWF gate, visual half (T3 of PR #21).** Owner, 2026-10-19: the `flat` variant shows a flat gray square for
+  `JokersGambit` inside a run, no new `crash_*.txt`, and `npm run test:swfgate -- control` passed. The emitter fix is
+  verified end to end (boot via the harness, display by eye).
+- [x] **The 2026-10-18 crash context.** Owner was not at the PC when it happened, so boot-vs-display is unknown.
+  Closed: unreproducible with the pre-fix donor at the main menu, and not seen since the fix (gate result above).
+- [x] **Joker's Luck in combat on the current framework build**: owner play-check 2026-10-19 — the cat's luck changes
+  at the start of each turn on the rebuilt DLLs.
 - [ ] **Vanilla-launch gate** of the framework: a plain Steam launch opens the real save, so only you decide whether
   to verify it on a copy of the install or accept the unchanged code path (see "Verification still owed").
 - [ ] **Hidden window on another machine**: confirm the harness keeps ticking hidden on a non-NVIDIA PC before any
@@ -24,7 +20,7 @@ Things no test can see: they need a human at the game, a decision, or an account
 - [ ] **Binding-port series** (second build, decisions, play-checks): the detailed checklist is the next section.
 - [ ] **Decisions pending** (section below): GitHub Actions for T0; the Ruffle (WASM) dependency; the dead
   `mewged.onboard.conceptsDontShowStart` key; mechanical TDD enforcement (PR template / CI).
-- [ ] **Merges.** Every PR waits for your explicit per-PR word (`CLAUDE.md`); open now: #20.
+- [ ] **Merges.** Every PR waits for your explicit per-PR word (`CLAUDE.md`); none open as of 2026-10-19 evening.
 
 ## Owner checklist — what only you can check (binding-port series, merged 2026-10-19)
 
@@ -38,8 +34,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   (or `BINDINGS_NEW_EXE=... npm test` from `editor/`). Expected: no `ambiguous`/`failed` rows outside struct offsets.
   Any such row is a ladder improvement to make; the candidates are already listed. Record the outcome in
   `docs/binding-port.md` "T1 cross-build".
-- [ ] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` *before* the next Steam update: the
-  anchors are committed, the old binary is not, and the self-port/harvest tests need it once the install moves on.
+- [x] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` (done 2026-10-19, git-ignored,
+  sha256 `4127cd6a…`). Redo this before every Steam update: the anchors are committed, the binary is not, and the
+  self-port/harvest tests need it once the install moves on.
 
 ### Decisions
 - [ ] **`sigCap` / `FW_SIG_MAX_BYTES` stays at 128?** `Status_GetCategory` needs 126 bytes; a longer unique pattern on a
@@ -54,13 +51,13 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [ ] **`FW_API_VERSION` bump policy** when the manifest exposes new `FW_SYM_*`/`FW_DATA_*` entries (append-only enums).
 
 ### Verify by eye / by playing
-- [ ] **Joker's Luck still rerolls luck every turn** on the `dev` save after the rebuilt DLLs (combat assertions are
-  blocked until TDD target 1; this is the T3 for every PR that touched `native/`).
+- [x] **Joker's Luck still rerolls luck every turn** on the `dev` save after the rebuilt DLLs (owner play-check
+  2026-10-19; combat assertions stay blocked until TDD target 1, so this remains the T3 for every PR touching `native/`).
 - [ ] **The `port-bindings` skill triggers when you say "the game updated"** (and on `unknown-build` /
   `native-build-unknown`); fix the description wording in `.claude/skills/port-bindings/SKILL.md` if it does not.
 - [ ] **Read `docs/binding-port.md` once as the person who will run the next port**; anything unclear is a doc bug.
-- [ ] **`check_game_build` from Claude Code** returns `known: true` with 35 `ok` signatures on your install (MCP
-  `mewgenics-editor`, 13 tools).
+- [x] **`check_game_build` from Claude Code** returned `known: true`, 35 `ok` / 0 moved / 0 missing / 0 ambiguous on
+  the install (2026-10-19; MCP `mewgenics-editor`, 13 tools).
 - [ ] **A `proposed` struct offset is never applied by the tool**: when a port reports one, apply it only with
   `--resolve Name=0x..` after a green `npm run test:ingame` that exercises it (`docs/binding-port.md` "The ladder").
 
@@ -178,7 +175,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")
-- [~] Emitter fix from `swf-emitter-fix-spec.md` (PR `fix/swf-append-frame`, 2026-10-19): `AbilityIcon` places a bare shape at **depth 3** per labeled frame (not nested clips) — donor now mirrors it; T2 gate `npm run test:swfgate -- <variant>` boots every layout (incl. the pre-fix one) without crashing, and `missing` proves the merge runs. **Owed:** the owner's T3 look at `JokersGambit` inside a run (the crash is display-time, not boot-time) — *emitter frontier*
+- [x] Emitter fix from `swf-emitter-fix-spec.md` (PR #21, 2026-10-19): `AbilityIcon` places a bare shape at **depth 3** per labeled frame (not nested clips) — donor mirrors it; T2 gate `npm run test:swfgate -- <variant>` boots every layout (incl. the pre-fix one) without crashing, and `missing` proves the merge runs. T3 done the same day: owner saw the gray square for `JokersGambit` inside a run, no crash.
 - [ ] Commit the uncommitted WIP (art pipeline + docs + `CLAUDE.md` flag) + open a PR for review (not merge)
 
 ### Go public (do LAST, after everything else lands — approved 2026-10-18)
