@@ -28,7 +28,7 @@ the linked docs; this page is the map.
 ### Native layer
 - The Mewjector `version.dll` chainloader loads our `mewframework.dll`, which **gates on `-savesuffix` + the build id
   and fails closed** on any other build. Custom statuses = vtable clone + hooking name-keyed property lookups. Byte
-  signatures/RVAs for this build live in `bindings/25143593.sig.tsv`. Sample **Joker's Luck** status is verified in combat.
+  signatures/RVAs/offsets for this build live in `bindings/25143593.json` (generated into `signatures.h`/`offsets.h`). Sample **Joker's Luck** status is verified in combat.
   Details: **[engine-map.md](engine-map.md)**.
 
 ### Art pipeline
@@ -79,8 +79,10 @@ the linked docs; this page is the map.
   changed `campaign02.sav`; `steamcampaign01.sav` stayed untouched, which the harness verifies by hash every run).
 - **Ruffle (WASM)** as an optional dep to preview *vanilla* SWFs in-editor — not decided (would go through the dep-gate).
 - Not built: **animation-clip authoring** (DefineSprite timelines end-to-end), a **cat-rig** (part-indexed) UI, art MCP tools.
-- **Per-build fragility**: everything native (signatures, the status pipeline) is pinned to build `25143593`; a game
-  update breaks it until signatures are re-derived (framework fails closed, so it won't crash/corrupt meanwhile).
+- **Per-build fragility** (now a procedure, not a dead end): everything native is pinned to build `25143593` through
+  `bindings/25143593.json`; a game update disables the framework (fails closed, so it won't crash/corrupt) until the
+  manifest is ported — `docs/binding-port.md` / the `port-bindings` skill. The real cross-build run still needs an
+  older depot (`download_depot`) to prove the anchors on a genuine recompile.
 - Whether an **official Workshop/launcher** ships (the dev intends to; not yet).
 
 ---
@@ -105,8 +107,9 @@ the linked docs; this page is the map.
   full import of the 22 MB exe takes ~17 min but REA's default call deadline is **330000 ms** — you **must** set
   `REA_GHIDRA_STARTUP_TIMEOUT_MS` ≥ **1800000** in the container env and use `watch` mode (one import, reused).
 - Much is answerable **without** Ghidra: parse the PE export table + `.analysis/list_names.tsv` /
-  `list_procedures.tsv` to resolve addresses (that's how the SWF crash was solved). Re-derive `bindings/` signatures on a
-  game update with `tools/bindings/make-signature.mjs --manifest bindings/<build>.json --write`, then `npm run bindings:gen`.
+  `list_procedures.tsv` to resolve addresses (that's how the SWF crash was solved). On a game update run the
+  `port-bindings` skill (`docs/binding-port.md`): `check_game_build` → `port_bindings` → `npm run bindings:gen` →
+  rebuild → `npm test` → `npm run test:ingame`; REA/Ghidra only for entries the ladder reports as ambiguous.
 
 ### Flagged source — do not fetch
 - **`tcrf.net/Mewgenics`** served prompt-injection content and a false "gpak is encrypted" claim. Do not fetch or act

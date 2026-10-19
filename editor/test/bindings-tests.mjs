@@ -252,35 +252,6 @@ export async function runBindingsTests(test, assert, eq) {
     eq(scanExec(p, f.buf, parsePattern("C3 AA")).count, 1);
   });
 
-  if (!exe) {
-    console.log("  (skipped: Mewgenics.exe not found; TSV regression test needs the game)");
-  } else {
-    const tsv = readFileSync(join(REPO_ROOT, "bindings", "25143593.sig.tsv"), "utf8");
-    const rows = tsv.split(/\r?\n/).filter(Boolean).map((line) => {
-      const [name, rva, len, rest] = line.split("\t");
-      return { name, rva: parseInt(rva, 16), len, rest: rest || "" };
-    });
-    const code = rows.filter((r) => /^\d+$/.test(r.len));
-    const p = parsePe(exe);
-    test(`T1 real exe: each of the ${code.length} TSV code signatures matches exactly once, at its RVA (TODO #4)`, () => {
-      assert(code.length >= 33, `expected >= 33 code rows, got ${code.length}`);
-      /** @type {string[]} */
-      const bad = [];
-      for (const r of code) {
-        const pat = parsePattern(r.rest);
-        eq(pat.length, Number(r.len), `${r.name}: hex length matches the len column`);
-        const res = scanExec(p, exe, pat);
-        if (res.count !== 1 || res.hits[0] !== r.rva) bad.push(`${r.name}: ${res.count} matches, first 0x${(res.hits[0] ?? -1).toString(16)} (want 0x${r.rva.toString(16)})`);
-      }
-      assert(bad.length === 0, bad.join("; "));
-    });
-    test("T1 real exe: the NOT-UNIQUE row's 64-byte prefix indeed matches more than once", () => {
-      const r = rows.find((x) => x.len.startsWith("NOT-UNIQUE"));
-      assert(r !== undefined, "row present");
-      if (!r) return;
-      eq(scanExec(p, exe, parsePattern(r.rest)).count, 2);
-    });
-  }
   // ---- manifest.mjs: bindings/<build>.json, the single source of truth ------------
   console.log("\n# Bindings: manifest (bindings/<steamBuildId>.json)");
   const man = await load("../src/core/bindings/manifest.mjs");

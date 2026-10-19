@@ -62,13 +62,13 @@ Two agents were in flight at last update: Playwright E2E/validation and the SWF-
    value in the units event: add `stacks` per status to `MtUnit`/the JSONL, host-tested first).
 3. [ ] **Auto-resolve overlay mod** `mods/_autoplay/` (`player_cat.gon.merge` → `passives { Uncontrollable 1 }`) so
    combat scripts run without input; validator test for the overlay, T2 test that a fight reaches round 2 unattended.
-4. [ ] **Bindings regression test (T1)**: a node test that scans the real exe read-only and asserts each
-   `bindings/25143593.sig.tsv` row matches exactly once at its RVA (skip when the exe is absent). Turns "a game
-   update breaks the native layer" into a red test instead of a silent disable.
-5. [ ] **Framework pure parts**: extract the build gate (`identify_build` over a synthetic PE header) and the status
-   definition table/name rules from `framework.c`/`status_engine.c` into host-testable units like `fw_sig.c`.
-6. [ ] **Tools tests (T0)**: `tools/gpak.py` against a synthetic archive built in-test (python `unittest`, stdlib
-   only); `tools/bindings/make-signature.mjs` against a synthetic PE (uniqueness, min/max length, rel32 wildcards) — done in editor/test/bindings-tests.mjs (siggen section).
+4. [x] **Bindings regression test (T1)** — `editor/test/bindings-tests.mjs`: every manifest signature matches exactly
+   once at its RVA in the installed exe, every function RVA begins a `.pdata` entry, anchors re-verify, self-port
+   changes nothing; `check_game_build` reports it live. (2026-10-19, binding-port series)
+5. [~] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
+   the status definition table / name rules are still inside `status_engine.c`.
+6. [~] **Tools tests (T0)**: `tools/bindings/make-signature.mjs` is covered by the siggen section of
+   `bindings-tests.mjs` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` still untested.
 7. [ ] **Validator fixtures per check**: one failing fixture per finding code (`unknown-status`, `missing-loc-key`,
    `merge-target-missing`, …) so the four checks are each pinned by a T0 test instead of only by the sample mods.
 8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
@@ -98,8 +98,9 @@ Two agents were in flight at last update: Playwright E2E/validation and the SWF-
 - [ ] **Which file `-savesuffix dev` writes**: dev launches changed `campaign02.sav`, not a `*dev*` file; the real
   `steamcampaign01.sav` stays untouched (hash-verified every run). Resolve the suffix→filename mapping from
   `MewSaveFile::open_or_create` (`0x229cd0`) and document it in `engine-map.md` "Save safety".
-- [ ] **`FrameBegin` signature on a future build**: 20 generic prologue bytes; fallback is `ApplicationBase_Step`
-  (recorded in `bindings/`). Re-derive both when the game updates.
+- [ ] **`FrameBegin` signature on a future build**: 19 generic prologue bytes; fallback is `ApplicationBase_Step`
+  (both in the manifest). The port ladder regenerates them; if `FrameBegin` ends up `ambiguous`, switch the harness
+  hook to `Step`.
 - [ ] **Hidden window on other machines**: verified on this PC (NVIDIA, ~180 fps hidden); confirm elsewhere before
   relying on it in CI-like setups.
 - [ ] **In-run console command set**: `listcmds` at the main menu lists 11 commands; capture the in-run list once
@@ -135,4 +136,12 @@ Two agents were in flight at last update: Playwright E2E/validation and the SWF-
 - [ ] RNG seeding for deterministic test runs (no user-facing command; the state is `TLS+0x178`, pin it from the harness → target 12)
 - [x] Headless / startup-macro mode — solved by the harness (in-process console execution + hidden window), not by the game
 - [ ] Verify the INFERRED preview behaviors (nested-sprite framing, cxform-after-remap, engine fill rule, bitmap sampling)
-- [ ] Per-build fragility: process to re-derive `bindings/` signatures when Mewgenics updates (framework fails closed meanwhile)
+- [x] Per-build fragility: `docs/binding-port.md` + the `port-bindings` skill (manifest `bindings/<build>.json`, generated
+  headers, harvest/port/check/seed tools, `unknown-build` verdict, `native-build-unknown` validator warning). 2026-10-19.
+- [ ] **Cross-build port, for real**: fetch an older build with Steam `download_depot 686060 <depot> <manifest>` into
+  `.analysis/exe/<build>/` and run the opt-in T1 (`BINDINGS_OLD_EXE`/`BINDINGS_NEW_EXE`) to prove the anchors survive a
+  genuine recompile; record the result in `docs/binding-port.md`.
+- [ ] **Witness patterns for the 38 unanchored entries** (struct offsets, vtable slot constants) so the port stops
+  reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.mjs`.
+- [ ] **Runtime anchor locator in the DLL** (optional): string → lea xref → `.pdata` so anchored-but-unsigned entries
+  survive a relink before anyone runs the port.

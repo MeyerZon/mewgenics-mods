@@ -23,7 +23,7 @@ and fast to author.
 | `native/` | Native framework (`framework/`), the `version.dll` chainloader setup, and native mods (`mods/`). |
 | `editor/` | The data-layer mod editor (core + MCP server + web UI). See [editor usage](#the-editor). |
 | `tools/` | `gpak.py` (read-only pack reader), `bindings/make-signature.mjs` + `bindings/gen-headers.mjs` (signature + header generators), `rea-mcp.mjs` (REA/Ghidra driver). |
-| `bindings/` | Per-build byte signatures + RVAs. Everything native is pinned to one game build. |
+| `bindings/` | Per-build manifest `<steamBuildId>.json` (signatures, RVAs, offsets + the anchors that re-find them); `signatures.h`/`offsets.h` are generated from it. See [`docs/binding-port.md`](docs/binding-port.md). |
 | `docs/` | The authoritative notes — start here. |
 
 ## Start here (docs)
@@ -106,5 +106,5 @@ raise `REA_GHIDRA_STARTUP_TIMEOUT_MS` (default 330000) well above that when star
 Never modify `Mewgenics.exe` or `resources.gpak`. Never touch save files — back up
 `%APPDATA%\Glaiel Games\Mewgenics\<steamid>` before any new mod build, and run modded play only through a save suffix.
 Never commit extracted assets or game bytes beyond short signatures. Everything native is pinned to Steam build
-`25143593`; when the game updates, signatures in `bindings/` must be re-derived and the framework fails closed until
-they are.
+`25143593` through `bindings/25143593.json`; when the game updates, the framework fails closed until the manifest is
+ported (`docs/binding-port.md`, the `port-bindings` skill).
