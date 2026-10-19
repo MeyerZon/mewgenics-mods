@@ -272,4 +272,36 @@ export const TOOLS = [
       return api.checkGameBuild({ exe: exe ? resolveReadPath(exe) : undefined });
     },
   },
+  {
+    name: "port_bindings",
+    description:
+      "Port the native bindings manifest of a known game build to a new Mewgenics.exe (docs/binding-port.md). Walks the resolution ladder per entry (signature rescan -> unique __FUNCSIG__ string xref -> caller ordinal -> .pdata neighbour; witnesses / RTTI / vtable slots / table indices for data) and returns { ok, dryRun, summary, rows: [{ name, kind, oldValue, newValue, status, method, detail, candidates? }], needsAgent: [...ambiguous/failed rows], report (markdown) }. Statuses: ported-exact | ported-rescan | ported-anchor | ported-witness | ported-derived | proposed (value NOT applied) | ambiguous | failed | needs-human. dryRun (default true) writes nothing; dryRun:false writes bindings/<build>.json and bindings/<build>.port-report.md and nothing else. Resolve ambiguous/failed entries by passing resolve: { name: \"0xRVA\" } after examining the candidates (REA compare_functions with tools/bindings/seed-file.mjs, or .analysis/decompiled). Afterwards: npm run bindings:gen, rebuild the DLLs, npm test, run_ingame_test.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        build: { type: "string", description: "the NEW Steam build id (digits), e.g. 25200000; names bindings/<build>.json" },
+        exe: { type: "string", description: "path to the new Mewgenics.exe (default: the installed game)" },
+        from: { type: "string", description: "the manifest to port from (default: the newest bindings/<build>.json)" },
+        version: { type: "string", description: "the new game version string, e.g. 1.1.21300" },
+        resolve: { type: "object", description: "name -> 0xRVA answers for ambiguous/failed entries", additionalProperties: { type: "string" } },
+        dryRun: { type: "boolean", description: "default true; false writes bindings/<build>.json + the report" },
+      },
+      required: ["build"],
+      additionalProperties: false,
+    },
+    handler: (args) => {
+      const exe = str(args, "exe");
+      const from = str(args, "from");
+      const resolve = obj(args, "resolve");
+      for (const [k, v] of Object.entries(resolve)) if (typeof v !== "string" || !/^0x[0-9a-fA-F]+$/.test(v)) throw new ToolError(`resolve.${k} must be a 0x hex RVA string`);
+      return api.portBindings({
+        build: str(args, "build", true) ?? "",
+        exe: exe ? resolveReadPath(exe) : undefined,
+        from: from ? resolveReadPath(from) : undefined,
+        version: str(args, "version"),
+        resolve: /** @type {Record<string, string>} */ (resolve),
+        dryRun: bool(args, "dryRun"),
+      });
+    },
+  },
 ];
