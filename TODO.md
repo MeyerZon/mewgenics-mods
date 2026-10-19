@@ -3,6 +3,50 @@
 Living status snapshot (last updated 2026-10-18, evening: harness + TDD rule). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 Two agents were in flight at last update: Playwright E2E/validation and the SWF-loader-crash RE.
 
+## Owner checklist — what only you can check (binding-port series, merged 2026-10-19)
+
+Things no test on this machine can decide. Tick them off here; each links to where the detail lives.
+
+### Needs a second game build
+- [ ] **Run the real cross-build port.** Fetch any other build in the Steam client console (`steam://open/console`):
+  `download_depot 686060 <depotId> <manifestId>` (ids from SteamDB's depot history for app 686060). Copy its
+  `Mewgenics.exe` to `.analysis/exe/<build>/` (git-ignored), then
+  `node tools/bindings/cross-build.mjs --old "<installed Mewgenics.exe>" --new .analysis\exe\<build>\Mewgenics.exe`
+  (or `BINDINGS_NEW_EXE=... npm test` from `editor/`). Expected: no `ambiguous`/`failed` rows outside struct offsets.
+  Any such row is a ladder improvement to make; the candidates are already listed. Record the outcome in
+  `docs/binding-port.md` "T1 cross-build".
+- [ ] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` *before* the next Steam update: the
+  anchors are committed, the old binary is not, and the self-port/harvest tests need it once the install moves on.
+
+### Decisions
+- [ ] **`sigCap` / `FW_SIG_MAX_BYTES` stays at 128?** `Status_GetCategory` needs 126 bytes; a longer unique pattern on a
+  future build fails to parse ("0 matches"). Raising it means `fw_sig.h` + `native/framework/test/test_sig.c` together
+  (`docs/binding-port.md` "Known limits").
+- [ ] **One DLL for several builds, or one per build?** `signatures.h` can carry several `BuildInfo` rows, but `offsets.h`
+  is shared `#define`s and the generator refuses when manifests disagree on an offset (then: one DLL per build).
+- [ ] **SDL version policy**: when `port_bindings` reports the 8 SDL slots as `needs-human` (SDL version changed), the
+  DYNAPI slot order must be re-verified by hand (`SDL_dynapi_procs.h` of that SDL version) before trusting the indices.
+- [ ] **Optional PR 15 — runtime anchor locator in the DLL** (string → lea xref → `.pdata`), so anchored-but-unsigned
+  entries survive a relink before anyone runs the port. Worth the native complexity, or not?
+- [ ] **`FW_API_VERSION` bump policy** when the manifest exposes new `FW_SYM_*`/`FW_DATA_*` entries (append-only enums).
+
+### Verify by eye / by playing
+- [ ] **Joker's Luck still rerolls luck every turn** on the `dev` save after the rebuilt DLLs (combat assertions are
+  blocked until TDD target 1; this is the T3 for every PR that touched `native/`).
+- [ ] **The `port-bindings` skill triggers when you say "the game updated"** (and on `unknown-build` /
+  `native-build-unknown`); fix the description wording in `.claude/skills/port-bindings/SKILL.md` if it does not.
+- [ ] **Read `docs/binding-port.md` once as the person who will run the next port**; anything unclear is a doc bug.
+- [ ] **`check_game_build` from Claude Code** returns `known: true` with 35 `ok` signatures on your install (MCP
+  `mewgenics-editor`, 13 tools).
+- [ ] **A `proposed` struct offset is never applied by the tool**: when a port reports one, apply it only with
+  `--resolve Name=0x..` after a green `npm run test:ingame` that exercises it (`docs/binding-port.md` "The ladder").
+
+### Known gaps you are accepting for now
+- [ ] 38 entries (32 struct offsets, 6 vtable slot constants) are still `unanchored`: every port reports them as
+  `needs-human` instead of guessing. Follow-up below ("Witness patterns for the 38 unanchored entries").
+- [ ] A changed arity of the 13 status lookups (shapes A–E in `status_engine.c`), a compiler/CRT change (`MsvcString`
+  layout, `_Allocate<16>`), or a changed vtable layout cannot be ported mechanically; the port will say so.
+
 ## Done
 
 ### Foundations
