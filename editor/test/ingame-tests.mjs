@@ -510,6 +510,12 @@ export async function runIngameTests(test, assert, eq) {
       const removed = savecheck.compareSaveSets(before, savecheck.snapshotSaves(dir, { allow }));
       assert(!removed.unchanged && removed.changed.join(",") === "steamcampaign01.sav", removed.detail);
     });
+    test("devSavePattern: the files a -savesuffix launch may write are the local slots, the test director and the house test; the Steam-cloud slots never", () => {
+      const p = savecheck.devSavePattern("dev");
+      for (const ok of ["campaign01.sav", "campaign02.sav", "campaign03.sav", "test00.sav", "housetest01.sav", "devcampaign01.sav"]) assert(p.test(ok), `${ok} allowed`);
+      for (const no of ["steamcampaign01.sav", "steamcampaign02.sav", "steamcampaign03.sav", "campaign01.savbackup", "other.sav"]) assert(!p.test(no), `${no} protected`);
+      assert(savecheck.devSavePattern("a.b").test("a.bcampaign01.sav") && !savecheck.devSavePattern("a.b").test("aXbcampaign01.sav"), "suffix is escaped");
+    });
     test("realSavesDir: the saves dir of the single steamid; null otherwise", () => {
       assert(typeof savecheck.realSavesDir === "function", "realSavesDir exported");
       const app = mkdtempSync(join(tmpdir(), "mewged-appdata-"));
