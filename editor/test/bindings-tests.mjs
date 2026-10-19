@@ -817,8 +817,8 @@ export async function runBindingsTests(test, assert, eq) {
   const { findString, findStringXrefs, harvestFunction, findRtti, vtableSlotTarget, deriveFromVtableSlot, harvestManifest } = hv;
 
   /**
-   * A fake image: .text at 0x1000, .rdata at 0x2000, .data at 0x3000 (builder layout, each section < 1 page).
-   *   fnA 0x1010: lea rcx,[rip->funcsig]; call fnB; mov rax,[rip->Glob]; ret
+   * A fake image: .hvText at 0x1000, .rdata at 0x2000, .data at 0x3000 (builder layout, each section < 1 page).
+   *   hvFnA 0x1010: lea rcx,[rip->funcsig]; call fnB; mov rax,[rip->Glob]; ret
    *   fnB 0x1040: mov eax,0x4d6; ret            (vtable slot 1 body)
    *   fnC 0x1060: push rbx; ...; ret            (vtable slot 0 body)
    *   .rdata: funcsig string @+0x10, "Dup" twice, COL @+0x40, vftable @+0x80 (COL pointer @+0x78)
@@ -827,16 +827,16 @@ export async function runBindingsTests(test, assert, eq) {
   const FUNCSIG = "int __cdecl glaiel::foo(void)";
   const TEXT = 0x1000, RDATA = 0x2000, DATA = 0x3000, BASE = 0x140000000;
   const le32 = (/** @type {number} */ v) => [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
-  const text = new Uint8Array(0x100);
-  const fnA = [
+  const hvText = new Uint8Array(0x100);
+  const hvFnA = [
     0x48, 0x8d, 0x0d, ...le32((RDATA + 0x10) - (TEXT + 0x17)),   // lea rcx,[rip+disp] -> funcsig
     0xe8, ...le32((TEXT + 0x40) - (TEXT + 0x1c)),                 // call fnB
     0x48, 0x8b, 0x05, ...le32((DATA + 0x100) - (TEXT + 0x23)),   // mov rax,[rip+disp] -> Glob
     0xc3,
   ];
-  text.set(fnA, 0x10);
-  text.set([0xb8, 0xd6, 0x04, 0x00, 0x00, 0xc3], 0x40);
-  text.set([0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3], 0x60);
+  hvText.set(hvFnA, 0x10);
+  hvText.set([0xb8, 0xd6, 0x04, 0x00, 0x00, 0xc3], 0x40);
+  hvText.set([0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3], 0x60);
   const rdata = Buffer.alloc(0x100);
   rdata.write(FUNCSIG + "\0", 0x10, "latin1");
   rdata.write("Dup\0", 0x30, "latin1");
@@ -855,8 +855,8 @@ export async function runBindingsTests(test, assert, eq) {
   data.write(".?AVFoo@glaiel@@\0", 0x30, "latin1");
   const hvPe = buildFakePe({
     timeDateStamp: 0x44444444,
-    sections: [{ name: ".text", bytes: text, exec: true }, { name: ".rdata", bytes: rdata }, { name: ".data", bytes: data, write: true }],
-    pdata: [{ section: ".text", begin: 0x10, end: 0x30 }, { section: ".text", begin: 0x40, end: 0x46 }, { section: ".text", begin: 0x60, end: 0x80 }],
+    sections: [{ name: ".hvText", bytes: hvText, exec: true }, { name: ".rdata", bytes: rdata }, { name: ".data", bytes: data, write: true }],
+    pdata: [{ section: ".hvText", begin: 0x10, end: 0x30 }, { section: ".hvText", begin: 0x40, end: 0x46 }, { section: ".hvText", begin: 0x60, end: 0x80 }],
   });
   const hp = parsePe(hvPe.buf);
   eq(hvPe.rva(".rdata", 0), RDATA, "fake layout assumption");
@@ -880,7 +880,7 @@ export async function runBindingsTests(test, assert, eq) {
   test("harvestFunction: funcsig string anchor, callees by ordinal, rip refs by ordinal, cfgLite and prologue", () => {
     const h = harvestFunction(hp, hvPe.buf, TEXT + 0x10, { names: new Map([[TEXT + 0x40, "FnB"]]) });
     eq(h.strings.length, 1);
-    eq(h.strings[0].text, FUNCSIG);
+    eq(h.strings[0].hvText, FUNCSIG);
     eq(h.strings[0].role, "funcsig");
     eq(h.strings[0].unique, true);
     eq(h.callees.map((/** @type {any} */ c) => `${c.ordinal}:${c.name}:${c.target}`).join(","), "0:FnB:0x1040");
@@ -928,7 +928,7 @@ export async function runBindingsTests(test, assert, eq) {
     });
     const { manifest: out, report } = harvestManifest(hp, hvPe.buf, m);
     const a = entry(out, "FnA");
-    eq(a.anchors.strings[0].text, FUNCSIG);
+    eq(a.anchors.strings[0].hvText, FUNCSIG);
     eq(a.anchors.callees[0].name, "FnB");
     eq(a.anchors.cfgLite.bytes, 0x20);
     const g = entry(out, "Glob");
@@ -956,7 +956,7 @@ export async function runBindingsTests(test, assert, eq) {
         const sig = h.strings.find((/** @type {any} */ s) => s.role === "funcsig" && s.unique);
         if (e.name === "Status_NameExists") { if (sig) bad.push("Status_NameExists unexpectedly has a funcsig"); continue; }
         if (!sig) { bad.push(`${e.name}: no unique funcsig`); continue; }
-        const x = findStringXrefs(p, exe, findString(p, exe, sig.text).rva);
+        const x = findStringXrefs(p, exe, findString(p, exe, sig.hvText).rva);
         const fns = [...new Set(x.map((/** @type {any} */ r) => (r.fn ? r.fn.begin : -1)))];
         if (fns.length !== 1 || fns[0] !== parseInt(e.rva, 16)) bad.push(`${e.name}: xrefs from ${fns.map((f) => "0x" + f.toString(16)).join(",")}`);
         else found++;
