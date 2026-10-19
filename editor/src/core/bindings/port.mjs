@@ -97,9 +97,14 @@ export function portManifest(old, pe, buf, opts) {
     const callsOk = Math.abs(s.calls - (old.calls || 0)) <= Math.max(2, 0.25 * (old.calls || 0));
     return bytesOk && callsOk;
   };
-  /** @param {import("./manifest.mjs").Entry} e @param {string} status @param {string} method @param {string} detail @param {string|null} newValue @param {Candidate[]} [candidates] */
-  const finish = (e, status, method, detail, newValue, candidates) => {
-    const oldValue = e.rva || e.value || "";
+  /** @param {number} n */
+  const signed = (n) => (n >= 0 ? "+" : "") + n;
+  /**
+   * Record the row and the entry's port block. `oldValue` is the value before this port; a branch that overwrites
+   * `e.rva`/`e.value` before calling finish must pass what it saw, or the report's "old" column shows the new value.
+   * @param {import("./manifest.mjs").Entry} e @param {string} status @param {string} method @param {string} detail @param {string|null} newValue @param {Candidate[]} [candidates] @param {string} [oldValue]
+   */
+  const finish = (e, status, method, detail, newValue, candidates, oldValue = e.rva || e.value || "") => {
     const row = { name: e.name, kind: e.kind, oldValue, newValue, status, method, detail, candidates };
     rows.push(row);
     e.port = { from, status, method, note: detail };
@@ -108,12 +113,13 @@ export function portManifest(old, pe, buf, opts) {
   };
   /** @param {import("./manifest.mjs").Entry} e @param {number} rva @param {string} status @param {string} method @param {string} detail */
   const portFunction = (e, rva, status, method, detail) => {
+    const was = e.rva || "";
     e.rva = hex(rva);
     newRva.set(e.name, rva);
     const sig = makeSignature(pe, buf, rva, { minLen: 12, cap: out.sigCap });
     if (sig.ok) e.signature = sig.signature;
     else { e.signature = null; detail += `; no unique signature on the new build (${sig.reason})`; }
-    finish(e, status, method, detail, hex(rva));
+    finish(e, status, method, detail, hex(rva), undefined, was);
   };
 
   // ---- functions: rung 1 (signature) + resolve ---------------------------------------
@@ -185,7 +191,13 @@ export function portManifest(old, pe, buf, opts) {
       }
       if (cands && cands.length === 1) {
         const rva = parseInt(cands[0].rva, 16);
-        if (withinTolerance(e, rva)) { portFunction(e, rva, "ported-anchor", method, `${cands[0].via} -> ${cands[0].rva} (${cands[0].bytes} bytes, ${cands[0].calls} calls; was ${e.rva})`); progress = true; continue; }
+        if (withinTolerance(e, rva)) {
+          const o = e.anchors.cfgLite;
+          const drift = o && o.bytes ? `; size ${signed(cands[0].bytes - o.bytes)} / calls ${signed(cands[0].calls - (o.calls || 0))} vs old` : "";
+          portFunction(e, rva, "ported-anchor", method, `${cands[0].via} -> ${cands[0].rva} (${cands[0].bytes} bytes, ${cands[0].calls} calls${drift}; was ${e.rva})`);
+          progress = true;
+          continue;
+        }
         p.why.push(`${cands[0].via} gives ${cands[0].rva} but size/calls differ too much (${cands[0].bytes} bytes, ${cands[0].calls} calls vs ${e.anchors.cfgLite ? `${e.anchors.cfgLite.bytes}/${e.anchors.cfgLite.calls}` : "?"})`);
         still.push({ ...p, cands });
         continue;
@@ -212,9 +224,10 @@ export function portManifest(old, pe, buf, opts) {
     if (!td) { finish(e, "needs-human", "none", "no RTTI anchor", null); continue; }
     const r = findRtti(pe, buf, td);
     if (!r) { finish(e, "failed", "rtti", `RTTI chain for ${td} not found`, null); continue; }
-    const same = hex(r.vftable) === e.rva;
+    const was = e.rva || "";
+    const same = hex(r.vftable) === was;
     e.rva = hex(r.vftable);
-    finish(e, "ported-derived", "rtti", `${td} -> vftable ${hex(r.vftable)} (col ${hex(r.col)})${same ? " (unchanged)" : ""}`, e.rva);
+    finish(e, "ported-derived", "rtti", `${td} -> vftable ${hex(r.vftable)} (col ${hex(r.col)})${same ? " (unchanged)" : ` (was ${was})`}`, e.rva, undefined, was);
   }
   // ---- constants --------------------------------------------------------------------
   for (const e of out.entries) {
@@ -227,7 +240,7 @@ export function portManifest(old, pe, buf, opts) {
       if (v === null) { finish(e, "failed", "slot-body", ok ? `slot ${d.slot} of ${d.vtable} does not match ${d.bodyPattern}` : `${d.vtable} did not port`, null); continue; }
       const was = e.value;
       e.value = hex(v);
-      finish(e, "ported-derived", "slot-body", `slot ${d.slot} of ${d.vtable} gives ${hex(v)}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.value);
+      finish(e, "ported-derived", "slot-body", `slot ${d.slot} of ${d.vtable} gives ${hex(v)}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.value, undefined, was || "");
       continue;
     }
     finish(e, "needs-human", "none", e.anchors.unanchored ? "unanchored constant carried over unchanged; verify by hand" : "no derivation anchor", e.value || null);
@@ -251,7 +264,7 @@ export function portManifest(old, pe, buf, opts) {
     }
     const was = e.rva;
     e.rva = ref.target;
-    finish(e, "ported-witness", "witness", `${note} -> ${ref.target}${was === ref.target ? " (unchanged)" : ` (was ${was})`}`, e.rva);
+    finish(e, "ported-witness", "witness", `${note} -> ${ref.target}${was === ref.target ? " (unchanged)" : ` (was ${was})`}`, e.rva, undefined, was || "");
   }
   for (const e of out.entries) {
     if (e.kind !== "data" || e.port) continue;
@@ -263,7 +276,7 @@ export function portManifest(old, pe, buf, opts) {
       const v = parseInt(t.rva || "0", 16) + 8 * d.index;
       const was = e.rva;
       e.rva = hex(v);
-      finish(e, "ported-derived", "table", `${d.table} + 8*${d.index} = ${hex(v)}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.rva);
+      finish(e, "ported-derived", "table", `${d.table} + 8*${d.index} = ${hex(v)}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.rva, undefined, was || "");
       continue;
     }
     finish(e, "needs-human", "none", e.anchors.unanchored ? "unanchored data carried over unchanged" : "no witness/derivation anchor", e.rva || null);

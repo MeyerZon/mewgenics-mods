@@ -111,7 +111,11 @@ Summary: 98 entries · ported-exact 35 · ported-anchor 12 · ported-witness 5 �
   `ported-exact`, exactly the unanchored entries `needs-human`).
 - **T1 cross-build**: the only tier that proves anchors survive a real recompile. Opt-in test in
   `bindings-tests.mjs` driven by `BINDINGS_OLD_EXE` / `BINDINGS_NEW_EXE` (git-ignored copies under
-  `.analysis/exe/<build>/`); fetch an older build with Steam's `download_depot 686060 <depot> <manifest>`.
+  `.analysis/exe/<build>/`); fetch an older build with Steam's `download_depot 686060 <depot> <manifest>`. The same
+  run as a CLI: `node tools/bindings/cross-build.mjs --old <exe> --new <exe> [--build <id>] [--gameVersion <x.y.z>]`
+  (nothing written; exit 1 when a non-offset entry is ambiguous/failed). In the report every anchor-ported row records
+  the candidate's drift from the old cfgLite (`size +N / calls +M vs old`), so a run whose anchors all drifted by 0
+  is recognisable as a relink that never stressed the tolerances; the `old` column is the pre-port value.
 - **T2**: `npm run test:ingame` after regenerating headers and rebuilding the DLLs. `unknown-build` means the
   identity gate still fails; `harness-error` naming a signature means that signature does not match once.
 - **T3**: a played fight on the `dev` save for anything that touches combat (Joker's Luck).
