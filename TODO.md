@@ -196,7 +196,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   - [ ] **Rebuild `.analysis/decompiled/`** for the functions the docs cite (`Gon_merge_{a,b,c}`,
     `FileManager_resolve_overlays`, `ProcessCmds`, `SaveSelection_Build`, the status pipeline, `p2_*`, `r3d_*`, every RVA
     in `engine-map.md`): one import with an own `rea_ghidra_<tag>`, then `batch_decompile`; fold into PR 5's import.
-  - [ ] PR 2 `fix/port-report-old-column`: port report `old` column, `--gameVersion`, rung-2 deltas in the report
+  - [x] PR 2 `fix/port-report-old-column`: port report `old` column, `--gameVersion`, size/call drift on anchor rows
+    (rung-3 hardening — callee-set / vftable-store rungs — stays open; needs a body-changing build to test against)
   - [ ] PR 3 `test/t0-skips-gpak-filter`: targets 9 + 10, `tools/gpak.py` T0 suite
   - [ ] PR 4 `fix/harness-clean-exit`: `-mewtest_clean` exits (pure `mt_exit.c` + runner end-grace), `clean:` header
   - [ ] PR 5 `docs/save-suffix-mapping`: decode `MewSaveFile::open_or_create`, savecheck over every real save

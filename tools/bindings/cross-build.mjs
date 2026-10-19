@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The real cross-build check (docs/binding-port.md "T1 cross-build"): port the committed manifest of
 // one genuine build onto another genuine build and print the report. Nothing is written.
-//   node tools/bindings/cross-build.mjs --old <Mewgenics.exe of the manifest's build> --new <other Mewgenics.exe> [--build <id>]
+//   node tools/bindings/cross-build.mjs --old <Mewgenics.exe of the manifest's build> --new <other Mewgenics.exe> [--build <id>] [--gameVersion <x.y.z>]
 // Getting a second build without extra tools: in the Steam client console (steam://open/console):
 //   download_depot 686060 <depotId> <manifestId>     (ids from SteamDB's depot history for app 686060)
 // Steam prints where it put the files; copy Mewgenics.exe to .analysis/exe/<build>/ (git-ignored).
@@ -10,16 +10,14 @@ import { readFileSync } from "node:fs";
 import { parsePe } from "../../editor/src/core/bindings/pe.mjs";
 import { listManifests } from "../../editor/src/core/bindings/manifest.mjs";
 import { portManifest, renderPortReport } from "../../editor/src/core/bindings/port.mjs";
+import { parseCrossBuildArgs } from "./cross-build-args.mjs";
 
-const argv = process.argv.slice(2);
-/** @param {string} flag */
-const opt = (flag) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
-const oldPath = opt("--old");
-const newPath = opt("--new");
-if (!oldPath || !newPath) {
-  console.error("usage: node tools/bindings/cross-build.mjs --old <old exe> --new <new exe> [--build <steamBuildId>]");
+const args = parseCrossBuildArgs(process.argv.slice(2));
+if (args.error || !args.oldPath || !args.newPath) {
+  console.error(args.error);
   process.exit(2);
 }
+const { oldPath, newPath } = args;
 const oldPe = parsePe(readFileSync(oldPath));
 const manifests = listManifests().map((x) => x.manifest);
 const m = manifests.find((x) => parseInt(x.build.timeDateStamp, 16) === oldPe.timeDateStamp && parseInt(x.build.sizeOfImage, 16) === oldPe.sizeOfImage);
@@ -29,7 +27,7 @@ if (!m) {
 }
 const newBuf = readFileSync(newPath);
 const newPe = parsePe(newBuf);
-const r = portManifest(m, newPe, newBuf, { steamBuildId: opt("--build") || "999999999" });
+const r = portManifest(m, newPe, newBuf, { steamBuildId: args.build, gameVersion: args.gameVersion });
 console.log(renderPortReport(r, { generatedAt: new Date().toISOString() }));
 const bad = r.rows.filter((x) => (x.status === "ambiguous" || x.status === "failed") && x.kind !== "offset");
 console.log(`\ncross-build ${m.build.steamBuildId} -> new exe: ${bad.length} non-offset entries ambiguous/failed`);
