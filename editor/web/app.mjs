@@ -1133,7 +1133,6 @@ function ConceptsDrawer() {
       div(
         { class: "dfoot" },
         span({ class: "muted", style: "flex:1;font-size:12.5px" }, "More in ", span({ class: "mono" }, artMode.val ? "docs/art-preview-plan.md" : "docs/data-mods.md")),
-        button({ class: "btn ghost", onclick: () => { lsSet("mewged.onboard.conceptsDontShowStart", "1"); S.conceptsOpen.val = false; } }, "Don't show on start"),
         button({ class: "btn primary", onclick: () => (S.conceptsOpen.val = false) }, "Got it"),
       ),
     ),
