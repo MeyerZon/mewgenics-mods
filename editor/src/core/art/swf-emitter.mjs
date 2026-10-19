@@ -315,21 +315,38 @@ export function encodeTimeline(baked, ids, findings, at) {
 }
 
 /**
- * The DoABC gate-test fixture (docs/art-preview-plan.md §7): a 64×64 `gray:8` square in a
- * one-frame sprite labelled `label`, exported as `linkage`, with or without the stub ABC.
- * @param {{ withAbc: boolean, linkage: string, label: string }} o
+ * Depth of the icon slot in the game's `AbilityIcon` clip: every labeled icon frame places one bare shape at
+ * depth 3 (OBSERVED on swfs/ability_icons.swf; pinned by the T1 test in test/art-emitter-tests.mjs and recorded
+ * in docs/engine-map.md "Art / SWF subsystem"). An `_Append_AbilityIcon` donor mirrors that slot.
+ */
+export const ABILITY_ICON_DEPTH = 3;
+
+/**
+ * The SWF-gate fixture (docs/art-preview-plan.md §7, docs/swf-emitter-fix-spec.md §8): a 64×64 `gray:8` square
+ * on a one-frame sprite labelled `label`, exported as `linkage`, with or without the stub ABC.
+ *
+ * `layout` chooses how the icon sits on the labeled frame:
+ * - `"flat"` (default): the shape itself at depth 3 with an identity matrix — exactly how `AbilityIcon` lays out
+ *   its own 842 labeled frames;
+ * - `"nested"`: the shape wrapped in its own one-frame `DefineSprite`, placed at depth 3 — the spec's §8.1
+ *   alternative, kept as a gate variant.
+ * @param {{ withAbc: boolean, linkage: string, label: string, layout?: "flat" | "nested" }} o
  * @returns {Uint8Array}
  */
 export function minimalGateSwf(o) {
+  const nested = o.layout === "nested";
   /** @type {Scene} */
   const scene = {
     version: 1,
-    name: "abc_gate",
+    name: "swf_gate",
     frameRate: 60,
     stage: { width: 1280, height: 720, background: "#ffccff" },
     shapes: { square: { paths: [{ d: "M0 0 L64 0 L64 64 L0 64 Z", fill: "gray:8", fillRule: "nonzero" }] } },
     bitmaps: {},
-    sprites: { Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth: 1, keys: [{ frame: 0, ref: "square", x: 0, y: 0 }] }] } },
+    sprites: {
+      ...(nested ? { Icon: { frames: 1, labels: {}, layers: [{ depth: 1, keys: [{ frame: 0, ref: "square", x: 0, y: 0 }] }] } } : {}),
+      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth: ABILITY_ICON_DEPTH, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0 }] }] },
+    },
     exports: { [o.linkage]: "Clip" },
     stage_instances: [],
   };

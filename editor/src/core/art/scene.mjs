@@ -8,7 +8,10 @@
 //   N = floor(r*15 + .5) to column N of a `palette.png` row; non-gray pixels pass
 //   through unchanged. So fills are either `gray:N` (remapped) or a colour (passthrough).
 
-/** Until the DoABC gate test (docs/art-preview-plan.md §7) settles it. */
+/**
+ * SymbolClass alone binds linkage names; a DoABC is not needed for that (docs/swf-emitter-fix-spec.md §3.2: the
+ * no-DoABC gate variant binds and merges exactly like the stub one). "stub" stays available for experiments only.
+ */
 export const DEFAULT_ABC_MODE = "none";
 
 export const GRAY_LEVELS = 16;
