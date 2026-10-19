@@ -564,4 +564,149 @@ export async function runBindingsTests(test, assert, eq) {
       eq(nl(readFileSync(p, "utf8")), nl(/** @type {string} */ (text)), `${rel} is stale`);
     }
   });
+  // ---- siggen.mjs: unique signatures with relocation bytes wildcarded ---------------
+  console.log("\n# Bindings: signature generator (wildcards rel32 / rip-relative disp32)");
+  const sg = await load("../src/core/bindings/siggen.mjs");
+  if (sg.__error) {
+    test("siggen.mjs loads", () => assert(false, sg.__error));
+    return;
+  }
+  const { decodeRelocs, makeSignature } = sg;
+  /** @param {number[]} xs */
+  const u8 = (xs) => Uint8Array.from(xs);
+
+  test("decodeRelocs: E8/E9 rel32, Jcc rel32, FF 15 and rip-relative ModRM disp32, movabs imm64", () => {
+    const code = u8([
+      0x40, 0x53,                                     // push rbx
+      0x48, 0x83, 0xec, 0x20,                         // sub rsp,0x20
+      0xe8, 0x11, 0x22, 0x33, 0x44,                   // call rel32          -> [7..10]
+      0x48, 0x8d, 0x0d, 0xaa, 0xbb, 0xcc, 0xdd,       // lea rcx,[rip+disp32] -> [14..17]
+      0x0f, 0x84, 0x01, 0x02, 0x03, 0x04,             // je rel32            -> [20..23]
+      0xff, 0x15, 0x05, 0x06, 0x07, 0x08,             // call [rip+disp32]   -> [26..29]
+      0x48, 0xb8, 1, 2, 3, 4, 5, 6, 7, 8,             // movabs rax, imm64   -> [32..39]
+      0x48, 0x8b, 0x05, 0x09, 0x0a, 0x0b, 0x0c,       // mov rax,[rip+disp32] -> [43..46]
+      0xe9, 0x10, 0x20, 0x30, 0x40,                   // jmp rel32           -> [48..51]
+      0xc3,
+    ]);
+    const r = decodeRelocs(code);
+    eq(r.map((/** @type {any} */ x) => `${x.at}+${x.len}`).join(" "), "7+4 14+4 20+4 26+4 32+8 43+4 48+4");
+    assert(r.every((/** @type {any} */ x) => typeof x.why === "string" && x.why.length > 0), "why strings");
+  });
+  test("decodeRelocs: frame sizes, imm32 constants and non-rip memory operands stay exact; unknown opcodes stop decoding", () => {
+    const code = u8([
+      0x48, 0x81, 0xec, 0xd0, 0x00, 0x00, 0x00,       // sub rsp, imm32 (frame size: keep)
+      0xb8, 0xd8, 0x11, 0x00, 0x00,                   // mov eax, imm32 (keep)
+      0x48, 0x89, 0x5c, 0x24, 0x08,                   // mov [rsp+8], rbx (SIB + disp8: keep)
+      0x48, 0x8b, 0x81, 0x10, 0x0e, 0x00, 0x00,       // mov rax,[rcx+0xe10] (disp32, not rip: keep)
+      0xc7, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // mov dword [rip+disp32], imm32 -> wildcard disp only [26..29]
+      0x0f, 0x0b,                                     // ud2: unknown-ish -> allowed; then
+      0xd6,                                           // invalid opcode: decoding stops
+      0xe8, 0x11, 0x22, 0x33, 0x44,                   // would be a call, but after the stop it stays exact
+    ]);
+    const r = decodeRelocs(code);
+    eq(r.map((/** @type {any} */ x) => `${x.at}+${x.len}`).join(" "), "26+4");
+  });
+
+  /** Two functions sharing a prologue, differing in a call target and in one byte after the call. */
+  const fnA = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0xe8, 0x10, 0x00, 0x00, 0x00, 0x48, 0x8b, 0xd8, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3];
+  const fnB = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0xe8, 0x20, 0x00, 0x00, 0x00, 0x48, 0x8b, 0xf8, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3];
+  /** @param {number[]} a @param {number[]} b */
+  const twoFns = (a, b) => {
+    const text = new Uint8Array(0x200);
+    text.set(a, 0x10);
+    text.set(b, 0x80);
+    return buildFakePe({ sections: [{ name: ".text", bytes: text, exec: true }], pdata: [{ section: ".text", begin: 0x10, end: 0x10 + a.length }, { section: ".text", begin: 0x80, end: 0x80 + b.length }] });
+  };
+
+  test("makeSignature: the rel32 is wildcarded and the pattern is still unique (distinguished by a fixed byte)", () => {
+    const f = twoFns(fnA, fnB);
+    const p = parsePe(f.buf);
+    const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12 });
+    assert(r.ok, r.ok ? "" : r.reason);
+    if (!r.ok) return;
+    eq(r.signature.pattern, "40 53 48 83 EC 20 E8 ?? ?? ?? ?? 48 8B D8");
+    eq(r.signature.offset, 0);
+    eq(r.signature.exactLen, 14);
+    eq(r.signature.wildcards.length, 1);
+    eq(r.signature.wildcards[0].at, 7);
+    eq(r.signature.wildcards[0].len, 4);
+    eq(scanExec(p, f.buf, parsePattern(r.signature.pattern)).count, 1);
+  });
+  test("makeSignature: a relinked copy (different rel32) still matches the wildcarded pattern once", () => {
+    const f1 = twoFns(fnA, fnB);
+    const p1 = parsePe(f1.buf);
+    const r = makeSignature(p1, f1.buf, f1.rva(".text", 0x10), { minLen: 12 });
+    assert(r.ok, "ok");
+    if (!r.ok) return;
+    const fnA2 = fnA.slice(); fnA2[7] = 0x77; fnA2[8] = 0x66;
+    const f2 = twoFns(fnA2, fnB);
+    const p2 = parsePe(f2.buf);
+    const hit = scanExec(p2, f2.buf, parsePattern(r.signature.pattern));
+    eq(hit.count, 1);
+    eq(hit.hits[0], f2.rva(".text", 0x10));
+  });
+  test("makeSignature: never ends inside a wildcard run (extends to the next fixed byte)", () => {
+    // unique already at the first rel32 byte, but the pattern must run through the rel32 to a fixed byte
+    const a = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0xe8, 0x10, 0x00, 0x00, 0x00, 0xc3];
+    const b = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0xe8, 0x20, 0x00, 0x00, 0x00, 0xcc];
+    const f = twoFns(a, b);
+    const p = parsePe(f.buf);
+    const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 8 });
+    assert(r.ok, r.ok ? "" : r.reason);
+    if (!r.ok) return;
+    eq(r.signature.pattern, "40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? C3");
+    assert(!r.signature.pattern.endsWith("??"), "fixed tail");
+  });
+  test("makeSignature: honours the cap (ok:false with a reason) when no unique prefix exists", () => {
+    const shared = Array.from({ length: 40 }, (_, i) => [0x48, 0x8b, 0xc1, 0x90][i % 4]); // 40 identical, reloc-free bytes
+    const a = [...shared, 0x48, 0x8b, 0xd8, 0xc3];
+    const b = [...shared, 0x48, 0x8b, 0xf8, 0xc3];
+    const f = twoFns(a, b);
+    const p = parsePe(f.buf);
+    const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 32, maxOffset: 0 });
+    assert(!r.ok, "must fail");
+    if (r.ok) return;
+    assert(/32/.test(r.reason), r.reason);
+  });
+  test("makeSignature: falls back to a later start with a negative offset when the prologue is shared", () => {
+    const shared = Array.from({ length: 40 }, (_, i) => [0x48, 0x8b, 0xc1, 0x90][i % 4]);
+    const a = [...shared, 0x48, 0x8b, 0xd8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xc3];
+    const b = [...shared, 0x48, 0x8b, 0xf8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xc3];
+    const f = twoFns(a, b);
+    const p = parsePe(f.buf);
+    const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 32, maxOffset: 64 });
+    assert(r.ok, r.ok ? "" : r.reason);
+    if (!r.ok) return;
+    assert(r.signature.offset < 0, `offset ${r.signature.offset}`);
+    const hit = scanExec(p, f.buf, parsePattern(r.signature.pattern));
+    eq(hit.count, 1);
+    eq(hit.hits[0] + r.signature.offset, f.rva(".text", 0x10), "hit + offset == function start");
+  });
+  if (exe) {
+    test("T1 real exe: every manifest function signature regenerates unique at its rva; >= 10 carry wildcards; Status_GetCategory fits the cap or is reported", () => {
+      const m = loadManifest(realPath);
+      const p = parsePe(exe);
+      /** @type {string[]} */
+      const bad = [];
+      let wild = 0;
+      let n = 0;
+      let cat = "";
+      for (const e of m.entries) {
+        if (e.kind !== "function" || !e.signature) continue;
+        n++;
+        const rva = parseInt(e.rva, 16);
+        const r = makeSignature(p, exe, rva, { minLen: 12, cap: m.sigCap });
+        if (!r.ok) { if (e.name === "Status_GetCategory") cat = r.reason; else bad.push(`${e.name}: ${r.reason}`); continue; }
+        if (r.signature.wildcards.length) wild++;
+        const hit = scanExec(p, exe, parsePattern(r.signature.pattern, m.sigCap));
+        if (hit.count !== 1 || hit.hits[0] + r.signature.offset !== rva) bad.push(`${e.name}: ${hit.count} hits`);
+        if (r.signature.pattern.endsWith("??")) bad.push(`${e.name}: ends in a wildcard`);
+        if (e.name === "Status_GetCategory") cat = `ok ${r.signature.exactLen} bytes, offset ${r.signature.offset}`;
+      }
+      assert(bad.length === 0, bad.join("; "));
+      assert(n >= 34, `functions with signatures: ${n}`);
+      assert(wild >= 10, `only ${wild} of ${n} signatures needed wildcards`);
+      console.log(`      Status_GetCategory: ${cat}; ${wild}/${n} signatures carry wildcards`);
+    });
+  }
 }
