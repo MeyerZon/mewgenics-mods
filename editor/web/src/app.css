@@ -331,7 +331,7 @@ label.fld { font-size: 12px; color: var(--muted); display: block; margin: 10px 0
 .ramp.big { grid-template-columns: repeat(16, 1fr); gap: 2px; width: 100%; }
 .ramp.big span { width: auto; height: 22px; opacity: 1; cursor: pointer; }
 .ramp.big span:hover { outline: 2px solid var(--acc-ink); }
-.dropzone { border: 1px dashed var(--line2); border-radius: 12px; padding: 18px; text-align: center; color: var(--ink2); background: var(--panel); }
+.dropzone { display: block; border: 1px dashed var(--line2); border-radius: 12px; padding: 18px; text-align: center; color: var(--ink2); background: var(--panel); }
 .dropzone.over { border-color: var(--acc-ink); background: var(--accbg); }
 .dropzone input[type=file] { display: none; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 12.5px; align-items: center; }
