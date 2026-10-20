@@ -975,12 +975,13 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const off = bl(plan, { gameDir, scriptPath: join(ROOT, "s.mewtest"), outPath: join(ROOT, "s.jsonl"), env: {}, modsDir });
       eq(off.args[off.args.indexOf("-mewtest_pipe") + 1], "0");
     });
-    test("connectPipe: retries until the server exists and gives up after timeoutMs", async () => {
-      const t0 = Date.now();
-      let err = "";
-      try { await pipeMod.connectPipe(pipeMod.pipePath(999999, process.platform), { retryMs: 20, timeoutMs: 150 }); } catch (e) { err = e instanceof Error ? e.message : String(e); }
-      assert(/timed out|not available|ENOENT|ECONNREFUSED/.test(err), `rejects with a reason: ${err}`);
-      assert(Date.now() - t0 >= 120, "waited for the timeout");
+    const cp0 = Date.now();
+    let cpErr = "";
+    try { await pipeMod.connectPipe(pipeMod.pipePath(999999, process.platform), { retryMs: 20, timeoutMs: 150 }); } catch (e) { cpErr = e instanceof Error ? e.message : String(e); }
+    const cpMs = Date.now() - cp0;
+    test("connectPipe: retries until the server exists and gives up after timeoutMs", () => {
+      assert(/timed out|not available|ENOENT|ECONNREFUSED/.test(cpErr), `rejects with a reason: ${cpErr}`);
+      assert(cpMs >= 120, `waited for the timeout (${cpMs} ms)`);
     });
     const interactivePlan = script.parseScript("mods: jokers-luck\ninteractive: true\ntimeout: 3s\nwait frames 1\n", { owningMod: "jokers-luck", name: "interactive" });
     assert(interactivePlan.ok && interactivePlan.interactive, "interactive plan parses");
@@ -1012,11 +1013,11 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(execs.length >= 2 && execs[0]!.op === "exec", JSON.stringify(execs));
       assert(session.ended, "ended after stop");
     });
-    test("session: exec after the game ended rejects with the verdict", async () => {
-      let err = "";
-      if (!session) throw new Error("no session");
-      try { await session.exec("listcmds"); } catch (e) { err = e instanceof Error ? e.message : String(e); }
-      assert(/session ended/.test(err), err);
+    let afterErr = "";
+    if (session) { try { await session.exec("listcmds"); } catch (e) { afterErr = e instanceof Error ? e.message : String(e); } }
+    test("session: exec after the game ended rejects with the verdict", () => {
+      assert(!!session, "no session");
+      assert(/session ended/.test(afterErr), afterErr);
     });
     const shotPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 2s\nhide: false\nshot \"menu\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
     const captured: { label: string; dir: string }[] = [];
@@ -1354,10 +1355,10 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       }
       return out;
     })();
-    test("MCP tools/list returns the 16 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools)", () => {
+    test("MCP tools/list returns the 23 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools + the 7 art tools)", () => {
       assert(!mcp.error, mcp.error);
       const names = mcp.list.tools.map((t: { name: string }) => t.name);
-      eq(names.length, 16, names.join(","));
+      eq(names.length, 23, names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {
