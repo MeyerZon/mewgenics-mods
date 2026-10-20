@@ -15,6 +15,8 @@
 | T2 | `npm run test:ingame -- <mod> [<test>]` | verdict per script / `(skipped: …)` |
 
 - T2 is required for any change under `mods/`, `native/` or `bindings/`.
+- CI (`T0` workflow) must be green. A source change with no test change fails the `test-change` job unless this body
+  (or a commit) carries `[no-test-change: <reason>]`.
 - A reverse-engineering fact the change relies on is in `docs/engine-map.md` **and** a test or fixture.
 - Docs-only PRs: say so here and delete the table.
 

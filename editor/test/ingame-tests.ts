@@ -429,6 +429,21 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(a.slice(iMod).join("|"), "-modpaths|C:\\re po\\mods\\jokers-luck|C:\\re po\\mods\\dev-sandbox");
       assert(!l.fake, "not fake");
     });
+    test("buildLaunch is OS-neutral: Windows-shaped paths join with backslashes and POSIX-shaped paths with slashes, on any host", () => {
+      // The launched game is always a Windows process, but the suite (and CI) may run on Linux: the joins must follow
+      // the shape of the paths given, not the host. Windows half (ctx above) is asserted by the test before this one.
+      const posix = { gameDir: "/opt/mew", scriptPath: "/tmp/r1/script.mewtest", outPath: "/tmp/r1/result.jsonl", env: {}, modsDir: "/repo/mods" };
+      const l = buildLaunch(plan, posix);
+      eq(l.command, "/opt/mew/Mewgenics.exe");
+      eq(l.args.slice(l.args.indexOf("-modpaths")).join("|"), "-modpaths|/repo/mods/jokers-luck|/repo/mods/dev-sandbox");
+      const w = buildLaunch(plan, ctx);
+      eq(w.command, "C:\\Games\\Mew genics\\Mewgenics.exe");
+      eq(w.args[w.args.length - 1], "C:\\re po\\mods\\dev-sandbox");
+      const throws = (fn: () => void): unknown => { try { fn(); return null; } catch (e) { return e; } };
+      assert(throws(() => buildLaunch(plan, { ...posix, modsDir: "/x/saves/mods" })) instanceof LaunchError, "posix saves path refused");
+      assert(throws(() => buildLaunch(plan, { ...ctx, modsDir: "C:\\x\\saves\\mods" })) instanceof LaunchError, "windows saves path refused");
+      assert(throws(() => buildLaunch(plan, { ...posix, scriptPath: "rel/script.mewtest" })) instanceof LaunchError, "posix relative script refused");
+    });
     test("buildLaunch: env adds both Steam ids and keeps the caller's env; hide false -> 0", () => {
       const l = buildLaunch(plan, ctx);
       eq(l.env.SteamAppId, "686060");

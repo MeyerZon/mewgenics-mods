@@ -199,9 +199,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    triggered only when relevant paths change (`editor/`, `native/`, `bindings/`, `tools/`, `mods/`), not on docs-only PRs.
 10. [x] **Test runner ergonomics** (done 2026-10-19, leftovers PR 3: `npm test -- --only <substring>` / `TEST_ONLY`): a name filter for `run-tests.ts` (or migrate to built-in `node:test`, zero deps,
     gives `--test-name-pattern`/`--watch`) so red/green per test is cheap.
-11. [~] **Mechanical enforcement** (decided **yes** 2026-10-19): PR template with the red/green table + T3 checklist
-    **done** (PR #26); still open: a check that a change under `src/`/`native/*/src/`/`mods/` comes with a test
-    change, and CI running T0 on relevant PRs (shares the workflow from target 9).
+11. [x] **Mechanical enforcement** (decided **yes** 2026-10-19; done 2026-10-20): PR template with the red/green table +
+    T3 checklist (PR #26); `.github/workflows/t0.yml` runs T0 on Linux runners (editor typecheck + `npm test` +
+    `bindings:check`; native host suites via `native/test-all.sh`; the game is never part of CI) for PRs touching
+    `editor/`, `native/`, `bindings/`, `tools/`, `mods/`; the `test-change` job fails a source change without a test
+    change unless `[no-test-change: <reason>]` is in the PR body or a commit (`editor/scripts/check-test-change.ts`,
+    classifier unit-tested). Owner: keep the jobs non-required in branch protection (docs-only PRs do not trigger them).
 12. [~] **Harness features**: ~~expose `-mewtest_clean` in the runner (`clean: true` header)~~ done 2026-10-19 (leftovers
     PR 4) — but it does not yield a complete `debug.log` (the game never shuts itself down; see `ingame-testing.md`
     "Clean mode"), so a log flush needs another lever;

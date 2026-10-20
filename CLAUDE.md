@@ -44,6 +44,9 @@ These are enforced in code and in the launch flow; keep them intact.
   `origin`). This applies to everything — code, docs, this file, one-line fixes.
 - Flow: create a branch (`feat/...`, `fix/...`, `docs/...`) → commit there → push → open a PR with `gh pr create` →
   stop and report. Do not merge the PR yourself; merging requires the owner's explicit, per-PR say-so.
+- CI (`.github/workflows/t0.yml`, Linux runners, never the game) runs T0 on PRs touching `editor/`, `native/`,
+  `bindings/`, `tools/` or `mods/`, and fails a source change that has no test change unless the PR body or a
+  commit says `[no-test-change: <reason>]` (`editor/scripts/check-test-change.ts`). Watch it with `gh pr checks`.
 - If you find yourself on `main`/`master` with uncommitted work, move it to a branch (`git switch -c <branch>`) before
   committing. Never `git push` to `main`/`master`, and never force-push anything.
 
