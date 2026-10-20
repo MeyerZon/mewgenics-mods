@@ -282,6 +282,20 @@ export function runArtCoreTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     assert(!rd.ok && rd.findings.some((x) => x.code === "export-ref"), "read reports the error");
     api.writeArtScene(tmpMod, "art/starter.scene.json", exampleScene("starter"));
   });
+  test("importSvgIntoScene: imports an SVG as a new shape of a scene and saves it; an existing shape id is refused unless replace; the scene still validates", () => {
+    const a = api as unknown as { importSvgIntoScene?: (args: { mod: string; scenePath: string; shapeId: string; svgText?: string; replace?: boolean }) => { ok: boolean; error?: string; paths?: number } };
+    assert(typeof a.importSvgIntoScene === "function", "api.importSvgIntoScene exported");
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="0" y="0" width="10" height="10" fill="#888"/></svg>';
+    const r = a.importSvgIntoScene!({ mod: tmpMod, scenePath: "art/starter.scene.json", shapeId: "imported", svgText: svg });
+    assert(r.ok && r.paths === 1, JSON.stringify(r));
+    const rd = api.readArtScene(tmpMod, "art/starter.scene.json");
+    assert(rd.ok && !!rd.scene && !!rd.scene.shapes["imported"], "saved into the scene");
+    const again = a.importSvgIntoScene!({ mod: tmpMod, scenePath: "art/starter.scene.json", shapeId: "imported", svgText: svg });
+    assert(!again.ok && /exists/.test(again.error || ""), JSON.stringify(again));
+    assert(a.importSvgIntoScene!({ mod: tmpMod, scenePath: "art/starter.scene.json", shapeId: "imported", svgText: svg, replace: true }).ok, "replace");
+    assert(!a.importSvgIntoScene!({ mod: tmpMod, scenePath: "../x.scene.json", shapeId: "y", svgText: svg }).ok, "path guard");
+    api.writeArtScene(tmpMod, "art/starter.scene.json", exampleScene("starter"));
+  });
   test("buildSwf writes swfs/<name>.swf + swflist.gon.append, self-checks with the reader, is idempotent", () => {
     const r = api.buildSwf(tmpMod, "art/starter.scene.json", { abc: "none" });
     assert(r.ok, r.error + " " + JSON.stringify(r.findings));

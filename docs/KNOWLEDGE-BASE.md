@@ -52,7 +52,7 @@ the linked docs; this page is the map.
 
 ### The toolkit we built (`editor/`)
 - A data-layer mod editor: a GON engine + overlay/merge engine + 4-check validator as the single source of truth, a
-  hand-rolled **MCP server** (`mewgenics-editor`, 16 tools, for agents), and a React + TypeScript **web UI** built by
+  hand-rolled **MCP server** (`mewgenics-editor`, 23 tools incl. art authoring, for agents), and a React + TypeScript **web UI** built by
   Vite (Data + Art modes, IDE-style, with onboarding; zod at the `/api` boundary — `editor-ts-react-plan.md`). **Art mode** has a hand-written SWF emitter, SVG import, and a
   WebGL in-game-faithful preview. Validated: 77 unit + 33 Playwright e2e tests, typecheck clean. Overview:
   **[../README.md](../README.md)**; art design/plan: **[art-preview-plan.md](art-preview-plan.md)**.

@@ -421,7 +421,8 @@ Real-browser profiling is a follow-up.
 **Not in this pass**
 10. Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
-11. MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
+11. **Done 2026-10-20:** MCP tools `list_art_scenes`, `read_art_scene`, `write_art_scene` (dryRun validates), `new_art_scene`,
+    `import_svg` (with `into { scene, shapeId }` it saves the shape), `build_swf`, `inspect_swf`. Was: MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
     contract and `src/mcp/` untouched.
 12. Part-indexed cat assembly as a first-class preview mode (slots `body/head/tail/leg1/
     leg2/arm1/arm2`, OBSERVED as named instances on `MinecartCat`): the data model

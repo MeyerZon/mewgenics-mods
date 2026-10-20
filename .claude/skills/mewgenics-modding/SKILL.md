@@ -103,6 +103,13 @@ Save safety — hard rules:
 The editor only reads base data and writes into `mods/<name>/`. The user keeps
 an ~83%-complete main save that must stay untouched.
 
+## Art without the UI
+
+The MCP art tools cover the whole loop: `new_art_scene` → `import_svg { svgText, mod, into: { scene, shapeId } }` (or
+`write_art_scene` with a whole scene; `dryRun` validates) → `build_swf` → `inspect_swf`. Gray fills (`gray:0..15`) are
+palette-remapped by the game for cats; enemy clips are not paletted and are drawn mirrored; bitmaps are smoothed and
+clamped (`npm run test:artprobe` shows the game drawing a probe; `docs/art-preview-plan.md` §8).
+
 ## The mod-development loop (agent alone until the last step)
 
 1. Author the overlays (`new_from_template`, `write_overlay`); `validate_mod` and

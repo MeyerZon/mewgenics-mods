@@ -40,7 +40,13 @@ let skipped = 0;
 const test: TestFn = (name, fn) => {
   if (!filter.matches(name)) { skipped++; return; }
   try {
-    fn();
+    const r = fn() as unknown;
+    // test bodies are synchronous: an async body would "pass" before its awaits ran (and its rejection would be
+    // lost). Await outside test() and assert inside it.
+    if (r && typeof (r as { then?: unknown }).then === "function") {
+      (r as Promise<unknown>).catch(() => undefined);
+      throw new Error("async test body: test() does not await — do the async work before test() and assert synchronously inside it");
+    }
     passed++;
     console.log(`  ok  ${name}`);
   } catch (e) {
@@ -412,7 +418,21 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 16 editor tools", () => eq(list.tools.length, 16));
+    test("tools/list returns the 23 editor tools", () => eq(list.tools.length, 23));
+    let bres: unknown = null, berr = "";
+    try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
+    test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
+      assert(bres !== null, berr);
+      const p = payloadOf(bres);
+      assert(p.ok === true && p.bytes > 0, JSON.stringify(p).slice(0, 300));
+    });
+    let ires: unknown = null, ierr = "";
+    try { ires = await req("tools/call", { name: "import_svg", arguments: { svgText: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="4" height="4" fill="#888"/></svg>' } }); } catch (e) { ierr = String(e); }
+    test("tools/call import_svg { svgText } -> a shape with one path (nothing written)", () => {
+      assert(ires !== null, ierr);
+      const p = payloadOf(ires);
+      assert(p.ok === true && p.shape && p.shape.paths.length === 1, JSON.stringify(p).slice(0, 300));
+    });
     let pres2: unknown = null;
     let perr2 = "";
     try { pres2 = await req("tools/call", { name: "port_bindings", arguments: { build: "25143593", dryRun: true } }); } catch (e) { perr2 = String(e); }

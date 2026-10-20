@@ -350,6 +350,211 @@
     }
   },
   {
+    "name": "list_art_scenes",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "mod folder; lists art/*.scene.json, built swfs/*.swf and art assets"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_art_scene",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "scene file inside the mod, e.g. art/my_rat.scene.json"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "write_art_scene",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "scene file inside the mod (art/<name>.scene.json)"
+        },
+        "scene": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {},
+          "description": "the whole scene (docs/art-preview-plan.md §2: version, name, shapes, bitmaps, sprites, exports, stage_instances)"
+        },
+        "force": {
+          "type": "boolean",
+          "description": "write even when the scene has validation errors (they are returned)"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "validate only, write nothing"
+        }
+      },
+      "required": [
+        "mod",
+        "path",
+        "scene"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "new_art_scene",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "description": "scene name, becomes art/<name>.scene.json"
+        },
+        "starter": {
+          "type": "boolean",
+          "description": "start from the example scene (default true)"
+        }
+      },
+      "required": [
+        "mod",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "import_svg",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "svgText": {
+          "type": "string",
+          "description": "SVG markup (or pass mod + path of an .svg inside the mod)"
+        },
+        "mod": {
+          "type": "string",
+          "description": "mod folder (for path, and for into)"
+        },
+        "path": {
+          "type": "string",
+          "description": "an .svg inside the mod"
+        },
+        "options": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {},
+          "description": "importer options: applyViewBox, quantizeGray, grayTolerance, dropStrokes"
+        },
+        "into": {
+          "type": "object",
+          "properties": {
+            "scene": {
+              "type": "string",
+              "description": "scene file inside the mod to add the shape to"
+            },
+            "shapeId": {
+              "type": "string",
+              "description": "the new shape's id"
+            },
+            "replace": {
+              "type": "boolean",
+              "description": "overwrite a shape with that id"
+            }
+          },
+          "required": [
+            "scene",
+            "shapeId"
+          ],
+          "additionalProperties": false,
+          "description": "save the imported shape into a scene (needs mod); without it nothing is written"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "build_swf",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "scene file inside the mod"
+        },
+        "abc": {
+          "type": "string",
+          "enum": [
+            "none",
+            "stub"
+          ],
+          "description": "DoABC: none (default; SymbolClass binds the name) or stub"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "emit + self-check, write nothing"
+        },
+        "writeSwflist": {
+          "type": "boolean",
+          "description": "also write swfs/swflist.gon.append (default true)"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "inspect_swf",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "a built SWF inside the mod, e.g. swfs/my_rat.swf"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "check_game_build",
     "inputSchema": {
       "type": "object",

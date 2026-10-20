@@ -65,6 +65,47 @@ export const TOOL_INPUT = {
   list_ingame_tests: z.object({
     mod: str("optional mod folder to restrict to").optional(),
   }),
+  list_art_scenes: z.object({
+    mod: str("mod folder; lists art/*.scene.json, built swfs/*.swf and art assets"),
+  }),
+  read_art_scene: z.object({
+    mod: str(),
+    path: str("scene file inside the mod, e.g. art/my_rat.scene.json"),
+  }),
+  write_art_scene: z.object({
+    mod: str(),
+    path: str("scene file inside the mod (art/<name>.scene.json)"),
+    scene: anyObject.describe("the whole scene (docs/art-preview-plan.md §2: version, name, shapes, bitmaps, sprites, exports, stage_instances)"),
+    force: bool("write even when the scene has validation errors (they are returned)").optional(),
+    dryRun: bool("validate only, write nothing").optional(),
+  }),
+  new_art_scene: z.object({
+    mod: str(),
+    name: str("scene name, becomes art/<name>.scene.json"),
+    starter: bool("start from the example scene (default true)").optional(),
+  }),
+  import_svg: z.object({
+    svgText: str("SVG markup (or pass mod + path of an .svg inside the mod)").optional(),
+    mod: str("mod folder (for path, and for into)").optional(),
+    path: str("an .svg inside the mod").optional(),
+    options: anyObject.describe("importer options: applyViewBox, quantizeGray, grayTolerance, dropStrokes").optional(),
+    into: z.object({
+      scene: str("scene file inside the mod to add the shape to"),
+      shapeId: str("the new shape's id"),
+      replace: bool("overwrite a shape with that id").optional(),
+    }).describe("save the imported shape into a scene (needs mod); without it nothing is written").optional(),
+  }),
+  build_swf: z.object({
+    mod: str(),
+    path: str("scene file inside the mod"),
+    abc: z.enum(["none", "stub"]).describe("DoABC: none (default; SymbolClass binds the name) or stub").optional(),
+    dryRun: bool("emit + self-check, write nothing").optional(),
+    writeSwflist: bool("also write swfs/swflist.gon.append (default true)").optional(),
+  }),
+  inspect_swf: z.object({
+    mod: str(),
+    path: str("a built SWF inside the mod, e.g. swfs/my_rat.swf"),
+  }),
   run_ingame_test: z.object({
     mod: str("mod folder; its tests/ dir is searched and it is the default -modpaths entry"),
     test: str("script name without .mewtest, e.g. smoke").optional(),
@@ -231,6 +272,48 @@ export const TOOLS: ToolDef[] = [
       if (!r.ok) throw new ToolError(r.error);
       return r;
     },
+  ),
+  def(
+    "list_art_scenes",
+    "List a mod's art: scenes (art/*.scene.json, with validity), built SWFs (swfs/*.swf) and assets (SVG/PNG). Art is authored as a scene (shapes from SVG paths with gray:N palette fills, bitmaps, sprites with keyed layers and labels, exports = SymbolClass names) and built into a SWF the game loads through swfs/swflist.gon.append.",
+    (a) => api.listArtScenes(a.mod),
+  ),
+  def(
+    "read_art_scene",
+    "Read and validate one scene file; returns { ok, scene, findings }.",
+    (a) => api.readArtScene(a.mod, a.path),
+  ),
+  def(
+    "write_art_scene",
+    "Write a whole scene file inside the mod (validated first; refused with findings when invalid unless force). dryRun validates only. Writes are confined to mods/<mod>/.",
+    (a) => (a.dryRun ? api.validateArtScene(a.scene) : api.writeArtScene(a.mod, a.path, a.scene, { force: a.force })),
+  ),
+  def(
+    "new_art_scene",
+    "Create art/<name>.scene.json (the example scene by default: two gray shapes, a 24-frame sprite with idle/blink labels, exports).",
+    (a) => api.newArtScene(a.mod, a.name, { starter: a.starter }),
+  ),
+  def(
+    "import_svg",
+    "Convert SVG markup (or an .svg inside the mod) into a scene shape: paths with fills quantised to gray:N where possible; gradients, filters, text, use and masks are reported as findings. With into { scene, shapeId } the shape is saved into that scene; otherwise nothing is written and the shape is returned.",
+    (a) => {
+      if (a.into) {
+        if (!a.mod) throw new ToolError("into needs mod");
+        return api.importSvgIntoScene({ mod: a.mod, scenePath: a.into.scene, shapeId: a.into.shapeId, svgText: a.svgText, svgPath: a.path, options: a.options, replace: a.into.replace });
+      }
+      if (!a.svgText && !(a.mod && a.path)) throw new ToolError("pass svgText, or mod + path");
+      return api.importSvgShape({ svgText: a.svgText, mod: a.mod, relPath: a.path, options: a.options });
+    },
+  ),
+  def(
+    "build_swf",
+    "Build a scene into mods/<mod>/swfs/<scene.name>.swf (DefineShape3 / DefineBitsLossless2 / DefineSprite / SymbolClass), re-read it with the verification reader, and add it to swfs/swflist.gon.append. dryRun emits and checks without writing. To see it in the game: an ability icon via _Append_AbilityIcon (npm run test:swfgate) or a character's graphics.movieclip (see mods/_artprobe and npm run test:artprobe).",
+    (a) => api.buildSwf(a.mod, a.path, { abc: a.abc, dryRun: a.dryRun, writeSwflist: a.writeSwflist }),
+  ),
+  def(
+    "inspect_swf",
+    "Read a built SWF inside the mod with the verification reader: header, tag histogram, frame labels, exports, DoABC count.",
+    (a) => api.inspectSwf(a.mod, a.path),
   ),
   def(
     "check_game_build",
