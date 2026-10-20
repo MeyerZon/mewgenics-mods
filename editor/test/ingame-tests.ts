@@ -697,7 +697,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(logHit.result.expects.passed, 1, "the DLL's own count is untouched");
       assert(/1 log expectation/.test(logHit.reason), logHit.reason);
       const copied = readFileSync(logHit.artifacts.script!, "utf8");
-      assert(copied.includes("# runner: expect log") && !copied.includes('expect log "ZZ'), copied);
+      assert(copied.includes("# runner: expect log") && !copied.split("\n").some((l) => l.startsWith("expect log")), copied);
     });
     const logMiss = await run("pass", {}, { plan: logPlan });
     test("fake pass without the line -> fail naming the expect log line and substring", () => {

@@ -47,6 +47,8 @@ if (process.env.FAKE_GAME_APPDATA_LOGS) {
     "[file: C:\\Engine\\Application.cpp; line: 843;] TOTAL LOADING TIME: 12",
   ];
   if (mode === "log-markers") lines.push("[file: C:\\Game\\Status.cpp; line: 55;] NO_STATUS_NAMED NotARealStatusXYZ");
+  // FAKE_GAME_DEBUG_LINES: extra debug.log messages, "|"-separated (for runner-side `expect log` tests)
+  for (const extra of String(process.env.FAKE_GAME_DEBUG_LINES || "").split("|").filter(Boolean)) lines.push(`[file: C:\\Game\\Custom.cpp; line: 1;] ${extra}`);
   writeFileSync(join(process.env.FAKE_GAME_APPDATA_LOGS, "debug.log"), lines.join("\n") + "\n");
 }
 if (process.env.FAKE_GAME_TOUCH_FILE && mode === "savechange") {
