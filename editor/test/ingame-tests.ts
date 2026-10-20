@@ -299,6 +299,18 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       for (const c of ["listcmds", "spawn arg0", "spawntile arg0", "load arg0", "bind arg0", "bind_passive arg0", "status arg0", "passive arg0", "win", "killall", "takeover", "noui", "equip arg0", "weather arg0", "tileset arg0", "skip_tutorial", "set_day arg0"]) assert(cmds.includes(c), `TacticsTest/MewDirector command ${c} listed`);
       eq(cmds[cmds.length - 1], "Executed: listcmds");
     });
+    test("OBSERVED 2026-10-20 fixture: combat-asserts — stacks in the units snapshot, round 2 after wait rounds, spawn adds a unit (result-combat-asserts.jsonl)", () => {
+      const r = parseResults(fixture("result-combat-asserts.jsonl")) as unknown as { turns: number; units: { round: number; count: number; list: { name: string; faction: number; statuses: string[]; stacks: number[] }[] } | null; expects: { passed: number; failed: number }; events: { ev: string; kind?: string; actual?: number; detail?: string }[]; end: { code: number } | null };
+      eq(r.turns, 6, "turns 2..6 happened on their own (the player cats are Uncontrollable)");
+      assert(!!r.units && r.units.round === 2 && r.units.count === 7, `last dump: ${JSON.stringify(r.units && { round: r.units.round, count: r.units.count })}`);
+      const withStacks = r.units!.list.filter((u) => u.statuses.length && u.statuses.length === u.stacks.length);
+      assert(withStacks.length >= 2 && withStacks.some((u) => u.statuses.includes("CharismaUp") && u.stacks[u.statuses.indexOf("CharismaUp")]! > 0), `stacks parallel to statuses: ${JSON.stringify(withStacks.map((u) => [u.statuses, u.stacks]))}`);
+      assert(r.units!.list.some((u) => u.name === "Lil' Rat" && u.faction === 2), "the spawned opponent is in the snapshot");
+      const roundsWait = r.events.find((e) => e.ev === "wait" && e.kind === "rounds");
+      assert(!!roundsWait && roundsWait.actual === 1, "wait rounds 1 completed");
+      assert(r.events.some((e) => e.ev === "expect" && e.kind === "round" && /round 2/.test(e.detail || "")), "expect round >= 2 saw round 2");
+      eq(r.expects.failed, 0); eq(r.end!.code, 0);
+    });
     test("popup events are collected as result.popups (title, text, frame); none -> empty", () => {
       const text = [
         '{"ev":"start","harness":"mewtest 0.1.0","t":0,"frame":0}',
