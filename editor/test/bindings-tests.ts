@@ -1322,6 +1322,25 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     "Scene_destroyed", "SceneManager_mainScene", "Scene_destroyNext", "MewDirector_devFightFlag", "MewDirector_devFightMode",
     "MewDirector_handoffFlag", "Tls_rngState",
   ];
+  /** batch 2: the status_engine offsets (Character, Entity, Status, the apply context) */
+  const WITNESSED_OFFSETS_BATCH2 = [
+    "Character_entity", "Character_catData", "CatData_class", "Character_name", "Character_faction", "Character_move", "Character_act",
+    "Character_turnKind", "Entity_componentCount", "Entity_components", "Status_removing", "Status_stacks", "Status_character",
+    "Status_temporary", "Status_applier", "Status_applierOwner", "ApplyCtx_character", "ApplyCtx_entity", "ApplyP6_applier",
+    "Applier_owner", "Character_touchedPassives",
+  ];
+  test("the committed manifest anchors the batch-2 offsets (status_engine): every offset now carries a witness; exactly the six vtable-slot constants are still unanchored", () => {
+    const m = loadManifest(realPath);
+    for (const name of WITNESSED_OFFSETS_BATCH2) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset", `${name} is an offset entry`);
+      const w = e!.anchors.witness;
+      assert(!!w && typeof w.function === "string" && typeof w.pattern === "string" && Number.isInteger(w.dispAt), `${name}: witness {function, pattern, dispAt}: ${JSON.stringify(w)}`);
+      assert(e!.anchors.unanchored !== true, `${name}: no longer unanchored`);
+    }
+    eq(m.entries.filter((e) => e.kind === "offset" && !(e.anchors.witness && e.anchors.witness.pattern)).map((e) => e.name).join(","), "", "no offset without a witness");
+    eq(m.entries.filter((e) => e.anchors.unanchored).map((e) => e.name).sort().join(","), ["LuckUp_vtableSlots", "VT_GetTypeHierarchy", "VT_GetTypeId", "VT_GetTypeName", "VT_IsA", "VT_OnStacksChanged"].sort().join(","), "only the six constants remain");
+  });
   test("the committed manifest anchors the batch-1 offsets: each carries anchors.witness {function, pattern, dispAt} and no unanchored flag; the dev-menu lambda is a function entry", () => {
     const m = loadManifest(realPath);
     for (const name of WITNESSED_OFFSETS_BATCH1) {
