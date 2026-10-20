@@ -76,6 +76,7 @@ void mt_jw_hex(MtJsonW *w, const char *k, unsigned long long v) { char t[40]; sn
 void mt_jw_bool(MtJsonW *w, const char *k, int v) { key(w, k); puts_(w, v ? "true" : "false"); w->needComma = 1; }
 void mt_jw_arr_begin(MtJsonW *w, const char *k) { key(w, k); puts_(w, "["); w->needComma = 0; }
 void mt_jw_arr_str(MtJsonW *w, const char *v) { if (w->needComma) puts_(w, ","); put_escaped(w, v, strlen(v)); w->needComma = 1; }
+void mt_jw_arr_int(MtJsonW *w, long long v) { char b[32]; snprintf(b, sizeof b, "%lld", v); if (w->needComma) puts_(w, ","); puts_(w, b); w->needComma = 1; }
 void mt_jw_arr_end(MtJsonW *w) { puts_(w, "]"); w->needComma = 1; }
 void mt_jw_obj_begin(MtJsonW *w, const char *k) {
     if (k) key(w, k); else if (w->needComma) puts_(w, ",");

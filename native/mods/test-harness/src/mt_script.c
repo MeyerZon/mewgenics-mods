@@ -47,6 +47,17 @@ const char *mt_scene_name(int scene) {
     return scene == MT_SCENE_TACTICS_TEST ? "TacticsTest" : "";
 }
 
+static int parse_op(const char *p, size_t n, MtOp *out) {
+    if (n == 2 && !strncmp(p, "==", 2)) *out = MT_OP_EQ;
+    else if (n == 2 && !strncmp(p, "!=", 2)) *out = MT_OP_NE;
+    else if (n == 2 && !strncmp(p, ">=", 2)) *out = MT_OP_GE;
+    else if (n == 2 && !strncmp(p, "<=", 2)) *out = MT_OP_LE;
+    else if (n == 1 && p[0] == '>') *out = MT_OP_GT;
+    else if (n == 1 && p[0] == '<') *out = MT_OP_LT;
+    else return 0;
+    return 1;
+}
+
 static int parse_uint(const char *p, size_t n, long *out) {
     if (n == 0 || n > 9) return 0;
     for (size_t i = 0; i < n; i++) if (p[i] < '0' || p[i] > '9') return 0;
@@ -87,8 +98,9 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
         if (!ul || !nl || *skip_ws(num + nl)) return fail(err, errCap, errLine, lineNo, "wait needs a unit (frames|turns|ms) and a count");
         if (ul == 6 && !strncmp(rest, "frames", 6)) d.kind = MT_D_WAIT_FRAMES;
         else if (ul == 5 && !strncmp(rest, "turns", 5)) d.kind = MT_D_WAIT_TURNS;
+        else if (ul == 6 && !strncmp(rest, "rounds", 6)) d.kind = MT_D_WAIT_ROUNDS;
         else if (ul == 2 && !strncmp(rest, "ms", 2)) d.kind = MT_D_WAIT_MS;
-        else return fail(err, errCap, errLine, lineNo, "bad wait unit (frames|turns|ms)");
+        else return fail(err, errCap, errLine, lineNo, "bad wait unit (frames|turns|rounds|ms)");
         if (!parse_uint(num, nl, &d.n) || d.n < 1) return fail(err, errCap, errLine, lineNo, "wait count must be an integer >= 1");
     } else if (wl == 6 && !strncmp(p, "expect", 6)) {
         size_t kl = tok_len(rest);
@@ -127,22 +139,50 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
                 if (parse_uint(unit, ul, &idx)) { d.unitIsIndex = 1; d.n = idx; }
                 else if (!(d.b = arena_add(s, unit, ul))) return fail(err, errCap, errLine, lineNo, "script too large");
             }
-        } else if (kl == 5 && !strncmp(rest, "units", 5)) {
-            d.kind = MT_D_EXPECT_UNITS;
+        } else if ((kl == 5 && !strncmp(rest, "units", 5)) || (kl == 5 && !strncmp(rest, "round", 5))) {
+            int isRound = rest[0] == 'r';
+            d.kind = isRound ? MT_D_EXPECT_ROUND : MT_D_EXPECT_UNITS;
             size_t ol = tok_len(arg);
             const char *num = skip_ws(arg + ol);
             size_t nl = tok_len(num);
-            if (!ol || !nl || *skip_ws(num + nl)) return fail(err, errCap, errLine, lineNo, "expect units needs: <op> <N>");
-            if (ol == 2 && !strncmp(arg, "==", 2)) d.op = MT_OP_EQ;
-            else if (ol == 2 && !strncmp(arg, "!=", 2)) d.op = MT_OP_NE;
-            else if (ol == 2 && !strncmp(arg, ">=", 2)) d.op = MT_OP_GE;
-            else if (ol == 2 && !strncmp(arg, "<=", 2)) d.op = MT_OP_LE;
-            else if (ol == 1 && arg[0] == '>') d.op = MT_OP_GT;
-            else if (ol == 1 && arg[0] == '<') d.op = MT_OP_LT;
-            else return fail(err, errCap, errLine, lineNo, "expect units: bad operator (== != >= <= > <)");
-            if (!parse_uint(num, nl, &d.n)) return fail(err, errCap, errLine, lineNo, "expect units: N must be an integer");
+            if (!ol || !nl || *skip_ws(num + nl)) return fail(err, errCap, errLine, lineNo, isRound ? "expect round needs: <op> <N>" : "expect units needs: <op> <N>");
+            if (!parse_op(arg, ol, &d.op)) return fail(err, errCap, errLine, lineNo, isRound ? "expect round: bad operator (== != >= <= > <)" : "expect units: bad operator (== != >= <= > <)");
+            if (!parse_uint(num, nl, &d.n)) return fail(err, errCap, errLine, lineNo, isRound ? "expect round: N must be an integer" : "expect units: N must be an integer");
+        } else if (kl == 6 && !strncmp(rest, "stacks", 6)) {
+            /* expect stacks <Status> on <unit> (<op> <N> | varied) */
+            d.kind = MT_D_EXPECT_STACKS;
+            size_t sl = tok_len(arg);
+            const char *on = skip_ws(arg + sl);
+            if (!sl || tok_len(on) != 2 || strncmp(on, "on", 2)) return fail(err, errCap, errLine, lineNo, "expect stacks needs: <Status> on <unit> (<op> <N> | varied)");
+            const char *unit = skip_ws(on + 2);
+            if (!*unit) return fail(err, errCap, errLine, lineNo, "expect stacks needs: <Status> on <unit> (<op> <N> | varied)");
+            if (!(d.a = arena_add(s, arg, sl))) return fail(err, errCap, errLine, lineNo, "script too large");
+            const char *tail;
+            if (*unit == '"') {
+                tail = parse_quoted(unit, q, sizeof q, &qn);
+                if (!tail) return fail(err, errCap, errLine, lineNo, "expect stacks: bad quoted unit name");
+                if (!(d.b = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
+            } else {
+                size_t ul = tok_len(unit);
+                long idx;
+                if (parse_uint(unit, ul, &idx)) { d.unitIsIndex = 1; d.n = idx; }
+                else if (!(d.b = arena_add(s, unit, ul))) return fail(err, errCap, errLine, lineNo, "script too large");
+                tail = unit + ul;
+            }
+            tail = skip_ws(tail);
+            size_t tl = tok_len(tail);
+            if (tl == 6 && !strncmp(tail, "varied", 6)) {
+                if (*skip_ws(tail + tl)) return fail(err, errCap, errLine, lineNo, "expect stacks: unexpected text after varied");
+                d.varied = 1;
+            } else {
+                const char *num = skip_ws(tail + tl);
+                size_t nl = tok_len(num);
+                if (!tl || !nl || *skip_ws(num + nl)) return fail(err, errCap, errLine, lineNo, "expect stacks needs: <Status> on <unit> (<op> <N> | varied)");
+                if (!parse_op(tail, tl, &d.op)) return fail(err, errCap, errLine, lineNo, "expect stacks: bad operator (== != >= <= > <) or `varied`");
+                if (!parse_uint(num, nl, &d.value)) return fail(err, errCap, errLine, lineNo, "expect stacks: N must be an integer");
+            }
         } else {
-            return fail(err, errCap, errLine, lineNo, "expect needs a kind (console|noconsole|status|units)");
+            return fail(err, errCap, errLine, lineNo, "expect needs a kind (console|noconsole|status|units|round|stacks)");
         }
     } else if (wl == 4 && !strncmp(p, "dump", 4)) {
         if (*rest) return fail(err, errCap, errLine, lineNo, "dump takes no arguments");
