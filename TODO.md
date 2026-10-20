@@ -340,7 +340,7 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
 - [x] Clip authoring (Timeline tab, timeline-edit.ts) and the cat rig (Rig tab, cat-rig.ts) — 2026-10-20, art build-out G + H; the game drives a character's root timeline, units are tinted by position
 - [ ] Emitter: ~~gradient fills~~ (done 2026-10-20, art build-out C: gradient.ts, gate `gradient`, probe square drawn in-game), ~~LineStyle2~~ (done 2026-10-20, art build-out E: DefineShape4, stroke.ts, gate `shape4`, caps honoured in-game), fonts/text, ~~PlaceObject3~~ (done 2026-10-20, art build-out F: blends load and apply in-game; filters crash the game and are a validation error)
 - [ ] MCP tools for art (so agents can author art, not just data)
-- [ ] "Draw in VectorCraft →" SVG import handoff
+- [x] External vector editor round trip (2026-10-21): VectorCraft (github.com/storytold/vectorcraft) is a static vector editor without timeline or player, so it edits single shapes through plain SVG — Export SVG / Replace… on Shapes rows, MCP `export_svg`, `svg-export.ts`; animation stays in the Timeline tab
 - [ ] Testing frontier from `automation-feasibility.md`: AI-brain auto-resolve to smoke-test mods in a real fight (tiers B/C) → now TDD targets 1–3 above; an IPC action layer (tier D) → the named-pipe mode in target 12
 
 ### Open engine unknowns to resolve
