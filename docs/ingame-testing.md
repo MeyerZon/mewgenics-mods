@@ -73,6 +73,11 @@ expect stacks <Status> on <unit> varied          >= 2 distinct stacks values see
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
 dump                                             snapshot the units into a units event
+shot "<label>"                                   screenshot: the DLL emits a shot event and holds the scene 700 ms while
+                                                 the runner captures the game window to <run dir>/shot-<label>.png
+                                                 (artifacts.shots); needs `hide: false`, else the file shows the desktop
+                                                 and the shot is flagged hidden. Frame 0..~250 is the black loading
+                                                 screen: shoot after `wait frames 300` or after `enter`
 log "<text>"                                     echo into the result file
 quit [code]                                      no code: 0 if every expect passed, else 1; end of script == quit
 ```
@@ -96,6 +101,7 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"],"stacks":[2]}]}
                                                 stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes)
 {"ev":"log","text":"..."}
+{"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
 {"ev":"popup","title":"WARNING","text":"..."}   a modal dialog of the game (its own WARNING/ERROR boxes) that the watchdog
                                                 closed — it would otherwise stop the frame loop for good under a hidden
                                                 window; never decides the verdict, appended to its reason
