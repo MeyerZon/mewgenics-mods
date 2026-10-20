@@ -7,7 +7,9 @@
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 GCC=${GCC:-gcc}
-CFLAGS="-std=c11 -O1 -g -Wall -Wextra -Werror"
+# -Wno-format-truncation: Ubuntu gcc builds with _FORTIFY_SOURCE and flags the deliberately bounded snprintf()s into
+# MtArgs.err[128] (a truncated error message is the intent); w64devkit gcc does not.
+CFLAGS="-std=c11 -O1 -g -Wall -Wextra -Werror -Wno-format-truncation"
 FW="$HERE/framework"
 HS="$HERE/mods/test-harness"
 
