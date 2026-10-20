@@ -1,0 +1,23 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\<run>\\script.mewtest","out":"C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\<run>\\result.jsonl","pid":39568,"hide":1,"timeout_ms":120000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":1157,"frame":120}
+{"ev":"seed","line":2,"seed":42,"ok":true,"detail":"state at 000001b1b7abd9e8: e173fcb82ba22b6e… -> bdd732262feb6e95…","t":3266,"frame":890}
+{"ev":"enter","line":3,"name":"TacticsTest","ok":true,"detail":"scene=000001b1b96d5a98 entity=000001b414c753d0 component=000001be302c0008 manager=000001b1b7bad4c0 director=000001b9a9350008 GetGame(console)=000001b9a9350008 director(after init)=000001b9a9350008","t":3297,"frame":891}
+{"ev":"turn","n":1,"round":1,"t":4250,"frame":1030}
+{"ev":"wait","line":4,"kind":"turns","n":1,"actual":1,"t":4250,"frame":1030}
+{"ev":"expect","line":5,"kind":"units","arg":"== 8","ok":true,"detail":"8 units","t":4250,"frame":1031}
+{"ev":"cmd","line":6,"text":"spawn Rat","t":4250,"frame":1032}
+{"ev":"console","text":"Spawned Rat","t":4250,"frame":1032}
+{"ev":"console","text":"Executed: spawn","t":4250,"frame":1032}
+{"ev":"expect","line":7,"kind":"console","arg":"Spawned Rat","ok":true,"detail":"matched console line 0","t":4266,"frame":1033}
+{"ev":"cmd","line":8,"text":"spawn Pooter","t":4266,"frame":1034}
+{"ev":"console","text":"Spawned Pooter","t":4266,"frame":1034}
+{"ev":"console","text":"Executed: spawn","t":4266,"frame":1034}
+{"ev":"expect","line":9,"kind":"console","arg":"Spawned Pooter","ok":true,"detail":"matched console line 2","t":4266,"frame":1035}
+{"ev":"wait","line":10,"kind":"frames","n":10,"actual":10,"t":4313,"frame":1045}
+{"ev":"units","available":true,"round":1,"count":10,"list":[{"i":0,"name":"Wengar The Wion","class":"Thief","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":1,"name":"Flint","class":"Mage","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":2,"name":"Webster","class":"Medic","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":3,"name":"Christine","class":"Hunter","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":6,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":7,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":8,"name":"Lil' Rat","class":"","faction":2,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":9,"name":"Pooter","class":"","faction":2,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]}],"t":4313,"frame":1046}
+{"ev":"expect","line":12,"kind":"units","arg":"== 10","ok":true,"detail":"10 units","t":4328,"frame":1047}
+{"ev":"expect","line":13,"kind":"unit","arg":"\"Lil' Rat\" faction == 2","ok":true,"detail":"unit 8 \"Lil' Rat\": faction 2","t":4328,"frame":1048}
+{"ev":"expect","line":14,"kind":"unit","arg":"8 name == \"Lil' Rat\"","ok":true,"detail":"unit 8 \"Lil' Rat\": name \"Lil' Rat\"","t":4328,"frame":1049}
+{"ev":"expect","line":15,"kind":"unit","arg":"Pooter faction == 2","ok":true,"detail":"unit 9 \"Pooter\": faction 2","t":4344,"frame":1050}
+{"ev":"expect","line":16,"kind":"unit","arg":"9 name == \"Pooter\"","ok":true,"detail":"unit 9 \"Pooter\": name \"Pooter\"","t":4344,"frame":1051}
+{"ev":"end","code":0,"reason":"quit","frames":1052,"turns":1,"elapsed_ms":4344,"expect_pass":8,"expect_fail":0,"t":4344,"frame":1052}

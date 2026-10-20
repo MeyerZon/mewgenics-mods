@@ -67,3 +67,15 @@ turns are taken by the AI and the fight resolves without input. Load it next to 
 (`mods: <mod>, _autoplay` in the `.mewtest` header); never play with it. The validator reports
 `merge-target-missing` for `PlayerCat.passives.Uncontrollable` because the base `passives` block is empty — the
 merge adds it, which is the point.
+
+`mods/_golden-merge/` (2026-10-20, TDD target 8 "golden through `dump`") pins the overlay policies against the
+game itself, differentially: `tests/vanilla.mewtest` and `tests/golden.mewtest` play the same seeded fight
+(`seed 42`, `enter TacticsTest`, `spawn Rat` / `Pooter` / `GoldenRat`) without and with the overlays and assert the
+units event with `expect unit`. OBSERVED: `enemies.gon.merge` (`Rat { graphics { name "GOLDEN_RAT_NAME" } properties
+{ faction allies } }`) → the spawned Rat dumps as `Golden Rat`, faction 1; `enemies.gon.patch` (`Pooter { properties
+{ faction.overwrite allies } stats { speed.add 10 } }`) → Pooter faction 1; `enemies.gon.append` (a new entry
+`GoldenRat { variant_of Rat … }`) → `spawn GoldenRat` works and it dumps as `Appended Rat`, faction 2 (the vanilla
+enemies value); `text/combined.csv.append` rows (no header line in an append file) supply both names. What the dump
+cannot see: `.add` / `.multiply` on stats (`speed.add 10` is pinned at T0 only, against the editor's engine, by
+`run-tests.ts` 4d) — the units event carries no stat or HP field; the follow-up is in `TODO.md` target 8. Fixtures:
+`editor/test/fixtures/ingame/result-golden-{vanilla,merge}.jsonl`.

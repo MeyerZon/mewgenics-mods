@@ -21,6 +21,8 @@ editor/data/
 editor/node_modules/
 # editor: the Vite build of the web UI (npm run build); served by web/server.mjs
 editor/web/dist/
+# editor: Ruffle's runtime files, vendored from node_modules by scripts/vendor-ruffle.ts (npm run build / dev)
+editor/web/public/ruffle/
 # editor: Playwright (dev-only) run output
 editor/test-results/
 editor/playwright-report/

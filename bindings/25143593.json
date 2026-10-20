@@ -199,7 +199,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Character_BeginTurn.c"
+        ".analysis/decompiled/Character_BeginTurn_0x10a9b0.c"
       ],
       "verify": {
         "log": "hook installed: Character::BeginTurn"
@@ -629,7 +629,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/ApplyStatusByName_140483120.c"
+        ".analysis/decompiled/Status_ApplyByName_0x483120.c"
       ],
       "verify": {
         "log": "status hooks: apply_status + 13/13 name lookups aliased"
@@ -785,7 +785,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Lookup_140493190.c"
+        ".analysis/decompiled/Status_GetFlags_0x493190.c"
       ],
       "note": "glaiel::get_status_flags(std::string) hit-effect flag bits. Also FW_LK[4]."
     },
@@ -847,7 +847,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/LuckUp_ctor_140711c90.c"
+        ".analysis/decompiled/LuckUp_ctor_0x711c90.c"
       ]
     },
     {
@@ -1074,7 +1074,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/debugconsole_init.c"
+        ".analysis/decompiled/DebugConsole_init_0xa11ef0.c"
       ]
     },
     {
@@ -1202,7 +1202,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140492c20.c"
+        ".analysis/decompiled/Status_GetStackMode_0x492c20.c"
       ]
     },
     {
@@ -1311,7 +1311,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140492f20.c"
+        ".analysis/decompiled/Status_GetValue_0x492f20.c"
       ]
     },
     {
@@ -1369,7 +1369,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_1405028e0.c"
+        ".analysis/decompiled/Status_IsHitEffect_0x5028e0.c"
       ]
     },
     {
@@ -1422,7 +1422,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140493690.c"
+        ".analysis/decompiled/Status_OnAppliedToDamageInstance_0x493690.c"
       ]
     },
     {
@@ -1475,7 +1475,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140493910.c"
+        ".analysis/decompiled/Status_OnAppliedToTile_0x493910.c"
       ]
     },
     {
@@ -1528,7 +1528,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140493b80.c"
+        ".analysis/decompiled/Status_OnKilledCharacter_0x493b80.c"
       ]
     },
     {
@@ -1581,7 +1581,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140493e00.c"
+        ".analysis/decompiled/Status_OnDamageReport_0x493e00.c"
       ]
     },
     {
@@ -1639,7 +1639,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_1404933e0.c"
+        ".analysis/decompiled/Status_GetIcon_0x4933e0.c"
       ]
     },
     {
@@ -1687,7 +1687,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140494080.c"
+        "docs/binding-port.md#known-limits-and-human-decisions"
       ]
     },
     {
@@ -2100,7 +2100,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140502b40.c"
+        ".analysis/decompiled/Status_SpawnTile_0x502b40.c"
       ]
     },
     {
@@ -2175,7 +2175,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/ProcessCmds.c"
+        ".analysis/decompiled/ProcessCmds_0x9b8bb0.c"
       ]
     },
     {
@@ -2410,7 +2410,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/gpak_load.c"
+        ".analysis/decompiled/Gpak_Load_0x9b5380.c"
       ]
     },
     {
@@ -2889,7 +2889,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Gon_merge_a.c"
+        ".analysis/decompiled/Gon_PatchMerge_a_0x944cc0.c"
       ]
     },
     {
@@ -2928,7 +2928,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Gon_merge_b.c"
+        ".analysis/decompiled/Gon_PatchMerge_b_0x944f50.c"
       ]
     },
     {
@@ -3012,7 +3012,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Gon_merge_c.c"
+        ".analysis/decompiled/Gon_DeepMerge_0x946680.c"
       ]
     },
     {
@@ -3061,7 +3061,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Dispatcher_1405f9760.c"
+        ".analysis/decompiled/Status_ApplyLuckUp_0x5f9760.c"
       ]
     },
     {
@@ -3221,7 +3221,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/debugconsole_init.c",
+        ".analysis/decompiled/DebugConsole_init_0xa11ef0.c",
         "docs/engine-map.md#debug-console-and-application-loop"
       ],
       "verify": {
@@ -3465,8 +3465,8 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/ApplyStatusByName_140483120.c:18",
-        ".analysis/decompiled/Dispatcher_1405f9760.c:31"
+        ".analysis/decompiled/Status_ApplyByName_0x483120.c",
+        ".analysis/decompiled/Status_ApplyLuckUp_0x5f9760.c"
       ]
     },
     {
@@ -3500,8 +3500,8 @@
       ],
       "evidence": [
         "docs/engine-map.md#status-effects",
-        ".analysis/decompiled/LuckUpVT0_140566ed0.c",
-        ".analysis/decompiled/LuckUpVT1_140566ec0.c",
+        ".analysis/decompiled/LuckUp_GetTypeName_0x566ed0.c",
+        ".analysis/decompiled/LuckUp_GetTypeId_0x566ec0.c",
         ".analysis/luckup-vtable.hex"
       ],
       "verify": {
@@ -3557,7 +3557,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/LuckUpVT1_140566ec0.c"
+        ".analysis/decompiled/LuckUp_GetTypeId_0x566ec0.c"
       ],
       "note": "slot 1 body on this build: B8 D6 04 00 00 C3 (mov eax, 0x4d6; ret); second source: mov r8d, 0x4d6 (41 B8 D6 04 00 00) four instructions before the call to Entity_FindComponentsByTypeId in Status_ApplyLuckUp (call #4). Both must agree or the port reports needs-human."
     },
@@ -3566,8 +3566,11 @@
       "kind": "constant",
       "value": "172",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "extent": true
+        },
+        "note": "the LuckUp vftable has exactly this many consecutive pointers into .text; the next qword is the following vftable's COL (.rdata). Status_vftable has the same count."
       },
       "consumers": [
         "native/framework/src/status_engine.c"
@@ -3587,8 +3590,15 @@
       "kind": "constant",
       "value": "0",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "stringRef": "LuckUp",
+            "nth": 0,
+            "expect": 2
+          }
+        },
+        "note": "the first of the two LuckUp slots whose bounded body references the unique string \"LuckUp\": GetTypeName loads its bytes with mov eax,[rip+str] / movzx eax,word [rip+str+4] (LuckUp_GetTypeName_0x566ed0.c shows them folded to constants); a build that inlines the name as immediates gives no answer -> needs-human, never a wrong slot"
       },
       "consumers": [
         "native/framework/src/status_engine.c",
@@ -3609,8 +3619,13 @@
       "kind": "constant",
       "value": "1",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "bodyPattern": "B8 ?? ?? ?? ?? C3"
+          }
+        },
+        "note": "the only LuckUp slot whose body is mov eax,imm32; ret (the type id 0x4d6)"
       },
       "consumers": [
         "native/framework/src/status_engine.c"
@@ -3630,8 +3645,15 @@
       "kind": "constant",
       "value": "2",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "stringRef": "LuckUp",
+            "nth": 1,
+            "expect": 2
+          }
+        },
+        "note": "the second of the two LuckUp slots referencing \"LuckUp\": IsA leas it to compare the queried name, then \"Status\" (LuckUp_IsA_0x566df0.c)"
       },
       "consumers": [
         "native/framework/src/status_engine.c",
@@ -3652,8 +3674,13 @@
       "kind": "constant",
       "value": "3",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "bodyPattern": "48 8D 05 ?? ?? ?? ?? C3"
+          }
+        },
+        "note": "the only LuckUp slot whose body is lea rax,[rip+table]; ret"
       },
       "consumers": [
         "native/framework/src/status_engine.c"
@@ -3673,8 +3700,14 @@
       "kind": "constant",
       "value": "170",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "FF 90 ?? ?? ?? ?? 83 7B ?? 00",
+          "dispAt": 2,
+          "dispSize": 4,
+          "scale": 8
+        },
+        "note": "call [rax+0x550] right before cmp dword [rbx+0x5c],0 in the merge path: slot 0x550/8 = 170 (status_engine.c calls the same slot)"
       },
       "consumers": [
         "native/framework/src/status_engine.c"
@@ -3696,7 +3729,12 @@
       "value": "0x10",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "ApplicationBase_appmain",
+          "pattern": "80 7E ?? 00 0F",
+          "dispAt": 2
+        },
+        "note": "cmp byte [rsi+0x10],0 followed by a jcc rel32: the main loop's running test (both such tests carry 0x10)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3719,7 +3757,13 @@
       "value": "0xdd0",
       "ctype": "SDL_Window*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Settings_Load",
+          "pattern": "48 8B 89 ?? ?? ?? ??",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rcx,[rcx+0xdd0] before SDL_SetWindowTitle(app->window, \"Mewgenics!\"); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3741,7 +3785,13 @@
       "value": "0xc8",
       "ctype": "std::string*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DebugConsole_Execute",
+          "pattern": "48 8B D0 49 8D 8D ?? ?? ?? ?? E8",
+          "dispAt": 6,
+          "dispSize": 4
+        },
+        "note": "lea rcx,[r13+0xc8] = &out vector, before the push_back call (3 occurrences, all 0xc8)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3764,7 +3814,13 @@
       "value": "0xd0",
       "ctype": "std::string*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DebugConsole_Execute",
+          "pattern": "49 83 85 ?? ?? ?? ?? 20",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "add qword [r13+0xd0],0x20: the vector's end advances by one std::string (3 occurrences, all 0xd0)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3786,7 +3842,12 @@
       "value": "0x18",
       "ctype": "Scene*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 79 ??",
+          "dispAt": 3
+        },
+        "note": "mov rdi,[rcx+0x18]: Component+0x18 (the entity/scene hop); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3808,7 +3869,12 @@
       "value": "0x8",
       "ctype": "EntityManager*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 5F ??",
+          "dispAt": 3
+        },
+        "note": "mov rbx,[rdi+0x8]; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3830,7 +3896,12 @@
       "value": "0x20",
       "ctype": "void*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 43 ??",
+          "dispAt": 3
+        },
+        "note": "mov rax,[rbx+0x20] (2 occurrences, both 0x20)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3852,7 +3923,13 @@
       "value": "0x1f90",
       "ctype": "RefArray*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "TurnControl_NextTurn",
+          "pattern": "48 8B 43 ?? 48 8B 88 ?? ?? ?? ??",
+          "dispAt": 7,
+          "dispSize": 4
+        },
+        "note": "mov rax,[rbx+0x20]; mov rcx,[rax+0x1f90]: the Character RefArray (preceded by mov edx,0x1f9 = the type id * 16); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3875,7 +3952,12 @@
       "value": "0xc",
       "ctype": "uint32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "83 78 ?? 00",
+          "dispAt": 2
+        },
+        "note": "cmp dword [rax+0xc],0 (2 occurrences, both 0xc)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3897,7 +3979,12 @@
       "value": "0x10",
       "ctype": "Character**",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 40 ??",
+          "dispAt": 3
+        },
+        "note": "mov rax,[rax+0x10] (2 occurrences, both 0x10)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3919,7 +4006,13 @@
       "value": "0x158",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "TurnControl_NextTurn",
+          "pattern": "FF 86 ?? ?? ?? ??",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "inc dword [rsi+0x158] (rsi = this): the round counter; the second FF 86 is +0xeb4"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3941,7 +4034,12 @@
       "value": "0x18",
       "ctype": "Entity*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "4C 8B 76 ?? 41 8B FD 41 8B DD 45 39 6E ??",
+          "dispAt": 3
+        },
+        "note": "mov r14,[rsi+0x18] (this->entity) then cmp [r14+0x24],r13d (the component count); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c",
@@ -3964,7 +4062,13 @@
       "value": "0x88",
       "ctype": "CatData*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "48 83 BE ?? ?? ?? ?? 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "cmp qword [rsi+0x88],0: has cat data? (3 occurrences, all 0x88)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3986,7 +4090,13 @@
       "value": "0xc10",
       "ctype": "std::string",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "48 81 C1 ?? ?? ?? ?? 48 8B 51 10 49 8B C4",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "add rcx,0xc10; mov rdx,[rcx+0x10]: &catData->class (a std::string) then its buffer — an imm32 read at dispAt (2 occurrences, both 0xc10)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -4008,7 +4118,13 @@
       "value": "0x290",
       "ctype": "std::wstring",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "48 8D 96 ?? ?? ?? ?? 48 8B 42 10",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "lea rdx,[rsi+0x290]; mov rax,[rdx+0x10]: &this->name (std::wstring) then its buffer; unique with the trailing mov"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -4030,7 +4146,13 @@
       "value": "0x350",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "TurnControl_NextTurn",
+          "pattern": "49 63 84 24 ?? ?? ?? ??",
+          "dispAt": 4,
+          "dispSize": 4
+        },
+        "note": "movsxd rax,dword [r12+0x350] inside the unit loop (r12 = Character*); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -4052,7 +4174,13 @@
       "value": "0xd10",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "C7 86 ?? ?? ?? ?? 01 00 00 00 C7 86 ?? ?? ?? ?? 01 00 00 00",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov dword [rsi+0xd10],1; mov dword [rsi+0xd14],1: the turn's move/act budgets reset together; unique (first store)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -4074,7 +4202,13 @@
       "value": "0xd14",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "C7 86 ?? ?? ?? ?? 01 00 00 00 C7 86 ?? ?? ?? ?? 01 00 00 00",
+          "dispAt": 12,
+          "dispSize": 4
+        },
+        "note": "the second store of the same pair: mov dword [rsi+0xd14],1"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -4096,7 +4230,13 @@
       "value": "0xdf0",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "44 89 B6 ?? ?? ?? ??",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov [rsi+0xdf0],r14d; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -4118,7 +4258,12 @@
       "value": "0x24",
       "ctype": "uint32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Entity_FindComponentsByTypeId",
+          "pattern": "44 39 61 ??",
+          "dispAt": 3
+        },
+        "note": "cmp [rcx+0x24],r12d: the component loop bound; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c",
@@ -4141,7 +4286,12 @@
       "value": "0x28",
       "ctype": "Component**",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Entity_FindComponentsByTypeId",
+          "pattern": "49 8B 45 ??",
+          "dispAt": 3
+        },
+        "note": "mov rax,[r13+0x28]: the component array; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c",
@@ -4164,7 +4314,12 @@
       "value": "0x75",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_Remove",
+          "pattern": "80 79 ?? 00",
+          "dispAt": 2
+        },
+        "note": "cmp byte [rcx+0x75],0: already removing?; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c",
@@ -4187,7 +4342,12 @@
       "value": "0x5c",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "01 53 ??",
+          "dispAt": 2
+        },
+        "note": "add [rbx+0x5c],edx: the stacks merge; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:status_stacks"
@@ -4209,7 +4369,12 @@
       "value": "0x38",
       "ctype": "Character*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_Remove",
+          "pattern": "48 8B 41 ??",
+          "dispAt": 3
+        },
+        "note": "mov rax,[rcx+0x38]: the status's character; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:status_character"
@@ -4231,7 +4396,13 @@
       "value": "0xe9",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "80 BB ?? ?? ?? ?? 00",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "cmp byte [rbx+0xe9],0; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:find_status_on",
@@ -4255,7 +4426,13 @@
       "value": "0xc8",
       "ctype": "void*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "48 89 B3 ?? ?? ?? ??",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov [rbx+0xc8],rsi: the applier stored on the new status; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:hook_ApplyByName"
@@ -4277,7 +4454,13 @@
       "value": "0xd0",
       "ctype": "void*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "4C 89 BB ?? ?? ?? ??",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov [rbx+0xd0],r15: the applier's owner; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:hook_ApplyByName"
@@ -4300,7 +4483,12 @@
       "value": "0x20",
       "ctype": "Character*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "48 8B 41 ?? 44 38 B8 ?? ?? ?? ?? 74",
+          "dispAt": 3
+        },
+        "note": "mov rax,[rcx+0x20]; cmp [rax+0x4b0],r15b: ctx->character then its scene's destroyed flag; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:hook_ApplyByName"
@@ -4323,7 +4511,12 @@
       "value": "0x18",
       "ctype": "Entity*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "48 8B 57 ?? 80 7A ?? 00",
+          "dispAt": 3
+        },
+        "note": "mov rdx,[rdi+0x18]; cmp byte [rdx+0x18],0: ctx->entity then entity->destroyed; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:hook_ApplyByName"
@@ -4345,7 +4538,12 @@
       "value": "0x10",
       "ctype": "void*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "48 8B 73 ?? 48 89 75 ??",
+          "dispAt": 3
+        },
+        "note": "mov rsi,[rbx+0x10]: p6->applier, spilled right after; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:hook_ApplyByName"
@@ -4368,7 +4566,12 @@
       "value": "-0x8",
       "ctype": "void*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "4C 8B 7E ??",
+          "dispAt": 3
+        },
+        "note": "mov r15,[rsi-0x8]: the applier's owner lives just before the applier object (a signed byte, -8); unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:hook_ApplyByName"
@@ -4391,7 +4594,13 @@
       "value": "0xe50",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Status_Remove",
+          "pattern": "C6 80 ?? ?? ?? ?? 01",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov byte [rax+0xe50],1: touched_passives on the character; unique"
       },
       "consumers": [
         "native/framework/src/status_engine.c:status_engine_set_stacks"
@@ -4852,7 +5061,12 @@
       "value": "0x28",
       "ctype": "SceneManager*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "AddComponent_TacticsTest",
+          "pattern": "48 89 47 ??",
+          "dispAt": 3
+        },
+        "note": "mov [rdi+0x28],rax: the new component's scene manager; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -4876,7 +5090,13 @@
       "value": "0x4b0",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Scene_CreateEntity",
+          "pattern": "80 B9 ?? ?? ?? ?? 00",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "cmp byte [rcx+0x4b0],0: the first instruction (a destroyed scene creates nothing)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -4957,7 +5177,12 @@
       "value": "0x18",
       "ctype": "Scene*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 59 ??",
+          "dispAt": 3
+        },
+        "note": "mov rbx,[rcx+0x18]: SceneManager->mainScene; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -4981,7 +5206,13 @@
       "value": "0x780",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DevMenu_TacticsTest_lambda",
+          "pattern": "C6 80 ?? ?? ?? ?? 01",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov byte [rax+0x780],1: the first flag the button sets on its director"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -5005,7 +5236,14 @@
       "value": "0x78c",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DevMenu_TacticsTest_lambda",
+          "pattern": "C6 80 ?? ?? ?? ?? 01",
+          "dispAt": 2,
+          "dispSize": 4,
+          "nth": 1
+        },
+        "note": "mov byte [rax+0x78c],1: the second byte flag the button sets (nth 1)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -5029,7 +5267,13 @@
       "value": "0x6dc",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "48 8B 05 ?? ?? ?? ?? 45 33 ED 44 39 A8 ?? ?? ?? ??",
+          "dispAt": 13,
+          "dispSize": 4
+        },
+        "note": "mov rax,[MewDirector_global]; xor r13d,r13d; cmp [rax+0x6dc],r13d: the act check at the start of a turn; the lambda's C7 80 ?? ?? ?? ?? 01 00 00 00 is the writer"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -5053,7 +5297,13 @@
       "value": "0x4db",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "SceneManager_CreateScene",
+          "pattern": "66 C7 83 ?? ?? ?? ?? 00 00 C6 83 ?? ?? ?? ?? 00",
+          "dispAt": 11,
+          "dispSize": 4
+        },
+        "note": "mov word [rbx+0x4d8],0; mov byte [rbx+0x4db],0: the fresh scene's flags (the displacement of the second store); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -5165,7 +5415,13 @@
       "value": "0x178",
       "ctype": "uint64_t[4]",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DevMenu_TacticsTest_lambda",
+          "pattern": "B9 ?? ?? ?? ?? 48 03 08 E8",
+          "dispAt": 1,
+          "dispSize": 4
+        },
+        "note": "mov ecx,0x178; add rcx,[rax]: the TLS block offset the button's reseed targets (an imm32, read as the value at dispAt); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_seed_rng"
@@ -5344,6 +5600,140 @@
         ".analysis/decompiled/fn_0x94eba0.c",
         ".analysis/decompiled/opencaller_c1_0x1be1a0.c",
         ".analysis/decompiled/MewDirector_start_0x3aefd0.c"
+      ]
+    },
+    {
+      "name": "SaveProps_GetOrCreate",
+      "kind": "function",
+      "rva": "0x61ea0",
+      "signature": {
+        "pattern": "78 18 0F 76 03 49 8B 10 48 BB ?? ?? ?? ?? ?? ?? ?? ?? 45 33 C0 4D 85 C9 74 2A 48 B9 ?? ?? ?? ?? ?? ?? ?? ?? 0F 1F 40 00 0F 1F 84 00 00 00 00 00 42 0F B6 04 02 48 33 D8 48 0F AF D9 49 FF C0 4D 3B C1 72 EC 4C 8B CB 4D 8B C6 48 8D 54 24 20 48 8B CD E8 ?? ?? ?? ?? 48 8B 44 24 28 48 85 C0 74 0C 48 89 06 C6 46 08 00 E9 ?? ?? ?? ?? 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 39 45 10 0F 84 C6",
+        "exactLen": 126,
+        "offset": -48,
+        "wildcards": [
+          {
+            "at": 10,
+            "len": 8,
+            "why": "movabs imm64"
+          },
+          {
+            "at": 28,
+            "len": 8,
+            "why": "movabs imm64"
+          },
+          {
+            "at": 83,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 105,
+            "len": 4,
+            "why": "E9 rel32"
+          },
+          {
+            "at": 111,
+            "len": 8,
+            "why": "movabs imm64"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Node** (PropMap* map, Node** out16, std::string* key): the save property map lookup with insert (FNV-1a hash of the key; a 0x38-byte node, value at +0x30). The new-game branch 0x3af310 writes game_began = 1 through it on director+0x38; the harness does the same for enter Campaign house. The key is copied (the caller keeps it).",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 644,
+          "calls": 6,
+          "ripRefs": 2,
+          "resyncs": 1
+        },
+        "prologue": "48 89 5C 24 08 48 89 6C 24 10 48 89"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:enter_campaign"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_SaveProps_GetOrCreate",
+          "index": 27
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry"
+      ]
+    },
+    {
+      "name": "DevMenu_TacticsTest_lambda",
+      "kind": "function",
+      "rva": "0x32fc00",
+      "signature": {
+        "pattern": "40 53 48 83 EC 40 48 8B D9 48 8B 49 08 E8 ?? ?? ?? ?? C6 80 80 07 00 00 01 48 8B 4B 08 E8 ?? ?? ?? ?? C6",
+        "exactLen": 35,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 14,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 30,
+            "len": 4,
+            "why": "E8 rel32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "std::function body of the dev menu's TacticsTest button (0x110 bytes, .pdata, no E8 caller): reseeds the RNG, flags the director (+0x780, +0x78c, +0x6dc), CreateScene(\"Battle\") + AddComponent<TacticsTest>. Rung 1 (signature) only — no strings, no caller; a body-changing build reports it failed together with the three offsets it witnesses.",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Component_GetGame",
+            "target": "0x908e0"
+          },
+          {
+            "ordinal": 1,
+            "name": "Component_GetGame",
+            "target": "0x908e0"
+          },
+          {
+            "ordinal": 2,
+            "name": "Rng_Reseed",
+            "target": "0x94f0a0"
+          },
+          {
+            "ordinal": 3,
+            "name": "SceneManager_CreateScene",
+            "target": "0x9d4950"
+          },
+          {
+            "ordinal": 4,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 5,
+            "name": "AddComponent_TacticsTest",
+            "target": "0x31c3e0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 272,
+          "calls": 6,
+          "ripRefs": 2,
+          "resyncs": 0
+        },
+        "prologue": "40 53 48 83 EC 40 48 8B D9 48 8B 49"
+      },
+      "consumers": [
+        "docs only: witness host for MewDirector_devFightFlag, MewDirector_devFightMode, Tls_rngState"
+      ],
+      "exposure": [],
+      "evidence": [
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        "docs/engine-map.md#dev-scenes-and-run-entry"
       ]
     }
   ]

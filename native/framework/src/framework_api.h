@@ -48,6 +48,7 @@ typedef enum FwSymbol {
     FW_SYM_Entity_DestroyOwnerOf,       /* void (Component*) — destroys the component's entity (what the save-slot click does to the old director) */
     FW_SYM_AddComponent_MewDirector_named, /* MewDirector* (Scene*, Entity*, std::string* saveName) — caller keeps the string */
     FW_SYM_MewDirector_start,           /* void (MewDirector*) — new game / resume from the save's properties */
+    FW_SYM_SaveProps_GetOrCreate,       /* Node** (PropMap* map, Node** out, std::string* key) — the save's property node (value at +0x30), created when absent */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 

@@ -1,0 +1,58 @@
+listcmds
+clear
+clear_history
+record_macro arg0
+end_recording_macro
+save_commands_as_macro arg0 arg1
+macro arg0
+clear_macros arg0
+nofilter
+toggle_filter
+soundevent_debug arg0
+vsync arg0
+debug_output_loaded_bitmap_atlas_pages
+debug_bitmap_atlas_cpu_memory_use
+soft_reset
+toggle_cursor_mode
+debug_memory_tesselate_everything
+crash
+crash_silent
+freeze
+debug_list_loaded_files
+list_steam_friends
+english_word_count
+measure_characters
+debug_sfx_memory_use
+set_language arg0
+test_locale_sort_order
+showdebug
+hidedebug
+ObtainRandomItems
+ObtainItemSet arg0
+ObtainItem arg0
+ObtainCoins arg0
+ObtainFood arg0
+AddChapterWeather arg0
+UnlockClass arg0
+UnlockAllAdventureContent
+DebugClearCatTempEffects
+TriggerAllProgressionUnlocks
+TriggerProgressionUnlock arg0
+skip_tutorial
+calculate_combat_reward_averages_food
+calculate_combat_reward_averages_coins
+set_day arg0
+debug_deconstruct_item_pools
+trigger_butterfly_effect
+upgrade
+upgrade_all
+upgrade_all_nobasement
+house_boss_event arg0
+max_npc_favor arg0
+interstitial_test arg0
+spawn_custom_stray arg0
+house_weather arg0
+get_furniture arg0
+get_rare_furniture arg0
+noui
+Executed: listcmds
