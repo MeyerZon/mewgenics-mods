@@ -9,6 +9,7 @@
 //   through unchanged. So fills are either `gray:N` (remapped) or a colour (passthrough).
 
 import type { Mat } from "./geometry.ts";
+import { gradientProblems } from "./gradient.ts";
 
 /**
  * SymbolClass alone binds linkage names; a DoABC is not needed for that (docs/swf-emitter-fix-spec.md §3.2: the
@@ -23,6 +24,7 @@ export type Fill =
   | { kind: "gray"; level: number }
   | { kind: "rgba"; r: number; g: number; b: number; a: number }
   | { kind: "bitmap"; id: string }
+  | { kind: "gradient"; id: string }
   | { kind: "none" };
 
 export interface RgbaColor {
@@ -35,7 +37,7 @@ export interface RgbaColor {
 export interface ScenePath {
   /** SVG path data (absolute or relative, any commands) */
   d: string;
-  /** "gray:N" | "#rrggbb" | "#rrggbbaa" | "bitmap:<id>" | "none" | null */
+  /** "gray:N" | "#rrggbb" | "#rrggbbaa" | "bitmap:<id>" | "gradient:<id>" | "none" | null */
   fill?: string | null;
   fillRule?: "nonzero" | "evenodd";
   /** colour or "gray:N" or null */
@@ -48,6 +50,31 @@ export interface ScenePath {
 export interface SceneShape {
   paths: ScenePath[];
   source?: string;
+}
+
+export interface GradientStopDef {
+  /** 0..1, ascending */
+  offset: number;
+  /** gray:N (palette-remapped like any gray) or #rrggbb[aa] */
+  color: string;
+}
+
+/** A gradient a path fill references as "gradient:<id>" (geometry in the path's local px; see gradient.ts). */
+export interface SceneGradient {
+  kind: "linear" | "radial";
+  stops: GradientStopDef[];
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  cx?: number;
+  cy?: number;
+  r?: number;
+  fx?: number;
+  fy?: number;
+  spread?: "pad" | "reflect" | "repeat";
+  /** applied after the geometry (SVG gradientTransform, objectBoundingBox) */
+  transform?: Mat;
 }
 
 export interface SceneCxform {
@@ -108,6 +135,7 @@ export interface Scene {
   curveResolution?: number;
   shapes: Record<string, SceneShape>;
   bitmaps?: Record<string, { file: string }>;
+  gradients?: Record<string, SceneGradient>;
   sprites: Record<string, SceneSprite>;
   exports: Record<string, string>;
   stage_instances?: Array<SceneKey & { ref: string }>;
@@ -214,6 +242,8 @@ export function parseFill(str: string | null | undefined): ParsedFill {
   }
   m = /^bitmap:([A-Za-z0-9_.-]+)$/.exec(s);
   if (m) return { fill: { kind: "bitmap", id: m[1] } };
+  m = /^gradient:([A-Za-z0-9_.-]+)$/.exec(s);
+  if (m) return { fill: { kind: "gradient", id: m[1] } };
   const rgba = parseColor(s);
   if (!rgba) return { fill: { kind: "none" }, error: `unrecognized fill: ${s}` };
   if (rgba.r === rgba.g && rgba.g === rgba.b && rgba.a === 255) {
@@ -332,6 +362,7 @@ export function validateScene(input: unknown): SceneValidation {
       else if (f.quantized) warn("fill-quantized", `gray fill ${p.fill} snapped to gray:${f.fill.kind === "gray" ? f.fill.level : ""}`, [at + ".fill"]);
       else if (f.fill.kind === "rgba") warn("passthrough-fill", `fill ${p.fill} is not gray: the engine will NOT palette-remap it`, [at + ".fill"]);
       else if (f.fill.kind === "bitmap" && !(scene.bitmaps || {})[f.fill.id]) err("bitmap-missing", `fill references unknown bitmap "${f.fill.id}"`, [at + ".fill"]);
+      else if (f.fill.kind === "gradient" && !(scene.gradients || {})[f.fill.id]) err("gradient-missing", `fill references unknown gradient "${f.fill.id}"`, [at + ".fill"]);
       if (p.fillRule && p.fillRule !== "nonzero" && p.fillRule !== "evenodd") err("fill-rule", `fillRule must be nonzero|evenodd`, [at + ".fillRule"]);
       if (p.stroke) {
         const sf = parseFill(p.stroke);
@@ -351,6 +382,11 @@ export function validateScene(input: unknown): SceneValidation {
   for (const id of Object.keys(scene.sprites)) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap`, [`sprites.${id}`]);
     ids.add(id);
+  }
+  for (const id of Object.keys(scene.gradients || {})) {
+    if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient`, [`gradients.${id}`]);
+    ids.add(id);
+    for (const p of gradientProblems((scene.gradients || {})[id])) err(p.code, `gradient "${id}": ${p.message}`, [`gradients.${id}` + (p.at ? `.${p.at}` : "")]);
   }
   for (const id of Object.keys(scene.sprites)) {
     const sp = scene.sprites[id];
@@ -456,6 +492,7 @@ export interface GrayUsage {
   levels: number[];
   passthrough: number;
   bitmaps: number;
+  gradients: number;
 }
 
 /** Which gray levels a shape uses (for the UI ramps) and whether it has passthrough fills. */
@@ -463,11 +500,13 @@ export function shapeGrayUsage(shape: SceneShape): GrayUsage {
   const levels = new Set<number>();
   let passthrough = 0;
   let bitmaps = 0;
+  let gradients = 0;
   for (const p of shape.paths || []) {
     const f = parseFill(p.fill).fill;
     if (f.kind === "gray") levels.add(f.level);
     else if (f.kind === "rgba") passthrough++;
     else if (f.kind === "bitmap") bitmaps++;
+    else if (f.kind === "gradient") gradients++;
   }
-  return { levels: [...levels].sort((a, b) => a - b), passthrough, bitmaps };
+  return { levels: [...levels].sort((a, b) => a - b), passthrough, bitmaps, gradients };
 }

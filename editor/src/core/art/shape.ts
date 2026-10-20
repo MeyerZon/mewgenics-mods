@@ -20,7 +20,9 @@
 import { IDENTITY, normalizePath, flattenSubpath, signedArea, subpathBounds } from "./geometry.ts";
 import type { Mat, SubPath, Edge } from "./geometry.ts";
 import { parseFill, fillToRgba } from "./scene.ts";
-import type { SceneShape, Finding } from "./scene.ts";
+import type { SceneShape, SceneGradient, Finding } from "./scene.ts";
+import { gradientMatrix, gradientFocal, gradientProblems, resolveStops, swfSpread } from "./gradient.ts";
+import type { ResolvedStop } from "./gradient.ts";
 import { BitWriter, TAG, nbitsForSigned, nbitsForUnsigned, writeRect, writeMatrix, writeRgba, tag } from "./swf-bits.ts";
 import type { Rect, Rgba } from "./swf-bits.ts";
 
@@ -31,6 +33,8 @@ export interface ShapeContext {
   shapeName?: string;
   /** quadratics per cubic (geometry default 4) */
   cubicSplits?: number;
+  /** scene.gradients, for "gradient:<id>" fills */
+  gradients?: Record<string, SceneGradient>;
 }
 
 export interface EncodedShape {
@@ -45,7 +49,10 @@ export interface EncodedShape {
   findings: Finding[];
 }
 
-type FillDef = { kind: "solid"; color: Rgba } | { kind: "bitmap"; id: number; matrix: Mat };
+type FillDef =
+  | { kind: "solid"; color: Rgba }
+  | { kind: "bitmap"; id: number; matrix: Mat }
+  | { kind: "gradient"; type: 0x10 | 0x12 | 0x13; matrix: Mat; stops: ResolvedStop[]; spread: 0 | 1 | 2; focal: number };
 interface LineDef {
   width: number;
   color: Rgba;
@@ -99,6 +106,17 @@ export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: Shap
         const t = p.transform || IDENTITY;
         // bitmap px → shape twips: scale 20 after the path transform; translate stays px (writeMatrix ×20)
         fillStyles.push({ kind: "bitmap", id: cid, matrix: [20 * t[0], 20 * t[1], 20 * t[2], 20 * t[3], t[4], t[5]] });
+        fillIdx = fillStyles.length;
+      }
+    } else if (pf.fill.kind === "gradient") {
+      const g = ctx.gradients ? ctx.gradients[pf.fill.id] : undefined;
+      const problems = g ? gradientProblems(g) : [];
+      if (!g) findings.push({ severity: "error", code: "gradient-missing", message: `fill references gradient "${pf.fill.id}" which is not in scene.gradients`, path: `${pat}.fill` });
+      else if (problems.length) findings.push({ severity: "error", code: problems[0]!.code, message: `gradient "${pf.fill.id}": ${problems[0]!.message}`, path: `${pat}.fill` });
+      else {
+        const focal = gradientFocal(g);
+        const type = g.kind === "linear" ? 0x10 : focal !== 0 ? 0x13 : 0x12;
+        fillStyles.push({ kind: "gradient", type, matrix: gradientMatrix(g, p.transform || IDENTITY), stops: resolveStops(g.stops), spread: swfSpread(g.spread), focal });
         fillIdx = fillStyles.length;
       }
     } else if (pf.error) {
@@ -160,6 +178,16 @@ export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: Shap
     if (f.kind === "solid") {
       w.u8(0x00);
       writeRgba(w, f.color);
+    } else if (f.kind === "gradient") {
+      w.u8(f.type);
+      writeMatrix(w, f.matrix);
+      // GRADIENT: SpreadMode(2) InterpolationMode(2, 0 = normal RGB) NumGradients(4), then RATIO + RGBA per stop
+      w.u8((f.spread << 6) | (f.stops.length & 0x0f));
+      for (const s of f.stops) {
+        w.u8(s.ratio);
+        writeRgba(w, s.color);
+      }
+      if (f.type === 0x13) w.u16(Math.round(f.focal * 256) & 0xffff); // FIXED8 focal point
     } else {
       w.u8(0x41); // clipped bitmap
       w.u16(f.id);

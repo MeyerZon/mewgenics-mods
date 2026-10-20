@@ -9,6 +9,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..", "..");
 const SANDBOX = join(REPO_ROOT, "mods", "dev-sandbox");
 const SVG_FIXTURE = join(HERE, "fixtures", "e2e_import.svg");
+const GRADIENT_FIXTURE = join(HERE, "fixtures", "e2e_gradient.svg");
 
 /** Enter Art mode on dev-sandbox and open the my_rat starter scene (24 frames). */
 async function openSandboxScene(page: Page) {
@@ -126,6 +127,21 @@ test.describe("Art mode — explorer & scene authoring", () => {
     // toast confirms the import, and a new shape row appears
     await expect(page.getByText(/imported e2e_import\.svg as shape/)).toBeVisible();
     await expect(page.locator(".artrow .id", { hasText: "e2e_import" })).toBeVisible();
+  });
+
+  test("an SVG with a linear gradient imports as a gradient fill (not gray:8): the shape shows a gradient chip, its path select reads gradient:ramp, the preview draws without errors", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await page.locator("input#art-svg-file").first().setInputFiles(GRADIENT_FIXTURE);
+    await expect(page.getByText(/imported e2e_gradient\.svg as shape/)).toBeVisible();
+    const row = page.locator(".artrow", { has: page.locator(".id", { hasText: "e2e_gradient" }) });
+    await expect(row.locator(".chip", { hasText: "1 gradient" })).toBeVisible();
+    await expect(page.locator('select[aria-label="fill of path 0"]')).toHaveValue("gradient:ramp");
+    await expect(page.locator(".pvcanvasbox canvas")).toBeVisible();
+    await page.waitForTimeout(300);
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text) || /shader|compile|link/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 });
 
@@ -292,6 +308,7 @@ test.afterAll(() => {
   try {
     rmSync(join(SANDBOX, "swfs"), { recursive: true, force: true });
     rmSync(join(SANDBOX, "art", "e2e_import.svg"), { force: true });
+    rmSync(join(SANDBOX, "art", "e2e_gradient.svg"), { force: true });
   } catch {
     /* non-fatal */
   }

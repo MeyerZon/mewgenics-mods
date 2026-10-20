@@ -2,7 +2,8 @@
 // draws our art. Layout in clip pixels: a checker bitmap at (0,0)-(96,64) — an 8×8 bitmap scaled ×8 over a path 12
 // texels wide, with a pure-yellow 1-texel border, so its last third is outside the bitmap — then 60×60 squares
 // centred at (150,30) the nested blink sprite (red → green → blue every 30 frames inside a one-frame holder),
-// (230,30) a gray:8 control and (310,30) gray:8 with cxform mul [1,0,0,1]. The yellow marker gives the screen
+// (230,30) a gray:8 control, (310,30) gray:8 with cxform mul [1,0,0,1] and (390,30) a linear gradient gray:0 → #ff2020
+// along clip x. The yellow marker gives the screen
 // scale and position; whether the magenta/cyan cells sit left or right inside it gives the orientation (enemies
 // face left: the clip is mirrored). Pure: works on any RGBA image (decodePng of the shot).
 
@@ -25,6 +26,11 @@ export interface ProbeShot {
   blink: "red" | "green" | "blue" | "other";
   control: Rgb;
   cx: Rgb;
+  /** the gradient square read in clip x: "drawn" (dark → red), "reversed", "flat" (one colour), "unknown" */
+  gradient: "drawn" | "reversed" | "flat" | "unknown";
+  /** its left / right patches (clip x 370 / 410) */
+  gradLeft: Rgb;
+  gradRight: Rgb;
   /** the marker's screen bbox */
   box: { x0: number; y0: number; x1: number; y1: number } | null;
 }
@@ -56,7 +62,7 @@ function classifyBlink(c: Rgb): ProbeShot["blink"] {
 }
 
 export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
-  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], box: null };
+  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], box: null };
   // 1. the yellow marker: the largest 8-connected region of near-yellow pixels (stray UI yellow elsewhere is ignored)
   const W = img.width, H = img.height;
   const mask = new Uint8Array(W * H);
@@ -127,7 +133,11 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   const edge: ProbeShot["edge"] = n && yel / n > 0.8 ? "clamp" : n && mc / n > 0.3 ? "repeat" : "unknown";
   // 5. the squares
   const blink = classifyBlink(patch(img, sx(150), sy(30)));
+  const gradLeft = patch(img, sx(370), sy(30)), gradRight = patch(img, sx(410), sy(30));
+  const dr = gradRight[0] - gradLeft[0];
+  const gradient: ProbeShot["gradient"] = dr > 60 ? "drawn" : dr < -60 ? "reversed" : Math.abs(dr) < 25 && gradRight[0] > 40 ? "flat" : "unknown";
   return {
+    gradient, gradLeft, gradRight,
     found: true, scale, mirrored,
     sampling: blendedRatio > 0.1 ? "smooth" : "nearest",
     blendedRatio, edge, blink,
@@ -148,6 +158,8 @@ export interface ProbeSummary {
   cxform: "applied" | "ignored" | "unknown";
   mirrored: boolean;
   blinks: ProbeShot["blink"][];
+  /** the linear gradient square across shots */
+  gradient: ProbeShot["gradient"];
 }
 
 function majority<T extends string>(xs: T[], fallback: T): T {
@@ -173,6 +185,7 @@ export function summarizeProbe(shots: ProbeShot[]): ProbeSummary {
     cxform: !ok.length ? "unknown" : cxApplied > ok.length / 2 ? "applied" : cxIgnored > ok.length / 2 ? "ignored" : "unknown",
     mirrored: ok.length ? majority(ok.map((s) => (s.mirrored ? "y" : "n")), "n") === "y" : false,
     blinks,
+    gradient: majority(ok.map((s) => s.gradient), "unknown"),
   };
 }
 
@@ -189,6 +202,7 @@ export function renderProbeReport(shots: ProbeShot[], s: ProbeSummary, labels: s
     `- bitmap sampling: **${s.sampling}**; outside the bitmap: **${s.edge}**`,
     `- PlaceObject cxform mul [1,0,0,1]: **${s.cxform}**`,
     `- orientation: ${s.mirrored ? "**mirrored** (the enemy faces left)" : "as authored"}`,
+    `- linear gradient fill (gray:0 → #ff2020 along clip x): **${s.gradient}** (left/right rgb per shot: ${shots.map((p) => `${p.gradLeft.join(",")} / ${p.gradRight.join(",")}`).join("; ") || "-"})`,
     `- marker found in ${s.found} of ${s.shots} shot(s)`,
     "",
   ].join("\n");

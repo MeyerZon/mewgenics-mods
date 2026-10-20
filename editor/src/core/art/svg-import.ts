@@ -9,10 +9,11 @@
 // viewBox (reported, optionally applied as a matrix). Everything else is reported as a
 // finding — gradients, filters, text, <use>, masks, clipPaths are never silently dropped.
 
-import { parseSvgTransform, multiply, IDENTITY } from "./geometry.ts";
+import { parseSvgTransform, multiply, IDENTITY, normalizePath, subpathBounds } from "./geometry.ts";
 import type { Mat } from "./geometry.ts";
 import { parseFill } from "./scene.ts";
-import type { ScenePath, Finding } from "./scene.ts";
+import type { ScenePath, Finding, SceneGradient, GradientStopDef } from "./scene.ts";
+import { MAX_STOPS_SHAPE3 } from "./gradient.ts";
 
 export interface XNode {
   name: string;
@@ -135,6 +136,8 @@ export interface ImportInfo {
 export interface ImportResult {
   ok: boolean;
   paths: ScenePath[];
+  /** gradients the paths reference as "gradient:<id>" (scene.gradients entries) */
+  gradients: Record<string, SceneGradient>;
   findings: Finding[];
   info: ImportInfo;
 }
@@ -153,6 +156,7 @@ interface SvgStyle {
 export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResult {
   const findings: Finding[] = [];
   const paths: ScenePath[] = [];
+  const gradients: Record<string, SceneGradient> = {};
   const skipped: Record<string, number> = {};
   const info: ImportInfo = { width: null, height: null, viewBox: null, elements: 0, skipped };
   let doc: XNode;
@@ -160,12 +164,12 @@ export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResu
     doc = parseXml(svgText);
   } catch (e) {
     findings.push({ severity: "error", code: "svg-parse", message: `could not parse XML: ${String(e instanceof Error ? e.message : e)}` });
-    return { ok: false, paths, findings, info };
+    return { ok: false, paths, gradients, findings, info };
   }
   const svg = doc.children.find((c) => localName(c.name) === "svg");
   if (!svg) {
     findings.push({ severity: "error", code: "svg-root", message: "no <svg> root element" });
-    return { ok: false, paths, findings, info };
+    return { ok: false, paths, gradients, findings, info };
   }
   info.width = lengthPx(svg.attrs.width);
   info.height = lengthPx(svg.attrs.height);
@@ -191,6 +195,12 @@ export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResu
 
   const defsIds = new Set<string>();
   collectIds(svg, defsIds);
+  const byId = new Map<string, XNode>();
+  collectNodes(svg, byId);
+  const viewW = info.viewBox ? info.viewBox[2]! : info.width ?? 100;
+  const viewH = info.viewBox ? info.viewBox[3]! : info.height ?? 100;
+  /** the local d of the element being emitted (objectBoundingBox gradients need its box) */
+  let currentD = "";
 
   const rootStyle: SvgStyle = {};
   walk(svg, rootMatrix, rootStyle, true);
@@ -281,6 +291,7 @@ export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResu
       return;
     }
     info.elements++;
+    currentD = d;
     const where = `${localName(el.name)}#${el.attrs.id || info.elements}`;
     const fill = resolvePaint(style.fill === undefined ? "#000000" : style.fill, style.fillOpacity, style.opacity, where, "fill");
     const strokeRaw = style.stroke;
@@ -304,7 +315,13 @@ export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResu
     const s = paint.trim();
     if (!s || s === "none") return null;
     if (s.startsWith("url(")) {
-      const id = s.slice(4, -1).replace(/^["']?#/, "").replace(/["']$/, "");
+      const id = s.slice(4, s.indexOf(")") > 0 ? s.indexOf(")") : s.length).trim().replace(/^["']?#/, "").replace(/["']$/, "");
+      const target = byId.get(id);
+      const tn = target ? localName(target.name).toLowerCase() : "";
+      if (role === "fill" && (tn === "lineargradient" || tn === "radialgradient")) {
+        const g = gradientFill(id, where);
+        if (g) return g;
+      }
       findings.push({ severity: "warning", code: "svg-paint-server", message: `${where} ${role} uses ${defsIds.has(id) ? "gradient/pattern" : "unknown paint server"} #${id}; replaced with gray:8 — flatten it or pick a level` });
       return role === "fill" ? "gray:8" : null;
     }
@@ -336,7 +353,138 @@ export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResu
     return null;
   }
 
-  return { ok: !findings.some((f) => f.severity === "error"), paths, findings, info };
+  /** The chain of a gradient and the gradients it inherits from (href / xlink:href), nearest first. */
+  function gradientChain(id: string): XNode[] {
+    const out: XNode[] = [];
+    let cur = byId.get(id);
+    while (cur && out.length < 8 && !out.includes(cur)) {
+      out.push(cur);
+      const href = cur.attrs.href || cur.attrs["xlink:href"];
+      cur = href && href.startsWith("#") ? byId.get(href.slice(1)) : undefined;
+    }
+    return out;
+  }
+
+  /** A scene fill for url(#id) on the current element: "gradient:<sceneId>", a solid colour (one stop), or null. */
+  function gradientFill(id: string, where: string): string | null {
+    const chain = gradientChain(id);
+    const attr = (name: string): string | undefined => {
+      for (const n of chain) if (n.attrs[name] !== undefined) return n.attrs[name];
+      return undefined;
+    };
+    const stopsNode = chain.find((n) => n.children.some((c) => localName(c.name).toLowerCase() === "stop"));
+    let stops: GradientStopDef[] = [];
+    if (stopsNode) {
+      let prev = 0;
+      for (const c of stopsNode.children) {
+        if (localName(c.name).toLowerCase() !== "stop") continue;
+        const st = styleMap(c.attrs.style);
+        const colour = st["stop-color"] ?? c.attrs["stop-color"] ?? "#000000";
+        const opacity = numOr(st["stop-opacity"] ?? c.attrs["stop-opacity"], 1);
+        let off = fraction(c.attrs.offset, 0);
+        off = Math.max(prev, Math.max(0, Math.min(1, off)));
+        prev = off;
+        stops.push({ offset: Math.round(off * 1e6) / 1e6, color: stopColour(colour, opacity, where) });
+      }
+    }
+    if (!stops.length) {
+      findings.push({ severity: "warning", code: "svg-gradient-empty", message: `${where}: gradient #${id} has no stops; replaced with gray:8` });
+      return "gray:8";
+    }
+    if (stops.length === 1) return stops[0]!.color;
+    if (stops.length > MAX_STOPS_SHAPE3) {
+      const n = stops.length;
+      stops = Array.from({ length: MAX_STOPS_SHAPE3 }, (_, i) => stops[Math.round((i * (n - 1)) / (MAX_STOPS_SHAPE3 - 1))]!);
+      findings.push({ severity: "warning", code: "svg-gradient-stops", message: `${where}: gradient #${id} has ${n} stops; DefineShape3 allows ${MAX_STOPS_SHAPE3}, resampled evenly` });
+    }
+    const linear = localName(chain[0]!.name).toLowerCase() === "lineargradient";
+    const bbox = (attr("gradientUnits") || "objectBoundingBox") !== "userSpaceOnUse";
+    const gt = attr("gradientTransform");
+    const gtm = gt ? parseSvgTransform(gt) : IDENTITY;
+    const coord = (name: string, def: string, axis: "x" | "y" | "r"): number => {
+      const raw = attr(name) ?? def;
+      if (bbox) return fraction(raw, 0);
+      const ref = axis === "x" ? viewW : axis === "y" ? viewH : Math.hypot(viewW, viewH) / Math.SQRT2;
+      return /%\s*$/.test(raw) ? (parseFloat(raw) / 100) * ref : num(raw);
+    };
+    const g: SceneGradient = linear
+      ? { kind: "linear", x1: coord("x1", "0%", "x"), y1: coord("y1", "0%", "y"), x2: coord("x2", "100%", "x"), y2: coord("y2", "0%", "y"), stops }
+      : { kind: "radial", cx: coord("cx", "50%", "x"), cy: coord("cy", "50%", "y"), r: coord("r", "50%", "r"), stops };
+    if (!linear && (attr("fx") !== undefined || attr("fy") !== undefined)) {
+      g.fx = attr("fx") !== undefined ? coord("fx", "50%", "x") : g.cx;
+      g.fy = attr("fy") !== undefined ? coord("fy", "50%", "y") : g.cy;
+      if (g.fx === g.cx && g.fy === g.cy) { delete g.fx; delete g.fy; }
+    }
+    const spread = attr("spreadMethod");
+    if (spread === "reflect" || spread === "repeat") g.spread = spread;
+    let t: Mat = gtm;
+    let sceneId = id.replace(/[^A-Za-z0-9_.-]/g, "_") || "gradient";
+    if (bbox) {
+      let b = null;
+      try { b = subpathBounds(normalizePath(currentD)); } catch { b = null; }
+      if (!b || !(b.xmax > b.xmin) || !(b.ymax > b.ymin)) {
+        findings.push({ severity: "warning", code: "svg-gradient-bbox", message: `${where}: gradient #${id} uses objectBoundingBox on an element with no area; replaced with gray:8` });
+        return "gray:8";
+      }
+      t = multiply([b.xmax - b.xmin, 0, 0, b.ymax - b.ymin, b.xmin, b.ymin], gtm);
+      sceneId = `${sceneId}_${info.elements}`;
+    }
+    if (!(t[0] === 1 && t[1] === 0 && t[2] === 0 && t[3] === 1 && t[4] === 0 && t[5] === 0)) g.transform = t.map((v) => Math.round(v * 1e6) / 1e6) as Mat;
+    while (gradients[sceneId] && JSON.stringify(gradients[sceneId]) !== JSON.stringify(g)) sceneId = `${sceneId}_`;
+    gradients[sceneId] = g;
+    return `gradient:${sceneId}`;
+  }
+
+  /** A stop colour as gray:N (opaque near-gray) or #rrggbb[aa]. */
+  function stopColour(colour: string, opacity: number, where: string): string {
+    const parsed = parseFill(colour.trim());
+    const a = Math.round(clamp01(opacity) * 255);
+    const hex = (v: number) => v.toString(16).padStart(2, "0");
+    if (parsed.error || (parsed.fill.kind !== "gray" && parsed.fill.kind !== "rgba")) {
+      findings.push({ severity: "warning", code: "svg-color", message: `${where}: unreadable stop colour "${colour}"; replaced with gray:8` });
+      return "gray:8";
+    }
+    if (parsed.fill.kind === "gray") {
+      if (a >= 255) return `gray:${parsed.fill.level}`;
+      const v = Math.round((parsed.fill.level * 255) / 15);
+      return `#${hex(v)}${hex(v)}${hex(v)}${hex(a)}`;
+    }
+    const f = parsed.fill;
+    const spread = Math.max(f.r, f.g, f.b) - Math.min(f.r, f.g, f.b);
+    const fa = Math.round((f.a * a) / 255);
+    if ((opts.quantizeGray ?? true) && spread <= (opts.grayTolerance ?? 8) && fa === 255) {
+      return `gray:${Math.max(0, Math.min(15, Math.floor(((f.r + f.g + f.b) / 3 / 255) * 15 + 0.5)))}`;
+    }
+    return `#${hex(f.r)}${hex(f.g)}${hex(f.b)}${fa < 255 ? hex(fa) : ""}`;
+  }
+
+  return { ok: !findings.some((f) => f.severity === "error"), paths, gradients, findings, info };
+}
+
+function collectNodes(node: XNode, out: Map<string, XNode>): void {
+  for (const c of node.children) {
+    if (c.attrs && c.attrs.id && !out.has(c.attrs.id)) out.set(c.attrs.id, c);
+    collectNodes(c, out);
+  }
+}
+
+/** "a:b; c:d" → { a: "b", c: "d" } */
+function styleMap(style: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of (style || "").split(";")) {
+    const i = part.indexOf(":");
+    if (i > 0) out[part.slice(0, i).trim().toLowerCase()] = part.slice(i + 1).trim();
+  }
+  return out;
+}
+
+/** "50%" → 0.5, "0.25" → 0.25 */
+function fraction(s: string | undefined, d: number): number {
+  if (s === undefined) return d;
+  const t = s.trim();
+  const v = parseFloat(t);
+  if (!Number.isFinite(v)) return d;
+  return t.endsWith("%") ? v / 100 : v;
 }
 
 function collectIds(node: XNode, ids: Set<string>): void {

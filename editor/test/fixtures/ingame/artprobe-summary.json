@@ -8,33 +8,45 @@
     "cxform": "applied",
     "mirrored": true,
     "blinks": [
-      "green",
+      "blue",
       "blue",
       "red",
       "green",
       "blue",
       "red"
-    ]
+    ],
+    "gradient": "drawn"
   },
   "shots": [
     {
       "label": "probe 1",
+      "gradient": "drawn",
+      "gradLeft": [
+        25,
+        3,
+        3
+      ],
+      "gradRight": [
+        194,
+        25,
+        25
+      ],
       "found": true,
       "scale": 1.71875,
       "mirrored": true,
       "sampling": "smooth",
-      "blendedRatio": 0.3383742911153119,
+      "blendedRatio": 0.37177063642091995,
       "edge": "clamp",
-      "blink": "green",
+      "blink": "blue",
       "control": [
-        206,
-        204,
-        204
+        135,
+        136,
+        137
       ],
       "cx": [
-        203,
-        203,
-        203
+        135,
+        0,
+        0
       ],
       "box": {
         "x0": 2528,
@@ -45,94 +57,138 @@
     },
     {
       "label": "probe 2",
-      "found": true,
-      "scale": 1.7083333333333333,
-      "mirrored": true,
-      "sampling": "smooth",
-      "blendedRatio": 0.7286284394034866,
-      "edge": "clamp",
-      "blink": "blue",
-      "control": [
-        136,
-        136,
-        135
+      "gradient": "drawn",
+      "gradLeft": [
+        24,
+        3,
+        3
       ],
-      "cx": [
-        141,
-        0,
-        0
+      "gradRight": [
+        194,
+        25,
+        25
       ],
-      "box": {
-        "x0": 2528,
-        "y0": 782,
-        "x1": 2691,
-        "y1": 890
-      }
-    },
-    {
-      "label": "probe 3",
       "found": true,
       "scale": 1.71875,
       "mirrored": true,
       "sampling": "smooth",
-      "blendedRatio": 0.6183574879227053,
+      "blendedRatio": 0.4980046208779668,
       "edge": "clamp",
-      "blink": "red",
+      "blink": "blue",
       "control": [
-        137,
         134,
-        136
+        133,
+        135
       ],
       "cx": [
-        136,
+        137,
         0,
         0
       ],
       "box": {
         "x0": 2528,
-        "y0": 782,
+        "y0": 781,
         "x1": 2692,
         "y1": 890
       }
     },
     {
-      "label": "probe 4",
+      "label": "probe 3",
+      "gradient": "drawn",
+      "gradLeft": [
+        25,
+        3,
+        3
+      ],
+      "gradRight": [
+        194,
+        23,
+        24
+      ],
       "found": true,
-      "scale": 1.7395833333333333,
+      "scale": 1.71875,
       "mirrored": true,
       "sampling": "smooth",
-      "blendedRatio": 0.3230612244897959,
+      "blendedRatio": 0.36840999789960094,
       "edge": "clamp",
-      "blink": "green",
+      "blink": "red",
       "control": [
+        136,
         137,
-        137,
-        138
+        133
       ],
       "cx": [
-        135,
+        137,
         0,
         0
       ],
       "box": {
-        "x0": 2405,
-        "y0": 842,
-        "x1": 2571,
-        "y1": 952
+        "x0": 2528,
+        "y0": 781,
+        "x1": 2692,
+        "y1": 891
+      }
+    },
+    {
+      "label": "probe 4",
+      "gradient": "drawn",
+      "gradLeft": [
+        26,
+        3,
+        3
+      ],
+      "gradRight": [
+        195,
+        24,
+        24
+      ],
+      "found": true,
+      "scale": 1.71875,
+      "mirrored": true,
+      "sampling": "smooth",
+      "blendedRatio": 0.320310859063222,
+      "edge": "clamp",
+      "blink": "green",
+      "control": [
+        49,
+        48,
+        50
+      ],
+      "cx": [
+        138,
+        0,
+        0
+      ],
+      "box": {
+        "x0": 2420,
+        "y0": 835,
+        "x1": 2584,
+        "y1": 945
       }
     },
     {
       "label": "probe 5",
+      "gradient": "drawn",
+      "gradLeft": [
+        42,
+        5,
+        5
+      ],
+      "gradRight": [
+        211,
+        26,
+        25
+      ],
       "found": true,
       "scale": 1.7395833333333333,
       "mirrored": true,
       "sampling": "smooth",
-      "blendedRatio": 0.25979591836734695,
+      "blendedRatio": 0.2620408163265306,
       "edge": "clamp",
       "blink": "blue",
       "control": [
+        134,
         138,
-        139,
         134
       ],
       "cx": [
@@ -142,27 +198,38 @@
       ],
       "box": {
         "x0": 2040,
-        "y0": 659,
+        "y0": 660,
         "x1": 2206,
         "y1": 769
       }
     },
     {
       "label": "probe 6",
+      "gradient": "drawn",
+      "gradLeft": [
+        43,
+        6,
+        5
+      ],
+      "gradRight": [
+        210,
+        26,
+        26
+      ],
       "found": true,
       "scale": 1.7395833333333333,
       "mirrored": true,
       "sampling": "smooth",
-      "blendedRatio": 0.26163265306122446,
+      "blendedRatio": 0.26612244897959186,
       "edge": "clamp",
       "blink": "red",
       "control": [
-        138,
-        133,
-        136
+        136,
+        135,
+        133
       ],
       "cx": [
-        137,
+        134,
         0,
         0
       ],

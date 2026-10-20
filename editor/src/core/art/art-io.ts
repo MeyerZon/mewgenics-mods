@@ -9,8 +9,9 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSy
 import { join, dirname, relative } from "node:path";
 import { MODS_DIR, REPO_ROOT, resolveModWritePath, isInside, touchesSaves } from "../repo.ts";
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
-import type { Scene, SceneShape, Finding } from "./scene.ts";
+import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
 import { importSvg } from "./svg-import.ts";
+import { adoptGradients } from "./gradient.ts";
 import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
 import type { RgbaImage } from "./png.ts";
@@ -203,6 +204,8 @@ export interface ImportSvgResult {
   ok: boolean;
   error?: string;
   shape?: SceneShape;
+  /** gradients the shape's fills reference; add them to scene.gradients (adoptGradients in gradient.ts) */
+  gradients?: Record<string, SceneGradient>;
   findings: Finding[];
   info?: ImportInfo;
 }
@@ -223,7 +226,7 @@ export function importSvgShape(args: ImportSvgArgs): ImportSvgResult {
   const res = importSvg(text, args.options || {});
   const shape: SceneShape = { paths: res.paths };
   if (source) shape.source = source;
-  return { ok: res.ok, shape, findings: res.findings, info: res.info };
+  return { ok: res.ok, shape, gradients: res.gradients, findings: res.findings, info: res.info };
 }
 
 export interface ImportSvgIntoSceneArgs {
@@ -247,7 +250,9 @@ export function importSvgIntoScene(args: ImportSvgIntoSceneArgs): { ok: boolean;
   if (rd.scene.shapes[args.shapeId] && !args.replace) return { ok: false, error: `shape "${args.shapeId}" exists (pass replace: true to overwrite it)`, findings: [] };
   const imp = importSvgShape({ svgText: args.svgText, mod: args.svgText === undefined ? args.mod : undefined, relPath: args.svgPath, options: args.options });
   if (!imp.ok || !imp.shape) return { ok: false, error: imp.error || "import failed", findings: imp.findings || [] };
-  const next = { ...rd.scene, shapes: { ...rd.scene.shapes, [args.shapeId]: imp.shape } };
+  const next: Scene = { ...rd.scene, shapes: { ...rd.scene.shapes }, gradients: { ...(rd.scene.gradients || {}) } };
+  delete next.shapes[args.shapeId];
+  next.shapes[args.shapeId] = adoptGradients(next, imp.shape, imp.gradients);
   const w = writeArtScene(args.mod, args.scenePath, next);
   if (!w.ok) return { ok: false, error: w.error || "write failed", findings: [...(imp.findings || []), ...((w as { findings?: Finding[] }).findings || [])] };
   return { ok: true, paths: imp.shape.paths.length, findings: imp.findings || [] };
@@ -498,6 +503,8 @@ export type GateLayout = "flat" | "nested" | "legacy";
 export interface GateVariantSpec {
   linkage: string;
   layout: GateLayout;
+  /** the square's fill (default gray:8) */
+  fill?: "gray" | "gradient";
   expect: string;
   note: string;
 }
@@ -512,12 +519,13 @@ export interface GateVariantSpec {
 export const SWF_GATE_VARIANTS: Record<string, GateVariantSpec> = {
   flat: { linkage: "_Append_AbilityIcon", layout: "flat", expect: "pass", note: "the fix: bare shape at depth 3, exactly like AbilityIcon's own labeled frames" },
   nested: { linkage: "_Append_AbilityIcon", layout: "nested", expect: "pass", note: "spec §8.1 alternative: the shape wrapped in a nested movieclip at depth 3" },
+  gradient: { linkage: "_Append_AbilityIcon", layout: "flat", fill: "gradient", expect: "pass", note: "the flat icon with a gray:2 → gray:14 linear gradient fill (DefineShape3 fill type 0x10): the game loads a gradient" },
   legacy: { linkage: "_Append_AbilityIcon", layout: "legacy", expect: "pass", note: "the pre-fix donor (shape at depth 1); it boots too, so the 2026-10-18 crash is not a boot-time merge fault" },
   probe: { linkage: "GateProbe", layout: "flat", expect: "pass", note: "load-only control: the same bytes under a non-_Append_ linkage, so nothing is merged" },
   missing: { linkage: "_Append_NoSuchClipXYZ", layout: "flat", expect: "harness-error", note: "merge witness: an unknown append target is logged and then stalls the boot before the console appears" },
 };
 
-export type GateVariant = "flat" | "nested" | "legacy" | "probe" | "missing" | "control";
+export type GateVariant = "flat" | "nested" | "gradient" | "legacy" | "probe" | "missing" | "control";
 
 export interface PrepareGateResult {
   ok: boolean;
@@ -566,7 +574,7 @@ export function prepareSwfGate(o: { mod?: string; variant: GateVariant }): Prepa
     return { ok: true, variant, mod: modName, written: [], removed, expect: "pass", note: "no gate files: a vanilla boot with the mod path present", next };
   }
   if (!spec) return { ok: false, error: "unreachable" };
-  const bytes = minimalGateSwf({ withAbc: false, linkage: spec.linkage, label: SWF_GATE_LABEL, layout: spec.layout });
+  const bytes = minimalGateSwf({ withAbc: false, linkage: spec.linkage, label: SWF_GATE_LABEL, layout: spec.layout, fill: spec.fill });
   const list = `// SWF gate variant "${variant}" (docs/swf-emitter-fix-spec.md §8): generated by prepareSwfGate — regenerate, do not edit\ngame [\n    ${SWF_GATE_FILE}\n]\n`;
   const payload = [bytes, new TextEncoder().encode(list)];
   const written: string[] = [];
