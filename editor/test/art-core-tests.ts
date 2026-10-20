@@ -2,8 +2,9 @@
 // importer, palette reader, mod IO). The emitter/reader/ABC/PNG tests live in
 // art-emitter-tests.ts. Wired into run-tests.ts.
 
-import { existsSync, rmSync, readFileSync } from "node:fs";
+import { existsSync, rmSync, readFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { MODS_DIR, REPO_ROOT } from "../src/core/repo.ts";
 import { parsePathData, normalizePath, flattenSubpath, signedArea, subpathBounds, matrixFromTransform, parseSvgTransform, multiply, apply, invert } from "../src/core/art/geometry.ts";
 import { validateScene, exampleScene, parseFill, grayLevelToByte, byteToGrayLevel, buildOrder, shapeGrayUsage, DEFAULT_ABC_MODE } from "../src/core/art/scene.ts";
@@ -17,6 +18,40 @@ import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 type LooseScene = Record<string, any>;
 
 export function runArtCoreTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
+  // ---- vanilla SWFs (read-only, from the git-ignored .extracted/swfs/; MEWGENICS_VANILLA_SWF_DIR overrides) ----
+  {
+    const dir = mkdtempSync(join(tmpdir(), "vanilla-swfs-"));
+    writeFileSync(join(dir, "swflist.gon"), 'loader loader.swf\n\ngame [\n    a.swf\n\t"cutscenes/b.swf" //this gets unloaded after it plays\n]\n');
+    writeFileSync(join(dir, "a.swf"), Buffer.from("FWS\u0011fake-swf-bytes", "latin1"));
+    const prev = process.env.MEWGENICS_VANILLA_SWF_DIR;
+    process.env.MEWGENICS_VANILLA_SWF_DIR = dir;
+    try {
+      const a = api as unknown as {
+        listVanillaSwfs: () => { ok: boolean; dir: string; files: { name: string; present: boolean; bytes?: number }[]; hint: string };
+        readVanillaSwf: (name: string) => { ok: boolean; bytes?: Uint8Array; error?: string; hint?: string };
+      };
+      test("listVanillaSwfs: names from swflist.gon (loader + the game block, quotes and comments stripped) with present/bytes; an extract hint", () => {
+        assert(typeof a.listVanillaSwfs === "function", "exported from api.ts");
+        const l = a.listVanillaSwfs();
+        assert(l.ok, JSON.stringify(l));
+        eq(l.files.map((f) => `${f.name}:${f.present}`).join(","), "loader.swf:false,a.swf:true,cutscenes/b.swf:false");
+        assert((l.files[1]!.bytes || 0) > 0, "bytes for a present file");
+        assert(/gpak\.py extract/.test(l.hint), l.hint);
+      });
+      test("readVanillaSwf: bytes of a listed, present file; absent -> error + extract hint; traversal and saves paths refused", () => {
+        assert(typeof a.readVanillaSwf === "function", "exported from api.ts");
+        const r = a.readVanillaSwf("a.swf");
+        assert(r.ok && !!r.bytes && Buffer.from(r.bytes).toString("latin1", 0, 3) === "FWS", JSON.stringify(r));
+        const missing = a.readVanillaSwf("loader.swf");
+        assert(!missing.ok && /gpak\.py extract/.test(missing.hint || ""), JSON.stringify(missing));
+        for (const bad of ["../x.swf", "a/../../x.swf", "C:/x.swf", "saves/x.swf", "a.txt", ""]) assert(!a.readVanillaSwf(bad).ok, `${bad} refused`);
+      });
+    } finally {
+      if (prev === undefined) delete process.env.MEWGENICS_VANILLA_SWF_DIR; else process.env.MEWGENICS_VANILLA_SWF_DIR = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
   console.log("\n# Art: geometry (SVG path → L/Q edges)");
   test("parsePathData absolutizes relative commands and shorthands", () => {
     const c = parsePathData("m10 10 h5 v5 l-5 0 z M0 0 c1 1 2 2 3 3 s1 1 2 2 q1 1 2 2 t1 1 a1 1 0 0 1 2 2") as Record<string, any>[];
@@ -245,6 +280,20 @@ export function runArtCoreTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     assert(f.ok && f.valid === false, "forced write records invalidity");
     const rd = api.readArtScene(tmpMod, "art/starter.scene.json");
     assert(!rd.ok && rd.findings.some((x) => x.code === "export-ref"), "read reports the error");
+    api.writeArtScene(tmpMod, "art/starter.scene.json", exampleScene("starter"));
+  });
+  test("importSvgIntoScene: imports an SVG as a new shape of a scene and saves it; an existing shape id is refused unless replace; the scene still validates", () => {
+    const a = api as unknown as { importSvgIntoScene?: (args: { mod: string; scenePath: string; shapeId: string; svgText?: string; replace?: boolean }) => { ok: boolean; error?: string; paths?: number } };
+    assert(typeof a.importSvgIntoScene === "function", "api.importSvgIntoScene exported");
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="0" y="0" width="10" height="10" fill="#888"/></svg>';
+    const r = a.importSvgIntoScene!({ mod: tmpMod, scenePath: "art/starter.scene.json", shapeId: "imported", svgText: svg });
+    assert(r.ok && r.paths === 1, JSON.stringify(r));
+    const rd = api.readArtScene(tmpMod, "art/starter.scene.json");
+    assert(rd.ok && !!rd.scene && !!rd.scene.shapes["imported"], "saved into the scene");
+    const again = a.importSvgIntoScene!({ mod: tmpMod, scenePath: "art/starter.scene.json", shapeId: "imported", svgText: svg });
+    assert(!again.ok && /exists/.test(again.error || ""), JSON.stringify(again));
+    assert(a.importSvgIntoScene!({ mod: tmpMod, scenePath: "art/starter.scene.json", shapeId: "imported", svgText: svg, replace: true }).ok, "replace");
+    assert(!a.importSvgIntoScene!({ mod: tmpMod, scenePath: "../x.scene.json", shapeId: "y", svgText: svg }).ok, "path guard");
     api.writeArtScene(tmpMod, "art/starter.scene.json", exampleScene("starter"));
   });
   test("buildSwf writes swfs/<name>.swf + swflist.gon.append, self-checks with the reader, is idempotent", () => {

@@ -52,7 +52,7 @@ the linked docs; this page is the map.
 
 ### The toolkit we built (`editor/`)
 - A data-layer mod editor: a GON engine + overlay/merge engine + 4-check validator as the single source of truth, a
-  hand-rolled **MCP server** (`mewgenics-editor`, 13 tools, for agents), and a React + TypeScript **web UI** built by
+  hand-rolled **MCP server** (`mewgenics-editor`, 23 tools incl. art authoring, for agents), and a React + TypeScript **web UI** built by
   Vite (Data + Art modes, IDE-style, with onboarding; zod at the `/api` boundary — `editor-ts-react-plan.md`). **Art mode** has a hand-written SWF emitter, SVG import, and a
   WebGL in-game-faithful preview. Validated: 77 unit + 33 Playwright e2e tests, typecheck clean. Overview:
   **[../README.md](../README.md)**; art design/plan: **[art-preview-plan.md](art-preview-plan.md)**.
@@ -81,7 +81,8 @@ the linked docs; this page is the map.
   build 25143593 (no code reads it besides `ProcessCmds`); save names come from the slot list / test director
   (`engine-map.md` "Save safety"), so the harness now hashes every `*.sav` in the saves dir and allows only the
   local/test families to change.
-- **Ruffle (WASM)** as an optional dep to preview *vanilla* SWFs in-editor — not decided (would go through the dep-gate).
+- **Ruffle (WASM)** as an optional dep to preview *vanilla* SWFs in-editor — approved by the owner (install go
+  2026-10-20); lands through the dep-gate in the art build-out (`TODO.md` "Larger build-out").
 - Not built: **animation-clip authoring** (DefineSprite timelines end-to-end), a **cat-rig** (part-indexed) UI, art MCP tools.
 - **Per-build fragility** (now a procedure, not a dead end): everything native is pinned to build `25143593` through
   `bindings/25143593.json`; a game update disables the framework (fails closed, so it won't crash/corrupt) until the
