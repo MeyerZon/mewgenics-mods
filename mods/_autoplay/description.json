@@ -1,0 +1,7 @@
+{
+  "title": "Autoplay (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for the in-game harness: gives the player cat the Uncontrollable passive so a fight resolves without input (combat only; the meta flow still waits for the player). Load it next to the mod under test: `mods: <mod>, _autoplay`. Never for play.",
+  "requirements": []
+}

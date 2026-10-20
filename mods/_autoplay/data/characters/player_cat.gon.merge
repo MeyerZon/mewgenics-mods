@@ -1,0 +1,8 @@
+// Deep-merged into data/characters/player_cat.gon: the player cat gets the Uncontrollable passive (the status
+// class glaiel::Uncontrollable, used by BrainChip in items/head_items.gon and the disorders), so its turns are
+// taken by the AI and a harness fight reaches the next round unattended. Test-only; never ship or play with it.
+PlayerCat {
+	passives {
+		Uncontrollable 1
+	}
+}
