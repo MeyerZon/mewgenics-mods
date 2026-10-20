@@ -3696,7 +3696,12 @@
       "value": "0x10",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "ApplicationBase_appmain",
+          "pattern": "80 7E ?? 00 0F",
+          "dispAt": 2
+        },
+        "note": "cmp byte [rsi+0x10],0 followed by a jcc rel32: the main loop's running test (both such tests carry 0x10)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3719,7 +3724,13 @@
       "value": "0xdd0",
       "ctype": "SDL_Window*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Settings_Load",
+          "pattern": "48 8B 89 ?? ?? ?? ??",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rcx,[rcx+0xdd0] before SDL_SetWindowTitle(app->window, \"Mewgenics!\"); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3741,7 +3752,13 @@
       "value": "0xc8",
       "ctype": "std::string*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DebugConsole_Execute",
+          "pattern": "48 8B D0 49 8D 8D ?? ?? ?? ?? E8",
+          "dispAt": 6,
+          "dispSize": 4
+        },
+        "note": "lea rcx,[r13+0xc8] = &out vector, before the push_back call (3 occurrences, all 0xc8)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3764,7 +3781,13 @@
       "value": "0xd0",
       "ctype": "std::string*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DebugConsole_Execute",
+          "pattern": "49 83 85 ?? ?? ?? ?? 20",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "add qword [r13+0xd0],0x20: the vector's end advances by one std::string (3 occurrences, all 0xd0)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3786,7 +3809,12 @@
       "value": "0x18",
       "ctype": "Scene*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 79 ??",
+          "dispAt": 3
+        },
+        "note": "mov rdi,[rcx+0x18]: Component+0x18 (the entity/scene hop); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3808,7 +3836,12 @@
       "value": "0x8",
       "ctype": "EntityManager*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 5F ??",
+          "dispAt": 3
+        },
+        "note": "mov rbx,[rdi+0x8]; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3830,7 +3863,12 @@
       "value": "0x20",
       "ctype": "void*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 43 ??",
+          "dispAt": 3
+        },
+        "note": "mov rax,[rbx+0x20] (2 occurrences, both 0x20)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3852,7 +3890,13 @@
       "value": "0x1f90",
       "ctype": "RefArray*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "TurnControl_NextTurn",
+          "pattern": "48 8B 43 ?? 48 8B 88 ?? ?? ?? ??",
+          "dispAt": 7,
+          "dispSize": 4
+        },
+        "note": "mov rax,[rbx+0x20]; mov rcx,[rax+0x1f90]: the Character RefArray (preceded by mov edx,0x1f9 = the type id * 16); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3875,7 +3919,12 @@
       "value": "0xc",
       "ctype": "uint32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "83 78 ?? 00",
+          "dispAt": 2
+        },
+        "note": "cmp dword [rax+0xc],0 (2 occurrences, both 0xc)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3897,7 +3946,12 @@
       "value": "0x10",
       "ctype": "Character**",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 40 ??",
+          "dispAt": 3
+        },
+        "note": "mov rax,[rax+0x10] (2 occurrences, both 0x10)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -3919,7 +3973,13 @@
       "value": "0x158",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "TurnControl_NextTurn",
+          "pattern": "FF 86 ?? ?? ?? ??",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "inc dword [rsi+0x158] (rsi = this): the round counter; the second FF 86 is +0xeb4"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c"
@@ -4852,7 +4912,12 @@
       "value": "0x28",
       "ctype": "SceneManager*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "AddComponent_TacticsTest",
+          "pattern": "48 89 47 ??",
+          "dispAt": 3
+        },
+        "note": "mov [rdi+0x28],rax: the new component's scene manager; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -4876,7 +4941,13 @@
       "value": "0x4b0",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Scene_CreateEntity",
+          "pattern": "80 B9 ?? ?? ?? ?? 00",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "cmp byte [rcx+0x4b0],0: the first instruction (a destroyed scene creates nothing)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -4957,7 +5028,12 @@
       "value": "0x18",
       "ctype": "Scene*",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Component_GetGame",
+          "pattern": "48 8B 59 ??",
+          "dispAt": 3
+        },
+        "note": "mov rbx,[rcx+0x18]: SceneManager->mainScene; unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -4981,7 +5057,13 @@
       "value": "0x780",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DevMenu_TacticsTest_lambda",
+          "pattern": "C6 80 ?? ?? ?? ?? 01",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov byte [rax+0x780],1: the first flag the button sets on its director"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -5005,7 +5087,14 @@
       "value": "0x78c",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DevMenu_TacticsTest_lambda",
+          "pattern": "C6 80 ?? ?? ?? ?? 01",
+          "dispAt": 2,
+          "dispSize": 4,
+          "nth": 1
+        },
+        "note": "mov byte [rax+0x78c],1: the second byte flag the button sets (nth 1)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -5029,7 +5118,13 @@
       "value": "0x6dc",
       "ctype": "int32",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "Character_BeginTurn",
+          "pattern": "48 8B 05 ?? ?? ?? ?? 45 33 ED 44 39 A8 ?? ?? ?? ??",
+          "dispAt": 13,
+          "dispSize": 4
+        },
+        "note": "mov rax,[MewDirector_global]; xor r13d,r13d; cmp [rax+0x6dc],r13d: the act check at the start of a turn; the lambda's C7 80 ?? ?? ?? ?? 01 00 00 00 is the writer"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -5053,7 +5148,13 @@
       "value": "0x4db",
       "ctype": "char",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "SceneManager_CreateScene",
+          "pattern": "66 C7 83 ?? ?? ?? ?? 00 00 C6 83 ?? ?? ?? ?? 00",
+          "dispAt": 11,
+          "dispSize": 4
+        },
+        "note": "mov word [rbx+0x4d8],0; mov byte [rbx+0x4db],0: the fresh scene's flags (the displacement of the second store); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_enter_scene"
@@ -5165,7 +5266,13 @@
       "value": "0x178",
       "ctype": "uint64_t[4]",
       "anchors": {
-        "unanchored": true
+        "witness": {
+          "function": "DevMenu_TacticsTest_lambda",
+          "pattern": "B9 ?? ?? ?? ?? 48 03 08 E8",
+          "dispAt": 1,
+          "dispSize": 4
+        },
+        "note": "mov ecx,0x178; add rcx,[rax]: the TLS block offset the button's reseed targets (an imm32, read as the value at dispAt); unique"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_seed_rng"
@@ -5344,6 +5451,79 @@
         ".analysis/decompiled/fn_0x94eba0.c",
         ".analysis/decompiled/opencaller_c1_0x1be1a0.c",
         ".analysis/decompiled/MewDirector_start_0x3aefd0.c"
+      ]
+    },
+    {
+      "name": "DevMenu_TacticsTest_lambda",
+      "kind": "function",
+      "rva": "0x32fc00",
+      "signature": {
+        "pattern": "40 53 48 83 EC 40 48 8B D9 48 8B 49 08 E8 ?? ?? ?? ?? C6 80 80 07 00 00 01 48 8B 4B 08 E8 ?? ?? ?? ?? C6",
+        "exactLen": 35,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 14,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 30,
+            "len": 4,
+            "why": "E8 rel32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "std::function body of the dev menu's TacticsTest button (0x110 bytes, .pdata, no E8 caller): reseeds the RNG, flags the director (+0x780, +0x78c, +0x6dc), CreateScene(\"Battle\") + AddComponent<TacticsTest>. Rung 1 (signature) only — no strings, no caller; a body-changing build reports it failed together with the three offsets it witnesses.",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Component_GetGame",
+            "target": "0x908e0"
+          },
+          {
+            "ordinal": 1,
+            "name": "Component_GetGame",
+            "target": "0x908e0"
+          },
+          {
+            "ordinal": 2,
+            "name": "Rng_Reseed",
+            "target": "0x94f0a0"
+          },
+          {
+            "ordinal": 3,
+            "name": "SceneManager_CreateScene",
+            "target": "0x9d4950"
+          },
+          {
+            "ordinal": 4,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 5,
+            "name": "AddComponent_TacticsTest",
+            "target": "0x31c3e0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 272,
+          "calls": 6,
+          "ripRefs": 2,
+          "resyncs": 0
+        },
+        "prologue": "40 53 48 83 EC 40 48 8B D9 48 8B 49"
+      },
+      "consumers": [
+        "docs only: witness host for MewDirector_devFightFlag, MewDirector_devFightMode, Tls_rngState"
+      ],
+      "exposure": [],
+      "evidence": [
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        "docs/engine-map.md#dev-scenes-and-run-entry"
       ]
     }
   ]
