@@ -58,3 +58,12 @@ applies the status. The native half (`native/mods/jokers-luck`) registers the na
 
 Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses
 (new status tick logic, new systems, new UI) needs the native layer (`native/`).
+
+## Test-only overlays
+
+`mods/_autoplay/` is not content: its one overlay, `data/characters/player_cat.gon.merge`, gives `PlayerCat` the
+`Uncontrollable` passive (the status class BrainChip and the disorders use), so in a harness fight the player cat's
+turns are taken by the AI and the fight resolves without input. Load it next to the mod under test
+(`mods: <mod>, _autoplay` in the `.mewtest` header); never play with it. The validator reports
+`merge-target-missing` for `PlayerCat.passives.Uncontrollable` because the base `passives` block is empty — the
+merge adds it, which is the point.

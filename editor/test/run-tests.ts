@@ -15,6 +15,7 @@ import { append, deepMerge, patchMerge } from "../src/core/overlay/merge.ts";
 import { applyGonOverlay } from "../src/core/overlay/overlay.ts";
 import { parsePolicy } from "../src/core/overlay/policy.ts";
 import { validateMod } from "../src/core/validate/validator.ts";
+import { previewMerge } from "../src/core/preview-merge.ts";
 import { EXTRACTED_DATA, REPO_ROOT, MODS_DIR } from "../src/core/repo.ts";
 import { makeTestFilter } from "./filter.ts";
 import { runGonRoundTripTests } from "./gon-roundtrip-tests.ts";
@@ -278,6 +279,27 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
     assert(!codes(validateMod("jokers-luck")).includes("native-build-unknown"), "default on this machine (known build or no exe)");
   });
 }
+
+// ---- 4c. mods/_autoplay: the auto-resolve overlay (TDD target 3; T1 against the real base) ----
+if (BASE_READY) {
+  test("_autoplay validates with zero errors (test-only overlay: PlayerCat passives Uncontrollable 1)", () => {
+    const r = validateMod("_autoplay");
+    assert(r.ok, `expected ok, got ${r.counts.errors} errors: ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
+    assert(!r.findings.some((f) => f.code === "mod-missing" || f.code === "mod-empty"), `mod present and non-empty: ${r.findings.map((f) => f.code).join(",")}`);
+  });
+  test("_autoplay merge preview: PlayerCat.passives gains Uncontrollable 1 and no other top-level entry is touched", () => {
+    const p = previewMerge("_autoplay", "data/characters/player_cat.gon.merge");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
+    eq(p.mode, "merge");
+    assert(p.baseExists, "base data/characters/player_cat.gon present");
+    eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "PlayerCat:changed");
+    const eff = p.touched[0]!.effective || "";
+    assert(/passives\s*\{[^}]*Uncontrollable\s+1/.test(eff), `effective PlayerCat has passives { Uncontrollable 1 }: ${eff.slice(0, 400)}`);
+    assert(!/Uncontrollable/.test(p.touched[0]!.base || ""), "the base PlayerCat has no Uncontrollable passive");
+    eq(p.effectiveEntryCount, p.baseEntryCount, "merge changes an entry, adds none");
+  });
+} else console.log("  (skipped: base data not extracted; _autoplay is checked against data/characters/player_cat.gon)");
 
 // ---- 4b. Validator fixtures (synthetic base; one mod per finding code; T0) ----
 {
