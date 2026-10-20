@@ -265,6 +265,11 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
     assert(r.ok, "a warning keeps the mod valid for the data layer");
     eq(new Set(w.map((f) => f.message)).size, w.length, "one warning per name per file");
   });
+  test("_jokersluck-test (test-only overlay) validates: JokersLuck resolves as a registered name under StatusOnBattleStart", () => {
+    const r = validateMod("_jokersluck-test", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } });
+    assert(r.ok, `expected ok, got ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
+    assert(!r.findings.some((f) => f.code === "unknown-status" || f.code === "unknown-component"), r.findings.map((f) => f.code).join(","));
+  });
   test("native-build-unknown: nothing when the build is known, when no exe is installed, or when the mod uses no native names", () => {
     const codes = (r: { findings: { code: string }[] }) => r.findings.map((f) => f.code);
     assert(!codes(validateMod("jokers-luck", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } })).includes("native-build-unknown"), "known");

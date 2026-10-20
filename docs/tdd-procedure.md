@@ -23,7 +23,10 @@ layer, which tier of test covers what, where a human still has to look, and what
 - **Data mods** (`mods/`): the validator (reference integrity, localization, overlay targets, merge preview) is the T0/T1
   test; the harness load smoke is the T2 test (no `NO_*_NAMED` / `GON_ERROR` marker, framework active).
 - **Native framework**: the signature scanner is a pure unit with 13 host tests; everything else is verified by the
-  harness run (15 symbols resolve, hooks install, Joker's Luck registers).
+  harness run (the symbols resolve, hooks install, Joker's Luck registers) and, since 2026-10-20, in a real fight:
+  `mods/jokers-luck/tests/luck-rerolls.mewtest` enters a test fight (`enter TacticsTest`), gives the cats the status
+  at battle start (`mods/_jokersluck-test/`, test-only) and asserts the stacks change across rounds
+  (`expect stacks JokersLuck on 0 varied`).
 - **Harness DLL**: 46 host tests for the pure modules (incl. the watchdog's exit decision); the glue by the real runs
   recorded in `docs/ingame-testing.md`.
 - **Bindings** (`bindings/<build>.json`): T0 on fake PE images (scanner parity with `fw_sig.c`, wildcarder, RTTI /

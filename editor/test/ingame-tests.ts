@@ -311,6 +311,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(r.events.some((e) => e.ev === "expect" && e.kind === "round" && /round 2/.test(e.detail || "")), "expect round >= 2 saw round 2");
       eq(r.expects.failed, 0); eq(r.end!.code, 0);
     });
+    test("OBSERVED 2026-10-20 fixture: luck-rerolls — the native JokersLuck status rerolls its stacks every turn (result-luck-rerolls.jsonl)", () => {
+      const r = parseResults(fixture("result-luck-rerolls.jsonl")) as unknown as { events: { ev: string; kind?: string; ok?: boolean; detail?: string; list?: { name: string; statuses: string[]; stacks: number[] }[] }[]; expects: { passed: number; failed: number }; end: { code: number } | null };
+      const dumps = r.events.filter((e) => e.ev === "units");
+      eq(dumps.length, 4);
+      const luck = dumps.map((d) => { const u = d.list![0]!; const k = u.statuses.indexOf("JokersLuck"); return k < 0 ? null : u.stacks[k]!; });
+      assert(luck.every((v) => v !== null), `JokersLuck on the first cat in every dump: ${JSON.stringify(luck)}`);
+      eq(luck[0], 1, "1 stack at battle start (StatusOnBattleStart)");
+      assert(new Set(luck).size >= 2, `the stacks change across rounds: ${JSON.stringify(luck)}`);
+      const varied = r.events.find((e) => e.ev === "expect" && e.kind === "stacks" && /varied/.test(e.detail || "") || (e.ev === "expect" && e.kind === "stacks" && /distinct/.test(e.detail || "")));
+      assert(!!varied && varied.ok === true, `expect stacks varied ok: ${JSON.stringify(varied)}`);
+      assert(r.events.some((e) => e.ev === "expect" && e.kind === "noconsole" && e.ok === true), "bind JokersGambit was accepted (no 'No command named')");
+      eq(r.expects.failed, 0); eq(r.end!.code, 0);
+    });
     test("popup events are collected as result.popups (title, text, frame); none -> empty", () => {
       const text = [
         '{"ev":"start","harness":"mewtest 0.1.0","t":0,"frame":0}',
