@@ -212,6 +212,10 @@ swapped), and hooks `Status_ApplyByName` (handles the new name: merge into an ex
 template ctor and swap the vtable), `get_status_type` and the flags lookup (alias the new name to the template so
 category and hit-effect rules apply), and `Character::BeginTurn` (dispatches `on_turn_begin` to carriers).
 `FW_SetStatusStacks` writes +0x5c, calls slot 170, sets `touched_passives`, and removes at 0.
+The rules a definition must satisfy — at most 8 definitions (one vtable-thunk row each), a non-empty name of at
+most 15 bytes (the std::string SSO buffer, so the alias rewrite never reallocates), template `LuckUp` only, unique
+names — and the alias rewrite itself live in the pure `fw_status_rules.c` (host tests `test_status_rules.c`);
+`FW_RegisterStatus` validates against them before it claims the name with Mewjector.
 Verified in process on 2026-10-17: all hooks installed, Mewjector integrity ALL OK, `JokersLuck` registered with
 type id 0x1000. Combat behavior still needs a played fight to confirm.
 

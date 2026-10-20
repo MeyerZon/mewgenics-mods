@@ -106,7 +106,8 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
-  and generated tables, the harness's modules; 65 checks, `-Werror`), no game needed. Each suite is also runnable as
+  and generated tables, the status definition rules, the harness's modules; 79 checks, `-Werror`), no game needed.
+  `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
 - `tools/install-mewjector.bat` installs a user-verified Mewjector `version.dll` + `native/chainloader.ini` into the
   game folder.
