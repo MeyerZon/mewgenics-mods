@@ -1,0 +1,9 @@
+mods: _autoplay
+timeout: 60s
+# T2 load smoke for the test-only overlay: the game boots to the main menu with the overlay applied and reports no
+# NO_*_NAMED / GON_ERROR marker (the runner's log-errors check). The unattended-fight check (round 2 without input)
+# lands once `enter TacticsTest` reaches a fight (TODO target 1).
+wait frames 120
+cmd listcmds
+expect console "Executed: listcmds" within 5
+quit
