@@ -1,0 +1,4 @@
+Foo {
+	variant_of Spin
+	template Nope
+}

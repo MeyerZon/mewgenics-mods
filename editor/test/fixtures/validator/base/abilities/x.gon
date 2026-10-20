@@ -1,0 +1,14 @@
+// Synthetic base: one ability.
+Spin {
+	meta {
+		name ABILITY_SPIN
+		class Fighter
+	}
+	template Melee
+	damage 10
+	damage_instance {
+		effects {
+			LuckUp 1
+		}
+	}
+}
