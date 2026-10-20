@@ -58,6 +58,8 @@ clean: false                     # default false: ExitProcess right after the en
                                  # flag and let the game shut down; the DLL terminates after 3 s, the runner kills after 5 s
 
 cmd <rest of line verbatim, 1..4078 bytes>       run a debug-console command
+enter <SceneName>                                replay a dev-menu scene entry (TacticsTest only); waits for the console
+                                                 like cmd; once per script; an unknown name fails before launch
 wait frames|turns|ms <N>                         N >= 1; turns = TurnControl::NextTurn calls
 expect console "<substr>" [within <frames>]      a console line since the last cmd contains substr
 expect noconsole "<substr>"                      no such line since the last cmd
@@ -81,6 +83,7 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"...","out":"...","pid":N,"hide":1,"timeout_ms":N,"clean":0}
 {"ev":"script_error","line":N,"msg":"..."}
 {"ev":"cmd","line":N,"text":"..."}
+{"ev":"enter","line":N,"name":"TacticsTest","ok":true,"detail":"scene=0x… entity=0x… component=0x… director=0x… …"}
 {"ev":"console","text":"..."}
 {"ev":"turn","n":N,"round":N}
 {"ev":"wait","line":N,"kind":"frames","n":N,"actual":N}
@@ -88,7 +91,7 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"]}]}
 {"ev":"log","text":"..."}
 {"ev":"crash","code":"0xC0000005","addr":"0x...","module":"Mewgenics.exe","rva":"0x...","tid":N}
-{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
+{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
 ```
 
 Harness exit codes: `0` pass, `1` an expect failed or `quit 1`, `2` script timeout, `3` crash, `4` harness error
@@ -178,7 +181,9 @@ under `mods/`.
   `safety-violation`. This read lives in `editor/src/core/ingame/savecheck.ts` only, approved by the owner on
   2026-10-18 for this purpose; the editor's no-saves rules are not loosened anywhere else.
 - The harness DLL is inert without `-mewtest` and without `-savesuffix` (the framework already refuses vanilla
-  launches), and never writes anything but its result file and `mod_logs\mewtest.log`.
+  launches), and never writes anything but its result file and `mod_logs\mewtest.log`. `enter` is the one directive
+  that can make the game open a save: the test director's `test00.sav`, whose name is hard-coded in the game
+  function the harness calls (never a `steamcampaign` slot); the save-set check allows that family.
 
 ## Game-state assumptions (verified 2026-10-18 on build 25143593)
 
@@ -194,10 +199,17 @@ under `mods/`.
 - A hidden window keeps the simulation running: with `hide: true` the harness hides the window at frame 0 and
   sets the swap interval to 0, after which the game ran ~180 frames per second (487 frames in 2.6 s) and every
   expectation behaved as with a visible window.
-- Combat commands need a run in progress on the `dev` save. **Entering that run from the main menu through the
-  console is still open** (no console command does it; the menu is mouse-driven). Until it is solved, committed
-  scripts assert only main-menu-safe things, the unit walk (`dump`, `expect status`, `expect units`) is
-  exercised only with `available:false` / `0 units`, and the crash path (`cmd crash`) is unverified in-game.
+- Combat commands need a run in progress. No console command enters one (the menu is mouse-driven); `enter
+  TacticsTest` replays the dev menu's "TacticsTest" button inside the DLL instead (`docs/engine-map.md` "Dev scenes
+  and run entry"): the test director on `test00.sav` is created the way the game's own load path does it, the
+  button's flags are set on it, then a `Battle` scene with the `TacticsTest` driver is created. OBSERVED 2026-10-20:
+  the entry itself works (scene, entity, component, director created; no assert, no crash; every save file
+  unchanged), and `TacticsTest::init` then asks `MewDirector::DebugGenAdventureCats` for the party, which throws
+  `no saved winning teams - win at least one run first!` on a fresh `test00.sav` — the unresolved last step (see
+  `TODO.md` target 1). Until it is, committed scripts assert only main-menu-safe things and the unit walk
+  (`dump`, `expect status`, `expect units`) is exercised only with `available:false` / `0 units`. The crash path
+  **is** verified in-game now: an access violation inside the entry produced the `crash` event, exit 3 and the
+  game's own crash log, with no dialog.
 - The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
   mode" above: the game does not shut itself down when its running flag is cleared, so nothing flushes). Load-time
   markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.
