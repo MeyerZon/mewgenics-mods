@@ -82,6 +82,19 @@ switch (mode) {
     // an older harness: inert, no result file, the game sits at the main menu until the backstop kills it
     setInterval(() => {}, 1000);
     break;
+  case "enter-pass":
+    // the harness replayed the dev menu's TacticsTest entry, a turn passed, two units were counted
+    writeResult([start, { ev: "enter", line: 3, name: "TacticsTest", ok: true, detail: "scene=0x1 entity=0x2 component=0x3", t: 1, frame: 1 }, { ev: "turn", n: 1, round: 1, t: 2, frame: 2 }, { ev: "wait", line: 4, kind: "turns", n: 1, actual: 1, t: 2, frame: 2 }, { ev: "expect", line: 5, kind: "units", arg: ">= 2", ok: true, detail: "2 units", t: 3, frame: 3 }, end(0, "quit", 1, 0)]);
+    process.exit(0);
+    break;
+  case "enter-fail":
+    writeResult([start, { ev: "enter", line: 3, name: "TacticsTest", ok: false, detail: "no MewDirector (the boot-time test director is missing)", t: 1, frame: 1 }, end(1, "enter_failed")]);
+    process.exit(1);
+    break;
+  case "enter-unavailable":
+    writeResult([start, { ev: "enter", line: 3, name: "TacticsTest", ok: false, detail: "symbols missing: FW_SYM_AddComponent_TacticsTest", t: 1, frame: 1 }, end(4, "enter_unavailable")]);
+    process.exit(4);
+    break;
   case "fail":
     writeResult([start, { ev: "cmd", line: 1, text: "bind X", t: 1, frame: 1 }, { ev: "console", text: 'No command named "bind" found', t: 1, frame: 1 }, { ev: "expect", line: 2, kind: "noconsole", arg: "No command named", ok: false, detail: "found in console line 0", t: 2, frame: 2 }, end(1, "quit", 0, 1)]);
     process.exit(1);

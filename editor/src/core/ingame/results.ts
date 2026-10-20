@@ -29,6 +29,14 @@ export interface ScriptErrorEvent extends ResultEvent {
   msg?: string;
 }
 
+/** `enter`: the harness replayed (or refused) a dev-menu scene entry. */
+export interface EnterEvent {
+  line: number;
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
 export interface ExpectFailure {
   line: number;
   kind: string;
@@ -53,6 +61,8 @@ export interface ResultSummary {
   expects: { passed: number; failed: number; failures: ExpectFailure[] };
   /** the last units snapshot */
   units: ResultEvent | null;
+  /** the enter event (one per script), null when the script had none */
+  enter: EnterEvent | null;
 }
 
 export function parseResults(text: string | null | undefined): ResultSummary {
@@ -69,6 +79,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
     consoleLines: [],
     expects: { passed: 0, failed: 0, failures: [] },
     units: null,
+    enter: null,
   };
   if (typeof text !== "string") return r;
 
@@ -97,6 +108,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
       case "turn": r.turns++; break;
       case "console": r.consoleLines.push(String(e.text ?? "")); break;
       case "units": r.units = e; break;
+      case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "expect":
         if (e.ok) r.expects.passed++;
         else {

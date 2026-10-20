@@ -188,11 +188,14 @@ export function decideVerdict(input: VerdictInput): { verdict: Verdict; reason: 
   if (crashReports.length) return { verdict: "crash", reason: `crash report(s) written: ${crashReports.join(", ")}` };
   if (code !== null && code !== 0 && code > 255) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   if (code !== null && code < 0) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
+  const enter = result.enter;
   if (code === 4 || result.scriptError || (result.end && result.end.code === 4)) {
     const fwInactive = fw && fw.present && !fw.active;
     const sigs = fw && Array.isArray(fw.signatureFailures) ? fw.signatureFailures : [];
     const detail = result.scriptError
       ? `script error at line ${result.scriptError.line}: ${result.scriptError.msg}`
+      : result.end && result.end.reason === "enter_unavailable" && enter
+        ? `enter ${enter.name} unavailable at line ${enter.line}: ${enter.detail} (enter_unavailable; rebuild mewframework/mewtest with the run-entry symbols)`
       : fwInactive && sigs.length
         ? `mewframework inactive: signature ${sigs.map((s) => `${s.name} (${s.matches} matches)`).join(", ")} failed on build ${fw.build || "?"}; re-derive with tools/bindings/make-signature.ts`
         : fwInactive
@@ -201,6 +204,9 @@ export function decideVerdict(input: VerdictInput): { verdict: Verdict; reason: 
     return { verdict: "harness-error", reason: detail };
   }
   if (code === 2 || (result.end && result.end.reason === "timeout")) return { verdict: "timeout", reason: `script timeout (end reason ${result.end ? result.end.reason : "?"})` };
+  if (result.end && result.end.reason === "enter_failed") {
+    return { verdict: "fail", reason: enter ? `enter ${enter.name} failed at line ${enter.line}: ${enter.detail}` : "enter failed (no enter event)" };
+  }
   if (code === 1 || result.expects.failed > 0 || (result.end && result.end.code === 1)) {
     const f = result.expects.failures[0];
     return { verdict: "fail", reason: f ? `expect ${f.kind} failed at line ${f.line}: ${f.detail}` : "harness exit code 1" };
