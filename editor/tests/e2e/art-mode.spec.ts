@@ -166,6 +166,27 @@ test.describe("Art mode — explorer & scene authoring", () => {
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 
+  test("Texts: + New text adds a game-font text (font picker lists the game's font classes); editing its words shows in the JSON (in memory)", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await page.getByRole("button", { name: "New text" }).click();
+    const row = page.locator(".text-row").first();
+    await expect(row).toBeVisible();
+    const fonts = await row.locator('select[aria-label^="font of"] option').allInnerTexts();
+    expect(fonts).toContain("Peralta");
+    expect(fonts).toContain("Edmundm");
+    const words = row.locator('input[aria-label^="words of"]');
+    await words.fill("Hello cats");
+    await words.press("Enter");
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const sc = JSON.parse(await page.locator("textarea").first().inputValue());
+    const t = Object.values(sc.texts || {})[0] as any;
+    expect(t && t.text).toBe("Hello cats");
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
   test("import an SVG via the file input adds a shape", async ({ page }) => {
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();

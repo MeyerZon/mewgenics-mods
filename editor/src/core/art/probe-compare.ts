@@ -39,6 +39,9 @@ export interface ProbeShot {
   blendRgb: Rgb;
   /** the walker's centre in clip x (NaN when not found) */
   walkerX: number;
+  /** the PROBE DefineEditText (mint #00ffa0, game font Peralta) in the clip box x 220..380, y 70..110 */
+  text: "drawn" | "missing";
+  textPixels: number;
   /** the marker's screen bbox */
   box: { x0: number; y0: number; x1: number; y1: number } | null;
 }
@@ -70,7 +73,7 @@ function classifyBlink(c: Rgb): ProbeShot["blink"] {
 }
 
 export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
-  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", blend: "unknown", blendRgb: [0, 0, 0], walkerX: NaN, box: null };
+  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", blend: "unknown", blendRgb: [0, 0, 0], walkerX: NaN, text: "missing", textPixels: 0, box: null };
   // 1. the yellow marker: the largest 8-connected region of near-yellow pixels (stray UI yellow elsewhere is ignored)
   const W = img.width, H = img.height;
   const mask = new Uint8Array(W * H);
@@ -172,8 +175,16 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   }
   const span = cols.length ? cols[cols.length - 1]! - cols[0]! : 0;
   const walkerX = cols.length && span >= 12 && span <= 26 ? (cols[0]! + cols[cols.length - 1]!) / 2 : NaN;
+  let textPixels = 0;
+  for (let cy = 70; cy <= 110; cy += 0.5) for (let cx = 220; cx <= 380; cx += 0.5) {
+    const x = Math.round(sx(cx)), y = Math.round(sy(cy));
+    if (x < 0 || y < 0 || x >= img.width || y >= img.height) continue;
+    const c = px(img, x, y);
+    if (c[1] > 150 && c[0] < 90 && c[2] > 90 && c[2] < 220) textPixels++;
+  }
+  const text: ProbeShot["text"] = textPixels > 40 ? "drawn" : "missing";
   return {
-    gradient, gradLeft, gradRight, caps, blend, blendRgb, walkerX,
+    gradient, gradLeft, gradRight, caps, blend, blendRgb, walkerX, text, textPixels,
     found: true, scale, mirrored,
     sampling: blendedRatio > 0.1 ? "smooth" : "nearest",
     blendedRatio, edge, blink,
@@ -205,6 +216,8 @@ export interface ProbeSummary {
    * moves), "game-driven" (it moves but stays near the start: the game keeps restarting the character's root clip)
    */
   rootTimeline: "plays" | "held" | "game-driven" | "unknown";
+  /** the PROBE text across shots */
+  text: ProbeShot["text"];
   walkerXs: number[];
 }
 
@@ -297,6 +310,7 @@ export function summarizeProbe(shots: ProbeShot[]): ProbeSummary {
     caps: majority(ok.map((s) => s.caps), "unknown"),
     blend: majority(ok.map((s) => s.blend), "unknown"),
     rootTimeline: walkerVerdict(ok.map((s) => s.walkerX)),
+    text: majority(ok.map((s) => s.text), "missing"),
     walkerXs: ok.map((s) => (Number.isFinite(s.walkerX) ? Math.round(s.walkerX) : -1)),
   };
 }
@@ -314,6 +328,7 @@ export function renderProbeReport(shots: ProbeShot[], s: ProbeSummary, labels: s
     `- bitmap sampling: **${s.sampling}**; outside the bitmap: **${s.edge}**`,
     `- PlaceObject cxform mul [1,0,0,1]: **${s.cxform}**`,
     `- orientation: ${s.mirrored ? "**mirrored** (the enemy faces left)" : "as authored"}`,
+    `- DefineEditText in the game font (PROBE, mint): **${s.text}** (text pixels per shot: ${shots.map((p) => p.textPixels).join(", ") || "-"})`,
     `- root clip timeline (walker on 60 frames): **${s.rootTimeline}** (walker clip x per shot: ${s.walkerXs.join(", ") || "-"})`,
     `- PlaceObject3 blend add (#600000 over the arena): **${s.blend}** (rgb per shot: ${shots.map((p) => p.blendRgb.join(",")).join("; ") || "-"})`,
     `- LINESTYLE2 caps (DefineShape4; butt vs square stroke length): **${s.caps}**`,

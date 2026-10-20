@@ -44,6 +44,8 @@ import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline
 import { nestedFrame } from "../../../src/core/art/engine-behaviour.ts";
 import { strokePolys } from "../../../src/core/art/stroke.ts";
 import { C2D_COMPOSITE } from "../../../src/core/art/effects.ts";
+import { textRgba } from "../../../src/core/art/text.ts";
+import type { SceneText } from "../../../src/core/art/text.ts";
 import type { StrokeStyle } from "../../../src/core/art/stroke.ts";
 import { gradientUnitMatrix, gradientFocal, rasterizeStops, resolveStops, swfSpread } from "../../../src/core/art/gradient.ts";
 import type { Scene, Fill, SceneShape } from "../../../src/core/art/scene.ts";
@@ -320,6 +322,41 @@ function flattenPath(path: PreparedPath, mat: Mat, tolLocal: number): number[][]
     polys.push(out);
   }
   return polys;
+}
+
+const TEXT_SCALE = 2;
+
+/** Draw a scene text into a canvas at TEXT_SCALE (word-wrapped to its box, aligned like the HTML <p align>). */
+function textCanvas(t: SceneText): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const cv = document.createElement("canvas");
+  cv.width = Math.max(1, Math.ceil(t.width * TEXT_SCALE));
+  cv.height = Math.max(1, Math.ceil(t.height * TEXT_SCALE));
+  const c = cv.getContext("2d");
+  if (!c) return null;
+  const rgba = textRgba(t);
+  c.scale(TEXT_SCALE, TEXT_SCALE);
+  c.font = `${t.size}px "${t.font || "Peralta"}", Georgia, serif`;
+  c.fillStyle = `rgba(${rgba.r},${rgba.g},${rgba.b},${rgba.a / 255})`;
+  c.textBaseline = "top";
+  const align = t.align || "center";
+  c.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
+  const x = align === "center" ? t.width / 2 : align === "right" ? t.width : 0;
+  const lines: string[] = [];
+  for (const para of String(t.text).split("\n")) {
+    let line = "";
+    for (const word of para.split(/\s+/)) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && c.measureText(next).width > t.width) {
+        lines.push(line);
+        line = word;
+      } else line = next;
+    }
+    lines.push(line);
+  }
+  const lh = t.size * 1.15;
+  lines.forEach((ln, i) => c.fillText(ln, x, i * lh));
+  return cv;
 }
 
 function polysBounds(polys: number[][]): Bounds | null {
@@ -615,6 +652,24 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
     g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
     bitmapTex.set(id, { tex, width: size[0], height: size[1] });
+  }
+
+  /**
+   * scene.texts → a 2× offscreen canvas each (Canvas2D fillText with the game font's name first, a serif fallback when
+   * it is not installed here), shown as a bitmap-filled box so the GL, Canvas2D and bounds paths all draw it unchanged.
+   */
+  function renderTexts(s: Scene): void {
+    const all = s.texts || {};
+    for (const [id, t] of Object.entries(all)) {
+      if (!t || !(t.width > 0) || !(t.height > 0) || !(t.size > 0)) continue;
+      const cv = textCanvas(t);
+      if (!cv) continue;
+      const bid = `__text_${id}`;
+      bitmapSources.set(bid, cv);
+      if (gl) uploadBitmap(bid, cv);
+      const shape: SceneShape = { paths: [{ d: `M0 0 L${cv.width} 0 L${cv.width} ${cv.height} L0 ${cv.height} Z`, fill: `bitmap:${bid}`, transform: [1 / TEXT_SCALE, 0, 0, 1 / TEXT_SCALE, -t.width / 2, -t.height / 2] }] };
+      prepared.set(id, prepareShape(shape));
+    }
   }
 
   /** One 256×1 premultiplied stop strip per scene gradient (rasterizeStops: the emitter's ratios and colours). */
@@ -1413,6 +1468,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
       boundsCache = new Map();
       remapCache.clear();
       for (const id of Object.keys(s.shapes || {})) prepared.set(id, prepareShape(s.shapes[id]!));
+      renderTexts(s);
       uploadGradients();
       if (s.preview && Number.isInteger(s.preview.palette)) paletteRow = Math.max(0, Math.min(255, s.preview.palette as number));
       const exists = targetId !== null && (targetId === STAGE_KEY || !!s.sprites[targetId] || !!s.shapes[targetId]);

@@ -16,6 +16,7 @@ import { BitWriter, TAG, tag, tagName, concat, writeRect, writeMatrix, writeCxfo
 import type { Mat } from "./geometry.ts";
 import type { RgbaImage } from "./png.ts";
 import { BLEND_MODES, hasEffects, writeFilterList } from "./effects.ts";
+import { encodeDefineEditText, encodeImportGameFonts } from "./text.ts";
 import type { SceneFilter } from "./effects.ts";
 
 export const SWF_VERSION = 17;
@@ -35,7 +36,7 @@ export interface EmitOptions {
 
 export interface EmitCharacter {
   id: number;
-  kind: "bitmap" | "shape" | "sprite";
+  kind: "bitmap" | "shape" | "sprite" | "text";
   name: string;
 }
 export interface EmitExport {
@@ -129,6 +130,10 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
     push(TAG.DefineSceneAndFrameLabelData, w.finish());
   }
 
+  // --- the game's fonts, declared like vanilla does (ImportAssets2 "fonts.swf", 0 assets) when the scene has text
+  const texts = scene.texts || {};
+  if (Object.keys(texts).length) tags.push({ code: TAG.ImportAssets2, bytes: encodeImportGameFonts() });
+
   // --- library definitions
   const order = buildOrder(scene);
   const ids = new Map<string, number>();
@@ -152,6 +157,9 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
       }
       bitmapIds.set(id, cid);
       characters.push({ id: cid, kind: "bitmap", name: id });
+    } else if (texts[id]) {
+      tags.push({ code: TAG.DefineEditText, bytes: encodeDefineEditText(cid, texts[id]!) });
+      characters.push({ id: cid, kind: "text", name: id });
     } else if (scene.shapes[id]) {
       const enc = encodeDefineShape(cid, scene.shapes[id], { bitmapIds, shapeName: id, cubicSplits: scene.curveResolution, gradients: scene.gradients });
       findings.push(...enc.findings);
@@ -401,6 +409,8 @@ export interface GateSwfOptions {
   stroke?: "shape4";
   /** PlaceObject3 on the icon: "blend" (blend add only) or "filters" (a red glow only) */
   effects?: "blend" | "filters";
+  /** add a Peralta DefineEditText ("GATE") on the icon frame (text the way vanilla icons carry it) */
+  text?: boolean;
 }
 
 /**
@@ -428,8 +438,9 @@ export function minimalGateSwf(o: GateSwfOptions): Uint8Array {
     ...(o.fill === "gradient" ? { gradients: { ramp: { kind: "linear" as const, x1: 0, y1: 0, x2: 64, y2: 0, stops: [{ offset: 0, color: "gray:2" }, { offset: 1, color: "gray:14" }] } } } : {}),
     sprites: {
       ...(nested ? { Icon: { frames: 1, labels: {}, layers: [{ depth: 1, keys: [{ frame: 0, ref: "square", x: 0, y: 0 }] }] } } : {}),
-      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0, ...(o.effects === "blend" ? { blend: "add" } : o.effects === "filters" ? { filters: [{ type: "glow" as const, color: "#ff2020", blurX: 8, blurY: 8, strength: 2 }] } : {}) }] }] },
+      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0, ...(o.effects === "blend" ? { blend: "add" } : o.effects === "filters" ? { filters: [{ type: "glow" as const, color: "#ff2020", blurX: 8, blurY: 8, strength: 2 }] } : {}) }] }].concat(o.text ? [{ depth: depth + 1, keys: [{ frame: 0, ref: "gatetext", x: 32, y: 52 }] }] : []) },
     },
+    ...(o.text ? { texts: { gatetext: { text: "GATE", font: "Peralta", size: 12, color: "#000000", align: "center" as const, width: 64, height: 20 } } } : {}),
     exports: { [o.linkage]: "Clip" },
     stage_instances: [],
   };

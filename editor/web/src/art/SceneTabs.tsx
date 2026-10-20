@@ -8,6 +8,8 @@ import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, 
 import { sx, Ramp, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
 import { shapeGrayUsage, parseFill } from "../../../src/core/art/scene.ts";
+import { GAME_FONTS } from "../../../src/core/art/text.ts";
+import type { SceneText } from "../../../src/core/art/text.ts";
 import { bakeSprite, type BakedSprite } from "../../../src/core/art/timeline.ts";
 import type { Scene, SceneSprite } from "./types.ts";
 
@@ -65,7 +67,65 @@ export function ShapesTab() {
         </div>
       )}
       <div style={sx("margin-top:12px")}><DropZone text="Drop an SVG to add a shape. Each SVG becomes one shape (many paths)." /></div>
+      <TextsSection />
       {ids.length ? <PathEditor /> : null}
+    </div>
+  );
+}
+
+/**
+ * Texts: DefineEditText characters in one of the game's own fonts (swfs/fonts.swf classes; text.ts), placed by keys
+ * like shapes. The game draws them in its font; the preview uses the font if installed here, else a serif stand-in.
+ */
+function TextsSection() {
+  useStore(A, (a) => a.rev);
+  const sc = getScene() as Scene;
+  const texts = sc.texts || {};
+  const ids = Object.keys(texts);
+  const set = (id: string, patch: Partial<SceneText>) => {
+    sc.texts = { ...texts, [id]: { ...texts[id]!, ...patch } };
+    scheduleValidate();
+    bump();
+  };
+  return (
+    <div style={sx("margin-top:16px")}>
+      <div className="artsec">
+        <span className="sec">{`Texts (${ids.length}) — DefineEditText in a game font`}</span>
+        <button
+          className="btn ghost sm"
+          onClick={() => {
+            let id = "text";
+            let n = 2;
+            while (texts[id] || sc.shapes[id] || sc.sprites[id]) id = `text${n++}`;
+            sc.texts = { ...texts, [id]: { text: "Text", font: "Peralta", size: 24, color: "#000000", align: "center", width: 200, height: 40 } };
+            scheduleValidate();
+            bump();
+            toast(`added text "${id}" — place it on a sprite layer like a shape`);
+          }}
+        >
+          New text
+        </button>
+      </div>
+      {ids.map((id) => {
+        const t = texts[id]!;
+        return (
+          <div key={id} className="artrow text-row">
+            <span className="id">{id}</span>
+            <CommitInput className="artinput" style={sx("flex:1")} aria-label={`words of ${id}`} initial={t.text} onCommit={(v) => set(id, { text: v })} />
+            <select className="artinput" aria-label={`font of ${id}`} value={t.font || "Peralta"} onChange={(e) => set(id, { font: e.target.value })}>
+              {GAME_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+            <CommitInput className="artinput num" type="number" min={1} aria-label={`size of ${id}`} initial={t.size} onCommit={(v) => set(id, { size: Math.max(1, Number(v) || 1) })} />
+            <CommitInput className="artinput mono" style={sx("width:90px")} aria-label={`colour of ${id}`} initial={t.color || "#000000"} onCommit={(v) => set(id, { color: v })} />
+            <select className="artinput" aria-label={`align of ${id}`} value={t.align || "center"} onChange={(e) => set(id, { align: e.target.value as SceneText["align"] })}>
+              <option value="left">left</option>
+              <option value="center">center</option>
+              <option value="right">right</option>
+            </select>
+            <button className="btn ghost sm" style={sx("color:var(--err)")} aria-label={`Delete text ${id}`} onClick={() => { const next = { ...texts }; delete next[id]; sc.texts = next; scheduleValidate(); bump(); }}>Delete</button>
+          </div>
+        );
+      })}
     </div>
   );
 }
