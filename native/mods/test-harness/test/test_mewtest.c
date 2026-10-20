@@ -768,6 +768,18 @@ TEST(runner_seed_calls_host_emits_seed_event_and_continues) {
     CHECK(has(last_ev(), "\"code\":0"));
 }
 
+TEST(runner_seed_retries_while_not_ready_then_seeds) {
+    /* the game reseeds during its own startup; the host answers 2 until that is over (director exists) */
+    fk_reset("seed 42\nquit\n");
+    fk.seedResult = 2;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.seedCalls, 2); CHECK_EQ(count_ev("seed"), 0); CHECK_EQ(rr.pc, 0);
+    fk.seedResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("seed"), 1); CHECK(has(last_ev(), "\"ok\":true")); CHECK_EQ(rr.pc, 1);
+}
+
 TEST(runner_seed_refused_or_unavailable_ends_the_script) {
     fk_reset("seed 7\nquit\n");
     fk.seedResult = 0;
