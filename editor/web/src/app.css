@@ -379,3 +379,20 @@ textarea.scenejson { width: 100%; min-height: 320px; resize: vertical; font-fami
 @media (max-width: 560px) {
   .topbar { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 8px; }
 }
+
+/* Timeline tab */
+.timeline .tl-labels { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; min-height: 22px; }
+.timeline .tl-label .linkbtn { background: none; border: 0; color: inherit; cursor: pointer; padding: 0 2px; font: inherit; }
+.timeline .tl-grid { display: grid; gap: 2px 1px; align-items: stretch; overflow-x: auto; padding-bottom: 6px; }
+.timeline .tl-name { font-size: 12px; padding: 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.timeline .tl-row.on .tl-name, .timeline .tl-row.on > .tl-name { font-weight: 700; }
+.timeline .tl-ruler { height: 18px; border: 0; background: transparent; color: var(--muted); font-size: 10px; padding: 0; cursor: pointer; }
+.timeline .tl-ruler.lab { box-shadow: inset 0 2px 0 var(--acc); }
+.timeline .tl-ruler.sel { color: var(--ink); font-weight: 700; }
+.timeline .tl-cell { height: 20px; border: 1px solid var(--line); background: var(--panel); padding: 0; cursor: pointer; border-radius: 2px; }
+.timeline .tl-cell.hold { background: var(--line2); }
+.timeline .tl-cell.tween { background: var(--accbg); border-color: var(--acc); }
+.timeline .tl-cell.key::after { content: ""; display: block; width: 7px; height: 7px; margin: auto; transform: rotate(45deg); background: var(--ink); }
+.timeline .tl-cell.key.empty::after { background: transparent; border: 1px solid var(--ink); }
+.timeline .tl-cell.sel { outline: 2px solid var(--acc); outline-offset: -1px; }
+.timeline .tl-inspector { margin-top: 10px; }

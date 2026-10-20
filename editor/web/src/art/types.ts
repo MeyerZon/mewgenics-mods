@@ -6,7 +6,7 @@ import type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, F
 
 export type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, Finding, Fill, SceneGradient };
 
-export type ArtSubtab = "overview" | "shapes" | "sprites" | "exports" | "json";
+export type ArtSubtab = "overview" | "shapes" | "sprites" | "timeline" | "exports" | "json";
 export type ArtRightTab = "preview" | "findings" | "build";
 export type AbcMode = "none" | "stub";
 
