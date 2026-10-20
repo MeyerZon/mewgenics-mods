@@ -1,0 +1,14 @@
+mods: dev-sandbox, _autoplay
+hide: false
+timeout: 60s
+# Look check (agent eye): screenshots of the test fight the agent reads from the run dir — the main menu, the
+# fight at round 1, and round 2. `hide: false` is required for a capture to show the game.
+wait frames 120
+shot "main menu"
+enter TacticsTest
+wait turns 1
+shot "fight round 1"
+cmd spawn Rat
+wait rounds 1
+shot "fight round 2"
+quit

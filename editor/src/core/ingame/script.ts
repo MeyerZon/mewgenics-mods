@@ -35,7 +35,9 @@ export type Directive =
   | { line: number; kind: "log"; text: string }
   | { line: number; kind: "quit"; code: number | null }
   /** replay a dev-menu scene entry inside the game (mewtest.dll: MtHost.enter_scene); once per script */
-  | { line: number; kind: "enter"; scene: string };
+  | { line: number; kind: "enter"; scene: string }
+  /** the DLL emits a shot event and holds the scene ~700 ms; the runner captures the game window into the run dir */
+  | { line: number; kind: "shot"; label: string };
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
 export const KNOWN_SCENES = ["TacticsTest"];
@@ -175,6 +177,11 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
       const q = parseQuoted(rest, 0);
       if (!q || rest.slice(q.end).trim()) return { error: "log needs one quoted string" };
       return { line: lineNo, kind: "log", text: q.value };
+    }
+    case "shot": {
+      const q = parseQuoted(rest, 0);
+      if (!q || rest.slice(q.end).trim()) return { error: "shot needs one quoted label" };
+      return { line: lineNo, kind: "shot", label: q.value };
     }
     case "enter": {
       if (!rest) return { error: `enter needs a scene name (${KNOWN_SCENES.join("|")})` };
