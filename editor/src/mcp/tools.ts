@@ -169,7 +169,7 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "run_ingame_test",
-    "Launch Mewgenics once with -savesuffix (never the real save), the test's mod paths and the mewtest harness DLL, run one .mewtest script and return the report: verdict (pass | fail | timeout | crash | harness-error | backstop-timeout | launch-error | cannot-run | skipped | no-result | log-errors | safety-violation), expectation failures, console lines, debug.log / framework / chainloader findings and artifact paths. Pass `test` (a name under mods/<mod>/tests/) or an inline `script`. Blocks until the game exits (default 120 s timeout + 45 s backstop). Returns verdict skipped/cannot-run with the reason when the game, Steam or the harness DLL is absent.",
+    "Launch Mewgenics once with -savesuffix (never the real save), the test's mod paths and the mewtest harness DLL, run one .mewtest script and return the report: verdict (pass | fail | timeout | crash | harness-error | backstop-timeout | launch-error | cannot-run | skipped | no-result | log-errors | safety-violation), expectation failures, console lines, debug.log / framework / chainloader findings and artifact paths, incl. artifacts.shots: one PNG per `shot \"<label>\"` directive, captured from the game window while the harness holds the scene (needs hide: false; open the PNGs to judge the look). Pass `test` (a name under mods/<mod>/tests/) or an inline `script`. Blocks until the game exits (default 120 s timeout + 45 s backstop). Returns verdict skipped/cannot-run with the reason when the game, Steam or the harness DLL is absent.",
     (a) => {
       if ((a.test && a.script) || (!a.test && !a.script)) throw new ToolError("pass exactly one of `test` or `script`");
       return api.runIngameTest({

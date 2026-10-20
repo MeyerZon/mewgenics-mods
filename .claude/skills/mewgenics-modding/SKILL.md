@@ -103,6 +103,22 @@ Save safety — hard rules:
 The editor only reads base data and writes into `mods/<name>/`. The user keeps
 an ~83%-complete main save that must stay untouched.
 
+## The mod-development loop (agent alone until the last step)
+
+1. Author the overlays (`new_from_template`, `write_overlay`); `validate_mod` and
+   `preview_merge` until clean.
+2. Write `mods/<mod>/tests/<name>.mewtest` first, red, then make it green
+   (`docs/tdd-procedure.md`). For combat behaviour: `enter TacticsTest`, load
+   `_autoplay` next to the mod so the fight runs unattended, `spawn Rat` for an
+   opponent, then `expect status` / `expect stacks … varied` / `expect round`
+   (`docs/ingame-testing.md`). Run it with `run_ingame_test`.
+3. Look at it: a script with `hide: false` and `shot "<label>"` lines; open the
+   PNGs from `artifacts.shots` and check the scene, the icon, the text (T3a).
+4. Open the PR with the red→green table and the T2 verdict lines.
+5. **Human play-check, always the last step of a mod:** the PR's T3 list names
+   exactly what the owner should play and judge (the ability in a fight, feel,
+   pacing, balance). The owner's verdict closes the loop; nothing else needs them.
+
 ## References
 
 - [references/gon-overlays.md](references/gon-overlays.md) — overlay modes,

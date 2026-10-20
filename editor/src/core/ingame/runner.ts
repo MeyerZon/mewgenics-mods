@@ -12,6 +12,7 @@ import { locateGameDir, preflight, buildLaunch, LaunchError, type Preflight, typ
 import { parseResults, type ResultSummary } from "./results.ts";
 import { collectLogs, locateAppdataLogsDir, readWindow, checkLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
 import { isRunnerSide } from "./script.ts";
+import { captureWindow, type CaptureFn } from "./shot.ts";
 import {
   snapshotFile, compareSnapshots, realSavePath, realSavesDir, snapshotSaves, compareSaveSets, devSavePattern,
   type SaveSnapshot,
@@ -87,6 +88,8 @@ export interface IngameReport {
     frameworkLogWindow: string | null;
     chainloaderLog: string | null;
     report: string | null;
+    /** one entry per `shot` directive: the PNG the runner captured while the DLL held the scene */
+    shots: { label: string; line: number; path: string | null; hidden: boolean }[];
   };
   stdoutTail: string;
   stderrTail: string;
@@ -261,6 +264,8 @@ export interface RunPlanArgs {
   endGraceMs?: number;
   exists?: (p: string) => boolean;
   steamRunning?: () => boolean | null;
+  /** screenshot taker for `shot` directives (tests inject one); default: the PowerShell window capture */
+  capture?: CaptureFn;
 }
 
 interface SpawnOutcome extends ExitInfo {
@@ -298,7 +303,7 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     logFindings: null,
     logExpects: [],
     safety: { expectedSuffix, observedSuffix: null, saveSuffixOk: true, modPathsObserved: [], saveCheck: null, saveSet: null },
-    artifacts: { runDir: null, script: null, resultFile: null, debugLog: null, frameworkLogWindow: null, chainloaderLog: null, report: null },
+    artifacts: { runDir: null, script: null, resultFile: null, debugLog: null, frameworkLogWindow: null, chainloaderLog: null, report: null, shots: [] },
     stdoutTail: "",
     stderrTail: "",
   };
@@ -306,7 +311,11 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     const v = decideVerdict({ preflight: report.preflight, launchError, exit, result: report.result, logs: report.logFindings, logExpects: report.logExpects, safety: report.safety });
     report.verdict = v.verdict;
     report.killedAfterEnd = !!exit.killedAfterEnd;
-    report.reason = v.reason + (exit.killedAfterEnd ? "; the game lingered after its end record and was killed after the end grace" : "");
+    const shots = report.artifacts.shots;
+    const shotNote = shots.length
+      ? `; ${shots.length} shot(s)${shots.some((s) => s.hidden) ? " taken with the window hidden (set hide: false to see the game)" : ""}${shots.some((s) => !s.path) ? ", some not captured" : ""}`
+      : "";
+    report.reason = v.reason + (exit.killedAfterEnd ? "; the game lingered after its end record and was killed after the end grace" : "") + shotNote;
     report.ok = v.verdict === "pass";
     report.code = exit.code;
     report.signal = exit.signal;
@@ -377,10 +386,24 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
       // the harness flushes every record; once `end` is on disk the verdict exists and only the process lifetime is
       // open. Clean mode relies on this: the game may shut itself down (any exit code), or never exit -> kill it.
       let endTimer: ReturnType<typeof setTimeout> | null = null;
+      const capture = args.capture || captureWindow;
+      // `shot` events: capture as soon as one shows up in the result file (the DLL holds the scene ~700 ms)
+      const takeShots = (res: ReturnType<typeof parseResults>) => {
+        for (let i = report.artifacts.shots.length; i < res.shots.length; i++) {
+          const s = res.shots[i]!;
+          let path: string | null = null;
+          try { path = capture(s.label, runDir, child.pid ?? null); } catch { path = null; }
+          report.artifacts.shots.push({ label: s.label, line: s.line, path, hidden: plan.hide });
+        }
+      };
       const poll = setInterval(() => {
         if (endTimer || settled) return;
         let seen = false;
-        try { seen = existsSync(outPath) && !!parseResults(readFileSync(outPath, "utf8")).end; } catch { seen = false; }
+        try {
+          const res = existsSync(outPath) ? parseResults(readFileSync(outPath, "utf8")) : null;
+          if (res) takeShots(res);
+          seen = !!(res && res.end);
+        } catch { seen = false; }
         if (!seen) return;
         endTimer = setTimeout(() => {
           if (settled) return;
@@ -414,6 +437,13 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
 
     // 6. evidence
     report.result = parseResults(existsSync(outPath) ? readFileSync(outPath, "utf8") : null);
+    // shot events the poll did not get to (a game that ended within one poll tick): capture what is on screen now
+    for (let i = report.artifacts.shots.length; i < report.result.shots.length; i++) {
+      const s = report.result.shots[i]!;
+      let path: string | null = null;
+      try { path = (args.capture || captureWindow)(s.label, runDir, null); } catch { path = null; }
+      report.artifacts.shots.push({ label: s.label, line: s.line, path, hidden: plan.hide });
+    }
     report.artifacts.resultFile = existsSync(outPath) ? outPath : null;
     const logs = collectLogs({ gameDir, appdataLogsDir, frameworkLogOffset, launchedAtMs, expectedSuffix });
     report.logFindings = logs;

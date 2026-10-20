@@ -62,8 +62,10 @@ typedef enum MtDirKind {
     MT_D_ENTER,         /* enter <SceneName>: replay a dev-menu scene entry (TacticsTest) through the host */
     MT_D_WAIT_ROUNDS,   /* wait rounds N: until TurnControl's round >= round-at-directive + N */
     MT_D_EXPECT_ROUND,  /* expect round <op> N (0 outside combat) */
-    MT_D_EXPECT_STACKS  /* expect stacks <Status> on <unit> (<op> N | varied) */
+    MT_D_EXPECT_STACKS, /* expect stacks <Status> on <unit> (<op> N | varied) */
+    MT_D_SHOT           /* shot "<label>": emit a shot event, then hold MT_SHOT_HOLD_MS so the runner can capture the window */
 } MtDirKind;
+#define MT_SHOT_HOLD_MS 700
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
 /* scenes `enter` knows; 0 = unknown. The DLL and the Node parser (script.ts KNOWN_SCENES) must agree. */
 #define MT_SCENE_TACTICS_TEST 1
@@ -132,7 +134,7 @@ typedef struct MtHost {
     int      (*enter_scene)(void *u, int scene, char *detail, size_t cap);
 } MtHost;
 
-typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS } MtState;
+typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT } MtState;
 typedef struct MtRunner {
     const MtScript *s;
     int pc;

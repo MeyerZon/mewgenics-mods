@@ -82,6 +82,11 @@ switch (mode) {
     // an older harness: inert, no result file, the game sits at the main menu until the backstop kills it
     setInterval(() => {}, 1000);
     break;
+  case "shot":
+    // a shot event mid-run: the runner must capture while the game holds (we hold 500 ms, then end)
+    if (outPath) writeFileSync(outPath, [start, { ev: "shot", line: 1, label: "menu", hold_ms: 700, t: 1, frame: 1 }].map((e) => JSON.stringify(e)).join("\n") + "\n");
+    setTimeout(() => { if (outPath) appendFileSync(outPath, JSON.stringify(end(0, "quit", 0, 0)) + "\n"); process.exit(0); }, 500);
+    break;
   case "enter-pass":
     // the harness replayed the dev menu's TacticsTest entry, a turn passed, two units were counted
     writeResult([start, { ev: "enter", line: 3, name: "TacticsTest", ok: true, detail: "scene=0x1 entity=0x2 component=0x3", t: 1, frame: 1 }, { ev: "turn", n: 1, round: 1, t: 2, frame: 2 }, { ev: "wait", line: 4, kind: "turns", n: 1, actual: 1, t: 2, frame: 2 }, { ev: "expect", line: 5, kind: "units", arg: ">= 2", ok: true, detail: "2 units", t: 3, frame: 3 }, end(0, "quit", 1, 0)]);

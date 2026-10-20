@@ -11,7 +11,8 @@ layer, which tier of test covers what, where a human still has to look, and what
 | **T0** pure unit | logic with no game bytes: GON engine, overlays, validator, art model, in-game runner (via the fake game), native pure modules | nothing | every change, could run in CI | `cd editor && npm test`, `native\test-all.bat`, `npm run typecheck` |
 | **T1** local data | tests that read `.extracted/`, the real exe or the real DLLs read-only (GON round-trip over base data, real-overlay merges, signature uniqueness) | `.extracted/`, the game install | every change on a dev machine; skipped with a logged `(skipped: …)` elsewhere | same commands; they skip when the inputs are absent |
 | **T2** in-game | `.mewtest` scripts run inside the real game by the `mewtest` harness | Steam running, `native/dist/mewframework.dll` + `mewtest.dll`, the `dev` save | per PR that touches a mod, the framework or the harness; on demand otherwise | `cd editor && npm run test:ingame [-- <mod> [<test>]]` or MCP `run_ingame_test` |
-| **T3** human | what no test can see: how art looks in-game, text fit, balance, feel | eyes | listed per PR as a checklist with the result filled in | — |
+| **T3a** agent eye | what a screenshot shows: the scene came up, the icon/art is drawn, text fits, nothing is blank or garbled | a `.mewtest` with `shot "<label>"` and `hide: false`; the agent opens the PNGs in `artifacts.shots` | per PR that changes anything visible | `npm run test:ingame -- <mod> <test>`, then read the PNGs |
+| **T3** human play | what no screenshot can judge: feel, pacing, balance, fun, whether the mod reads the way it was meant to | the owner, playing | listed per PR as a checklist with the result filled in; a standing step of every mod's development (see "The loop") | — |
 
 `npm test` never launches the game. T2 is serialized by a lock (one game at a time) and takes ~3.5 s per script.
 
@@ -42,7 +43,7 @@ layer, which tier of test covers what, where a human still has to look, and what
 
 | Gap | Closest automated check | Human step |
 |---|---|---|
-| Visual correctness of SWF art, text fit, UI look | SWF loads without a loader fault (`log-errors` / `crash` verdicts), Playwright asserts behaviour, not appearance | look at it; say so in the PR's T3 list |
+| Visual correctness of SWF art, text fit, UI look | `shot "<label>"` screenshots (T3a): the agent checks the icon is drawn, the scene is the expected one, text fits; SWF loads without a loader fault (`log-errors` / `crash`); Playwright asserts behaviour, not appearance | feel and style: look at it in play; say so in the PR's T3 list |
 | Combat behaviour of a mod (e.g. "luck rerolls every turn") | `enter TacticsTest` puts the harness into a test fight (`docs/ingame-testing.md`); then `expect status` / `expect units` / `dump` per turn | feel and balance: play it |
 | Balance, fun | none | play |
 | Reverse-engineering claims | none as claims; they become tests when turned into a signature row, a golden merge case, a log-marker fixture or an offset the harness reads | — |
@@ -64,6 +65,11 @@ layer, which tier of test covers what, where a human still has to look, and what
    looked at and what was not.
 5. **Facts from reverse engineering** that the change relies on land in `docs/engine-map.md` *and* in a test or
    fixture (`editor/test/fixtures/ingame/`, `bindings/`, a host test). A fact that lives only in prose is not done.
+6. **The human play-check is a step of every mod, not an afterthought** (owner, 2026-10-20). Agents build and
+   validate alone through T0–T3a; when a mod (or a feature of one) is complete and green, the PR's T3 list names
+   exactly what the owner should play and look for (the new ability in a fight, the icon in the ability bar, the
+   tooltip text, the balance question), and the owner's verdict closes the loop. Keep the list short and specific;
+   a screenshot the agent already checked does not go on it.
 
 ## Fixtures vs game bytes
 

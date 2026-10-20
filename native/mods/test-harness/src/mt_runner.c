@@ -250,6 +250,17 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             r->pc++;
             return 1;
         }
+        case MT_D_SHOT: {
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "shot");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_str(&w, "label", d->a);
+            mt_jw_int(&w, "hold_ms", MT_SHOT_HOLD_MS);
+            stamp_and_emit(r, h, &w);
+            r->waitDeadline = r->now + MT_SHOT_HOLD_MS;   /* keep the script (and so the scene) still while the runner captures */
+            r->state = MT_S_WAIT_SHOT;
+            return 1;
+        }
         case MT_D_WAIT_ROUNDS:
             r->waitStartRound = h->units_available(h->user) ? h->round_number(h->user) : 0;
             r->waitTargetRound = r->waitStartRound + d->n;
@@ -376,6 +387,9 @@ int mt_runner_step(MtRunner *r, const MtHost *h) {
             return 1;
         case MT_S_WAIT_MS:
             if (r->now >= r->waitDeadline) { emit_wait(r, h, d, "ms", (long)(r->now - r->waitStartMs)); r->state = MT_S_RUN; r->pc++; }
+            return 1;
+        case MT_S_WAIT_SHOT:
+            if (r->now >= r->waitDeadline) { r->state = MT_S_RUN; r->pc++; }
             return 1;
         case MT_S_WAIT_ROUNDS: {
             long round = h->units_available(h->user) ? h->round_number(h->user) : 0;

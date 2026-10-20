@@ -20,9 +20,15 @@
 - A reverse-engineering fact the change relies on is in `docs/engine-map.md` **and** a test or fixture.
 - Docs-only PRs: say so here and delete the table.
 
-## T3 — human checklist
+## T3a — agent eye
 
-<!-- What no test can see: look, feel, balance, a play-check. One line each; the owner ticks them. Delete if none. -->
+<!-- Screenshots the agent took and read (`shot "<label>"` with `hide: false`): which run dir, what was checked. Delete if nothing visible changed. -->
+
+- shots: `<run dir>`: … (scene / icon / text checked)
+
+## T3 — human play-check
+
+<!-- The last step of every mod: what the owner should play and judge (feel, pacing, balance, does it read as intended). One line each, specific; the owner ticks them. -->
 
 - [ ] …
 

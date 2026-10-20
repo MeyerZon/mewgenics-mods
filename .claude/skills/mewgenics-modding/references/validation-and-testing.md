@@ -48,14 +48,26 @@ as non-negotiable.
 
 ## In-game smoke test
 
-After `validate_mod` passes and `preview_merge` looks right, launch through
-`launch-dev.bat` (which runs under `-savesuffix dev`). Then, using the debug
-console (backtick key), bind and trigger the content — the pattern from the
-Joker's Luck sample:
+After `validate_mod` passes and `preview_merge` looks right, drive the game
+through the harness instead of by hand: `run_ingame_test { mod, test | script }`
+launches it under `-savesuffix dev` with the `mewtest` DLL and returns a verdict.
+The combat pattern (the Joker's Luck sample, `mods/jokers-luck/tests/luck-rerolls.mewtest`):
 
 ```
-bind <AbilityName>
+mods: <mod>, _autoplay          # _autoplay: the player cats take their own turns
+wait frames 120
+enter TacticsTest               # a test fight from the main menu; run commands now exist
+wait turns 1
+cmd bind <AbilityName>
+expect noconsole "No command named"
+cmd spawn Rat                   # an opponent on the empty test level
+wait rounds 1
+dump                            # units with statuses and stacks
+expect stacks <Status> on 0 varied
+shot "round 2"                  # with hide: false: a PNG the agent reads
+quit
 ```
 
-Use the ability and observe the effect. This exercises the merged data in a
-real session without touching the main save.
+A status the mod wants on the cats from the first turn can come from a
+test-only overlay (`mods/_jokersluck-test/`: `StatusOnBattleStart { <Status> 1 }`).
+Manual play through `launch-dev.bat` remains the owner's step (T3), not the agent's.

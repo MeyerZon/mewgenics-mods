@@ -37,6 +37,13 @@ export interface EnterEvent {
   detail: string;
 }
 
+/** `shot`: the script asked for a screenshot here; the DLL held the scene for `hold_ms` while the runner captured. */
+export interface ShotEvent {
+  line: number;
+  label: string;
+  frame: number;
+}
+
 /** `popup`: a modal dialog the harness's watchdog dismissed (the game's own WARNING/ERROR boxes). */
 export interface PopupEvent {
   title: string;
@@ -72,6 +79,8 @@ export interface ResultSummary {
   enter: EnterEvent | null;
   /** dialogs the watchdog dismissed, in order */
   popups: PopupEvent[];
+  /** screenshot requests, in order */
+  shots: ShotEvent[];
 }
 
 export function parseResults(text: string | null | undefined): ResultSummary {
@@ -90,6 +99,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
     units: null,
     enter: null,
     popups: [],
+    shots: [],
   };
   if (typeof text !== "string") return r;
 
@@ -120,6 +130,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
       case "units": r.units = e; break;
       case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "popup": r.popups.push({ title: String(e.title ?? ""), text: String(e.text ?? ""), frame: Number(e.frame ?? 0) }); break;
+      case "shot": r.shots.push({ line: Number(e.line ?? 0), label: String(e.label ?? ""), frame: Number(e.frame ?? 0) }); break;
       case "expect":
         if (e.ok) r.expects.passed++;
         else {

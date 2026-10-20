@@ -734,6 +734,34 @@ TEST(runner_expect_stacks_varied_needs_two_distinct_recorded_values) {
     CHECK(has(last_ev(), "\"ok\":true")); CHECK(has(last_ev(), "2 distinct"));
 }
 
+/* ---- shot "<label>": emit a shot event, then hold the frame for MT_SHOT_HOLD_MS so the runner can capture it ---- */
+TEST(script_shot_parses_a_quoted_label_and_rejects_bare_or_missing) {
+    char err[256]; int line = 0;
+    const char *s = "shot \"round one\"\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.d[0].kind, MT_D_SHOT); CHECK_STR(g_s.d[0].a, "round one");
+    const char *bad = "shot bare\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    bad = "shot\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_shot_emits_event_then_holds_then_continues) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.now = 1000;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "{\"ev\":\"shot\"")); CHECK(has(ev(0), "\"line\":1")); CHECK(has(ev(0), "\"label\":\"menu\""));
+    CHECK(has(ev(0), "\"hold_ms\":"));
+    fk.now = 1000 + MT_SHOT_HOLD_MS - 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);          /* still holding: quit not reached */
+    CHECK_EQ(count_ev("end"), 0);
+    fk.now = 1000 + MT_SHOT_HOLD_MS + 1;
+    mt_runner_step(&rr, &HOST);                       /* hold over -> advance */
+    mt_runner_step(&rr, &HOST);                       /* quit */
+    CHECK_EQ(count_ev("end"), 1); CHECK_EQ(fk.exitCode, 0);
+}
+
 TEST(runner_expect_status_without_combat_fails) {
     fk_reset("expect status LuckUp on 0\nquit\n");
     steps_until_done(5);
