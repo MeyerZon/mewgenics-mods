@@ -90,6 +90,9 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"expect","line":N,"kind":"console","arg":"...","ok":true,"detail":"..."}
 {"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"]}]}
 {"ev":"log","text":"..."}
+{"ev":"popup","title":"WARNING","text":"..."}   a modal dialog of the game (its own WARNING/ERROR boxes) that the watchdog
+                                                closed — it would otherwise stop the frame loop for good under a hidden
+                                                window; never decides the verdict, appended to its reason
 {"ev":"crash","code":"0xC0000005","addr":"0x...","module":"Mewgenics.exe","rva":"0x...","tid":N}
 {"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
 ```
