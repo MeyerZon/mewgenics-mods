@@ -5,66 +5,59 @@
 // matrices/cxforms the SWF will carry.
 
 import { matrixFromTransform } from "./geometry.ts";
+import type { Mat } from "./geometry.ts";
+import type { Scene, SceneSprite, SceneKey } from "./scene.ts";
 
-/**
- * @typedef {import('./geometry.ts').Mat} Mat
- * @typedef {import('./scene.ts').Scene} Scene
- * @typedef {import('./scene.ts').SceneSprite} SceneSprite
- * @typedef {import('./scene.ts').SceneKey} SceneKey
- * @typedef {import('./scene.ts').SceneLayer} SceneLayer
- */
+export type Vec4 = [number, number, number, number];
 
-/**
- * @typedef {Object} Cxform
- * @property {[number,number,number,number]} mul   r,g,b,a multipliers (1 = identity)
- * @property {[number,number,number,number]} add   r,g,b,a additive terms in 0..1 units (0 = identity)
- */
+export interface Cxform {
+  /** r,g,b,a multipliers (1 = identity) */
+  mul: Vec4;
+  /** r,g,b,a additive terms in 0..1 units (0 = identity) */
+  add: Vec4;
+}
 
-/**
- * @typedef {Object} Placement
- * @property {number} depth
- * @property {string} ref
- * @property {Mat} matrix
- * @property {Cxform|null} cxform      null = identity
- * @property {number|null} clipDepth
- * @property {string|null} name
- */
+export interface Placement {
+  depth: number;
+  ref: string;
+  matrix: Mat;
+  /** null = identity */
+  cxform: Cxform | null;
+  clipDepth: number | null;
+  name: string | null;
+}
 
-/**
- * @typedef {Object} BakedSprite
- * @property {number} frames
- * @property {Placement[][]} placements   placements[frame] sorted by depth ascending
- * @property {Array<string[]>} labels      labels[frame] = label names starting at that frame
- */
+export interface BakedSprite {
+  frames: number;
+  /** placements[frame] sorted by depth ascending */
+  placements: Placement[][];
+  /** labels[frame] = label names starting at that frame */
+  labels: Array<string[]>;
+}
 
-/** @type {Cxform} */
-export const CXFORM_IDENTITY = { mul: [1, 1, 1, 1], add: [0, 0, 0, 0] };
+export interface Pose {
+  matrix: Mat;
+  cxform: Cxform | null;
+}
 
-/**
- * Resolve a key's matrix: raw `matrix` override wins; else x/y/sx/sy/rot/skew.
- * @param {SceneKey} k
- * @returns {Mat}
- */
-export function keyMatrix(k) {
-  if (k.matrix && k.matrix.length === 6) return /** @type {Mat} */ ([...k.matrix]);
+export const CXFORM_IDENTITY: Cxform = { mul: [1, 1, 1, 1], add: [0, 0, 0, 0] };
+
+/** Resolve a key's matrix: raw `matrix` override wins; else x/y/sx/sy/rot/skew. */
+export function keyMatrix(k: SceneKey): Mat {
+  if (k.matrix && k.matrix.length === 6) return [...k.matrix] as Mat;
   return matrixFromTransform(k);
 }
 
-/**
- * Resolve a key's colour transform (alpha shorthand folds into mul[3]).
- * @param {SceneKey} k
- * @returns {Cxform|null}
- */
-export function keyCxform(k) {
-  const mul = /** @type {[number,number,number,number]} */ ([...(k.cxform && k.cxform.mul ? k.cxform.mul : [1, 1, 1, 1])]);
-  const add = /** @type {[number,number,number,number]} */ ([...(k.cxform && k.cxform.add ? k.cxform.add : [0, 0, 0, 0])]);
+/** Resolve a key's colour transform (alpha shorthand folds into mul[3]). */
+export function keyCxform(k: SceneKey): Cxform | null {
+  const mul = [...(k.cxform && k.cxform.mul ? k.cxform.mul : [1, 1, 1, 1])] as Vec4;
+  const add = [...(k.cxform && k.cxform.add ? k.cxform.add : [0, 0, 0, 0])] as Vec4;
   if (typeof k.alpha === "number") mul[3] = mul[3] * k.alpha;
-  if (mul.every((v, i) => v === 1) && add.every((v) => v === 0)) return null;
+  if (mul.every((v) => v === 1) && add.every((v) => v === 0)) return null;
   return { mul, add };
 }
 
-/** @param {number} a @param {number} b @param {number} t */
-function lerp(a, b, t) {
+function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
@@ -72,16 +65,14 @@ function lerp(a, b, t) {
  * Interpolated placement fields between two keys (linear). Interpolates the
  * component fields (x, y, sx, sy, rot, skew, alpha, cxform), not raw matrices, so a
  * rotation tween turns rather than collapsing. Raw `matrix` keys interpolate per element.
- * @param {SceneKey} a @param {SceneKey} b @param {number} t 0..1
- * @returns {{ matrix: Mat, cxform: Cxform|null }}
+ * @param t 0..1
  */
-export function interpolateKeys(a, b, t) {
-  /** @type {Mat} */
-  let matrix;
+export function interpolateKeys(a: SceneKey, b: SceneKey, t: number): Pose {
+  let matrix: Mat;
   if (a.matrix || b.matrix) {
     const ma = keyMatrix(a);
     const mb = keyMatrix(b);
-    matrix = /** @type {Mat} */ (ma.map((v, i) => lerp(v, mb[i], t)));
+    matrix = ma.map((v, i) => lerp(v, mb[i], t)) as Mat;
   } else {
     matrix = matrixFromTransform({
       x: lerp(a.x ?? 0, b.x ?? 0, t),
@@ -94,10 +85,9 @@ export function interpolateKeys(a, b, t) {
   }
   const ca = keyCxform(a) || CXFORM_IDENTITY;
   const cb = keyCxform(b) || CXFORM_IDENTITY;
-  /** @type {Cxform} */
-  const cx = {
-    mul: /** @type {[number,number,number,number]} */ (ca.mul.map((v, i) => lerp(v, cb.mul[i], t))),
-    add: /** @type {[number,number,number,number]} */ (ca.add.map((v, i) => lerp(v, cb.add[i], t))),
+  const cx: Cxform = {
+    mul: ca.mul.map((v, i) => lerp(v, cb.mul[i], t)) as Vec4,
+    add: ca.add.map((v, i) => lerp(v, cb.add[i], t)) as Vec4,
   };
   const isId = cx.mul.every((v) => v === 1) && cx.add.every((v) => v === 0);
   return { matrix, cxform: isId ? null : cx };
@@ -108,15 +98,11 @@ export function interpolateKeys(a, b, t) {
  * Semantics: a key holds until the next key on the same layer; `tween: "linear"` on a
  * key interpolates toward the next key (which must have a non-null ref); a `ref: null`
  * key removes the object from its depth; a ref change at a key swaps the character.
- * @param {SceneSprite} sprite
- * @returns {BakedSprite}
  */
-export function bakeSprite(sprite) {
+export function bakeSprite(sprite: SceneSprite): BakedSprite {
   const frames = Math.max(1, sprite.frames | 0);
-  /** @type {Placement[][]} */
-  const placements = Array.from({ length: frames }, () => []);
-  /** @type {Array<string[]>} */
-  const labels = Array.from({ length: frames }, () => []);
+  const placements: Placement[][] = Array.from({ length: frames }, () => []);
+  const labels: Array<string[]> = Array.from({ length: frames }, () => []);
   for (const [name, fr] of Object.entries(sprite.labels || {})) {
     if (Number.isInteger(fr) && fr >= 0 && fr < frames) labels[fr].push(name);
   }
@@ -125,12 +111,11 @@ export function bakeSprite(sprite) {
     for (let i = 0; i < keys.length; i++) {
       const k = keys[i];
       if (k.ref === null || k.ref === undefined) continue;
-      const next = keys[i + 1];
+      const next: SceneKey | undefined = keys[i + 1];
       const end = next ? next.frame : frames; // exclusive
       const canTween = k.tween === "linear" && next && next.ref !== null && next.ref !== undefined;
       for (let f = Math.max(0, k.frame); f < Math.min(frames, end); f++) {
-        /** @type {{ matrix: Mat, cxform: Cxform|null }} */
-        let pose;
+        let pose: Pose;
         if (canTween && next) {
           const span = next.frame - k.frame;
           pose = interpolateKeys(k, next, span > 0 ? (f - k.frame) / span : 0);
@@ -152,15 +137,10 @@ export function bakeSprite(sprite) {
   return { frames, placements, labels };
 }
 
-/**
- * The main timeline as a pseudo-sprite: stage_instances placed on frame 0 and held.
- * @param {Scene} scene
- * @returns {BakedSprite}
- */
-export function bakeStage(scene) {
+/** The main timeline as a pseudo-sprite: stage_instances placed on frame 0 and held. */
+export function bakeStage(scene: Scene): BakedSprite {
   const inst = scene.stage_instances || [];
-  /** @type {SceneSprite} */
-  const pseudo = {
+  const pseudo: SceneSprite = {
     frames: 1,
     labels: {},
     layers: inst.map((si, i) => ({ depth: i + 1, keys: [{ ...si, frame: 0 }] })),
@@ -171,18 +151,19 @@ export function bakeStage(scene) {
 /**
  * place: new depth. replace: same depth, different character/clip/name (PlaceObject2
  * Move+HasCharacter). move: same character, matrix and/or cxform changed. remove: depth freed.
- * @typedef {{ op: 'place', p: Placement } | { op: 'replace', p: Placement } | { op: 'move', p: Placement, changedMatrix: boolean, changedCxform: boolean } | { op: 'remove', depth: number }} FrameOp
  */
+export type FrameOp =
+  | { op: "place"; p: Placement }
+  | { op: "replace"; p: Placement }
+  | { op: "move"; p: Placement; changedMatrix: boolean; changedCxform: boolean }
+  | { op: "remove"; depth: number };
 
 /**
  * Diff two consecutive frames (by depth). Emitters turn these into tags; `prev` for
  * frame 0 is an empty list.
- * @param {Placement[]} prev @param {Placement[]} cur
- * @returns {FrameOp[]}
  */
-export function diffFrames(prev, cur) {
-  /** @type {FrameOp[]} */
-  const ops = [];
+export function diffFrames(prev: Placement[], cur: Placement[]): FrameOp[] {
+  const ops: FrameOp[] = [];
   const prevBy = new Map(prev.map((p) => [p.depth, p]));
   const curBy = new Map(cur.map((p) => [p.depth, p]));
   for (const p of prev) if (!curBy.has(p.depth)) ops.push({ op: "remove", depth: p.depth });
@@ -203,13 +184,11 @@ export function diffFrames(prev, cur) {
   return ops;
 }
 
-/** @param {Mat} a @param {Mat} b */
-export function sameMat(a, b) {
+export function sameMat(a: Mat, b: Mat): boolean {
   for (let i = 0; i < 6; i++) if (Math.abs(a[i] - b[i]) > 1e-9) return false;
   return true;
 }
-/** @param {Cxform|null} a @param {Cxform|null} b */
-export function sameCx(a, b) {
+export function sameCx(a: Cxform | null, b: Cxform | null): boolean {
   if (!a && !b) return true;
   const x = a || CXFORM_IDENTITY;
   const y = b || CXFORM_IDENTITY;
@@ -217,13 +196,14 @@ export function sameCx(a, b) {
   return true;
 }
 
-/**
- * Sorted list of {frame, label} for scrubber ticks.
- * @param {BakedSprite} baked
- */
-export function labelList(baked) {
-  /** @type {Array<{frame:number, label:string}>} */
-  const out = [];
+export interface FrameLabel {
+  frame: number;
+  label: string;
+}
+
+/** Sorted list of {frame, label} for scrubber ticks. */
+export function labelList(baked: BakedSprite): FrameLabel[] {
+  const out: FrameLabel[] = [];
   baked.labels.forEach((names, frame) => names.forEach((label) => out.push({ frame, label })));
   return out;
 }

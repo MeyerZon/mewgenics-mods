@@ -5,9 +5,9 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse, serialize } from "../src/core/gon/parser.ts";
 import { EXTRACTED_DATA } from "../src/core/repo.ts";
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
-/** @param {string} dir @param {string[]} acc */
-function listGon(dir, acc) {
+function listGon(dir: string, acc: string[]): string[] {
   if (!existsSync(dir)) return acc;
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, ent.name);
@@ -17,14 +17,17 @@ function listGon(dir, acc) {
   return acc;
 }
 
-/**
- * @param {(name: string, fn: () => void) => void} test
- * @param {(cond: boolean, msg: string) => void} assert
- * @param {(a: unknown, b: unknown, msg?: string) => void} eq
- * @param {{ extractedDir?: string, log?: (line: string) => void }} [opts]
- * @returns {{ skipped: boolean, checked: number }}
- */
-export function runGonRoundTripTests(test, assert, eq, opts = {}) {
+export interface GonRoundTripOptions {
+  extractedDir?: string;
+  log?: (line: string) => void;
+}
+
+export function runGonRoundTripTests(
+  test: TestFn,
+  assert: AssertFn,
+  eq: EqFn,
+  opts: GonRoundTripOptions = {},
+): { skipped: boolean; checked: number } {
   const dir = opts.extractedDir || EXTRACTED_DATA;
   const log = opts.log || console.log;
   log("\n# GON round-trip (parse -> serialize is byte-exact)");
@@ -35,8 +38,7 @@ export function runGonRoundTripTests(test, assert, eq, opts = {}) {
   }
   let checked = 0;
   let exact = 0;
-  /** @type {string[]} */
-  const failures = [];
+  const failures: string[] = [];
   for (const f of all) {
     const src = readFileSync(f, "utf8");
     const out = serialize(parse(src));

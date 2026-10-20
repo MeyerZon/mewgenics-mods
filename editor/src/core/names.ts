@@ -7,32 +7,32 @@ import { REGISTERED_NAMES_PATH } from "./repo.ts";
 import { buildIndex } from "./base-data.ts";
 import { componentNameSet } from "./components.ts";
 
-/**
- * @typedef {Object} RegisteredName
- * @property {string} name
- * @property {string} [kind]
- * @property {string} [mod]
- */
+export interface RegisteredName {
+  name: string;
+  kind?: string;
+  mod?: string;
+}
 
-/** @type {RegisteredName[]|null} */
-let registeredCache = null;
+let registeredCache: RegisteredName[] | null = null;
 
 /**
  * Load the native-registered names. Accepts a bare array, {names:[...]}, or
  * entries that are plain strings or {name,kind,mod} objects.
- * @returns {RegisteredName[]}
  */
-export function loadRegisteredNames() {
+export function loadRegisteredNames(): RegisteredName[] {
   if (registeredCache) return registeredCache;
-  /** @type {RegisteredName[]} */
-  let out = [];
+  let out: RegisteredName[] = [];
   if (existsSync(REGISTERED_NAMES_PATH)) {
     try {
-      const parsed = JSON.parse(readFileSync(REGISTERED_NAMES_PATH, "utf8"));
-      const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.names) ? parsed.names : [];
+      const parsed: unknown = JSON.parse(readFileSync(REGISTERED_NAMES_PATH, "utf8"));
+      const list: unknown[] = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === "object" && Array.isArray((parsed as { names?: unknown }).names)
+          ? ((parsed as { names: unknown[] }).names)
+          : [];
       out = list
-        .map((/** @type {any} */ e) => (typeof e === "string" ? { name: e } : e))
-        .filter((/** @type {any} */ e) => e && typeof e.name === "string");
+        .map((e) => (typeof e === "string" ? { name: e } : e))
+        .filter((e): e is RegisteredName => !!e && typeof (e as { name?: unknown }).name === "string");
     } catch {
       out = [];
     }
@@ -41,31 +41,34 @@ export function loadRegisteredNames() {
   return out;
 }
 
-/** @returns {Set<string>} */
-export function registeredNameSet() {
+export function registeredNameSet(): Set<string> {
   return new Set(loadRegisteredNames().map((e) => e.name));
 }
 
 /** Clear cached registered names (after editing the file). */
-export function clearRegisteredCache() {
+export function clearRegisteredCache(): void {
   registeredCache = null;
 }
 
-/** @param {string} category */
-function entryNameSet(category) {
+function entryNameSet(category: string): Set<string> {
   const ci = buildIndex().get(category);
   return new Set(ci ? ci.names : []);
 }
 
-/**
- * The resolution sets the validator uses. Each is a Set of names.
- * @returns {{
- *   statuses: Set<string>, abilities: Set<string>, passives: Set<string>,
- *   items: Set<string>, characters: Set<string>, classes: Set<string>,
- *   templates: Set<string>, components: Set<string>, registered: Set<string>
- * }}
- */
-export function resolutionSets() {
+export interface ResolutionSets {
+  statuses: Set<string>;
+  abilities: Set<string>;
+  passives: Set<string>;
+  items: Set<string>;
+  characters: Set<string>;
+  classes: Set<string>;
+  templates: Set<string>;
+  components: Set<string>;
+  registered: Set<string>;
+}
+
+/** The resolution sets the validator uses. Each is a Set of names. */
+export function resolutionSets(): ResolutionSets {
   const components = componentNameSet();
   const registered = registeredNameSet();
   // Every status is a glaiel component; keyword_tooltips lists display/status

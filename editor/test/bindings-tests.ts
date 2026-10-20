@@ -10,42 +10,51 @@ import { locateGameDir } from "../src/core/ingame/launch.ts";
 import { REPO_ROOT, SafetyError } from "../src/core/repo.ts";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
+import type { Entry, EnumExposure, TableExposure, MacroExposure } from "../src/core/bindings/manifest.ts";
+import type { PortRow, PortResult } from "../src/core/bindings/port.ts";
+import type { CheckEntry } from "../src/core/bindings/check.ts";
 
 /** Known build 25143593 identity (docs/engine-map.md). */
 const KNOWN_TS = 0x6a9c51e5;
 const KNOWN_SIZE = 0x1574000;
 
-/**
- * Import a module, or return an object with __error so the suite can
- * register one failing test instead of crashing the run (readable red).
- * @param {string} rel
- */
-async function load(rel) {
+/** A module under test, or the load error so the suite can register one failing test instead of crashing the run (readable red). */
+type Loaded<M> = M | { __error: string };
+
+/** Import a module, or return the error so the suite can register one failing test instead of crashing the run. */
+async function load<M>(rel: string): Promise<Loaded<M>> {
   try {
-    return await import(rel);
+    return (await import(rel)) as M;
   } catch (e) {
     return { __error: String(e instanceof Error ? e.message : e) };
   }
 }
 
-/** @returns {Buffer|null} the installed exe, or null when absent */
-function realExe() {
+/** @returns the installed exe, or null when absent */
+function realExe(): Buffer|null {
   const p = join(locateGameDir(process.env), "Mewgenics.exe");
   return existsSync(p) ? readFileSync(p) : null;
 }
 
-/**
- * @param {(name: string, fn: () => void) => void} test
- * @param {(cond: boolean, msg: string) => void} assert
- * @param {(a: unknown, b: unknown, msg?: string) => void} eq
- */
-export async function runBindingsTests(test, assert, eq) {
+/** One item of a fake function body: a byte, or a placeholder resolved after layout. */
+type CodeItem = number | { call: string } | { lea: string } | { mov: string };
+interface LinkSpec {
+  textPad?: number;
+  rdataPad?: number;
+  stamp?: number;
+  fns: { name: string; code: CodeItem[] }[];
+  strings?: Record<string, string>;
+  globs?: string[];
+}
+
+export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
   console.log("\n# Bindings: PE reader (fake PE + real exe)");
-  const fake = await load("./fixtures/bindings/fake-pe.ts");
-  const pe = await load("../src/core/bindings/pe.ts");
-  if (fake.__error) test("fake-pe.ts loads", () => assert(false, fake.__error));
-  if (pe.__error) test("pe.ts loads", () => assert(false, pe.__error));
-  if (fake.__error || pe.__error) return;
+  const fake = await load<typeof import("./fixtures/bindings/fake-pe.ts")>("./fixtures/bindings/fake-pe.ts");
+  const pe = await load<typeof import("../src/core/bindings/pe.ts")>("../src/core/bindings/pe.ts");
+  if ("__error" in fake) test("fake-pe.ts loads", () => assert(false, fake.__error));
+  if ("__error" in pe) test("pe.ts loads", () => assert(false, pe.__error));
+  if ("__error" in fake || "__error" in pe) return;
   const { buildFakePe } = fake;
   const { parsePe } = pe;
 
@@ -72,7 +81,7 @@ export async function runBindingsTests(test, assert, eq) {
     const p = parsePe(f.buf);
     eq(p.timeDateStamp, 0x12345678);
     eq(p.imageBase, 0x140000000);
-    eq(p.sections.map((/** @type {any} */ s) => s.name).join(","), ".text,.rdata,.pdata");
+    eq(p.sections.map((s: { name: string }) => s.name).join(","), ".text,.rdata,.pdata");
     eq(p.sections[0].va, 0x1000, ".text starts at the first page");
     assert(p.sections[0].exec, ".text is executable");
     assert(!p.sections[1].exec, ".rdata is not executable");
@@ -92,7 +101,7 @@ export async function runBindingsTests(test, assert, eq) {
     eq(p.rvaToOff(0x10), -1, "header region is not a section");
     eq(p.rvaToOff(0x7fff0000), -1, "beyond the image");
     eq(p.offToRva(0x10), -1, "file header offset has no section RVA");
-    eq(p.sectionOf(rva).name, ".rdata");
+    eq(p.sectionOf(rva)!.name, ".rdata");
     eq(p.sectionOf(0x7fff0000), null);
   });
 
@@ -100,7 +109,7 @@ export async function runBindingsTests(test, assert, eq) {
     const f = buildFakePe(spec);
     const p = parsePe(f.buf);
     eq(p.pdata.count, 2);
-    const a = p.pdata.find(f.rva(".text", 0x12));
+    const a = p.pdata.find(f.rva(".text", 0x12))!;
     assert(a !== null, "inside fn A");
     eq(a.begin, f.rva(".text", 0x10));
     eq(a.end, f.rva(".text", 0x40));
@@ -130,7 +139,7 @@ export async function runBindingsTests(test, assert, eq) {
     });
     test("T1 real exe: .text is the only executable section; .pdata has > 50,000 functions", () => {
       const p = parsePe(exe);
-      eq(p.execSections.map((/** @type {any} */ s) => s.name).join(","), ".text");
+      eq(p.execSections.map((s: { name: string }) => s.name).join(","), ".text");
       assert(p.pdata.count > 50000, `pdata count ${p.pdata.count}`);
       const f = p.pdata.find(0x8e3c60); // TurnControl::NextTurn
       assert(f !== null && f.begin === 0x8e3c60, `NextTurn should start a RUNTIME_FUNCTION, got ${JSON.stringify(f)}`);
@@ -140,14 +149,13 @@ export async function runBindingsTests(test, assert, eq) {
 
   // ---- scan.ts: the DLL's scanner semantics (fw_sig.c) in node ----------------
   console.log("\n# Bindings: signature scanner (parity with native/framework/test/test_sig.c)");
-  const scan = await load("../src/core/bindings/scan.ts");
-  if (scan.__error) {
+  const scan = await load<typeof import("../src/core/bindings/scan.ts")>("../src/core/bindings/scan.ts");
+  if ("__error" in scan) {
     test("scan.ts loads", () => assert(false, scan.__error));
     return;
   }
   const { parsePattern, scanBuffer, scanExec, scanSection, patternToString, PatternError, FW_SIG_MAX_BYTES } = scan;
-  /** @param {() => void} fn */
-  const throwsPattern = (fn) => {
+    const throwsPattern = (fn: () => void) => {
     try { fn(); } catch (e) { return e instanceof PatternError; }
     return false;
   };
@@ -254,15 +262,15 @@ export async function runBindingsTests(test, assert, eq) {
 
   // ---- manifest.ts: bindings/<build>.json, the single source of truth ------------
   console.log("\n# Bindings: manifest (bindings/<steamBuildId>.json)");
-  const man = await load("../src/core/bindings/manifest.ts");
-  if (man.__error) {
+  const man = await load<typeof import("../src/core/bindings/manifest.ts")>("../src/core/bindings/manifest.ts");
+  if ("__error" in man) {
     test("manifest.ts loads", () => assert(false, man.__error));
     return;
   }
   const { parseManifest, validateManifest, loadManifest, saveManifest, symbolTable, dataTable, lkTable, entry, hex, BINDINGS_DIR, ManifestError } = man;
 
-  /** @param {any} overrides @returns {any} a minimal valid manifest object */
-  const mini = (overrides = {}) => ({
+    /** @returns a minimal valid manifest object */
+  const mini = (overrides: any = {}): any => ({
     format: 1,
     build: { steamBuildId: "1", gameVersion: "0.0.1", name: "0.0.1 (steam 1)", timeDateStamp: "0x11111111", sizeOfImage: "0x4000", imageBase: "0x140000000", exeSha256: "a".repeat(64), exeSize: 1, sdlVersion: "3.2.12" },
     sigCap: 128,
@@ -276,10 +284,8 @@ export async function runBindingsTests(test, assert, eq) {
     ],
     ...overrides,
   });
-  /** @param {any} m @returns {string[]} */
-  const problems = (m) => validateManifest(m).problems;
-  /** @param {any} m @param {RegExp} re @param {string} what */
-  const rejects = (m, re, what) => {
+    const problems = (m: any): string[] => validateManifest(m).problems;
+    const rejects = (m: any, re: RegExp, what: string) => {
     const ps = problems(m);
     assert(ps.some((x) => re.test(x)), `${what}: expected a problem matching ${re}, got ${JSON.stringify(ps)}`);
   };
@@ -321,11 +327,11 @@ export async function runBindingsTests(test, assert, eq) {
     rejects(o, /Foo_stacks.*witness|Foo_stacks.*unanchored/, "no witness");
     const u = mini(); u.entries[5].anchors = { unanchored: true };
     eq(problems(u).length, 0, "unanchored is allowed (reported, never silently ported)");
-    const w = mini(); w.entries[5].anchors.witness.function = "Nope";
+    const w = mini(); w.entries[5].anchors.witness!.function = "Nope";
     rejects(w, /Foo_stacks.*Nope/, "unknown witness");
     const c = mini(); c.entries[1].anchors = { callees: [{ name: "Ghost", ordinal: 0 }] };
     rejects(c, /FnB.*Ghost/, "unknown callee");
-    const dv = mini(); dv.entries[4].anchors.derive.vtable = "Nope_vftable";
+    const dv = mini(); dv.entries[4].anchors.derive!.vtable = "Nope_vftable";
     rejects(dv, /Foo_typeid.*Nope_vftable/, "unknown vtable");
     const dw = mini(); dw.entries[4].anchors.witness = { function: "FnA", callee: "Nope_fn", pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, maxBack: 6 };
     rejects(dw, /Foo_typeid.*Nope_fn/, "unknown witness callee");
@@ -339,10 +345,10 @@ export async function runBindingsTests(test, assert, eq) {
   });
   test("symbolTable / dataTable / lkTable return entries sorted by index", () => {
     const m = parseManifest(mini());
-    eq(symbolTable(m).map((/** @type {any} */ e) => e.name).join(","), "FnA");
-    eq(dataTable(m).map((/** @type {any} */ e) => e.name).join(","), "Glob");
-    eq(lkTable(m).map((/** @type {any} */ e) => e.name).join(","), "FnB");
-    eq(entry(m, "Foo_typeid").kind, "constant");
+    eq(symbolTable(m).map((e) => e.name).join(","), "FnA");
+    eq(dataTable(m).map((e) => e.name).join(","), "Glob");
+    eq(lkTable(m).map((e) => e.name).join(","), "FnB");
+    eq(entry(m, "Foo_typeid")!.kind, "constant");
     eq(entry(m, "Missing"), null);
   });
   test("saveManifest writes only under bindings/ (SafetyError elsewhere) and round-trips", () => {
@@ -362,8 +368,7 @@ export async function runBindingsTests(test, assert, eq) {
   console.log("\n# Bindings: bindings/25143593.json content");
   const realPath = join(BINDINGS_DIR, "25143593.json");
   const apiH = readFileSync(join(REPO_ROOT, "native", "framework", "src", "framework_api.h"), "utf8");
-  /** @param {string} prefix */
-  const enumerators = (prefix) => (apiH.match(new RegExp(`^\\s*(${prefix}[A-Za-z0-9_]+)\\s*,`, "gm")) || []).map((l) => l.trim().replace(/,$/, "")).filter((n) => !n.endsWith("_COUNT_"));
+    const enumerators = (prefix: string) => (apiH.match(new RegExp(`^\\s*(${prefix}[A-Za-z0-9_]+)\\s*,`, "gm")) || []).map((l) => l.trim().replace(/,$/, "")).filter((n) => !n.endsWith("_COUNT_"));
   test("25143593.json loads and identifies the build", () => {
     assert(existsSync(realPath), `${realPath} missing`);
     const m = loadManifest(realPath);
@@ -381,79 +386,77 @@ export async function runBindingsTests(test, assert, eq) {
     const want = enumerators("FW_SYM_");
     eq(want.length, 15);
     const got = symbolTable(m);
-    eq(got.map((/** @type {any} */ e) => e.exposure.find((/** @type {any} */ x) => x.enum).enum).join("\n"), want.join("\n"));
-    for (const e of got) assert(e.signature && e.signature.pattern, `${e.name} needs a signature`);
-    eq(entry(m, "TurnControl_NextTurn").rva, "0x8e3c60");
-    eq(entry(m, "Status_GetCategory").signature.exactLen, 126);
+    eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
+    for (const e of got) assert(!!(e.signature && e.signature.pattern), `${e.name} needs a signature`);
+    eq(entry(m, "TurnControl_NextTurn")!.rva, "0x8e3c60");
+    eq(entry(m, "Status_GetCategory")!.signature!.exactLen, 126);
   });
   test("25143593.json: FwData table == framework_api.h FW_DATA_* order (9); App_global first", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_DATA_");
     eq(want.length, 9);
     const got = dataTable(m);
-    eq(got.map((/** @type {any} */ e) => e.exposure.find((/** @type {any} */ x) => x.enum).enum).join("\n"), want.join("\n"));
+    eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
     eq(got[0].name, "App_global");
     eq(got[0].rva, "0x13c4a30");
-    eq(entry(m, "SDL_HideWindow_slot").rva, "0x12e82a0");
+    eq(entry(m, "SDL_HideWindow_slot")!.rva, "0x12e82a0");
     const t = entry(m, "SDL_DYNAPI_table");
-    assert(t && t.rva === "0x12e7000", "the DYNAPI jump_table struct is its own entry (exported slots start at +0x78)");
-    assert(t && t.anchors.witness && t.anchors.witness.function === "SDL_InitDynamicAPI", "anchored by the function that fills it");
-    for (const e of got.slice(1)) assert(e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table", `${e.name} derives from the table`);
+    assert(!!(t && t.rva === "0x12e7000"), "the DYNAPI jump_table struct is its own entry (exported slots start at +0x78)");
+    assert(!!(t && t.anchors.witness && t.anchors.witness.function === "SDL_InitDynamicAPI"), "anchored by the function that fills it");
+    for (const e of got.slice(1)) assert(!!(e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table"), `${e.name} derives from the table`);
   });
   test("25143593.json: FW_LK table is the 13 status lookups in status_engine.c g_lk_rva order, shapes A-E", () => {
     const m = loadManifest(realPath);
     const lk = lkTable(m);
     const rvas = ["0x4929c0", "0x492c20", "0x492e80", "0x492f20", "0x493190", "0x5028e0", "0x493690", "0x493910", "0x493b80", "0x493e00", "0x4933e0", "0x494080", "0x502b40"];
-    eq(lk.map((/** @type {any} */ e) => e.rva).join(","), rvas.join(","));
-    eq(lk.map((/** @type {any} */ e) => e.exposure.find((/** @type {any} */ x) => x.table).shape).join(""), "AAAAAABBBBCDE");
+    eq(lk.map((e) => e.rva).join(","), rvas.join(","));
+    eq(lk.map((e) => (e.exposure.find((x) => "table" in x) as TableExposure).shape).join(""), "AAAAAABBBBCDE");
     eq(lk[0].name, "Status_GetCategory", "index 0 is also FW_SYM_Status_GetCategory");
     eq(lk[4].name, "Status_GetFlags");
-    assert(lk.filter((/** @type {any} */ e) => e.anchors.strings && e.anchors.strings.some((/** @type {any} */ s) => s.role === "funcsig")).length >= 11, "funcsig anchors recorded for the lookups that have one");
+    assert(lk.filter((e) => e.anchors.strings && e.anchors.strings!.some((s) => s.role === "funcsig")).length >= 11, "funcsig anchors recorded for the lookups that have one");
   });
   test("25143593.json: vtables, type id, vtable slot constants and >= 30 struct offsets with macros", () => {
     const m = loadManifest(realPath);
-    eq(entry(m, "LuckUp_vftable").rva, "0xf57ab8");
-    eq(entry(m, "LuckUp_vftable").anchors.rtti.typeDescriptorName, ".?AVLuckUp@glaiel@@");
-    eq(entry(m, "Status_vftable").rva, "0xed1960");
-    eq(entry(m, "LuckUp_typeid").value, "0x4d6");
-    eq(entry(m, "DefaultStatusSource").rva, "0x13c4d30");
-    eq(entry(m, "LuckUp_vtableSlots").value, "172");
-    eq(entry(m, "VT_OnStacksChanged").value, "170");
-    const offs = m.entries.filter((/** @type {any} */ e) => e.kind === "offset");
+    eq(entry(m, "LuckUp_vftable")!.rva, "0xf57ab8");
+    eq(entry(m, "LuckUp_vftable")!.anchors.rtti!.typeDescriptorName, ".?AVLuckUp@glaiel@@");
+    eq(entry(m, "Status_vftable")!.rva, "0xed1960");
+    eq(entry(m, "LuckUp_typeid")!.value, "0x4d6");
+    eq(entry(m, "DefaultStatusSource")!.rva, "0x13c4d30");
+    eq(entry(m, "LuckUp_vtableSlots")!.value, "172");
+    eq(entry(m, "VT_OnStacksChanged")!.value, "170");
+    const offs = m.entries.filter((e) => e.kind === "offset");
     assert(offs.length >= 30, `offsets: ${offs.length}`);
-    eq(entry(m, "Status_stacks").value, "0x5c");
-    eq(entry(m, "Status_stacks").exposure[0].macro, "OFF_STATUS_STACKS");
-    eq(entry(m, "X_charArray").value, "0x1f90");
-    eq(entry(m, "Character_touchedPassives").value, "0xe50");
-    for (const e of offs) assert(e.struct && e.exposure.some((/** @type {any} */ x) => x.macro), `${e.name} has struct + macro`);
+    eq(entry(m, "Status_stacks")!.value, "0x5c");
+    eq((entry(m, "Status_stacks")!.exposure[0] as MacroExposure).macro, "OFF_STATUS_STACKS");
+    eq(entry(m, "X_charArray")!.value, "0x1f90");
+    eq(entry(m, "Character_touchedPassives")!.value, "0xe50");
+    for (const e of offs) assert(!!(e.struct && e.exposure.some((x) => "macro" in x)), `${e.name} has struct + macro`);
   });
   if (exe) {
     const m = loadManifest(realPath);
     const p = parsePe(exe);
     test("T1 real exe: every manifest function signature matches exactly once at its rva", () => {
-      /** @type {string[]} */
-      const bad = [];
+            const bad: string[] = [];
       for (const e of m.entries) {
         if (e.kind !== "function" || !e.signature) continue;
-        const r = scanExec(p, exe, parsePattern(e.signature.pattern, m.sigCap));
-        if (r.count !== 1 || r.hits[0] + e.signature.offset !== parseInt(e.rva, 16)) bad.push(`${e.name}: ${r.count} hits, first 0x${(r.hits[0] ?? -1).toString(16)} + offset ${e.signature.offset}`);
+        const r = scanExec(p, exe, parsePattern(e.signature!.pattern, m.sigCap));
+        if (r.count !== 1 || r.hits[0] + e.signature!.offset !== parseInt(e.rva!, 16)) bad.push(`${e.name}: ${r.count} hits, first 0x${(r.hits[0] ?? -1).toString(16)} + offset ${e.signature!.offset}`);
       }
       assert(bad.length === 0, bad.join("; "));
-      assert(m.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.signature).length >= 34, "all TSV code rows carried over (incl. Status_ApplyLuckUp, now unique at 76 bytes)");
+      assert(m.entries.filter((e) => e.kind === "function" && e.signature).length >= 34, "all TSV code rows carried over (incl. Status_ApplyLuckUp, now unique at 76 bytes)");
     });
     test("T1 real exe: every function entry (signed or raw) begins a .pdata RUNTIME_FUNCTION; vtables have file bytes; data globals sit inside a section", () => {
-      /** @type {string[]} */
-      const bad = [];
+            const bad: string[] = [];
       for (const e of m.entries) {
         if (e.kind === "function") {
-          const rva = parseInt(e.rva, 16);
+          const rva = parseInt(e.rva!, 16);
           const f = p.pdata.find(rva);
           if (!f || f.begin !== rva) bad.push(`${e.name} 0x${rva.toString(16)} is not a function start (${f ? "inside 0x" + f.begin.toString(16) : "no pdata"})`);
         } else if (e.kind === "vtable") {
-          if (p.rvaToOff(parseInt(e.rva, 16)) < 0) bad.push(`${e.name} has no file byte`);
+          if (p.rvaToOff(parseInt(e.rva!, 16)) < 0) bad.push(`${e.name} has no file byte`);
         } else if (e.kind === "data") {
           // globals may live in .data's zero-filled tail (no file byte), but must be inside a section
-          if (!p.sectionOf(parseInt(e.rva, 16))) bad.push(`${e.name} is outside every section`);
+          if (!p.sectionOf(parseInt(e.rva!, 16))) bad.push(`${e.name} is outside every section`);
         }
       }
       assert(bad.length === 0, bad.join("; "));
@@ -461,21 +464,20 @@ export async function runBindingsTests(test, assert, eq) {
   }
   // ---- gen-headers.ts: signatures.h / offsets.h generated from the manifests -------------
   console.log("\n# Bindings: header generator (signatures.h / offsets.h from bindings/*.json)");
-  const gen = await load("../src/core/bindings/gen-headers.ts");
-  if (gen.__error) {
+  const gen = await load<typeof import("../src/core/bindings/gen-headers.ts")>("../src/core/bindings/gen-headers.ts");
+  if ("__error" in gen) {
     test("gen-headers.ts loads", () => assert(false, gen.__error));
     return;
   }
   const { genSignaturesH, genOffsetsH, generateHeaders, GenError, HEADER_PATHS } = gen;
   const m25 = loadManifest(realPath);
-  /** @returns {any} a second build that only differs in identity */
-  const cloneBuild = () => {
+    /** @returns a second build that only differs in identity */
+  const cloneBuild = (): any => {
     const c = JSON.parse(JSON.stringify(m25));
     c.build = { ...c.build, steamBuildId: "99", name: "9.9.9 (steam 99)", timeDateStamp: "0x22222222", sizeOfImage: "0x1580000", exeSha256: "b".repeat(64) };
     return c;
   };
-  /** @param {string} t */
-  const nl = (t) => t.replace(/\r\n/g, "\n");
+    const nl = (t: string) => t.replace(/\r\n/g, "\n");
 
   test("genSignaturesH: one SymbolSig table per build in FwSymbol order, FW_LK rva table, FW_BUILDS row with pointers", () => {
     const h = genSignaturesH([m25]);
@@ -485,10 +487,10 @@ export async function runBindingsTests(test, assert, eq) {
     const second = h.indexOf("\"Character_BeginTurn\"");
     const last = h.indexOf("\"string_Allocate\"");
     assert(first > 0 && second > first && last > second, "FwSymbol order");
-    const nt = entry(m25, "TurnControl_NextTurn");
-    assert(h.includes(`"TurnControl_NextTurn", "${nt.signature.pattern}", ${nt.signature.offset}, 0x8e3c60u`), "pattern, offset, expectedRva from the manifest");
-    const lc = entry(m25, "LuckUp_ctor");
-    assert(h.includes(`"LuckUp_ctor", "${lc.signature.pattern}", ${lc.signature.offset}, 0x711c90u`) && lc.signature.offset < 0, "negative SymbolSig.offset carried through");
+    const nt = entry(m25, "TurnControl_NextTurn")!;
+    assert(h.includes(`"TurnControl_NextTurn", "${nt.signature!.pattern}", ${nt.signature!.offset}, 0x8e3c60u`), "pattern, offset, expectedRva from the manifest");
+    const lc = entry(m25, "LuckUp_ctor")!;
+    assert(h.includes(`"LuckUp_ctor", "${lc.signature!.pattern}", ${lc.signature!.offset}, 0x711c90u`) && lc.signature!.offset < 0, "negative SymbolSig.offset carried through");
     assert(h.includes("#define FW_LK_COUNT 13"), "lk count");
     assert(h.includes("static const uint32_t FW_LK_RVAS_25143593[FW_LK_COUNT]"), "lk table");
     assert(/FW_LK_RVAS_25143593\[FW_LK_COUNT\] = \{\s*0x4929c0u,[^\n]*\n\s*0x492c20u,[\s\S]*0x502b40u,[^\n]*\n\s*\}/.test(h), "lk order");
@@ -512,13 +514,13 @@ export async function runBindingsTests(test, assert, eq) {
     assert(/^#define OFF_APPLIER_OWNER\s+\(-0x8\)/m.test(h), "negative");
     assert(/^#define OFF_X_CHARARRAY\s+0x1f90/m.test(h), "mewtest offset");
     assert(/^#define VT_ONSTACKSCHANGED\s+170/m.test(h), "vtable slot");
-    const macros = m25.entries.flatMap((/** @type {any} */ e) => e.exposure.filter((/** @type {any} */ x) => x.macro).map((/** @type {any} */ x) => x.macro));
+    const macros = m25.entries.flatMap((e) => e.exposure.filter((x): x is MacroExposure => "macro" in x).map((x) => x.macro));
     for (const mac of macros) eq((h.match(new RegExp(`^#define ${mac} `, "gm")) || []).length, 1, mac);
     assert(/\/\* Status \+0x5c int32 .*status_stacks/.test(h) || h.includes("Status_stacks"), "comment names the struct/entry");
   });
   test("genOffsetsH: manifests that disagree on a macro throw GenError naming the entry and builds", () => {
     const other = cloneBuild();
-    const st = other.entries.find((/** @type {any} */ e) => e.name === "Status_stacks");
+    const st = other.entries.find((e: Entry) => e.name === "Status_stacks")!;
     st.value = "0x60";
     let err = null;
     try { genOffsetsH([m25, other]); } catch (e) { err = e; }
@@ -534,23 +536,22 @@ export async function runBindingsTests(test, assert, eq) {
   });
   test("golden: committed signatures.h and offsets.h equal the generated text (else run `npm run bindings:gen`)", () => {
     const { listManifests } = man;
-    const out = generateHeaders(listManifests().map((/** @type {any} */ x) => x.manifest));
+    const out = generateHeaders(listManifests().map((x: ReturnType<typeof listManifests>[number]) => x.manifest));
     for (const [rel, text] of Object.entries(out)) {
       const p = join(REPO_ROOT, rel);
       assert(existsSync(p), `${rel} missing`);
-      eq(nl(readFileSync(p, "utf8")), nl(/** @type {string} */ (text)), `${rel} is stale`);
+      eq(nl(readFileSync(p, "utf8")), nl((text as string)), `${rel} is stale`);
     }
   });
   // ---- siggen.ts: unique signatures with relocation bytes wildcarded ---------------
   console.log("\n# Bindings: signature generator (wildcards rel32 / rip-relative disp32)");
-  const sg = await load("../src/core/bindings/siggen.ts");
-  if (sg.__error) {
+  const sg = await load<typeof import("../src/core/bindings/siggen.ts")>("../src/core/bindings/siggen.ts");
+  if ("__error" in sg) {
     test("siggen.ts loads", () => assert(false, sg.__error));
     return;
   }
   const { decodeRelocs, makeSignature } = sg;
-  /** @param {number[]} xs */
-  const u8 = (xs) => Uint8Array.from(xs);
+    const u8 = (xs: number[]) => Uint8Array.from(xs);
 
   test("decodeRelocs: E8/E9 rel32, Jcc rel32, FF 15 and rip-relative ModRM disp32, movabs imm64", () => {
     const code = u8([
@@ -566,8 +567,8 @@ export async function runBindingsTests(test, assert, eq) {
       0xc3,
     ]);
     const r = decodeRelocs(code);
-    eq(r.map((/** @type {any} */ x) => `${x.at}+${x.len}`).join(" "), "7+4 14+4 20+4 26+4 32+8 43+4 48+4");
-    assert(r.every((/** @type {any} */ x) => typeof x.why === "string" && x.why.length > 0), "why strings");
+    eq(r.map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "7+4 14+4 20+4 26+4 32+8 43+4 48+4");
+    assert(r.every((x: { why: string }) => typeof x.why === "string" && x.why.length > 0), "why strings");
   });
   test("decodeRelocs: frame sizes, imm32 constants and non-rip memory operands stay exact; unknown opcodes stop decoding", () => {
     const code = u8([
@@ -581,14 +582,13 @@ export async function runBindingsTests(test, assert, eq) {
       0xe8, 0x11, 0x22, 0x33, 0x44,                   // would be a call, but after the stop it stays exact
     ]);
     const r = decodeRelocs(code);
-    eq(r.map((/** @type {any} */ x) => `${x.at}+${x.len}`).join(" "), "26+4");
+    eq(r.map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "26+4");
   });
 
   /** Two functions sharing a prologue, differing in a call target and in one byte after the call. */
   const fnA = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0xe8, 0x10, 0x00, 0x00, 0x00, 0x48, 0x8b, 0xd8, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3];
   const fnB = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0xe8, 0x20, 0x00, 0x00, 0x00, 0x48, 0x8b, 0xf8, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3];
-  /** @param {number[]} a @param {number[]} b */
-  const twoFns = (a, b) => {
+    const twoFns = (a: number[], b: number[]) => {
     const text = new Uint8Array(0x200);
     text.set(a, 0x10);
     text.set(b, 0x80);
@@ -601,13 +601,13 @@ export async function runBindingsTests(test, assert, eq) {
     const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12 });
     assert(r.ok, r.ok ? "" : r.reason);
     if (!r.ok) return;
-    eq(r.signature.pattern, "40 53 48 83 EC 20 E8 ?? ?? ?? ?? 48 8B D8");
-    eq(r.signature.offset, 0);
-    eq(r.signature.exactLen, 14);
-    eq(r.signature.wildcards.length, 1);
-    eq(r.signature.wildcards[0].at, 7);
-    eq(r.signature.wildcards[0].len, 4);
-    eq(scanExec(p, f.buf, parsePattern(r.signature.pattern)).count, 1);
+    eq(r.signature!.pattern, "40 53 48 83 EC 20 E8 ?? ?? ?? ?? 48 8B D8");
+    eq(r.signature!.offset, 0);
+    eq(r.signature!.exactLen, 14);
+    eq(r.signature!.wildcards.length, 1);
+    eq(r.signature!.wildcards[0].at, 7);
+    eq(r.signature!.wildcards[0].len, 4);
+    eq(scanExec(p, f.buf, parsePattern(r.signature!.pattern)).count, 1);
   });
   test("makeSignature: a relinked copy (different rel32) still matches the wildcarded pattern once", () => {
     const f1 = twoFns(fnA, fnB);
@@ -618,7 +618,7 @@ export async function runBindingsTests(test, assert, eq) {
     const fnA2 = fnA.slice(); fnA2[7] = 0x77; fnA2[8] = 0x66;
     const f2 = twoFns(fnA2, fnB);
     const p2 = parsePe(f2.buf);
-    const hit = scanExec(p2, f2.buf, parsePattern(r.signature.pattern));
+    const hit = scanExec(p2, f2.buf, parsePattern(r.signature!.pattern));
     eq(hit.count, 1);
     eq(hit.hits[0], f2.rva(".text", 0x10));
   });
@@ -631,8 +631,8 @@ export async function runBindingsTests(test, assert, eq) {
     const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 8 });
     assert(r.ok, r.ok ? "" : r.reason);
     if (!r.ok) return;
-    eq(r.signature.pattern, "40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? C3");
-    assert(!r.signature.pattern.endsWith("??"), "fixed tail");
+    eq(r.signature!.pattern, "40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? C3");
+    assert(!r.signature!.pattern.endsWith("??"), "fixed tail");
   });
   test("makeSignature: honours the cap (ok:false with a reason) when no unique prefix exists", () => {
     const shared = Array.from({ length: 40 }, (_, i) => [0x48, 0x8b, 0xc1, 0x90][i % 4]); // 40 identical, reloc-free bytes
@@ -654,31 +654,30 @@ export async function runBindingsTests(test, assert, eq) {
     const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 32, maxOffset: 64 });
     assert(r.ok, r.ok ? "" : r.reason);
     if (!r.ok) return;
-    assert(r.signature.offset < 0, `offset ${r.signature.offset}`);
-    const hit = scanExec(p, f.buf, parsePattern(r.signature.pattern));
+    assert(r.signature!.offset < 0, `offset ${r.signature!.offset}`);
+    const hit = scanExec(p, f.buf, parsePattern(r.signature!.pattern));
     eq(hit.count, 1);
-    eq(hit.hits[0] + r.signature.offset, f.rva(".text", 0x10), "hit + offset == function start");
+    eq(hit.hits[0] + r.signature!.offset, f.rva(".text", 0x10), "hit + offset == function start");
   });
   if (exe) {
     test("T1 real exe: every manifest function signature regenerates unique at its rva; >= 5 carry wildcards; Status_GetCategory fits the cap or is reported", () => {
       const m = loadManifest(realPath);
       const p = parsePe(exe);
-      /** @type {string[]} */
-      const bad = [];
+      const bad: string[] = [];
       let wild = 0;
       let n = 0;
       let cat = "";
       for (const e of m.entries) {
         if (e.kind !== "function" || !e.signature) continue;
         n++;
-        const rva = parseInt(e.rva, 16);
+        const rva = parseInt(e.rva!, 16);
         const r = makeSignature(p, exe, rva, { minLen: 12, cap: m.sigCap });
         if (!r.ok) { if (e.name === "Status_GetCategory") cat = r.reason; else bad.push(`${e.name}: ${r.reason}`); continue; }
-        if (r.signature.wildcards.length) wild++;
-        const hit = scanExec(p, exe, parsePattern(r.signature.pattern, m.sigCap));
-        if (hit.count !== 1 || hit.hits[0] + r.signature.offset !== rva) bad.push(`${e.name}: ${hit.count} hits`);
-        if (r.signature.pattern.endsWith("??")) bad.push(`${e.name}: ends in a wildcard`);
-        if (e.name === "Status_GetCategory") cat = `ok ${r.signature.exactLen} bytes, offset ${r.signature.offset}`;
+        if (r.signature!.wildcards.length) wild++;
+        const hit = scanExec(p, exe, parsePattern(r.signature!.pattern, m.sigCap));
+        if (hit.count !== 1 || hit.hits[0] + r.signature!.offset !== rva) bad.push(`${e.name}: ${hit.count} hits`);
+        if (r.signature!.pattern.endsWith("??")) bad.push(`${e.name}: ends in a wildcard`);
+        if (e.name === "Status_GetCategory") cat = `ok ${r.signature!.exactLen} bytes, offset ${r.signature!.offset}`;
       }
       assert(bad.length === 0, bad.join("; "));
       assert(n >= 34, `functions with signatures: ${n}`);
@@ -688,13 +687,15 @@ export async function runBindingsTests(test, assert, eq) {
   }
   // ---- check.ts: is the installed exe a known build, and do the signatures still hold? ----
   console.log("\n# Bindings: check-build (identity + per-signature scan)");
-  const ck = await load("../src/core/bindings/check.ts");
-  if (ck.__error) {
+  const ck = await load<typeof import("../src/core/bindings/check.ts")>("../src/core/bindings/check.ts");
+  if ("__error" in ck) {
     test("check.ts loads", () => assert(false, ck.__error));
     return;
   }
   const { checkBuild, checkInstalledBuild } = ck;
-  const apiMod = await load("../src/core/api.ts");
+  const apiLoaded = await load<typeof import("../src/core/api.ts")>("../src/core/api.ts");
+  const apiErr = "__error" in apiLoaded ? apiLoaded.__error : "";
+  const apiMod = "__error" in apiLoaded ? null : apiLoaded;
 
   /** A fake build with two signed functions, as a manifest + PE pair. */
   const fakeKnownPe = twoFns(fnA, fnB);
@@ -702,8 +703,7 @@ export async function runBindingsTests(test, assert, eq) {
   const sigA = makeSignature(fakeKnownParsed, fakeKnownPe.buf, fakeKnownPe.rva(".text", 0x10), { minLen: 12 });
   const sigB = makeSignature(fakeKnownParsed, fakeKnownPe.buf, fakeKnownPe.rva(".text", 0x80), { minLen: 12 });
   assert(sigA.ok && sigB.ok, "fake signatures");
-  /** @type {any} */
-  const fakeManifest = parseManifest({
+    const fakeManifest = parseManifest({
     format: 1,
     build: { steamBuildId: "777", gameVersion: "7.7.7", name: "7.7.7 (steam 777)", timeDateStamp: "0x11111111", sizeOfImage: "0x" + fakeKnownParsed.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "c".repeat(64), exeSize: fakeKnownPe.buf.length, sdlVersion: "3.2.12" },
     sigCap: 128,
@@ -720,7 +720,7 @@ export async function runBindingsTests(test, assert, eq) {
     eq(r.known, true);
     eq(r.build.matched && r.build.matched.steamBuildId, "777");
     eq(r.build.timeDateStamp, "0x11111111");
-    eq(r.entries.map((/** @type {any} */ e) => `${e.name}:${e.status}`).join(","), "FnA:ok,FnB:ok");
+    eq(r.entries.map((e) => `${e.name}:${e.status}`).join(","), "FnA:ok,FnB:ok");
     eq(r.summary.ok, 2);
     eq(r.summary.unscanned, 2, "raw-RVA function + data entry are not scannable");
     eq(r.summary.total, 4);
@@ -736,14 +736,14 @@ export async function runBindingsTests(test, assert, eq) {
     eq(r.build.matched, null);
     eq(r.build.timeDateStamp, "0x22222222");
     eq(r.build.scannedWith, "777", "falls back to the newest manifest to show how many signatures survive");
-    const by = Object.fromEntries(r.entries.map((/** @type {any} */ e) => [e.name, e]));
+    const by: Record<string, CheckEntry> = Object.fromEntries(r.entries.map((e) => [e.name, e]));
     eq(by.FnA.status, "moved");
     eq(by.FnA.hit, "0x" + shifted.rva(".text", 0x30).toString(16));
     eq(by.FnB.status, "ok");
     // a build where fnA is gone entirely
     const gone = buildFakePe({ timeDateStamp: 0x33333333, sections: [{ name: ".text", bytes: (() => { const t = new Uint8Array(0x200); t.set(fnB, 0x80); return t; })(), exec: true }] });
     const g = checkBuild(gone.buf, [fakeManifest]);
-    eq(g.entries.find((/** @type {any} */ e) => e.name === "FnA").status, "missing");
+    eq(g.entries.find((e) => e.name === "FnA")!.status, "missing");
     eq(g.summary.missing, 1);
   });
   test("checkInstalledBuild: reads <gameDir>/Mewgenics.exe (MEWGENICS_DIR); absent -> ok:false, skipped", () => {
@@ -751,7 +751,7 @@ export async function runBindingsTests(test, assert, eq) {
     try {
       const empty = checkInstalledBuild({ env: { MEWGENICS_DIR: tmp }, manifests: [fakeManifest] });
       assert(!empty.ok && empty.skipped, JSON.stringify(empty));
-      assert(/Mewgenics\.exe/.test(empty.reason), empty.reason);
+      assert(!empty.ok && /Mewgenics\.exe/.test(empty.reason), !empty.ok ? empty.reason : "ok");
       writeFileSync(join(tmp, "Mewgenics.exe"), fakeKnownPe.buf);
       const r = checkInstalledBuild({ env: { MEWGENICS_DIR: tmp }, manifests: [fakeManifest] });
       assert(r.ok, JSON.stringify(r));
@@ -763,10 +763,10 @@ export async function runBindingsTests(test, assert, eq) {
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
   test("api.checkGameBuild forwards env/manifests and never throws on a missing exe", () => {
-    assert(!apiMod.__error, apiMod.__error || "");
+    assert(apiMod !== null, apiErr);
     const tmp = mkdtempSync(join(tmpdir(), "mewcheck-"));
     try {
-      const r = apiMod.checkGameBuild({ env: { MEWGENICS_DIR: tmp }, manifests: [fakeManifest] });
+      const r = apiMod!.checkGameBuild({ env: { MEWGENICS_DIR: tmp }, manifests: [fakeManifest] });
       assert(!r.ok && r.skipped, JSON.stringify(r));
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
@@ -777,14 +777,14 @@ export async function runBindingsTests(test, assert, eq) {
       if (!r.ok) return;
       eq(r.known, true);
       eq(r.build.matched && r.build.matched.steamBuildId, "25143593");
-      eq(r.summary.ok, r.entries.length, r.entries.filter((/** @type {any} */ e) => e.status !== "ok").map((/** @type {any} */ e) => `${e.name}:${e.status}`).join(","));
+      eq(r.summary.ok, r.entries.length, r.entries.filter((e) => e.status !== "ok").map((e) => `${e.name}:${e.status}`).join(","));
       assert(r.summary.ok >= 34, `ok ${r.summary.ok}`);
     });
   }
   // ---- harvest.ts: anchors that survive a recompile ------------------------------------
   console.log("\n# Bindings: harvest (strings, callees, rip refs, RTTI, vtable slots, witnesses)");
-  const hv = await load("../src/core/bindings/harvest.ts");
-  if (hv.__error) {
+  const hv = await load<typeof import("../src/core/bindings/harvest.ts")>("../src/core/bindings/harvest.ts");
+  if ("__error" in hv) {
     test("harvest.ts loads", () => assert(false, hv.__error));
     return;
   }
@@ -800,7 +800,7 @@ export async function runBindingsTests(test, assert, eq) {
    */
   const FUNCSIG = "int __cdecl glaiel::foo(void)";
   const TEXT = 0x1000, RDATA = 0x2000, DATA = 0x3000, BASE = 0x140000000;
-  const le32 = (/** @type {number} */ v) => [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
+  const le32 = (v: number) => [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
   const hvText = new Uint8Array(0x100);
   const hvFnA = [
     0x48, 0x8d, 0x0d, ...le32((RDATA + 0x10) - (TEXT + 0x17)),   // lea rcx,[rip+disp] -> funcsig
@@ -860,8 +860,8 @@ export async function runBindingsTests(test, assert, eq) {
     eq(h.strings[0].text, FUNCSIG);
     eq(h.strings[0].role, "funcsig");
     eq(h.strings[0].unique, true);
-    eq(h.callees.map((/** @type {any} */ c) => `${c.ordinal}:${c.name}:${c.target}`).join(","), "0:FnB:0x1040");
-    eq(h.ripRefs.map((/** @type {any} */ r) => `${r.ordinal}:${r.opcode}:${r.target}`).join(","), "0:lea:0x2010,1:mov:0x3100");
+    eq(h.callees.map((c: { ordinal: number; name: string; target: string }) => `${c.ordinal}:${c.name}:${c.target}`).join(","), "0:FnB:0x1040");
+    eq(h.ripRefs.map((r: { ordinal: number; opcode: string; target: string }) => `${r.ordinal}:${r.opcode}:${r.target}`).join(","), "0:lea:0x2010,1:mov:0x3100");
     eq(h.cfgLite.bytes, 0x20);
     eq(h.cfgLite.calls, 1);
     eq(h.cfgLite.ripRefs, 2);
@@ -887,8 +887,7 @@ export async function runBindingsTests(test, assert, eq) {
     eq(deriveFromVtableSlot(hp, hvPe.buf, RDATA + 0x80, 0, "B8 ?? ?? ?? ?? C3", 1), null, "body does not match");
   });
   test("harvestManifest: fills function anchors, resolves witness ordinals, verifies rtti/derive, reports mismatches", () => {
-    /** @type {any} */
-    const m = parseManifest({
+        const m = parseManifest({
       format: 1,
       build: { steamBuildId: "444", gameVersion: "4.4.4", name: "4.4.4 (steam 444)", timeDateStamp: "0x44444444", sizeOfImage: "0x" + hp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "d".repeat(64), exeSize: hvPe.buf.length, sdlVersion: "3.2.12" },
       sigCap: 128,
@@ -904,22 +903,22 @@ export async function runBindingsTests(test, assert, eq) {
       ],
     });
     const { manifest: out, report } = harvestManifest(hp, hvPe.buf, m);
-    const a = entry(out, "FnA");
-    eq(a.anchors.strings[0].text, FUNCSIG);
-    eq(a.anchors.callees[0].name, "FnB");
-    eq(a.anchors.cfgLite.bytes, 0x20);
-    const g = entry(out, "Glob");
-    eq(g.anchors.witness.ripRefOrdinal, 1);
-    eq(g.anchors.witness.needsHarvest, false);
-    eq(report.find((/** @type {any} */ r) => r.name === "Foo_vftable").status, "verified");
-    eq(report.find((/** @type {any} */ r) => r.name === "Foo_typeid").status, "verified");
-    eq(report.find((/** @type {any} */ r) => r.name === "Tbl_slot3").status, "verified");
-    const w = report.find((/** @type {any} */ r) => r.name === "Wrong_vftable");
+    const a = entry(out, "FnA")!;
+    eq(a.anchors.strings![0].text, FUNCSIG);
+    eq(a.anchors.callees![0]!.name, "FnB");
+    eq(a.anchors.cfgLite!.bytes, 0x20);
+    const g = entry(out, "Glob")!;
+    eq(g.anchors.witness!.ripRefOrdinal, 1);
+    eq(g.anchors.witness!.needsHarvest, false);
+    eq(report.find((r) => r.name === "Foo_vftable")!.status, "verified");
+    eq(report.find((r) => r.name === "Foo_typeid")!.status, "verified");
+    eq(report.find((r) => r.name === "Tbl_slot3")!.status, "verified");
+    const w = report.find((r) => r.name === "Wrong_vftable")!;
     eq(w.status, "mismatch");
     assert(/0x2080/.test(w.detail), w.detail);
-    eq(entry(out, "Wrong_vftable").rva, "0x2090", "a mismatch never rewrites the value");
+    eq(entry(out, "Wrong_vftable")!.rva, "0x2090", "a mismatch never rewrites the value");
     eq(validateManifest(out).ok, true, "output validates");
-    eq(report.filter((/** @type {any} */ r) => r.status === "mismatch").length, 1);
+    eq(report.filter((r) => r.status === "mismatch").length, 1);
   });
   test("deriveFromCallArg: the imm32 of the matching instruction within maxBack instructions before the call to callee", () => {
     assert(typeof hv.deriveFromCallArg === "function", "deriveFromCallArg exported");
@@ -934,38 +933,37 @@ export async function runBindingsTests(test, assert, eq) {
       build: { steamBuildId: "444", gameVersion: "4.4.4", name: "4.4.4 (steam 444)", timeDateStamp: "0x44444444", sizeOfImage: "0x" + hp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "d".repeat(64), exeSize: hvPe.buf.length, sdlVersion: "3.2.12" },
       sigCap: 128,
     };
-    const typeid = (/** @type {string} */ value) => ({ name: "Foo_typeid", kind: "constant", value, anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 }, witness: { function: "FnD", callee: "FnB", pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, maxBack: 6 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] });
-    const entries = (/** @type {string} */ value) => [
+    const typeid = (value: string) => ({ name: "Foo_typeid", kind: "constant", value, anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 }, witness: { function: "FnD", callee: "FnB", pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, maxBack: 6 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] });
+    const entries = (value: string) => [
       { name: "FnB", kind: "function", rva: "0x1040", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
       { name: "FnD", kind: "function", rva: "0x1080", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
       { name: "Foo_vftable", kind: "vtable", rva: "0x2080", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
       typeid(value),
     ];
     const ok = harvestManifest(hp, hvPe.buf, parseManifest({ ...base, entries: entries("0x4d6") }));
-    const r1 = ok.report.find((/** @type {any} */ r) => r.name === "Foo_typeid");
+    const r1 = ok.report.find((r) => r.name === "Foo_typeid")!;
     eq(r1.status, "verified", r1.detail);
     assert(/slot body gives 0x4d6/.test(r1.detail) && /call-arg witness .*0x4d6/.test(r1.detail), r1.detail);
     const bad = harvestManifest(hp, hvPe.buf, parseManifest({ ...base, entries: entries("0x4d7") }));
-    const r2 = bad.report.find((/** @type {any} */ r) => r.name === "Foo_typeid");
+    const r2 = bad.report.find((r) => r.name === "Foo_typeid")!;
     eq(r2.status, "mismatch", r2.detail);
     assert(/0x4d6/.test(r2.detail) && /0x4d7/.test(r2.detail), r2.detail);
-    eq(entry(bad.manifest, "Foo_typeid").value, "0x4d7", "never rewritten");
+    eq(entry(bad.manifest, "Foo_typeid")!.value, "0x4d7", "never rewritten");
   });
   if (exe) {
     const m = loadManifest(realPath);
     const p = parsePe(exe);
     test("T1 real exe: 12 of the 13 FW_LK lookups are found by a unique __FUNCSIG__ string xref'd from exactly their function; Status_NameExists has none", () => {
-      /** @type {string[]} */
-      const bad = [];
+            const bad: string[] = [];
       let found = 0;
       for (const e of lkTable(m)) {
-        const h = harvestFunction(p, exe, parseInt(e.rva, 16), { names: new Map() });
-        const sig = h.strings.find((/** @type {any} */ s) => s.role === "funcsig" && s.unique);
+        const h = harvestFunction(p, exe, parseInt(e.rva!, 16), { names: new Map() });
+        const sig = h.strings.find((s: { role: string; unique: boolean }) => s.role === "funcsig" && s.unique);
         if (e.name === "Status_NameExists") { if (sig) bad.push("Status_NameExists unexpectedly has a funcsig"); continue; }
         if (!sig) { bad.push(`${e.name}: no unique funcsig`); continue; }
-        const x = findStringXrefs(p, exe, findString(p, exe, sig.text).rva);
-        const fns = [...new Set(x.map((/** @type {any} */ r) => (r.fn ? r.fn.begin : -1)))];
-        if (fns.length !== 1 || fns[0] !== parseInt(e.rva, 16)) bad.push(`${e.name}: xrefs from ${fns.map((f) => "0x" + f.toString(16)).join(",")}`);
+        const x = findStringXrefs(p, exe, findString(p, exe, sig.text).rva!);
+        const fns = [...new Set<number>(x.map((r: { fn: { begin: number } | null }) => (r.fn ? r.fn.begin : -1)))];
+        if (fns.length !== 1 || fns[0] !== parseInt(e.rva!, 16)) bad.push(`${e.name}: xrefs from ${fns.map((f) => "0x" + f.toString(16)).join(",")}`);
         else found++;
       }
       assert(bad.length === 0, bad.join("; "));
@@ -977,74 +975,64 @@ export async function runBindingsTests(test, assert, eq) {
       const s = findRtti(p, exe, ".?AVStatus@glaiel@@");
       eq(s && hex(s.vftable), "0xed1960");
       eq(deriveFromVtableSlot(p, exe, 0xf57ab8, 1, "B8 ?? ?? ?? ?? C3", 1), 0x4d6);
-      const t = entry(m, "SDL_DYNAPI_table");
+      const t = entry(m, "SDL_DYNAPI_table")!;
       for (const e of m.entries) {
-        if (e.kind === "hvData" && e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table") eq(parseInt(e.rva, 16), parseInt(t.rva, 16) + 8 * e.anchors.derive.index, e.name);
+        if ((e.kind as string) === "hvData" && e.anchors.derive && e.anchors.derive!.table === "SDL_DYNAPI_table") eq(parseInt(e.rva!, 16), parseInt(t.rva!, 16) + 8 * e.anchors.derive!.index!, e.name);
       }
     });
     test("T1 real exe: harvestManifest resolves App_global / DefaultStatusSource witnesses, verifies every rtti/derive, and the committed manifest is already harvested", () => {
       const { manifest: out, report } = harvestManifest(p, exe, m);
-      const mism = report.filter((/** @type {any} */ r) => r.status === "mismatch");
-      assert(mism.length === 0, mism.map((/** @type {any} */ r) => `${r.name}: ${r.detail}`).join("; "));
-      const app = entry(out, "App_global");
-      assert(Number.isInteger(app.anchors.witness.ripRefOrdinal) && app.anchors.witness.needsHarvest === false, `App_global witness ${JSON.stringify(app.anchors.witness)}`);
-      const dss = entry(out, "DefaultStatusSource");
-      assert(Number.isInteger(dss.anchors.witness.ripRefOrdinal) && dss.anchors.witness.needsHarvest === false, `DefaultStatusSource witness ${JSON.stringify(dss.anchors.witness)}`);
-      const withSig = out.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.anchors.strings && e.anchors.strings.some((/** @type {any} */ s) => s.role === "funcsig")).length;
+      const mism = report.filter((r) => r.status === "mismatch");
+      assert(mism.length === 0, mism.map((r) => `${r.name}: ${r.detail}`).join("; "));
+      const app = entry(out, "App_global")!;
+      assert(Number.isInteger(app.anchors.witness!.ripRefOrdinal) && app.anchors.witness!.needsHarvest === false, `App_global witness ${JSON.stringify(app.anchors.witness)}`);
+      const dss = entry(out, "DefaultStatusSource")!;
+      assert(Number.isInteger(dss.anchors.witness!.ripRefOrdinal) && dss.anchors.witness!.needsHarvest === false, `DefaultStatusSource witness ${JSON.stringify(dss.anchors.witness)}`);
+      const withSig = out.entries.filter((e) => e.kind === "function" && e.anchors.strings && e.anchors.strings!.some((s) => s.role === "funcsig")).length;
       assert(withSig >= 20, `funcsig anchors: ${withSig}`);
       assert(JSON.stringify(out) === JSON.stringify(m), "committed anchors are stale: run node tools/bindings/harvest.ts <exe> --manifest bindings/25143593.json --write");
     });
   }
   // ---- port.ts: the resolution ladder, old manifest -> new exe ----------------------------
   console.log("\n# Bindings: port ladder (rescan -> anchor -> caller ordinal; witnesses; report)");
-  const pt = await load("../src/core/bindings/port.ts");
-  if (pt.__error) {
+  const pt = await load<typeof import("../src/core/bindings/port.ts")>("../src/core/bindings/port.ts");
+  if ("__error" in pt) {
     test("port.ts loads", () => assert(false, pt.__error));
     return;
   }
   const { portManifest, renderPortReport, PORT_STATUSES } = pt;
 
-  /**
-   * Mini linker for fake builds. Items in `code` are bytes or placeholders resolved after layout:
-   *   { call: "Fn" } -> E8 rel32, { lea: "str:NAME" } -> 48 8D 0D disp32, { mov: "glob:NAME" } -> 48 8B 05 disp32
-   * @param {{ fns: { name: string, code: (number|{call:string}|{lea:string}|{mov:string})[] }[], strings?: Record<string,string>, globs?: string[], textPad?: number, rdataPad?: number, stamp?: number }} spec
-   */
-  const link = (spec) => {
+    /** Mini linker for fake builds. Items in `code` are bytes or placeholders resolved after layout: { call: "Fn" } -> E8 rel32, { lea: "str:NAME" } -> 48 8D 0D disp32, { mov: "glob:NAME" } -> 48 8B 05 disp32 */
+  const link = (spec: LinkSpec) => {
     const TEXT = 0x1000, RDATA = 0x2000, DATA = 0x3000;
-    const size = (/** @type {any} */ it) => (typeof it === "number" ? 1 : it.call ? 5 : 7);
-    /** @type {Record<string, number>} */
-    const fnAt = {};
+    const size = (it: CodeItem) => (typeof it === "number" ? 1 : "call" in it ? 5 : 7);
+    const fnAt: Record<string, number> = {};
     let pc = TEXT + (spec.textPad || 0x10);
-    for (const f of spec.fns) { pc = (pc + 15) & ~15; fnAt[f.name] = pc; pc += f.code.reduce((/** @type {number} */ n, it) => n + size(it), 0); }
-    /** @type {Record<string, number>} */
-    const strAt = {};
+    for (const f of spec.fns) { pc = (pc + 15) & ~15; fnAt[f.name] = pc; pc += f.code.reduce((n: number, it) => n + size(it), 0); }
+    const strAt: Record<string, number> = {};
     let sp = RDATA + 0x10 + (spec.rdataPad || 0);
     for (const [k, v] of Object.entries(spec.strings || {})) { strAt[k] = sp; sp += v.length + 1; sp = (sp + 3) & ~3; }
-    /** @type {Record<string, number>} */
-    const globAt = {};
+    const globAt: Record<string, number> = {};
     let gp = DATA + 0x10;
     for (const g of spec.globs || []) { globAt[g] = gp; gp += 8; }
     const textBytes = new Uint8Array(0x400);
-    /** @type {{ section: string, begin: number, end: number }[]} */
-    const pdata = [];
+    const pdata: { section: string; begin: number; end: number }[] = [];
     for (const f of spec.fns) {
-      let at = fnAt[f.name];
+      let at = fnAt[f.name]!;
       const begin = at;
-      for (const it0 of f.code) {
-        const it = /** @type {any} */ (it0);
+      for (const it of f.code) {
         if (typeof it === "number") { textBytes[at - TEXT] = it; at += 1; continue; }
-        /** @type {number[]} */
-        let bytes;
-        if (it.call) { const next = at + 5; bytes = [0xe8, ...le32(fnAt[it.call] - next)]; }
-        else if (it.lea) { const next = at + 7; bytes = [0x48, 0x8d, 0x0d, ...le32(strAt[it.lea.slice(4)] - next)]; }
-        else { const next = at + 7; bytes = [0x48, 0x8b, 0x05, ...le32(globAt[it.mov.slice(5)] - next)]; }
+        let bytes: number[];
+        if ("call" in it) { const next = at + 5; bytes = [0xe8, ...le32(fnAt[it.call]! - next)]; }
+        else if ("lea" in it) { const next = at + 7; bytes = [0x48, 0x8d, 0x0d, ...le32(strAt[it.lea.slice(4)]! - next)]; }
+        else { const next = at + 7; bytes = [0x48, 0x8b, 0x05, ...le32(globAt[it.mov.slice(5)]! - next)]; }
         textBytes.set(bytes, at - TEXT);
         at += bytes.length;
       }
       pdata.push({ section: ".text", begin: begin - TEXT, end: at - TEXT });
     }
     const rdataBytes = Buffer.alloc(0x400);
-    for (const [k, v] of Object.entries(spec.strings || {})) rdataBytes.write(v + "\0", strAt[k] - RDATA, "latin1");
+    for (const [k, v] of Object.entries(spec.strings || {})) rdataBytes.write(v + "\0", strAt[k]! - RDATA, "latin1");
     const dataBytes = Buffer.alloc(0x100);
     const img = buildFakePe({ timeDateStamp: spec.stamp ?? 0x51515151, sections: [{ name: ".text", bytes: textBytes, exec: true }, { name: ".rdata", bytes: rdataBytes }, { name: ".data", bytes: dataBytes, write: true }], pdata });
     return { img, pe: parsePe(img.buf), fnAt, strAt, globAt };
@@ -1054,15 +1042,14 @@ export async function runBindingsTests(test, assert, eq) {
   const PRO = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20];           // push rbx; sub rsp,0x20
   const EPI = [0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3];           // add rsp,0x20; pop rbx; ret
   const PRO2 = [0x40, 0x53, 0x48, 0x83, 0xec, 0x30];          // a recompiled prologue (frame 0x30): breaks the v1 signature
-  const bodyA = (/** @type {number[]} */ extra = [], pro = PRO) => [...pro, { lea: "str:A" }, { call: "FnB" }, { mov: "glob:G" }, 0x48, 0x8b, 0xd8, ...extra, ...EPI];
-  const bodyB = (/** @type {number[]} */ extra = []) => [...PRO, { lea: "str:B" }, 0x48, 0x8b, 0xf8, ...extra, ...EPI];
-  const bodyC = (/** @type {number} */ disp = 0x5c) => [...PRO, 0x8b, 0x41, disp, 0x48, 0x8b, 0xc8, 0x48, 0x8b, 0xd0, ...EPI]; // mov eax,[rcx+disp]
+  const bodyA = (extra: number[] = [], pro = PRO) => [...pro, { lea: "str:A" }, { call: "FnB" }, { mov: "glob:G" }, 0x48, 0x8b, 0xd8, ...extra, ...EPI];
+  const bodyB = (extra: number[] = []) => [...PRO, { lea: "str:B" }, 0x48, 0x8b, 0xf8, ...extra, ...EPI];
+  const bodyC = (disp: number = 0x5c) => [...PRO, 0x8b, 0x41, disp, 0x48, 0x8b, 0xc8, 0x48, 0x8b, 0xd0, ...EPI]; // mov eax,[rcx+disp]
   const v1 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"] });
   /** the v1 manifest: signatures generated and anchors harvested on v1 */
   const mkOld = () => {
-    const sig = (/** @type {number} */ rva) => { const r = makeSignature(v1.pe, v1.img.buf, rva, { minLen: 8 }); return r.ok ? r.signature : null; };
-    /** @type {any} */
-    const m = parseManifest({
+    const sig = (rva: number) => { const r = makeSignature(v1.pe, v1.img.buf, rva, { minLen: 8 }); return r.ok ? r.signature : null; };
+      const m = parseManifest({
       format: 1,
       build: { steamBuildId: "100", gameVersion: "1.0.0", name: "1.0.0 (steam 100)", timeDateStamp: "0x51515151", sizeOfImage: "0x" + v1.pe.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "e".repeat(64), exeSize: v1.img.buf.length, sdlVersion: "3.2.12" },
       sigCap: 128,
@@ -1078,10 +1065,13 @@ export async function runBindingsTests(test, assert, eq) {
     return harvestManifest(v1.pe, v1.img.buf, m).manifest;
   };
   const old = mkOld();
-  /** @param {any} v2 @param {Record<string, any>} [opts] */
-  const port = (v2, opts = {}) => portManifest(old, v2.pe, v2.img.buf, { steamBuildId: "200", gameVersion: "2.0.0", ...opts });
-  /** @param {any} r @param {string} name */
-  const row = (r, name) => r.rows.find((/** @type {any} */ x) => x.name === name);
+    const port = (v2: ReturnType<typeof link>, opts: Record<string, any> = {}) => portManifest(old, v2.pe, v2.img.buf, { steamBuildId: "200", gameVersion: "2.0.0", ...opts });
+    /** A port-report row by name (a missing row fails the assertion that asked for it). */
+    const row = (r: PortResult, name: string): PortRow => {
+      const x = r.rows.find((x) => x.name === name);
+      if (!x) throw new Error(`no report row named ${name}`);
+      return x;
+    };
 
   test("PORT_STATUSES is the closed set the report and the manifest schema use", () => {
     eq(PORT_STATUSES.join(","), "ported-exact,ported-rescan,ported-anchor,ported-witness,ported-derived,proposed,ambiguous,failed,needs-human");
@@ -1094,22 +1084,22 @@ export async function runBindingsTests(test, assert, eq) {
     eq(row(r, "G").status, "ported-witness");
     eq(row(r, "Foo_stacks").status, "ported-witness");
     eq(row(r, "Mystery").status, "needs-human");
-    eq(entry(r.manifest, "FnA").rva, hex(v1.fnAt.FnA));
-    eq(entry(r.manifest, "Mystery").value, "0x10", "value carried over, flagged");
+    eq(entry(r.manifest, "FnA")!.rva, hex(v1.fnAt.FnA));
+    eq(entry(r.manifest, "Mystery")!.value, "0x10", "value carried over, flagged");
     eq(validateManifest(r.manifest).ok, true, JSON.stringify(validateManifest(r.manifest).problems));
     eq(r.manifest.build.steamBuildId, "100");
-    assert(r.manifest.entries.every((/** @type {any} */ e) => e.port && e.port.from === "100" && PORT_STATUSES.includes(e.port.status)), "every entry carries a port block");
+    assert(r.manifest.entries.every((e) => e.port && e.port.from === "100" && PORT_STATUSES.includes(e.port.status)), "every entry carries a port block");
   });
   test("relink (code and strings shifted, bytes unchanged) -> ported-rescan with the new RVAs; witnesses follow", () => {
     const v2 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], textPad: 0x50, rdataPad: 0x20, stamp: 0x52525252 });
     const r = port(v2);
-    for (const n of ["FnA", "FnB", "FnC"]) { eq(row(r, n).status, "ported-rescan", n); eq(entry(r.manifest, n).rva, hex(v2.fnAt[n]), n); }
+    for (const n of ["FnA", "FnB", "FnC"]) { eq(row(r, n).status, "ported-rescan", n); eq(entry(r.manifest, n)!.rva, hex(v2.fnAt[n]!), n); }
     eq(row(r, "G").status, "ported-witness");
-    eq(entry(r.manifest, "G").rva, hex(v2.globAt.G));
+    eq(entry(r.manifest, "G")!.rva, hex(v2.globAt.G));
     eq(row(r, "Foo_stacks").status, "ported-witness");
     eq(r.manifest.build.timeDateStamp, "0x52525252");
     eq(r.manifest.build.steamBuildId, "200");
-    assert(entry(r.manifest, "FnA").signature && entry(r.manifest, "FnA").signature.pattern, "signature regenerated on the new image");
+    assert(!!(entry(r.manifest, "FnA")!.signature && entry(r.manifest, "FnA")!.signature!.pattern), "signature regenerated on the new image");
     eq(r.summary["ported-rescan"], 3);
     // the report's "old" column must keep the pre-port value (found by the 2026-10-19 cross-build run)
     eq(row(r, "FnA").oldValue, hex(v1.fnAt.FnA), "function row: old = the v1 RVA, not the ported one");
@@ -1120,7 +1110,7 @@ export async function runBindingsTests(test, assert, eq) {
     const v2 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["H", "G"], stamp: 0x5a5a5a5a });
     const r = port(v2);
     eq(row(r, "G").status, "ported-witness");
-    eq(entry(r.manifest, "G").rva, hex(v2.globAt.G));
+    eq(entry(r.manifest, "G")!.rva, hex(v2.globAt.G));
     assert(v2.globAt.G !== v1.globAt.G, "fixture: G moved");
     eq(row(r, "G").oldValue, hex(v1.globAt.G), "witness row: old = the v1 address");
     eq(row(r, "G").newValue, hex(v2.globAt.G));
@@ -1131,39 +1121,39 @@ export async function runBindingsTests(test, assert, eq) {
     const r = port(v2);
     eq(row(r, "FnA").status, "ported-anchor", row(r, "FnA").detail);
     eq(row(r, "FnA").method, "funcsig-xref");
-    eq(entry(r.manifest, "FnA").rva, hex(v2.fnAt.FnA));
+    eq(entry(r.manifest, "FnA")!.rva, hex(v2.fnAt.FnA));
     eq(row(r, "FnB").status, "ported-anchor", row(r, "FnB").detail);
     eq(row(r, "FnB").method, "caller-ordinal");
-    eq(entry(r.manifest, "FnB").rva, hex(v2.fnAt.FnB));
+    eq(entry(r.manifest, "FnB")!.rva, hex(v2.fnAt.FnB));
     eq(row(r, "G").status, "ported-witness");
     // anchor-ported rows record how far the candidate drifted from the old cfgLite (size/calls), so a cross-build
     // report shows whether the tolerances were exercised at all
-    assert(/size [+-]\d+ \/ calls [+-]\d+ vs old/.test(row(r, "FnA").detail), `FnA detail: ${row(r, "FnA").detail}`);
-    assert(/size [+-]\d+ \/ calls [+-]\d+ vs old/.test(row(r, "FnB").detail), `FnB detail: ${row(r, "FnB").detail}`);
+    assert(/size [+-]\d+ \/ calls [+-]\d+ vs old/.test(row(r, "FnA").detail ?? ""), `FnA detail: ${row(r, "FnA").detail}`);
+    assert(/size [+-]\d+ \/ calls [+-]\d+ vs old/.test(row(r, "FnB").detail ?? ""), `FnB detail: ${row(r, "FnB").detail}`);
   });
   test("a clone referencing the same funcsig -> ambiguous with both candidates listed for the agent", () => {
     const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x54545454 });
     const r = port(v2);
     const a = row(r, "FnA");
     eq(a.status, "ambiguous", a.detail);
-    eq(a.candidates.length, 2);
-    eq(a.candidates.map((/** @type {any} */ c) => c.rva).sort().join(","), [hex(v2.fnAt.FnA), hex(v2.fnAt.FnA2)].sort().join(","));
-    assert(a.candidates.every((/** @type {any} */ c) => Number.isInteger(c.bytes) && Number.isInteger(c.calls)), "candidate stats");
-    assert(r.needsAgent.some((/** @type {any} */ x) => x.name === "FnA"), "listed for the agent");
-    eq(entry(r.manifest, "FnA").rva, hex(v1.fnAt.FnA), "old value kept until resolved");
+    eq(a.candidates!.length, 2);
+    eq(a.candidates!.map((c: { rva: string }) => c.rva).sort().join(","), [hex(v2.fnAt.FnA!), hex(v2.fnAt.FnA2!)].sort().join(","));
+    assert(a.candidates!.every((c: { bytes: number; calls: number }) => Number.isInteger(c.bytes) && Number.isInteger(c.calls)), "candidate stats");
+    assert(r.needsAgent.some((x: { name: string }) => x.name === "FnA"), "listed for the agent");
+    eq(entry(r.manifest, "FnA")!.rva, hex(v1.fnAt.FnA), "old value kept until resolved");
     eq(row(r, "G").status, "failed", "witness function unresolved -> the global cannot be ported");
   });
   test("string gone and bytes changed -> failed with the reason; --resolve supplies the answer and re-anchors", () => {
     const v2 = link({ fns: [{ name: "FnA", code: [...PRO, { call: "FnB" }, { mov: "glob:G" }, 0x48, 0x8b, 0xd8, 0x90, 0x90, ...EPI] }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { B: SIG_B }, globs: ["G"], stamp: 0x55555555 });
     const r = port(v2);
     eq(row(r, "FnA").status, "failed", row(r, "FnA").detail);
-    assert(/funcsig|string/.test(row(r, "FnA").detail), row(r, "FnA").detail);
+    assert(/funcsig|string/.test(row(r, "FnA").detail ?? ""), row(r, "FnA").detail ?? "");
     const fixed = port(v2, { resolve: { FnA: hex(v2.fnAt.FnA) } });
     eq(row(fixed, "FnA").status, "ported-anchor");
     eq(row(fixed, "FnA").method, "resolved");
-    eq(entry(fixed.manifest, "FnA").rva, hex(v2.fnAt.FnA));
+    eq(entry(fixed.manifest, "FnA")!.rva, hex(v2.fnAt.FnA));
     eq(row(fixed, "G").status, "ported-witness", "the witness now resolves through the supplied function");
-    assert(entry(fixed.manifest, "FnA").anchors.cfgLite.bytes > 0, "anchors re-harvested on the new image");
+    assert(entry(fixed.manifest, "FnA")!.anchors.cfgLite!.bytes > 0, "anchors re-harvested on the new image");
   });
   test("struct offset witness: same displacement -> ported-witness; changed -> proposed (value NOT applied)", () => {
     const same = port(link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x5c) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x56565656 }));
@@ -1171,9 +1161,9 @@ export async function runBindingsTests(test, assert, eq) {
     const moved = port(link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x57575757 }));
     const o = row(moved, "Foo_stacks");
     eq(o.status, "proposed", o.detail);
-    assert(/0x5c/.test(o.detail) && /0x60/.test(o.detail), o.detail);
-    eq(entry(moved.manifest, "Foo_stacks").value, "0x5c", "proposed values are never applied without a green T2");
-    eq(entry(moved.manifest, "Foo_stacks").port.note && /0x60/.test(entry(moved.manifest, "Foo_stacks").port.note), true, "the proposal is recorded in the port block");
+    assert(/0x5c/.test(o.detail ?? "") && /0x60/.test(o.detail ?? ""), o.detail ?? "");
+    eq(entry(moved.manifest, "Foo_stacks")!.value, "0x5c", "proposed values are never applied without a green T2");
+    eq(!!(entry(moved.manifest, "Foo_stacks")!.port!.note && /0x60/.test(entry(moved.manifest, "Foo_stacks")!.port!.note!)), true, "the proposal is recorded in the port block");
   });
   test("renderPortReport: summary line, one row per entry, needs-attention sections with candidates and next steps", () => {
     const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x58585858 });
@@ -1205,7 +1195,7 @@ export async function runBindingsTests(test, assert, eq) {
     const same = portManifest(old, hp, hvPe.buf, { steamBuildId: "445", gameVersion: "4.4.5", resolve });
     const r1 = row(same, "Foo_typeid");
     eq(r1.status, "ported-derived", r1.detail);
-    assert(/agree/.test(r1.detail) && /0x4d6/.test(r1.detail), r1.detail);
+    assert(/agree/.test(r1.detail ?? "") && /0x4d6/.test(r1.detail ?? ""), r1.detail ?? "");
     // a build where the slot body says 0x4d7 but the call site still passes 0x4d6: nobody may pick blindly
     const patched = new Uint8Array(hvText);
     patched[0x41] = 0xd7;
@@ -1213,40 +1203,41 @@ export async function runBindingsTests(test, assert, eq) {
     const split = portManifest(old, parsePe(img2.buf), img2.buf, { steamBuildId: "446", gameVersion: "4.4.6", resolve });
     const r2 = row(split, "Foo_typeid");
     eq(r2.status, "needs-human", r2.detail);
-    assert(/0x4d6/.test(r2.detail) && /0x4d7/.test(r2.detail), r2.detail);
-    eq(entry(split.manifest, "Foo_typeid").value, "0x4d6", "old value kept until a human decides");
+    assert(/0x4d6/.test(r2.detail ?? "") && /0x4d7/.test(r2.detail ?? ""), r2.detail ?? "");
+    eq(entry(split.manifest, "Foo_typeid")!.value, "0x4d6", "old value kept until a human decides");
   });
   if (exe) {
     test("T1 real exe: LuckUp type id 0x4d6 is also the imm32 passed to Entity_FindComponentsByTypeId inside Status_ApplyLuckUp (second witness)", () => {
       const m = loadManifest(realPath);
       const p = parsePe(exe);
-      const fn = entry(m, "Status_ApplyLuckUp"), callee = entry(m, "Entity_FindComponentsByTypeId");
-      eq(hv.deriveFromCallArg(p, exe, parseInt(fn.rva, 16), parseInt(callee.rva, 16), "41 B8 ?? ?? ?? ??", 2, 8), 0x4d6);
-      const w = entry(m, "LuckUp_typeid").anchors.witness;
-      assert(w && w.function === "Status_ApplyLuckUp" && w.callee === "Entity_FindComponentsByTypeId", "the committed manifest carries the second witness");
-      const rep = harvestManifest(p, exe, m).report.find((/** @type {any} */ r) => r.name === "LuckUp_typeid");
+      const fn = entry(m, "Status_ApplyLuckUp"), callee = entry(m, "Entity_FindComponentsByTypeId")!;
+      eq(hv.deriveFromCallArg(p, exe, parseInt(fn!.rva!, 16), parseInt(callee!.rva!, 16), "41 B8 ?? ?? ?? ??", 2, 8), 0x4d6);
+      const w = entry(m, "LuckUp_typeid")!.anchors.witness;
+      assert(!!(w && w.function === "Status_ApplyLuckUp" && w.callee === "Entity_FindComponentsByTypeId"), "the committed manifest carries the second witness");
+      const rep = harvestManifest(p, exe, m).report.find((r) => r.name === "LuckUp_typeid")!;
       eq(rep.status, "verified", rep.detail);
       assert(/call-arg witness/.test(rep.detail), rep.detail);
     });
   }
-  const cba = await load("../../tools/bindings/cross-build-args.ts");
+  const cbaLoaded = await load<typeof import("../../tools/bindings/cross-build-args.ts")>("../../tools/bindings/cross-build-args.ts");
+  const cbaErr = "__error" in cbaLoaded ? cbaLoaded.__error : "";
+  const cba = "__error" in cbaLoaded ? null : cbaLoaded;
   test("cross-build.ts args: --old/--new required, --build defaults to 999999999, --gameVersion passed through", () => {
-    assert(!cba.__error, cba.__error || "");
-    const p = cba.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe", "--build", "123", "--gameVersion", "1.1.9"]);
+    assert(cba !== null, cbaErr);
+    const p = cba!.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe", "--build", "123", "--gameVersion", "1.1.9"]);
     eq(p.error, null);
     eq(p.oldPath, "a.exe"); eq(p.newPath, "b.exe"); eq(p.build, "123"); eq(p.gameVersion, "1.1.9");
-    const d = cba.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe"]);
+    const d = cba!.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe"]);
     eq(d.error, null); eq(d.build, "999999999"); eq(d.gameVersion, undefined);
-    assert(/usage/.test(cba.parseCrossBuildArgs(["--old", "a.exe"]).error || ""), "missing --new -> usage error");
-    assert(/usage/.test(cba.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe", "--gameVersion"]).error || ""), "dangling flag -> usage error");
+    assert(/usage/.test(cba!.parseCrossBuildArgs(["--old", "a.exe"]).error || ""), "missing --new -> usage error");
+    assert(/usage/.test(cba!.parseCrossBuildArgs(["--old", "a.exe", "--new", "b.exe", "--gameVersion"]).error || ""), "dangling flag -> usage error");
   });
   if (exe) {
     test("T1 real exe: self-port of bindings/25143593.json onto the installed exe -> every anchored entry ported with identical values; nothing ambiguous or failed", () => {
       const m = loadManifest(realPath);
       const p = parsePe(exe);
       const r = portManifest(m, p, exe, { steamBuildId: "25143593", gameVersion: "1.1.21239" });
-      /** @type {string[]} */
-      const bad = [];
+      const bad: string[] = [];
       for (const rw of r.rows) {
         if (rw.status === "ambiguous" || rw.status === "failed") bad.push(`${rw.name}: ${rw.status} (${rw.detail})`);
         const o = entry(m, rw.name);
@@ -1254,16 +1245,16 @@ export async function runBindingsTests(test, assert, eq) {
         if (o && n && (o.rva !== n.rva || o.value !== n.value)) bad.push(`${rw.name}: value changed ${o.rva || o.value} -> ${n.rva || n.value}`);
       }
       assert(bad.length === 0, bad.join("; "));
-      eq(r.summary["ported-exact"], m.entries.filter((/** @type {any} */ e) => e.kind === "function" && e.signature).length, "every signed function ported-exact");
+      eq(r.summary["ported-exact"], m.entries.filter((e) => e.kind === "function" && e.signature).length, "every signed function ported-exact");
       assert((r.summary["ported-witness"] || 0) >= 2 && (r.summary["ported-derived"] || 0) >= 11, JSON.stringify(r.summary));
-      eq(r.summary["needs-human"], m.entries.filter((/** @type {any} */ e) => e.anchors.unanchored).length, "exactly the unanchored entries need a human");
+      eq(r.summary["needs-human"], m.entries.filter((e) => e.anchors.unanchored).length, "exactly the unanchored entries need a human");
       eq(validateManifest(r.manifest).ok, true);
     });
   }
   // ---- seed.ts: REA_GHIDRA_SEED_FILE from a manifest (Windows Ghidra is read-only) -------
   console.log("\n# Bindings: REA seed file (address<TAB>kind<TAB>name)");
-  const sd = await load("../src/core/bindings/seed.ts");
-  if (sd.__error) {
+  const sd = await load<typeof import("../src/core/bindings/seed.ts")>("../src/core/bindings/seed.ts");
+  if ("__error" in sd) {
     test("seed.ts loads", () => assert(false, sd.__error));
     return;
   }
@@ -1275,8 +1266,8 @@ export async function runBindingsTests(test, assert, eq) {
     assert(text.endsWith("\n"), "trailing newline");
     const lines = text.split("\n").filter(Boolean);
     assert(lines[0].startsWith("# "), "header comment");
-    assert(lines.some((/** @type {any} */ l) => /^# .*steam 1\b/.test(l) || /steamBuildId 1\b/.test(l)), "names the build");
-    const rows = lines.filter((/** @type {any} */ l) => !l.startsWith("#"));
+    assert(lines.some((l: string) => /^# .*steam 1\b/.test(l) || /steamBuildId 1\b/.test(l)), "names the build");
+    const rows = lines.filter((l: string) => !l.startsWith("#"));
     eq(rows.join("|"), ["0x140003000\tlabel\tFoo_vftable", "0x140002000\tlabel\tGlob", "0x140001040\tfunction\tFnB", "0x140001010\tfunction\tFnA"].join("|"));
     assert(!text.includes("Foo_typeid") && !text.includes("Foo_stacks"), "constants and offsets are not addresses");
     const parsed = parseSeed(text);
@@ -1286,23 +1277,22 @@ export async function runBindingsTests(test, assert, eq) {
     eq(parsed[3].name, "FnA");
   });
   test("seedFromManifest on a ported manifest: ambiguous entries become one `function` seed per candidate, named Name__cand_<rva>", () => {
-    /** @type {any} */
-    const m = parseManifest(mini());
-    const a = entry(m, "FnA");
+        const m = parseManifest(mini());
+    const a = entry(m, "FnA")!;
     a.port = { from: "1", status: "ambiguous", method: "candidates", note: "2 candidates", candidates: [{ rva: "0x1200", bytes: 40, calls: 1, via: "funcsig xref" }, { rva: "0x1300", bytes: 44, calls: 1, via: "funcsig xref" }] };
-    const b = entry(m, "FnB");
+    const b = entry(m, "FnB")!;
     b.port = { from: "1", status: "ported-rescan", method: "signature", note: "" };
     const text = seedFromManifest(m);
     assert(text.includes("0x140001300\tfunction\tFnA__cand_0x1300") && text.includes("0x140001200\tfunction\tFnA__cand_0x1200"), text);
     assert(!/\tFnA\n/.test(text), "no seed at the stale FnA address");
     assert(text.includes("0x140001040\tfunction\tFnB"), "ported entries keep their names");
     const failed = parseManifest(mini());
-    entry(failed, "FnA").port = { from: "1", status: "failed", method: "none", note: "no anchor" };
+    entry(failed, "FnA")!.port = { from: "1", status: "failed", method: "none", note: "no anchor" };
     assert(!seedFromManifest(failed).includes("\tFnA"), "a failed entry has no trustworthy address");
   });
   test("parseSeed: ignores comments and blank lines, rejects a bad line with the line number", () => {
     const p = parseSeed("# c\n\n0x140001000\tfunction\tA\n0x140002000\tcode\n0x140003000\tlabel\tL\n");
-    eq(p.map((/** @type {any} */ x) => `${x.kind}:${x.name || ""}`).join(","), "function:A,code:,label:L");
+    eq(p.map((x: { kind: string; name?: string }) => `${x.kind}:${x.name || ""}`).join(","), "function:A,code:,label:L");
     let err = "";
     try { parseSeed("0x1\tfunction\tA\nnope\n"); } catch (e) { err = String(e); }
     assert(/line 2/.test(err), err);
@@ -1311,7 +1301,7 @@ export async function runBindingsTests(test, assert, eq) {
     test("T1: the real manifest seeds every function and vtable/data address (>= 46 functions), e.g. TurnControl_NextTurn and LuckUp_vftable", () => {
       const text = seedFromManifest(loadManifest(realPath));
       const rows = parseSeed(text);
-      assert(rows.filter((/** @type {any} */ x) => x.kind === "function").length >= 46, `functions: ${rows.filter((/** @type {any} */ x) => x.kind === "function").length}`);
+      assert(rows.filter((x: { kind: string }) => x.kind === "function").length >= 46, `functions: ${rows.filter((x: { kind: string }) => x.kind === "function").length}`);
       assert(text.includes("0x1408e3c60\tfunction\tTurnControl_NextTurn"), "NextTurn");
       assert(text.includes("0x140f57ab8\tlabel\tLuckUp_vftable"), "LuckUp vftable");
       assert(text.includes("0x1413c4a30\tlabel\tApp_global"), "App global");
@@ -1320,13 +1310,13 @@ export async function runBindingsTests(test, assert, eq) {
   // ---- api.portBindings + MCP port_bindings ---------------------------------------------
   console.log("\n# Bindings: api.portBindings (dry run / apply under bindings/ only)");
   test("api.portBindings: dry run on a fake exe + manifest file returns rows, summary, needsAgent and the markdown report; writes nothing", () => {
-    assert(!apiMod.__error && typeof apiMod.portBindings === "function", "api.portBindings exists");
+    assert(apiMod !== null && typeof apiMod.portBindings === "function", "api.portBindings exists");
     const tmp = mkdtempSync(join(tmpdir(), "mewport-"));
     try {
       const v2 = link({ fns: [{ name: "FnA", code: bodyA() }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC() }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], textPad: 0x50, stamp: 0x59595959 });
       writeFileSync(join(tmp, "new.exe"), v2.img.buf);
       writeFileSync(join(tmp, "old.json"), JSON.stringify(old));
-      const r = apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "200", version: "2.0.0", dryRun: true });
+      const r = apiMod!.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "200", version: "2.0.0", dryRun: true });
       assert(r.ok, JSON.stringify(r).slice(0, 300));
       if (!r.ok) return;
       eq(r.dryRun, true);
@@ -1347,11 +1337,11 @@ export async function runBindingsTests(test, assert, eq) {
       writeFileSync(join(tmp, "new.exe"), v2.img.buf);
       writeFileSync(join(tmp, "old.json"), JSON.stringify(old));
       let threw = false;
-      try { apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "999", dryRun: false, out: join(tmp, "999.json") }); } catch (e) { threw = e instanceof SafetyError; }
+      try { apiMod!.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "999", dryRun: false, out: join(tmp, "999.json") }); } catch (e) { threw = e instanceof SafetyError; }
       assert(threw, "out outside bindings/ must throw SafetyError");
       assert(!existsSync(join(tmp, "999.json")), "nothing written outside");
-      const r = apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "999", dryRun: false });
-      assert(r.ok && r.written && r.written.manifest === outJson && r.written.report === outMd, JSON.stringify(r.written));
+      const r = apiMod!.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "new.exe"), build: "999", dryRun: false });
+      assert(!!(r.ok && r.written && r.written.manifest === outJson && r.written.report === outMd), JSON.stringify((r as { written?: unknown }).written));
       assert(existsSync(outJson) && existsSync(outMd), "files written under bindings/");
       eq(loadManifest(outJson).build.steamBuildId, "999");
       assert(readFileSync(outMd, "utf8").startsWith("# Port report 100 -> 999"), "report content");
@@ -1365,9 +1355,9 @@ export async function runBindingsTests(test, assert, eq) {
     const tmp = mkdtempSync(join(tmpdir(), "mewport-"));
     try {
       writeFileSync(join(tmp, "old.json"), JSON.stringify(old));
-      const r = apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "missing.exe"), build: "200" });
+      const r = apiMod!.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "missing.exe"), build: "200" });
       assert(!r.ok && r.skipped && /missing\.exe/.test(r.reason), JSON.stringify(r));
-      const b = apiMod.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "old.json"), build: "abc" });
+      const b = apiMod!.portBindings({ from: join(tmp, "old.json"), exe: join(tmp, "old.json"), build: "abc" });
       assert(!b.ok && !b.skipped && /build/.test(b.reason), JSON.stringify(b));
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
@@ -1378,13 +1368,13 @@ export async function runBindingsTests(test, assert, eq) {
     const tmp = mkdtempSync(join(tmpdir(), "mewid-"));
     try {
       writeFileSync(join(tmp, "Mewgenics.exe"), fakeKnownPe.buf);
-      const r = ck.identifyExe(join(tmp, "Mewgenics.exe"), [fakeManifest]);
-      assert(r && r.known === true && r.matched && r.matched.steamBuildId === "777", JSON.stringify(r));
+      const r = ck.identifyExe(join(tmp, "Mewgenics.exe"), [fakeManifest])!;
+      assert(!!(r && r.known === true && r.matched && r.matched.steamBuildId === "777"), JSON.stringify(r));
       eq(r.identity.timeDateStamp, "0x11111111");
       const again = ck.identifyExe(join(tmp, "Mewgenics.exe"), [fakeManifest]);
       assert(again === r, "memoized object identity for the same path + mtime");
       const u = ck.identifyExe(join(tmp, "Mewgenics.exe"), []);
-      assert(u && u.known === false && u.matched === null, "no manifests -> unknown");
+      assert(!!(u && u.known === false && u.matched === null), "no manifests -> unknown");
       eq(ck.identifyExe(join(tmp, "nope.exe"), [fakeManifest]), null);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
@@ -1405,10 +1395,10 @@ export async function runBindingsTests(test, assert, eq) {
         assert(parseInt(m.build.timeDateStamp, 16) === oldPe.timeDateStamp && parseInt(m.build.sizeOfImage, 16) === oldPe.sizeOfImage, `BINDINGS_OLD_EXE is not build ${m.build.steamBuildId}`);
         assert(newPe.timeDateStamp !== oldPe.timeDateStamp || newPe.sizeOfImage !== oldPe.sizeOfImage, "BINDINGS_NEW_EXE must be a different build");
         const r = portManifest(m, newPe, newBuf, { steamBuildId: process.env.BINDINGS_NEW_BUILD || "999999999" });
-        const bad = r.rows.filter((/** @type {any} */ x) => (x.status === "ambiguous" || x.status === "failed") && x.kind !== "offset");
-        const proposed = r.rows.filter((/** @type {any} */ x) => x.status === "proposed");
-        console.log(`      ${Object.entries(r.summary).map(([k, v]) => `${k} ${v}`).join(", ")}${proposed.length ? `; proposed: ${proposed.map((/** @type {any} */ x) => x.name).join(",")}` : ""}`);
-        assert(bad.length === 0, bad.map((/** @type {any} */ x) => `${x.name}: ${x.status} (${x.detail.slice(0, 160)})`).join("; "));
+        const bad = r.rows.filter((x) => (x.status === "ambiguous" || x.status === "failed") && x.kind !== "offset");
+        const proposed = r.rows.filter((x) => x.status === "proposed");
+        console.log(`      ${Object.entries(r.summary).map(([k, v]) => `${k} ${v}`).join(", ")}${proposed.length ? `; proposed: ${proposed.map((x) => x.name).join(",")}` : ""}`);
+        assert(bad.length === 0, bad.map((x) => `${x.name}: ${x.status} (${(x.detail ?? "").slice(0, 160)})`).join("; "));
         eq(validateManifest(r.manifest).ok, true);
       });
     }

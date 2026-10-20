@@ -6,13 +6,13 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EDITOR = join(HERE, "..");
 const REPO = join(EDITOR, "..");
 
-/** @param {string} dir @param {string[]} out */
-function jsFiles(dir, out = []) {
+function jsFiles(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name === "data") continue;
@@ -23,26 +23,33 @@ function jsFiles(dir, out = []) {
   return out;
 }
 
-/** A failing import becomes a failing test. @param {string} rel */
-async function load(rel) {
+/** A failing import becomes a failing test. The module is read loosely on purpose. */
+async function load(rel: string): Promise<Record<string, any> & { __error?: string }> {
   try {
-    return await import(rel);
+    return (await import(rel)) as Record<string, any>;
   } catch (e) {
     return { __error: String(e instanceof Error ? e.message : e) };
   }
 }
 
+/** The subset of JSON Schema the contract check reads. */
+interface JsonSchemaLike {
+  type?: string;
+  properties?: Record<string, { type?: string | string[]; enum?: unknown[] }>;
+  required?: string[];
+  additionalProperties?: unknown;
+  $schema?: string;
+}
+
 /**
  * The parts of a JSON Schema that are the MCP contract: property names and their types/enums,
  * the required set, and additionalProperties.
- * @param {any} schema
  */
-function contract(schema) {
+function contract(schema: JsonSchemaLike) {
   const props = schema && schema.properties ? schema.properties : {};
-  /** @type {Record<string, string>} */
-  const typed = {};
+  const typed: Record<string, string> = {};
   for (const k of Object.keys(props).sort()) {
-    const p = props[k];
+    const p = props[k]!;
     typed[k] = p.enum ? `enum(${[...p.enum].sort().join("|")})` : Array.isArray(p.type) ? p.type.slice().sort().join("|") : String(p.type);
   }
   return {
@@ -53,12 +60,12 @@ function contract(schema) {
   };
 }
 
-/**
- * @param {(name: string, fn: () => void) => void} test
- * @param {(cond: boolean, msg: string) => void} assert
- * @param {(a: unknown, b: unknown, msg?: string) => void} eq
- */
-export async function runTsMigrationTests(test, assert, eq) {
+interface ToolLike {
+  name: string;
+  inputSchema: JsonSchemaLike;
+}
+
+export async function runTsMigrationTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
   console.log("\n# TypeScript migration: no JS source left, TS-only toolchain, MCP schemas from zod");
 
   test("no .mjs/.js source remains under editor/{src,scripts,test,web} and tools/bindings except the MCP shim src/mcp/server.mjs", () => {
@@ -83,7 +90,7 @@ export async function runTsMigrationTests(test, assert, eq) {
 
   test("package.json scripts point at .ts entry points and the README registration names server.ts", () => {
     const pkg = JSON.parse(readFileSync(join(EDITOR, "package.json"), "utf8"));
-    const bad = Object.entries(pkg.scripts).filter(([, v]) => /\.(mjs|js)\b/.test(String(v)));
+    const bad = Object.entries(pkg.scripts as Record<string, string>).filter(([, v]) => /\.(mjs|js)\b/.test(String(v)));
     eq(bad.length, 0, `scripts still naming JS files: ${bad.map(([k, v]) => `${k}=${v}`).join("; ")}`);
     assert(pkg.devDependencies && pkg.devDependencies["@types/node"], "@types/node is a devDependency");
     const readme = readFileSync(join(REPO, "README.md"), "utf8");
@@ -101,21 +108,21 @@ export async function runTsMigrationTests(test, assert, eq) {
   });
 
   // ---- MCP tool schemas from zod -----------------------------------------------------------
-  const golden = JSON.parse(readFileSync(join(HERE, "fixtures", "mcp-tool-schemas.json"), "utf8"));
+  const golden = JSON.parse(readFileSync(join(HERE, "fixtures", "mcp-tool-schemas.json"), "utf8")) as ToolLike[];
   const tools = await load("../src/mcp/tools.ts");
   const { z } = await import("zod");
   test("src/mcp/tools.ts loads and exports TOOLS, TOOL_INPUT (name → zod schema) and callTool", () => {
-    assert(!tools.__error, tools.__error);
+    assert(!tools.__error, tools.__error ?? "");
     assert(Array.isArray(tools.TOOLS), "TOOLS");
     assert(tools.TOOL_INPUT && typeof tools.TOOL_INPUT === "object", "TOOL_INPUT");
     assert(typeof tools.callTool === "function", "callTool");
   });
   test("every tool has a zod input schema and its published inputSchema is generated from it", () => {
     if (tools.__error) throw new Error("tools.ts did not load");
-    for (const t of tools.TOOLS) {
+    for (const t of tools.TOOLS as ToolLike[]) {
       const zs = tools.TOOL_INPUT[t.name];
       assert(!!zs, `${t.name}: zod schema`);
-      const gen = z.toJSONSchema(zs);
+      const gen = z.toJSONSchema(zs) as JsonSchemaLike;
       delete gen.$schema;
       eq(JSON.stringify(contract(t.inputSchema)), JSON.stringify(contract(gen)), `${t.name}: inputSchema is the zod-generated one`);
       assert(!("$schema" in t.inputSchema), `${t.name}: no $schema key on the wire`);
@@ -123,10 +130,12 @@ export async function runTsMigrationTests(test, assert, eq) {
   });
   test("the generated schemas keep the pre-migration contract (golden fixture: names, property types, required, additionalProperties:false)", () => {
     if (tools.__error) throw new Error("tools.ts did not load");
-    eq(tools.TOOLS.map((/** @type {any} */ t) => t.name).join(","), golden.map((/** @type {any} */ g) => g.name).join(","), "tool names and order");
+    const all = tools.TOOLS as ToolLike[];
+    eq(all.map((t) => t.name).join(","), golden.map((g) => g.name).join(","), "tool names and order");
     for (const g of golden) {
-      const t = tools.TOOLS.find((/** @type {any} */ x) => x.name === g.name);
-      eq(JSON.stringify(contract(t.inputSchema)), JSON.stringify(contract(g.inputSchema)), `${g.name}: contract`);
+      const t = all.find((x) => x.name === g.name);
+      assert(!!t, g.name + ": present");
+      eq(JSON.stringify(contract(t!.inputSchema)), JSON.stringify(contract(g.inputSchema)), `${g.name}: contract`);
     }
   });
   // callTool validates synchronously (throws before any handler promise exists), so the sync harness sees it.
@@ -137,7 +146,7 @@ export async function runTsMigrationTests(test, assert, eq) {
       tools.callTool("list_base_data", { category: 1 });
     } catch (e) {
       msg = String(e instanceof Error ? e.message : e);
-      assert(e instanceof tools.ToolError, `ToolError, got ${e && e.constructor && e.constructor.name}`);
+      assert(e instanceof tools.ToolError, `ToolError, got ${e instanceof Object ? e.constructor.name : typeof e}`);
     }
     assert(/category/.test(msg), `message names the argument: ${msg}`);
     let msg2 = "";

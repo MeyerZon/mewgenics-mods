@@ -18,71 +18,80 @@
 //            getlex MovieClip, newclass <i>, 7× popscope, initproperty <QName>, returnvoid.
 // `parseAbc` is the structural reader used by tests (round-trip + vanilla parse).
 
-/**
- * @typedef {Object} AbcNamespace
- * @property {number} kind
- * @property {number} name   string index
- */
-/**
- * @typedef {Object} AbcMultiname
- * @property {number} kind
- * @property {number} [ns]
- * @property {number} [name]
- * @property {number} [nsSet]
- * @property {number} [base]
- * @property {number[]} [params]
- */
-/**
- * @typedef {Object} AbcMethod
- * @property {number} paramCount
- * @property {number} returnType
- * @property {number[]} paramTypes
- * @property {number} name
- * @property {number} flags
- */
-/**
- * @typedef {{ name: number, kind: number, attr: number, slotId?: number, typeName?: number, vindex?: number, vkind?: number, classIndex?: number, func?: number, dispId?: number, method?: number, metadata?: number[] }} AbcTrait
- */
-/**
- * @typedef {Object} AbcInstance
- * @property {number} name
- * @property {number} superName
- * @property {number} flags
- * @property {number} [protectedNs]
- * @property {number[]} interfaces
- * @property {number} iinit
- * @property {AbcTrait[]} traits
- */
-/**
- * @typedef {Object} AbcBody
- * @property {number} method
- * @property {number} maxStack
- * @property {number} localCount
- * @property {number} initScopeDepth
- * @property {number} maxScopeDepth
- * @property {Uint8Array} code
- * @property {number} exceptionCount
- * @property {AbcTrait[]} traits
- */
-/**
- * @typedef {Object} ParsedAbc
- * @property {number} minor
- * @property {number} major
- * @property {number[]} ints          index 0 implicit (0)
- * @property {number[]} uints
- * @property {number[]} doubles
- * @property {string[]} strings       index 0 implicit ("")
- * @property {Array<AbcNamespace | null>} namespaces
- * @property {Array<number[] | null>} nsSets
- * @property {Array<AbcMultiname | null>} multinames
- * @property {AbcMethod[]} methods
- * @property {number} metadataCount
- * @property {AbcInstance[]} instances
- * @property {Array<{ cinit: number, traits: AbcTrait[] }>} classes
- * @property {Array<{ init: number, traits: AbcTrait[] }>} scripts
- * @property {AbcBody[]} bodies
- * @property {number} consumed        bytes consumed by the parse
- */
+export interface AbcNamespace {
+  kind: number;
+  /** string index */
+  name: number;
+}
+export interface AbcMultiname {
+  kind: number;
+  ns?: number;
+  name?: number;
+  nsSet?: number;
+  base?: number;
+  params?: number[];
+}
+export interface AbcMethod {
+  paramCount: number;
+  returnType: number;
+  paramTypes: number[];
+  name: number;
+  flags: number;
+}
+export interface AbcTrait {
+  name: number;
+  kind: number;
+  attr: number;
+  slotId?: number;
+  typeName?: number;
+  vindex?: number;
+  vkind?: number;
+  classIndex?: number;
+  func?: number;
+  dispId?: number;
+  method?: number;
+  metadata?: number[];
+}
+export interface AbcInstance {
+  name: number;
+  superName: number;
+  flags: number;
+  protectedNs?: number;
+  interfaces: number[];
+  iinit: number;
+  traits: AbcTrait[];
+}
+export interface AbcBody {
+  method: number;
+  maxStack: number;
+  localCount: number;
+  initScopeDepth: number;
+  maxScopeDepth: number;
+  code: Uint8Array;
+  exceptionCount: number;
+  traits: AbcTrait[];
+}
+export interface ParsedAbc {
+  minor: number;
+  major: number;
+  /** index 0 implicit (0) */
+  ints: number[];
+  uints: number[];
+  doubles: number[];
+  /** index 0 implicit ("") */
+  strings: string[];
+  namespaces: Array<AbcNamespace | null>;
+  nsSets: Array<number[] | null>;
+  multinames: Array<AbcMultiname | null>;
+  methods: AbcMethod[];
+  metadataCount: number;
+  instances: AbcInstance[];
+  classes: Array<{ cinit: number; traits: AbcTrait[] }>;
+  scripts: Array<{ init: number; traits: AbcTrait[] }>;
+  bodies: AbcBody[];
+  /** bytes consumed by the parse */
+  consumed: number;
+}
 
 const NS_PACKAGE = 0x16;
 const NS_PROTECTED = 0x18;
@@ -92,20 +101,17 @@ const DEC = new TextDecoder();
 
 /** Little ABC byte writer (u8 / u16 / u30 / d64 / bytes). */
 class AbcWriter {
+  out: number[];
   constructor() {
-    /** @type {number[]} */
     this.out = [];
   }
-  /** @param {number} v */
-  u8(v) {
+  u8(v: number): void {
     this.out.push(v & 0xff);
   }
-  /** @param {number} v */
-  u16(v) {
+  u16(v: number): void {
     this.out.push(v & 0xff, (v >>> 8) & 0xff);
   }
-  /** @param {number} v */
-  u30(v) {
+  u30(v: number): void {
     let x = v >>> 0;
     do {
       let b = x & 0x7f;
@@ -114,48 +120,44 @@ class AbcWriter {
       this.out.push(b);
     } while (x);
   }
-  /** @param {Uint8Array | number[]} bytes */
-  bytes(bytes) {
+  bytes(bytes: Uint8Array | number[]): void {
     for (const b of bytes) this.out.push(b);
   }
-  /** @param {string} s */
-  string(s) {
+  string(s: string): void {
     const b = ENC.encode(s);
     this.u30(b.length);
     this.bytes(b);
   }
-  finish() {
+  finish(): Uint8Array {
     return Uint8Array.from(this.out);
   }
 }
 
 /** Constant pool with Flash's interning order. */
 class Pool {
+  /** explicit string entries (index 1..) */
+  strings: string[];
+  namespaces: AbcNamespace[];
+  multinames: AbcMultiname[];
   constructor() {
-    /** explicit string entries (index 1..) */
-    this.strings = /** @type {string[]} */ ([]);
-    /** @type {AbcNamespace[]} */
+    this.strings = [];
     this.namespaces = [];
-    /** @type {AbcMultiname[]} */
     this.multinames = [];
   }
-  /** @param {string} s */
-  string(s) {
+  string(s: string): number {
     const i = this.strings.indexOf(s);
     if (i >= 0) return i + 1;
     this.strings.push(s);
     return this.strings.length;
   }
-  /** @param {number} kind @param {string} name */
-  namespace(kind, name) {
+  namespace(kind: number, name: string): number {
     const nameIdx = this.string(name);
     const i = this.namespaces.findIndex((n) => n.kind === kind && n.name === nameIdx);
     if (i >= 0) return i + 1;
     this.namespaces.push({ kind, name: nameIdx });
     return this.namespaces.length;
   }
-  /** @param {string} pkg @param {string} name */
-  qname(pkg, name) {
+  qname(pkg: string, name: string): number {
     const ns = this.namespace(NS_PACKAGE, pkg);
     const nameIdx = this.string(name);
     const i = this.multinames.findIndex((m) => m.kind === MN_QNAME && m.ns === ns && m.name === nameIdx);
@@ -165,12 +167,8 @@ class Pool {
   }
 }
 
-/**
- * Split "pkg.sub.Name" into package and local name at the last dot ("Name" → ["", "Name"]).
- * @param {string} full
- * @returns {[string, string]}
- */
-export function splitClassName(full) {
+/** Split "pkg.sub.Name" into package and local name at the last dot ("Name" → ["", "Name"]). */
+export function splitClassName(full: string): [string, string] {
   const i = full.lastIndexOf(".");
   return i < 0 ? ["", full] : [full.slice(0, i), full.slice(i + 1)];
 }
@@ -178,13 +176,10 @@ export function splitClassName(full) {
 /**
  * Build the linkage ABC for the given SymbolClass names (each becomes a MovieClip
  * subclass). Names repeat Flash's convention: dots separate the package.
- * @param {string[]} names
- * @returns {Uint8Array}
  */
-export function buildLinkageAbc(names) {
+export function buildLinkageAbc(names: string[]): Uint8Array {
   const pool = new Pool();
-  /** @type {Array<{ qname: number, superName: number, protectedNs: number }>} */
-  const classes = [];
+  const classes: Array<{ qname: number; superName: number; protectedNs: number }> = [];
   for (const full of names) {
     const [pkg, name] = splitClassName(full);
     const qname = pool.qname(pkg, name);
@@ -283,11 +278,7 @@ export function buildLinkageAbc(names) {
   return w.finish();
 }
 
-/**
- * @param {AbcWriter} w @param {number} method @param {number} maxStack @param {number} locals
- * @param {number} initScope @param {number} maxScope @param {Uint8Array | number[]} code
- */
-function body(w, method, maxStack, locals, initScope, maxScope, code) {
+function body(w: AbcWriter, method: number, maxStack: number, locals: number, initScope: number, maxScope: number, code: Uint8Array | number[]): void {
   w.u30(method);
   w.u30(maxStack);
   w.u30(locals);
@@ -304,17 +295,15 @@ function body(w, method, maxStack, locals, initScope, maxScope, code) {
 /**
  * Structural ABC parse (constant pool, methods, metadata, instances/classes, scripts,
  * bodies). Throws on malformed input. `consumed` lets callers assert the whole blob was read.
- * @param {Uint8Array} bytes
- * @returns {ParsedAbc}
  */
-export function parseAbc(bytes) {
+export function parseAbc(bytes: Uint8Array): ParsedAbc {
   let q = 0;
-  const u8 = () => {
+  const u8 = (): number => {
     if (q >= bytes.length) throw new Error(`abc: read past end at ${q}`);
     return bytes[q++];
   };
-  const u16 = () => u8() | (u8() << 8);
-  const u30 = () => {
+  const u16 = (): number => u8() | (u8() << 8);
+  const u30 = (): number => {
     let r = 0;
     let mult = 1;
     for (let i = 0; i < 5; i++) {
@@ -325,11 +314,11 @@ export function parseAbc(bytes) {
     }
     return r;
   };
-  const s32 = () => {
+  const s32 = (): number => {
     const v = u30();
     return v >= 0x80000000 ? v - 0x100000000 : v;
   };
-  const d64 = () => {
+  const d64 = (): number => {
     if (q + 8 > bytes.length) throw new Error("abc: truncated double");
     const dv = new DataView(bytes.buffer, bytes.byteOffset + q, 8);
     q += 8;
@@ -355,21 +344,18 @@ export function parseAbc(bytes) {
     q += len;
   }
   const nNs = u30();
-  /** @type {Array<AbcNamespace | null>} */
-  const namespaces = [null];
+  const namespaces: Array<AbcNamespace | null> = [null];
   for (let i = 1; i < nNs; i++) namespaces.push({ kind: u8(), name: u30() });
   const nSet = u30();
-  /** @type {Array<number[] | null>} */
-  const nsSets = [null];
+  const nsSets: Array<number[] | null> = [null];
   for (let i = 1; i < nSet; i++) {
     const c = u30();
-    const set = [];
+    const set: number[] = [];
     for (let j = 0; j < c; j++) set.push(u30());
     nsSets.push(set);
   }
   const nMn = u30();
-  /** @type {Array<AbcMultiname | null>} */
-  const multinames = [null];
+  const multinames: Array<AbcMultiname | null> = [null];
   for (let i = 1; i < nMn; i++) {
     const kind = u8();
     switch (kind) {
@@ -396,7 +382,7 @@ export function parseAbc(bytes) {
       case 0x1d: {
         const base = u30();
         const c = u30();
-        const params = [];
+        const params: number[] = [];
         for (let j = 0; j < c; j++) params.push(u30());
         multinames.push({ kind, base, params });
         break;
@@ -406,12 +392,11 @@ export function parseAbc(bytes) {
     }
   }
   const nMeth = u30();
-  /** @type {AbcMethod[]} */
-  const methods = [];
+  const methods: AbcMethod[] = [];
   for (let i = 0; i < nMeth; i++) {
     const paramCount = u30();
     const returnType = u30();
-    const paramTypes = [];
+    const paramTypes: number[] = [];
     for (let j = 0; j < paramCount; j++) paramTypes.push(u30());
     const name = u30();
     const flags = u8();
@@ -434,15 +419,13 @@ export function parseAbc(bytes) {
       u30();
     }
   }
-  const traits = () => {
+  const traits = (): AbcTrait[] => {
     const c = u30();
-    /** @type {AbcTrait[]} */
-    const out = [];
+    const out: AbcTrait[] = [];
     for (let i = 0; i < c; i++) {
       const name = u30();
       const kindByte = u8();
-      /** @type {AbcTrait} */
-      const t = { name, kind: kindByte & 0x0f, attr: kindByte >> 4 };
+      const t: AbcTrait = { name, kind: kindByte & 0x0f, attr: kindByte >> 4 };
       switch (t.kind) {
         case 0:
         case 6:
@@ -473,14 +456,12 @@ export function parseAbc(bytes) {
     return out;
   };
   const nCls = u30();
-  /** @type {AbcInstance[]} */
-  const instances = [];
+  const instances: AbcInstance[] = [];
   for (let i = 0; i < nCls; i++) {
     const name = u30();
     const superName = u30();
     const flags = u8();
-    /** @type {AbcInstance} */
-    const inst = { name, superName, flags, interfaces: [], iinit: 0, traits: [] };
+    const inst: AbcInstance = { name, superName, flags, interfaces: [], iinit: 0, traits: [] };
     if (flags & 0x08) inst.protectedNs = u30();
     const ic = u30();
     for (let j = 0; j < ic; j++) inst.interfaces.push(u30());
@@ -488,14 +469,13 @@ export function parseAbc(bytes) {
     inst.traits = traits();
     instances.push(inst);
   }
-  const classes = [];
+  const classes: Array<{ cinit: number; traits: AbcTrait[] }> = [];
   for (let i = 0; i < nCls; i++) classes.push({ cinit: u30(), traits: traits() });
   const nScr = u30();
-  const scripts = [];
+  const scripts: Array<{ init: number; traits: AbcTrait[] }> = [];
   for (let i = 0; i < nScr; i++) scripts.push({ init: u30(), traits: traits() });
   const nBody = u30();
-  /** @type {AbcBody[]} */
-  const bodies = [];
+  const bodies: AbcBody[] = [];
   for (let i = 0; i < nBody; i++) {
     const method = u30();
     const maxStack = u30();
@@ -519,11 +499,8 @@ export function parseAbc(bytes) {
   return { minor, major, ints, uints, doubles, strings, namespaces, nsSets, multinames, methods, metadataCount, instances, classes, scripts, bodies, consumed: q };
 }
 
-/**
- * Human-readable "ns:name" for a QName multiname (tests / reports).
- * @param {ParsedAbc} abc @param {number} index
- */
-export function multinameToString(abc, index) {
+/** Human-readable "ns:name" for a QName multiname (tests / reports). */
+export function multinameToString(abc: ParsedAbc, index: number): string {
   const mn = abc.multinames[index];
   if (!mn || mn.ns === undefined || mn.name === undefined) return `#${index}`;
   const ns = abc.namespaces[mn.ns];

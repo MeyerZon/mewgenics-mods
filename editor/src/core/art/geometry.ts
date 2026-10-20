@@ -11,23 +11,28 @@
 //   x' = a*x + c*y + e ;  y' = b*x + d*y + f
 // (SWF MATRIX: ScaleX=a, RotateSkew0=b, RotateSkew1=c, ScaleY=d, TranslateX=e, TranslateY=f.)
 
-/** @typedef {[number, number, number, number, number, number]} Mat */
+export type Mat = [number, number, number, number, number, number];
 
-/** @type {Mat} */
-export const IDENTITY = [1, 0, 0, 1, 0, 0];
+export const IDENTITY: Mat = [1, 0, 0, 1, 0, 0];
 
-/**
- * @typedef {{ t: 'L', x: number, y: number } | { t: 'Q', cx: number, cy: number, x: number, y: number }} Edge
- * @typedef {{ start: [number, number], edges: Edge[], closed: boolean }} SubPath
- */
+export type Edge = { t: "L"; x: number; y: number } | { t: "Q"; cx: number; cy: number; x: number; y: number };
+export interface SubPath {
+  start: [number, number];
+  edges: Edge[];
+  closed: boolean;
+}
+
+export interface Bounds {
+  xmin: number;
+  ymin: number;
+  xmax: number;
+  ymax: number;
+}
 
 // ---- matrices ---------------------------------------------------------------
 
-/**
- * m1 ∘ m2: apply m2 first, then m1 (same as SVG `transform="m1 m2"`).
- * @param {Mat} m1 @param {Mat} m2 @returns {Mat}
- */
-export function multiply(m1, m2) {
+/** m1 ∘ m2: apply m2 first, then m1 (same as SVG `transform="m1 m2"`). */
+export function multiply(m1: Mat, m2: Mat): Mat {
   return [
     m1[0] * m2[0] + m1[2] * m2[1],
     m1[1] * m2[0] + m1[3] * m2[1],
@@ -38,24 +43,29 @@ export function multiply(m1, m2) {
   ];
 }
 
-/** @param {Mat} m @param {number} x @param {number} y @returns {[number, number]} */
-export function apply(m, x, y) {
+export function apply(m: Mat, x: number, y: number): [number, number] {
   return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 }
 
-/** @param {Mat} m */
-export function isIdentity(m) {
+export function isIdentity(m: Mat): boolean {
   return m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
+}
+
+export interface TransformFields {
+  x?: number;
+  y?: number;
+  sx?: number;
+  sy?: number;
+  rot?: number;
+  skew?: number;
 }
 
 /**
  * Build a matrix from the scene's placement fields: translate(x,y) · rotate(rot°) ·
  * skewX(skew°) · scale(sx,sy). Rotation is clockwise-positive on screen (y down),
  * matching Flash's `rotation` property.
- * @param {{ x?: number, y?: number, sx?: number, sy?: number, rot?: number, skew?: number }} t
- * @returns {Mat}
  */
-export function matrixFromTransform(t) {
+export function matrixFromTransform(t: TransformFields): Mat {
   const x = t.x ?? 0;
   const y = t.y ?? 0;
   const sx = t.sx ?? 1;
@@ -74,23 +84,19 @@ export function matrixFromTransform(t) {
   return [round6(a), round6(b), round6(c), round6(d), x, y];
 }
 
-/** @param {number} v */
-function round6(v) {
+function round6(v: number): number {
   return Math.round(v * 1e6) / 1e6;
 }
 
 /**
  * Parse an SVG `transform` attribute into one matrix.
  * Supports matrix(), translate(), scale(), rotate([cx cy]), skewX(), skewY().
- * @param {string | null | undefined} str
- * @returns {Mat}
  */
-export function parseSvgTransform(str) {
-  /** @type {Mat} */
-  let m = IDENTITY;
+export function parseSvgTransform(str: string | null | undefined): Mat {
+  let m: Mat = IDENTITY;
   if (!str) return m;
   const re = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = re.exec(str))) {
     const name = match[1];
     const args = match[2]
@@ -98,11 +104,10 @@ export function parseSvgTransform(str) {
       .split(/[\s,]+/)
       .filter((s) => s.length)
       .map(Number);
-    /** @type {Mat} */
-    let t = IDENTITY;
+    let t: Mat = IDENTITY;
     switch (name) {
       case "matrix":
-        if (args.length === 6) t = /** @type {Mat} */ (args);
+        if (args.length === 6) t = args as Mat;
         break;
       case "translate":
         t = [1, 0, 0, 1, args[0] || 0, args[1] || 0];
@@ -136,24 +141,22 @@ export function parseSvgTransform(str) {
 
 // ---- SVG path data ----------------------------------------------------------
 
-/**
- * @typedef {{ t: 'M'|'L', x: number, y: number }
- *   | { t: 'Q', x1: number, y1: number, x: number, y: number }
- *   | { t: 'C', x1: number, y1: number, x2: number, y2: number, x: number, y: number }
- *   | { t: 'A', rx: number, ry: number, rot: number, large: boolean, sweep: boolean, x: number, y: number }
- *   | { t: 'Z' }} PathCmd
- */
+export type PathCmd =
+  | { t: "M" | "L"; x: number; y: number }
+  | { t: "Q"; x1: number; y1: number; x: number; y: number }
+  | { t: "C"; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
+  | { t: "A"; rx: number; ry: number; rot: number; large: boolean; sweep: boolean; x: number; y: number }
+  | { t: "Z" };
+
+type PathToken = { kind: "cmd"; value: string } | { kind: "num"; value: number };
 
 /**
  * Tokenize + absolutize an SVG path `d` string. Relative commands, H/V, S/T
  * shorthands and implicit repeats are resolved; the output has only
  * M, L, Q, C, A, Z in absolute coordinates.
- * @param {string} d
- * @returns {PathCmd[]}
  */
-export function parsePathData(d) {
-  /** @type {PathCmd[]} */
-  const out = [];
+export function parsePathData(d: string): PathCmd[] {
+  const out: PathCmd[] = [];
   const tokens = tokenizePath(d);
   let i = 0;
   let cx = 0;
@@ -164,19 +167,19 @@ export function parsePathData(d) {
   let lastCtrlX = 0; // for S/T reflection
   let lastCtrlY = 0;
   let lastType = ""; // 'Q' | 'C' | ''
-  const num = () => {
+  const num = (): number => {
     const t = tokens[i++];
     if (t === undefined || t.kind !== "num") throw new Error(`path data: expected number at token ${i - 1}`);
     return t.value;
   };
-  const flag = () => {
+  const flag = (): boolean => {
     const t = tokens[i++];
     if (t === undefined || t.kind !== "num" || (t.value !== 0 && t.value !== 1)) throw new Error(`path data: expected flag at token ${i - 1}`);
     return t.value === 1;
   };
   while (i < tokens.length) {
     const tok = tokens[i];
-    let cmd;
+    let cmd: string;
     if (tok.kind === "cmd") {
       cmd = tok.value;
       i++;
@@ -307,15 +310,10 @@ export function parsePathData(d) {
   return out;
 }
 
-/**
- * @param {string} d
- * @returns {Array<{kind:'cmd', value:string} | {kind:'num', value:number}>}
- */
-function tokenizePath(d) {
-  /** @type {Array<{kind:'cmd', value:string} | {kind:'num', value:number}>} */
-  const out = [];
+function tokenizePath(d: string): PathToken[] {
+  const out: PathToken[] = [];
   const re = /([MmLlHhVvQqTtCcSsAaZz])|([-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?)/g;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = re.exec(d))) {
     if (m[1]) out.push({ kind: "cmd", value: m[1] });
     else out.push({ kind: "num", value: Number(m[2]) });
@@ -325,38 +323,38 @@ function tokenizePath(d) {
 
 // ---- normalization: commands → line/quadratic edges -------------------------
 
+export interface NormalizeOptions {
+  matrix?: Mat;
+  cubicSplits?: number;
+}
+
 /**
  * Normalize path commands into sub-paths of absolute line + quadratic edges,
  * applying `matrix`. Cubics are subdivided into quadratics (midpoint method, `cubicSplits`
  * pieces each — 4 is visually exact for cartoon art), arcs are converted to cubics first.
- * @param {PathCmd[] | string} cmdsOrD
- * @param {{ matrix?: Mat, cubicSplits?: number }} [opts]
- * @returns {SubPath[]}
  */
-export function normalizePath(cmdsOrD, opts = {}) {
+export function normalizePath(cmdsOrD: PathCmd[] | string, opts: NormalizeOptions = {}): SubPath[] {
   const cmds = typeof cmdsOrD === "string" ? parsePathData(cmdsOrD) : cmdsOrD;
   const m = opts.matrix || IDENTITY;
   const splits = Math.max(1, opts.cubicSplits ?? 4);
-  /** @type {SubPath[]} */
-  const subs = [];
-  /** @type {SubPath | null} */
-  let cur = null;
+  const subs: SubPath[] = [];
+  let cur: SubPath | null = null;
   let cx = 0;
   let cy = 0;
-  const T = (/** @type {number} */ x, /** @type {number} */ y) => apply(m, x, y);
-  const ensure = () => {
+  const T = (x: number, y: number) => apply(m, x, y);
+  const ensure = (): SubPath => {
     if (!cur) {
       cur = { start: T(cx, cy), edges: [], closed: false };
       subs.push(cur);
     }
     return cur;
   };
-  const pushQuad = (/** @type {number} */ x1, /** @type {number} */ y1, /** @type {number} */ x, /** @type {number} */ y) => {
+  const pushQuad = (x1: number, y1: number, x: number, y: number) => {
     const c = T(x1, y1);
     const p = T(x, y);
     ensure().edges.push({ t: "Q", cx: c[0], cy: c[1], x: p[0], y: p[1] });
   };
-  const pushCubic = (/** @type {number[]} */ p0, /** @type {number[]} */ p1, /** @type {number[]} */ p2, /** @type {number[]} */ p3) => {
+  const pushCubic = (p0: number[], p1: number[], p2: number[], p3: number[]) => {
     for (const q of cubicToQuads(p0, p1, p2, p3, splits)) pushQuad(q[0], q[1], q[2], q[3]);
   };
   for (const c of cmds) {
@@ -396,7 +394,7 @@ export function normalizePath(cmdsOrD, opts = {}) {
       }
       case "Z":
         if (cur) {
-          const closing = /** @type {SubPath} */ (cur);
+          const closing: SubPath = cur;
           closing.closed = true;
           // return to subpath start; a following command without M continues from there
           const s = closing.start;
@@ -414,8 +412,7 @@ export function normalizePath(cmdsOrD, opts = {}) {
   return subs.filter((s) => s.edges.length > 0);
 }
 
-/** @param {Mat} m @returns {Mat | null} */
-export function invert(m) {
+export function invert(m: Mat): Mat | null {
   const det = m[0] * m[3] - m[1] * m[2];
   if (!det) return null;
   const a = m[3] / det;
@@ -428,12 +425,10 @@ export function invert(m) {
 /**
  * Approximate a cubic Bézier with `n` quadratics using the midpoint method on each
  * subdivided piece (control point = intersection-free midpoint estimate).
- * @param {number[]} p0 @param {number[]} p1 @param {number[]} p2 @param {number[]} p3 @param {number} n
- * @returns {Array<[number, number, number, number]>} [cx, cy, x, y] per quadratic
+ * @returns [cx, cy, x, y] per quadratic
  */
-export function cubicToQuads(p0, p1, p2, p3, n) {
-  /** @type {Array<[number, number, number, number]>} */
-  const out = [];
+export function cubicToQuads(p0: number[], p1: number[], p2: number[], p3: number[], n: number): Array<[number, number, number, number]> {
+  const out: Array<[number, number, number, number]> = [];
   for (let i = 0; i < n; i++) {
     const t0 = i / n;
     const t1 = (i + 1) / n;
@@ -446,22 +441,15 @@ export function cubicToQuads(p0, p1, p2, p3, n) {
   return out;
 }
 
-/**
- * Sub-curve of a cubic between t0 and t1 (de Casteljau).
- * @param {number[]} p0 @param {number[]} p1 @param {number[]} p2 @param {number[]} p3 @param {number} t0 @param {number} t1
- * @returns {number[][]}
- */
-function cubicSegment(p0, p1, p2, p3, t0, t1) {
+/** Sub-curve of a cubic between t0 and t1 (de Casteljau). */
+function cubicSegment(p0: number[], p1: number[], p2: number[], p3: number[], t0: number, t1: number): number[][] {
   const left = splitCubic(p0, p1, p2, p3, t1)[0];
   const t = t1 === 0 ? 0 : t0 / t1;
   return splitCubic(left[0], left[1], left[2], left[3], t)[1];
 }
-/**
- * @param {number[]} p0 @param {number[]} p1 @param {number[]} p2 @param {number[]} p3 @param {number} t
- * @returns {[number[][], number[][]]}
- */
-function splitCubic(p0, p1, p2, p3, t) {
-  const lerp = (/** @type {number[]} */ a, /** @type {number[]} */ b) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+function splitCubic(p0: number[], p1: number[], p2: number[], p3: number[], t: number): [number[][], number[][]] {
+  const lerp = (a: number[], b: number[]) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   const p01 = lerp(p0, p1);
   const p12 = lerp(p1, p2);
   const p23 = lerp(p2, p3);
@@ -476,14 +464,20 @@ function splitCubic(p0, p1, p2, p3, t) {
 
 /**
  * SVG elliptical arc → cubic Béziers (standard endpoint→center conversion, ≤90° pieces).
- * @returns {Array<[number, number, number, number, number, number]>} [x1,y1,x2,y2,x,y] per cubic
+ * @returns [x1,y1,x2,y2,x,y] per cubic
  */
 export function arcToCubics(
-  /** @type {number} */ x0, /** @type {number} */ y0, /** @type {number} */ rx, /** @type {number} */ ry, /** @type {number} */ rotDeg,
-  /** @type {boolean} */ large, /** @type {boolean} */ sweep, /** @type {number} */ x, /** @type {number} */ y,
-) {
-  /** @type {Array<[number, number, number, number, number, number]>} */
-  const out = [];
+  x0: number,
+  y0: number,
+  rx: number,
+  ry: number,
+  rotDeg: number,
+  large: boolean,
+  sweep: boolean,
+  x: number,
+  y: number,
+): Array<[number, number, number, number, number, number]> {
+  const out: Array<[number, number, number, number, number, number]> = [];
   if (x0 === x && y0 === y) return out;
   rx = Math.abs(rx);
   ry = Math.abs(ry);
@@ -513,7 +507,7 @@ export function arcToCubics(
   const cyp = coef * (-(ry * x1p) / rx);
   const cx = cosP * cxp - sinP * cyp + (x0 + x) / 2;
   const cy = sinP * cxp + cosP * cyp + (y0 + y) / 2;
-  const ang = (/** @type {number} */ ux, /** @type {number} */ uy, /** @type {number} */ vx, /** @type {number} */ vy) => {
+  const ang = (ux: number, uy: number, vx: number, vy: number) => {
     const dot = ux * vx + uy * vy;
     const len = Math.hypot(ux, uy) * Math.hypot(vx, vy);
     let a = Math.acos(Math.max(-1, Math.min(1, dot / len)));
@@ -539,7 +533,7 @@ export function arcToCubics(
     const e1y = sin1 + kappa * cos1;
     const e2x = cos2 + kappa * sin2;
     const e2y = sin2 - kappa * cos2;
-    const map = (/** @type {number} */ ux, /** @type {number} */ uy) => [cosP * rx * ux - sinP * ry * uy + cx, sinP * rx * ux + cosP * ry * uy + cy];
+    const map = (ux: number, uy: number) => [cosP * rx * ux - sinP * ry * uy + cx, sinP * rx * ux + cosP * ry * uy + cy];
     const c1 = map(e1x, e1y);
     const c2 = map(e2x, e2y);
     const p = i === segs - 1 ? [x, y] : map(cos2, sin2);
@@ -554,10 +548,9 @@ export function arcToCubics(
 /**
  * Flatten a sub-path to a polygon (array of [x, y]) with the given tolerance (same units
  * as the path). Quadratics are subdivided uniformly by an estimate of their length.
- * @param {SubPath} sub @param {number} [tolerance]
- * @returns {number[]} flat [x0, y0, x1, y1, ...]
+ * @returns flat [x0, y0, x1, y1, ...]
  */
-export function flattenSubpath(sub, tolerance = 0.5) {
+export function flattenSubpath(sub: SubPath, tolerance = 0.5): number[] {
   const pts = [sub.start[0], sub.start[1]];
   let px = sub.start[0];
   let py = sub.start[1];
@@ -584,9 +577,8 @@ export function flattenSubpath(sub, tolerance = 0.5) {
 /**
  * Shoelace signed area of a flat polygon. In y-down space a positive result is a
  * path that runs clockwise on screen (interior on the RIGHT of travel).
- * @param {number[]} flat
  */
-export function signedArea(flat) {
+export function signedArea(flat: number[]): number {
   let a = 0;
   const n = flat.length / 2;
   for (let i = 0; i < n; i++) {
@@ -596,11 +588,7 @@ export function signedArea(flat) {
   return a / 2;
 }
 
-/**
- * @param {number[]} flat
- * @returns {{ xmin: number, ymin: number, xmax: number, ymax: number } | null}
- */
-export function boundsOf(flat) {
+export function boundsOf(flat: number[]): Bounds | null {
   if (flat.length < 2) return null;
   let xmin = Infinity;
   let ymin = Infinity;
@@ -617,12 +605,8 @@ export function boundsOf(flat) {
   return { xmin, ymin, xmax, ymax };
 }
 
-/**
- * Union of bounds (null-safe).
- * @param {{ xmin: number, ymin: number, xmax: number, ymax: number } | null} a
- * @param {{ xmin: number, ymin: number, xmax: number, ymax: number } | null} b
- */
-export function unionBounds(a, b) {
+/** Union of bounds (null-safe). */
+export function unionBounds(a: Bounds | null, b: Bounds | null): Bounds | null {
   if (!a) return b;
   if (!b) return a;
   return { xmin: Math.min(a.xmin, b.xmin), ymin: Math.min(a.ymin, b.ymin), xmax: Math.max(a.xmax, b.xmax), ymax: Math.max(a.ymax, b.ymax) };
@@ -631,11 +615,9 @@ export function unionBounds(a, b) {
 /**
  * Bounds of a set of sub-paths, including quadratic control points (a safe superset,
  * which is what SWF ShapeBounds needs).
- * @param {SubPath[]} subs
  */
-export function subpathBounds(subs) {
-  /** @type {{ xmin: number, ymin: number, xmax: number, ymax: number } | null} */
-  let b = null;
+export function subpathBounds(subs: SubPath[]): Bounds | null {
+  let b: Bounds | null = null;
   for (const s of subs) {
     const pts = [s.start[0], s.start[1]];
     for (const e of s.edges) {

@@ -6,112 +6,139 @@
 
 import { inflateSync } from "node:zlib";
 import { TAG, tagName } from "./swf-bits.ts";
+import type { Rect, Rgba } from "./swf-bits.ts";
+import type { Mat } from "./geometry.ts";
 
-/** @typedef {import('./geometry.ts').Mat} Mat */
-/** @typedef {import('./swf-bits.ts').Rect} Rect */
-/** @typedef {import('./swf-bits.ts').Rgba} Rgba */
+export interface SwfHeader {
+  /** "FWS" | "CWS" | "ZWS" */
+  signature: string;
+  version: number;
+  fileLength: number;
+  /** twips */
+  rect: Rect;
+  /** fps (8.8 decoded) */
+  frameRate: number;
+  frameCount: number;
+}
 
-/**
- * @typedef {Object} SwfHeader
- * @property {string} signature   "FWS" | "CWS" | "ZWS"
- * @property {number} version
- * @property {number} fileLength
- * @property {Rect} rect          twips
- * @property {number} frameRate   fps (8.8 decoded)
- * @property {number} frameCount
- */
+export interface GradientStop {
+  ratio: number;
+  color: Rgba;
+}
 
-/**
- * @typedef {Object} FillStyle
- * @property {number} type        0x00 solid, 0x10/0x12/0x13 gradient, 0x40..0x43 bitmap
- * @property {Rgba} [color]
- * @property {Mat} [matrix]       gradient/bitmap matrix (raw SWF units: translate in twips)
- * @property {number} [bitmapId]
- * @property {Array<{ ratio: number, color: Rgba }>} [gradient]
- * @property {number} [focalPoint]
- */
+export interface FillStyle {
+  /** 0x00 solid, 0x10/0x12/0x13 gradient, 0x40..0x43 bitmap */
+  type: number;
+  color?: Rgba;
+  /** gradient/bitmap matrix (raw SWF units: translate in twips) */
+  matrix?: Mat;
+  bitmapId?: number;
+  gradient?: GradientStop[];
+  focalPoint?: number;
+}
 
-/**
- * @typedef {Object} LineStyle
- * @property {number} width       twips
- * @property {Rgba} [color]
- * @property {number} [flags]     LINESTYLE2 flag word (DefineShape4)
- * @property {FillStyle} [fill]   LINESTYLE2 with HasFill
- * @property {number} [miterLimit]
- */
+export interface LineStyle {
+  /** twips */
+  width: number;
+  color?: Rgba;
+  /** LINESTYLE2 flag word (DefineShape4) */
+  flags?: number;
+  /** LINESTYLE2 with HasFill */
+  fill?: FillStyle;
+  miterLimit?: number;
+}
 
-/**
- * @typedef {{ type: 'style', x: number, y: number, moveTo: boolean, fill0: number | null, fill1: number | null, line: number | null, newStyles: boolean }
- *   | { type: 'straight', x0: number, y0: number, x1: number, y1: number }
- *   | { type: 'curve', x0: number, y0: number, cx: number, cy: number, x1: number, y1: number }} ShapeRecord
- */
+export type ShapeRecord =
+  | { type: "style"; x: number; y: number; moveTo: boolean; fill0: number | null; fill1: number | null; line: number | null; newStyles: boolean }
+  | { type: "straight"; x0: number; y0: number; x1: number; y1: number }
+  | { type: "curve"; x0: number; y0: number; cx: number; cy: number; x1: number; y1: number };
 
-/**
- * @typedef {Object} ParsedShape
- * @property {number} id
- * @property {Rect} bounds
- * @property {Rect} [edgeBounds]
- * @property {number} [flags]
- * @property {FillStyle[]} fillStyles   1-based indices in records point here (index-1); NewStyles append
- * @property {LineStyle[]} lineStyles
- * @property {ShapeRecord[]} records    positions are absolute twips
- */
+export interface ParsedShape {
+  id: number;
+  bounds: Rect;
+  edgeBounds?: Rect;
+  flags?: number;
+  /** 1-based indices in records point here (index-1); NewStyles append */
+  fillStyles: FillStyle[];
+  lineStyles: LineStyle[];
+  /** positions are absolute twips */
+  records: ShapeRecord[];
+}
 
-/**
- * @typedef {Object} ParsedPlace
- * @property {number} flags
- * @property {boolean} move
- * @property {number} depth
- * @property {number} [characterId]
- * @property {Mat} [matrix]           raw SWF: scale/rotate as numbers, translate in twips
- * @property {{ mul: number[], add: number[] }} [cxform]  mul in 8.8 raw, add in -255..255 raw
- * @property {number} [ratio]
- * @property {string} [name]
- * @property {number} [clipDepth]
- * @property {Uint8Array} [clipActions]
- */
+export interface RawCxform {
+  /** 8.8 raw */
+  mul: number[];
+  /** -255..255 raw */
+  add: number[];
+}
 
-/**
- * @typedef {Object} Tag
- * @property {number} code
- * @property {string} name
- * @property {number} offset      byte offset of the tag header within its container
- * @property {number} length      body length
- * @property {Uint8Array} [raw]   body bytes for tags without a dedicated parser
- * @property {number} [flags]
- * @property {{ r: number, g: number, b: number }} [rgb]
- * @property {Array<{ offset: number, name: string }>} [scenes]
- * @property {Array<{ frame: number, name: string }>} [frameLabels]
- * @property {ParsedShape} [shape]
- * @property {number} [id]
- * @property {number} [frameCount]
- * @property {Tag[]} [tags]
- * @property {ParsedPlace} [place]
- * @property {number} [depth]
- * @property {string} [label]
- * @property {boolean} [anchor]
- * @property {string} [abcName]
- * @property {Uint8Array} [abcBytes]
- * @property {Array<{ id: number, name: string }>} [entries]
- * @property {{ id: number, format: number, width: number, height: number, colorTableSize: number, pixels: Uint8Array }} [bitmap]
- * @property {string} [error]
- */
+export interface ParsedPlace {
+  flags: number;
+  move: boolean;
+  depth: number;
+  characterId?: number;
+  /** raw SWF: scale/rotate as numbers, translate in twips */
+  matrix?: Mat;
+  cxform?: RawCxform;
+  ratio?: number;
+  name?: string;
+  clipDepth?: number;
+  clipActions?: Uint8Array;
+}
+
+export interface ParsedBitmap {
+  id: number;
+  format: number;
+  width: number;
+  height: number;
+  colorTableSize: number;
+  pixels: Uint8Array;
+}
+
+export interface Tag {
+  code: number;
+  name: string;
+  /** byte offset of the tag header within its container */
+  offset: number;
+  /** body length */
+  length: number;
+  /** body bytes for tags without a dedicated parser */
+  raw?: Uint8Array;
+  flags?: number;
+  rgb?: { r: number; g: number; b: number };
+  scenes?: Array<{ offset: number; name: string }>;
+  frameLabels?: Array<{ frame: number; name: string }>;
+  shape?: ParsedShape;
+  id?: number;
+  frameCount?: number;
+  tags?: Tag[];
+  place?: ParsedPlace;
+  depth?: number;
+  label?: string;
+  anchor?: boolean;
+  abcName?: string;
+  abcBytes?: Uint8Array;
+  entries?: Array<{ id: number; name: string }>;
+  bitmap?: ParsedBitmap;
+  error?: string;
+}
 
 // ---- bit reader --------------------------------------------------------------
 
 /** Byte/bit reader mirroring BitWriter. */
 export class BitReader {
-  /** @param {Uint8Array} buf @param {number} [pos] */
-  constructor(buf, pos = 0) {
+  buf: Uint8Array;
+  pos: number;
+  bitPos: number;
+  constructor(buf: Uint8Array, pos = 0) {
     this.buf = buf;
     this.pos = pos;
     this.bitPos = 0;
   }
-  get remaining() {
+  get remaining(): number {
     return this.buf.length - this.pos - (this.bitPos ? 1 : 0);
   }
-  /** @param {number} n */
-  readUB(n) {
+  readUB(n: number): number {
     let v = 0;
     for (let i = 0; i < n; i++) {
       if (this.pos >= this.buf.length) throw new Error(`BitReader: read past end at byte ${this.pos}`);
@@ -125,40 +152,38 @@ export class BitReader {
     }
     return v;
   }
-  /** @param {number} n */
-  readSB(n) {
+  readSB(n: number): number {
     if (n === 0) return 0;
     const v = this.readUB(n);
     return v >= 2 ** (n - 1) ? v - 2 ** n : v;
   }
-  /** @param {number} n */
-  readFB(n) {
+  readFB(n: number): number {
     return this.readSB(n) / 65536;
   }
-  align() {
+  align(): void {
     if (this.bitPos) {
       this.bitPos = 0;
       this.pos++;
     }
   }
-  u8() {
+  u8(): number {
     this.align();
     if (this.pos >= this.buf.length) throw new Error(`BitReader: read past end at byte ${this.pos}`);
     return this.buf[this.pos++];
   }
-  u16() {
+  u16(): number {
     const a = this.u8();
     return a | (this.u8() << 8);
   }
-  u32() {
+  u32(): number {
     const lo = this.u16();
     return lo + this.u16() * 0x10000;
   }
-  s16() {
+  s16(): number {
     const v = this.u16();
     return v >= 0x8000 ? v - 0x10000 : v;
   }
-  encodedU32() {
+  encodedU32(): number {
     this.align();
     let r = 0;
     let shift = 1;
@@ -170,7 +195,7 @@ export class BitReader {
     }
     return r;
   }
-  string() {
+  string(): string {
     this.align();
     const start = this.pos;
     while (this.pos < this.buf.length && this.buf[this.pos] !== 0) this.pos++;
@@ -178,21 +203,19 @@ export class BitReader {
     this.pos++; // NUL
     return s;
   }
-  /** @param {number} n */
-  bytes(n) {
+  bytes(n: number): Uint8Array {
     this.align();
     const out = this.buf.subarray(this.pos, this.pos + n);
     this.pos += n;
     return out;
   }
-  rect() {
+  rect(): Rect {
     const n = this.readUB(5);
     const r = { xmin: this.readSB(n), xmax: this.readSB(n), ymin: this.readSB(n), ymax: this.readSB(n) };
     this.align();
     return r;
   }
-  /** @returns {Mat} */
-  matrix() {
+  matrix(): Mat {
     let a = 1;
     let d = 1;
     let b = 0;
@@ -213,7 +236,7 @@ export class BitReader {
     this.align();
     return [a, b, c, d, tx, ty];
   }
-  cxformWithAlpha() {
+  cxformWithAlpha(): RawCxform {
     const hasAdd = this.readUB(1);
     const hasMul = this.readUB(1);
     const n = this.readUB(4);
@@ -224,8 +247,7 @@ export class BitReader {
     this.align();
     return { mul, add };
   }
-  /** @param {boolean} alpha */
-  color(alpha) {
+  color(alpha: boolean): Rgba {
     const r = this.u8();
     const g = this.u8();
     const b = this.u8();
@@ -238,13 +260,16 @@ const DEC = new TextDecoder();
 
 // ---- file ------------------------------------------------------------------------
 
+export interface ParsedSwf {
+  header: SwfHeader;
+  tags: Tag[];
+}
+
 /**
  * Parse an SWF file. Only uncompressed (`FWS`) bodies are walked; `CWS`/`ZWS` return the
  * header with an empty tag list and an `error` on the first tag entry.
- * @param {Uint8Array} bytes
- * @returns {{ header: SwfHeader, tags: Tag[] }}
  */
-export function readSwf(bytes) {
+export function readSwf(bytes: Uint8Array): ParsedSwf {
   if (bytes.length < 8) throw new Error("readSwf: file shorter than 8 bytes");
   const signature = String.fromCharCode(bytes[0], bytes[1], bytes[2]);
   if (!/^[FCZ]WS$/.test(signature)) throw new Error(`readSwf: bad signature ${JSON.stringify(signature)}`);
@@ -264,14 +289,9 @@ export function readSwf(bytes) {
   return { header: { signature, version, fileLength, rect, frameRate, frameCount }, tags };
 }
 
-/**
- * Walk a tag stream between `start` and `end`.
- * @param {Uint8Array} buf @param {number} start @param {number} end
- * @returns {Tag[]}
- */
-export function readTags(buf, start, end) {
-  /** @type {Tag[]} */
-  const tags = [];
+/** Walk a tag stream between `start` and `end`. */
+export function readTags(buf: Uint8Array, start: number, end: number): Tag[] {
+  const tags: Tag[] = [];
   let p = start;
   while (p + 2 <= end) {
     const header = buf[p] | (buf[p + 1] << 8);
@@ -292,13 +312,8 @@ export function readTags(buf, start, end) {
   return tags;
 }
 
-/**
- * @param {number} code @param {Uint8Array} body @param {number} offset
- * @returns {Tag}
- */
-function parseTag(code, body, offset) {
-  /** @type {Tag} */
-  const t = { code, name: tagName(code), offset, length: body.length };
+function parseTag(code: number, body: Uint8Array, offset: number): Tag {
+  const t: Tag = { code, name: tagName(code), offset, length: body.length };
   const r = new BitReader(body);
   try {
     switch (code) {
@@ -381,16 +396,11 @@ function parseTag(code, body, offset) {
 
 // ---- shapes ----------------------------------------------------------------------
 
-/**
- * @param {BitReader} r @param {number} code
- * @returns {ParsedShape}
- */
-export function parseDefineShape(r, code) {
+export function parseDefineShape(r: BitReader, code: number): ParsedShape {
   const version = code === TAG.DefineShape ? 1 : code === TAG.DefineShape2 ? 2 : code === TAG.DefineShape3 ? 3 : 4;
   const id = r.u16();
   const bounds = r.rect();
-  /** @type {ParsedShape} */
-  const shape = { id, bounds, fillStyles: [], lineStyles: [], records: [] };
+  const shape: ParsedShape = { id, bounds, fillStyles: [], lineStyles: [], records: [] };
   if (version === 4) {
     shape.edgeBounds = r.rect();
     shape.flags = r.u8();
@@ -420,10 +430,8 @@ export function parseDefineShape(r, code) {
       const fill0 = hasFill0 ? r.readUB(numFillBits) : null;
       const fill1 = hasFill1 ? r.readUB(numFillBits) : null;
       const line = hasLine ? r.readUB(numLineBits) : null;
-      /** @param {number | null} v @param {number} base */
-      const abs = (v, base) => (v === null ? null : v === 0 ? 0 : v + base);
-      /** @type {ShapeRecord} */
-      const rec = { type: "style", x, y, moveTo, fill0: abs(fill0, fillBase), fill1: abs(fill1, fillBase), line: abs(line, lineBase), newStyles };
+      const abs = (v: number | null, base: number) => (v === null ? null : v === 0 ? 0 : v + base);
+      const rec: ShapeRecord = { type: "style", x, y, moveTo, fill0: abs(fill0, fillBase), fill1: abs(fill1, fillBase), line: abs(line, lineBase), newStyles };
       if (newStyles) {
         fillBase = shape.fillStyles.length;
         lineBase = shape.lineStyles.length;
@@ -466,11 +474,8 @@ export function parseDefineShape(r, code) {
   return shape;
 }
 
-/**
- * FILLSTYLEARRAY + LINESTYLEARRAY appended to `shape`.
- * @param {BitReader} r @param {number} version @param {ParsedShape} shape
- */
-function readStyleArrays(r, version, shape) {
+/** FILLSTYLEARRAY + LINESTYLEARRAY appended to `shape`. */
+function readStyleArrays(r: BitReader, version: number, shape: ParsedShape): void {
   const alpha = version >= 3;
   let nFill = r.u8();
   if (nFill === 0xff && version >= 2) nFill = r.u16();
@@ -483,8 +488,7 @@ function readStyleArrays(r, version, shape) {
       // LINESTYLE2 flags are bit fields, MSB first: StartCap(2) Join(2) HasFill(1) NoHScale(1)
       // NoVScale(1) PixelHinting(1) Reserved(5) NoClose(1) EndCap(2).
       const flags = r.readUB(16);
-      /** @type {LineStyle} */
-      const ls = { width, flags };
+      const ls: LineStyle = { width, flags };
       const join = (flags >> 12) & 3;
       const hasFill = !!(flags & 0x0800);
       if (join === 2) ls.miterLimit = r.u16() / 256;
@@ -497,21 +501,16 @@ function readStyleArrays(r, version, shape) {
   }
 }
 
-/**
- * @param {BitReader} r @param {number} version @param {boolean} alpha
- * @returns {FillStyle}
- */
-function readFillStyle(r, version, alpha) {
+function readFillStyle(r: BitReader, version: number, alpha: boolean): FillStyle {
   const type = r.u8();
   if (type === 0x00) return { type, color: r.color(alpha) };
   if (type === 0x10 || type === 0x12 || type === 0x13) {
     const matrix = r.matrix();
     const head = r.u8();
     const n = head & 0x0f;
-    const gradient = [];
+    const gradient: GradientStop[] = [];
     for (let i = 0; i < n; i++) gradient.push({ ratio: r.u8(), color: r.color(alpha) });
-    /** @type {FillStyle} */
-    const fs = { type, matrix, gradient };
+    const fs: FillStyle = { type, matrix, gradient };
     if (type === 0x13) fs.focalPoint = r.s16() / 256;
     return fs;
   }
@@ -523,28 +522,27 @@ function readFillStyle(r, version, alpha) {
   throw new Error(`fill style type 0x${type.toString(16)} (DefineShape v${version}) is not supported`);
 }
 
-/**
- * @typedef {Object} ReadSubpath
- * @property {number} fill0      style index (1-based) or 0
- * @property {number} fill1
- * @property {number} line
- * @property {number[]} points   flat [x0,y0, x1,y1, ...] anchor points (twips), start first
- * @property {Array<{ t: 'L', x: number, y: number } | { t: 'Q', cx: number, cy: number, x: number, y: number }>} edges
- */
+export type ReadEdge = { t: "L"; x: number; y: number } | { t: "Q"; cx: number; cy: number; x: number; y: number };
+
+export interface ReadSubpath {
+  /** style index (1-based) or 0 */
+  fill0: number;
+  fill1: number;
+  line: number;
+  /** flat [x0,y0, x1,y1, ...] anchor points (twips), start first */
+  points: number[];
+  edges: ReadEdge[];
+}
 
 /**
  * Group a parsed shape's edge records into runs that share one style state. Each run
  * starts at a StyleChange record (whether or not it moves) and ends at the next one.
  * `points` are the anchor points of the run (curves contribute their anchor; the control
  * point is kept in `edges`), suitable for `geometry.signedArea`.
- * @param {ParsedShape} shape
- * @returns {ReadSubpath[]}
  */
-export function shapeToSubpaths(shape) {
-  /** @type {ReadSubpath[]} */
-  const out = [];
-  /** @type {ReadSubpath | null} */
-  let cur = null;
+export function shapeToSubpaths(shape: ParsedShape): ReadSubpath[] {
+  const out: ReadSubpath[] = [];
+  let cur: ReadSubpath | null = null;
   let fill0 = 0;
   let fill1 = 0;
   let line = 0;
@@ -574,15 +572,10 @@ export function shapeToSubpaths(shape) {
 
 // ---- PlaceObject2 -------------------------------------------------------------------
 
-/**
- * @param {BitReader} r
- * @returns {ParsedPlace}
- */
-function parsePlaceObject2(r) {
+function parsePlaceObject2(r: BitReader): ParsedPlace {
   const flags = r.u8();
   const depth = r.u16();
-  /** @type {ParsedPlace} */
-  const p = { flags, move: !!(flags & 0x01), depth };
+  const p: ParsedPlace = { flags, move: !!(flags & 0x01), depth };
   if (flags & 0x02) p.characterId = r.u16();
   if (flags & 0x04) p.matrix = r.matrix();
   if (flags & 0x08) p.cxform = r.cxformWithAlpha();
@@ -595,14 +588,9 @@ function parsePlaceObject2(r) {
 
 // ---- helpers for tests / reports ------------------------------------------------------
 
-/**
- * Flatten a tag tree (DefineSprite children included) into one list.
- * @param {Tag[]} tags
- * @returns {Tag[]}
- */
-export function flattenTags(tags) {
-  /** @type {Tag[]} */
-  const out = [];
+/** Flatten a tag tree (DefineSprite children included) into one list. */
+export function flattenTags(tags: Tag[]): Tag[] {
+  const out: Tag[] = [];
   for (const t of tags) {
     out.push(t);
     if (t.tags) out.push(...flattenTags(t.tags));
@@ -610,13 +598,9 @@ export function flattenTags(tags) {
   return out;
 }
 
-/**
- * Count tags by name (top level only unless `deep`).
- * @param {Tag[]} tags @param {boolean} [deep]
- */
-export function countTags(tags, deep = false) {
-  /** @type {Record<string, number>} */
-  const counts = {};
+/** Count tags by name (top level only unless `deep`). */
+export function countTags(tags: Tag[], deep = false): Record<string, number> {
+  const counts: Record<string, number> = {};
   for (const t of deep ? flattenTags(tags) : tags) counts[t.name] = (counts[t.name] || 0) + 1;
   return counts;
 }

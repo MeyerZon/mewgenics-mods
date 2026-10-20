@@ -7,30 +7,41 @@ import { readFileSync, existsSync, statSync, openSync, readSync, closeSync } fro
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { parsePe, PeError } from "./pe.ts";
+import type { Pe } from "./pe.ts";
 import { parsePattern, scanExec } from "./scan.ts";
+import type { Pattern } from "./scan.ts";
 import { listManifests, hex } from "./manifest.ts";
+import type { Manifest } from "./manifest.ts";
 import { locateGameDir } from "../ingame/launch.ts";
 
-/**
- * @typedef {"ok"|"moved"|"missing"|"ambiguous"} EntryStatus
- * @typedef {{ name: string, kind: string, status: EntryStatus, matches: number, hit: string|null, expected: string, offset: number, detail?: string }} CheckEntry
- * @typedef {{
- *   known: boolean,
- *   build: { timeDateStamp: string, sizeOfImage: string, imageBase: string, exeSize: number,
- *            matched: { steamBuildId: string, name: string, gameVersion: string }|null,
- *            scannedWith: string|null,
- *            knownBuilds: { steamBuildId: string, name: string, timeDateStamp: string, sizeOfImage: string }[] },
- *   entries: CheckEntry[],
- *   summary: { total: number, ok: number, moved: number, missing: number, ambiguous: number, unscanned: number },
- * }} BuildCheck
- */
+export type EntryStatus = "ok" | "moved" | "missing" | "ambiguous";
+export interface CheckEntry {
+  name: string;
+  kind: string;
+  status: EntryStatus;
+  matches: number;
+  hit: string | null;
+  expected: string;
+  offset: number;
+  detail?: string;
+}
+export interface BuildCheck {
+  known: boolean;
+  build: {
+    timeDateStamp: string;
+    sizeOfImage: string;
+    imageBase: string;
+    exeSize: number;
+    matched: { steamBuildId: string; name: string; gameVersion: string } | null;
+    scannedWith: string | null;
+    knownBuilds: { steamBuildId: string; name: string; timeDateStamp: string; sizeOfImage: string }[];
+  };
+  entries: CheckEntry[];
+  summary: { total: number; ok: number; moved: number; missing: number; ambiguous: number; unscanned: number };
+}
 
-/**
- * @param {Buffer} buf  the exe bytes
- * @param {import("./manifest.ts").Manifest[]} manifests
- * @returns {BuildCheck}
- */
-export function checkBuild(buf, manifests) {
+/** @param buf the exe bytes */
+export function checkBuild(buf: Buffer, manifests: Manifest[]): BuildCheck {
   const pe = parsePe(buf);
   const ts = pe.timeDateStamp;
   const size = pe.sizeOfImage;
@@ -38,16 +49,14 @@ export function checkBuild(buf, manifests) {
   const newest = [...manifests].sort((a, b) => Number(b.build.steamBuildId) - Number(a.build.steamBuildId))[0] || null;
   // on an unknown build, scan with the newest manifest: "how much survived" is the first porting signal
   const scanWith = matched || newest;
-  /** @type {CheckEntry[]} */
-  const entries = [];
+  const entries: CheckEntry[] = [];
   const summary = { total: 0, ok: 0, moved: 0, missing: 0, ambiguous: 0, unscanned: 0 };
   if (scanWith) {
     for (const e of scanWith.entries) {
       summary.total++;
       if (e.kind !== "function" || !e.signature) { summary.unscanned++; continue; }
       const expected = parseInt(e.rva || "0", 16);
-      /** @type {import("./scan.ts").Pattern} */
-      let pat;
+      let pat: Pattern;
       try {
         pat = parsePattern(e.signature.pattern, scanWith.sigCap);
       } catch (err) {
@@ -57,8 +66,7 @@ export function checkBuild(buf, manifests) {
       }
       const r = scanExec(pe, buf, pat);
       const hit = r.count >= 1 ? r.hits[0] + e.signature.offset : null;
-      /** @type {EntryStatus} */
-      const status = r.count === 0 ? "missing" : r.count > 1 ? "ambiguous" : hit === expected ? "ok" : "moved";
+      const status: EntryStatus = r.count === 0 ? "missing" : r.count > 1 ? "ambiguous" : hit === expected ? "ok" : "moved";
       entries.push({ name: e.name, kind: e.kind, status, matches: r.count, hit: hit === null ? null : hex(hit), expected: hex(expected), offset: e.signature.offset });
       summary[status]++;
     }
@@ -79,21 +87,21 @@ export function checkBuild(buf, manifests) {
   };
 }
 
-/**
- * @typedef {{ known: boolean, identity: { timeDateStamp: string, sizeOfImage: string }, matched: { steamBuildId: string, name: string }|null, exePath: string }} ExeIdentity
- */
+export interface ExeIdentity {
+  known: boolean;
+  identity: { timeDateStamp: string; sizeOfImage: string };
+  matched: { steamBuildId: string; name: string } | null;
+  exePath: string;
+}
 
-/** @type {Map<string, ExeIdentity>} */
-const identityCache = new Map();
+const identityCache = new Map<string, ExeIdentity>();
 
 /**
  * Identity only, from the PE headers (first 64 KB), memoized per path + mtime + manifest set.
  * This is the validator's fast path: it never reads the whole exe and never scans.
- * @param {string} path
- * @param {import("./manifest.ts").Manifest[]} manifests
- * @returns {ExeIdentity|null} null when the file is absent or not a PE image
+ * @returns null when the file is absent or not a PE image
  */
-export function identifyExe(path, manifests) {
+export function identifyExe(path: string, manifests: Manifest[]): ExeIdentity | null {
   if (!existsSync(path)) return null;
   const st = statSync(path);
   const key = `${path}|${st.mtimeMs}|${st.size}|${manifests.map((m) => m.build.steamBuildId).join(",")}`;
@@ -106,8 +114,7 @@ export function identifyExe(path, manifests) {
   } finally {
     closeSync(fd);
   }
-  /** @type {import("./pe.ts").Pe} */
-  let pe;
+  let pe: Pe;
   try {
     pe = parsePe(head);
   } catch (e) {
@@ -115,7 +122,7 @@ export function identifyExe(path, manifests) {
     throw e;
   }
   const matched = manifests.find((m) => parseInt(m.build.timeDateStamp, 16) === pe.timeDateStamp && parseInt(m.build.sizeOfImage, 16) === pe.sizeOfImage) || null;
-  const r = {
+  const r: ExeIdentity = {
     known: matched !== null,
     identity: { timeDateStamp: hex(pe.timeDateStamp), sizeOfImage: hex(pe.sizeOfImage) },
     matched: matched ? { steamBuildId: matched.build.steamBuildId, name: matched.build.name } : null,
@@ -125,17 +132,22 @@ export function identifyExe(path, manifests) {
   return r;
 }
 
-/**
- * @typedef {({ ok: true, exePath: string, sha256: string } & BuildCheck) | { ok: false, skipped: boolean, reason: string, exePath: string }} InstalledCheck
- */
+export type InstalledCheck =
+  | ({ ok: true; exePath: string; sha256: string } & BuildCheck)
+  | { ok: false; skipped: boolean; reason: string; exePath: string };
+
+export interface InstalledCheckOptions {
+  env?: Record<string, string | undefined>;
+  gameDir?: string;
+  exePath?: string;
+  manifests?: Manifest[];
+}
 
 /**
  * Check the installed game (or an explicit exe). Read-only. Returns ok:false + skipped when the
  * exe or the manifests are absent, so callers can log "(skipped: …)" instead of failing.
- * @param {{ env?: Record<string, string|undefined>, gameDir?: string, exePath?: string, manifests?: import("./manifest.ts").Manifest[] }} [opts]
- * @returns {InstalledCheck}
  */
-export function checkInstalledBuild(opts = {}) {
+export function checkInstalledBuild(opts: InstalledCheckOptions = {}): InstalledCheck {
   const env = opts.env || process.env;
   const path = opts.exePath || join(opts.gameDir || locateGameDir(env), "Mewgenics.exe");
   if (!existsSync(path)) return { ok: false, skipped: true, reason: `Mewgenics.exe not found: ${path} (set MEWGENICS_DIR or pass exe)`, exePath: path };

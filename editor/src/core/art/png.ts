@@ -6,13 +6,16 @@
 
 import { deflateSync, inflateSync } from "node:zlib";
 
-/** @typedef {{ width: number, height: number, rgba: Uint8Array }} RgbaImage */
+export interface RgbaImage {
+  width: number;
+  height: number;
+  rgba: Uint8Array;
+}
 
 const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-/** @type {Uint32Array | null} */
-let crcTable = null;
-function table() {
+let crcTable: Uint32Array | null = null;
+function table(): Uint32Array {
   if (crcTable) return crcTable;
   crcTable = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -23,40 +26,29 @@ function table() {
   return crcTable;
 }
 
-/**
- * CRC-32 (IEEE) as used by PNG chunks.
- * @param {Uint8Array} bytes @param {number} [start] @param {number} [end]
- */
-export function crc32(bytes, start = 0, end = bytes.length) {
+/** CRC-32 (IEEE) as used by PNG chunks. */
+export function crc32(bytes: Uint8Array, start = 0, end = bytes.length): number {
   const t = table();
   let c = 0xffffffff;
   for (let i = start; i < end; i++) c = t[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
-/** @param {Uint8Array} b @param {number} p */
-function be32(b, p) {
+function be32(b: Uint8Array, p: number): number {
   return ((b[p] << 24) | (b[p + 1] << 16) | (b[p + 2] << 8) | b[p + 3]) >>> 0;
 }
 
-/**
- * Decode a PNG into RGBA.
- * @param {Uint8Array} bytes
- * @returns {RgbaImage}
- */
-export function decodePng(bytes) {
+/** Decode a PNG into RGBA. */
+export function decodePng(bytes: Uint8Array): RgbaImage {
   if (bytes.length < 33 || SIGNATURE.some((v, i) => bytes[i] !== v)) throw new Error("png: not a PNG file (bad signature)");
   let p = 8;
   let width = 0;
   let height = 0;
   let bitDepth = 0;
   let colorType = 0;
-  /** @type {Uint8Array | null} */
-  let palette = null;
-  /** @type {Uint8Array | null} */
-  let trns = null;
-  /** @type {Uint8Array[]} */
-  const idat = [];
+  let palette: Uint8Array | null = null;
+  let trns: Uint8Array | null = null;
+  const idat: Uint8Array[] = [];
   let sawIhdr = false;
   while (p + 8 <= bytes.length) {
     const len = be32(bytes, p);
@@ -99,8 +91,7 @@ export function decodePng(bytes) {
   const raw = new Uint8Array(inflateSync(z));
   if (raw.length < (stride + 1) * height) throw new Error(`png: image data too short (${raw.length} < ${(stride + 1) * height})`);
   const pixels = new Uint8Array(stride * height);
-  /** @type {Uint8Array} */
-  let prev = new Uint8Array(stride);
+  let prev: Uint8Array = new Uint8Array(stride);
   for (let y = 0; y < height; y++) {
     const filter = raw[y * (stride + 1)];
     const src = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
@@ -130,7 +121,7 @@ export function decodePng(bytes) {
       }
       case 3: {
         const idx = pixels[i];
-        const pal = /** @type {Uint8Array} */ (palette);
+        const pal = palette as Uint8Array;
         if (idx * 3 + 2 >= pal.length) throw new Error(`png: palette index ${idx} outside PLTE`);
         rgba[o] = pal[idx * 3];
         rgba[o + 1] = pal[idx * 3 + 1];
@@ -152,10 +143,7 @@ export function decodePng(bytes) {
   return { width, height, rgba };
 }
 
-/**
- * @param {number} filter @param {Uint8Array} src @param {Uint8Array} prev @param {Uint8Array} out @param {number} bpp
- */
-function unfilter(filter, src, prev, out, bpp) {
+function unfilter(filter: number, src: Uint8Array, prev: Uint8Array, out: Uint8Array, bpp: number): void {
   const n = src.length;
   switch (filter) {
     case 0:
@@ -187,12 +175,8 @@ function unfilter(filter, src, prev, out, bpp) {
   }
 }
 
-/**
- * Encode straight RGBA as an 8-bit RGBA PNG (filter 0 on every row).
- * @param {number} width @param {number} height @param {Uint8Array} rgba
- * @returns {Uint8Array}
- */
-export function encodePng(width, height, rgba) {
+/** Encode straight RGBA as an 8-bit RGBA PNG (filter 0 on every row). */
+export function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array {
   if (rgba.length !== width * height * 4) throw new Error(`encodePng: rgba length ${rgba.length} != ${width}*${height}*4`);
   const stride = width * 4;
   const raw = new Uint8Array((stride + 1) * height);
@@ -209,16 +193,14 @@ export function encodePng(width, height, rgba) {
   return concatChunks([Uint8Array.from(SIGNATURE), chunk("IHDR", ihdr), chunk("IDAT", idat), chunk("IEND", new Uint8Array(0))]);
 }
 
-/** @param {Uint8Array} b @param {number} p @param {number} v */
-function writeBe32(b, p, v) {
+function writeBe32(b: Uint8Array, p: number, v: number): void {
   b[p] = (v >>> 24) & 0xff;
   b[p + 1] = (v >>> 16) & 0xff;
   b[p + 2] = (v >>> 8) & 0xff;
   b[p + 3] = v & 0xff;
 }
 
-/** @param {string} type @param {Uint8Array} data */
-function chunk(type, data) {
+function chunk(type: string, data: Uint8Array): Uint8Array {
   const out = new Uint8Array(12 + data.length);
   writeBe32(out, 0, data.length);
   for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
@@ -227,8 +209,7 @@ function chunk(type, data) {
   return out;
 }
 
-/** @param {Uint8Array[]} parts */
-function concatChunks(parts) {
+function concatChunks(parts: Uint8Array[]): Uint8Array {
   let n = 0;
   for (const p of parts) n += p.length;
   const out = new Uint8Array(n);

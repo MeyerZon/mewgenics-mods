@@ -12,38 +12,42 @@ export const SAVESUFFIX_RE = /^[A-Za-z0-9_-]{1,32}$/;
 export const MAX_CMD_BYTES = 4078; // the game's std::string small/large allocation boundary
 export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
 
-/** @typedef {{ line: number, message: string }} Finding */
-/**
- * @typedef {{ line: number, kind: "cmd", text: string }
- *   | { line: number, kind: "wait", unit: "frames" | "turns" | "ms", n: number }
- *   | { line: number, kind: "expect", what: "console" | "noconsole", substr: string, within?: number }
- *   | { line: number, kind: "expect", what: "status", status: string, unit: string }
- *   | { line: number, kind: "expect", what: "units", op: string, n: number }
- *   | { line: number, kind: "dump" }
- *   | { line: number, kind: "log", text: string }
- *   | { line: number, kind: "quit", code: number | null }} Directive
- */
-/**
- * @typedef {Object} Plan
- * @property {boolean} ok
- * @property {string} name
- * @property {string[]} mods
- * @property {string} savesuffix
- * @property {number} timeoutMs
- * @property {boolean} hide
- * @property {boolean} clean  -mewtest_clean 1: after the end event the harness lets the game shut itself down (complete debug.log); default false
- * @property {Directive[]} directives
- * @property {string} body  directive lines only (no header, no comments), "\n"-terminated
- * @property {Finding[]} errors
- * @property {Finding[]} warnings
- */
+export interface Finding {
+  line: number;
+  message: string;
+}
 
-/**
- * "5000" -> 5000, "90s" -> 90000, "2m" -> 120000; null when invalid or <= 0.
- * @param {string} v
- * @returns {number|null}
- */
-export function parseTimeout(v) {
+export type WaitUnit = "frames" | "turns" | "ms";
+
+/** One parsed directive line (docs/ingame-testing.md "Grammar"). */
+export type Directive =
+  | { line: number; kind: "cmd"; text: string }
+  | { line: number; kind: "wait"; unit: WaitUnit; n: number }
+  | { line: number; kind: "expect"; what: "console" | "noconsole"; substr: string; within?: number }
+  | { line: number; kind: "expect"; what: "status"; status: string; unit: string }
+  | { line: number; kind: "expect"; what: "units"; op: string; n: number }
+  | { line: number; kind: "dump" }
+  | { line: number; kind: "log"; text: string }
+  | { line: number; kind: "quit"; code: number | null };
+
+export interface Plan {
+  ok: boolean;
+  name: string;
+  mods: string[];
+  savesuffix: string;
+  timeoutMs: number;
+  hide: boolean;
+  /** -mewtest_clean 1: after the end event the harness lets the game shut itself down (complete debug.log); default false */
+  clean: boolean;
+  directives: Directive[];
+  /** directive lines only (no header, no comments), "\n"-terminated */
+  body: string;
+  errors: Finding[];
+  warnings: Finding[];
+}
+
+/** "5000" -> 5000, "90s" -> 90000, "2m" -> 120000; null when invalid or <= 0. */
+export function parseTimeout(v: string): number | null {
   const m = /^\s*(\d+)\s*(ms|s|m)?\s*$/i.exec(String(v));
   if (!m) return null;
   const n = Number(m[1]);
@@ -55,10 +59,8 @@ export function parseTimeout(v) {
 /**
  * Parse a double-quoted string literal starting at s[i] === '"'.
  * Escapes: \" and \\ only.
- * @param {string} s @param {number} i
- * @returns {{ value: string, end: number } | null}
  */
-function parseQuoted(s, i) {
+function parseQuoted(s: string, i: number): { value: string; end: number } | null {
   if (s[i] !== '"') return null;
   let out = "";
   for (let j = i + 1; j < s.length; j++) {
@@ -75,13 +77,9 @@ function parseQuoted(s, i) {
   return null;
 }
 
-/**
- * Parse one directive line (already trimmed, non-empty, not a comment).
- * @param {string} line @param {number} lineNo
- * @returns {Directive | { error: string }}
- */
-export function parseDirective(line, lineNo) {
-  const word = (/^(\S+)/.exec(line) || ["", ""])[1];
+/** Parse one directive line (already trimmed, non-empty, not a comment). */
+export function parseDirective(line: string, lineNo: number): Directive | { error: string } {
+  const word = (/^(\S+)/.exec(line) || ["", ""])[1]!;
   const rest = line.slice(word.length).trim();
   switch (word) {
     case "cmd": {
@@ -92,13 +90,13 @@ export function parseDirective(line, lineNo) {
     case "wait": {
       const m = /^(\S+)\s+(\S+)$/.exec(rest);
       if (!m) return { error: "wait needs a unit (frames|turns|ms) and a count" };
-      const unit = m[1];
+      const unit = m[1]!;
       if (unit !== "frames" && unit !== "turns" && unit !== "ms") return { error: `bad wait unit "${unit}" (frames|turns|ms)` };
-      if (!/^\d+$/.test(m[2]) || Number(m[2]) < 1) return { error: "wait count must be an integer >= 1" };
+      if (!/^\d+$/.test(m[2]!) || Number(m[2]) < 1) return { error: "wait count must be an integer >= 1" };
       return { line: lineNo, kind: "wait", unit, n: Number(m[2]) };
     }
     case "expect": {
-      const what = (/^(\S+)/.exec(rest) || ["", ""])[1];
+      const what = (/^(\S+)/.exec(rest) || ["", ""])[1]!;
       const arg = rest.slice(what.length).trim();
       if (what === "console" || what === "noconsole") {
         const q = parseQuoted(arg, 0);
@@ -112,7 +110,7 @@ export function parseDirective(line, lineNo) {
       if (what === "status") {
         const m = /^(\S+)\s+on\s+(.+)$/.exec(arg);
         if (!m) return { error: "expect status needs: <StatusName> on <unit>" };
-        let unit = m[2].trim();
+        let unit = m[2]!.trim();
         if (unit.startsWith('"')) {
           const q = parseQuoted(unit, 0);
           if (!q || q.end !== unit.length) return { error: "expect status: bad quoted unit name" };
@@ -120,13 +118,13 @@ export function parseDirective(line, lineNo) {
         } else if (/\s/.test(unit)) {
           return { error: "expect status: quote a unit name that contains spaces" };
         }
-        return { line: lineNo, kind: "expect", what: "status", status: m[1], unit };
+        return { line: lineNo, kind: "expect", what: "status", status: m[1]!, unit };
       }
       if (what === "units") {
         const m = /^(\S+)\s+(\d+)$/.exec(arg);
         if (!m) return { error: "expect units needs: <op> <N>" };
-        if (!UNITS_OPS.includes(m[1])) return { error: `expect units: bad operator "${m[1]}" (${UNITS_OPS.join(" ")})` };
-        return { line: lineNo, kind: "expect", what: "units", op: m[1], n: Number(m[2]) };
+        if (!UNITS_OPS.includes(m[1]!)) return { error: `expect units: bad operator "${m[1]}" (${UNITS_OPS.join(" ")})` };
+        return { line: lineNo, kind: "expect", what: "units", op: m[1]!, n: Number(m[2]) };
       }
       return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units)" };
     }
@@ -148,22 +146,17 @@ export function parseDirective(line, lineNo) {
   }
 }
 
-/**
- * @param {string} text
- * @param {{ owningMod?: string, name?: string }} [opts]
- * @returns {Plan}
- */
-export function parseScript(text, opts = {}) {
-  /** @type {Finding[]} */
-  const errors = [];
-  /** @type {Finding[]} */
-  const warnings = [];
-  /** @type {Directive[]} */
-  const directives = [];
-  /** @type {string[]} */
-  const bodyLines = [];
-  /** @type {string[] | null} */
-  let mods = null;
+export interface ParseScriptOptions {
+  owningMod?: string;
+  name?: string;
+}
+
+export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
+  const errors: Finding[] = [];
+  const warnings: Finding[] = [];
+  const directives: Directive[] = [];
+  const bodyLines: string[] = [];
+  let mods: string[] | null = null;
   let savesuffix = DEFAULT_SAVESUFFIX;
   let timeoutMs = DEFAULT_TIMEOUT_MS;
   let hide = true;
@@ -173,13 +166,13 @@ export function parseScript(text, opts = {}) {
   const lines = String(text).split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const lineNo = i + 1;
-    const raw = lines[i].trim();
+    const raw = lines[i]!.trim();
     if (!raw) { inHeader = false; continue; }
     if (raw.startsWith("#")) { inHeader = false; continue; }
     const hm = /^([A-Za-z_]+):(?:\s+(.*))?$/.exec(raw);
     if (hm) {
       if (!inHeader) { errors.push({ line: lineNo, message: `header line "${hm[1]}:" after the first directive` }); continue; }
-      const key = hm[1].toLowerCase();
+      const key = hm[1]!.toLowerCase();
       const val = (hm[2] || "").trim();
       if (key === "mods") {
         mods = val.split(/[\s,]+/).filter(Boolean);

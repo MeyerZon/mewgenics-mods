@@ -9,20 +9,30 @@
 // absent or MEWTEST_SKIP=1. See docs/ingame-testing.md.
 
 import * as api from "../src/core/api.ts";
+import type { IngameReport } from "../src/core/ingame/runner.ts";
 
-/** @param {string} msg */
-function usage(msg) {
+function usage(msg: string): never {
   process.stderr.write(`${msg}\nusage: node scripts/ingame.ts [<mod> [<test>]] [--timeout <ms>] [--no-hide] [--clean] [--no-savecheck] [--json]\n`);
   process.exit(2);
 }
 
-/** @type {{ mod?: string, test?: string, timeoutMs?: number, hide?: boolean, clean?: boolean, saveCheck?: boolean, json: boolean }} */
-const opts = { json: false };
-/** @type {string[]} */
-const positional = [];
+interface Opts {
+  mod?: string;
+  test?: string;
+  timeoutMs?: number;
+  hide?: boolean;
+  clean?: boolean;
+  saveCheck?: boolean;
+  json: boolean;
+}
+/** A report line: the runner's report, or the launch-error stub this CLI writes for scripts that never ran. */
+type ReportLine = IngameReport | { test: { mod: string; name: string }; verdict: "launch-error"; reason: string };
+
+const opts: Opts = { json: false };
+const positional: string[] = [];
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
-  const a = argv[i];
+  const a = argv[i]!;
   if (a === "--json") opts.json = true;
   else if (a === "--no-hide") opts.hide = false;
   else if (a === "--hide") opts.hide = true;
@@ -48,8 +58,7 @@ if (tests.length === 0) {
   process.exit(opts.test ? 2 : 0);
 }
 
-/** @type {any[]} */
-const reports = [];
+const reports: ReportLine[] = [];
 let passed = 0, failed = 0, skipped = 0;
 for (const t of tests) {
   const label = `${t.mod}/${t.name}`;
@@ -66,7 +75,7 @@ for (const t of tests) {
     if (!opts.json) process.stdout.write(`FAIL  ${label}  ${r.error}\n`);
     continue;
   }
-  const report = r;
+  const report: IngameReport = r;
   reports.push(report);
   if (report.verdict === "pass") {
     passed++;

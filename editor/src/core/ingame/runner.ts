@@ -8,10 +8,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, c
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { DATA_CACHE_DIR } from "../repo.ts";
-import { locateGameDir, preflight, buildLaunch, LaunchError } from "./launch.ts";
-import { parseResults } from "./results.ts";
-import { collectLogs, locateAppdataLogsDir, readWindow } from "./logs.ts";
-import { snapshotFile, compareSnapshots, realSavePath, realSavesDir, snapshotSaves, compareSaveSets, devSavePattern } from "./savecheck.ts";
+import { locateGameDir, preflight, buildLaunch, LaunchError, type Preflight, type LaunchSpec, type Env } from "./launch.ts";
+import { parseResults, type ResultSummary } from "./results.ts";
+import { collectLogs, locateAppdataLogsDir, readWindow, type LogFindings } from "./logs.ts";
+import {
+  snapshotFile, compareSnapshots, realSavePath, realSavesDir, snapshotSaves, compareSaveSets, devSavePattern,
+  type SaveSnapshot,
+} from "./savecheck.ts";
+import type { Plan, Finding } from "./script.ts";
 
 export const RUNS_DIR = join(DATA_CACHE_DIR, "ingame-runs");
 export const BACKSTOP_GRACE_MS = 45000;
@@ -21,71 +25,101 @@ export const END_GRACE_MS = 5000;
 export const LOCK_FILE = ".lock";
 const TAIL_CHARS = 2000;
 
-/**
- * @typedef {'pass'|'fail'|'timeout'|'crash'|'harness-error'|'backstop-timeout'|'launch-error'
- *   |'cannot-run'|'skipped'|'no-result'|'log-errors'|'safety-violation'|'unknown-build'} Verdict
- */
-/**
- * @typedef {Object} IngameReport
- * @property {boolean} ok
- * @property {Verdict} verdict
- * @property {string} reason
- * @property {number|null} code
- * @property {string|null} signal
- * @property {boolean} killedAfterEnd  the game lingered after writing its end record and was killed after END_GRACE_MS
- * @property {{ mod: string, name: string, scriptPath: string|null, inline: boolean }} test
- * @property {{ mods: string[], savesuffix: string, timeoutMs: number, hide: boolean, clean: boolean, directives: number, warnings: any[] }} plan
- * @property {import("./launch.ts").Preflight} preflight
- * @property {{ command: string, args: string[], cwd: string, gameDir: string, fake: boolean } | null} launch
- * @property {string} startedAt
- * @property {string} endedAt
- * @property {number} durationMs
- * @property {import("./results.ts").ResultSummary} result
- * @property {import("./logs.ts").LogFindings | null} logFindings
- * @property {{ expectedSuffix: string, observedSuffix: string|null, saveSuffixOk: boolean, saveSuffixReason?: string, modPathsObserved: string[], saveCheck: null | { path: string, unchanged: boolean, matchesKnownBaseline: boolean, detail: string, before: any, after: any }, saveSet: null | { dir: string, unchanged: boolean, changed: string[], detail: string, files: number, skipped: string[] } }} safety
- * @property {{ runDir: string|null, script: string|null, resultFile: string|null, debugLog: string|null, frameworkLogWindow: string|null, chainloaderLog: string|null, report: string|null }} artifacts
- * @property {string} stdoutTail
- * @property {string} stderrTail
- */
+/** The runner's verdicts (docs/ingame-testing.md "Verdicts"). */
+export type Verdict =
+  | "pass" | "fail" | "timeout" | "crash" | "harness-error" | "backstop-timeout" | "launch-error"
+  | "cannot-run" | "skipped" | "no-result" | "log-errors" | "safety-violation" | "unknown-build";
 
-/**
- * @param {string} mod @param {string} name @param {number} nowMs
- */
-export function runDirName(mod, name, nowMs) {
+export interface SaveCheckResult {
+  path: string;
+  unchanged: boolean;
+  matchesKnownBaseline: boolean;
+  detail: string;
+  before: SaveSnapshot;
+  after: SaveSnapshot;
+}
+
+export interface SaveSetResult {
+  dir: string;
+  unchanged: boolean;
+  changed: string[];
+  detail: string;
+  files: number;
+  skipped: string[];
+}
+
+export interface SafetyReport {
+  expectedSuffix: string;
+  observedSuffix: string | null;
+  saveSuffixOk: boolean;
+  saveSuffixReason?: string;
+  modPathsObserved: string[];
+  saveCheck: SaveCheckResult | null;
+  saveSet: SaveSetResult | null;
+}
+
+export interface IngameReport {
+  ok: boolean;
+  verdict: Verdict;
+  reason: string;
+  code: number | null;
+  signal: string | null;
+  /** the game lingered after writing its end record and was killed after END_GRACE_MS */
+  killedAfterEnd: boolean;
+  test: { mod: string; name: string; scriptPath: string | null; inline: boolean };
+  plan: { mods: string[]; savesuffix: string; timeoutMs: number; hide: boolean; clean: boolean; directives: number; warnings: Finding[] };
+  preflight: Preflight;
+  launch: { command: string; args: string[]; cwd: string; gameDir: string; fake: boolean } | null;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  result: ResultSummary;
+  logFindings: LogFindings | null;
+  safety: SafetyReport;
+  artifacts: {
+    runDir: string | null;
+    script: string | null;
+    resultFile: string | null;
+    debugLog: string | null;
+    frameworkLogWindow: string | null;
+    chainloaderLog: string | null;
+    report: string | null;
+  };
+  stdoutTail: string;
+  stderrTail: string;
+}
+
+export function runDirName(mod: string, name: string, nowMs: number): string {
   const d = new Date(nowMs);
-  const p = (/** @type {number} */ n) => String(n).padStart(2, "0");
+  const p = (n: number) => String(n).padStart(2, "0");
   const stamp = `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
-  const safe = (/** @type {string} */ s) => s.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40) || "x";
+  const safe = (s: string) => s.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40) || "x";
   return `${stamp}-${safe(mod)}-${safe(name)}`;
 }
 
 /**
  * The run dir for this launch: runDirName, or the first free "-2", "-3", … variant when a run of the same test
  * started in the same second (a reused dir would hand the new run the previous result.jsonl).
- * @param {string} runsDir @param {string} mod @param {string} name @param {number} nowMs
  */
-export function uniqueRunDir(runsDir, mod, name, nowMs) {
+export function uniqueRunDir(runsDir: string, mod: string, name: string, nowMs: number): string {
   const base = join(runsDir, runDirName(mod, name, nowMs));
   let dir = base;
   for (let n = 2; existsSync(dir); n++) dir = `${base}-${n}`;
   return dir;
 }
 
-/** @param {number} pid */
-function pidAlive(pid) {
+function pidAlive(pid: number): boolean {
   try {
     return process.kill(pid, 0);
   } catch (e) {
-    return /** @type {any} */ (e)?.code === "EPERM";
+    return (e as { code?: string })?.code === "EPERM";
   }
 }
 
-/**
- * Pid-file lock so only one game runs at a time. A lock whose pid is dead is reclaimed.
- * @param {string} runsDir
- * @returns {{ ok: true, release: () => void } | { ok: false, pid: number }}
- */
-export function acquireLock(runsDir) {
+export type LockResult = { ok: true; release: () => void } | { ok: false; pid: number };
+
+/** Pid-file lock so only one game runs at a time. A lock whose pid is dead is reclaimed. */
+export function acquireLock(runsDir: string): LockResult {
   mkdirSync(runsDir, { recursive: true });
   const lockPath = join(runsDir, LOCK_FILE);
   if (existsSync(lockPath)) {
@@ -97,12 +131,36 @@ export function acquireLock(runsDir) {
   return { ok: true, release: () => rmSync(lockPath, { force: true }) };
 }
 
-/**
- * Pure verdict from the collected evidence. First match wins; see docs/ingame-testing.md.
- * @param {{ preflight: import("./launch.ts").Preflight, launchError?: string|null, exit: { code: number|null, signal: string|null, backstop: boolean }, result: import("./results.ts").ResultSummary, logs: any, safety: { saveSuffixOk: boolean, saveSuffixReason?: string, saveCheck: null | { unchanged: boolean, detail?: string }, saveSet?: null | { unchanged: boolean, detail?: string } } }} input
- * @returns {{ verdict: Verdict, reason: string }}
- */
-export function decideVerdict(input) {
+export interface ExitInfo {
+  code: number | null;
+  signal: string | null;
+  backstop: boolean;
+  killedAfterEnd?: boolean;
+}
+
+/** What decideVerdict reads from the collected logs (a LogFindings, or any object with these fields). */
+export interface VerdictLogs {
+  frameworkLog?: { present: boolean; unknownBuild: boolean; identity?: { timeDateStamp: string; sizeOfImage: string } | null; active: boolean; signatureFailures?: { name: string; matches: number }[]; build?: string | null } | null;
+  crashReports?: string[];
+  debugLog?: { findings: { marker: string; line: number; text: string }[] } | null;
+}
+
+export interface VerdictInput {
+  preflight: Preflight;
+  launchError?: string | null;
+  exit: ExitInfo;
+  result: ResultSummary;
+  logs: VerdictLogs | null | undefined;
+  safety: {
+    saveSuffixOk: boolean;
+    saveSuffixReason?: string;
+    saveCheck: null | { unchanged: boolean; detail?: string };
+    saveSet?: null | { unchanged: boolean; detail?: string };
+  };
+}
+
+/** Pure verdict from the collected evidence. First match wins; see docs/ingame-testing.md. */
+export function decideVerdict(input: VerdictInput): { verdict: Verdict; reason: string } {
   const { preflight: pre, exit, result, logs, safety } = input;
   if (pre.skipped) return { verdict: "skipped", reason: pre.reasons.join("; ") || "skipped" };
   if (!pre.ok) return { verdict: "cannot-run", reason: pre.reasons.join("; ") };
@@ -131,7 +189,7 @@ export function decideVerdict(input) {
     const detail = result.scriptError
       ? `script error at line ${result.scriptError.line}: ${result.scriptError.msg}`
       : fwInactive && sigs.length
-        ? `mewframework inactive: signature ${sigs.map((/** @type {{ name: string, matches: number }} */ s) => `${s.name} (${s.matches} matches)`).join(", ")} failed on build ${fw.build || "?"}; re-derive with tools/bindings/make-signature.ts`
+        ? `mewframework inactive: signature ${sigs.map((s) => `${s.name} (${s.matches} matches)`).join(", ")} failed on build ${fw.build || "?"}; re-derive with tools/bindings/make-signature.ts`
         : fwInactive
           ? "mewframework inactive (see mod_logs/mewframework.log)"
           : (result.end && result.end.reason) || "harness error";
@@ -149,15 +207,14 @@ export function decideVerdict(input) {
   if (!result.present) return { verdict: "no-result", reason: "no result file was written" };
   if (!result.end) return { verdict: "no-result", reason: result.truncated ? "result file truncated (no end event)" : "result file has no end event" };
   if (logs && logs.debugLog && logs.debugLog.findings.length) {
-    const f = logs.debugLog.findings[0];
+    const f = logs.debugLog.findings[0]!;
     return { verdict: "log-errors", reason: `${logs.debugLog.findings.length} debug.log marker(s), first: ${f.marker} at line ${f.line}` };
   }
   if (code !== 0 && code !== null) return { verdict: "fail", reason: `exit code ${code}` };
   return { verdict: "pass", reason: `all ${result.expects.passed} expectation(s) passed` };
 }
 
-/** @param {string} p */
-function sizeOf(p) {
+function sizeOf(p: string): number {
   try {
     return statSync(p).size;
   } catch {
@@ -165,15 +222,32 @@ function sizeOf(p) {
   }
 }
 
-/**
- * @param {{ plan: import("./script.ts").Plan, test: { mod: string, name: string, scriptPath: string|null },
- *   env?: Record<string, string|undefined>, gameDir?: string, appdataLogsDir?: string|null, modsDir?: string,
- *   runsDir?: string, saveCheck?: boolean, realSavePath?: string|null, realSavesDir?: string|null, backstopGraceMs?: number, endGraceMs?: number,
- *   exists?: (p: string) => boolean, steamRunning?: () => boolean|null }} args
- * @returns {Promise<IngameReport>}
- */
-export async function runPlan(args) {
-  const env = args.env || process.env;
+export interface RunPlanArgs {
+  plan: Plan;
+  test: { mod: string; name: string; scriptPath: string | null };
+  env?: Env;
+  gameDir?: string;
+  appdataLogsDir?: string | null;
+  modsDir?: string;
+  runsDir?: string;
+  saveCheck?: boolean;
+  realSavePath?: string | null;
+  realSavesDir?: string | null;
+  backstopGraceMs?: number;
+  endGraceMs?: number;
+  exists?: (p: string) => boolean;
+  steamRunning?: () => boolean | null;
+}
+
+interface SpawnOutcome extends ExitInfo {
+  killedAfterEnd: boolean;
+  stdout: string;
+  stderr: string;
+  err: string | null;
+}
+
+export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
+  const env: Env = args.env || process.env;
   const plan = args.plan;
   const gameDir = args.gameDir || locateGameDir(env);
   const appdataLogsDir = args.appdataLogsDir !== undefined ? args.appdataLogsDir : locateAppdataLogsDir(env);
@@ -182,8 +256,7 @@ export async function runPlan(args) {
   const startedAt = new Date(startedMs).toISOString();
   const expectedSuffix = plan.savesuffix;
 
-  /** @type {IngameReport} */
-  const report = {
+  const report: IngameReport = {
     ok: false,
     verdict: "cannot-run",
     reason: "",
@@ -204,8 +277,7 @@ export async function runPlan(args) {
     stdoutTail: "",
     stderrTail: "",
   };
-  /** @param {string|null} launchError @param {{ code: number|null, signal: string|null, backstop: boolean, killedAfterEnd?: boolean }} [exit] */
-  const finish = (launchError, exit = { code: null, signal: null, backstop: false }) => {
+  const finish = (launchError: string | null, exit: ExitInfo = { code: null, signal: null, backstop: false }): IngameReport => {
     const v = decideVerdict({ preflight: report.preflight, launchError, exit, result: report.result, logs: report.logFindings, safety: report.safety });
     report.verdict = v.verdict;
     report.killedAfterEnd = !!exit.killedAfterEnd;
@@ -248,7 +320,7 @@ export async function runPlan(args) {
     report.artifacts.script = scriptPath;
 
     // 3. launch spec
-    let launch;
+    let launch: LaunchSpec;
     try {
       launch = buildLaunch(plan, { gameDir, scriptPath, outPath, env, modsDir: args.modsDir });
     } catch (e) {
@@ -268,7 +340,7 @@ export async function runPlan(args) {
 
     // 5. spawn + wait (backstop kill)
     const launchedAtMs = Date.now();
-    const exit = await new Promise((resolve) => {
+    const exit = await new Promise<SpawnOutcome>((resolve) => {
       let stdout = "";
       let stderr = "";
       let settled = false;
@@ -279,8 +351,7 @@ export async function runPlan(args) {
       const endGrace = args.endGraceMs !== undefined ? args.endGraceMs : END_GRACE_MS;
       // the harness flushes every record; once `end` is on disk the verdict exists and only the process lifetime is
       // open. Clean mode relies on this: the game may shut itself down (any exit code), or never exit -> kill it.
-      /** @type {ReturnType<typeof setTimeout>|null} */
-      let endTimer = null;
+      let endTimer: ReturnType<typeof setTimeout> | null = null;
       const poll = setInterval(() => {
         if (endTimer || settled) return;
         let seen = false;
@@ -300,10 +371,9 @@ export async function runPlan(args) {
           /* already gone */
         }
       }, plan.timeoutMs + grace);
-      child.stdout.on("data", (/** @type {any} */ c) => { stdout = (stdout + c.toString("utf8")).slice(-TAIL_CHARS); });
-      child.stderr.on("data", (/** @type {any} */ c) => { stderr = (stderr + c.toString("utf8")).slice(-TAIL_CHARS); });
-      /** @param {number|null} code @param {string|null} signal @param {string|null} err */
-      const done = (code, signal, err) => {
+      child.stdout.on("data", (c: Buffer | string) => { stdout = (stdout + c.toString("utf8")).slice(-TAIL_CHARS); });
+      child.stderr.on("data", (c: Buffer | string) => { stderr = (stderr + c.toString("utf8")).slice(-TAIL_CHARS); });
+      const done = (code: number | null, signal: string | null, err: string | null) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
@@ -311,8 +381,8 @@ export async function runPlan(args) {
         if (endTimer) clearTimeout(endTimer);
         resolve({ code, signal, backstop, killedAfterEnd, stdout, stderr, err });
       };
-      child.on("error", (/** @type {any} */ e) => done(null, null, String(e && e.message ? e.message : e)));
-      child.on("exit", (/** @type {any} */ code, /** @type {any} */ signal) => done(typeof code === "number" ? code : null, signal || null, null));
+      child.on("error", (e: Error) => done(null, null, String(e && e.message ? e.message : e)));
+      child.on("exit", (code: number | null, signal: string | null) => done(typeof code === "number" ? code : null, signal || null, null));
     });
     report.stdoutTail = exit.stdout;
     report.stderrTail = exit.stderr;

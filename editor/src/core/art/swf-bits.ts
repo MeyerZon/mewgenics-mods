@@ -8,13 +8,29 @@
 // `writeMatrix` takes the scene's px matrix and scales the translate ×20 itself so
 // that every MATRIX in the file goes through one conversion.
 
-/** @typedef {import('./geometry.ts').Mat} Mat */
-/** @typedef {{ xmin: number, ymin: number, xmax: number, ymax: number }} Rect */
-/** @typedef {{ r: number, g: number, b: number }} Rgb */
-/** @typedef {{ r: number, g: number, b: number, a: number }} Rgba */
+import type { Mat } from "./geometry.ts";
+import type { Cxform } from "./timeline.ts";
+
+export interface Rect {
+  xmin: number;
+  ymin: number;
+  xmax: number;
+  ymax: number;
+}
+export interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+export interface Rgba {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
 
 /** SWF tag codes used by the emitter / reader. */
-export const TAG = /** @type {const} */ ({
+export const TAG = {
   End: 0,
   ShowFrame: 1,
   DefineShape: 2,
@@ -44,20 +60,18 @@ export const TAG = /** @type {const} */ ({
   DefineShape4: 83,
   DefineSceneAndFrameLabelData: 86,
   DefineFontName: 88,
-});
+} as const;
 
-/** @type {Record<number, string>} */
-export const TAG_NAMES = Object.fromEntries(Object.entries(TAG).map(([k, v]) => [v, k]));
+export const TAG_NAMES: Record<number, string> = Object.fromEntries(Object.entries(TAG).map(([k, v]) => [v, k]));
 
-/** @param {number} code */
-export function tagName(code) {
+export function tagName(code: number): string {
   return TAG_NAMES[code] || `Tag${code}`;
 }
 
 // ---- bit counting --------------------------------------------------------------
 
-/** @param {number} v integer */
-function signedBits(v) {
+/** @param v integer */
+function signedBits(v: number): number {
   if (v === 0) return 0;
   const a = v < 0 ? -v - 1 : v; // magnitude of the two's-complement payload
   if (a === 0) return 1; // -1
@@ -67,9 +81,9 @@ function signedBits(v) {
 
 /**
  * Bits needed to hold every value as an SB (two's complement). 0 when all values are 0.
- * @param {number[]} values integers
+ * @param values integers
  */
-export function nbitsForSigned(values) {
+export function nbitsForSigned(values: number[]): number {
   let n = 0;
   for (const v of values) {
     const b = signedBits(Math.trunc(v));
@@ -80,9 +94,9 @@ export function nbitsForSigned(values) {
 
 /**
  * Bits needed to hold every value as a UB. 0 when all values are 0.
- * @param {number[] | number} values non-negative integers
+ * @param values non-negative integers
  */
-export function nbitsForUnsigned(values) {
+export function nbitsForUnsigned(values: number[] | number): number {
   const list = typeof values === "number" ? [values] : values;
   let n = 0;
   for (const v of list) {
@@ -98,18 +112,19 @@ export function nbitsForUnsigned(values) {
 
 /** Growable little-endian byte/bit writer following SWF bit-field conventions. */
 export class BitWriter {
-  /** @param {number} [initialCapacity] */
+  buf: Uint8Array;
+  /** byte position of the byte currently receiving bits */
+  pos: number;
+  /** bits already used in buf[pos] (0..7) */
+  bitPos: number;
+
   constructor(initialCapacity = 256) {
-    /** @type {Uint8Array} */
     this.buf = new Uint8Array(Math.max(16, initialCapacity));
-    /** byte position of the byte currently receiving bits */
     this.pos = 0;
-    /** bits already used in buf[pos] (0..7) */
     this.bitPos = 0;
   }
 
-  /** @param {number} extraBytes */
-  ensure(extraBytes) {
+  ensure(extraBytes: number): void {
     const need = this.pos + extraBytes + 1;
     if (need <= this.buf.length) return;
     let cap = this.buf.length * 2;
@@ -120,16 +135,15 @@ export class BitWriter {
   }
 
   /** Bytes written so far (a partial byte counts). */
-  get length() {
+  get length(): number {
     return this.pos + (this.bitPos > 0 ? 1 : 0);
   }
 
   /**
    * Unsigned bit field, MSB first.
-   * @param {number} nbits 0..32
-   * @param {number} value
+   * @param nbits 0..32
    */
-  writeUB(nbits, value) {
+  writeUB(nbits: number, value: number): void {
     if (nbits === 0) return;
     if (nbits < 0 || nbits > 32) throw new Error(`writeUB: nbits ${nbits} out of range`);
     let v = Math.trunc(value);
@@ -154,10 +168,9 @@ export class BitWriter {
 
   /**
    * Signed (two's complement) bit field.
-   * @param {number} nbits
-   * @param {number} value integer
+   * @param value integer
    */
-  writeSB(nbits, value) {
+  writeSB(nbits: number, value: number): void {
     if (nbits === 0) {
       if (Math.trunc(value) !== 0) throw new Error(`writeSB: value ${value} with 0 bits`);
       return;
@@ -169,40 +182,33 @@ export class BitWriter {
     this.writeUB(nbits, v < 0 ? v + 2 ** nbits : v);
   }
 
-  /**
-   * 16.16 fixed-point bit field (FB).
-   * @param {number} nbits
-   * @param {number} value
-   */
-  writeFB(nbits, value) {
+  /** 16.16 fixed-point bit field (FB). */
+  writeFB(nbits: number, value: number): void {
     this.writeSB(nbits, fixed16(value));
   }
 
   /** Advance to the next byte boundary (no-op when already aligned). */
-  align() {
+  align(): void {
     if (this.bitPos > 0) {
       this.bitPos = 0;
       this.pos++;
     }
   }
 
-  /** @param {number} v */
-  u8(v) {
+  u8(v: number): void {
     this.align();
     this.ensure(1);
     this.buf[this.pos++] = v & 0xff;
   }
 
-  /** @param {number} v */
-  u16(v) {
+  u16(v: number): void {
     this.align();
     this.ensure(2);
     this.buf[this.pos++] = v & 0xff;
     this.buf[this.pos++] = (v >>> 8) & 0xff;
   }
 
-  /** @param {number} v */
-  u32(v) {
+  u32(v: number): void {
     this.align();
     this.ensure(4);
     this.buf[this.pos++] = v & 0xff;
@@ -211,16 +217,12 @@ export class BitWriter {
     this.buf[this.pos++] = (v >>> 24) & 0xff;
   }
 
-  /** @param {number} v */
-  s16(v) {
+  s16(v: number): void {
     this.u16(v < 0 ? v + 0x10000 : v);
   }
 
-  /**
-   * Variable-length unsigned integer (EncodedU32 / ABC u30 style: 7 bits per byte, LSB first).
-   * @param {number} v
-   */
-  encodedU32(v) {
+  /** Variable-length unsigned integer (EncodedU32 / ABC u30 style: 7 bits per byte, LSB first). */
+  encodedU32(v: number): void {
     this.align();
     let x = v >>> 0;
     do {
@@ -232,48 +234,39 @@ export class BitWriter {
     } while (x);
   }
 
-  /** @param {Uint8Array} bytes */
-  bytes(bytes) {
+  bytes(bytes: Uint8Array): void {
     this.align();
     this.ensure(bytes.length);
     this.buf.set(bytes, this.pos);
     this.pos += bytes.length;
   }
 
-  /**
-   * UTF-8 string with a terminating NUL (SWF STRING).
-   * @param {string} s
-   */
-  string(s) {
+  /** UTF-8 string with a terminating NUL (SWF STRING). */
+  string(s: string): void {
     this.bytes(utf8(s));
     this.u8(0);
   }
 
   /** The bytes written so far, as a fresh Uint8Array. */
-  finish() {
+  finish(): Uint8Array {
     this.align();
     return this.buf.slice(0, this.pos);
   }
 }
 
 const ENC = new TextEncoder();
-/** @param {string} s */
-export function utf8(s) {
+export function utf8(s: string): Uint8Array {
   return ENC.encode(s);
 }
 
-/** @param {number} v */
-export function fixed16(v) {
+export function fixed16(v: number): number {
   return Math.round(v * 65536);
 }
 
 // ---- structured fields ---------------------------------------------------------
 
-/**
- * RECT (twips). Byte-aligned at the end.
- * @param {BitWriter} w @param {Rect} r
- */
-export function writeRect(w, r) {
+/** RECT (twips). Byte-aligned at the end. */
+export function writeRect(w: BitWriter, r: Rect): void {
   const xmin = Math.round(r.xmin);
   const xmax = Math.round(r.xmax);
   const ymin = Math.round(r.ymin);
@@ -291,9 +284,8 @@ export function writeRect(w, r) {
  * MATRIX from a scene matrix in px: translate is scaled ×20 (twips) here; scale and
  * rotate/skew are written as 16.16 FB. HasScale is emitted only when a or d differ from 1,
  * HasRotate only when b or c differ from 0. Byte-aligned at the end.
- * @param {BitWriter} w @param {Mat} m
  */
-export function writeMatrix(w, m) {
+export function writeMatrix(w: BitWriter, m: Mat): void {
   const hasScale = m[0] !== 1 || m[3] !== 1;
   const hasRotate = m[1] !== 0 || m[2] !== 0;
   w.writeUB(1, hasScale ? 1 : 0);
@@ -326,10 +318,8 @@ export function writeMatrix(w, m) {
 /**
  * CXFORMWITHALPHA. `mul` is written as 8.8 fixed (256 = 1.0); `add` is in 0..1 units and
  * written as -255..255. Terms that are identity are omitted. Byte-aligned at the end.
- * @param {BitWriter} w
- * @param {import('./timeline.ts').Cxform} cx
  */
-export function writeCxformWithAlpha(w, cx) {
+export function writeCxformWithAlpha(w: BitWriter, cx: Cxform): void {
   const mul = cx.mul.map((v) => Math.max(-32768, Math.min(32767, Math.round(v * 256))));
   const add = cx.add.map((v) => Math.max(-255, Math.min(255, Math.round(v * 255))));
   const hasMul = mul.some((v) => v !== 256);
@@ -343,15 +333,13 @@ export function writeCxformWithAlpha(w, cx) {
   w.align();
 }
 
-/** @param {BitWriter} w @param {Rgb} c */
-export function writeRgb(w, c) {
+export function writeRgb(w: BitWriter, c: Rgb): void {
   w.u8(c.r);
   w.u8(c.g);
   w.u8(c.b);
 }
 
-/** @param {BitWriter} w @param {Rgba} c */
-export function writeRgba(w, c) {
+export function writeRgba(w: BitWriter, c: Rgba): void {
   w.u8(c.r);
   w.u8(c.g);
   w.u8(c.b);
@@ -363,9 +351,8 @@ export function writeRgba(w, c) {
 /**
  * Frame a tag body: RECORDHEADER (u16 code<<6|len, plus u32 length when len >= 63 or
  * `forceLong`). Flash always uses the long form for DefineBits* and DefineSprite.
- * @param {number} code @param {Uint8Array} body @param {boolean} [forceLong]
  */
-export function tag(code, body, forceLong = false) {
+export function tag(code: number, body: Uint8Array, forceLong = false): Uint8Array {
   const long = forceLong || body.length >= 63;
   const out = new Uint8Array((long ? 6 : 2) + body.length);
   const header = (code << 6) | (long ? 0x3f : body.length);
@@ -384,8 +371,7 @@ export function tag(code, body, forceLong = false) {
   return out;
 }
 
-/** @param {Uint8Array[]} chunks */
-export function concat(chunks) {
+export function concat(chunks: Uint8Array[]): Uint8Array {
   let total = 0;
   for (const c of chunks) total += c.length;
   const out = new Uint8Array(total);

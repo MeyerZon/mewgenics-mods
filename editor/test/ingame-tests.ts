@@ -9,35 +9,46 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODS_DIR, REPO_ROOT } from "../src/core/repo.ts";
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
+import type { ResultSummary } from "../src/core/ingame/results.ts";
+import type { VerdictLogs, ExitInfo, VerdictInput, IngameReport } from "../src/core/ingame/runner.ts";
+
+/** Deliberately minimal stand-ins for the verdict table: only the fields each case reads are set. */
+type DeepPartial<T> = T extends (infer U)[] ? DeepPartial<U>[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
+/** reason-or-error of a report that may be a refusal. */
+const why = (r: { reason?: string; error?: string }): string | undefined => r.reason || r.error;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, "fixtures", "ingame");
-/** @param {string} name */
-const fixture = (name) => readFileSync(join(FIX, name), "utf8");
+const fixture = (name: string) => readFileSync(join(FIX, name), "utf8");
+
+/** A module under test, or the load error so the caller can register one failing test instead of crashing the run. */
+type Loaded<M> = M | { __error: string };
 
 /**
- * Import a module, or return null so the caller can register one failing test
+ * Import a module, or return the error so the caller can register one failing test
  * instead of crashing the whole run (keeps the "red" phase readable).
- * @param {string} rel
  */
-async function load(rel) {
+async function load<M>(rel: string): Promise<Loaded<M>> {
   try {
-    return await import(rel);
+    return (await import(rel)) as M;
   } catch (e) {
     return { __error: String(e instanceof Error ? e.message : e) };
   }
 }
 
-/**
- * @param {(name: string, fn: () => void) => void} test
- * @param {(cond: boolean, msg: string) => void} assert
- * @param {(a: unknown, b: unknown, msg?: string) => void} eq
- */
-export async function runIngameTests(test, assert, eq) {
+/** A child process's captured exit. */
+interface CliRun {
+  code: number | null;
+  out: string;
+  err: string;
+}
+
+export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
   // ---- script.ts ----------------------------------------------------------
   console.log("\n# In-game: .mewtest script parser");
-  const script = await load("../src/core/ingame/script.ts");
-  if (script.__error) {
+  const script = await load<typeof import("../src/core/ingame/script.ts")>("../src/core/ingame/script.ts");
+  if ("__error" in script) {
     test("script.ts loads", () => assert(false, script.__error));
   } else {
     const { parseScript, parseDirective, parseTimeout, DEFAULT_SAVESUFFIX, DEFAULT_TIMEOUT_MS } = script;
@@ -75,7 +86,7 @@ export async function runIngameTests(test, assert, eq) {
         eq(p.clean, want, `clean: ${v}`);
       }
       const bad = parseScript("clean: maybe\ncmd listcmds\nquit\n", { owningMod: "x" });
-      assert(!bad.ok && bad.errors.some((/** @type {any} */ e) => e.line === 1 && /clean must be true or false/.test(e.message)), JSON.stringify(bad.errors));
+      assert(!bad.ok && bad.errors.some((e: { line: number; message: string }) => e.line === 1 && /clean must be true or false/.test(e.message)), JSON.stringify(bad.errors));
     });
 
     test("every directive kind parses with its line number", () => {
@@ -98,7 +109,7 @@ export async function runIngameTests(test, assert, eq) {
 
     test("all six units ops parse; a bad op is an error with its line", () => {
       for (const op of ["==", "!=", ">=", "<=", ">", "<"]) {
-        const d = /** @type {any} */ (parseDirective(`expect units ${op} 3`, 4));
+        const d = parseDirective(`expect units ${op} 3`, 4) as { op: string; n: number };
         eq(d.op, op, `op ${op}`);
         eq(d.n, 3);
       }
@@ -116,14 +127,13 @@ export async function runIngameTests(test, assert, eq) {
     });
 
     test("quit without code, quit N, quit 300 rejected", () => {
-      eq(/** @type {any} */ (parseDirective("quit", 1)).code, null);
-      eq(/** @type {any} */ (parseDirective("quit 7", 1)).code, 7);
-      assert("error" in /** @type {any} */ (parseDirective("quit 300", 1)), "quit 300 must error");
+      eq((parseDirective("quit", 1) as { code: number | null }).code, null);
+      eq((parseDirective("quit 7", 1) as { code: number | null }).code, 7);
+      assert("error" in parseDirective("quit 300", 1), "quit 300 must error");
     });
 
     test("error cases carry line numbers", () => {
-      /** @type {Array<[string, string]>} */
-      const cases = [
+            const cases: Array<[string, string]> = [
         ["frobnicate now", "unknown directive"],
         ["wait seconds 3", "bad wait unit"],
         ["wait frames 0", "N must be >= 1"],
@@ -152,7 +162,7 @@ export async function runIngameTests(test, assert, eq) {
     test("no quit -> warning, still ok", () => {
       const p = parseScript("cmd listcmds\n", { owningMod: "m" });
       assert(p.ok, "ok");
-      assert(p.warnings.some((/** @type {any} */ w) => /quit/.test(w.message)), "warning mentions quit");
+      assert(p.warnings.some((w: { message: string }) => /quit/.test(w.message)), "warning mentions quit");
     });
 
     test("empty / comment-only script is ok with zero directives and a warning", () => {
@@ -165,18 +175,18 @@ export async function runIngameTests(test, assert, eq) {
 
   // ---- discover.ts --------------------------------------------------------
   console.log("\n# In-game: test discovery");
-  const discover = await load("../src/core/ingame/discover.ts");
-  if (discover.__error) {
+  const discover = await load<typeof import("../src/core/ingame/discover.ts")>("../src/core/ingame/discover.ts");
+  if ("__error" in discover) {
     test("discover.ts loads", () => assert(false, discover.__error));
   } else if (existsSync(join(MODS_DIR, "jokers-luck", "tests")) && existsSync(join(MODS_DIR, "dev-sandbox", "tests"))) {
     test("listIngameTests finds the committed sample scripts and they parse with zero errors", () => {
       const all = discover.listIngameTests();
-      const names = all.tests.map((/** @type {any} */ t) => `${t.mod}/${t.name}`);
+      const names = all.tests.map((t: { mod: string; name: string }) => `${t.mod}/${t.name}`);
       assert(names.includes("jokers-luck/smoke"), `missing jokers-luck/smoke in ${names.join(",")}`);
       assert(names.includes("dev-sandbox/console-smoke"), `missing dev-sandbox/console-smoke in ${names.join(",")}`);
       for (const t of all.tests) assert(t.plan.ok, `${t.mod}/${t.name}: ${JSON.stringify(t.plan.errors)}`);
       const one = discover.listIngameTests("jokers-luck");
-      assert(one.tests.every((/** @type {any} */ t) => t.mod === "jokers-luck"), "filter by mod");
+      assert(one.tests.every((t: { mod: string }) => t.mod === "jokers-luck"), "filter by mod");
       assert(one.tests[0].plan.mods.includes("jokers-luck"), "owning mod is the default -modpaths entry");
     });
   } else {
@@ -185,8 +195,8 @@ export async function runIngameTests(test, assert, eq) {
 
   // ---- results.ts ---------------------------------------------------------
   console.log("\n# In-game: result JSONL parser");
-  const results = await load("../src/core/ingame/results.ts");
-  if (results.__error) {
+  const results = await load<typeof import("../src/core/ingame/results.ts")>("../src/core/ingame/results.ts");
+  if ("__error" in results) {
     test("results.ts loads", () => assert(false, results.__error));
   } else {
     const { parseResults } = results;
@@ -195,29 +205,29 @@ export async function runIngameTests(test, assert, eq) {
       assert(r.present && !r.truncated, "present, not truncated");
       eq(r.parseErrors, 0);
       eq(r.events.length, 12);
-      eq(r.start.build, "1.1.21239 (steam 25143593)");
-      eq(r.end.code, 0);
-      eq(r.end.reason, "quit");
+      eq(r.start!.build, "1.1.21239 (steam 25143593)");
+      eq(r.end!.code, 0);
+      eq(r.end!.reason, "quit");
       eq(r.crash, null);
       eq(r.turns, 1);
       eq(r.consoleLines.length, 3);
       eq(r.expects.passed, 2);
       eq(r.expects.failed, 0);
-      eq(r.units.count, 2);
-      eq(r.units.list[0].name, "Lumee");
+      eq(r.units!.count, 2);
+      eq((r.units!.list as { name: string }[])[0]!.name, "Lumee");
     });
     test("fail fixture lists failures with line, kind, arg, detail", () => {
       const r = parseResults(fixture("result-fail.jsonl"));
-      eq(r.end.code, 1);
+      eq(r.end!.code, 1);
       eq(r.expects.failed, 1);
       eq(r.expects.passed, 1);
       eq(JSON.stringify(r.expects.failures[0]), JSON.stringify({ line: 3, kind: "noconsole", arg: "No command named", detail: "found in console line 0" }));
     });
     test("crash fixture exposes the crash event", () => {
       const r = parseResults(fixture("result-crash.jsonl"));
-      eq(r.crash.code, "0xC0000005");
-      eq(r.crash.rva, "0x4929c0");
-      eq(r.end.code, 3);
+      eq(r.crash!.code, "0xC0000005");
+      eq(r.crash!.rva, "0x4929c0");
+      eq(r.end!.code, 3);
     });
     test("truncated trailing line is tolerated and flagged; no end", () => {
       const r = parseResults(fixture("result-truncated.jsonl"));
@@ -237,20 +247,20 @@ export async function runIngameTests(test, assert, eq) {
       eq(r.events.length, 3);
       eq(r.parseErrors, 1);
       assert(!r.truncated, "a complete non-JSON line is not truncation");
-      eq(r.end.code, 0);
+      eq(r.end!.code, 0);
     });
   }
 
   // ---- logs.ts ------------------------------------------------------------
   console.log("\n# In-game: log scanners");
-  const logs = await load("../src/core/ingame/logs.ts");
-  if (logs.__error) {
+  const logs = await load<typeof import("../src/core/ingame/logs.ts")>("../src/core/ingame/logs.ts");
+  if ("__error" in logs) {
     test("logs.ts loads", () => assert(false, logs.__error));
   } else {
     const { scanDebugLog, checkSaveSuffix, scanFrameworkLog, scanChainloaderLog, readWindow, locateAppdataLogsDir, collectLogs } = logs;
     test("scanDebugLog: every marker found with the [file: ...] prefix stripped and line numbers", () => {
       const r = scanDebugLog(fixture("debug-markers.log"));
-      const markers = r.findings.map((/** @type {any} */ f) => f.marker);
+      const markers = r.findings.map((f: { marker: string }) => f.marker);
       for (const m of ["GON_ERROR", "NO_STATUS_NAMED", "NO_BRAIN_NAMED", "NO_ABILITY_NAMED", "NO_PASSIVE_NAMED", "No level named", "No enemy named"]) {
         assert(markers.includes(m), `missing marker ${m} in ${markers.join(",")}`);
       }
@@ -267,9 +277,9 @@ export async function runIngameTests(test, assert, eq) {
     test("checkSaveSuffix: ok / missing / different", () => {
       assert(checkSaveSuffix("dev", "dev").ok, "same");
       const m = checkSaveSuffix(null, "dev");
-      assert(!m.ok && /missing|not found/i.test(m.reason), "missing");
+      assert(!m.ok && /missing|not found/i.test(m.reason ?? ""), "missing");
       const d = checkSaveSuffix("other", "dev");
-      assert(!d.ok && /other/.test(d.reason), "different");
+      assert(!d.ok && /other/.test(d.reason ?? ""), "different");
     });
     test("scanFrameworkLog: windowed text yields active + symbol count + hooks; unknown build detected", () => {
       const all = fixture("mewframework-two-sessions.log");
@@ -282,12 +292,12 @@ export async function runIngameTests(test, assert, eq) {
       assert(!r.unknownBuild, "known build");
       const u = scanFrameworkLog(fixture("mewframework-unknown-build.log"));
       assert(u.unknownBuild && !u.active, "unknown build -> inactive");
-      assert(u.identity && u.identity.timeDateStamp === "0x6b000000" && u.identity.sizeOfImage === "0x01580000", `identity parsed: ${JSON.stringify(u.identity)}`);
+      assert(!!(u.identity && u.identity.timeDateStamp === "0x6b000000" && u.identity.sizeOfImage === "0x01580000"), `identity parsed: ${JSON.stringify(u.identity)}`);
       eq(u.signatureFailures.length, 0);
       const sf = scanFrameworkLog(fixture("mewframework-signature-failed.log"));
       assert(!sf.unknownBuild && !sf.active, "known build, inactive");
       eq(sf.build, "1.1.21239 (steam 25143593)");
-      eq(sf.signatureFailures.map((/** @type {any} */ f) => `${f.name}=${f.matches}`).join(","), "DebugConsole_Execute=0,ApplicationBase_FrameBegin=2");
+      eq(sf.signatureFailures.map((f: { name: string; matches: number }) => `${f.name}=${f.matches}`).join(","), "DebugConsole_Execute=0,ApplicationBase_FrameBegin=2");
       eq(r.signatureFailures.length, 0, "active session has none");
       eq(r.identity, null, "identity only reported for an unknown build");
       const both = scanFrameworkLog(all);
@@ -300,7 +310,7 @@ export async function runIngameTests(test, assert, eq) {
       eq(ok.crashLines.length, 0);
       const cr = scanChainloaderLog(fixture("chainloader-crash.log"));
       assert(cr.crashLines.length >= 2, `expected crash lines, got ${cr.crashLines.length}`);
-      assert(cr.crashLines.some((/** @type {string} */ l) => /fatal=1/.test(l)), "fatal VEH line");
+      assert(cr.crashLines.some((l: string) => /fatal=1/.test(l)), "fatal VEH line");
     });
     test("readWindow returns only bytes after the offset", () => {
       const dir = join(FIX, "__tmp_window");
@@ -363,9 +373,9 @@ export async function runIngameTests(test, assert, eq) {
 
   // ---- launch.ts ----------------------------------------------------------
   console.log("\n# In-game: launch builder + preflight");
-  const launch = await load("../src/core/ingame/launch.ts");
-  if (launch.__error || script.__error) {
-    test("launch.ts loads", () => assert(false, launch.__error || "script.ts missing"));
+  const launch = await load<typeof import("../src/core/ingame/launch.ts")>("../src/core/ingame/launch.ts");
+  if ("__error" in launch || "__error" in script) {
+    test("launch.ts loads", () => assert(false, "__error" in launch ? launch.__error : "script.ts missing"));
   } else {
     const { locateGameDir, preflight, buildLaunch, LaunchError, DEFAULT_GAME_DIR, STEAM_APP_ID } = launch;
     const plan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 30s\ncmd listcmds\nquit\n", { owningMod: "jokers-luck", name: "t" });
@@ -382,24 +392,23 @@ export async function runIngameTests(test, assert, eq) {
       for (const k of ["exe", "versionDll", "chainloaderIni", "frameworkDll", "mewtestDll", "appdata", "steam", "modDirs"]) assert(r.checks[k] && r.checks[k].ok, `check ${k}`);
     });
     test("preflight: each missing item yields its own reason", () => {
-      /** @type {Array<[string, RegExp]>} */
-      const cases = [["Mewgenics.exe", /Mewgenics\.exe/], ["version.dll", /version\.dll/], ["chainloader.ini", /chainloader\.ini/], ["mewframework.dll", /mewframework\.dll/], ["mewtest.dll", /mewtest\.dll/], ["jokers-luck", /jokers-luck/]];
+            const cases: Array<[string, RegExp]> = [["Mewgenics.exe", /Mewgenics\.exe/], ["version.dll", /version\.dll/], ["chainloader.ini", /chainloader\.ini/], ["mewframework.dll", /mewframework\.dll/], ["mewtest.dll", /mewtest\.dll/], ["jokers-luck", /jokers-luck/]];
       for (const [missing, re] of cases) {
-        const r = preflight(plan, { gameDir: "C:\\G", env: {}, exists: (/** @type {string} */ p) => !p.toLowerCase().endsWith(missing.toLowerCase()), steamRunning: () => true, modsDir: "C:\\repo\\mods", appdataLogsDir: "C:\\A\\logs" });
+        const r = preflight(plan, { gameDir: "C:\\G", env: {}, exists: (p: string) => !p.toLowerCase().endsWith(missing.toLowerCase()), steamRunning: () => true, modsDir: "C:\\repo\\mods", appdataLogsDir: "C:\\A\\logs" });
         assert(!r.ok, `${missing}: should fail`);
-        assert(r.reasons.some((/** @type {string} */ x) => re.test(x)), `${missing}: reason ${JSON.stringify(r.reasons)}`);
+        assert(r.reasons.some((x: string) => re.test(x)), `${missing}: reason ${JSON.stringify(r.reasons)}`);
       }
       const noSteam = preflight(plan, { gameDir: "C:\\G", env: {}, exists: okExists, steamRunning: () => false, modsDir: "C:\\repo\\mods", appdataLogsDir: "C:\\A\\logs" });
-      assert(!noSteam.ok && noSteam.reasons.some((/** @type {string} */ x) => /steam/i.test(x)), "steam not running");
+      assert(!noSteam.ok && noSteam.reasons.some((x: string) => /steam/i.test(x)), "steam not running");
       const unknownSteam = preflight(plan, { gameDir: "C:\\G", env: {}, exists: okExists, steamRunning: () => null, modsDir: "C:\\repo\\mods", appdataLogsDir: "C:\\A\\logs" });
       assert(unknownSteam.ok, "unknown steam state is not a blocker");
       const noApp = preflight(plan, { gameDir: "C:\\G", env: {}, exists: okExists, steamRunning: () => true, modsDir: "C:\\repo\\mods", appdataLogsDir: null });
-      assert(!noApp.ok && noApp.reasons.some((/** @type {string} */ x) => /appdata|logs/i.test(x)), "appdata logs dir");
+      assert(!noApp.ok && noApp.reasons.some((x: string) => /appdata|logs/i.test(x)), "appdata logs dir");
     });
     test("preflight: MEWTEST_SKIP=1 -> skipped; MEWTEST_FAKE_GAME relaxes the game checks", () => {
       const s = preflight(plan, { gameDir: "C:\\G", env: { MEWTEST_SKIP: "1" }, exists: () => false, steamRunning: () => false, modsDir: "C:\\repo\\mods", appdataLogsDir: null });
       assert(s.skipped && !s.ok, "skipped");
-      const f = preflight(plan, { gameDir: "C:\\G", env: { MEWTEST_FAKE_GAME: "C:\\fake.mjs" }, exists: (/** @type {string} */ p) => p.includes("mods"), steamRunning: () => false, modsDir: "C:\\repo\\mods", appdataLogsDir: "C:\\A\\logs" });
+      const f = preflight(plan, { gameDir: "C:\\G", env: { MEWTEST_FAKE_GAME: "C:\\fake.mjs" }, exists: (p: string) => p.includes("mods"), steamRunning: () => false, modsDir: "C:\\repo\\mods", appdataLogsDir: "C:\\A\\logs" });
       assert(f.ok, `fake mode ok: ${JSON.stringify(f.reasons)}`);
     });
     const ctx = { gameDir: "C:\\Games\\Mew genics", scriptPath: "C:\\repo\\editor\\data\\ingame-runs\\r1\\script.mewtest", outPath: "C:\\repo\\editor\\data\\ingame-runs\\r1\\result.jsonl", env: { PATH: "x" }, modsDir: "C:\\re po\\mods" };
@@ -431,14 +440,13 @@ export async function runIngameTests(test, assert, eq) {
       eq(buildLaunch(p3, ctx).args[buildLaunch(p3, ctx).args.indexOf("-mewtest_clean") + 1], "1", "clean: true -> -mewtest_clean 1");
     });
     test("buildLaunch refuses: bad suffix, saves path in a mod dir, relative script path", () => {
-      /** @param {() => void} fn */
-      const throws = (fn) => { try { fn(); return null; } catch (e) { return /** @type {any} */ (e); } };
+            const throws = (fn: () => void): unknown => { try { fn(); return null; } catch (e) { return e; } };
       const bad = script.parseScript("cmd listcmds\nquit\n", { owningMod: "jokers-luck" });
       bad.savesuffix = "has space";
       const e1 = throws(() => buildLaunch(bad, ctx));
       assert(e1 instanceof LaunchError, "bad suffix -> LaunchError");
       const e2 = throws(() => buildLaunch(plan, { ...ctx, modsDir: "C:\\x\\saves\\mods" }));
-      assert(e2 instanceof LaunchError && /saves/i.test(String(e2.message)), "saves path refused");
+      assert(e2 instanceof LaunchError && /saves/i.test(String((e2 as Error).message)), "saves path refused");
       const e3 = throws(() => buildLaunch(plan, { ...ctx, scriptPath: "rel\\script.mewtest" }));
       assert(e3 instanceof LaunchError, "relative script path refused");
       const e4 = throws(() => buildLaunch(plan, { ...ctx, modsDir: "C:\\repo\\mods", scriptPath: "C:\\x\\saves\\s.mewtest" }));
@@ -456,15 +464,15 @@ export async function runIngameTests(test, assert, eq) {
 
   // ---- savecheck.ts -------------------------------------------------------
   console.log("\n# In-game: real-save read-only hash check");
-  const savecheck = await load("../src/core/ingame/savecheck.ts");
-  if (savecheck.__error) {
+  const savecheck = await load<typeof import("../src/core/ingame/savecheck.ts")>("../src/core/ingame/savecheck.ts");
+  if ("__error" in savecheck) {
     test("savecheck.ts loads", () => assert(false, savecheck.__error));
   } else {
     const { snapshotFile, compareSnapshots, realSavePath, KNOWN_REAL_SAVE_SHA256 } = savecheck;
     test("snapshotFile + compareSnapshots on a fixture (never a real save)", () => {
       const p = join(FIX, "sample-save.bin");
       const a = snapshotFile(p);
-      assert(a.present && a.sha256 && a.sha256.length === 64, "sha256 present");
+      assert(!!(a.present && a.sha256 && a.sha256.length === 64), "sha256 present");
       assert(a.bytes > 0, "bytes");
       const b = snapshotFile(p);
       const same = compareSnapshots(a, b);
@@ -486,8 +494,8 @@ export async function runIngameTests(test, assert, eq) {
       writeFileSync(join(dir, "steam_autocloud.vdf"), "not a save");
       const allow = /^campaign0\d\.sav$/i; // stands in for devSavePattern("dev") until the mapping is decoded
       const before = savecheck.snapshotSaves(dir, { allow });
-      eq(before.files.map((/** @type {any} */ f) => f.name).join(","), "steamcampaign01.sav,steamcampaign02.sav", "sorted, allowed and non-.sav files excluded");
-      assert(before.files.every((/** @type {any} */ f) => f.present && f.sha256 && f.sha256.length === 64), "hashed");
+      eq(before.files.map((f: { name: string }) => f.name).join(","), "steamcampaign01.sav,steamcampaign02.sav", "sorted, allowed and non-.sav files excluded");
+      assert(before.files.every((f: { present: boolean; sha256: string | null }) => f.present && f.sha256 && f.sha256.length === 64), "hashed");
       eq(before.skipped.join(","), "campaign02.sav", "the allowed (dev) file is listed as skipped, not hashed");
       // nothing changed
       const same = savecheck.compareSaveSets(before, savecheck.snapshotSaves(dir, { allow }));
@@ -538,9 +546,9 @@ export async function runIngameTests(test, assert, eq) {
 
   // ---- runner.ts (against the fake game) ----------------------------------
   console.log("\n# In-game: runner against the fake game");
-  const runner = await load("../src/core/ingame/runner.ts");
-  if (runner.__error || script.__error) {
-    test("runner.ts loads", () => assert(false, runner.__error || "script.ts missing"));
+  const runner = await load<typeof import("../src/core/ingame/runner.ts")>("../src/core/ingame/runner.ts");
+  if ("__error" in runner || "__error" in script) {
+    test("runner.ts loads", () => assert(false, "__error" in runner ? runner.__error : "script.ts missing"));
   } else {
     const { runPlan, acquireLock, runDirName, decideVerdict, LOCK_FILE } = runner;
     const FAKE = join(HERE, "fixtures", "fake-game.ts");
@@ -556,8 +564,7 @@ export async function runIngameTests(test, assert, eq) {
     mkdirSync(join(modsDir, "dev-sandbox"), { recursive: true });
     writeFileSync(savePath, fixture("sample-save.bin"));
     const plan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 1s\ncmd listcmds\nexpect console \"listcmds\"\nquit\n", { owningMod: "jokers-luck", name: "smoke" });
-    /** @param {string} mode @param {Record<string,string>} [extraEnv] @param {Record<string, any>} [extra] */
-    const run = (mode, extraEnv = {}, extra = {}) =>
+        const run = (mode: string, extraEnv: Record<string,string> = {}, extra: Record<string, any> = {}) =>
       runPlan({
         plan,
         test: { mod: "jokers-luck", name: "smoke", scriptPath: null },
@@ -590,22 +597,22 @@ export async function runIngameTests(test, assert, eq) {
       assert(a.ok, "first lock");
       const b = acquireLock(runsDir);
       assert(!b.ok && b.pid === process.pid, `second lock should fail with pid ${process.pid}: ${JSON.stringify(b)}`);
-      a.release();
+      if (a.ok) a.release();
       writeFileSync(join(runsDir, LOCK_FILE), "999999999");
       const c = acquireLock(runsDir);
       assert(c.ok, "stale lock reclaimed");
-      c.release();
+      if (c.ok) c.release();
       assert(!existsSync(join(runsDir, LOCK_FILE)), "release removes the lock file");
     });
 
     test("decideVerdict precedence table", () => {
       const pre = { ok: true, skipped: false, reasons: [], checks: {} };
-      const res = (/** @type {any} */ o) => ({ present: true, truncated: false, parseErrors: 0, events: [], start: {}, end: { code: 0 }, crash: null, scriptError: null, turns: 0, consoleLines: [], expects: { passed: 1, failed: 0, failures: [] }, units: null, ...o });
-      const logs = (/** @type {any} */ o) => ({ debugLog: { findings: [] }, frameworkLog: { active: true, present: true }, chainloaderLog: { crashLines: [] }, crashReports: [], ...o });
+      // deliberately minimal stand-ins: decideVerdict only reads the fields each case sets
+      const res = (o: DeepPartial<ResultSummary>): ResultSummary => ({ present: true, truncated: false, parseErrors: 0, events: [], start: {}, end: { code: 0 }, crash: null, scriptError: null, turns: 0, consoleLines: [], expects: { passed: 1, failed: 0, failures: [] }, units: null, ...o } as ResultSummary);
+      const logs = (o: DeepPartial<VerdictLogs>): VerdictLogs => ({ debugLog: { findings: [] }, frameworkLog: { active: true, present: true }, chainloaderLog: { crashLines: [] }, crashReports: [], ...o } as VerdictLogs);
       const safe = { saveSuffixOk: true, saveCheck: null };
-      const exit = (/** @type {number|null} */ code, backstop = false) => ({ code, signal: null, backstop });
-      /** @param {string} label @param {any} input @param {string} want */
-      const expectV = (label, input, want) => eq(decideVerdict(input).verdict, want, label);
+      const exit = (code: number | null, backstop = false): ExitInfo => ({ code, signal: null, backstop });
+      const expectV = (label: string, input: VerdictInput, want: string) => eq(decideVerdict(input).verdict, want, label);
       expectV("skipped", { preflight: { ...pre, ok: false, skipped: true, reasons: ["MEWTEST_SKIP=1"] }, exit: exit(null), result: res({ present: false, end: null }), logs: null, safety: safe }, "skipped");
       expectV("cannot-run", { preflight: { ...pre, ok: false, reasons: ["no exe"] }, exit: exit(null), result: res({ present: false, end: null }), logs: null, safety: safe }, "cannot-run");
       expectV("launch-error", { preflight: pre, launchError: "bad suffix", exit: exit(null), result: res({ present: false, end: null }), logs: null, safety: safe }, "launch-error");
@@ -643,30 +650,30 @@ export async function runIngameTests(test, assert, eq) {
       eq(pass.verdict, "pass", pass.reason);
       assert(pass.ok, "ok");
       eq(pass.code, 0);
-      assert(pass.launch && pass.launch.fake, "fake launch");
-      assert(existsSync(pass.artifacts.runDir), "run dir");
-      assert(existsSync(pass.artifacts.report), "report.json");
-      assert(pass.artifacts.resultFile && existsSync(pass.artifacts.resultFile), "result file");
-      const copied = readFileSync(pass.artifacts.script, "utf8");
+      assert(!!(pass.launch && pass.launch.fake), "fake launch");
+      assert(existsSync(pass.artifacts.runDir!), "run dir");
+      assert(existsSync(pass.artifacts.report!), "report.json");
+      assert(!!(pass.artifacts.resultFile && existsSync(pass.artifacts.resultFile)), "result file");
+      const copied = readFileSync(pass.artifacts.script!, "utf8");
       assert(!copied.includes("mods:"), "header stripped from the run-dir script");
       assert(copied.startsWith("cmd listcmds\n"), "directives only");
       eq(pass.result.expects.passed, 1);
-      assert(pass.logFindings.frameworkLog.active, "framework active from the fake log");
-      eq(pass.logFindings.frameworkLog.symbols, 15);
+      assert(pass.logFindings!.frameworkLog.active, "framework active from the fake log");
+      eq(pass.logFindings!.frameworkLog.symbols, 15);
       eq(pass.safety.observedSuffix, "dev");
       assert(pass.safety.saveSuffixOk, "suffix ok");
-      assert(pass.safety.saveCheck && pass.safety.saveCheck.unchanged, "save unchanged");
+      assert(!!(pass.safety.saveCheck && pass.safety.saveCheck.unchanged), "save unchanged");
       eq(pass.safety.modPathsObserved.length, 2);
       assert(pass.durationMs >= 0 && typeof pass.startedAt === "string", "timing");
-      assert(pass.artifacts.debugLog && existsSync(pass.artifacts.debugLog), "debug.log copied into the run dir");
+      assert(!!(pass.artifacts.debugLog && existsSync(pass.artifacts.debugLog)), "debug.log copied into the run dir");
       assert(!existsSync(join(runsDir, LOCK_FILE)), "lock released");
     });
 
     const pass2 = await run("pass");
     test("framework log window: only the newest session is scanned", () => {
       eq(pass2.verdict, "pass", pass2.reason);
-      assert(pass2.logFindings.frameworkLog.windowOffset > 0, "offset recorded");
-      eq(pass2.logFindings.frameworkLog.symbols, 15);
+      assert(pass2.logFindings!.frameworkLog.windowOffset > 0, "offset recorded");
+      eq(pass2.logFindings!.frameworkLog.symbols, 15);
     });
 
     const fail = await run("fail");
@@ -680,7 +687,7 @@ export async function runIngameTests(test, assert, eq) {
     const crash = await run("crash");
     test("fake crash -> verdict crash with the crash event", () => {
       eq(crash.verdict, "crash", crash.reason);
-      eq(crash.result.crash.code, "0xC0000005");
+      eq(crash.result.crash!.code, "0xC0000005");
     });
 
     const herr = await run("harness-error");
@@ -692,7 +699,7 @@ export async function runIngameTests(test, assert, eq) {
     const sigfail = await run("signature-failed");
     test("fake signature-failed (known build) -> harness-error naming the signature", () => {
       eq(sigfail.verdict, "harness-error", sigfail.reason);
-      assert(!sigfail.logFindings.frameworkLog.active, "inactive");
+      assert(!sigfail.logFindings!.frameworkLog.active, "inactive");
       assert(/DebugConsole_Execute/.test(sigfail.reason), sigfail.reason);
     });
     const unknown = await run("unknown-build");
@@ -735,7 +742,7 @@ export async function runIngameTests(test, assert, eq) {
     const markers = await run("log-markers");
     test("fake log-markers -> code 0 but verdict log-errors", () => {
       eq(markers.verdict, "log-errors", markers.reason);
-      eq(markers.logFindings.debugLog.findings[0].marker, "NO_STATUS_NAMED");
+      eq(markers.logFindings!.debugLog.findings[0].marker, "NO_STATUS_NAMED");
     });
 
     const wrong = await run("wrong-suffix", { FAKE_GAME_SUFFIX_OVERRIDE: "other" });
@@ -756,7 +763,7 @@ export async function runIngameTests(test, assert, eq) {
     const mutated = await run("savechange", { FAKE_GAME_TOUCH_FILE: savePath });
     test("fake savechange -> safety-violation from the real-save hash", () => {
       eq(mutated.verdict, "safety-violation", mutated.reason);
-      assert(mutated.safety.saveCheck && !mutated.safety.saveCheck.unchanged, "hash changed");
+      assert(!!(mutated.safety.saveCheck && !mutated.safety.saveCheck.unchanged), "hash changed");
     });
     writeFileSync(savePath, fixture("sample-save.bin"));
 
@@ -811,8 +818,7 @@ export async function runIngameTests(test, assert, eq) {
     const runsDir = join(ROOT, "runs");
     mkdirSync(join(gameDir, "mod_logs"), { recursive: true });
     mkdirSync(appLogs, { recursive: true });
-    /** @param {string} mode */
-    const fakeEnv = (mode) => ({
+        const fakeEnv = (mode: string) => ({
       ...process.env,
       MEWTEST_FAKE_GAME: FAKE,
       FAKE_GAME_MODE: mode,
@@ -823,35 +829,37 @@ export async function runIngameTests(test, assert, eq) {
     });
     const hasSamples = existsSync(join(MODS_DIR, "jokers-luck", "tests", "smoke.mewtest"));
 
-    const api = await load("../src/core/api.ts");
-    if (api.__error || typeof api.runIngameTest !== "function" || typeof api.listIngameTests !== "function") {
-      test("api.ts exports listIngameTests and runIngameTest", () => assert(false, api.__error || "missing exports"));
+    const api = await load<typeof import("../src/core/api.ts")>("../src/core/api.ts");
+    if ("__error" in api || typeof api.runIngameTest !== "function" || typeof api.listIngameTests !== "function") {
+      test("api.ts exports listIngameTests and runIngameTest", () => assert(false, "__error" in api ? api.__error : "missing exports"));
     } else {
       if (hasSamples) {
         test("api.listIngameTests lists jokers-luck/smoke", () => {
-          const names = api.listIngameTests().tests.map((/** @type {any} */ t) => `${t.mod}/${t.name}`);
+          const names = api.listIngameTests().tests.map((t: { mod: string; name: string }) => `${t.mod}/${t.name}`);
           assert(names.includes("jokers-luck/smoke"), names.join(","));
         });
       }
-      const inline = await api.runIngameTest({ mod: "jokers-luck", script: "cmd listcmds\nexpect console \"listcmds\"\nquit\n", env: fakeEnv("pass") });
+      // a refusal here would surface as a failed verdict assertion, exactly as before
+      const inline = (await api.runIngameTest({ mod: "jokers-luck", script: "cmd listcmds\nexpect console \"listcmds\"\nquit\n", env: fakeEnv("pass") })) as IngameReport;
       test("api.runIngameTest inline script against the fake game -> pass", () => {
-        eq(inline.ok, true, inline.reason || inline.error);
+        eq(inline.ok, true, why(inline));
         eq(inline.verdict, "pass");
         eq(inline.test.inline, true);
         assert(!("events" in inline.result) || inline.result.events.length === 0, "events omitted unless includeEvents");
       });
       if (hasSamples) {
-        const named = await api.runIngameTest({ mod: "jokers-luck", test: "smoke", env: fakeEnv("pass"), includeEvents: true, timeoutMs: 1000 });
+        const named = (await api.runIngameTest({ mod: "jokers-luck", test: "smoke", env: fakeEnv("pass"), includeEvents: true, timeoutMs: 1000 })) as IngameReport;
         test("api.runIngameTest named test with overrides -> pass, events included, timeout override applied", () => {
-          eq(named.verdict, "pass", named.reason || named.error);
+          eq(named.verdict, "pass", why(named));
           eq(named.test.name, "smoke");
           assert(named.result.events.length > 0, "events included");
           eq(named.plan.timeoutMs, 1000);
         });
       }
-      const neither = await api.runIngameTest({ mod: "jokers-luck", env: fakeEnv("pass") });
-      const both = await api.runIngameTest({ mod: "jokers-luck", test: "smoke", script: "quit\n", env: fakeEnv("pass") });
-      const missing = await api.runIngameTest({ mod: "jokers-luck", test: "does-not-exist", env: fakeEnv("pass") });
+      const refusal = (r: Awaited<ReturnType<typeof api.runIngameTest>>) => r as { ok: false; error: string };
+      const neither = refusal(await api.runIngameTest({ mod: "jokers-luck", env: fakeEnv("pass") }));
+      const both = refusal(await api.runIngameTest({ mod: "jokers-luck", test: "smoke", script: "quit\n", env: fakeEnv("pass") }));
+      const missing = refusal(await api.runIngameTest({ mod: "jokers-luck", test: "does-not-exist", env: fakeEnv("pass") }));
       test("api.runIngameTest rejects neither/both of test|script and an unknown test name", () => {
         assert(neither.ok === false && /test|script/.test(neither.error), JSON.stringify(neither.error));
         assert(both.ok === false && /one of/.test(both.error), JSON.stringify(both.error));
@@ -864,32 +872,29 @@ export async function runIngameTests(test, assert, eq) {
     const mcp = await (async () => {
       const { spawn } = await import("node:child_process");
       const child = spawn(process.argv[0], [serverPath], { stdio: ["pipe", "pipe", "pipe"], env: fakeEnv("pass") });
-      /** @type {Map<number, {resolve:(v:any)=>void, reject:(e:any)=>void}>} */
-      const pending = new Map();
+      const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
       let id = 1, buf = "";
-      child.stdout.on("data", (/** @type {any} */ chunk) => {
+      child.stdout.on("data", (chunk: Buffer | string) => {
         buf += chunk.toString("utf8");
-        let nl;
+        let nl: number;
         while ((nl = buf.indexOf("\n")) >= 0) {
           const line = buf.slice(0, nl).trim();
           buf = buf.slice(nl + 1);
           if (!line) continue;
-          let msg;
-          try { msg = JSON.parse(line); } catch { continue; }
+          let msg: { id?: number; error?: unknown; result?: unknown };
+          try { msg = JSON.parse(line) as { id?: number; error?: unknown; result?: unknown }; } catch { continue; }
           const p = msg.id !== undefined ? pending.get(msg.id) : undefined;
-          if (p) { pending.delete(msg.id); msg.error ? p.reject(new Error(JSON.stringify(msg.error))) : p.resolve(msg.result); }
+          if (p && msg.id !== undefined) { pending.delete(msg.id); msg.error ? p.reject(new Error(JSON.stringify(msg.error))) : p.resolve(msg.result); }
         }
       });
       child.stderr.on("data", () => {});
-      /** @param {string} method @param {any} params */
-      const req = (method, params) => new Promise((resolve, reject) => {
+      const req = (method: string, params: unknown): Promise<any> => new Promise((resolve, reject) => {
         const myId = id++;
         pending.set(myId, { resolve, reject });
         child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: myId, method, params }) + "\n");
         setTimeout(() => { if (pending.has(myId)) { pending.delete(myId); reject(new Error(`timeout: ${method}`)); } }, 20000);
       });
-      /** @type {any} */
-      const out = {};
+      const out: Record<string, any> = {};
       try {
         await req("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
         out.list = await req("tools/list", {});
@@ -906,14 +911,14 @@ export async function runIngameTests(test, assert, eq) {
     })();
     test("MCP tools/list returns the 13 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings)", () => {
       assert(!mcp.error, mcp.error);
-      const names = mcp.list.tools.map((/** @type {any} */ t) => t.name);
+      const names = mcp.list.tools.map((t: { name: string }) => t.name);
       eq(names.length, 13, names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {
       const payload = JSON.parse(mcp.listTests.content[0].text);
       assert(Array.isArray(payload.tests), "tests array");
-      if (hasSamples) assert(payload.tests.some((/** @type {any} */ t) => t.mod === "jokers-luck" && t.name === "smoke"), "jokers-luck/smoke listed");
+      if (hasSamples) assert(payload.tests.some((t: { mod: string; name: string }) => t.mod === "jokers-luck" && t.name === "smoke"), "jokers-luck/smoke listed");
     });
     test("MCP run_ingame_test (inline, fake game) returns the awaited report with verdict pass", () => {
       const payload = JSON.parse(mcp.run.content[0].text);
@@ -927,37 +932,36 @@ export async function runIngameTests(test, assert, eq) {
 
     // CLI
     const cliPath = join(REPO_ROOT, "editor", "scripts", "ingame.ts");
-    /** @param {Record<string,string|undefined>} env @param {string[]} [argv] */
-    const runCli = async (env, argv = []) => {
+    const runCli = async (env: Record<string, string | undefined>, argv: string[] = []): Promise<CliRun> => {
       const { spawn } = await import("node:child_process");
-      return new Promise((resolve) => {
-        const child = spawn(process.argv[0], [cliPath, ...argv], { stdio: ["ignore", "pipe", "pipe"], env });
+      return new Promise<CliRun>((resolve) => {
+        const child = spawn(process.argv[0]!, [cliPath, ...argv], { stdio: ["ignore", "pipe", "pipe"], env });
         let out = "", err = "";
-        child.stdout.on("data", (/** @type {any} */ c) => { out += c.toString("utf8"); });
-        child.stderr.on("data", (/** @type {any} */ c) => { err += c.toString("utf8"); });
-        child.on("exit", (/** @type {any} */ code) => resolve({ code, out, err }));
-        child.on("error", (/** @type {any} */ e) => resolve({ code: null, out, err: String(e) }));
+        child.stdout.on("data", (c: Buffer | string) => { out += c.toString("utf8"); });
+        child.stderr.on("data", (c: Buffer | string) => { err += c.toString("utf8"); });
+        child.on("exit", (code) => resolve({ code, out, err }));
+        child.on("error", (e) => resolve({ code: null, out, err: String(e) }));
       });
     };
-    const skip = /** @type {any} */ (await runCli({ ...fakeEnv("pass"), MEWTEST_SKIP: "1" }));
+    const skip = (await runCli({ ...fakeEnv("pass"), MEWTEST_SKIP: "1" }));
     test("CLI with MEWTEST_SKIP=1 exits 0 and prints skipped", () => {
       eq(skip.code, 0, skip.err);
       assert(/skipped/i.test(skip.out), skip.out);
     });
     if (hasSamples) {
-      const failRun = /** @type {any} */ (await runCli(fakeEnv("fail"), ["jokers-luck", "smoke"]));
+      const failRun = (await runCli(fakeEnv("fail"), ["jokers-luck", "smoke"]));
       test("CLI with a failing fake run exits 1 and prints FAIL", () => {
         eq(failRun.code, 1, failRun.err);
         assert(/FAIL/.test(failRun.out), failRun.out);
       });
-      const passRun = /** @type {any} */ (await runCli(fakeEnv("pass"), ["jokers-luck", "--json"]));
+      const passRun = (await runCli(fakeEnv("pass"), ["jokers-luck", "--json"]));
       test("CLI --json with a passing fake run exits 0 and emits JSON reports", () => {
         eq(passRun.code, 0, passRun.err + passRun.out);
         const parsed = JSON.parse(passRun.out);
-        assert(Array.isArray(parsed.reports) && parsed.reports.every((/** @type {any} */ r) => r.verdict === "pass"), passRun.out.slice(0, 300));
+        assert(Array.isArray(parsed.reports) && parsed.reports.every((r: { verdict: string }) => r.verdict === "pass"), passRun.out.slice(0, 300));
       });
     }
-    const usage = /** @type {any} */ (await runCli(fakeEnv("pass"), ["--bogus-flag"]));
+    const usage = (await runCli(fakeEnv("pass"), ["--bogus-flag"]));
     test("CLI usage error exits 2", () => eq(usage.code, 2, usage.out + usage.err));
     rmSync(ROOT, { recursive: true, force: true });
   }
@@ -968,12 +972,9 @@ export async function runIngameTests(test, assert, eq) {
 // Standalone entry point: node test/ingame-tests.ts
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let passed = 0, failed = 0;
-  /** @param {string} name @param {() => void} fn */
-  const test = (name, fn) => { try { fn(); passed++; console.log(`  ok  ${name}`); } catch (e) { failed++; console.log(`FAIL  ${name}\n      ${String(e instanceof Error ? e.message : e)}`); } };
-  /** @param {boolean} c @param {string} m */
-  const assert = (c, m) => { if (!c) throw new Error(m); };
-  /** @param {unknown} a @param {unknown} b @param {string} [m] */
-  const eq = (a, b, m) => { if (a !== b) throw new Error(`${m || "not equal"}: got ${JSON.stringify(a)} expected ${JSON.stringify(b)}`); };
+    const test = (name: string, fn: () => void) => { try { fn(); passed++; console.log(`  ok  ${name}`); } catch (e) { failed++; console.log(`FAIL  ${name}\n      ${String(e instanceof Error ? e.message : e)}`); } };
+    const assert = (c: boolean, m: string) => { if (!c) throw new Error(m); };
+    const eq = (a: unknown, b: unknown, m?: string) => { if (a !== b) throw new Error(`${m || "not equal"}: got ${JSON.stringify(a)} expected ${JSON.stringify(b)}`); };
   await runIngameTests(test, assert, eq);
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

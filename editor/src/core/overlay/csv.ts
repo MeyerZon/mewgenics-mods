@@ -9,20 +9,16 @@
 /**
  * Parse CSV text into rows of string cells. Handles double-quoted fields with
  * embedded commas, newlines, and `""` escapes. A leading BOM is stripped.
- * @param {string} text
- * @returns {string[][]}
  */
-export function parseCsv(text) {
+export function parseCsv(text: string): string[][] {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-  /** @type {string[][]} */
-  const rows = [];
-  /** @type {string[]} */
-  let row = [];
+  const rows: string[][] = [];
+  let row: string[] = [];
   let field = "";
   let inQuotes = false;
   const n = text.length;
   for (let i = 0; i < n; i++) {
-    const c = text[i];
+    const c = text[i]!;
     if (inQuotes) {
       if (c === '"') {
         if (text[i + 1] === '"') {
@@ -69,10 +65,8 @@ export function parseCsv(text) {
 /**
  * Serialize rows back to CSV text (quoting cells that need it). Uses `\n` line
  * endings and no BOM (callers add one if preserving the base file's style).
- * @param {string[][]} rows
- * @returns {string}
  */
-export function serializeCsv(rows) {
+export function serializeCsv(rows: string[][]): string {
   return rows
     .map((row) =>
       row
@@ -84,14 +78,9 @@ export function serializeCsv(rows) {
     .join("\n");
 }
 
-/**
- * Build a map from the first-column key to its full row (first occurrence wins).
- * @param {string[][]} rows
- * @returns {Map<string, string[]>}
- */
-export function keyedRows(rows) {
-  /** @type {Map<string, string[]>} */
-  const map = new Map();
+/** Build a map from the first-column key to its full row (first occurrence wins). */
+export function keyedRows(rows: string[][]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
   for (const row of rows) {
     const key = row[0];
     if (key !== undefined && key !== "" && !map.has(key)) map.set(key, row);
@@ -99,32 +88,24 @@ export function keyedRows(rows) {
   return map;
 }
 
-/**
- * Append overlay rows after base rows.
- * @param {string[][]} base
- * @param {string[][]} overlay
- * @returns {string[][]}
- */
-export function csvAppend(base, overlay) {
+/** Append overlay rows after base rows. */
+export function csvAppend(base: string[][], overlay: string[][]): string[][] {
   return base.concat(overlay.map((r) => r.slice()));
 }
 
-/**
- * Positional column merge: overlay row i overwrites non-empty cells of base row i.
- * @param {string[][]} base
- * @param {string[][]} overlay
- * @returns {string[][]}
- */
-export function csvPositionalMerge(base, overlay) {
+/** Positional column merge: overlay row i overwrites non-empty cells of base row i. */
+export function csvPositionalMerge(base: string[][], overlay: string[][]): string[][] {
   const out = base.map((r) => r.slice());
   for (let i = 0; i < overlay.length; i++) {
+    const orow = overlay[i]!;
     if (i >= out.length) {
-      out.push(overlay[i].slice());
+      out.push(orow.slice());
       continue;
     }
-    const orow = overlay[i];
+    const target = out[i]!;
     for (let j = 0; j < orow.length; j++) {
-      if (orow[j] !== "") out[i][j] = orow[j];
+      const cell = orow[j]!;
+      if (cell !== "") target[j] = cell;
     }
   }
   return out;

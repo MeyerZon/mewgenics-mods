@@ -5,12 +5,10 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, statSy
 import { join, dirname, relative } from "node:path";
 import { MODS_DIR, resolveModWritePath } from "./repo.ts";
 import { parseOverlayName } from "./overlay/overlay.ts";
+import type { OverlayMode, FileType } from "./overlay/overlay.ts";
 
-/**
- * List mod folder names under mods/.
- * @returns {string[]}
- */
-export function listMods() {
+/** List mod folder names under mods/. */
+export function listMods(): string[] {
   if (!existsSync(MODS_DIR)) return [];
   return readdirSync(MODS_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory())
@@ -18,27 +16,20 @@ export function listMods() {
     .sort();
 }
 
-/**
- * @typedef {Object} ModFileInfo
- * @property {string} relPath
- * @property {number} bytes
- * @property {string} baseName
- * @property {'append'|'merge'|'patch'|'replace'} mode
- * @property {'gon'|'csv'|'txt'|'other'} fileType
- */
+export interface ModFileInfo {
+  relPath: string;
+  bytes: number;
+  baseName: string;
+  mode: OverlayMode;
+  fileType: FileType;
+}
 
-/**
- * Recursively list files under a mod, with overlay metadata.
- * @param {string} modName
- * @returns {ModFileInfo[]}
- */
-export function listModFiles(modName) {
+/** Recursively list files under a mod, with overlay metadata. */
+export function listModFiles(modName: string): ModFileInfo[] {
   const modDir = join(MODS_DIR, modName);
-  /** @type {ModFileInfo[]} */
-  const out = [];
+  const out: ModFileInfo[] = [];
   if (!existsSync(modDir)) return out;
-  /** @param {string} dir */
-  const walk = (dir) => {
+  const walk = (dir: string): void => {
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, ent.name);
       if (ent.isDirectory()) walk(abs);
@@ -55,15 +46,19 @@ export function listModFiles(modName) {
   return out;
 }
 
-/**
- * Read a mod: its description.json (if any) and the list of overlay files.
- * @param {string} modName
- * @param {{ includeText?: boolean }} [opts]
- */
-export function readMod(modName, opts = {}) {
+export interface ModFileWithText extends ModFileInfo {
+  text?: string;
+}
+
+export type ReadModResult =
+  | { ok: true; name: string; description: unknown; files: ModFileWithText[] }
+  | { ok: false; error: string };
+
+/** Read a mod: its description.json (if any) and the list of overlay files. */
+export function readMod(modName: string, opts: { includeText?: boolean } = {}): ReadModResult {
   const modDir = join(MODS_DIR, modName);
   if (!existsSync(modDir)) return { ok: false, error: `mod not found: mods/${modName}` };
-  let description = null;
+  let description: unknown = null;
   const descPath = join(modDir, "description.json");
   if (existsSync(descPath)) {
     try {
@@ -72,7 +67,7 @@ export function readMod(modName, opts = {}) {
       description = { _error: `could not parse description.json: ${String(e)}` };
     }
   }
-  const files = listModFiles(modName).map((f) => {
+  const files: ModFileWithText[] = listModFiles(modName).map((f) => {
     if (opts.includeText && f.relPath !== "description.json") {
       try {
         return { ...f, text: readFileSync(join(modDir, f.relPath), "utf8") };
@@ -85,26 +80,20 @@ export function readMod(modName, opts = {}) {
   return { ok: true, name: modName, description, files };
 }
 
-/**
- * Read one overlay file's text.
- * @param {string} modName
- * @param {string} relPath
- */
-export function readModFile(modName, relPath) {
+export type ReadModFileResult = { ok: true; text: string } | { ok: false; error: string };
+
+/** Read one overlay file's text. */
+export function readModFile(modName: string, relPath: string): ReadModFileResult {
   const abs = resolveModWritePath(modName, relPath); // also validates confinement
   if (!existsSync(abs)) return { ok: false, error: `file not found: mods/${modName}/${relPath}` };
   return { ok: true, text: readFileSync(abs, "utf8") };
 }
 
-/**
- * Write (create or overwrite) an overlay file under mods/<name>/.
- * @param {string} modName
- * @param {string} relPath
- * @param {string} content
- * @returns {{ ok: true, path: string, bytes: number } | { ok: false, error: string }}
- */
-export function writeOverlay(modName, relPath, content) {
-  let abs;
+export type WriteOverlayResult = { ok: true; path: string; bytes: number } | { ok: false; error: string };
+
+/** Write (create or overwrite) an overlay file under mods/<name>/. */
+export function writeOverlay(modName: string, relPath: string, content: string): WriteOverlayResult {
+  let abs: string;
   try {
     abs = resolveModWritePath(modName, relPath);
   } catch (e) {

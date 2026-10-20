@@ -29,7 +29,8 @@
     "test/**/*.ts",
     "tests/**/*.ts",
     "vite.config.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "../tools/bindings/**/*.ts"
   ],
   "exclude": [
     "node_modules",

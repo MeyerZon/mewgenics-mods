@@ -10,8 +10,7 @@ import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 
 const argv = process.argv.slice(2);
-/** @param {string} flag */
-const argAfter = (flag) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
+const argAfter = (flag: string): string | undefined => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
 const scriptPath = argAfter("-mewtest");
 const outPath = argAfter("-mewtest_out") || (scriptPath ? scriptPath.replace(/\.[^.]+$/, "") + ".jsonl" : undefined);
 const suffix = argAfter("-savesuffix") || "";
@@ -55,14 +54,13 @@ if (process.env.FAKE_GAME_TOUCH_FILE && mode === "savechange") {
 }
 
 // --- result file -------------------------------------------------------------
-/** @param {any[]} events */
-function writeResult(events) {
+type Event = Record<string, unknown>;
+function writeResult(events: Event[]): void {
   if (!outPath) return;
   writeFileSync(outPath, events.map((e) => JSON.stringify(e)).join("\n") + "\n");
 }
-const start = { ev: "start", harness: "fake-game", build: "fake", script: scriptPath, out: outPath, pid: process.pid, hide: 1, timeout_ms: 1000, clean: Number(argAfter("-mewtest_clean") || 0), t: 0, frame: 0 };
-/** @param {number} code @param {string} reason @param {number} pass @param {number} fail */
-const end = (code, reason, pass = 0, fail = 0) => ({ ev: "end", code, reason, frames: 3, turns: 0, elapsed_ms: 5, expect_pass: pass, expect_fail: fail, t: 5, frame: 3 });
+const start: Event = { ev: "start", harness: "fake-game", build: "fake", script: scriptPath, out: outPath, pid: process.pid, hide: 1, timeout_ms: 1000, clean: Number(argAfter("-mewtest_clean") || 0), t: 0, frame: 0 };
+const end = (code: number, reason: string, pass = 0, fail = 0): Event => ({ ev: "end", code, reason, frames: 3, turns: 0, elapsed_ms: 5, expect_pass: pass, expect_fail: fail, t: 5, frame: 3 });
 
 switch (mode) {
   case "pass":

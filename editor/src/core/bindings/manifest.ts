@@ -13,76 +13,190 @@ import { parsePattern, PatternError } from "./scan.ts";
 
 export const BINDINGS_DIR = join(REPO_ROOT, "bindings");
 export const MANIFEST_FORMAT = 1;
-export const KINDS = ["function", "data", "vtable", "constant", "offset"];
-export const LK_SHAPES = ["A", "B", "C", "D", "E"];
+export type EntryKind = "function" | "data" | "vtable" | "constant" | "offset";
+export const KINDS: readonly EntryKind[] = ["function", "data", "vtable", "constant", "offset"];
+export const LK_SHAPES: readonly string[] = ["A", "B", "C", "D", "E"];
 export const SCHEMA_FILE = "manifest.schema.json";
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RVA_RE = /^0x[0-9a-fA-F]+$/;
 const VALUE_RE = /^-?(0x[0-9a-fA-F]+|\d+)$/;
 
-/**
- * @typedef {{ enum: string, index: number }} EnumExposure           FwSymbol / FwData enumerator
- * @typedef {{ table: "FW_LK", index: number, shape: string, prototype?: string }} TableExposure
- * @typedef {{ field: string }} FieldExposure                         BuildInfo field
- * @typedef {{ macro: string }} MacroExposure                         offsets.h #define
- * @typedef {EnumExposure|TableExposure|FieldExposure|MacroExposure} Exposure
- * @typedef {{ pattern: string, exactLen: number, offset: number, wildcards: { at: number, len: number, why: string }[] }} Signature
- * @typedef {{
- *   name: string,
- *   kind: "function"|"data"|"vtable"|"constant"|"offset",
- *   rva?: string,
- *   value?: string,
- *   struct?: string,
- *   ctype?: string,
- *   slots?: number,
- *   signature?: Signature|null,
- *   anchors: Record<string, any>,
- *   consumers: string[],
- *   exposure: Exposure[],
- *   evidence: string[],
- *   verify?: Record<string, any>,
- *   note?: string,
- *   port?: { from: string, status: string, method: string, note?: string, candidates?: { rva: string, bytes: number, calls: number, via: string }[] },
- * }} Entry
- * @typedef {{
- *   steamBuildId: string, gameVersion: string, name: string, timeDateStamp: string, sizeOfImage: string,
- *   imageBase: string, exeSha256: string, exeSize: number, sdlVersion: string, linked?: string, note?: string,
- * }} BuildId
- * @typedef {{ format: number, build: BuildId, sigCap: number, entries: Entry[] }} Manifest
- */
+/** FwSymbol / FwData enumerator */
+export interface EnumExposure {
+  enum: string;
+  index: number;
+}
+export interface TableExposure {
+  table: "FW_LK";
+  index: number;
+  shape: string;
+  prototype?: string;
+}
+/** BuildInfo field */
+export interface FieldExposure {
+  field: string;
+}
+/** offsets.h #define */
+export interface MacroExposure {
+  macro: string;
+}
+export type Exposure = EnumExposure | TableExposure | FieldExposure | MacroExposure;
+
+export interface Wildcard {
+  at: number;
+  len: number;
+  why: string;
+}
+export interface Signature {
+  pattern: string;
+  exactLen: number;
+  offset: number;
+  wildcards: Wildcard[];
+}
+
+// ---- anchors: the evidence the port step uses (harvest.ts fills, port.ts reads) ----------------
+export interface StringAnchor {
+  text: string;
+  role: "funcsig" | "file" | "literal";
+  unique: boolean;
+}
+/** a call to a manifest entry; ordinal counts every call in the function */
+export interface CalleeAnchor {
+  ordinal: number;
+  name: string;
+  target: string;
+}
+export interface CfgLite {
+  bytes: number;
+  calls: number;
+  ripRefs: number;
+  resyncs: number;
+}
+export interface WitnessAnchor {
+  function: string;
+  callee?: string;
+  pattern?: string;
+  imm32At?: number;
+  maxBack?: number;
+  nth?: number;
+  dispAt?: number;
+  dispSize?: number;
+  ripRefOrdinal?: number;
+  kind?: string;
+  needsHarvest?: boolean;
+}
+export interface RttiAnchor {
+  typeDescriptorName: string;
+  method?: string;
+}
+export interface DeriveAnchor {
+  vtable?: string;
+  slot?: number;
+  bodyPattern?: string;
+  imm32At?: number;
+  table?: string;
+  index?: number;
+}
+export interface AfterAnchor {
+  function: string;
+}
+/** Loosely shaped on purpose: the manifest JSON may carry anchors this code does not read. */
+export interface Anchors {
+  strings?: StringAnchor[];
+  callees?: CalleeAnchor[];
+  cfgLite?: CfgLite;
+  prologue?: string;
+  witness?: WitnessAnchor;
+  rtti?: RttiAnchor;
+  derive?: DeriveAnchor;
+  after?: AfterAnchor;
+  unanchored?: boolean;
+  [k: string]: unknown;
+}
+
+export interface PortCandidate {
+  rva: string;
+  bytes: number;
+  calls: number;
+  via: string;
+}
+export interface PortBlock {
+  from: string;
+  status: string;
+  method: string;
+  note?: string;
+  candidates?: PortCandidate[];
+}
+
+export interface Entry {
+  name: string;
+  kind: EntryKind;
+  rva?: string;
+  value?: string;
+  struct?: string;
+  ctype?: string;
+  slots?: number;
+  signature?: Signature | null;
+  anchors: Anchors;
+  consumers: string[];
+  exposure: Exposure[];
+  evidence: string[];
+  verify?: Record<string, unknown>;
+  note?: string;
+  port?: PortBlock;
+}
+export interface BuildId {
+  steamBuildId: string;
+  gameVersion: string;
+  name: string;
+  timeDateStamp: string;
+  sizeOfImage: string;
+  imageBase: string;
+  exeSha256: string;
+  exeSize: number;
+  sdlVersion: string;
+  linked?: string;
+  note?: string;
+}
+export interface Manifest {
+  format: number;
+  build: BuildId;
+  sigCap: number;
+  entries: Entry[];
+}
 
 export class ManifestError extends Error {
-  /** @param {string} message @param {string[]} [problems] */
-  constructor(message, problems = []) {
+  readonly problems: string[];
+  constructor(message: string, problems: string[] = []) {
     super(message);
     this.name = "ManifestError";
     this.problems = problems;
   }
 }
 
-/** @param {string} s @returns {number} parse "0x5c" / "-0x8" / "172" */
-export function parseValue(s) {
+/** parse "0x5c" / "-0x8" / "172" */
+export function parseValue(s: string): number {
   const neg = s.startsWith("-");
   const body = neg ? s.slice(1) : s;
   const n = body.startsWith("0x") || body.startsWith("0X") ? parseInt(body.slice(2), 16) : parseInt(body, 10);
   return neg ? -n : n;
 }
 
-/** @param {number} n @returns {string} */
-export function hex(n) {
+export function hex(n: number): string {
   return (n < 0 ? "-0x" : "0x") + Math.abs(n).toString(16);
 }
 
+type EnumFamily = "FW_SYM_" | "FW_DATA_" | "FW_LK";
+
 /**
  * Structural + referential validation. Never throws; returns every problem found.
- * @param {any} m
- * @returns {{ ok: boolean, problems: string[] }}
+ * The input is untyped JSON, so it is walked as `any` and every claim about it is checked here.
  */
-export function validateManifest(m) {
-  /** @type {string[]} */
-  const problems = [];
-  const bad = (/** @type {string} */ s) => problems.push(s);
+export function validateManifest(input: unknown): { ok: boolean; problems: string[] } {
+  const problems: string[] = [];
+  const bad = (s: string) => problems.push(s);
+  const m = input as any;
   if (!m || typeof m !== "object") return { ok: false, problems: ["manifest is not an object"] };
   if (m.format !== MANIFEST_FORMAT) bad(`format must be ${MANIFEST_FORMAT}, got ${JSON.stringify(m.format)}`);
 
@@ -96,25 +210,23 @@ export function validateManifest(m) {
     if (!Number.isInteger(b.exeSize) || b.exeSize < 0) bad("build.exeSize must be a non-negative integer");
   }
   if (!Number.isInteger(m.sigCap) || m.sigCap <= 0) bad("sigCap must be a positive integer");
-  const sigCap = Number.isInteger(m.sigCap) && m.sigCap > 0 ? m.sigCap : 128;
+  const sigCap: number = Number.isInteger(m.sigCap) && m.sigCap > 0 ? m.sigCap : 128;
 
   if (!Array.isArray(m.entries)) {
     bad("entries must be an array");
     return { ok: false, problems };
   }
-  /** @type {Map<string, any>} */
-  const byName = new Map();
+  const byName = new Map<string, any>();
   for (const e of m.entries) {
     if (!e || typeof e !== "object" || typeof e.name !== "string") { bad("entry without a name"); continue; }
     if (byName.has(e.name)) bad(`duplicate entry name ${e.name}`);
     byName.set(e.name, e);
   }
-  /** @type {Record<string, number[]>} */
-  const indices = { FW_SYM_: [], FW_DATA_: [], FW_LK: [] };
+  const indices: Record<EnumFamily, number[]> = { FW_SYM_: [], FW_DATA_: [], FW_LK: [] };
 
   for (const e of m.entries) {
     if (!e || typeof e !== "object" || typeof e.name !== "string") continue;
-    const n = e.name;
+    const n: string = e.name;
     if (!NAME_RE.test(n)) bad(`${n}: name must be a C identifier`);
     if (!KINDS.includes(e.kind)) bad(`${n}: kind must be one of ${KINDS.join("|")}, got ${JSON.stringify(e.kind)}`);
     const addr = e.kind === "function" || e.kind === "data" || e.kind === "vtable";
@@ -144,7 +256,7 @@ export function validateManifest(m) {
     if (!anchors) bad(`${n}: anchors must be an object`);
     if (e.kind === "offset" && anchors && !anchors.witness && anchors.unanchored !== true) bad(`${n}: offset needs anchors.witness or anchors.unanchored: true`);
     if (anchors) {
-      const ref = (/** @type {string} */ what, /** @type {any} */ target, /** @type {string|null} */ kind) => {
+      const ref = (what: string, target: unknown, kind: string | null) => {
         if (typeof target !== "string") { bad(`${n}: ${what} must name an entry`); return; }
         const t = byName.get(target);
         if (!t) bad(`${n}: ${what} refers to unknown entry ${target}`);
@@ -167,7 +279,7 @@ export function validateManifest(m) {
         const keys = ["enum", "table", "field", "macro"].filter((k) => x[k] !== undefined);
         if (keys.length !== 1) { bad(`${n}: exposure item needs exactly one of enum|table|field|macro`); continue; }
         if (x.enum !== undefined) {
-          const fam = x.enum.startsWith("FW_SYM_") ? "FW_SYM_" : x.enum.startsWith("FW_DATA_") ? "FW_DATA_" : null;
+          const fam: EnumFamily | null = x.enum.startsWith("FW_SYM_") ? "FW_SYM_" : x.enum.startsWith("FW_DATA_") ? "FW_DATA_" : null;
           if (!fam) bad(`${n}: enum exposure must start with FW_SYM_ or FW_DATA_`);
           else if (fam === "FW_SYM_" && e.kind !== "function") bad(`${n}: FW_SYM_ exposure needs a function entry`);
           else if (fam === "FW_DATA_" && e.kind !== "data") bad(`${n}: FW_DATA_ exposure needs a data entry`);
@@ -184,7 +296,7 @@ export function validateManifest(m) {
       }
     }
   }
-  for (const fam of /** @type {const} */ (["FW_SYM_", "FW_DATA_", "FW_LK"])) {
+  for (const fam of ["FW_SYM_", "FW_DATA_", "FW_LK"] as const) {
     const sorted = [...indices[fam]].sort((a, b) => a - b);
     for (let i = 0; i < sorted.length; i++) {
       if (sorted[i] !== i) {
@@ -196,14 +308,9 @@ export function validateManifest(m) {
   return { ok: problems.length === 0, problems };
 }
 
-/**
- * Parse JSON text or an object into a validated Manifest. Throws ManifestError listing every problem.
- * @param {string|object} input
- * @returns {Manifest}
- */
-export function parseManifest(input) {
-  /** @type {any} */
-  let obj = input;
+/** Parse JSON text or an object into a validated Manifest. Throws ManifestError listing every problem. */
+export function parseManifest(input: string | object): Manifest {
+  let obj: unknown = input;
   if (typeof input === "string") {
     try {
       obj = JSON.parse(input);
@@ -213,24 +320,19 @@ export function parseManifest(input) {
   }
   const v = validateManifest(obj);
   if (!v.ok) throw new ManifestError(`invalid manifest:\n  ${v.problems.join("\n  ")}`, v.problems);
-  const m = /** @type {Manifest} */ (obj);
+  const m = obj as Manifest;
   for (const e of m.entries) {
     if (e.kind === "function" && e.signature === undefined) e.signature = null;
   }
   return m;
 }
 
-/** @param {string} path @returns {Manifest} */
-export function loadManifest(path) {
+export function loadManifest(path: string): Manifest {
   return parseManifest(readFileSync(path, "utf8"));
 }
 
-/**
- * Every bindings/<build>.json, sorted by Steam build id.
- * @param {string} [dir]
- * @returns {{ path: string, manifest: Manifest }[]}
- */
-export function listManifests(dir = BINDINGS_DIR) {
+/** Every bindings/<build>.json, sorted by Steam build id. */
+export function listManifests(dir: string = BINDINGS_DIR): { path: string; manifest: Manifest }[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json") && f !== SCHEMA_FILE && /^\d+\.json$/.test(f))
@@ -240,12 +342,9 @@ export function listManifests(dir = BINDINGS_DIR) {
 
 /**
  * Serialize (and validate) a manifest. Writes only under bindings/; never a saves path.
- * @param {string} path
- * @param {Manifest} m
- * @param {{ dryRun?: boolean }} [opts]
- * @returns {string} the JSON text
+ * @returns the JSON text
  */
-export function saveManifest(path, m, opts = {}) {
+export function saveManifest(path: string, m: Manifest, opts: { dryRun?: boolean } = {}): string {
   const abs = resolve(path);
   if (!isInside(BINDINGS_DIR, abs)) throw new SafetyError(`refusing to write a manifest outside bindings/: ${abs}`);
   if (touchesSaves(abs)) throw new SafetyError(`refusing to write a saves path: ${abs}`);
@@ -257,35 +356,29 @@ export function saveManifest(path, m, opts = {}) {
   return text;
 }
 
-/** @param {Manifest} m @param {string} name @returns {Entry|null} */
-export function entry(m, name) {
+export function entry(m: Manifest, name: string): Entry | null {
   return m.entries.find((e) => e.name === name) || null;
 }
 
-/**
- * @param {Manifest} m
- * @param {(x: any) => boolean} pick
- * @returns {Entry[]} entries with a matching exposure, sorted by that exposure's index
- */
-function table(m, pick) {
-  /** @type {{ e: Entry, i: number }[]} */
-  const rows = [];
+/** entries with a matching exposure, sorted by that exposure's index */
+function table(m: Manifest, pick: (x: Exposure) => x is EnumExposure | TableExposure): Entry[] {
+  const rows: { e: Entry; i: number }[] = [];
   for (const e of m.entries) {
-    const x = /** @type {any} */ (e.exposure.find(pick));
+    const x = e.exposure.find(pick);
     if (x) rows.push({ e, i: x.index });
   }
   return rows.sort((a, b) => a.i - b.i).map((r) => r.e);
 }
 
-/** FwSymbol order. @param {Manifest} m */
-export function symbolTable(m) {
-  return table(m, (x) => typeof x.enum === "string" && x.enum.startsWith("FW_SYM_"));
+/** FwSymbol order. */
+export function symbolTable(m: Manifest): Entry[] {
+  return table(m, (x): x is EnumExposure => typeof (x as EnumExposure).enum === "string" && (x as EnumExposure).enum.startsWith("FW_SYM_"));
 }
-/** FwData order. @param {Manifest} m */
-export function dataTable(m) {
-  return table(m, (x) => typeof x.enum === "string" && x.enum.startsWith("FW_DATA_"));
+/** FwData order. */
+export function dataTable(m: Manifest): Entry[] {
+  return table(m, (x): x is EnumExposure => typeof (x as EnumExposure).enum === "string" && (x as EnumExposure).enum.startsWith("FW_DATA_"));
 }
-/** status_engine's name-lookup hook table order. @param {Manifest} m */
-export function lkTable(m) {
-  return table(m, (x) => x.table === "FW_LK");
+/** status_engine's name-lookup hook table order. */
+export function lkTable(m: Manifest): Entry[] {
+  return table(m, (x): x is TableExposure => (x as TableExposure).table === "FW_LK");
 }

@@ -58,7 +58,7 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   · **T3** human checklist in the PR body for what no test can see (look, feel, balance).
 - A reverse-engineering fact the code relies on is not done until it is in `docs/engine-map.md` **and** a test or
   fixture (`editor/test/fixtures/ingame/`, `bindings/`, a host test).
-- Where to put tests: editor → `editor/test/*.mjs` (suites export `runXTests(test, assert, eq)`); data mod →
+- Where to put tests: editor → `editor/test/*.ts` (suites export `runXTests(test, assert, eq)`); data mod →
   `mods/<mod>/tests/*.mewtest` (+ validator fixtures); native → the module's `test/` host suite plus a `.mewtest`.
 
 ## Build / run / test
@@ -75,8 +75,11 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   `tools/gpak.py` is covered by `test/gpak-tests.ts` on a synthetic archive (needs a Python 3 on PATH, else skips).
 - `npm run bindings:gen` / `bindings:check` — regenerate / verify `native/framework/src/signatures.h` + `offsets.h`
   from `bindings/*.json` (see "Everything native is pinned" below).
-- `npm run typecheck` — `tsc --noEmit` (strict) over the TS/TSX web UI and the JSDoc-typed core. The Node side runs
-  from the checkout with no bundler (Node ≥ 22.18 strips types natively); only the browser UI is built.
+- `npm run typecheck` — `tsc --noEmit` (strict) over everything: the TS/TSX web UI, the core, the MCP server, the
+  scripts, the tests and `tools/bindings/`. The whole editor is TypeScript; the Node side runs the `.ts` sources from
+  the checkout with no bundler (Node ≥ 22.18 strips types natively, so imports carry explicit `.ts` extensions and
+  `erasableSyntaxOnly` forbids enums/namespaces/parameter properties); only the browser UI is built (Vite).
+  `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
 - `npm run test:e2e` — `vite build && playwright test`: the 34-check browser suite in `editor/tests/e2e/` that pins

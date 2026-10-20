@@ -13,15 +13,13 @@ import { portManifest, renderPortReport } from "../../editor/src/core/bindings/p
 import { isInside, SafetyError } from "../../editor/src/core/repo.ts";
 
 const argv = process.argv.slice(2);
-/** @param {string} flag */
-const opt = (flag) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
+const opt = (flag: string): string | undefined => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
 const from = opt("--from");
 const exePath = opt("--exe");
 const build = opt("--build");
 const version = opt("--version");
 const apply = argv.includes("--apply");
-/** @type {Record<string, string>} */
-const resolve = {};
+const resolve: Record<string, string> = {};
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === "--resolve") {
     const [name, rva] = String(argv[++i]).split("=");

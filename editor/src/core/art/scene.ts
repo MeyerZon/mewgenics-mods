@@ -8,6 +8,8 @@
 //   N = floor(r*15 + .5) to column N of a `palette.png` row; non-gray pixels pass
 //   through unchanged. So fills are either `gray:N` (remapped) or a colour (passthrough).
 
+import type { Mat } from "./geometry.ts";
+
 /**
  * SymbolClass alone binds linkage names; a DoABC is not needed for that (docs/swf-emitter-fix-spec.md §3.2: the
  * no-DoABC gate variant binds and merges exactly like the stub one). "stub" stays available for experiments only.
@@ -17,90 +19,109 @@ export const DEFAULT_ABC_MODE = "none";
 export const GRAY_LEVELS = 16;
 export const SCENE_VERSION = 1;
 
-/**
- * @typedef {{ kind: 'gray', level: number }
- *   | { kind: 'rgba', r: number, g: number, b: number, a: number }
- *   | { kind: 'bitmap', id: string }
- *   | { kind: 'none' }} Fill
- */
+export type Fill =
+  | { kind: "gray"; level: number }
+  | { kind: "rgba"; r: number; g: number; b: number; a: number }
+  | { kind: "bitmap"; id: string }
+  | { kind: "none" };
 
-/**
- * @typedef {Object} ScenePath
- * @property {string} d                    SVG path data (absolute or relative, any commands)
- * @property {string|null} [fill]          "gray:N" | "#rrggbb" | "#rrggbbaa" | "bitmap:<id>" | "none" | null
- * @property {'nonzero'|'evenodd'} [fillRule]
- * @property {string|null} [stroke]        colour or "gray:N" or null
- * @property {number} [strokeWidth]        px
- * @property {import('./geometry.ts').Mat} [transform]
- */
+export interface RgbaColor {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
 
-/**
- * @typedef {Object} SceneShape
- * @property {ScenePath[]} paths
- * @property {string} [source]
- */
+export interface ScenePath {
+  /** SVG path data (absolute or relative, any commands) */
+  d: string;
+  /** "gray:N" | "#rrggbb" | "#rrggbbaa" | "bitmap:<id>" | "none" | null */
+  fill?: string | null;
+  fillRule?: "nonzero" | "evenodd";
+  /** colour or "gray:N" or null */
+  stroke?: string | null;
+  /** px */
+  strokeWidth?: number;
+  transform?: Mat;
+}
 
-/**
- * @typedef {Object} SceneCxform
- * @property {[number,number,number,number]} [mul]
- * @property {[number,number,number,number]} [add]
- */
+export interface SceneShape {
+  paths: ScenePath[];
+  source?: string;
+}
 
-/**
- * @typedef {Object} SceneKey
- * @property {number} frame                0-based
- * @property {string|null} ref             shape or sprite id; null removes the layer's object
- * @property {number} [x]
- * @property {number} [y]
- * @property {number} [sx]
- * @property {number} [sy]
- * @property {number} [rot]                degrees, clockwise on screen
- * @property {number} [skew]
- * @property {import('./geometry.ts').Mat} [matrix]   raw override of x/y/sx/sy/rot/skew
- * @property {SceneCxform|null} [cxform]
- * @property {number} [alpha]              shorthand for cxform.mul[3]
- * @property {'hold'|'linear'} [tween]     how to reach the next key (default hold)
- */
+export interface SceneCxform {
+  mul?: [number, number, number, number];
+  add?: [number, number, number, number];
+}
 
-/**
- * @typedef {Object} SceneLayer
- * @property {string} [name]              becomes the PlaceObject2 instance name (e.g. "body")
- * @property {number} depth               unique within the sprite, >= 1
- * @property {boolean} [clip]             this layer masks layers with depth <= clipDepth
- * @property {number} [clipDepth]
- * @property {SceneKey[]} keys
- */
+export interface SceneKey {
+  /** 0-based */
+  frame: number;
+  /** shape or sprite id; null removes the layer's object */
+  ref: string | null;
+  x?: number;
+  y?: number;
+  sx?: number;
+  sy?: number;
+  /** degrees, clockwise on screen */
+  rot?: number;
+  skew?: number;
+  /** raw override of x/y/sx/sy/rot/skew */
+  matrix?: Mat;
+  cxform?: SceneCxform | null;
+  /** shorthand for cxform.mul[3] */
+  alpha?: number;
+  /** how to reach the next key (default hold) */
+  tween?: "hold" | "linear";
+}
 
-/**
- * @typedef {Object} SceneSprite
- * @property {number} frames
- * @property {Record<string, number>} [labels]
- * @property {SceneLayer[]} layers
- */
+export interface SceneLayer {
+  /** becomes the PlaceObject2 instance name (e.g. "body") */
+  name?: string;
+  /** unique within the sprite, >= 1 */
+  depth: number;
+  /** this layer masks layers with depth <= clipDepth */
+  clip?: boolean;
+  clipDepth?: number;
+  keys: SceneKey[];
+}
 
-/**
- * @typedef {Object} Scene
- * @property {number} version
- * @property {string} name
- * @property {number} [frameRate]
- * @property {{ width: number, height: number, background?: string }} [stage]
- * @property {{ palette?: number }} [preview]
- * @property {number} [curveResolution]
- * @property {Record<string, SceneShape>} shapes
- * @property {Record<string, { file: string }>} [bitmaps]
- * @property {Record<string, SceneSprite>} sprites
- * @property {Record<string, string>} exports
- * @property {Array<SceneKey & { ref: string }>} [stage_instances]
- */
+export interface SceneSprite {
+  frames: number;
+  labels?: Record<string, number>;
+  layers: SceneLayer[];
+}
 
-/**
- * @typedef {{ severity: 'error'|'warning'|'info', code: string, message: string, path?: string }} Finding
- */
+export interface SceneStage {
+  width: number;
+  height: number;
+  background?: string;
+}
 
-/** @param {string} name */
-export function newScene(name) {
-  /** @type {Scene} */
-  const s = {
+export interface Scene {
+  version: number;
+  name: string;
+  frameRate?: number;
+  stage?: SceneStage;
+  preview?: { palette?: number };
+  curveResolution?: number;
+  shapes: Record<string, SceneShape>;
+  bitmaps?: Record<string, { file: string }>;
+  sprites: Record<string, SceneSprite>;
+  exports: Record<string, string>;
+  stage_instances?: Array<SceneKey & { ref: string }>;
+}
+
+export interface Finding {
+  severity: "error" | "warning" | "info";
+  code: string;
+  message: string;
+  path?: string;
+}
+
+export function newScene(name: string): Scene {
+  const s: Scene = {
     version: SCENE_VERSION,
     name,
     frameRate: 60,
@@ -118,10 +139,8 @@ export function newScene(name) {
 /**
  * A small starter scene: a gray square that bobs, plus a passthrough-coloured eye,
  * exported under both a class-style and a ".png"-style linkage name.
- * @param {string} [name]
- * @returns {Scene}
  */
-export function exampleScene(name = "starter") {
+export function exampleScene(name = "starter"): Scene {
   const s = newScene(name);
   s.shapes.body = {
     paths: [
@@ -164,26 +183,27 @@ export function exampleScene(name = "starter") {
 
 // ---- fills -------------------------------------------------------------------
 
-/** @param {number} level 0..15 → byte value the shader maps back to exactly `level` */
-export function grayLevelToByte(level) {
+/** @param level 0..15 → byte value the shader maps back to exactly `level` */
+export function grayLevelToByte(level: number): number {
   return Math.max(0, Math.min(15, Math.round(level))) * 17;
 }
 
-/**
- * Nearest 16-level gray for a byte (0..255). Mirrors the shader: floor(r*15+.5).
- * @param {number} byte
- */
-export function byteToGrayLevel(byte) {
+/** Nearest 16-level gray for a byte (0..255). Mirrors the shader: floor(r*15+.5). */
+export function byteToGrayLevel(byte: number): number {
   return Math.max(0, Math.min(15, Math.floor((byte / 255) * 15 + 0.5)));
+}
+
+export interface ParsedFill {
+  fill: Fill;
+  quantized?: boolean;
+  error?: string;
 }
 
 /**
  * Parse a scene fill string. Gray colours (#rrggbb with r==g==b) are quantized to a
  * level (and the caller may warn when the quantization changed the byte).
- * @param {string|null|undefined} str
- * @returns {{ fill: Fill, quantized?: boolean, error?: string }}
  */
-export function parseFill(str) {
+export function parseFill(str: string | null | undefined): ParsedFill {
   if (str === null || str === undefined || str === "none" || str === "") return { fill: { kind: "none" } };
   const s = String(str).trim();
   let m = /^gray:(\d{1,2})$/i.exec(s);
@@ -203,17 +223,13 @@ export function parseFill(str) {
   return { fill: { kind: "rgba", ...rgba } };
 }
 
-const NAMED = /** @type {Record<string, string>} */ ({
+const NAMED: Record<string, string> = {
   black: "#000000", white: "#ffffff", red: "#ff0000", green: "#008000", blue: "#0000ff", yellow: "#ffff00",
   gray: "#808080", grey: "#808080", none: "", transparent: "#00000000",
-});
+};
 
-/**
- * #rgb, #rrggbb, #rrggbbaa, rgb(), rgba(), a few names.
- * @param {string} s
- * @returns {{ r: number, g: number, b: number, a: number } | null}
- */
-export function parseColor(s) {
+/** #rgb, #rrggbb, #rrggbbaa, rgb(), rgba(), a few names. */
+export function parseColor(s: string): RgbaColor | null {
   let str = s.trim().toLowerCase();
   if (NAMED[str] !== undefined) str = NAMED[str];
   if (!str) return null;
@@ -237,17 +253,12 @@ export function parseColor(s) {
   }
   return null;
 }
-/** @param {number} v */
-function clampByte(v) {
+function clampByte(v: number): number {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
 
-/**
- * The RGBA bytes the emitter writes / the preview feeds the shader for a fill.
- * @param {Fill} fill
- * @returns {{ r: number, g: number, b: number, a: number } | null}
- */
-export function fillToRgba(fill) {
+/** The RGBA bytes the emitter writes / the preview feeds the shader for a fill. */
+export function fillToRgba(fill: Fill): RgbaColor | null {
   if (fill.kind === "gray") {
     const v = grayLevelToByte(fill.level);
     return { r: v, g: v, b: v, a: 255 };
@@ -258,26 +269,27 @@ export function fillToRgba(fill) {
 
 // ---- validation ---------------------------------------------------------------
 
+export interface SceneValidation {
+  ok: boolean;
+  scene: Scene;
+  findings: Finding[];
+}
+
 /**
  * Validate (and lightly normalize, in place, on a deep copy) a scene. Never throws on
  * bad user data; returns findings. `ok` is false only on errors.
- * @param {unknown} input
- * @returns {{ ok: boolean, scene: Scene, findings: Finding[] }}
  */
-export function validateScene(input) {
-  /** @type {Finding[]} */
-  const findings = [];
-  /** @param {string} code @param {string} message @param {string[]} [at] */
-  const err = (code, message, at) => findings.push({ severity: "error", code, message, path: at && at[0] });
-  /** @param {string} code @param {string} message @param {string[]} [at] */
-  const warn = (code, message, at) => findings.push({ severity: "warning", code, message, path: at && at[0] });
+export function validateScene(input: unknown): SceneValidation {
+  const findings: Finding[] = [];
+  const err = (code: string, message: string, at?: string[]) => findings.push({ severity: "error", code, message, path: at && at[0] });
+  const warn = (code: string, message: string, at?: string[]) => findings.push({ severity: "warning", code, message, path: at && at[0] });
 
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     err("scene-not-object", "scene must be a JSON object");
     return { ok: false, scene: newScene("invalid"), findings };
   }
-  /** @type {Scene} */
-  const scene = JSON.parse(JSON.stringify(input));
+  // user JSON: the fields are checked one by one below, so this is the only `as` in the module
+  const scene: Scene = JSON.parse(JSON.stringify(input)) as Scene;
   if (scene.version !== SCENE_VERSION) warn("scene-version", `scene.version is ${String(scene.version)}, expected ${SCENE_VERSION}`, ["version"]);
   if (typeof scene.name !== "string" || !/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(scene.name)) {
     err("scene-name", "scene.name must be a file-safe identifier (letters, digits, _ . -)", ["name"]);
@@ -299,7 +311,7 @@ export function validateScene(input) {
   scene.exports = scene.exports || {};
   scene.stage_instances = scene.stage_instances || [];
 
-  const ids = new Set();
+  const ids = new Set<string>();
   for (const id of Object.keys(scene.shapes)) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap`, [`shapes.${id}`]);
     ids.add(id);
@@ -317,7 +329,7 @@ export function validateScene(input) {
       }
       const f = parseFill(p.fill);
       if (f.error) err("fill", f.error, [at + ".fill"]);
-      else if (f.quantized) warn("fill-quantized", `gray fill ${p.fill} snapped to gray:${/** @type {any} */ (f.fill).level}`, [at + ".fill"]);
+      else if (f.quantized) warn("fill-quantized", `gray fill ${p.fill} snapped to gray:${f.fill.kind === "gray" ? f.fill.level : ""}`, [at + ".fill"]);
       else if (f.fill.kind === "rgba") warn("passthrough-fill", `fill ${p.fill} is not gray: the engine will NOT palette-remap it`, [at + ".fill"]);
       else if (f.fill.kind === "bitmap" && !(scene.bitmaps || {})[f.fill.id]) err("bitmap-missing", `fill references unknown bitmap "${f.fill.id}"`, [at + ".fill"]);
       if (p.fillRule && p.fillRule !== "nonzero" && p.fillRule !== "evenodd") err("fill-rule", `fillRule must be nonzero|evenodd`, [at + ".fillRule"]);
@@ -356,7 +368,7 @@ export function validateScene(input) {
       if (!/^[A-Za-z_][A-Za-z0-9_ -]*$/.test(label)) warn("label-name", `label "${label}" has unusual characters`, [at + ".labels"]);
       if (!(Number.isInteger(fr) && fr >= 0 && fr < sp.frames)) err("label-frame", `label "${label}" frame ${fr} outside 0..${sp.frames - 1}`, [at + ".labels." + label]);
     }
-    const depths = new Set();
+    const depths = new Set<number>();
     sp.layers.forEach((layer, li) => {
       const lat = `${at}.layers[${li}]`;
       if (!(Number.isInteger(layer.depth) && layer.depth >= 1 && layer.depth <= 65535)) err("layer-depth", "layer.depth must be an integer 1..65535", [lat + ".depth"]);
@@ -381,7 +393,7 @@ export function validateScene(input) {
         if (k.tween && k.tween !== "hold" && k.tween !== "linear") err("key-tween", "tween must be hold|linear", [kat + ".tween"]);
         if (k.matrix && (!Array.isArray(k.matrix) || k.matrix.length !== 6)) err("key-matrix", "matrix must be a 6-number array", [kat + ".matrix"]);
         if (k.cxform) {
-          for (const f of /** @type {const} */ (["mul", "add"])) {
+          for (const f of ["mul", "add"] as const) {
             const v = k.cxform[f];
             if (v !== undefined && (!Array.isArray(v) || v.length !== 4)) err("key-cxform", `cxform.${f} must have 4 numbers`, [kat + ".cxform"]);
           }
@@ -407,10 +419,7 @@ export function validateScene(input) {
   return { ok: !findings.some((f) => f.severity === "error"), scene, findings };
 }
 
-/**
- * @param {Scene} scene @param {string} id @param {Set<string>} stack
- */
-function hasCycle(scene, id, stack) {
+function hasCycle(scene: Scene, id: string, stack: Set<string>): boolean {
   if (stack.has(id)) return true;
   const sp = scene.sprites[id];
   if (!sp || !Array.isArray(sp.layers)) return false;
@@ -427,14 +436,12 @@ function hasCycle(scene, id, stack) {
 /**
  * Deterministic build order: every id a sprite depends on comes before it.
  * Shapes and bitmaps first (sorted), then sprites in dependency order.
- * @param {Scene} scene
- * @returns {string[]}
  */
-export function buildOrder(scene) {
+export function buildOrder(scene: Scene): string[] {
   const out = Object.keys(scene.bitmaps || {}).sort();
   out.push(...Object.keys(scene.shapes).sort());
   const seen = new Set(out);
-  const visit = (/** @type {string} */ id) => {
+  const visit = (id: string) => {
     if (seen.has(id)) return;
     seen.add(id);
     const sp = scene.sprites[id];
@@ -445,12 +452,15 @@ export function buildOrder(scene) {
   return out;
 }
 
-/**
- * Which gray levels a shape uses (for the UI ramps) and whether it has passthrough fills.
- * @param {SceneShape} shape
- */
-export function shapeGrayUsage(shape) {
-  const levels = new Set();
+export interface GrayUsage {
+  levels: number[];
+  passthrough: number;
+  bitmaps: number;
+}
+
+/** Which gray levels a shape uses (for the UI ramps) and whether it has passthrough fills. */
+export function shapeGrayUsage(shape: SceneShape): GrayUsage {
+  const levels = new Set<number>();
   let passthrough = 0;
   let bitmaps = 0;
   for (const p of shape.paths || []) {

@@ -9,48 +9,58 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSy
 import { join, dirname, relative } from "node:path";
 import { MODS_DIR, resolveModWritePath } from "../repo.ts";
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
+import type { Scene, SceneShape, Finding } from "./scene.ts";
 import { importSvg } from "./svg-import.ts";
+import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
+import type { RgbaImage } from "./png.ts";
 import { emitSwf, minimalGateSwf } from "./swf-emitter.ts";
+import type { EmitReport } from "./swf-emitter.ts";
 import { readSwf } from "./swf-reader.ts";
-
-/**
- * @typedef {import('./scene.ts').Scene} Scene
- * @typedef {import('./scene.ts').Finding} Finding
- */
+import type { SwfHeader, Tag } from "./swf-reader.ts";
 
 export const ART_DIR = "art";
 export const SWF_DIR = "swfs";
 export const SCENE_SUFFIX = ".scene.json";
 
-/** @param {string} modName */
-function modDir(modName) {
+function modDir(modName: string): string {
   return join(MODS_DIR, modName);
 }
 
-/** @param {unknown} e */
-function errText(e) {
+function errText(e: unknown): string {
   return String(e instanceof Error ? e.message : e);
 }
 
-/**
- * List a mod's art assets.
- * @param {string} modName
- */
-export function listArtScenes(modName) {
+export interface SceneListEntry {
+  relPath: string;
+  name: string;
+  bytes: number;
+}
+export interface SwfListEntry {
+  relPath: string;
+  bytes: number;
+  mtimeMs: number;
+}
+export interface ArtListing {
+  ok: boolean;
+  error?: string;
+  scenes: SceneListEntry[];
+  swfs: SwfListEntry[];
+  svgs: string[];
+  pngs: string[];
+  swflistAppend: string | null;
+}
+
+/** List a mod's art assets. */
+export function listArtScenes(modName: string): ArtListing {
   const dir = modDir(modName);
   if (!existsSync(dir)) return { ok: false, error: `mod not found: mods/${modName}`, scenes: [], swfs: [], svgs: [], pngs: [], swflistAppend: null };
-  /** @type {Array<{relPath:string, name:string, bytes:number}>} */
-  const scenes = [];
-  /** @type {Array<{relPath:string, bytes:number, mtimeMs:number}>} */
-  const swfs = [];
-  /** @type {string[]} */
-  const svgs = [];
-  /** @type {string[]} */
-  const pngs = [];
-  let swflistAppend = null;
-  /** @param {string} d */
-  const walk = (d) => {
+  const scenes: SceneListEntry[] = [];
+  const swfs: SwfListEntry[] = [];
+  const svgs: string[] = [];
+  const pngs: string[] = [];
+  let swflistAppend: string | null = null;
+  const walk = (d: string) => {
     for (const ent of readdirSync(d, { withFileTypes: true })) {
       const abs = join(d, ent.name);
       if (ent.isDirectory()) {
@@ -72,13 +82,18 @@ export function listArtScenes(modName) {
   return { ok: true, scenes, swfs, svgs, pngs, swflistAppend };
 }
 
-/**
- * Read + validate a scene file.
- * @param {string} modName @param {string} relPath
- * @returns {{ ok: boolean, relPath: string, scene?: Scene, findings: Finding[], error?: string, text?: string }}
- */
-export function readArtScene(modName, relPath) {
-  let abs;
+export interface SceneReadResult {
+  ok: boolean;
+  relPath: string;
+  scene?: Scene;
+  findings: Finding[];
+  error?: string;
+  text?: string;
+}
+
+/** Read + validate a scene file. */
+export function readArtScene(modName: string, relPath: string): SceneReadResult {
+  let abs: string;
   try {
     abs = resolveModWritePath(modName, relPath);
   } catch (e) {
@@ -86,7 +101,7 @@ export function readArtScene(modName, relPath) {
   }
   if (!existsSync(abs)) return { ok: false, relPath, findings: [], error: `file not found: mods/${modName}/${relPath}` };
   const text = readFileSync(abs, "utf8");
-  let json;
+  let json: unknown;
   try {
     json = JSON.parse(text);
   } catch (e) {
@@ -96,16 +111,24 @@ export function readArtScene(modName, relPath) {
   return { ok: v.ok, relPath, scene: v.scene, findings: v.findings, text };
 }
 
+export interface SceneWriteResult {
+  ok: boolean;
+  error?: string;
+  findings: Finding[];
+  path?: string;
+  bytes?: number;
+  valid?: boolean;
+}
+
 /**
  * Validate and write a scene (pretty JSON). Refuses to write an invalid scene unless
  * `force` is set (so a half-edited scene can still be saved from the UI).
- * @param {string} modName @param {string} relPath @param {unknown} sceneInput @param {{ force?: boolean }} [opts]
  */
-export function writeArtScene(modName, relPath, sceneInput, opts = {}) {
+export function writeArtScene(modName: string, relPath: string, sceneInput: unknown, opts: { force?: boolean } = {}): SceneWriteResult {
   if (!relPath.endsWith(SCENE_SUFFIX)) return { ok: false, error: `scene files must end with ${SCENE_SUFFIX}`, findings: [] };
   const v = validateScene(sceneInput);
   if (!v.ok && !opts.force) return { ok: false, error: "scene has errors (pass force to save anyway)", findings: v.findings };
-  let abs;
+  let abs: string;
   try {
     abs = resolveModWritePath(modName, relPath);
   } catch (e) {
@@ -117,14 +140,16 @@ export function writeArtScene(modName, relPath, sceneInput, opts = {}) {
   return { ok: true, path: `mods/${modName}/${relPath}`, bytes: Buffer.from(text).length, findings: v.findings, valid: v.ok };
 }
 
-/**
- * Create a new scene file from the starter example (or empty).
- * @param {string} modName @param {string} name @param {{ starter?: boolean }} [opts]
- */
-export function newArtScene(modName, name, opts = {}) {
+export interface NewSceneResult extends SceneWriteResult {
+  relPath?: string;
+  scene?: Scene;
+}
+
+/** Create a new scene file from the starter example (or empty). */
+export function newArtScene(modName: string, name: string, opts: { starter?: boolean } = {}): NewSceneResult {
   if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(name)) return { ok: false, error: `invalid scene name ${JSON.stringify(name)}`, findings: [] };
   const relPath = `${ART_DIR}/${name}${SCENE_SUFFIX}`;
-  let abs;
+  let abs: string;
   try {
     abs = resolveModWritePath(modName, relPath);
   } catch (e) {
@@ -136,13 +161,11 @@ export function newArtScene(modName, name, opts = {}) {
   return r.ok ? { ...r, relPath, scene } : r;
 }
 
-/**
- * Raw bytes of a file inside the mod (PNG/SVG assets for the preview and importer).
- * @param {string} modName @param {string} relPath
- * @returns {{ ok: true, bytes: Uint8Array, mime: string } | { ok: false, error: string }}
- */
-export function readModBytes(modName, relPath) {
-  let abs;
+export type ModBytesResult = { ok: true; bytes: Uint8Array; mime: string } | { ok: false; error: string };
+
+/** Raw bytes of a file inside the mod (PNG/SVG assets for the preview and importer). */
+export function readModBytes(modName: string, relPath: string): ModBytesResult {
+  let abs: string;
   try {
     abs = resolveModWritePath(modName, relPath);
   } catch (e) {
@@ -154,13 +177,12 @@ export function readModBytes(modName, relPath) {
   return { ok: true, bytes: new Uint8Array(readFileSync(abs)), mime };
 }
 
-/**
- * Write raw bytes (e.g. an uploaded SVG/PNG) into the mod's art folder.
- * @param {string} modName @param {string} relPath @param {Uint8Array} bytes
- */
-export function writeModBytes(modName, relPath, bytes) {
+export type WriteBytesResult = { ok: true; path: string; bytes: number } | { ok: false; error: string };
+
+/** Write raw bytes (e.g. an uploaded SVG/PNG) into the mod's art folder. */
+export function writeModBytes(modName: string, relPath: string, bytes: Uint8Array): WriteBytesResult {
   if (!/\.(svg|png)$/i.test(relPath)) return { ok: false, error: "only .svg and .png assets can be written here" };
-  let abs;
+  let abs: string;
   try {
     abs = resolveModWritePath(modName, relPath);
   } catch (e) {
@@ -171,14 +193,27 @@ export function writeModBytes(modName, relPath, bytes) {
   return { ok: true, path: `mods/${modName}/${relPath}`, bytes: bytes.length };
 }
 
+export interface ImportSvgArgs {
+  svgText?: string;
+  mod?: string;
+  relPath?: string;
+  options?: ImportOptions;
+}
+export interface ImportSvgResult {
+  ok: boolean;
+  error?: string;
+  shape?: SceneShape;
+  findings: Finding[];
+  info?: ImportInfo;
+}
+
 /**
  * Import an SVG (text, or a file already inside the mod) into a scene shape. Does not
  * write; returns the shape so the UI/MCP can place it under `scene.shapes[id]`.
- * @param {{ svgText?: string, mod?: string, relPath?: string, options?: import('./svg-import.ts').ImportOptions }} args
  */
-export function importSvgShape(args) {
+export function importSvgShape(args: ImportSvgArgs): ImportSvgResult {
   let text = args.svgText;
-  let source = args.relPath;
+  const source = args.relPath;
   if (text === undefined) {
     if (!args.mod || !args.relPath) return { ok: false, error: "pass svgText, or mod + relPath of an .svg inside the mod", findings: [] };
     const r = readModBytes(args.mod, args.relPath);
@@ -186,21 +221,15 @@ export function importSvgShape(args) {
     text = new TextDecoder().decode(r.bytes);
   }
   const res = importSvg(text, args.options || {});
-  /** @type {import('./scene.ts').SceneShape} */
-  const shape = { paths: res.paths };
+  const shape: SceneShape = { paths: res.paths };
   if (source) shape.source = source;
   return { ok: res.ok, shape, findings: res.findings, info: res.info };
 }
 
-/**
- * Decode every bitmap the scene references (PNG files inside the mod).
- * @param {string} modName @param {Scene} scene
- * @returns {{ bitmaps: Map<string, {width:number, height:number, rgba:Uint8Array}>, findings: Finding[] }}
- */
-export function loadSceneBitmaps(modName, scene) {
-  const bitmaps = new Map();
-  /** @type {Finding[]} */
-  const findings = [];
+/** Decode every bitmap the scene references (PNG files inside the mod). */
+export function loadSceneBitmaps(modName: string, scene: Scene): { bitmaps: Map<string, RgbaImage>; findings: Finding[] } {
+  const bitmaps = new Map<string, RgbaImage>();
+  const findings: Finding[] = [];
   for (const [id, bm] of Object.entries(scene.bitmaps || {})) {
     const r = readModBytes(modName, bm.file);
     if (!r.ok) {
@@ -216,18 +245,44 @@ export function loadSceneBitmaps(modName, scene) {
   return { bitmaps, findings };
 }
 
+export type AbcMode = "none" | "stub";
+
+export interface BuildSwfOptions {
+  abc?: AbcMode;
+  overrideScene?: unknown;
+  writeSwflist?: boolean;
+  dryRun?: boolean;
+}
+
+export interface SwfVerify {
+  ok: boolean;
+  tags?: number;
+  frameCount?: number;
+  error?: string;
+}
+
+export interface BuildSwfResult {
+  ok: boolean;
+  error?: string;
+  findings: Finding[];
+  report?: EmitReport;
+  dryRun?: boolean;
+  swfPath?: string;
+  bytes?: number;
+  verify?: SwfVerify;
+  abc?: AbcMode;
+  swflist?: SwflistResult | null;
+}
+
 /**
  * Build a scene into mods/<mod>/swfs/<scene.name>.swf.
- * @param {string} modName @param {string} relPath scene file
- * @param {{ abc?: 'none'|'stub', overrideScene?: unknown, writeSwflist?: boolean, dryRun?: boolean }} [opts]
+ * @param relPath scene file
  */
-export function buildSwf(modName, relPath, opts = {}) {
+export function buildSwf(modName: string, relPath: string, opts: BuildSwfOptions = {}): BuildSwfResult {
   const abcMode = opts.abc || DEFAULT_ABC_MODE;
   if (abcMode !== "none" && abcMode !== "stub") return { ok: false, error: `abc must be none|stub, got ${String(abcMode)}`, findings: [] };
-  /** @type {Scene} */
-  let scene;
-  /** @type {Finding[]} */
-  let findings;
+  let scene: Scene;
+  let findings: Finding[];
   if (opts.overrideScene !== undefined) {
     const v = validateScene(opts.overrideScene);
     if (!v.ok) return { ok: false, error: "scene has errors", findings: v.findings };
@@ -246,7 +301,7 @@ export function buildSwf(modName, relPath, opts = {}) {
   findings = findings.concat(out.findings);
   if (out.findings.some((f) => f.severity === "error")) return { ok: false, error: "emitter reported errors", findings, report: out.report };
   // self-check: our reader must parse what we wrote
-  let verify;
+  let verify: SwfVerify;
   try {
     const parsed = readSwf(out.bytes);
     verify = { ok: true, tags: parsed.tags.length, frameCount: parsed.header.frameCount };
@@ -257,7 +312,7 @@ export function buildSwf(modName, relPath, opts = {}) {
   }
   const swfRel = `${SWF_DIR}/${scene.name}.swf`;
   if (opts.dryRun) return { ok: true, dryRun: true, swfPath: `mods/${modName}/${swfRel}`, bytes: out.bytes.length, report: out.report, findings, verify, abc: abcMode };
-  let abs;
+  let abs: string;
   try {
     abs = resolveModWritePath(modName, swfRel);
   } catch (e) {
@@ -265,43 +320,47 @@ export function buildSwf(modName, relPath, opts = {}) {
   }
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, out.bytes);
-  let swflist = null;
+  let swflist: SwflistResult | null = null;
   if (opts.writeSwflist !== false) swflist = writeSwflistAppend(modName, [{ file: `${scene.name}.swf`, curveResolution: scene.curveResolution }]);
   return { ok: true, swfPath: `mods/${modName}/${swfRel}`, bytes: out.bytes.length, report: out.report, findings, verify, abc: abcMode, swflist };
 }
+
+export interface SwflistEntry {
+  file: string;
+  curveResolution?: number;
+}
+export type SwflistResult = { ok: true; path: string; files: string[]; text: string } | { ok: false; error: string };
 
 /**
  * Write (or extend) mods/<mod>/swfs/swflist.gon.append so the engine loads the listed
  * SWFs. Idempotent: existing entries are kept, duplicates are not added. The format is
  * GON Append semantics onto `swfs/swflist.gon` (docs/data-mods.md): a `game [ ... ]` array
  * and optional `per_file_curve_resolution { <file> N }`.
- * @param {string} modName @param {Array<{file:string, curveResolution?: number}>} entries
  */
-export function writeSwflistAppend(modName, entries) {
+export function writeSwflistAppend(modName: string, entries: SwflistEntry[]): SwflistResult {
   const rel = `${SWF_DIR}/swflist.gon.append`;
-  let abs;
+  let abs: string;
   try {
     abs = resolveModWritePath(modName, rel);
   } catch (e) {
     return { ok: false, error: errText(e) };
   }
   const existing = existsSync(abs) ? readFileSync(abs, "utf8") : "";
-  const have = new Set();
-  /** @type {Map<string, number>} */
-  const res = new Map();
+  const have = new Set<string>();
+  const res = new Map<string, number>();
   const gameBlock = /game\s*\[([^\]]*)\]/.exec(existing);
   if (gameBlock) for (const tok of gameBlock[1].split(/\s+/)) if (tok && !tok.startsWith("//")) have.add(tok.replace(/^"|"$/g, ""));
   const resBlock = /per_file_curve_resolution\s*\{([^}]*)\}/.exec(existing);
   if (resBlock) {
     const re = /("?[^\s"{}]+"?)\s+(\d+)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = re.exec(resBlock[1]))) res.set(m[1].replace(/^"|"$/g, ""), Number(m[2]));
   }
   for (const e of entries) {
     have.add(e.file);
     if (e.curveResolution) res.set(e.file, e.curveResolution);
   }
-  const quote = (/** @type {string} */ f) => (/[\s/]/.test(f) ? `"${f}"` : f);
+  const quote = (f: string) => (/[\s/]/.test(f) ? `"${f}"` : f);
   let text = "// generated by the mod editor art pipeline — appends mod SWFs to swfs/swflist.gon\n";
   text += "game [\n" + [...have].map((f) => `    ${quote(f)}\n`).join("") + "]\n";
   if (res.size) text += "\nper_file_curve_resolution {\n" + [...res].map(([f, n]) => `    ${quote(f)} ${n}\n`).join("") + "}\n";
@@ -310,24 +369,31 @@ export function writeSwflistAppend(modName, entries) {
   return { ok: true, path: `mods/${modName}/${rel}`, files: [...have], text };
 }
 
+export interface InspectSwfResult {
+  ok: boolean;
+  error?: string;
+  header?: SwfHeader;
+  histogram?: Record<string, number>;
+  labels?: string[];
+  exports?: Array<{ id: number; name: string }>;
+  doAbc?: number;
+  bytes?: number;
+}
+
 /**
  * Inspect a built (or any) SWF inside a mod with the verification reader: header, tag
  * histogram, SymbolClass names, frame labels, DoABC presence.
- * @param {string} modName @param {string} relPath
  */
-export function inspectSwf(modName, relPath) {
+export function inspectSwf(modName: string, relPath: string): InspectSwfResult {
   const r = readModBytes(modName, relPath);
   if (!r.ok) return { ok: false, error: r.error };
   try {
     const parsed = readSwf(r.bytes);
-    /** @type {Record<string, number>} */
-    const histogram = {};
-    /** @type {string[]} */
-    const labels = [];
-    /** @type {Array<{id:number, name:string}>} */
-    const exports = [];
+    const histogram: Record<string, number> = {};
+    const labels: string[] = [];
+    const exports: Array<{ id: number; name: string }> = [];
     let doAbc = 0;
-    const walk = (/** @type {any[]} */ tags) => {
+    const walk = (tags: Tag[]) => {
       for (const t of tags) {
         histogram[t.name] = (histogram[t.name] || 0) + 1;
         if (t.name === "FrameLabel" && t.label !== undefined) labels.push(t.label);
@@ -355,15 +421,23 @@ export const SWF_GATE_FILE = "gate.swf";
 /** The frame label = the ability whose icon the donor appends (a jokers-luck ability with no vanilla icon). */
 export const SWF_GATE_LABEL = "JokersGambit";
 
+export type GateLayout = "flat" | "nested" | "legacy";
+
+export interface GateVariantSpec {
+  linkage: string;
+  layout: GateLayout;
+  expect: string;
+  note: string;
+}
+
 /**
  * `expect` is the harness verdict the variant must produce (OBSERVED 2026-10-19; runs recorded in the PR for
  * fix/swf-append-frame): every real-target donor boots to the main menu; an unknown target logs
  * "Append movieclip: … could not locate original movieclip to append to" (Application.cpp:1363) and the boot then
  * never reaches the console (verdict `harness-error`, reason `console_unavailable`, no crash report) — which
  * doubles as the proof that process_animation_merges ran over our SymbolClass.
- * @type {Record<string, { linkage: string, layout: "flat" | "nested" | "legacy", expect: string, note: string }>}
  */
-export const SWF_GATE_VARIANTS = {
+export const SWF_GATE_VARIANTS: Record<string, GateVariantSpec> = {
   flat: { linkage: "_Append_AbilityIcon", layout: "flat", expect: "pass", note: "the fix: bare shape at depth 3, exactly like AbilityIcon's own labeled frames" },
   nested: { linkage: "_Append_AbilityIcon", layout: "nested", expect: "pass", note: "spec §8.1 alternative: the shape wrapped in a nested movieclip at depth 3" },
   legacy: { linkage: "_Append_AbilityIcon", layout: "legacy", expect: "pass", note: "the pre-fix donor (shape at depth 1); it boots too, so the 2026-10-18 crash is not a boot-time merge fault" },
@@ -371,21 +445,36 @@ export const SWF_GATE_VARIANTS = {
   missing: { linkage: "_Append_NoSuchClipXYZ", layout: "flat", expect: "harness-error", note: "merge witness: an unknown append target is logged and then stalls the boot before the console appears" },
 };
 
+export type GateVariant = "flat" | "nested" | "legacy" | "probe" | "missing" | "control";
+
+export interface PrepareGateResult {
+  ok: boolean;
+  error?: string;
+  variant?: GateVariant;
+  mod?: string;
+  written?: string[];
+  removed?: string[];
+  linkage?: string;
+  label?: string;
+  layout?: GateLayout;
+  expect?: string;
+  note?: string;
+  next?: string;
+}
+
 /**
  * Write (or, for `control`, remove) the gate files in `mods/<mod>/swfs/`: `gate.swf` and a
  * `swflist.gon.append` listing only it. Nothing is launched here; `npm run test:swfgate -- <variant>`
  * does both. Only `mods/<mod>/` is ever written.
- * @param {{ mod?: string, variant: "flat" | "nested" | "legacy" | "probe" | "missing" | "control" }} o
  */
-export function prepareSwfGate(o) {
+export function prepareSwfGate(o: { mod?: string; variant: GateVariant }): PrepareGateResult {
   const modName = (o && o.mod) || SWF_GATE_MOD;
   const variant = o && o.variant;
   const isControl = variant === "control";
   const spec = !isControl && variant && Object.prototype.hasOwnProperty.call(SWF_GATE_VARIANTS, variant) ? SWF_GATE_VARIANTS[variant] : null;
   if (!isControl && !spec) return { ok: false, error: `unknown gate variant ${JSON.stringify(variant)}; use one of ${[...Object.keys(SWF_GATE_VARIANTS), "control"].join(", ")}` };
   const rels = [`${SWF_DIR}/${SWF_GATE_FILE}`, `${SWF_DIR}/swflist.gon.append`];
-  /** @type {string[]} */
-  const abs = [];
+  const abs: string[] = [];
   for (const rel of rels) {
     try {
       abs.push(resolveModWritePath(modName, rel));
@@ -395,8 +484,7 @@ export function prepareSwfGate(o) {
   }
   const next = `cd editor && npm run test:swfgate -- ${variant}`;
   if (isControl) {
-    /** @type {string[]} */
-    const removed = [];
+    const removed: string[] = [];
     rels.forEach((rel, i) => {
       if (existsSync(abs[i])) {
         rmSync(abs[i]);
@@ -409,8 +497,7 @@ export function prepareSwfGate(o) {
   const bytes = minimalGateSwf({ withAbc: false, linkage: spec.linkage, label: SWF_GATE_LABEL, layout: spec.layout });
   const list = `// SWF gate variant "${variant}" (docs/swf-emitter-fix-spec.md §8): generated by prepareSwfGate — regenerate, do not edit\ngame [\n    ${SWF_GATE_FILE}\n]\n`;
   const payload = [bytes, new TextEncoder().encode(list)];
-  /** @type {string[]} */
-  const written = [];
+  const written: string[] = [];
   rels.forEach((rel, i) => {
     mkdirSync(dirname(abs[i]), { recursive: true });
     writeFileSync(abs[i], payload[i]);

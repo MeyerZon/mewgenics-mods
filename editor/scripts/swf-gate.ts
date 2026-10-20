@@ -11,14 +11,34 @@
 
 import * as api from "../src/core/api.ts";
 
-/** @param {string} msg */
-function usage(msg) {
+function usage(msg: string): never {
   process.stderr.write(`${msg}\nusage: node scripts/swf-gate.ts <${[...Object.keys(api.SWF_GATE_VARIANTS), "control"].join("|")}> [--prepare-only] [--no-hide] [--json]\n`);
   process.exit(2);
 }
 
-/** @type {{ variant?: string, prepareOnly: boolean, hide?: boolean, json: boolean }} */
-const opts = { prepareOnly: false, json: false };
+type GateVariant = "flat" | "nested" | "legacy" | "probe" | "missing" | "control";
+
+interface Opts {
+  variant?: string;
+  prepareOnly: boolean;
+  hide?: boolean;
+  json: boolean;
+}
+
+/** What prepareSwfGate returns (src/core/art/art-io: a failure, or the written/removed files + the expected verdict). */
+interface PreparedGate {
+  ok: boolean;
+  error?: string;
+  note?: string;
+  written: string[];
+  removed: string[];
+  linkage?: string;
+  label?: string;
+  layout?: string;
+  expect: string;
+}
+
+const opts: Opts = { prepareOnly: false, json: false };
 for (const a of process.argv.slice(2)) {
   if (a === "--json") opts.json = true;
   else if (a === "--prepare-only") opts.prepareOnly = true;
@@ -29,9 +49,9 @@ for (const a of process.argv.slice(2)) {
   else opts.variant = a;
 }
 if (!opts.variant) usage("a variant is required");
-const variant = /** @type {"flat" | "nested" | "legacy" | "probe" | "missing" | "control"} */ (opts.variant);
+const variant = opts.variant as GateVariant;
 
-const prep = /** @type {any} */ (api.prepareSwfGate({ variant }));
+const prep = api.prepareSwfGate({ variant }) as PreparedGate;
 if (!prep.ok) {
   process.stderr.write(`failed: ${prep.error}\n`);
   process.exit(2);
@@ -48,12 +68,12 @@ if (opts.prepareOnly) {
   process.exit(0);
 }
 
-const r = /** @type {any} */ (await api.runIngameTest({ mod: api.SWF_GATE_MOD, test: "boot", hide: opts.hide }));
+const r = await api.runIngameTest({ mod: api.SWF_GATE_MOD, test: "boot", hide: opts.hide });
 if (!("verdict" in r)) {
   process.stderr.write(`launch failed: ${r.error}\n`);
   process.exit(1);
 }
-const crashReports = (r.logs && Array.isArray(r.logs.crashReports) && r.logs.crashReports) || [];
+const crashReports = r.logFindings && Array.isArray(r.logFindings.crashReports) ? r.logFindings.crashReports : [];
 if (opts.json) {
   process.stdout.write(JSON.stringify({ prepared: prep, report: r }, null, 2) + "\n");
 } else {

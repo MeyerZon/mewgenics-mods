@@ -2,21 +2,18 @@
 // entries, and load the localization table. Everything here is read-only against
 // .extracted/ and is cached in memory for the life of the process.
 
-import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse } from "./gon/parser.ts";
 import { serialize } from "./gon/parser.ts";
 import { EXTRACTED_DATA, COMBINED_CSV, resolveReadPath } from "./repo.ts";
 import { parseCsv } from "./overlay/csv.ts";
 
-/** @typedef {import('./gon/types.ts').ObjectNode} ObjectNode */
-
 /**
  * Category -> where its entries live. A `dir` scans every *.gon in that folder;
  * a `file` reads top-level keys from one file.
- * @type {Record<string, { dir?: string, file?: string }>}
  */
-const CATEGORY_SOURCES = {
+const CATEGORY_SOURCES: Record<string, { dir?: string; file?: string }> = {
   abilities: { dir: "abilities" },
   ability_templates: { dir: "ability_templates" },
   passives: { dir: "passives" },
@@ -29,28 +26,23 @@ const CATEGORY_SOURCES = {
   statuses: { file: "keyword_tooltips.gon" },
 };
 
-/**
- * @typedef {Object} CategoryIndex
- * @property {string[]} names        sorted entry names
- * @property {Map<string, string>} entryFile  name -> repo-relative file path
- */
+export interface CategoryIndex {
+  /** sorted entry names */
+  names: string[];
+  /** name -> repo-relative file path */
+  entryFile: Map<string, string>;
+}
 
-/** @type {Map<string, CategoryIndex>|null} */
-let indexCache = null;
+let indexCache: Map<string, CategoryIndex> | null = null;
 
-/** @returns {boolean} whether extracted base data is present */
-export function hasBaseData() {
+/** Whether extracted base data is present. */
+export function hasBaseData(): boolean {
   return existsSync(EXTRACTED_DATA);
 }
 
-/**
- * Recursively list *.gon files under a directory (absolute paths).
- * @param {string} dir
- * @returns {string[]}
- */
-function listGon(dir) {
-  /** @type {string[]} */
-  const out = [];
+/** Recursively list *.gon files under a directory (absolute paths). */
+function listGon(dir: string): string[] {
+  const out: string[] = [];
   if (!existsSync(dir)) return out;
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, ent.name);
@@ -60,12 +52,8 @@ function listGon(dir) {
   return out;
 }
 
-/**
- * Top-level field keys (decoded) of a GON file.
- * @param {string} absFile
- * @returns {string[]}
- */
-function topLevelKeys(absFile) {
+/** Top-level field keys (decoded) of a GON file. */
+function topLevelKeys(absFile: string): string[] {
   try {
     const root = parse(readFileSync(absFile, "utf8"));
     return root.fields.map((f) => f.key.value ?? f.key.text);
@@ -74,19 +62,13 @@ function topLevelKeys(absFile) {
   }
 }
 
-/**
- * Build (and cache) the base-data index.
- * @returns {Map<string, CategoryIndex>}
- */
-export function buildIndex() {
+/** Build (and cache) the base-data index. */
+export function buildIndex(): Map<string, CategoryIndex> {
   if (indexCache) return indexCache;
-  /** @type {Map<string, CategoryIndex>} */
-  const index = new Map();
+  const index = new Map<string, CategoryIndex>();
   for (const [cat, src] of Object.entries(CATEGORY_SOURCES)) {
-    /** @type {Map<string, string>} */
-    const entryFile = new Map();
-    /** @type {string[]} */
-    let files = [];
+    const entryFile = new Map<string, string>();
+    let files: string[] = [];
     if (src.dir) files = listGon(join(EXTRACTED_DATA, src.dir));
     else if (src.file) {
       const f = join(EXTRACTED_DATA, src.file);
@@ -104,27 +86,24 @@ export function buildIndex() {
 }
 
 /** Clear the in-memory index (e.g. after regeneration). */
-export function clearCache() {
+export function clearCache(): void {
   indexCache = null;
   locCache = null;
 }
 
-/**
- * List categories with entry counts.
- * @returns {Array<{ category: string, count: number }>}
- */
-export function listCategories() {
+export interface CategoryCount {
+  category: string;
+  count: number;
+}
+
+/** List categories with entry counts. */
+export function listCategories(): CategoryCount[] {
   const idx = buildIndex();
   return [...idx.entries()].map(([category, ci]) => ({ category, count: ci.names.length }));
 }
 
-/**
- * List entry names in a category (optionally filtered by substring).
- * @param {string} category
- * @param {string} [filter]
- * @returns {string[]}
- */
-export function listEntries(category, filter) {
+/** List entry names in a category (optionally filtered by substring). */
+export function listEntries(category: string, filter?: string): string[] {
   const ci = buildIndex().get(category);
   if (!ci) return [];
   if (!filter) return ci.names;
@@ -132,13 +111,15 @@ export function listEntries(category, filter) {
   return ci.names.filter((n) => n.toLowerCase().includes(f));
 }
 
-/**
- * Read one base entry as GON text.
- * @param {string} category
- * @param {string} name
- * @returns {{ category: string, name: string, file: string, gon: string } | null}
- */
-export function readEntry(category, name) {
+export interface BaseEntry {
+  category: string;
+  name: string;
+  file: string;
+  gon: string;
+}
+
+/** Read one base entry as GON text. */
+export function readEntry(category: string, name: string): BaseEntry | null {
   const ci = buildIndex().get(category);
   if (!ci) return null;
   const rel = ci.entryFile.get(name);
@@ -153,45 +134,41 @@ export function readEntry(category, name) {
 
 /**
  * Read an arbitrary base file's raw text (read-only, repo-relative under data/).
- * @param {string} repoRelPathUnderData  e.g. "abilities/fighter_abilities.gon"
- * @returns {string}
+ * @param repoRelPathUnderData e.g. "abilities/fighter_abilities.gon"
  */
-export function readBaseFile(repoRelPathUnderData) {
+export function readBaseFile(repoRelPathUnderData: string): string {
   const abs = resolveReadPath(join(EXTRACTED_DATA, repoRelPathUnderData));
   return readFileSync(abs, "utf8");
 }
 
 // ---- Localization -----------------------------------------------------------
 
-/**
- * @typedef {Object} LocTable
- * @property {string[]} header       column names (expected 12)
- * @property {Map<string, string[]>} rows  key -> full row (incl. key as col 0)
- * @property {number} columns        column count of the header
- */
+export interface LocTable {
+  /** column names (expected 12) */
+  header: string[];
+  /** key -> full row (incl. key as col 0) */
+  rows: Map<string, string[]>;
+  /** column count of the header */
+  columns: number;
+}
 
-/** @type {LocTable|null} */
-let locCache = null;
+let locCache: LocTable | null = null;
 
 /** The 12 expected localization columns. */
 export const LOC_COLUMNS = ["KEY", "en", "notes", "sp", "fr", "de", "it", "pt-br", "ru", "ko", "ja", "zh-cn"];
 
-/**
- * Load the base localization table (cached).
- * @returns {LocTable}
- */
-export function loadLocalization() {
+/** Load the base localization table (cached). */
+export function loadLocalization(): LocTable {
   if (locCache) return locCache;
-  /** @type {LocTable} */
-  let table = { header: LOC_COLUMNS.slice(), rows: new Map(), columns: LOC_COLUMNS.length };
+  let table: LocTable = { header: LOC_COLUMNS.slice(), rows: new Map(), columns: LOC_COLUMNS.length };
   if (existsSync(COMBINED_CSV)) {
     const rows = parseCsv(readFileSync(COMBINED_CSV, "utf8"));
-    const header = rows.length ? rows[0] : LOC_COLUMNS.slice();
-    /** @type {Map<string, string[]>} */
-    const map = new Map();
+    const header = rows.length ? rows[0]! : LOC_COLUMNS.slice();
+    const map = new Map<string, string[]>();
     for (let i = 1; i < rows.length; i++) {
-      const key = rows[i][0];
-      if (key !== undefined && key !== "" && !map.has(key)) map.set(key, rows[i]);
+      const row = rows[i]!;
+      const key = row[0];
+      if (key !== undefined && key !== "" && !map.has(key)) map.set(key, row);
     }
     table = { header, rows: map, columns: header.length };
   }

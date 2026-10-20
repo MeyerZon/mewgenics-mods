@@ -6,18 +6,24 @@
 // zero-padded). Pure; node built-ins only.
 
 import { sectionBytes } from "./pe.ts";
+import type { Pe, PeSection } from "./pe.ts";
 
 /** Mirrors FW_SIG_MAX_BYTES in fw_sig.h; a longer pattern fails to parse in the DLL ("0 matches"). */
 export const FW_SIG_MAX_BYTES = 128;
 
-/**
- * @typedef {{ bytes: Uint8Array, mask: Uint8Array, length: number }} Pattern  mask 1 = byte must match
- * @typedef {{ matches: number }} ScanState  shared counter across buffers/sections
- */
+/** mask 1 = byte must match */
+export interface Pattern {
+  bytes: Uint8Array;
+  mask: Uint8Array;
+  length: number;
+}
+/** shared counter across buffers/sections */
+export interface ScanState {
+  matches: number;
+}
 
 export class PatternError extends Error {
-  /** @param {string} message */
-  constructor(message) {
+  constructor(message: string) {
     super(message);
     this.name = "PatternError";
   }
@@ -26,16 +32,13 @@ export class PatternError extends Error {
 /**
  * Parse an IDA-style pattern. Tokens are two hex digits or a run of `?`; whitespace separates.
  * Throws PatternError on bad hex, junk after a token, or more than `cap` bytes (the DLL returns -1).
- * @param {string} sig
- * @param {number} [cap]
- * @returns {Pattern}
  */
-export function parsePattern(sig, cap = FW_SIG_MAX_BYTES) {
+export function parsePattern(sig: string, cap: number = FW_SIG_MAX_BYTES): Pattern {
   const bytes = new Uint8Array(cap);
   const mask = new Uint8Array(cap);
   let n = 0;
   let i = 0;
-  const isSpace = (/** @type {string} */ c) => c === " " || c === "\t";
+  const isSpace = (c: string) => c === " " || c === "\t";
   while (i < sig.length) {
     while (i < sig.length && isSpace(sig[i])) i++;
     if (i >= sig.length) break;
@@ -57,23 +60,15 @@ export function parsePattern(sig, cap = FW_SIG_MAX_BYTES) {
   return { bytes: bytes.subarray(0, n), mask: mask.subarray(0, n), length: n };
 }
 
-/**
- * @param {Pattern} pat
- * @returns {string} "48 8B ?? C4"
- */
-export function patternToString(pat) {
-  /** @type {string[]} */
-  const out = [];
+/** "48 8B ?? C4" */
+export function patternToString(pat: Pattern): string {
+  const out: string[] = [];
   for (let i = 0; i < pat.length; i++) out.push(pat.mask[i] ? pat.bytes[i].toString(16).padStart(2, "0").toUpperCase() : "??");
   return out.join(" ");
 }
 
-/**
- * An all-fixed pattern over raw bytes.
- * @param {Uint8Array} bytes
- * @returns {Pattern}
- */
-export function exactPattern(bytes) {
+/** An all-fixed pattern over raw bytes. */
+export function exactPattern(bytes: Uint8Array): Pattern {
   return { bytes: Uint8Array.from(bytes), mask: new Uint8Array(bytes.length).fill(1), length: bytes.length };
 }
 
@@ -81,12 +76,8 @@ export function exactPattern(bytes) {
  * The DLL's fw_scan_buffer: returns the FIRST hit offset (or -1) and ADDS the hit count to
  * state.matches, returning as soon as the count reaches 2. A zero-length pattern never matches.
  * Uses Buffer.indexOf on the leading fixed run as a prefilter; semantics are unchanged.
- * @param {Buffer} hay
- * @param {Pattern} pat
- * @param {ScanState} state
- * @returns {number}
  */
-export function scanBuffer(hay, pat, state) {
+export function scanBuffer(hay: Buffer, pat: Pattern, state: ScanState): number {
   const n = pat.length;
   if (n === 0 || hay.length < n) return -1;
   let lead = 0;
@@ -112,52 +103,36 @@ export function scanBuffer(hay, pat, state) {
   return found;
 }
 
-/**
- * Scan one section as the loader sees it. Returns the RVAs of up to two hits.
- * @param {Buffer} buf
- * @param {import("./pe.ts").PeSection} section
- * @param {Pattern} pat
- * @param {ScanState} state
- * @returns {number[]}
- */
-export function scanSection(buf, section, pat, state) {
+/** Scan one section as the loader sees it. Returns the RVAs of up to two hits. */
+export function scanSection(buf: Buffer, section: PeSection, pat: Pattern, state: ScanState): number[] {
   const bytes = sectionBytes(buf, section);
-  /** @type {number[]} */
-  const hits = [];
+  const hits: number[] = [];
   const before = state.matches;
   const first = scanBuffer(bytes, pat, state);
   if (first < 0) return hits;
   hits.push(section.va + first);
   if (state.matches - before >= 2) {
     // locate the second hit for reporting (the DLL stops here; we only need its address)
-    const st2 = { matches: 0 };
+    const st2: ScanState = { matches: 0 };
     const second = scanBuffer(bytes.subarray(first + 1), pat, st2);
     if (second >= 0) hits.push(section.va + first + 1 + second);
   }
   return hits;
 }
 
-/**
- * The DLL's scan_unique: every executable section, one shared counter, stop at two.
- * @param {import("./pe.ts").Pe} pe
- * @param {Buffer} buf
- * @param {Pattern} pat
- * @returns {{ hits: number[], count: number }}
- */
-export function scanExec(pe, buf, pat) {
+export interface ScanResult {
+  hits: number[];
+  count: number;
+}
+
+/** The DLL's scan_unique: every executable section, one shared counter, stop at two. */
+export function scanExec(pe: Pe, buf: Buffer, pat: Pattern): ScanResult {
   return scanSections(buf, pe.execSections, pat);
 }
 
-/**
- * @param {Buffer} buf
- * @param {import("./pe.ts").PeSection[]} sections
- * @param {Pattern} pat
- * @returns {{ hits: number[], count: number }}
- */
-export function scanSections(buf, sections, pat) {
-  const state = { matches: 0 };
-  /** @type {number[]} */
-  const hits = [];
+export function scanSections(buf: Buffer, sections: PeSection[], pat: Pattern): ScanResult {
+  const state: ScanState = { matches: 0 };
+  const hits: number[] = [];
   for (const s of sections) {
     for (const h of scanSection(buf, s, pat, state)) if (hits.length < 2) hits.push(h);
     if (state.matches >= 2) break;

@@ -6,10 +6,11 @@
 //   .overwrite -> 3, .append -> 1, .merge -> 2, .add -> 4, .multiply -> 5, none -> 0
 // We use string policy names instead of the numeric codes.
 
-/** @typedef {'overwrite'|'append'|'merge'|'add'|'multiply'|'default'} Policy */
+import type { VNode } from "../gon/types.ts";
 
-/** @type {Array<[string, Policy]>} */
-const SUFFIXES = [
+export type Policy = "overwrite" | "append" | "merge" | "add" | "multiply" | "default";
+
+const SUFFIXES: Array<[string, Policy]> = [
   [".overwrite", "overwrite"],
   [".append", "append"],
   [".merge", "merge"],
@@ -17,12 +18,8 @@ const SUFFIXES = [
   [".multiply", "multiply"],
 ];
 
-/**
- * Split a key into its target name and field policy.
- * @param {string} key
- * @returns {{ name: string, policy: Policy }}
- */
-export function parsePolicy(key) {
+/** Split a key into its target name and field policy. */
+export function parsePolicy(key: string): { name: string; policy: Policy } {
   for (const [suffix, policy] of SUFFIXES) {
     if (key.length > suffix.length && key.endsWith(suffix)) {
       return { name: key.slice(0, key.length - suffix.length), policy };
@@ -35,10 +32,8 @@ export function parsePolicy(key) {
  * Recursively strip recognized policy suffixes from every object key in a value
  * subtree. The engine does this (RVA 0x944f50) when a patch introduces a brand
  * new field, since the suffix is only meaningful while merging.
- * @param {import('../gon/types.ts').VNode} v
- * @returns {import('../gon/types.ts').VNode}
  */
-export function stripPolicySuffixes(v) {
+export function stripPolicySuffixes(v: VNode): VNode {
   if (v.t === "str") return v;
   if (v.t === "arr") {
     for (const it of v.items) stripPolicySuffixes(it);

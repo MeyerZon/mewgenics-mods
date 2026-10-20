@@ -2,14 +2,17 @@
 // runs only the tests whose name contains the substring (case-insensitive); everything else is counted as skipped.
 // Pure, so the runner can test it.
 
+export interface TestFilter {
+  only: string | null;
+  matches: (name: string) => boolean;
+}
+
 /**
- * @param {string[]} argv  process.argv.slice(2)
- * @param {Record<string, string|undefined>} env
- * @returns {{ only: string|null, matches: (name: string) => boolean }}
+ * @param argv  process.argv.slice(2)
+ * @param env   process.env (reads TEST_ONLY)
  */
-export function makeTestFilter(argv, env) {
-  /** @type {string|null} */
-  let only = null;
+export function makeTestFilter(argv: string[], env: Record<string, string | undefined>): TestFilter {
+  let only: string | null = null;
   const i = argv.indexOf("--only");
   if (i >= 0) {
     const v = argv[i + 1];

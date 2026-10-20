@@ -1,7 +1,7 @@
 // Playwright config for the Mewgenics mod-editor web UI end-to-end suite.
 // Dev-only (devDependency); never shipped with the tool. Headless Chromium.
 //
-// The webServer runs the real editor server (node web/server.mjs) on a fixed free
+// The webServer runs the real editor server (node web/server.ts) on a fixed free
 // port. 4173/4180/4199 are deliberately avoided (the task warns some may be held by
 // stale processes); 4191 is used instead. Each test gets a fresh browser context, so
 // `first-run` localStorage (mewged.onboard.*) starts clean per test.
@@ -48,7 +48,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "node web/server.mjs",
+    command: "node web/server.ts",
     url: BASE_URL,
     env: { PORT: String(PORT) },
     reuseExistingServer: !process.env.CI,

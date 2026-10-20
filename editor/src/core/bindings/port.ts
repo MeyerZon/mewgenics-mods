@@ -18,19 +18,41 @@
 import { createHash } from "node:crypto";
 import { parsePattern, scanExec } from "./scan.ts";
 import { makeSignature } from "./siggen.ts";
-import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, deriveFromVtableSlot, decodeFunction, constantSources } from "./harvest.ts";
+import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, decodeFunction, constantSources } from "./harvest.ts";
+import type { FunctionHarvest, RipRef } from "./harvest.ts";
 import { hex, parseValue, entry } from "./manifest.ts";
+import type { Manifest, Entry, PortCandidate } from "./manifest.ts";
+import type { Pe } from "./pe.ts";
 
 export const PORT_STATUSES = ["ported-exact", "ported-rescan", "ported-anchor", "ported-witness", "ported-derived", "proposed", "ambiguous", "failed", "needs-human"];
 
-/**
- * @typedef {{ rva: string, bytes: number, calls: number, via: string }} Candidate
- * @typedef {{ name: string, kind: string, oldValue: string, newValue: string|null, status: string, method: string, detail: string, candidates?: Candidate[] }} PortRow
- * @typedef {{ manifest: import("./manifest.ts").Manifest, rows: PortRow[], summary: Record<string, number>, needsAgent: PortRow[], from: string }} PortResult
- */
+export type Candidate = PortCandidate;
+export interface PortRow {
+  name: string;
+  kind: string;
+  oldValue: string;
+  newValue: string | null;
+  status: string;
+  method: string;
+  detail: string;
+  candidates?: Candidate[];
+}
+export interface PortResult {
+  manifest: Manifest;
+  rows: PortRow[];
+  summary: Record<string, number>;
+  needsAgent: PortRow[];
+  from: string;
+}
+export interface PortOptions {
+  steamBuildId: string;
+  gameVersion?: string;
+  name?: string;
+  resolve?: Record<string, string>;
+}
 
-/** @param {Buffer} buf @returns {string|null} the statically linked SDL version from its source path strings */
-export function detectSdlVersion(buf) {
+/** @returns the statically linked SDL version from its source path strings */
+export function detectSdlVersion(buf: Buffer): string | null {
   const needle = Buffer.from("release-", "latin1");
   let i = 0;
   while ((i = buf.indexOf(needle, i)) !== -1) {
@@ -41,16 +63,14 @@ export function detectSdlVersion(buf) {
   return null;
 }
 
-/**
- * @param {import("./manifest.ts").Manifest} old
- * @param {import("./pe.ts").Pe} pe
- * @param {Buffer} buf
- * @param {{ steamBuildId: string, gameVersion?: string, name?: string, resolve?: Record<string, string> }} opts
- * @returns {PortResult}
- */
-export function portManifest(old, pe, buf, opts) {
-  /** @type {import("./manifest.ts").Manifest} */
-  const out = JSON.parse(JSON.stringify(old));
+interface Pending {
+  e: Entry;
+  why: string[];
+  cands?: Candidate[];
+}
+
+export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptions): PortResult {
+  const out: Manifest = JSON.parse(JSON.stringify(old));
   const from = old.build.steamBuildId;
   const gameVersion = opts.gameVersion || old.build.gameVersion;
   const sdl = detectSdlVersion(buf);
@@ -70,26 +90,22 @@ export function portManifest(old, pe, buf, opts) {
   delete out.build.linked;
   const resolve = opts.resolve || {};
 
-  /** @type {PortRow[]} */
-  const rows = [];
-  /** @type {Map<string, number>} name -> new rva (functions that ported) */
-  const newRva = new Map();
-  /** @type {Map<string, ReturnType<typeof harvestFunction>>} */
-  const hcache = new Map();
-  /** @param {string} name @param {number} rva */
-  const harvestNew = (name, rva) => {
+  const rows: PortRow[] = [];
+  /** name -> new rva (functions that ported) */
+  const newRva = new Map<string, number>();
+  const hcache = new Map<string, FunctionHarvest>();
+  const harvestNew = (name: string, rva: number): FunctionHarvest => {
     const k = `${name}@${rva}`;
     let h = hcache.get(k);
     if (!h) { h = harvestFunction(pe, buf, rva, {}); hcache.set(k, h); }
     return h;
   };
-  /** @param {import("./manifest.ts").Entry} e @param {number} rva */
-  const candidateStats = (e, rva) => {
+  const candidateStats = (e: Entry, rva: number): { bytes: number; calls: number } => {
     const h = harvestNew(e.name, rva);
     return { bytes: h.cfgLite.bytes, calls: h.cfgLite.calls };
   };
   /** size/call-count tolerance against the old cfgLite (a recompile changes both a little) */
-  const withinTolerance = (/** @type {import("./manifest.ts").Entry} */ e, /** @type {number} */ rva) => {
+  const withinTolerance = (e: Entry, rva: number): boolean => {
     const old = e.anchors.cfgLite;
     if (!old || !old.bytes) return true;
     const s = candidateStats(e, rva);
@@ -97,22 +113,19 @@ export function portManifest(old, pe, buf, opts) {
     const callsOk = Math.abs(s.calls - (old.calls || 0)) <= Math.max(2, 0.25 * (old.calls || 0));
     return bytesOk && callsOk;
   };
-  /** @param {number} n */
-  const signed = (n) => (n >= 0 ? "+" : "") + n;
+  const signed = (n: number): string => (n >= 0 ? "+" : "") + n;
   /**
    * Record the row and the entry's port block. `oldValue` is the value before this port; a branch that overwrites
    * `e.rva`/`e.value` before calling finish must pass what it saw, or the report's "old" column shows the new value.
-   * @param {import("./manifest.ts").Entry} e @param {string} status @param {string} method @param {string} detail @param {string|null} newValue @param {Candidate[]} [candidates] @param {string} [oldValue]
    */
-  const finish = (e, status, method, detail, newValue, candidates, oldValue = e.rva || e.value || "") => {
-    const row = { name: e.name, kind: e.kind, oldValue, newValue, status, method, detail, candidates };
+  const finish = (e: Entry, status: string, method: string, detail: string, newValue: string | null, candidates?: Candidate[], oldValue: string = e.rva || e.value || ""): PortRow => {
+    const row: PortRow = { name: e.name, kind: e.kind, oldValue, newValue, status, method, detail, candidates };
     rows.push(row);
     e.port = { from, status, method, note: detail };
     if (candidates && candidates.length) e.port.candidates = candidates; // lets seed.ts name the new side
     return row;
   };
-  /** @param {import("./manifest.ts").Entry} e @param {number} rva @param {string} status @param {string} method @param {string} detail */
-  const portFunction = (e, rva, status, method, detail) => {
+  const portFunction = (e: Entry, rva: number, status: string, method: string, detail: string): void => {
     const was = e.rva || "";
     e.rva = hex(rva);
     newRva.set(e.name, rva);
@@ -124,13 +137,11 @@ export function portManifest(old, pe, buf, opts) {
 
   // ---- functions: rung 1 (signature) + resolve ---------------------------------------
   const fns = out.entries.filter((e) => e.kind === "function");
-  /** @type {{ e: import("./manifest.ts").Entry, why: string[], cands?: Candidate[] }[]} */
-  let pending = [];
+  let pending: Pending[] = [];
   for (const e of fns) {
     const oldRva = parseInt(e.rva || "0", 16);
     if (resolve[e.name]) { portFunction(e, parseInt(resolve[e.name], 16), "ported-anchor", "resolved", `supplied: ${resolve[e.name]}`); continue; }
-    /** @type {string[]} */
-    const why = [];
+    const why: string[] = [];
     if (e.signature) {
       const r = scanExec(pe, buf, parsePattern(e.signature.pattern, out.sigCap));
       if (r.count === 1) {
@@ -147,33 +158,29 @@ export function portManifest(old, pe, buf, opts) {
   let progress = true;
   while (progress && pending.length) {
     progress = false;
-    /** @type {typeof pending} */
-    const still = [];
+    const still: Pending[] = [];
     for (const p of pending) {
       const e = p.e;
-      /** @type {Candidate[]|null} */
-      let cands = null;
+      let cands: Candidate[] | null = null;
       // rung 2: unique string anchors
-      const anchorsStrings = (e.anchors.strings || []).filter((/** @type {any} */ s) => s.unique && (s.role === "funcsig" || s.role === "literal"));
+      const anchorsStrings = (e.anchors.strings || []).filter((s) => s.unique && (s.role === "funcsig" || s.role === "literal"));
       for (const s of anchorsStrings) {
         const fs = findString(pe, buf, s.text);
         if (fs.rva === null || fs.count !== 1) { p.why.push(`${s.role} string ${fs.count === 0 ? "missing" : "not unique"} on the new build`); continue; }
         const fnsHit = [...new Set(findStringXrefs(pe, buf, fs.rva).map((x) => (x.fn ? x.fn.begin : -1)).filter((x) => x >= 0))];
-        /** @type {Candidate[]} */
-        const here = fnsHit.map((rva) => ({ rva: hex(rva), ...candidateStats(e, rva), via: `${s.role} xref` }));
+        const here: Candidate[] = fnsHit.map((rva) => ({ rva: hex(rva), ...candidateStats(e, rva), via: `${s.role} xref` }));
         cands = cands === null ? here : cands.filter((c) => here.some((h) => h.rva === c.rva));
       }
       let method = "funcsig-xref";
       // rung 3: caller ordinal
       if (!cands || cands.length === 0) {
-        /** @type {Candidate[]} */
-        const viaCallers = [];
+        const viaCallers: Candidate[] = [];
         for (const c of fns) {
           if (!newRva.has(c.name) || !Array.isArray(c.anchors.callees)) continue;
           for (const cal of c.anchors.callees) {
             if (cal.name !== e.name) continue;
-            const d = decodeFunction(pe, buf, /** @type {number} */ (newRva.get(c.name)));
-            const calls = d.instrs.filter((x) => x.ins.kind === "call" && x.ins.reloc && x.ins.reloc.why === "E8 rel32" && x.ins.relTarget !== null).map((x) => x.at + x.ins.length + /** @type {number} */ (x.ins.relTarget));
+            const d = decodeFunction(pe, buf, newRva.get(c.name) as number);
+            const calls = d.instrs.filter((x) => x.ins.kind === "call" && x.ins.reloc && x.ins.reloc.why === "E8 rel32" && x.ins.relTarget !== null).map((x) => x.at + x.ins.length + (x.ins.relTarget as number));
             const t = calls[cal.ordinal];
             if (t !== undefined && pe.sectionOf(t)) viaCallers.push({ rva: hex(t), ...candidateStats(e, t), via: `call #${cal.ordinal} of ${c.name}` });
           }
@@ -182,7 +189,7 @@ export function portManifest(old, pe, buf, opts) {
       }
       // rung 4: successor of a ported neighbour in .pdata
       if ((!cands || cands.length === 0) && e.anchors.after && e.anchors.after.function && newRva.has(e.anchors.after.function)) {
-        const nb = pe.pdata.find(/** @type {number} */ (newRva.get(e.anchors.after.function)));
+        const nb = pe.pdata.find(newRva.get(e.anchors.after.function) as number);
         if (nb) {
           let lo = 0, hi = pe.pdata.count - 1, idx = -1;
           while (lo <= hi) { const mid = (lo + hi) >> 1; if (pe.pdata.get(mid).begin >= nb.end) { idx = mid; hi = mid - 1; } else lo = mid + 1; }
@@ -207,10 +214,10 @@ export function portManifest(old, pe, buf, opts) {
     }
     pending = still;
   }
-  for (const p of /** @type {any[]} */ (pending)) {
+  for (const p of pending) {
     const e = p.e;
     if (p.cands && p.cands.length) {
-      finish(e, "ambiguous", "candidates", `${p.cands.length} candidate(s): ${p.cands.map((/** @type {Candidate} */ c) => `${c.rva} (${c.bytes} bytes, ${c.calls} calls; ${c.via})`).join(", ")}; ${p.why.join("; ")}`, null, p.cands);
+      finish(e, "ambiguous", "candidates", `${p.cands.length} candidate(s): ${p.cands.map((c) => `${c.rva} (${c.bytes} bytes, ${c.calls} calls; ${c.via})`).join(", ")}; ${p.why.join("; ")}`, null, p.cands);
     } else {
       const reasons = p.why.length ? p.why.join("; ") : "no unique funcsig/literal string anchor and no ported caller";
       finish(e, "failed", "none", `${reasons}; no ported caller names it${e.anchors.after ? "" : "; no .pdata neighbour anchor"}`, null);
@@ -236,7 +243,7 @@ export function portManifest(old, pe, buf, opts) {
     if ((a.derive && a.derive.vtable) || (a.witness && a.witness.callee)) {
       // every independent source must agree; a split is a human decision, never a coin toss
       const src = constantSources(out, pe, buf, e);
-      const vals = [src.slot, src.arg].filter((v) => v !== null);
+      const vals = [src.slot, src.arg].filter((v): v is number => v !== null);
       const was = e.value || "";
       if (!vals.length) { finish(e, "failed", "derive", src.notes.join("; "), null); continue; }
       if (vals.some((v) => v !== vals[0])) { finish(e, "needs-human", "derive", `sources disagree: ${src.notes.join("; ")}; value ${was} kept`, null); continue; }
@@ -258,7 +265,7 @@ export function portManifest(old, pe, buf, opts) {
     if (!f || frva === undefined) { finish(e, "failed", "witness", `witness function ${w.function} did not port`, null); continue; }
     const h = harvestNew(f.name, frva);
     const wantOp = typeof w.kind === "string" && w.kind.startsWith("rip-") ? w.kind.slice(4) : null;
-    let ref = Number.isInteger(w.ripRefOrdinal) ? h.ripRefs[w.ripRefOrdinal] : undefined;
+    let ref: RipRef | undefined = typeof w.ripRefOrdinal === "number" && Number.isInteger(w.ripRefOrdinal) ? h.ripRefs[w.ripRefOrdinal] : undefined;
     let note = `rip ref #${w.ripRefOrdinal} in ${w.function}`;
     if (!ref || (wantOp && ref.opcode !== wantOp)) {
       const same = wantOp ? h.ripRefs.filter((r) => r.opcode === wantOp) : [];
@@ -276,7 +283,7 @@ export function portManifest(old, pe, buf, opts) {
       const t = entry(out, d.table);
       if (!t || !t.port || !t.port.status.startsWith("ported")) { finish(e, "failed", "table", `${d.table} did not port`, null); continue; }
       if (sdlChanged) { finish(e, "needs-human", "table", `SDL changed ${old.build.sdlVersion} -> ${sdl}: the DYNAPI slot order must be re-verified before trusting index ${d.index}`, null); continue; }
-      const v = parseInt(t.rva || "0", 16) + 8 * d.index;
+      const v = parseInt(t.rva || "0", 16) + 8 * d.index!;
       const was = e.rva;
       e.rva = hex(v);
       finish(e, "ported-derived", "table", `${d.table} + 8*${d.index} = ${hex(v)}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.rva, undefined, was || "");
@@ -302,7 +309,7 @@ export function portManifest(old, pe, buf, opts) {
     if (at < 0) { finish(e, "failed", "witness", `pattern ${w.pattern} (#${w.nth || 0}) not found in ${w.function}`, null); continue; }
     const size = w.dispSize || 1;
     const off = at + (w.dispAt || 0);
-    let disp;
+    let disp: number;
     if (size === 1) { disp = d.bytes[off]; if (disp > 127) disp -= 256; }
     else { const v = (d.bytes[off] | (d.bytes[off + 1] << 8) | (d.bytes[off + 2] << 16) | (d.bytes[off + 3] << 24)) | 0; disp = v; }
     const oldV = parseValue(e.value || "0");
@@ -316,29 +323,23 @@ export function portManifest(old, pe, buf, opts) {
     const h = entry(harvested.manifest, e.name);
     if (!h) continue;
     if (e.kind === "function" && e.port && e.port.status.startsWith("ported")) {
-      const manual = (e.anchors.strings || []).filter((/** @type {any} */ s) => s.role === "literal");
-      e.anchors = { ...e.anchors, ...h.anchors, strings: [...manual.map((/** @type {any} */ s) => ({ ...s, unique: findString(pe, buf, s.text).count === 1 })), ...h.anchors.strings.filter((/** @type {any} */ s) => s.role !== "literal")] };
+      const manual = (e.anchors.strings || []).filter((s) => s.role === "literal");
+      e.anchors = { ...e.anchors, ...h.anchors, strings: [...manual.map((s) => ({ ...s, unique: findString(pe, buf, s.text).count === 1 })), ...(h.anchors.strings || []).filter((s) => s.role !== "literal")] };
     }
   }
 
-  /** @type {Record<string, number>} */
-  const summary = { total: rows.length };
+  const summary: Record<string, number> = { total: rows.length };
   for (const r of rows) summary[r.status] = (summary[r.status] || 0) + 1;
   const needsAgent = rows.filter((r) => r.status === "ambiguous" || r.status === "failed");
   return { manifest: out, rows, summary, needsAgent, from };
 }
 
-/**
- * @param {PortResult} r
- * @param {{ generatedAt?: string }} [opts]
- * @returns {string} markdown
- */
-export function renderPortReport(r, opts = {}) {
+/** @returns markdown */
+export function renderPortReport(r: PortResult, opts: { generatedAt?: string } = {}): string {
   const m = r.manifest;
   const s = r.summary;
   const order = PORT_STATUSES.filter((k) => s[k]);
-  /** @type {string[]} */
-  const out = [];
+  const out: string[] = [];
   out.push(`# Port report ${r.from} -> ${m.build.steamBuildId}`);
   out.push(`generated ${opts.generatedAt || "(unset)"}; new exe sha256 ${m.build.exeSha256}, TimeDateStamp ${m.build.timeDateStamp}, SizeOfImage ${m.build.sizeOfImage}, SDL ${m.build.sdlVersion}`);
   out.push("");

@@ -12,8 +12,7 @@ import { seedFromManifest } from "../../editor/src/core/bindings/seed.ts";
 import { touchesSaves, SafetyError } from "../../editor/src/core/repo.ts";
 
 const argv = process.argv.slice(2);
-/** @param {string} flag */
-const opt = (flag) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
+const opt = (flag: string): string | undefined => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
 const manifestPath = opt("--manifest");
 if (!manifestPath) {
   console.error("usage: node tools/bindings/seed-file.ts --manifest bindings/<build>.json [--out path]");

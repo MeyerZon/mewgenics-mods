@@ -5,18 +5,17 @@
 // run between the old function and each candidate. Pure; node built-ins only.
 
 import { parseValue } from "./manifest.ts";
+import type { Manifest } from "./manifest.ts";
 
-/** @typedef {{ address: number, kind: "function"|"code"|"label", name?: string }} SeedRow */
+export interface SeedRow {
+  address: number;
+  kind: "function" | "code" | "label";
+  name?: string;
+}
 
-/**
- * @param {import("./manifest.ts").Manifest} m
- * @param {{ comment?: string }} [opts]
- * @returns {string}
- */
-export function seedFromManifest(m, opts = {}) {
+export function seedFromManifest(m: Manifest, opts: { comment?: string } = {}): string {
   const base = parseValue(m.build.imageBase);
-  /** @type {SeedRow[]} */
-  const rows = [];
+  const rows: SeedRow[] = [];
   for (const e of m.entries) {
     const p = e.port;
     if (e.kind === "function") {
@@ -40,13 +39,8 @@ export function seedFromManifest(m, opts = {}) {
   return header.concat(rows.map((r) => `0x${r.address.toString(16)}\t${r.kind}${r.name ? `\t${r.name}` : ""}`)).join("\n") + "\n";
 }
 
-/**
- * @param {string} text
- * @returns {SeedRow[]}
- */
-export function parseSeed(text) {
-  /** @type {SeedRow[]} */
-  const out = [];
+export function parseSeed(text: string): SeedRow[] {
+  const out: SeedRow[] = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -54,7 +48,7 @@ export function parseSeed(text) {
     const m = /^(0x[0-9a-fA-F]+)\t(function|code|label)(?:\t(\S.*))?$/.exec(line);
     if (!m) throw new Error(`seed file line ${i + 1}: expected "0xADDR<TAB>function|code|label[<TAB>name]", got ${JSON.stringify(line)}`);
     if (m[2] === "label" && !m[3]) throw new Error(`seed file line ${i + 1}: a label needs a name`);
-    out.push({ address: parseInt(m[1], 16), kind: /** @type {SeedRow["kind"]} */ (m[2]), name: m[3] });
+    out.push({ address: parseInt(m[1], 16), kind: m[2] as SeedRow["kind"], name: m[3] });
   }
   return out;
 }

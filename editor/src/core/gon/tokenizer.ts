@@ -15,23 +15,21 @@
 //    `[idle, FighterIdle]`.
 //  - Comments: `// line`, `# line`, and `/* block */`.
 
-/** @typedef {import('./types.ts').Token} Token */
+import type { Token, TokenType } from "./types.ts";
 
 const SPACE = new Set([" ", "\t", "\r", "\n", ","]);
-/** @type {Record<string, 'lbrace'|'rbrace'|'lbracket'|'rbracket'>} */
-const STRUCT = { "{": "lbrace", "}": "rbrace", "[": "lbracket", "]": "rbracket" };
+const STRUCT: Record<string, Exclude<TokenType, "string" | "eof">> = { "{": "lbrace", "}": "rbrace", "[": "lbracket", "]": "rbracket" };
 
 /**
  * Decode a quoted GON string's inner escapes.
- * @param {string} inner raw characters between the quotes
- * @returns {string}
+ * @param inner raw characters between the quotes
  */
-function decodeEscapes(inner) {
+function decodeEscapes(inner: string): string {
   let out = "";
   for (let i = 0; i < inner.length; i++) {
-    const c = inner[i];
+    const c = inner[i]!;
     if (c === "\\" && i + 1 < inner.length) {
-      const n = inner[i + 1];
+      const n = inner[i + 1]!;
       i++;
       if (n === "n") out += "\n";
       else if (n === "t") out += "\t";
@@ -47,22 +45,17 @@ function decodeEscapes(inner) {
   return out;
 }
 
-/**
- * Tokenize GON source.
- * @param {string} src
- * @returns {Token[]}
- */
-export function tokenize(src) {
-  /** @type {Token[]} */
-  const tokens = [];
+/** Tokenize GON source. */
+export function tokenize(src: string): Token[] {
+  const tokens: Token[] = [];
   let i = 0;
   let line = 1;
   let col = 1;
   const n = src.length;
 
   /** advance one char, maintaining line/col */
-  function adv() {
-    const c = src[i];
+  function adv(): string {
+    const c = src[i]!;
     if (c === "\n") {
       line++;
       col = 1;
@@ -74,11 +67,11 @@ export function tokenize(src) {
   }
 
   /** scan trivia (whitespace, commas, comments); return its text */
-  function scanTrivia() {
+  function scanTrivia(): string {
     const start = i;
     for (;;) {
       if (i >= n) break;
-      const c = src[i];
+      const c = src[i]!;
       if (SPACE.has(c)) {
         adv();
         continue;
@@ -106,8 +99,8 @@ export function tokenize(src) {
     return src.slice(start, i);
   }
 
-  /** true if `c` ends a bare token @param {string} c */
-  function isBareTerminator(c) {
+  /** true if `c` ends a bare token */
+  function isBareTerminator(c: string): boolean {
     if (SPACE.has(c)) return true;
     if (c === '"' || c === "#") return true;
     if (STRUCT[c]) return true;
@@ -121,12 +114,12 @@ export function tokenize(src) {
       tokens.push({ type: "eof", text: "", leading, pos });
       break;
     }
-    const c = src[i];
+    const c = src[i]!;
     const st = STRUCT[c];
     if (st) {
       adv();
       tokens.push({
-        type: /** @type {Token['type']} */ (st),
+        type: st,
         text: c,
         leading,
         pos,
@@ -138,7 +131,7 @@ export function tokenize(src) {
       adv(); // opening quote
       let inner = "";
       while (i < n) {
-        const ch = src[i];
+        const ch = src[i]!;
         if (ch === "\\" && i + 1 < n) {
           inner += src[i] + src[i + 1];
           adv();
@@ -163,7 +156,7 @@ export function tokenize(src) {
     // bare token
     const start = i;
     while (i < n) {
-      const ch = src[i];
+      const ch = src[i]!;
       if (isBareTerminator(ch)) break;
       if (ch === "/" && (src[i + 1] === "/" || src[i + 1] === "*")) break;
       adv();

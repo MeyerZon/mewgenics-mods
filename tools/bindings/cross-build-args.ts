@@ -2,13 +2,17 @@
 // (editor/test/bindings-tests.ts "cross-build.ts args").
 export const USAGE = "usage: node tools/bindings/cross-build.ts --old <old exe> --new <new exe> [--build <steamBuildId>] [--gameVersion <x.y.z>]";
 
-/**
- * @param {string[]} argv
- * @returns {{ oldPath?: string, newPath?: string, build: string, gameVersion?: string, error: string|null }}
- */
-export function parseCrossBuildArgs(argv) {
+export interface CrossBuildArgs {
+  oldPath?: string;
+  newPath?: string;
+  build: string;
+  gameVersion?: string;
+  error: string | null;
+}
+
+export function parseCrossBuildArgs(argv: string[]): CrossBuildArgs {
   /** a flag's value: undefined when absent, null when dangling or followed by another flag */
-  const opt = (/** @type {string} */ flag) => {
+  const opt = (flag: string): string | null | undefined => {
     const i = argv.indexOf(flag);
     if (i < 0) return undefined;
     const v = argv[i + 1];

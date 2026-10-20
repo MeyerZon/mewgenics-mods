@@ -63,18 +63,21 @@ tools/bindings/*.ts           node runs them directly (they import editor/src/co
 
 ## PR stack
 
-1. **`feat/editor-vite-react`** (this PR): the web layer. Red test first (`test/web-tests.ts`: store, highlighter,
+1. **`feat/editor-vite-react`** (PR #36): the web layer. Red test first (`test/web-tests.ts`: store, highlighter,
    tree, zod schemas, server gate), then the infrastructure (Vite, tsconfig, scripts, server), then the React port of
    `app.mjs` + `art-ui.mjs`, the TS port of `preview-gl.ts` / `preview-dev.ts`, the e2e suite as `.ts`, VanJS
    removed, docs updated.
-2. **`feat/editor-ts-core`** (stacked on 1): every remaining `.mjs` under `editor/src`, `editor/scripts`,
+2. **`feat/editor-ts-core`** (stacked on 1, PR #37 or next): every remaining `.mjs` under `editor/src`, `editor/scripts`,
    `editor/test`, `tools/bindings` → `.ts` with TS types; `@types/node` replaces `types/node-shims.d.ts`;
    `src/core/api-schemas.ts` grows the MCP tool input schemas (`z.toJSONSchema` feeds `tools/list`); the structural
    test "no `.mjs` left except the shim" goes red → green; docs paths updated.
 
-## TDD evidence (filled per PR)
+## TDD evidence
 
-See each PR body for the red → green table with the exact summary lines.
+See each PR body for the red → green table with the exact summary lines. End state of the stack (2026-10-20):
+`npm run typecheck` clean over the whole editor + `tools/bindings`, `npm test` 288 passed / 0 failed,
+`npm run test:e2e` 34 passed, `npm run bindings:check` current, zero JSDoc type tags left, zero `.mjs` sources
+except the MCP shim.
 
 ## Follow-ups (not in this stack)
 

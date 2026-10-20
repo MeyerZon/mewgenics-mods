@@ -10,15 +10,16 @@
 // finding — gradients, filters, text, <use>, masks, clipPaths are never silently dropped.
 
 import { parseSvgTransform, multiply, IDENTITY } from "./geometry.ts";
+import type { Mat } from "./geometry.ts";
 import { parseFill } from "./scene.ts";
+import type { ScenePath, Finding } from "./scene.ts";
 
-/**
- * @typedef {import('./scene.ts').ScenePath} ScenePath
- * @typedef {import('./scene.ts').Finding} Finding
- * @typedef {import('./geometry.ts').Mat} Mat
- */
-
-/** @typedef {{ name: string, attrs: Record<string, string>, children: XNode[], text?: string }} XNode */
+export interface XNode {
+  name: string;
+  attrs: Record<string, string>;
+  children: XNode[];
+  text?: string;
+}
 
 // ---- minimal XML reader -------------------------------------------------------
 
@@ -26,14 +27,10 @@ import { parseFill } from "./scene.ts";
  * Parse XML into a tree. Handles comments, CDATA, processing instructions, DOCTYPE,
  * self-closing tags, entities (&amp; &lt; &gt; &quot; &apos; &#n; &#xh;). Namespaced
  * names keep their prefix (e.g. "inkscape:label") so unknown vendor data is skippable.
- * @param {string} xml
- * @returns {XNode}
  */
-export function parseXml(xml) {
-  /** @type {XNode} */
-  const root = { name: "#document", attrs: {}, children: [] };
-  /** @type {XNode[]} */
-  const stack = [root];
+export function parseXml(xml: string): XNode {
+  const root: XNode = { name: "#document", attrs: {}, children: [] };
+  const stack: XNode[] = [root];
   let i = 0;
   const n = xml.length;
   while (i < n) {
@@ -78,16 +75,14 @@ export function parseXml(xml) {
     const body = selfClose ? raw.slice(0, -1) : raw;
     const m = /^([^\s/>]+)\s*([\s\S]*)$/.exec(body.trim());
     if (!m) continue;
-    /** @type {XNode} */
-    const node = { name: m[1], attrs: parseAttrs(m[2]), children: [] };
+    const node: XNode = { name: m[1], attrs: parseAttrs(m[2]), children: [] };
     stack[stack.length - 1].children.push(node);
     if (!selfClose) stack.push(node);
   }
   return root;
 }
 
-/** @param {string} xml @param {number} lt */
-function findTagEnd(xml, lt) {
+function findTagEnd(xml: string, lt: number): number {
   let q = "";
   for (let k = lt + 1; k < xml.length; k++) {
     const c = xml[k];
@@ -99,57 +94,68 @@ function findTagEnd(xml, lt) {
   return xml.length;
 }
 
-/** @param {string} s */
-function parseAttrs(s) {
-  /** @type {Record<string, string>} */
-  const attrs = {};
+function parseAttrs(s: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
   const re = /([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = re.exec(s))) attrs[m[1]] = decodeEntities(m[2] !== undefined ? m[2] : m[3]);
   return attrs;
 }
 
-/** @param {string} s */
-function decodeEntities(s) {
-  return s.replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g, (_, e) => {
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+
+function decodeEntities(s: string): string {
+  return s.replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g, (_, e: string) => {
     if (e[0] === "#") return String.fromCodePoint(e[1] === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
-    return /** @type {Record<string,string>} */ ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" })[e];
+    return ENTITIES[e];
   });
 }
 
 // ---- SVG → paths ---------------------------------------------------------------
 
-/**
- * @typedef {Object} ImportOptions
- * @property {boolean} [applyViewBox]   map viewBox → width/height as a matrix (default true when both present)
- * @property {boolean} [quantizeGray]   snap near-gray fills to gray:N (default true)
- * @property {number} [grayTolerance]   max channel spread treated as gray (default 8)
- * @property {boolean} [dropStrokes]    ignore strokes entirely (default false)
- */
+export interface ImportOptions {
+  /** map viewBox → width/height as a matrix (default true when both present) */
+  applyViewBox?: boolean;
+  /** snap near-gray fills to gray:N (default true) */
+  quantizeGray?: boolean;
+  /** max channel spread treated as gray (default 8) */
+  grayTolerance?: number;
+  /** ignore strokes entirely (default false) */
+  dropStrokes?: boolean;
+}
 
-/**
- * @typedef {Object} ImportResult
- * @property {boolean} ok
- * @property {ScenePath[]} paths
- * @property {Finding[]} findings
- * @property {{ width: number|null, height: number|null, viewBox: number[]|null, elements: number, skipped: Record<string, number> }} info
- */
+export interface ImportInfo {
+  width: number | null;
+  height: number | null;
+  viewBox: number[] | null;
+  elements: number;
+  skipped: Record<string, number>;
+}
 
-/**
- * Import an SVG document's drawable elements as scene paths (in SVG user units ≡ px).
- * @param {string} svgText
- * @param {ImportOptions} [opts]
- * @returns {ImportResult}
- */
-export function importSvg(svgText, opts = {}) {
-  /** @type {Finding[]} */
-  const findings = [];
-  /** @type {ScenePath[]} */
-  const paths = [];
-  /** @type {Record<string, number>} */
-  const skipped = {};
-  const info = { width: /** @type {number|null} */ (null), height: /** @type {number|null} */ (null), viewBox: /** @type {number[]|null} */ (null), elements: 0, skipped };
-  let doc;
+export interface ImportResult {
+  ok: boolean;
+  paths: ScenePath[];
+  findings: Finding[];
+  info: ImportInfo;
+}
+
+interface SvgStyle {
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: string;
+  fillRule?: string;
+  opacity?: string;
+  fillOpacity?: string;
+  display?: string;
+}
+
+/** Import an SVG document's drawable elements as scene paths (in SVG user units ≡ px). */
+export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResult {
+  const findings: Finding[] = [];
+  const paths: ScenePath[] = [];
+  const skipped: Record<string, number> = {};
+  const info: ImportInfo = { width: null, height: null, viewBox: null, elements: 0, skipped };
+  let doc: XNode;
   try {
     doc = parseXml(svgText);
   } catch (e) {
@@ -168,8 +174,7 @@ export function importSvg(svgText, opts = {}) {
     if (vb.length === 4 && vb.every((v) => Number.isFinite(v))) info.viewBox = vb;
     else findings.push({ severity: "warning", code: "svg-viewbox", message: `unreadable viewBox "${svg.attrs.viewBox}"` });
   }
-  /** @type {Mat} */
-  let rootMatrix = IDENTITY;
+  let rootMatrix: Mat = IDENTITY;
   const applyVb = opts.applyViewBox ?? (info.viewBox !== null && info.width !== null && info.height !== null);
   if (applyVb && info.viewBox && info.width !== null && info.height !== null) {
     const [vx, vy, vw, vh] = info.viewBox;
@@ -184,17 +189,13 @@ export function importSvg(svgText, opts = {}) {
     if (vx || vy) rootMatrix = [1, 0, 0, 1, -vx, -vy];
   }
 
-  const defsIds = new Set();
+  const defsIds = new Set<string>();
   collectIds(svg, defsIds);
 
-  /** @type {{ fill?: string, stroke?: string, strokeWidth?: string, fillRule?: string, opacity?: string, fillOpacity?: string, display?: string }} */
-  const rootStyle = {};
+  const rootStyle: SvgStyle = {};
   walk(svg, rootMatrix, rootStyle, true);
 
-  /**
-   * @param {XNode} node @param {Mat} parentM @param {typeof rootStyle} parentStyle @param {boolean} isRoot
-   */
-  function walk(node, parentM, parentStyle, isRoot) {
+  function walk(node: XNode, parentM: Mat, parentStyle: SvgStyle, isRoot: boolean): void {
     for (const child of node.children) {
       if (child.name === "#text") continue;
       const tag = localName(child.name);
@@ -270,32 +271,27 @@ export function importSvg(svgText, opts = {}) {
     void isRoot;
   }
 
-  /** @param {string} what */
-  function skip(what) {
+  function skip(what: string): void {
     skipped[what] = (skipped[what] || 0) + 1;
   }
 
-  /**
-   * @param {XNode} el @param {string} d @param {Mat} m @param {typeof rootStyle} style
-   */
-  function emit(el, d, m, style) {
+  function emit(el: XNode, d: string, m: Mat, style: SvgStyle): void {
     if (!d.trim()) {
       findings.push({ severity: "warning", code: "svg-empty", message: `<${localName(el.name)}#${el.attrs.id || "?"}> has no geometry` });
       return;
     }
     info.elements++;
     const where = `${localName(el.name)}#${el.attrs.id || info.elements}`;
-    let fill = resolvePaint(style.fill === undefined ? "#000000" : style.fill, style.fillOpacity, style.opacity, where, "fill");
+    const fill = resolvePaint(style.fill === undefined ? "#000000" : style.fill, style.fillOpacity, style.opacity, where, "fill");
     const strokeRaw = style.stroke;
-    let stroke = opts.dropStrokes || !strokeRaw ? null : resolvePaint(strokeRaw, undefined, style.opacity, where, "stroke");
+    const stroke = opts.dropStrokes || !strokeRaw ? null : resolvePaint(strokeRaw, undefined, style.opacity, where, "stroke");
     const strokeWidth = stroke ? lengthPx(style.strokeWidth) ?? 1 : 0;
-    /** @type {ScenePath} */
-    const p = { d, fill, fillRule: style.fillRule === "evenodd" ? "evenodd" : "nonzero" };
+    const p: ScenePath = { d, fill, fillRule: style.fillRule === "evenodd" ? "evenodd" : "nonzero" };
     if (stroke && strokeWidth > 0) {
       p.stroke = stroke;
       p.strokeWidth = strokeWidth;
     }
-    if (m !== IDENTITY && !(m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0)) p.transform = /** @type {Mat} */ (m.map((v) => Math.round(v * 1e6) / 1e6));
+    if (m !== IDENTITY && !(m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0)) p.transform = m.map((v) => Math.round(v * 1e6) / 1e6) as Mat;
     if (fill === null && !p.stroke) {
       findings.push({ severity: "info", code: "svg-invisible", message: `${where} has neither fill nor stroke; skipped` });
       return;
@@ -303,12 +299,8 @@ export function importSvg(svgText, opts = {}) {
     paths.push(p);
   }
 
-  /**
-   * Resolve an SVG paint to a scene fill string. Gray-ish colours become gray:N.
-   * @param {string} paint @param {string|undefined} paintOpacity @param {string|undefined} opacity @param {string} where @param {'fill'|'stroke'} role
-   * @returns {string|null}
-   */
-  function resolvePaint(paint, paintOpacity, opacity, where, role) {
+  /** Resolve an SVG paint to a scene fill string. Gray-ish colours become gray:N. */
+  function resolvePaint(paint: string, paintOpacity: string | undefined, opacity: string | undefined, where: string, role: "fill" | "stroke"): string | null {
     const s = paint.trim();
     if (!s || s === "none") return null;
     if (s.startsWith("url(")) {
@@ -338,7 +330,7 @@ export function importSvg(svgText, opts = {}) {
         return `gray:${level}`;
       }
       const a = Math.round(f.a * alpha);
-      const hex = (/** @type {number} */ v) => v.toString(16).padStart(2, "0");
+      const hex = (v: number) => v.toString(16).padStart(2, "0");
       return `#${hex(f.r)}${hex(f.g)}${hex(f.b)}${a < 255 ? hex(a) : ""}`;
     }
     return null;
@@ -347,31 +339,24 @@ export function importSvg(svgText, opts = {}) {
   return { ok: !findings.some((f) => f.severity === "error"), paths, findings, info };
 }
 
-/** @param {XNode} node @param {Set<string>} ids */
-function collectIds(node, ids) {
+function collectIds(node: XNode, ids: Set<string>): void {
   for (const c of node.children) {
     if (c.attrs && c.attrs.id) ids.add(c.attrs.id);
     collectIds(c, ids);
   }
 }
 
-/** @param {string} name */
-function localName(name) {
+function localName(name: string): string {
   const i = name.indexOf(":");
   return (i >= 0 ? name.slice(i + 1) : name).toLowerCase();
 }
 
-/**
- * Merge presentation attributes + inline style onto the inherited style.
- * @param {{ fill?: string, stroke?: string, strokeWidth?: string, fillRule?: string, opacity?: string, fillOpacity?: string, display?: string }} parent
- * @param {Record<string,string>} attrs
- */
-function inherit(parent, attrs) {
-  /** @type {{ fill?: string, stroke?: string, strokeWidth?: string, fillRule?: string, opacity?: string, fillOpacity?: string, display?: string }} */
-  const out = { ...parent };
+/** Merge presentation attributes + inline style onto the inherited style. */
+function inherit(parent: SvgStyle, attrs: Record<string, string>): SvgStyle {
+  const out: SvgStyle = { ...parent };
   delete out.opacity; // opacity/display do not inherit as values (opacity composes, see below)
   delete out.display;
-  const set = (/** @type {string} */ k, /** @type {string|undefined} */ v) => {
+  const set = (k: string, v: string | undefined) => {
     if (v === undefined || v === null || v === "") return;
     if (k === "fill") out.fill = v;
     else if (k === "stroke") out.stroke = v;
@@ -393,8 +378,8 @@ function inherit(parent, attrs) {
   return out;
 }
 
-/** @param {string|undefined} s @returns {number|null} px for unitless/px/pt/mm/cm/in, null otherwise */
-function lengthPx(s) {
+/** @returns px for unitless/px/pt/mm/cm/in, null otherwise */
+function lengthPx(s: string | undefined): number | null {
   if (s === undefined || s === null || s === "") return null;
   const m = /^\s*([-+]?[\d.]+(?:e[-+]?\d+)?)\s*(px|pt|mm|cm|in|%)?\s*$/i.exec(s);
   if (!m) return null;
@@ -414,24 +399,20 @@ function lengthPx(s) {
       return v;
   }
 }
-/** @param {string|undefined} s */
-function num(s) {
+function num(s: string | undefined): number {
   const v = lengthPx(s);
   return v === null ? 0 : v;
 }
-/** @param {string|undefined} s @param {number} d */
-function numOr(s, d) {
+function numOr(s: string | undefined, d: number): number {
   if (s === undefined) return d;
   const v = Number(s);
   return Number.isFinite(v) ? v : d;
 }
-/** @param {number} v */
-function clamp01(v) {
+function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-/** @param {Record<string,string>} a */
-function rectPath(a) {
+function rectPath(a: Record<string, string>): string {
   const x = num(a.x);
   const y = num(a.y);
   const w = num(a.width);
@@ -447,13 +428,11 @@ function rectPath(a) {
     `H${x + rx} A${rx} ${ry} 0 0 1 ${x} ${y + h - ry} V${y + ry} A${rx} ${ry} 0 0 1 ${x + rx} ${y} Z`
   );
 }
-/** @param {number} cx @param {number} cy @param {number} rx @param {number} ry */
-function ellipsePath(cx, cy, rx, ry) {
+function ellipsePath(cx: number, cy: number, rx: number, ry: number): string {
   if (rx <= 0 || ry <= 0) return "";
   return `M${cx + rx} ${cy} A${rx} ${ry} 0 1 1 ${cx - rx} ${cy} A${rx} ${ry} 0 1 1 ${cx + rx} ${cy} Z`;
 }
-/** @param {string} pts @param {boolean} close */
-function pointsPath(pts, close) {
+function pointsPath(pts: string, close: boolean): string {
   const nums = pts
     .trim()
     .split(/[\s,]+/)

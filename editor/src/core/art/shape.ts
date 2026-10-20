@@ -18,62 +18,64 @@
 // self-intersecting sub-path cannot be fixed by orientation and keeps its own winding.
 
 import { IDENTITY, normalizePath, flattenSubpath, signedArea, subpathBounds } from "./geometry.ts";
+import type { Mat, SubPath, Edge } from "./geometry.ts";
 import { parseFill, fillToRgba } from "./scene.ts";
+import type { SceneShape, Finding } from "./scene.ts";
 import { BitWriter, TAG, nbitsForSigned, nbitsForUnsigned, writeRect, writeMatrix, writeRgba, tag } from "./swf-bits.ts";
+import type { Rect, Rgba } from "./swf-bits.ts";
 
-/** @typedef {import('./geometry.ts').Mat} Mat */
-/** @typedef {import('./geometry.ts').SubPath} SubPath */
-/** @typedef {import('./geometry.ts').Edge} Edge */
-/** @typedef {import('./scene.ts').SceneShape} SceneShape */
-/** @typedef {import('./scene.ts').Finding} Finding */
-/** @typedef {import('./swf-bits.ts').Rect} Rect */
-/** @typedef {import('./swf-bits.ts').Rgba} Rgba */
+export interface ShapeContext {
+  /** scene bitmap id → character id of its DefineBitsLossless2 */
+  bitmapIds?: Map<string, number>;
+  /** scene id, used in finding paths */
+  shapeName?: string;
+  /** quadratics per cubic (geometry default 4) */
+  cubicSplits?: number;
+}
 
-/**
- * @typedef {Object} ShapeContext
- * @property {Map<string, number>} [bitmapIds]  scene bitmap id → character id of its DefineBitsLossless2
- * @property {string} [shapeName]              scene id, used in finding paths
- * @property {number} [cubicSplits]            quadratics per cubic (geometry default 4)
- */
+export interface EncodedShape {
+  /** framed DefineShape3 tag */
+  bytes: Uint8Array;
+  /** twips */
+  bounds: Rect;
+  fillCount: number;
+  lineCount: number;
+  /** edge records written */
+  edgeCount: number;
+  findings: Finding[];
+}
 
-/**
- * @typedef {Object} EncodedShape
- * @property {Uint8Array} bytes      framed DefineShape3 tag
- * @property {Rect} bounds           twips
- * @property {number} fillCount
- * @property {number} lineCount
- * @property {number} edgeCount      edge records written
- * @property {Finding[]} findings
- */
+type FillDef = { kind: "solid"; color: Rgba } | { kind: "bitmap"; id: number; matrix: Mat };
+interface LineDef {
+  width: number;
+  color: Rgba;
+}
+interface Run {
+  fill0: number;
+  fill1: number;
+  line: number;
+  start: [number, number];
+  edges: Edge[];
+}
 
-/** @typedef {{ kind: 'solid', color: Rgba } | { kind: 'bitmap', id: number, matrix: Mat }} FillDef */
-/** @typedef {{ width: number, color: Rgba }} LineDef */
-/** @typedef {{ fill0: number, fill1: number, line: number, start: [number, number], edges: Edge[] }} Run */
+export type FillSide = "left" | "right" | "none";
 
 const MAX_EDGE_BITS = 17; // NumBits (4 bits) + 2
 
 /**
  * Encode one scene shape as a DefineShape3 tag.
- * @param {number} shapeId character id
- * @param {SceneShape} shape
- * @param {ShapeContext} [ctx]
- * @returns {EncodedShape}
+ * @param shapeId character id
  */
-export function encodeDefineShape3(shapeId, shape, ctx = {}) {
-  /** @type {Finding[]} */
-  const findings = [];
+export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: ShapeContext = {}): EncodedShape {
+  const findings: Finding[] = [];
   const at = `shapes.${ctx.shapeName ?? shapeId}`;
-  /** @type {FillDef[]} */
-  const fillStyles = [];
-  /** @type {LineDef[]} */
-  const lineStyles = [];
-  /** @type {Run[]} */
-  const runs = [];
+  const fillStyles: FillDef[] = [];
+  const lineStyles: LineDef[] = [];
+  const runs: Run[] = [];
 
   (shape.paths || []).forEach((p, pi) => {
     const pat = `${at}.paths[${pi}]`;
-    /** @type {SubPath[]} */
-    let subs;
+    let subs: SubPath[];
     try {
       subs = normalizePath(p.d, { matrix: p.transform, cubicSplits: ctx.cubicSplits });
     } catch (e) {
@@ -118,7 +120,7 @@ export function encodeDefineShape3(shapeId, shape, ctx = {}) {
       findings.push({ severity: "info", code: "path-invisible", message: "path has neither fill nor stroke; skipped", path: pat });
       return;
     }
-    const sides = fillIdx ? assignFillSides(subs, p.fillRule === "evenodd") : subs.map(() => /** @type {const} */ ("none"));
+    const sides: FillSide[] = fillIdx ? assignFillSides(subs, p.fillRule === "evenodd") : subs.map(() => "none" as const);
     let dropped = 0;
     subs.forEach((sub, si) => {
       const tw = toTwips(sub);
@@ -140,7 +142,7 @@ export function encodeDefineShape3(shapeId, shape, ctx = {}) {
   });
 
   // bounds in twips (+ half the widest stroke)
-  const pseudo = runs.map((r) => /** @type {SubPath} */ ({ start: r.start, edges: r.edges, closed: true }));
+  const pseudo: SubPath[] = runs.map((r) => ({ start: r.start, edges: r.edges, closed: true }));
   let bounds = subpathBounds(pseudo);
   if (!bounds) {
     bounds = { xmin: 0, ymin: 0, xmax: 0, ymax: 0 };
@@ -205,33 +207,24 @@ export function encodeDefineShape3(shapeId, shape, ctx = {}) {
   return { bytes: tag(TAG.DefineShape3, w.finish()), bounds, fillCount: fillStyles.length, lineCount: lineStyles.length, edgeCount, findings };
 }
 
-/** @param {BitWriter} w @param {number} n */
-function writeStyleCount(w, n) {
+function writeStyleCount(w: BitWriter, n: number): void {
   if (n >= 0xff) {
     w.u8(0xff);
     w.u16(n);
   } else w.u8(n);
 }
 
-/**
- * px sub-path → integer twips.
- * @param {SubPath} sub
- * @returns {{ start: [number, number], edges: Edge[] }}
- */
-function toTwips(sub) {
-  const T = (/** @type {number} */ v) => Math.round(v * 20);
+/** px sub-path → integer twips. */
+function toTwips(sub: SubPath): { start: [number, number]; edges: Edge[] } {
+  const T = (v: number) => Math.round(v * 20);
   return {
     start: [T(sub.start[0]), T(sub.start[1])],
-    edges: sub.edges.map((e) => (e.t === "L" ? { t: "L", x: T(e.x), y: T(e.y) } : { t: "Q", cx: T(e.cx), cy: T(e.cy), x: T(e.x), y: T(e.y) })),
+    edges: sub.edges.map((e): Edge => (e.t === "L" ? { t: "L", x: T(e.x), y: T(e.y) } : { t: "Q", cx: T(e.cx), cy: T(e.cy), x: T(e.x), y: T(e.y) })),
   };
 }
 
-/**
- * StraightEdgeRecord(s) for a delta; splits deltas wider than 17 bits. Returns records written.
- * @param {BitWriter} w @param {number} dx @param {number} dy
- * @returns {number}
- */
-function writeStraight(w, dx, dy) {
+/** StraightEdgeRecord(s) for a delta; splits deltas wider than 17 bits. Returns records written. */
+function writeStraight(w: BitWriter, dx: number, dy: number): number {
   if (dx === 0 && dy === 0) return 0;
   const nbits = Math.max(2, nbitsForSigned([dx, dy]));
   if (nbits > MAX_EDGE_BITS) {
@@ -254,13 +247,8 @@ function writeStraight(w, dx, dy) {
   return 1;
 }
 
-/**
- * CurvedEdgeRecord(s); splits (de Casteljau) when a delta needs more than 17 bits.
- * @param {BitWriter} w
- * @param {number} x0 @param {number} y0 @param {number} cx @param {number} cy @param {number} x1 @param {number} y1
- * @returns {number}
- */
-function writeCurve(w, x0, y0, cx, cy, x1, y1) {
+/** CurvedEdgeRecord(s); splits (de Casteljau) when a delta needs more than 17 bits. */
+function writeCurve(w: BitWriter, x0: number, y0: number, cx: number, cy: number, x1: number, y1: number): number {
   const cdx = cx - x0;
   const cdy = cy - y0;
   const adx = x1 - cx;
@@ -291,14 +279,12 @@ function writeCurve(w, x0, y0, cx, cy, x1, y1) {
 /**
  * For each sub-path decide where its fill goes: "right" (FillStyle1), "left" (FillStyle0)
  * or "none" (no paint boundary). See the module header for the rule.
- * @param {SubPath[]} subs px (any consistent unit)
- * @param {boolean} evenodd
- * @returns {Array<'left'|'right'|'none'>}
+ * @param subs px (any consistent unit)
  */
-export function assignFillSides(subs, evenodd) {
+export function assignFillSides(subs: SubPath[], evenodd: boolean): FillSide[] {
   const polys = subs.map((s) => flattenSubpath(s, 0.25));
   const areas = polys.map(signedArea);
-  return subs.map((_, i) => {
+  return subs.map((_, i): FillSide => {
     const sign = areas[i] > 1e-9 ? 1 : areas[i] < -1e-9 ? -1 : 0;
     if (sign === 0) return "none";
     const rep = representativePoint(polys[i]);
@@ -315,10 +301,9 @@ export function assignFillSides(subs, evenodd) {
 
 /**
  * A point on the polygon's boundary (midpoint of its first non-degenerate segment).
- * @param {number[]} poly flat
- * @returns {[number, number]}
+ * @param poly flat
  */
-function representativePoint(poly) {
+function representativePoint(poly: number[]): [number, number] {
   const n = poly.length / 2;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
@@ -334,9 +319,8 @@ function representativePoint(poly) {
 /**
  * Winding number of (px, py) with respect to a flat closed polygon. Positive when the
  * polygon's `signedArea` is positive and the point is inside.
- * @param {number} px @param {number} py @param {number[]} poly
  */
-export function windingNumber(px, py, poly) {
+export function windingNumber(px: number, py: number, poly: number[]): number {
   let wn = 0;
   const n = poly.length / 2;
   for (let i = 0; i < n; i++) {

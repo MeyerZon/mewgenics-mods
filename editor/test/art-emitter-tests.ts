@@ -18,30 +18,32 @@ import { readSwf, readTags, shapeToSubpaths, flattenTags, BitReader } from "../s
 import { exampleScene, validateScene } from "../src/core/art/scene.ts";
 import { normalizePath, signedArea, flattenSubpath } from "../src/core/art/geometry.ts";
 import { bakeSprite, diffFrames } from "../src/core/art/timeline.ts";
+import type { Tag } from "../src/core/art/swf-reader.ts";
+import type { Placement } from "../src/core/art/timeline.ts";
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 // Vanilla SWFs (T1) are read from the git-ignored `.extracted/swfs/` (populate with
 // `python -I tools/gpak.py extract .extracted --prefix swfs/ability_icons.swf`); set MEWGENICS_VANILLA_SWF_DIR to
 // point elsewhere. Tests that need them skip with a logged `(skipped: …)` when the file is absent.
 const VANILLA_DIR = process.env.MEWGENICS_VANILLA_SWF_DIR || resolve(dirname(fileURLToPath(import.meta.url)), "../../.extracted/swfs");
 
-/** @param {string} name @returns {Uint8Array | null} */
-function vanilla(name) {
+function vanilla(name: string): Uint8Array | null {
   const p = join(VANILLA_DIR, name);
   if (!existsSync(p)) return null;
   return new Uint8Array(readFileSync(p));
 }
 
-/** @typedef {import('../src/core/art/swf-reader.ts').Tag} Tag */
+interface SpriteFrame {
+  index: number;
+  label: string | null;
+  places: Tag[];
+  removes: number[];
+}
 
-/**
- * Split a DefineSprite's tag stream into frames: `{ index, label, places, removes }` per ShowFrame.
- * @param {Tag} sprite
- * @returns {{ index: number, label: string | null, places: Tag[], removes: number[] }[]}
- */
-function spriteFrames(sprite) {
-  /** @type {{ index: number, label: string | null, places: Tag[], removes: number[] }[]} */
-  const frames = [];
-  let cur = { index: 0, label: /** @type {string | null} */ (null), places: /** @type {Tag[]} */ ([]), removes: /** @type {number[]} */ ([]) };
+/** Split a DefineSprite's tag stream into frames: `{ index, label, places, removes }` per ShowFrame. */
+function spriteFrames(sprite: Tag): SpriteFrame[] {
+  const frames: SpriteFrame[] = [];
+  let cur: SpriteFrame = { index: 0, label: null, places: [], removes: [] };
   for (const t of sprite.tags || []) {
     if (t.name === "FrameLabel") cur.label = t.label || null;
     else if (t.name === "PlaceObject2") cur.places.push(t);
@@ -54,32 +56,22 @@ function spriteFrames(sprite) {
   return frames;
 }
 
-/**
- * The donor sprite a SymbolClass entry binds, plus the id → definition map of the file.
- * @param {{ tags: Tag[] }} swf @param {string} linkage
- */
-function boundSprite(swf, linkage) {
-  /** @type {Map<number, Tag>} */
-  const byId = new Map();
+/** The donor sprite a SymbolClass entry binds, plus the id → definition map of the file. */
+function boundSprite(swf: { tags: Tag[] }, linkage: string) {
+  const byId = new Map<number, Tag>();
   for (const t of swf.tags) if (t.id !== undefined) byId.set(t.id, t);
   const sym = swf.tags.find((t) => t.name === "SymbolClass");
-  const entry = sym && sym.entries && sym.entries.find((e) => e.name === linkage);
+  const entry = sym && sym.entries && sym.entries.find((e: { name: string; id: number }) => e.name === linkage);
   const sprite = entry ? byId.get(entry.id) : undefined;
   return { byId, entry, sprite: sprite && sprite.name === "DefineSprite" ? sprite : undefined };
 }
 
-/** The (depth, flags, matrix) shape of one PlaceObject2, for layout parity checks. @param {Tag} t */
-const placeShape = (t) => `d${t.depth} f${t.place ? t.place.flags : "?"} m${t.place && t.place.matrix ? t.place.matrix.join(",") : "-"}`;
+/** The (depth, flags, matrix) shape of one PlaceObject2, for layout parity checks. */
+const placeShape = (t: Tag): string => `d${t.depth} f${t.place ? t.place.flags : "?"} m${t.place && t.place.matrix ? t.place.matrix.join(",") : "-"}`;
 
-/** @param {Uint8Array} b */
-const hex = (b) => [...b].map((x) => x.toString(16).padStart(2, "0")).join(" ");
+const hex = (b: Uint8Array): string => [...b].map((x) => x.toString(16).padStart(2, "0")).join(" ");
 
-/**
- * @param {(name: string, fn: () => void) => void} test
- * @param {(cond: boolean, msg: string) => void} assert
- * @param {(a: unknown, b: unknown, msg?: string) => void} eq
- */
-export function runArtEmitterTests(test, assert, eq) {
+export function runArtEmitterTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   console.log("\n# Art: bit writer");
   test("writeUB packs MSB-first across byte boundaries", () => {
     const w = new BitWriter();
@@ -202,7 +194,7 @@ export function runArtEmitterTests(test, assert, eq) {
     assert(!!sh, "parsed shape");
     if (!sh) return;
     eq(sh.id, 7);
-    for (const k of /** @type {const} */ (["xmin", "ymin", "xmax", "ymax"])) assert(Math.abs(sh.bounds[k] - enc.bounds[k]) <= 1, `bounds.${k} ${sh.bounds[k]} vs ${enc.bounds[k]}`);
+    for (const k of ["xmin", "ymin", "xmax", "ymax"] as const) assert(Math.abs(sh.bounds[k] - enc.bounds[k]) <= 1, `bounds.${k} ${sh.bounds[k]} vs ${enc.bounds[k]}`);
     eq(sh.bounds.xmin, -800);
     eq(sh.bounds.xmax, 800);
     eq(sh.bounds.ymin, -600);
@@ -210,7 +202,7 @@ export function runArtEmitterTests(test, assert, eq) {
     eq(sh.fillStyles.length, 2);
     eq(sh.fillStyles[0].color && sh.fillStyles[0].color.r, 136, "gray:8 → 136");
     eq(sh.fillStyles[1].color && sh.fillStyles[1].color.r, 204, "gray:12 → 204");
-    const edges = sh.records.filter((r) => r.type !== "style").length;
+    const edges = sh.records.filter((r: { type: string }) => r.type !== "style").length;
     eq(edges, expectedEdges);
     const subs = shapeToSubpaths(sh);
     eq(subs.length, 2);
@@ -224,7 +216,7 @@ export function runArtEmitterTests(test, assert, eq) {
     const sh = readTags(enc.bytes, 0, enc.bytes.length)[0].shape;
     assert(!!sh, "parsed");
     if (!sh) return;
-    eq(sh.records.filter((r) => r.type === "curve").length, 16);
+    eq(sh.records.filter((r: { type: string }) => r.type === "curve").length, 16);
     eq(sh.fillStyles[0].color && sh.fillStyles[0].color.g, 0x20);
     eq(sh.fillStyles[0].color && sh.fillStyles[0].color.a, 255);
   });
@@ -252,7 +244,7 @@ export function runArtEmitterTests(test, assert, eq) {
     assert(dropped.findings.some((f) => f.code === "stroke-dropped"), "stroke-dropped finding");
   });
   test("bitmap fill without a bitmap id is an error finding; with one it is a clipped-bitmap style", () => {
-    const shape = { paths: [{ d: "M0 0 L32 0 L32 32 L0 32 Z", fill: "bitmap:tex", transform: /** @type {[number,number,number,number,number,number]} */ ([1, 0, 0, 1, 5, 0]) }] };
+    const shape = { paths: [{ d: "M0 0 L32 0 L32 32 L0 32 Z", fill: "bitmap:tex", transform: [1, 0, 0, 1, 5, 0] as [number, number, number, number, number, number] }] };
     const missing = encodeDefineShape3(5, shape, {});
     assert(missing.findings.some((f) => f.code === "bitmap-missing"), "bitmap-missing finding");
     eq(missing.fillCount, 0);
@@ -283,7 +275,7 @@ export function runArtEmitterTests(test, assert, eq) {
         }
       }
     }
-    const simple = flattenTags(swf.tags).find((t) => t.shape && t.shape.id === 13);
+    const simple = flattenTags(swf.tags).find((t: Tag) => t.shape && t.shape.id === 13);
     assert(!!simple && !!simple.shape, "shape 13 present");
     if (simple && simple.shape) {
       const subs = shapeToSubpaths(simple.shape);
@@ -309,10 +301,9 @@ export function runArtEmitterTests(test, assert, eq) {
   });
   test("decodePng: palette + tRNS, gray, and filter types 1-4 (hand-built)", () => {
     // minimal chunk builder (mirrors png.ts, kept local to make the fixture explicit)
-    /** @param {string} type @param {Uint8Array} data */
-    const chunk = (type, data) => {
+    const chunk = (type: string, data: Uint8Array): Uint8Array => {
       const out = new Uint8Array(12 + data.length);
-      const be = (/** @type {number} */ p, /** @type {number} */ v) => {
+      const be = (p: number, v: number) => {
         out[p] = v >>> 24;
         out[p + 1] = (v >>> 16) & 255;
         out[p + 2] = (v >>> 8) & 255;
@@ -325,9 +316,8 @@ export function runArtEmitterTests(test, assert, eq) {
       return out;
     };
     const sig = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    /** @param {number} w @param {number} h @param {number} ct */
-    const ihdr = (w, h, ct) => Uint8Array.from([0, 0, 0, w, 0, 0, 0, h, 8, ct, 0, 0, 0]);
-    const zlib = (/** @type {Uint8Array} */ raw) => new Uint8Array(deflateSync(raw));
+    const ihdr = (w: number, h: number, ct: number) => Uint8Array.from([0, 0, 0, w, 0, 0, 0, h, 8, ct, 0, 0, 0]);
+    const zlib = (raw: Uint8Array) => new Uint8Array(deflateSync(raw));
     // palette 2×1: index 0 = red opaque, index 1 = blue with alpha 7
     const pal = decodePng(concat([sig, chunk("IHDR", ihdr(2, 1, 3)), chunk("PLTE", Uint8Array.from([255, 0, 0, 0, 0, 255])), chunk("tRNS", Uint8Array.from([255, 7])), chunk("IDAT", zlib(Uint8Array.from([0, 0, 1]))), chunk("IEND", new Uint8Array(0))]));
     eq(hex(pal.rgba), "ff 00 00 ff 00 00 ff 07");
@@ -398,7 +388,7 @@ export function runArtEmitterTests(test, assert, eq) {
       const pns = inst.protectedNs !== undefined ? p.namespaces[inst.protectedNs] : null;
       eq(pns && pns.kind, 0x18);
     }
-    eq(p.strings[/** @type {any} */ (p.namespaces[p.instances[1].protectedNs || 0]).name], "pkg:Bar");
+    eq(p.strings[p.namespaces[p.instances[1]!.protectedNs || 0]!.name], "pkg:Bar");
     for (const m of p.methods) assert(m.paramCount === 0 && m.returnType === 0 && m.name === 0 && m.flags === 0, "bare method_info");
     p.scripts.forEach((s, i) => {
       eq(s.init, i * 3 + 2);
@@ -424,7 +414,7 @@ export function runArtEmitterTests(test, assert, eq) {
       eq(sinit.traits.length, 0);
     });
     // script init of class 0 (all multiname indices < 128 → one byte each)
-    const mn = (/** @type {string} */ s) => p.multinames.findIndex((m, i) => i > 0 && multinameToString(p, i) === s).toString(16).padStart(2, "0");
+    const mn = (s: string) => p.multinames.findIndex((_m, i) => i > 0 && multinameToString(p, i) === s).toString(16).padStart(2, "0");
     const expected = `d0 30 65 00 60 ${mn(":Object")} 30 60 ${mn("flash.events:EventDispatcher")} 30 60 ${mn("flash.display:DisplayObject")} 30 60 ${mn("flash.display:InteractiveObject")} 30 60 ${mn("flash.display:DisplayObjectContainer")} 30 60 ${mn("flash.display:Sprite")} 30 60 ${mn("flash.display:MovieClip")} 30 60 ${mn("flash.display:MovieClip")} 58 00 1d 1d 1d 1d 1d 1d 1d 68 ${mn(":Foo")} 47`;
     eq(hex(p.bodies[2].code), expected);
     // multinames: 1 :Foo, 2 flash.display:MovieClip, 3 pkg:Bar, then the chain 4..9
@@ -493,8 +483,8 @@ export function runArtEmitterTests(test, assert, eq) {
     assert(!!sym && !!sym.entries, "SymbolClass");
     if (!sym || !sym.entries) return;
     eq(sym.entries.length, 2);
-    assert(sym.entries.every((e) => e.id === 3), "both exports point at the sprite");
-    eq(sym.entries.map((e) => e.name).join(","), "Starter,starter.png");
+    assert(sym.entries.every((e: { id: number }) => e.id === 3), "both exports point at the sprite");
+    eq(sym.entries.map((e: { name: string }) => e.name).join(","), "Starter,starter.png");
     assert(!findings.some((f) => f.severity === "error"), `no error findings: ${JSON.stringify(findings)}`);
     // main-timeline placement of the stage instance
     const place = swf.tags.find((t) => t.name === "PlaceObject2");
@@ -512,9 +502,9 @@ export function runArtEmitterTests(test, assert, eq) {
     if (!sprite || !sprite.tags) return;
     eq(sprite.id, 3);
     eq(sprite.frameCount, 24);
-    eq(sprite.tags.filter((t) => t.name === "ShowFrame").length, 24);
+    eq(sprite.tags.filter((t: Tag) => t.name === "ShowFrame").length, 24);
     eq(sprite.tags[sprite.tags.length - 1].name, "End");
-    const labels = [];
+    const labels: string[] = [];
     let frame = 0;
     for (const t of sprite.tags) {
       if (t.name === "FrameLabel") labels.push(`${t.label}@${frame}`);
@@ -523,21 +513,21 @@ export function runArtEmitterTests(test, assert, eq) {
     eq(labels.join(","), "idle@0,blink@12");
     const baked = bakeSprite(scene.sprites.Starter);
     let expected = 0;
-    let prev = /** @type {import('../src/core/art/timeline.ts').Placement[]} */ ([]);
+    let prev: Placement[] = [];
     for (let f = 0; f < baked.frames; f++) {
       expected += diffFrames(prev, baked.placements[f]).filter((op) => op.op !== "remove").length;
       prev = baked.placements[f];
     }
-    eq(sprite.tags.filter((t) => t.name === "PlaceObject2").length, expected);
-    const first = sprite.tags.find((t) => t.name === "PlaceObject2");
+    eq(sprite.tags.filter((t: Tag) => t.name === "PlaceObject2").length, expected);
+    const first = sprite.tags.find((t: Tag) => t.name === "PlaceObject2");
     assert(!!first && !!first.place, "first place");
     if (first && first.place) {
       eq(first.place.flags, 0x26, "HasCharacter|HasMatrix|HasName like vanilla rig slots");
       eq(first.place.name, "body");
       eq(first.place.characterId, 1);
     }
-    const moves = sprite.tags.filter((t) => t.place && t.place.move);
-    assert(moves.length > 0 && moves.every((t) => t.place && t.place.flags === 0x05), "tween frames are Move|HasMatrix (0x05)");
+    const moves = sprite.tags.filter((t: Tag) => t.place && t.place.move);
+    assert(moves.length > 0 && moves.every((t: Tag) => t.place && t.place.flags === 0x05), "tween frames are Move|HasMatrix (0x05)");
   });
   test("abc: 'stub' adds exactly one DoABC before SymbolClass; blob passes through", () => {
     const { bytes, report } = emitSwf(scene, { abc: "stub" });
@@ -582,7 +572,7 @@ export function runArtEmitterTests(test, assert, eq) {
     eq(r3.report.characters[0].kind, "bitmap");
     const swf = readSwf(r3.bytes);
     eq(swf.tags.filter((t) => t.name === "DefineBitsLossless2").length, 1);
-    const pic = swf.tags.find((t) => t.shape && t.shape.fillStyles.some((f) => f.type === 0x41));
+    const pic = swf.tags.find((t: Tag) => t.shape && t.shape.fillStyles.some((f: { type: number }) => f.type === 0x41));
     assert(!!pic && !!pic.shape && pic.shape.fillStyles[0].bitmapId === 1, "shape fill references bitmap char 1");
   });
   console.log("\n# Art: append donor (the _Append_<Clip> SWF mirrors the target's labeled-frame layout)");
@@ -593,7 +583,7 @@ export function runArtEmitterTests(test, assert, eq) {
     const swf = readSwf(bytes);
     eq(swf.tags.filter((t) => t.name === "DoABC").length, 0, "SymbolClass binds without a DoABC");
     const sym = swf.tags.find((t) => t.name === "SymbolClass");
-    eq(sym && sym.entries && sym.entries.map((e) => e.name).join(","), "_Append_AbilityIcon", "linkage spelling untouched");
+    eq(sym && sym.entries && sym.entries.map((e: { name: string }) => e.name).join(","), "_Append_AbilityIcon", "linkage spelling untouched");
     const { byId, sprite } = boundSprite(swf, "_Append_AbilityIcon");
     assert(!!sprite, "linkage → a DefineSprite");
     if (!sprite) return;
@@ -629,7 +619,7 @@ export function runArtEmitterTests(test, assert, eq) {
     const innerFrames = spriteFrames(inner);
     eq(innerFrames.length, 1);
     eq(innerFrames[0].places.length, 1);
-    const shapeTag = innerFrames[0].places[0].place && innerFrames[0].places[0].place.characterId !== undefined ? byId.get(/** @type {number} */ (innerFrames[0].places[0].place.characterId)) : undefined;
+    const shapeTag = innerFrames[0].places[0].place && innerFrames[0].places[0].place.characterId !== undefined ? byId.get(innerFrames[0]!.places[0]!.place!.characterId!) : undefined;
     eq(shapeTag && shapeTag.name, "DefineShape3");
   });
   test("minimalGateSwf layout 'legacy' reproduces the pre-fix donor (bare shape at depth 1) so the gate can show it still crashes", () => {
@@ -642,7 +632,7 @@ export function runArtEmitterTests(test, assert, eq) {
     eq(frames[0].label, "JokersGambit");
     eq(frames[0].places.length, 1);
     eq(placeShape(frames[0].places[0]), "d1 f6 m1,0,0,1,0,0", "depth 1: the layout that crashed on 2026-10-18");
-    const icon = frames[0].places[0].place && frames[0].places[0].place.characterId !== undefined ? byId.get(/** @type {number} */ (frames[0].places[0].place.characterId)) : undefined;
+    const icon = frames[0].places[0].place && frames[0].places[0].place.characterId !== undefined ? byId.get(frames[0]!.places[0]!.place!.characterId!) : undefined;
     eq(icon && icon.name, "DefineShape3");
   });
   test("minimalGateSwf withAbc keeps the byte-exact linkage stub (explicit gate experiment only)", () => {
@@ -685,8 +675,8 @@ export function runArtEmitterTests(test, assert, eq) {
       eq(swf.header.fileLength, bytes.length);
       eq(swf.header.frameRate, 60);
       const all = flattenTags(swf.tags);
-      const errors = all.filter((t) => t.error);
-      eq(errors.length, 0, `tag errors: ${errors.slice(0, 3).map((e) => `${e.name}@${e.offset}: ${e.error}`).join("; ")}`);
+      const errors = all.filter((t: Tag) => t.error);
+      eq(errors.length, 0, `tag errors: ${errors.slice(0, 3).map((e: Tag) => `${e.name}@${e.offset}: ${e.error}`).join("; ")}`);
       eq(swf.tags[swf.tags.length - 1].name, "End");
       eq(swf.tags.filter((t) => t.name === "DoABC").length, 1);
       assert(swf.tags.filter((t) => t.name === "SymbolClass").length >= 1, "SymbolClass present");
@@ -706,7 +696,7 @@ export function runArtEmitterTests(test, assert, eq) {
     eq(sprite.frameCount, 901);
     const frames = spriteFrames(sprite);
     eq(frames.length, 901);
-    const labels = frames.filter((f) => f.label).map((f) => /** @type {string} */ (f.label));
+    const labels = frames.filter((f) => f.label).map((f) => f.label as string);
     eq(labels.length, 842);
     eq(new Set(labels).size, 842, "labels are unique");
     eq(frames[0].label, "unknown", "frame 0 is the fallback icon");
@@ -715,7 +705,7 @@ export function runArtEmitterTests(test, assert, eq) {
     // frame 0 carries the chrome: background shape @1, the 'label' text @2, border @5 — none of it is a movieclip
     eq(frames[0].places.map((p) => `${p.depth}:${p.place && p.place.name ? p.place.name : ""}`).join(","), "1:,2:label,5:");
     // every placed character in the whole clip is a shape or the text field; no DefineSprite is ever placed
-    const placedKinds = new Set();
+    const placedKinds = new Set<string>();
     for (const f of frames) for (const p of f.places) if (p.place && p.place.characterId !== undefined) placedKinds.add((byId.get(p.place.characterId) || { name: "?" }).name);
     assert(!placedKinds.has("DefineSprite"), `no nested movieclips (placed kinds: ${[...placedKinds].join(",")})`);
     // the icon slot: labeled frames place exactly one shape at depth 3, flags 6 (char+identity matrix) or 3 (move+char)
@@ -724,15 +714,15 @@ export function runArtEmitterTests(test, assert, eq) {
     const canonical = iconFrames.filter((f) => f.places[0].place && (f.places[0].place.flags === 3 || placeShape(f.places[0]) === "d3 f6 m1,0,0,1,0,0"));
     const outliers = iconFrames.filter((f) => !canonical.includes(f)).map((f) => `${f.label}: ${placeShape(f.places[0])}`);
     assert(canonical.length >= 780 && outliers.length <= 1, `canonical forms: ${canonical.length}; outliers: ${outliers.join("; ")}`);
-    assert(iconFrames.every((f) => /^DefineShape[234]?$/.test((byId.get(/** @type {number} */ (f.places[0].place && f.places[0].place.characterId)) || { name: "?" }).name)), "icon characters are DefineShape*");
+    assert(iconFrames.every((f) => /^DefineShape[234]?$/.test((byId.get(f.places[0]!.place!.characterId!) || { name: "?" }).name)), "icon characters are DefineShape*");
     // icon extent (twips): a 64 px square (1280 twips) fits the vanilla slot
     const first = iconFrames[0];
-    const icon = byId.get(/** @type {number} */ (first.places[0].place && first.places[0].place.characterId));
+    const icon = byId.get(first!.places[0]!.place!.characterId!);
     assert(!!icon && !!icon.shape && icon.shape.bounds.xmax <= 1320 && icon.shape.bounds.ymax <= 1200, `icon bounds ${icon && icon.shape && JSON.stringify(icon.shape.bounds)}`);
     // the root places the clip at depth 1 and the clip's tail removes the chrome
     const rootPlace = swf.tags.find((t) => t.name === "PlaceObject2" && t.place && t.place.characterId === 1346);
     eq(rootPlace && rootPlace.depth, 1);
-    const tail = sprite.tags ? sprite.tags.slice(-12).map((t) => (t.name === "RemoveObject2" ? `Remove@${t.depth}` : t.name)).join(",") : "";
+    const tail = sprite.tags ? sprite.tags.slice(-12).map((t: Tag) => (t.name === "RemoveObject2" ? `Remove@${t.depth}` : t.name)).join(",") : "";
     eq(tail, "ShowFrame,Remove@5,ShowFrame,Remove@1,ShowFrame,ShowFrame,ShowFrame,ShowFrame,ShowFrame,ShowFrame,ShowFrame,End");
     // the only frame script is frame1 → stop (ABC strings); nothing reacts to appended frames
     const abc = swf.tags.find((t) => t.name === "DoABC");

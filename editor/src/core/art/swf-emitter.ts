@@ -6,56 +6,94 @@
 // `lossless.ts`, the optional ABC from `abc-stub.ts`, baked frames from `timeline.ts`.
 
 import { buildOrder, parseColor } from "./scene.ts";
+import type { Scene, Finding } from "./scene.ts";
 import { bakeSprite, bakeStage, diffFrames, CXFORM_IDENTITY } from "./timeline.ts";
+import type { Cxform, BakedSprite, FrameOp, Placement } from "./timeline.ts";
 import { encodeDefineShape3 } from "./shape.ts";
 import { encodeDefineBitsLossless2 } from "./lossless.ts";
 import { buildLinkageAbc } from "./abc-stub.ts";
 import { BitWriter, TAG, tag, tagName, concat, writeRect, writeMatrix, writeCxformWithAlpha, writeRgb } from "./swf-bits.ts";
-
-/** @typedef {import('./geometry.ts').Mat} Mat */
-/** @typedef {import('./scene.ts').Scene} Scene */
-/** @typedef {import('./scene.ts').Finding} Finding */
-/** @typedef {import('./timeline.ts').Cxform} Cxform */
-/** @typedef {import('./timeline.ts').BakedSprite} BakedSprite */
-/** @typedef {import('./png.ts').RgbaImage} RgbaImage */
+import type { Mat } from "./geometry.ts";
+import type { RgbaImage } from "./png.ts";
 
 export const SWF_VERSION = 17;
 export const FILE_ATTRIBUTES_AS3 = 0x00000008;
 export const DEFAULT_BACKGROUND = { r: 0xff, g: 0xcc, b: 0xff };
 
-/**
- * @typedef {Object} EmitOptions
- * @property {"none"|"stub"|Uint8Array} [abc]          DoABC: omit, Flash-faithful stub, or a caller-supplied ABC blob
- * @property {Map<string, RgbaImage>} [bitmaps]        decoded PNGs by scene bitmap id
- * @property {boolean} [exportAssets]                  also write an ExportAssets tag (vanilla files do not)
- */
+export type AbcOption = "none" | "stub" | Uint8Array;
 
-/**
- * @typedef {Object} EmitReport
- * @property {number} fileLength
- * @property {number} frameCount
- * @property {Array<{ id: number, kind: 'bitmap'|'shape'|'sprite', name: string }>} characters
- * @property {Array<{ id: number, name: string }>} exports
- * @property {Array<{ code: number, name: string, length: number }>} tags   top-level tags, body lengths
- * @property {"none"|"stub"|"blob"} abc
- */
+export interface EmitOptions {
+  /** DoABC: omit, Flash-faithful stub, or a caller-supplied ABC blob */
+  abc?: AbcOption;
+  /** decoded PNGs by scene bitmap id */
+  bitmaps?: Map<string, RgbaImage>;
+  /** also write an ExportAssets tag (vanilla files do not) */
+  exportAssets?: boolean;
+}
 
-/** @typedef {{ code: number, bytes: Uint8Array }} FramedTag */
+export interface EmitCharacter {
+  id: number;
+  kind: "bitmap" | "shape" | "sprite";
+  name: string;
+}
+export interface EmitExport {
+  id: number;
+  name: string;
+}
+export interface EmitTagInfo {
+  code: number;
+  name: string;
+  length: number;
+}
+
+export interface EmitReport {
+  fileLength: number;
+  frameCount: number;
+  characters: EmitCharacter[];
+  exports: EmitExport[];
+  /** top-level tags, body lengths */
+  tags: EmitTagInfo[];
+  abc: "none" | "stub" | "blob";
+}
+
+export interface EmitResult {
+  bytes: Uint8Array;
+  report: EmitReport;
+  findings: Finding[];
+}
+
+interface FramedTag {
+  code: number;
+  bytes: Uint8Array;
+}
+
+export interface PlaceObject2Fields {
+  move: boolean;
+  depth: number;
+  characterId?: number;
+  matrix?: Mat;
+  cxform?: Cxform | null;
+  name?: string | null;
+  clipDepth?: number | null;
+}
+
+export interface EncodedTimeline {
+  bytes: Uint8Array;
+  placeCount: number;
+  removeCount: number;
+  labelCount: number;
+}
 
 const EMPTY = new Uint8Array(0);
 
 /**
  * Emit a complete SWF for a validated scene.
- * @param {Scene} scene   output of `validateScene(...).scene` (defaults filled in)
- * @param {EmitOptions} [opts]
- * @returns {{ bytes: Uint8Array, report: EmitReport, findings: Finding[] }}
+ * @param scene output of `validateScene(...).scene` (defaults filled in)
  */
-export function emitSwf(scene, opts = {}) {
-  /** @type {Finding[]} */
-  const findings = [];
-  /** @type {FramedTag[]} */
-  const tags = [];
-  const push = (/** @type {number} */ code, /** @type {Uint8Array} */ body, /** @type {boolean} */ long = false) => {
+export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
+  const findings: Finding[] = [];
+  const tags: FramedTag[] = [];
+  const push = (code: number, body: Uint8Array, long = false) => {
     tags.push({ code, bytes: tag(code, body, long) });
   };
 
@@ -84,16 +122,13 @@ export function emitSwf(scene, opts = {}) {
 
   // --- library definitions
   const order = buildOrder(scene);
-  /** @type {Map<string, number>} */
-  const ids = new Map();
+  const ids = new Map<string, number>();
   order.forEach((id, i) => ids.set(id, i + 1));
-  /** @type {Map<string, number>} */
-  const bitmapIds = new Map();
-  /** @type {EmitReport['characters']} */
-  const characters = [];
+  const bitmapIds = new Map<string, number>();
+  const characters: EmitCharacter[] = [];
   const bitmaps = scene.bitmaps || {};
   for (const id of order) {
-    const cid = /** @type {number} */ (ids.get(id));
+    const cid = ids.get(id) as number;
     if (bitmaps[id]) {
       const img = opts.bitmaps ? opts.bitmaps.get(id) : undefined;
       if (!img) {
@@ -133,8 +168,7 @@ export function emitSwf(scene, opts = {}) {
   }
 
   // --- linkage
-  /** @type {EmitReport['exports']} */
-  const exports = [];
+  const exports: EmitExport[] = [];
   for (const [linkage, ref] of Object.entries(scene.exports || {})) {
     const cid = ids.get(ref);
     if (cid === undefined) {
@@ -147,9 +181,8 @@ export function emitSwf(scene, opts = {}) {
   const symbolBody = encodeSymbolList(exports);
   if (opts.exportAssets) push(TAG.ExportAssets, symbolBody);
 
-  const abcMode = opts.abc ?? "none";
-  /** @type {EmitReport['abc']} */
-  let abcKind = "none";
+  const abcMode: AbcOption = opts.abc ?? "none";
+  let abcKind: EmitReport["abc"] = "none";
   if (abcMode !== "none") {
     const abc = abcMode === "stub" ? buildLinkageAbc(exports.map((e) => e.name)) : abcMode;
     abcKind = abcMode === "stub" ? "stub" : "blob";
@@ -183,8 +216,7 @@ export function emitSwf(scene, opts = {}) {
   bytes[6] = (len >>> 16) & 0xff;
   bytes[7] = (len >>> 24) & 0xff;
 
-  /** @type {EmitReport} */
-  const report = {
+  const report: EmitReport = {
     fileLength: len,
     frameCount,
     characters,
@@ -195,17 +227,13 @@ export function emitSwf(scene, opts = {}) {
   return { bytes, report, findings };
 }
 
-/** @param {Uint8Array} framed */
-function bodyLength(framed) {
+function bodyLength(framed: Uint8Array): number {
   const header = framed[0] | (framed[1] << 8);
   return (header & 0x3f) === 0x3f ? framed.length - 6 : framed.length - 2;
 }
 
-/**
- * SymbolClass / ExportAssets body: u16 count, then (u16 id, STRING name)*.
- * @param {Array<{ id: number, name: string }>} entries
- */
-export function encodeSymbolList(entries) {
+/** SymbolClass / ExportAssets body: u16 count, then (u16 id, STRING name)*. */
+export function encodeSymbolList(entries: EmitExport[]): Uint8Array {
   const w = new BitWriter(16);
   w.u16(entries.length);
   for (const e of entries) {
@@ -217,10 +245,9 @@ export function encodeSymbolList(entries) {
 
 /**
  * PlaceObject2 tag.
- * @param {{ move: boolean, depth: number, characterId?: number, matrix?: Mat, cxform?: Cxform | null, name?: string | null, clipDepth?: number | null }} p
- * @returns {Uint8Array} framed tag
+ * @returns framed tag
  */
-export function encodePlaceObject2(p) {
+export function encodePlaceObject2(p: PlaceObject2Fields): Uint8Array {
   let flags = 0;
   if (p.move) flags |= 0x01;
   if (p.characterId !== undefined) flags |= 0x02;
@@ -239,15 +266,8 @@ export function encodePlaceObject2(p) {
   return tag(TAG.PlaceObject2, w.finish());
 }
 
-/**
- * One timeline frame-op → tag (null when the referenced character is unknown).
- * @param {import('./timeline.ts').FrameOp} op
- * @param {Map<string, number>} ids
- * @param {Finding[]} findings
- * @param {string} at
- * @returns {FramedTag | null}
- */
-function frameOpToTag(op, ids, findings, at) {
+/** One timeline frame-op → tag (null when the referenced character is unknown). */
+function frameOpToTag(op: FrameOp, ids: Map<string, number>, findings: Finding[], at: string): FramedTag | null {
   if (op.op === "remove") {
     const w = new BitWriter(2);
     w.u16(op.depth);
@@ -276,22 +296,13 @@ function frameOpToTag(op, ids, findings, at) {
   };
 }
 
-/**
- * Baked sprite → inner tag stream: per frame FrameLabel(s), diff ops, ShowFrame; then End.
- * @param {BakedSprite} baked
- * @param {Map<string, number>} ids
- * @param {Finding[]} findings
- * @param {string} at
- * @returns {{ bytes: Uint8Array, placeCount: number, removeCount: number, labelCount: number }}
- */
-export function encodeTimeline(baked, ids, findings, at) {
-  /** @type {Uint8Array[]} */
-  const chunks = [];
+/** Baked sprite → inner tag stream: per frame FrameLabel(s), diff ops, ShowFrame; then End. */
+export function encodeTimeline(baked: BakedSprite, ids: Map<string, number>, findings: Finding[], at: string): EncodedTimeline {
+  const chunks: Uint8Array[] = [];
   let placeCount = 0;
   let removeCount = 0;
   let labelCount = 0;
-  /** @type {import('./timeline.ts').Placement[]} */
-  let prev = [];
+  let prev: Placement[] = [];
   for (let f = 0; f < baked.frames; f++) {
     for (const label of baked.labels[f] || []) {
       const w = new BitWriter(16);
@@ -321,6 +332,13 @@ export function encodeTimeline(baked, ids, findings, at) {
  */
 export const ABILITY_ICON_DEPTH = 3;
 
+export interface GateSwfOptions {
+  withAbc: boolean;
+  linkage: string;
+  label: string;
+  layout?: "flat" | "nested" | "legacy";
+}
+
 /**
  * The SWF-gate fixture (docs/art-preview-plan.md §7, docs/swf-emitter-fix-spec.md §8): a 64×64 `gray:8` square
  * on a one-frame sprite labelled `label`, exported as `linkage`, with or without the stub ABC.
@@ -332,14 +350,11 @@ export const ABILITY_ICON_DEPTH = 3;
  *   alternative, kept as a gate variant;
  * - `"legacy"`: the shape at depth 1 — the pre-fix donor that crashed the game on 2026-10-18, kept so the gate
  *   can show the crash still reproduces (a negative control).
- * @param {{ withAbc: boolean, linkage: string, label: string, layout?: "flat" | "nested" | "legacy" }} o
- * @returns {Uint8Array}
  */
-export function minimalGateSwf(o) {
+export function minimalGateSwf(o: GateSwfOptions): Uint8Array {
   const nested = o.layout === "nested";
   const depth = o.layout === "legacy" ? 1 : ABILITY_ICON_DEPTH;
-  /** @type {Scene} */
-  const scene = {
+  const scene: Scene = {
     version: 1,
     name: "swf_gate",
     frameRate: 60,

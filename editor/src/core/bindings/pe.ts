@@ -4,46 +4,54 @@
 // Buffer, never writes, node built-ins only. Shared by the signature scanner
 // (scan.ts), the generator (siggen.ts), harvest/port and tools/bindings/*.
 
-/**
- * @typedef {{ name: string, va: number, vsize: number, raw: number, rawSize: number, chars: number, exec: boolean }} PeSection
- * @typedef {{ begin: number, end: number, unwind: number }} RuntimeFunction
- * @typedef {{ rva: number, size: number }} DataDirectory
- * @typedef {{
- *   machine: number,
- *   timeDateStamp: number,
- *   sizeOfImage: number,
- *   sizeOfHeaders: number,
- *   imageBase: number,
- *   sectionAlignment: number,
- *   fileAlignment: number,
- *   sections: PeSection[],
- *   execSections: PeSection[],
- *   dataDirectories: DataDirectory[],
- *   rvaToOff: (rva: number) => number,
- *   offToRva: (off: number) => number,
- *   sectionOf: (rva: number) => PeSection|null,
- *   pdata: { count: number, get: (i: number) => RuntimeFunction, find: (rva: number) => RuntimeFunction|null },
- * }} Pe
- */
+export interface PeSection {
+  name: string;
+  va: number;
+  vsize: number;
+  raw: number;
+  rawSize: number;
+  chars: number;
+  exec: boolean;
+}
+export interface RuntimeFunction {
+  begin: number;
+  end: number;
+  unwind: number;
+}
+export interface DataDirectory {
+  rva: number;
+  size: number;
+}
+export interface Pe {
+  machine: number;
+  timeDateStamp: number;
+  sizeOfImage: number;
+  sizeOfHeaders: number;
+  imageBase: number;
+  sectionAlignment: number;
+  fileAlignment: number;
+  sections: PeSection[];
+  execSections: PeSection[];
+  dataDirectories: DataDirectory[];
+  rvaToOff: (rva: number) => number;
+  offToRva: (off: number) => number;
+  sectionOf: (rva: number) => PeSection | null;
+  pdata: { count: number; get: (i: number) => RuntimeFunction; find: (rva: number) => RuntimeFunction | null };
+}
 
 export const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 export const IMAGE_DIRECTORY_ENTRY_EXCEPTION = 3;
 export const RUNTIME_FUNCTION_SIZE = 12;
 
 export class PeError extends Error {
-  /** @param {string} message */
-  constructor(message) {
+  constructor(message: string) {
     super(message);
     this.name = "PeError";
   }
 }
 
-/**
- * Parse a PE32+ image from its on-disk bytes.
- * @param {Buffer} buf
- * @returns {Pe}
- */
-export function parsePe(buf) {
+/** Parse a PE32+ image from its on-disk bytes. */
+export function parsePe(buf: Buffer): Pe {
   if (buf.length < 0x40 || buf.readUInt16LE(0) !== 0x5a4d) throw new PeError("not a PE file (no MZ header)");
   const pe = buf.readUInt32LE(0x3c);
   if (pe + 24 > buf.length || buf.readUInt32LE(pe) !== 0x00004550) throw new PeError("not a PE file (no PE signature)");
@@ -60,16 +68,14 @@ export function parsePe(buf) {
   const sizeOfImage = buf.readUInt32LE(opt + 56);
   const sizeOfHeaders = buf.readUInt32LE(opt + 60);
   const numDirs = buf.readUInt32LE(opt + 108);
-  /** @type {DataDirectory[]} */
-  const dataDirectories = [];
+  const dataDirectories: DataDirectory[] = [];
   for (let i = 0; i < numDirs; i++) {
     const o = opt + 112 + i * 8;
     if (o + 8 > buf.length) break;
     dataDirectories.push({ rva: buf.readUInt32LE(o), size: buf.readUInt32LE(o + 4) });
   }
 
-  /** @type {PeSection[]} */
-  const sections = [];
+  const sections: PeSection[] = [];
   const secTab = opt + optSize;
   for (let i = 0; i < nsec; i++) {
     const o = secTab + i * 40;
@@ -87,20 +93,17 @@ export function parsePe(buf) {
   }
   const execSections = sections.filter((s) => s.exec);
 
-  /** @param {number} rva */
-  const sectionOf = (rva) => {
+  const sectionOf = (rva: number): PeSection | null => {
     for (const s of sections) if (rva >= s.va && rva < s.va + Math.max(s.vsize, s.rawSize)) return s;
     return null;
   };
-  /** @param {number} rva */
-  const rvaToOff = (rva) => {
+  const rvaToOff = (rva: number): number => {
     const s = sectionOf(rva);
     if (!s) return -1;
     const d = rva - s.va;
     return d < s.rawSize ? s.raw + d : -1; // beyond the raw data there is no file byte (zero fill in memory)
   };
-  /** @param {number} off */
-  const offToRva = (off) => {
+  const offToRva = (off: number): number => {
     for (const s of sections) if (s.rawSize > 0 && off >= s.raw && off < s.raw + s.rawSize) return s.va + (off - s.raw);
     return -1;
   };
@@ -109,15 +112,13 @@ export function parsePe(buf) {
   // sorted by BeginAddress (PE spec), so a binary search finds the entry containing an RVA.
   const exc = dataDirectories[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
   const excOff = exc && exc.size >= RUNTIME_FUNCTION_SIZE ? rvaToOff(exc.rva) : -1;
-  const count = excOff >= 0 ? Math.min(Math.floor(exc.size / RUNTIME_FUNCTION_SIZE), Math.floor((buf.length - excOff) / RUNTIME_FUNCTION_SIZE)) : 0;
-  /** @param {number} i @returns {RuntimeFunction} */
-  const get = (i) => {
+  const count = excOff >= 0 && exc ? Math.min(Math.floor(exc.size / RUNTIME_FUNCTION_SIZE), Math.floor((buf.length - excOff) / RUNTIME_FUNCTION_SIZE)) : 0;
+  const get = (i: number): RuntimeFunction => {
     if (i < 0 || i >= count) throw new PeError(`pdata index ${i} out of range (count ${count})`);
     const o = excOff + i * RUNTIME_FUNCTION_SIZE;
     return { begin: buf.readUInt32LE(o), end: buf.readUInt32LE(o + 4), unwind: buf.readUInt32LE(o + 8) };
   };
-  /** @param {number} rva @returns {RuntimeFunction|null} */
-  const find = (rva) => {
+  const find = (rva: number): RuntimeFunction | null => {
     let lo = 0;
     let hi = count - 1;
     while (lo <= hi) {
@@ -141,11 +142,8 @@ export function parsePe(buf) {
  * The bytes of a section as the loader sees them: raw data, zero-padded to VirtualSize when
  * VirtualSize is larger. The DLL scans Misc.VirtualSize in memory while the old TSV tool scanned
  * the raw size on disk; this is the single definition both sides now use.
- * @param {Buffer} buf
- * @param {PeSection} s
- * @returns {Buffer}
  */
-export function sectionBytes(buf, s) {
+export function sectionBytes(buf: Buffer, s: PeSection): Buffer {
   const raw = buf.subarray(s.raw, Math.min(buf.length, s.raw + s.rawSize));
   if (s.vsize <= raw.length) return raw.subarray(0, s.vsize);
   const out = Buffer.alloc(s.vsize);

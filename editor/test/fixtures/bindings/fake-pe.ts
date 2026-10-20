@@ -11,39 +11,56 @@ const PE_OFFSET = 0x40;
 const OPT_SIZE = 240; // PE32+ optional header with 16 data directories
 const IMAGE_BASE = 0x140000000;
 
-/**
- * @typedef {{ name: string, bytes: Uint8Array|number[], exec?: boolean, write?: boolean }} FakeSectionSpec
- * @typedef {{ section?: string, begin: number, end: number }} FakePdataSpec  begin/end relative to the named section, or absolute RVAs when omitted
- * @typedef {{ timeDateStamp?: number, imageBase?: number, sections: FakeSectionSpec[], pdata?: FakePdataSpec[] }} FakePeSpec
- * @typedef {{ name: string, va: number, vsize: number, raw: number, rawSize: number, chars: number }} FakeSection
- * @typedef {{ buf: Buffer, sections: FakeSection[], rva: (name: string, off: number) => number, off: (name: string, off: number) => number }} FakePe
- */
+export interface FakeSectionSpec {
+  name: string;
+  bytes: Uint8Array | number[];
+  exec?: boolean;
+  write?: boolean;
+}
+/** begin/end relative to the named section, or absolute RVAs when omitted */
+export interface FakePdataSpec {
+  section?: string;
+  begin: number;
+  end: number;
+}
+export interface FakePeSpec {
+  timeDateStamp?: number;
+  imageBase?: number;
+  sections: FakeSectionSpec[];
+  pdata?: FakePdataSpec[];
+}
+export interface FakeSection {
+  name: string;
+  va: number;
+  vsize: number;
+  raw: number;
+  rawSize: number;
+  chars: number;
+}
+export interface FakePe {
+  buf: Buffer;
+  sections: FakeSection[];
+  rva: (name: string, off: number) => number;
+  off: (name: string, off: number) => number;
+}
 
-/** @param {number} n @param {number} a */
-const align = (n, a) => Math.ceil(n / a) * a;
+const align = (n: number, a: number): number => Math.ceil(n / a) * a;
 
-/**
- * @param {FakePeSpec} spec
- * @returns {FakePe}
- */
-export function buildFakePe(spec) {
+export function buildFakePe(spec: FakePeSpec): FakePe {
   const timeDateStamp = spec.timeDateStamp ?? 0x11111111;
   const imageBase = spec.imageBase ?? IMAGE_BASE;
 
-  /** @type {{ name: string, bytes: Buffer, chars: number }[]} */
-  const inputs = spec.sections.map((s) => ({
+  const inputs: { name: string; bytes: Buffer; chars: number }[] = spec.sections.map((s) => ({
     name: s.name,
     bytes: Buffer.from(s.bytes),
     chars: ((s.exec ? 0x60000020 : 0x40000040) | (s.write ? 0x80000000 : 0)) >>> 0,
   }));
 
-  /** @type {FakeSection[]} */
-  const sections = [];
+  const sections: FakeSection[] = [];
   let va = SECTION_ALIGN;
   let raw = HEADERS_SIZE;
-  /** @param {string} name @param {number} size @param {number} chars */
-  const place = (name, size, chars) => {
-    const s = { name, va, vsize: size, raw, rawSize: align(size, FILE_ALIGN), chars };
+  const place = (name: string, size: number, chars: number): FakeSection => {
+    const s: FakeSection = { name, va, vsize: size, raw, rawSize: align(size, FILE_ALIGN), chars };
     sections.push(s);
     va = align(va + Math.max(size, 1), SECTION_ALIGN);
     raw += s.rawSize;
@@ -51,15 +68,13 @@ export function buildFakePe(spec) {
   };
   for (const s of inputs) place(s.name, s.bytes.length, s.chars);
 
-  /** @param {string} name */
-  const byName = (name) => {
+  const byName = (name: string): FakeSection => {
     const s = sections.find((x) => x.name === name);
     if (!s) throw new Error(`fake PE: no section ${name}`);
     return s;
   };
 
-  /** @type {Buffer|null} */
-  let pdataBytes = null;
+  let pdataBytes: Buffer | null = null;
   if (spec.pdata && spec.pdata.length) {
     const entries = spec.pdata
       .map((e) => {

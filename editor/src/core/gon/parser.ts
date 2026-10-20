@@ -12,42 +12,27 @@
 
 import { tokenize } from "./tokenizer.ts";
 
-/** @typedef {import('./types.ts').Token} Token */
-/** @typedef {import('./types.ts').Node} Node */
-/** @typedef {import('./types.ts').ObjectNode} ObjectNode */
-/** @typedef {import('./types.ts').ArrayNode} ArrayNode */
-/** @typedef {import('./types.ts').ScalarNode} ScalarNode */
-/** @typedef {import('./types.ts').Field} Field */
+import type { Token, Node, ObjectNode, ArrayNode, Field, Pos } from "./types.ts";
 
 export class GonParseError extends Error {
-  /**
-   * @param {string} message
-   * @param {import('./types.ts').Pos} [pos]
-   */
-  constructor(message, pos) {
+  pos: Pos | undefined;
+  constructor(message: string, pos?: Pos) {
     super(pos ? `${message} (line ${pos.line}, col ${pos.col})` : message);
     this.name = "GonParseError";
     this.pos = pos;
   }
 }
 
-/**
- * Parse GON source into a root ObjectNode.
- * @param {string} src
- * @returns {ObjectNode}
- */
-export function parse(src) {
+/** Parse GON source into a root ObjectNode. */
+export function parse(src: string): ObjectNode {
   const tokens = tokenize(src);
   let p = 0;
 
-  const peek = () => tokens[p];
-  const next = () => tokens[p++];
+  const peek = (): Token => tokens[p]!;
+  const next = (): Token => tokens[p++]!;
 
-  /**
-   * Parse a value node. The current token is the first token of the value.
-   * @returns {Node}
-   */
-  function parseValue() {
+  /** Parse a value node. The current token is the first token of the value. */
+  function parseValue(): Node {
     const t = peek();
     if (t.type === "lbrace") return parseObject(next());
     if (t.type === "lbracket") return parseArray(next());
@@ -61,13 +46,9 @@ export function parse(src) {
     );
   }
 
-  /**
-   * @param {Token} open  the already-consumed '{'
-   * @returns {ObjectNode}
-   */
-  function parseObject(open) {
-    /** @type {Field[]} */
-    const fields = [];
+  /** @param open the already-consumed '{' */
+  function parseObject(open: Token): ObjectNode {
+    const fields: Field[] = [];
     for (;;) {
       const t = peek();
       if (t.type === "rbrace") {
@@ -84,13 +65,9 @@ export function parse(src) {
     }
   }
 
-  /**
-   * @param {Token} open  the already-consumed '['
-   * @returns {ArrayNode}
-   */
-  function parseArray(open) {
-    /** @type {Node[]} */
-    const items = [];
+  /** @param open the already-consumed '[' */
+  function parseArray(open: Token): ArrayNode {
+    const items: Node[] = [];
     for (;;) {
       const t = peek();
       if (t.type === "rbracket") {
@@ -104,8 +81,7 @@ export function parse(src) {
   }
 
   // Root: read top-level fields until EOF (synthetic wrapping object).
-  /** @type {Field[]} */
-  const fields = [];
+  const fields: Field[] = [];
   for (;;) {
     const t = peek();
     if (t.type === "eof") {
@@ -124,19 +100,15 @@ export function parse(src) {
 
 /**
  * Serialize an AST back to source. For an unmodified tree this is byte-exact.
- * @param {Node} node  usually the root ObjectNode
- * @returns {string}
+ * @param node usually the root ObjectNode
  */
-export function serialize(node) {
-  /** @type {string[]} */
-  const out = [];
-  /** @param {Token} tok */
-  const emit = (tok) => {
+export function serialize(node: Node): string {
+  const out: string[] = [];
+  const emit = (tok: Token): void => {
     out.push(tok.leading);
     out.push(tok.text);
   };
-  /** @param {Node} nd */
-  function walk(nd) {
+  function walk(nd: Node): void {
     if (nd.kind === "scalar") {
       emit(nd.token);
       return;

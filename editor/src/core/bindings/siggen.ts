@@ -10,18 +10,26 @@
 // Pure; node built-ins only.
 
 import { scanExec, patternToString } from "./scan.ts";
+import type { Pattern } from "./scan.ts";
+import type { Pe } from "./pe.ts";
 
-/** @typedef {{ at: number, len: number, why: string }} Reloc  byte range (relative to the decoded buffer) to wildcard */
+/** byte range (relative to the decoded buffer) to wildcard */
+export interface Reloc {
+  at: number;
+  len: number;
+  why: string;
+}
+export type InstructionKind = "call" | "jmp" | "jcc" | "ret" | "lea" | "mov" | "movabs" | "other";
 /**
  * One decoded instruction. `relTarget` is the signed rel32 / rip disp32 when present:
  * absolute target = instruction rva + length + relTarget.
- * @typedef {{
- *   length: number,
- *   kind: "call"|"jmp"|"jcc"|"ret"|"lea"|"mov"|"movabs"|"other",
- *   reloc: Reloc|null,
- *   relTarget: number|null,
- * }} Instruction
  */
+export interface Instruction {
+  length: number;
+  kind: InstructionKind;
+  reloc: Reloc | null;
+  relTarget: number | null;
+}
 
 const PREFIXES = new Set([0x66, 0x67, 0xf2, 0xf3, 0xf0, 0x2e, 0x3e, 0x26, 0x36, 0x64, 0x65]);
 
@@ -57,12 +65,17 @@ const MODRM_0F = new Set([
 const MODRM_IMM8_0F = new Set([0x70, 0x71, 0x72, 0x73, 0xba, 0xc2, 0xc4, 0xc5, 0xc6]);
 const PLAIN_0F = new Set([0x05, 0x0b, 0x31, 0xa2, 0x1e]);
 
+interface ModRm {
+  len: number;
+  ripAt: number;
+  reg: number;
+}
+
 /**
  * Decode a ModRM (+SIB, +disp) at index i. Returns the operand byte count and, for a
  * rip-relative operand (mod 00, rm 101), the index of its disp32.
- * @param {Uint8Array} b @param {number} i
  */
-function modrm(b, i) {
+function modrm(b: Uint8Array, i: number): ModRm | null {
   if (i >= b.length) return null;
   const m = b[i];
   const mod = m >> 6;
@@ -85,8 +98,8 @@ function modrm(b, i) {
   return { len, ripAt, reg: (m >> 3) & 7 };
 }
 
-/** @param {Uint8Array} b @param {number} i signed little-endian int32 at i, or null when truncated */
-function i32(b, i) {
+/** signed little-endian int32 at i, or null when truncated */
+function i32(b: Uint8Array, i: number): number | null {
   if (i + 4 > b.length) return null;
   return (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) | 0;
 }
@@ -94,11 +107,8 @@ function i32(b, i) {
 /**
  * Decode one instruction at index i. Returns null for an opcode the decoder does not know (or a
  * truncated instruction); callers decide whether to stop or resync.
- * @param {Uint8Array} bytes
- * @param {number} start
- * @returns {Instruction|null}
  */
-export function decodeInstruction(bytes, start) {
+export function decodeInstruction(bytes: Uint8Array, start: number): Instruction | null {
   const n = bytes.length;
   let i = start;
   let rexW = false;
@@ -106,12 +116,10 @@ export function decodeInstruction(bytes, start) {
   if (i < n && bytes[i] >= 0x40 && bytes[i] <= 0x4f) { rexW = (bytes[i] & 8) !== 0; i++; }
   if (i >= n) return null;
   const op = bytes[i++];
-  /** @param {number} end @param {Instruction["kind"]} kind @param {Reloc|null} reloc @param {number|null} rel */
-  const done = (end, kind, reloc = null, rel = null) => (end <= n ? { length: end - start, kind, reloc, relTarget: rel } : null);
-  /** @param {number} at @param {string} why @param {Instruction["kind"]} kind */
-  const withRel32 = (at, why, kind) => done(at + 4, kind, { at, len: 4, why }, i32(bytes, at));
-  /** @param {number} after @param {ReturnType<typeof modrm>} m @param {Instruction["kind"]} kind */
-  const withModrm = (after, m, kind) => {
+  const done = (end: number, kind: InstructionKind, reloc: Reloc | null = null, rel: number | null = null): Instruction | null =>
+    end <= n ? { length: end - start, kind, reloc, relTarget: rel } : null;
+  const withRel32 = (at: number, why: string, kind: InstructionKind) => done(at + 4, kind, { at, len: 4, why }, i32(bytes, at));
+  const withModrm = (after: number, m: ModRm | null, kind: InstructionKind): Instruction | null => {
     if (!m) return null;
     const end = after + m.len;
     if (m.ripAt >= 0) return done(end, kind, { at: m.ripAt, len: 4, why: "rip-relative disp32" }, i32(bytes, m.ripAt));
@@ -150,8 +158,7 @@ export function decodeInstruction(bytes, start) {
   if (MODRM.has(op) || MODRM_IMM8.has(op) || MODRM_IMM32.has(op) || op === 0xf6 || op === 0xf7) {
     const m = modrm(bytes, i);
     if (!m) return null;
-    /** @type {Instruction["kind"]} */
-    let kind = op === 0x8d ? "lea" : op === 0x8b || op === 0x89 ? "mov" : op === 0xff && m.reg === 2 ? "call" : op === 0xff && m.reg === 4 ? "jmp" : "other";
+    const kind: InstructionKind = op === 0x8d ? "lea" : op === 0x8b || op === 0x89 ? "mov" : op === 0xff && m.reg === 2 ? "call" : op === 0xff && m.reg === 4 ? "jmp" : "other";
     const r = withModrm(i, m, kind);
     if (!r) return null;
     let extra = 0;
@@ -164,14 +171,9 @@ export function decodeInstruction(bytes, start) {
   return null;
 }
 
-/**
- * Relocation byte ranges from the start of `bytes` up to the first unknown opcode.
- * @param {Uint8Array} bytes
- * @returns {Reloc[]}
- */
-export function decodeRelocs(bytes) {
-  /** @type {Reloc[]} */
-  const out = [];
+/** Relocation byte ranges from the start of `bytes` up to the first unknown opcode. */
+export function decodeRelocs(bytes: Uint8Array): Reloc[] {
+  const out: Reloc[] = [];
   let i = 0;
   while (i < bytes.length) {
     const ins = decodeInstruction(bytes, i);
@@ -182,23 +184,28 @@ export function decodeRelocs(bytes) {
   return out;
 }
 
-/**
- * @typedef {{ pattern: string, exactLen: number, offset: number, wildcards: Reloc[] }} GeneratedSignature
- * @typedef {{ ok: true, signature: GeneratedSignature }|{ ok: false, reason: string }} SignatureResult
- */
+export interface GeneratedSignature {
+  pattern: string;
+  exactLen: number;
+  offset: number;
+  wildcards: Reloc[];
+}
+export type SignatureResult = { ok: true; signature: GeneratedSignature } | { ok: false; reason: string };
+
+export interface MakeSignatureOptions {
+  minLen?: number;
+  cap?: number;
+  maxOffset?: number;
+  step?: number;
+}
 
 /**
  * Find the shortest masked prefix (>= minLen, <= cap bytes, never ending in a wildcard) that
  * matches exactly once in the executable sections at `rva`. When no prefix from the function
  * start works, later starts (every `step` bytes up to `maxOffset`) are tried and the signature
  * carries a negative `offset` so that hit + offset == rva (SymbolSig.offset in the DLL).
- * @param {import("./pe.ts").Pe} pe
- * @param {Buffer} buf
- * @param {number} rva
- * @param {{ minLen?: number, cap?: number, maxOffset?: number, step?: number }} [opts]
- * @returns {SignatureResult}
  */
-export function makeSignature(pe, buf, rva, opts = {}) {
+export function makeSignature(pe: Pe, buf: Buffer, rva: number, opts: MakeSignatureOptions = {}): SignatureResult {
   const minLen = opts.minLen ?? 12;
   const cap = opts.cap ?? 128;
   const maxOffset = opts.maxOffset ?? 512;
@@ -218,7 +225,7 @@ export function makeSignature(pe, buf, rva, opts = {}) {
     for (const r of relocs) for (let k = r.at; k < r.at + r.len && k < avail; k++) mask[k] = 0;
     for (let len = minLen; len <= avail; len++) {
       if (!mask[len - 1]) continue;
-      const pat = { bytes: bytes.subarray(0, len), mask: mask.subarray(0, len), length: len };
+      const pat: Pattern = { bytes: bytes.subarray(0, len), mask: mask.subarray(0, len), length: len };
       const res = scanExec(pe, buf, pat);
       if (res.count === 1 && res.hits[0] === at) {
         const wildcards = relocs.filter((r) => r.at < len).map((r) => ({ at: r.at, len: Math.min(r.len, len - r.at), why: r.why }));

@@ -11,31 +11,46 @@ import { parseCsv, serializeCsv } from "./overlay/csv.ts";
 import { LOC_COLUMNS } from "./base-data.ts";
 import { writeOverlay } from "./mod-io.ts";
 
-/** @typedef {'ability'|'passive'|'item'|'status-data'} TemplateKind */
+export type TemplateKind = "ability" | "passive" | "item" | "status-data";
 
-const LOC_PREFIX = { ability: "ABILITY", passive: "PASSIVE", item: "ITEM", "status-data": "KEYWORD" };
-const DEFAULT_GON_FILE = {
+/** Scaffold knobs; every field is optional and comes from untyped JSON (MCP args / HTTP body). */
+export interface TemplateOptions {
+  displayName?: string;
+  desc?: string;
+  parent?: string;
+  mana?: number | string;
+  damage?: number | string;
+  statusEffect?: string;
+  statusStacks?: number | string;
+  class?: string;
+  component?: string;
+  rarity?: string;
+  kind?: string;
+  frame?: number | string;
+  gonFile?: string;
+  fillTranslations?: boolean;
+  write?: boolean;
+  dryRun?: boolean;
+}
+
+const LOC_PREFIX: Record<TemplateKind, string> = { ability: "ABILITY", passive: "PASSIVE", item: "ITEM", "status-data": "KEYWORD" };
+const DEFAULT_GON_FILE: Record<TemplateKind, string> = {
   ability: "data/abilities/mod_abilities.gon.append",
   passive: "data/passives/mod_passives.gon.append",
   item: "data/items/mod_items.gon.append",
   "status-data": "data/keyword_tooltips.gon.append",
 };
 
-/** @param {string} s */
-function toKeyToken(s) {
+function toKeyToken(s: string): string {
   return s.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
 }
 
 /**
  * Build a 12-column localization row. Translations default to the English text
  * as a placeholder so a fresh scaffold validates cleanly; `notes` flags it.
- * @param {string} key
- * @param {string} en
- * @param {boolean} fillTranslations
- * @returns {string[]}
  */
-function locRow(key, en, fillTranslations) {
-  const row = new Array(LOC_COLUMNS.length).fill("");
+function locRow(key: string, en: string, fillTranslations: boolean): string[] {
+  const row: string[] = new Array<string>(LOC_COLUMNS.length).fill("");
   row[0] = key;
   row[1] = en;
   row[2] = "scaffolded by editor; TODO translate";
@@ -43,13 +58,7 @@ function locRow(key, en, fillTranslations) {
   return row;
 }
 
-/**
- * @param {TemplateKind} kind
- * @param {string} name
- * @param {Record<string, any>} o
- * @returns {string}
- */
-function scaffoldGon(kind, name, o) {
+function scaffoldGon(kind: TemplateKind, name: string, o: TemplateOptions): string {
   const base = `${LOC_PREFIX[kind]}_${toKeyToken(name)}`;
   if (kind === "ability") {
     const parent = o.parent || "Spin";
@@ -117,12 +126,8 @@ function scaffoldGon(kind, name, o) {
 `;
 }
 
-/**
- * Does a GON append file already define a top-level entry `name`?
- * @param {string} abs
- * @param {string} name
- */
-function entryExists(abs, name) {
+/** Does a GON append file already define a top-level entry `name`? */
+function entryExists(abs: string, name: string): boolean {
   if (!existsSync(abs)) return false;
   try {
     const root = toValue(parse(readFileSync(abs, "utf8")));
@@ -132,14 +137,22 @@ function entryExists(abs, name) {
   }
 }
 
+export interface TemplatePlanFile {
+  relPath: string;
+  content: string;
+}
+
+export type TemplateResult =
+  | { ok: false; error: string; partial?: string[] }
+  | { ok: true; dryRun: true; kind: TemplateKind; name: string; files: TemplatePlanFile[]; localizationKeys: string[] }
+  | { ok: true; kind: TemplateKind; name: string; written: string[]; localizationKeys: string[] };
+
 /**
  * Scaffold a new content entry and its localization rows.
- * @param {string} modName
- * @param {TemplateKind} kind
- * @param {string} name                      the new entry's GON key (e.g. "MyCoolSpin")
- * @param {Record<string, any>} [options]    displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations, write, dryRun
+ * @param name the new entry's GON key (e.g. "MyCoolSpin")
+ * @param options displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations, write, dryRun
  */
-export function newFromTemplate(modName, kind, name, options = {}) {
+export function newFromTemplate(modName: string, kind: TemplateKind, name: string, options: TemplateOptions = {}): TemplateResult {
   if (!LOC_PREFIX[kind]) return { ok: false, error: `unknown template kind: ${kind}` };
   if (!name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     return { ok: false, error: `invalid entry name: ${JSON.stringify(name)} (letters, digits, underscore; not starting with a digit)` };
@@ -157,7 +170,7 @@ export function newFromTemplate(modName, kind, name, options = {}) {
   const entryGon = scaffoldGon(kind, name, options);
 
   // Compose the new GON append file text (append the entry if the file exists).
-  let gonText;
+  let gonText: string;
   if (existsSync(gonAbs)) {
     const prev = readFileSync(gonAbs, "utf8").replace(/\s*$/, "");
     gonText = prev + "\n\n" + entryGon;
@@ -170,8 +183,7 @@ export function newFromTemplate(modName, kind, name, options = {}) {
   const csvAbs = join(MODS_DIR, modName, csvRel);
   const existingRows = existsSync(csvAbs) ? parseCsv(readFileSync(csvAbs, "utf8")) : [];
   const existingKeys = new Set(existingRows.map((r) => r[0]));
-  /** @type {string[][]} */
-  const newRows = [];
+  const newRows: string[][] = [];
   const nameKey = `${base}_NAME`;
   const descKey = `${base}_DESC`;
   if (!existingKeys.has(nameKey)) newRows.push(locRow(nameKey, displayName, fill));
@@ -185,7 +197,7 @@ export function newFromTemplate(modName, kind, name, options = {}) {
     files: [
       { relPath: gonRel, content: gonText },
       { relPath: csvRel, content: csvText },
-    ],
+    ] as TemplatePlanFile[],
     localizationKeys: [nameKey, descKey],
   };
 
@@ -193,7 +205,7 @@ export function newFromTemplate(modName, kind, name, options = {}) {
     return { ok: true, dryRun: true, ...plan };
   }
 
-  const written = [];
+  const written: string[] = [];
   for (const f of plan.files) {
     const r = writeOverlay(modName, f.relPath, f.content);
     if (!r.ok) return { ok: false, error: r.error, partial: written };

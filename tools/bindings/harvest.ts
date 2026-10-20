@@ -27,8 +27,7 @@ if (parseInt(m.build.timeDateStamp, 16) !== pe.timeDateStamp || parseInt(m.build
   process.exit(1);
 }
 const { manifest, report, changed } = harvestManifest(pe, buf, m);
-/** @type {Record<string, number>} */
-const counts = {};
+const counts: Record<string, number> = {};
 for (const r of report) {
   counts[r.status] = (counts[r.status] || 0) + 1;
   if (all || r.status === "mismatch" || r.status === "unresolved") console.log(`  ${r.status.padEnd(10)} ${r.name.padEnd(34)} ${r.detail}`);

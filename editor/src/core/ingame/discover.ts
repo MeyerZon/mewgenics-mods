@@ -3,24 +3,25 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
 import { MODS_DIR } from "../repo.ts";
-import { parseScript } from "./script.ts";
+import { parseScript, type Plan } from "./script.ts";
 
 export const TESTS_DIR = "tests";
 export const SCRIPT_EXT = ".mewtest";
 
-/**
- * @typedef {{ mod: string, name: string, relPath: string, absPath: string, plan: import("./script.ts").Plan }} IngameTestEntry
- */
+export interface IngameTestEntry {
+  mod: string;
+  name: string;
+  relPath: string;
+  absPath: string;
+  plan: Plan;
+}
 
 /**
- * @param {string} [modName] restrict to one mod folder
- * @param {{ modsDir?: string }} [opts]
- * @returns {{ tests: IngameTestEntry[] }}
+ * @param modName restrict to one mod folder
  */
-export function listIngameTests(modName, opts = {}) {
+export function listIngameTests(modName?: string, opts: { modsDir?: string } = {}): { tests: IngameTestEntry[] } {
   const modsDir = opts.modsDir || MODS_DIR;
-  /** @type {IngameTestEntry[]} */
-  const tests = [];
+  const tests: IngameTestEntry[] = [];
   if (!existsSync(modsDir)) return { tests };
   const mods = modName ? [modName] : readdirSync(modsDir).filter((m) => safeIsDir(join(modsDir, m))).sort();
   for (const mod of mods) {
@@ -37,8 +38,7 @@ export function listIngameTests(modName, opts = {}) {
   return { tests };
 }
 
-/** @param {string} p */
-function safeIsDir(p) {
+function safeIsDir(p: string): boolean {
   try {
     return statSync(p).isDirectory();
   } catch {

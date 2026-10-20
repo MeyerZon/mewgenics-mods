@@ -7,16 +7,17 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { REPO_ROOT } from "../src/core/repo.ts";
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const GPAK_PY = join(REPO_ROOT, "tools", "gpak.py");
 
-/**
- * @param {{ path: string, body: Buffer }[]} entries
- * @returns {{ buf: Buffer, offsets: number[], indexSize: number }}
- */
-function buildGpak(entries) {
-  /** @type {Buffer[]} */
-  const parts = [];
+interface GpakEntry {
+  path: string;
+  body: Buffer;
+}
+
+function buildGpak(entries: GpakEntry[]): { buf: Buffer; offsets: number[]; indexSize: number } {
+  const parts: Buffer[] = [];
   const head = Buffer.alloc(4);
   head.writeUInt32LE(entries.length, 0);
   parts.push(head);
@@ -31,39 +32,28 @@ function buildGpak(entries) {
     indexSize += rec.length;
   }
   for (const e of entries) parts.push(e.body);
-  /** @type {number[]} */
-  const offsets = [];
+  const offsets: number[] = [];
   let off = indexSize;
   for (const e of entries) { offsets.push(off); off += e.body.length; }
   return { buf: Buffer.concat(parts), offsets, indexSize };
 }
 
-/** @returns {string[]|null} the interpreter argv prefix, or null when no Python 3 answers */
-function findPython() {
-  /** @type {string[][]} */
-  const probes = [["python"], ["python3"], ["py", "-3"]];
+/** The interpreter argv prefix, or null when no Python 3 answers. */
+function findPython(): string[] | null {
+  const probes: string[][] = [["python"], ["python3"], ["py", "-3"]];
   for (const p of probes) {
-    const r = spawnSync(p[0], [...p.slice(1), "-I", "-c", "import sys; print(sys.version_info[0])"], { encoding: "utf8" });
+    const r = spawnSync(p[0]!, [...p.slice(1), "-I", "-c", "import sys; print(sys.version_info[0])"], { encoding: "utf8" });
     if (r.status === 0 && r.stdout.trim() === "3") return p;
   }
   return null;
 }
 
-/**
- * @param {string[]} py @param {string} gpak @param {string[]} args
- * @returns {{ status: number|null, stdout: Buffer, stderr: string }}
- */
-function gpak(py, gpak, args) {
-  const r = spawnSync(py[0], [...py.slice(1), "-I", GPAK_PY, "--gpak", gpak, ...args], { encoding: "buffer", timeout: 60000 });
+function gpak(py: string[], gpak: string, args: string[]): { status: number | null; stdout: Buffer; stderr: string } {
+  const r = spawnSync(py[0]!, [...py.slice(1), "-I", GPAK_PY, "--gpak", gpak, ...args], { encoding: "buffer", timeout: 60000 });
   return { status: r.status, stdout: r.stdout || Buffer.alloc(0), stderr: (r.stderr || Buffer.alloc(0)).toString("utf8") };
 }
 
-/**
- * @param {(name: string, fn: () => void) => void} test
- * @param {(cond: boolean, msg: string) => void} assert
- * @param {(a: unknown, b: unknown, msg?: string) => void} eq
- */
-export async function runGpakTests(test, assert, eq) {
+export async function runGpakTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
   console.log("\n# tools/gpak.py (synthetic archive, read-only; python -I)");
   const py = findPython();
   if (!py) {
@@ -72,7 +62,7 @@ export async function runGpakTests(test, assert, eq) {
   }
   const dir = mkdtempSync(join(tmpdir(), "mewged-gpak-"));
   const allBytes = Buffer.from(Array.from({ length: 256 }, (_, i) => i));
-  const entries = [
+  const entries: GpakEntry[] = [
     { path: "data/abilities/a.gon", body: Buffer.from("A { x 1 }\n", "utf8") },
     { path: "data/text/combined.csv", body: Buffer.from("k,v\r\n", "utf8") },
     { path: "swfs/icons.swf", body: allBytes },
@@ -109,7 +99,7 @@ export async function runGpakTests(test, assert, eq) {
     const out = join(dir, "out");
     const r = gpak(py, fixture, ["extract", out, "--prefix", "data/"]);
     eq(r.status, 0, r.stderr);
-    eq(r.stdout.toString("utf8").trim(), `extracted 2 entries, ${entries[0].body.length + entries[1].body.length} bytes, to ${out}`);
+    eq(r.stdout.toString("utf8").trim(), `extracted 2 entries, ${entries[0]!.body.length + entries[1]!.body.length} bytes, to ${out}`);
     eq(readFileSync(join(out, "data", "abilities", "a.gon"), "utf8"), "A { x 1 }\n");
     eq(readFileSync(join(out, "data", "text", "combined.csv"), "utf8"), "k,v\r\n");
     assert(!existsSync(join(out, "swfs")), "non-matching entry must not be extracted");

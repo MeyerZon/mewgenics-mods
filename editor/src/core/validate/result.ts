@@ -1,78 +1,55 @@
 // A small tagged result/finding model shared by the validator, the MCP server,
 // and the web UI. Nothing here throws; callers inspect `ok` and `findings`.
 
-/** @typedef {'error'|'warning'|'info'} Severity */
+export type Severity = "error" | "warning" | "info";
 
-/**
- * @typedef {Object} SourceLocation
- * @property {string} [file]   repo-relative file the finding is about
- * @property {number} [line]   1-based line
- * @property {number} [col]    1-based column
- * @property {string} [path]   dotted GON path, e.g. "JokersGambit.damage_instance.effects"
- */
+export interface SourceLocation {
+  /** repo-relative file the finding is about */
+  file?: string;
+  /** 1-based line */
+  line?: number;
+  /** 1-based column */
+  col?: number;
+  /** dotted GON path, e.g. "JokersGambit.damage_instance.effects" */
+  path?: string;
+}
 
-/**
- * @typedef {Object} Finding
- * @property {Severity} severity
- * @property {string} code      stable machine code, e.g. "unknown-status"
- * @property {string} message   human-readable explanation
- * @property {SourceLocation} [location]
- */
+export interface Finding {
+  severity: Severity;
+  /** stable machine code, e.g. "unknown-status" */
+  code: string;
+  /** human-readable explanation */
+  message: string;
+  location?: SourceLocation;
+}
 
-/**
- * @param {Severity} severity
- * @param {string} code
- * @param {string} message
- * @param {SourceLocation} [location]
- * @returns {Finding}
- */
-export function finding(severity, code, message, location) {
+export function finding(severity: Severity, code: string, message: string, location?: SourceLocation): Finding {
   return location ? { severity, code, message, location } : { severity, code, message };
 }
 
-/**
- * @typedef {Object} Report
- * @property {boolean} ok          true when there are no error-severity findings
- * @property {Finding[]} findings
- * @property {{ errors: number, warnings: number, infos: number }} counts
- */
+export interface Report {
+  /** true when there are no error-severity findings */
+  ok: boolean;
+  findings: Finding[];
+  counts: { errors: number; warnings: number; infos: number };
+}
 
 export class ReportBuilder {
-  constructor() {
-    /** @type {Finding[]} */
-    this.findings = [];
-  }
-  /** @param {Finding} f */
-  add(f) {
+  findings: Finding[] = [];
+  add(f: Finding): this {
     this.findings.push(f);
     return this;
   }
-  /**
-   * @param {string} code
-   * @param {string} message
-   * @param {SourceLocation} [location]
-   */
-  error(code, message, location) {
+  error(code: string, message: string, location?: SourceLocation): this {
     return this.add(finding("error", code, message, location));
   }
-  /**
-   * @param {string} code
-   * @param {string} message
-   * @param {SourceLocation} [location]
-   */
-  warn(code, message, location) {
+  warn(code: string, message: string, location?: SourceLocation): this {
     return this.add(finding("warning", code, message, location));
   }
-  /**
-   * @param {string} code
-   * @param {string} message
-   * @param {SourceLocation} [location]
-   */
-  info(code, message, location) {
+  info(code: string, message: string, location?: SourceLocation): this {
     return this.add(finding("info", code, message, location));
   }
-  /** @returns {Report} */
-  build() {
+  build(): Report {
     let errors = 0;
     let warnings = 0;
     let infos = 0;

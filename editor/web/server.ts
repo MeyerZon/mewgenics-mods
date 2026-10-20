@@ -10,20 +10,19 @@
 //
 // PORT=0 picks a free port (the test suite does this); the bound port is announced on stderr.
 
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize, extname } from "node:path";
 import * as api from "../src/core/api.ts";
-import { parseBody, BodyError } from "../src/core/api-schemas.ts";
+import { parseBody, BodyError, type ApiBody, type PostRoute } from "../src/core/api-schemas.ts";
 
 const WEB_DIR = dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = join(WEB_DIR, "dist");
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT || 4173);
 
-/** @type {Record<string, string>} */
-const MIME = {
+const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -37,18 +36,16 @@ const MIME = {
   ".woff2": "font/woff2",
 };
 
-/** @param {import('node:http').ServerResponse} res @param {number} status @param {unknown} body */
-function sendJson(res, status, body) {
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body);
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(text);
 }
 
-/** @param {import('node:http').IncomingMessage} req @returns {Promise<unknown>} */
-function readBody(req) {
+function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", (c) => {
+    req.on("data", (c: Buffer | string) => {
       data += c;
       if (data.length > 8_000_000) reject(new Error("request body too large"));
     });
@@ -64,19 +61,13 @@ function readBody(req) {
   });
 }
 
-/**
- * Read + validate a POST body for a route.
- * @template {import('../src/core/api-schemas.ts').PostRoute} R
- * @param {R} route @param {import('node:http').IncomingMessage} req
- * @returns {Promise<import('../src/core/api-schemas.ts').ApiBody<R>>}
- */
-async function body(route, req) {
+/** Read + validate a POST body for a route. */
+async function body<R extends PostRoute>(route: R, req: IncomingMessage): Promise<ApiBody<R>> {
   return parseBody(route, await readBody(req));
 }
 
-/** @param {import('node:http').ServerResponse} res @param {string} relUrl */
-function serveStatic(res, relUrl) {
-  let rel = relUrl.split("?")[0];
+function serveStatic(res: ServerResponse, relUrl: string): void {
+  let rel = relUrl.split("?")[0]!;
   if (rel === "/" || rel === "") rel = "/index.html";
   if (!existsSync(join(DIST_DIR, "index.html"))) {
     res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8" });
@@ -98,12 +89,7 @@ function serveStatic(res, relUrl) {
   res.end(readFileSync(abs));
 }
 
-/**
- * @param {import('node:http').IncomingMessage} req
- * @param {import('node:http').ServerResponse} res
- * @param {URL} url
- */
-async function handleApi(req, res, url) {
+async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const q = url.searchParams;
   const method = req.method || "GET";
   try {

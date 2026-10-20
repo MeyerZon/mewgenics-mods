@@ -8,29 +8,32 @@
 // Pure over (pe, buf); node built-ins only.
 
 import { sectionBytes } from "./pe.ts";
+import type { Pe, PeSection, RuntimeFunction } from "./pe.ts";
 import { parsePattern, patternToString } from "./scan.ts";
 import { decodeInstruction } from "./siggen.ts";
+import type { Instruction } from "./siggen.ts";
 import { hex, parseValue, entry } from "./manifest.ts";
+import type { Manifest, Entry, StringAnchor, CalleeAnchor, CfgLite } from "./manifest.ts";
 
-/** @typedef {{ text: string, role: "funcsig"|"file"|"literal", unique: boolean }} StringAnchor */
-/** @typedef {{ ordinal: number, name: string, target: string }} CalleeAnchor  a call to a manifest entry; ordinal counts every call in the function */
-/** @typedef {{ ordinal: number, opcode: string, target: string }} RipRef */
-/**
- * @typedef {{
- *   strings: StringAnchor[], callees: CalleeAnchor[], ripRefs: RipRef[],
- *   cfgLite: { bytes: number, calls: number, ripRefs: number, resyncs: number }, prologue: string,
- * }} FunctionHarvest
- */
+export type { StringAnchor, CalleeAnchor } from "./manifest.ts";
 
-/** @param {import("./pe.ts").Pe} pe */
-const dataSections = (pe) => pe.sections.filter((s) => !s.exec && s.rawSize > 0);
+export interface RipRef {
+  ordinal: number;
+  opcode: string;
+  target: string;
+}
+export interface FunctionHarvest {
+  strings: StringAnchor[];
+  callees: CalleeAnchor[];
+  ripRefs: RipRef[];
+  cfgLite: CfgLite;
+  prologue: string;
+}
 
-/**
- * Read a NUL-terminated latin1 string at an RVA (null when unmapped or unterminated within max).
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} rva @param {number} [max]
- * @returns {string|null}
- */
-export function cstringAt(pe, buf, rva, max = 2048) {
+const dataSections = (pe: Pe): PeSection[] => pe.sections.filter((s) => !s.exec && s.rawSize > 0);
+
+/** Read a NUL-terminated latin1 string at an RVA (null when unmapped or unterminated within max). */
+export function cstringAt(pe: Pe, buf: Buffer, rva: number, max = 2048): string | null {
   const off = pe.rvaToOff(rva);
   if (off < 0) return null;
   let e = off;
@@ -42,13 +45,10 @@ export function cstringAt(pe, buf, rva, max = 2048) {
 /**
  * Find a NUL-terminated string (whole string: preceded by NUL or the section start) in the data
  * sections. Returns the first RVA and how many times it occurs (capped at 3).
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {string} text
- * @returns {{ rva: number|null, count: number }}
  */
-export function findString(pe, buf, text) {
+export function findString(pe: Pe, buf: Buffer, text: string): { rva: number | null; count: number } {
   const needle = Buffer.from(text + "\0", "latin1");
-  /** @type {number|null} */
-  let first = null;
+  let first: number | null = null;
   let count = 0;
   for (const s of dataSections(pe)) {
     const bytes = sectionBytes(buf, s);
@@ -64,19 +64,16 @@ export function findString(pe, buf, text) {
   return { rva: first, count };
 }
 
-/** @type {WeakMap<Buffer, Map<number, number[]>>} */
-const leaCache = new WeakMap();
+const leaCache = new WeakMap<Buffer, Map<number, number[]>>();
 
 /**
  * One pass over the executable sections collecting every rip-relative lea site by target RVA.
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf
- * @returns {Map<number, number[]>} target rva -> lea instruction rvas
+ * @returns target rva -> lea instruction rvas
  */
-export function leaIndex(pe, buf) {
+export function leaIndex(pe: Pe, buf: Buffer): Map<number, number[]> {
   const cached = leaCache.get(buf);
   if (cached) return cached;
-  /** @type {Map<number, number[]>} */
-  const idx = new Map();
+  const idx = new Map<number, number[]>();
   for (const s of pe.execSections) {
     const b = sectionBytes(buf, s);
     const n = b.length;
@@ -95,30 +92,31 @@ export function leaIndex(pe, buf) {
   return idx;
 }
 
-/**
- * Every rip-relative lea that points at `rva`, with the .pdata function containing the site.
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} rva
- * @returns {{ at: number, fn: import("./pe.ts").RuntimeFunction|null }[]}
- */
-export function findStringXrefs(pe, buf, rva) {
+/** Every rip-relative lea that points at `rva`, with the .pdata function containing the site. */
+export function findStringXrefs(pe: Pe, buf: Buffer, rva: number): { at: number; fn: RuntimeFunction | null }[] {
   return (leaIndex(pe, buf).get(rva) || []).map((at) => ({ at, fn: pe.pdata.find(at) }));
+}
+
+export interface DecodedFunction {
+  begin: number;
+  end: number;
+  instrs: { at: number; ins: Instruction }[];
+  resyncs: number;
+  bytes: Uint8Array;
 }
 
 /**
  * Decode a whole .pdata function (or `fallbackBytes` when it is not in .pdata). Unknown opcodes
  * are skipped one byte at a time (counted in `resyncs`) so counting continues.
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} rva
- * @returns {{ begin: number, end: number, instrs: { at: number, ins: import("./siggen.ts").Instruction }[], resyncs: number, bytes: Uint8Array }}
  */
-export function decodeFunction(pe, buf, rva, fallbackBytes = 256) {
+export function decodeFunction(pe: Pe, buf: Buffer, rva: number, fallbackBytes = 256): DecodedFunction {
   const fn = pe.pdata.find(rva);
   const begin = fn && fn.begin === rva ? fn.begin : rva;
   const end = fn && fn.begin === rva ? fn.end : rva + fallbackBytes;
   const off = pe.rvaToOff(begin);
   const avail = off < 0 ? 0 : Math.min(end - begin, buf.length - off);
   const bytes = off < 0 ? new Uint8Array(0) : Uint8Array.from(buf.subarray(off, off + avail));
-  /** @type {{ at: number, ins: import("./siggen.ts").Instruction }[]} */
-  const instrs = [];
+  const instrs: { at: number; ins: Instruction }[] = [];
   let resyncs = 0;
   let i = 0;
   while (i < bytes.length) {
@@ -130,21 +128,14 @@ export function decodeFunction(pe, buf, rva, fallbackBytes = 256) {
   return { begin, end, instrs, resyncs, bytes };
 }
 
-/**
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} rva
- * @param {{ names?: Map<number, string> }} [opts] rva -> entry name for callee naming
- * @returns {FunctionHarvest}
- */
-export function harvestFunction(pe, buf, rva, opts = {}) {
-  const names = opts.names || new Map();
+/** @param opts.names rva -> entry name for callee naming */
+export function harvestFunction(pe: Pe, buf: Buffer, rva: number, opts: { names?: Map<number, string> } = {}): FunctionHarvest {
+  const names = opts.names || new Map<number, string>();
   const d = decodeFunction(pe, buf, rva);
-  /** @type {StringAnchor[]} */
-  const strings = [];
-  /** @type {CalleeAnchor[]} */
-  const callees = []; // only calls to manifest entries (the ordinal counts every call), else the lists explode
+  const strings: StringAnchor[] = [];
+  const callees: CalleeAnchor[] = []; // only calls to manifest entries (the ordinal counts every call), else the lists explode
   let calls = 0;
-  /** @type {RipRef[]} */
-  const ripRefs = [];
+  const ripRefs: RipRef[] = [];
   for (const { at, ins } of d.instrs) {
     if (ins.relTarget === null) continue;
     const target = at + ins.length + ins.relTarget;
@@ -162,7 +153,7 @@ export function harvestFunction(pe, buf, rva, opts = {}) {
     if (!sec || sec.exec) continue;
     const s = cstringAt(pe, buf, target);
     if (!s) continue;
-    const role = /__cdecl|__thiscall|__fastcall/.test(s) ? "funcsig" : /\.(cpp|hpp|c|h|inl)$/i.test(s) ? "file" : null;
+    const role: StringAnchor["role"] | null = /__cdecl|__thiscall|__fastcall/.test(s) ? "funcsig" : /\.(cpp|hpp|c|h|inl)$/i.test(s) ? "file" : null;
     if (!role || strings.some((x) => x.text === s)) continue;
     strings.push({ text: s, role, unique: findString(pe, buf, s).count === 1 });
   }
@@ -182,13 +173,11 @@ export function harvestFunction(pe, buf, rva, opts = {}) {
   };
 }
 
-/** @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} rva */
-function u32At(pe, buf, rva) {
+function u32At(pe: Pe, buf: Buffer, rva: number): number | null {
   const off = pe.rvaToOff(rva);
   return off < 0 || off + 4 > buf.length ? null : buf.readUInt32LE(off);
 }
-/** @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} rva */
-function u64At(pe, buf, rva) {
+function u64At(pe: Pe, buf: Buffer, rva: number): number | null {
   const off = pe.rvaToOff(rva);
   return off < 0 || off + 8 > buf.length ? null : Number(buf.readBigUInt64LE(off));
 }
@@ -197,15 +186,13 @@ function u64At(pe, buf, rva) {
  * MSVC x64 RTTI: TypeDescriptor { vftable*, spare, name[] } (in .data) -> a CompleteObjectLocator
  * { signature 1, offset, cdOffset, pTypeDescriptor, pClassDescriptor, pSelf } (image-relative u32s)
  * -> the vftable whose slot -1 holds the locator's absolute address.
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {string} typeDescriptorName e.g. ".?AVLuckUp@glaiel@@"
- * @returns {{ typeDescriptor: number, col: number, vftable: number }|null}
+ * @param typeDescriptorName e.g. ".?AVLuckUp@glaiel@@"
  */
-export function findRtti(pe, buf, typeDescriptorName) {
+export function findRtti(pe: Pe, buf: Buffer, typeDescriptorName: string): { typeDescriptor: number; col: number; vftable: number } | null {
   const name = findString(pe, buf, typeDescriptorName);
   if (name.rva === null || name.count !== 1) return null;
   const td = name.rva - 16;
-  /** @type {number[]} */
-  const cols = [];
+  const cols: number[] = [];
   for (const s of dataSections(pe)) {
     const b = sectionBytes(buf, s);
     for (let i = 12; i + 12 <= b.length; i += 4) {
@@ -228,23 +215,16 @@ export function findRtti(pe, buf, typeDescriptorName) {
   return null;
 }
 
-/**
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} vftableRva @param {number} slot
- * @returns {number|null} the slot's target RVA
- */
-export function vtableSlotTarget(pe, buf, vftableRva, slot) {
+/** @returns the slot's target RVA */
+export function vtableSlotTarget(pe: Pe, buf: Buffer, vftableRva: number, slot: number): number | null {
   const abs = u64At(pe, buf, vftableRva + 8 * slot);
   if (abs === null) return null;
   const rva = abs - pe.imageBase;
   return pe.sectionOf(rva) ? rva : null;
 }
 
-/**
- * Read an imm32 out of a vtable slot's body when the body matches `bodyPattern` (e.g. "B8 ?? ?? ?? ?? C3").
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} vftableRva @param {number} slot @param {string} bodyPattern @param {number} imm32At
- * @returns {number|null}
- */
-export function deriveFromVtableSlot(pe, buf, vftableRva, slot, bodyPattern, imm32At) {
+/** Read an imm32 out of a vtable slot's body when the body matches `bodyPattern` (e.g. "B8 ?? ?? ?? ?? C3"). */
+export function deriveFromVtableSlot(pe: Pe, buf: Buffer, vftableRva: number, slot: number, bodyPattern: string, imm32At: number): number | null {
   const target = vtableSlotTarget(pe, buf, vftableRva, slot);
   if (target === null) return null;
   const off = pe.rvaToOff(target);
@@ -258,16 +238,14 @@ export function deriveFromVtableSlot(pe, buf, vftableRva, slot, bodyPattern, imm
  * Read an imm32 from the instruction matching `pattern` within `maxBack` instructions before the first E8 call to
  * `calleeRva` inside the function at `fnRva` (e.g. "41 B8 ?? ?? ?? ??" = mov r8d, imm32: the type id passed to
  * Entity_FindComponentsByTypeId). A second, independent source for a constant that otherwise rests on one vtable slot body.
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {number} fnRva @param {number} calleeRva @param {string} pattern @param {number} imm32At @param {number} [maxBack]
- * @returns {number|null}
  */
-export function deriveFromCallArg(pe, buf, fnRva, calleeRva, pattern, imm32At, maxBack = 8) {
+export function deriveFromCallArg(pe: Pe, buf: Buffer, fnRva: number, calleeRva: number, pattern: string, imm32At: number, maxBack = 8): number | null {
   const d = decodeFunction(pe, buf, fnRva);
   const pat = parsePattern(pattern);
   for (let i = 0; i < d.instrs.length; i++) {
     const x = d.instrs[i];
     if (!(x.ins.kind === "call" && x.ins.reloc && x.ins.reloc.why === "E8 rel32" && x.ins.relTarget !== null)) continue;
-    if (x.at + x.ins.length + /** @type {number} */ (x.ins.relTarget) !== calleeRva) continue;
+    if (x.at + x.ins.length + x.ins.relTarget !== calleeRva) continue;
     for (let k = i - 1; k >= 0 && k >= i - maxBack; k--) {
       const y = d.instrs[k];
       const off = pe.rvaToOff(y.at);
@@ -282,56 +260,56 @@ export function deriveFromCallArg(pe, buf, fnRva, calleeRva, pattern, imm32At, m
   return null;
 }
 
+export interface ConstantSources {
+  slot: number | null;
+  arg: number | null;
+  notes: string[];
+}
+
 /**
  * Every independent source of a constant's value on this image: the vtable slot body (anchors.derive) and the
  * call-arg witness (anchors.witness with a callee). Entries that carry a port block must have ported for their
  * value to be trusted. Shared by harvest (verify) and port (re-derive); the caller decides what agreement means.
- * @param {import("./manifest.ts").Manifest} manifest @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {import("./manifest.ts").Entry} e
- * @returns {{ slot: number|null, arg: number|null, notes: string[] }}
+ * The anchor fields are passed through as the manifest holds them (a missing field fails inside the helper, as before).
  */
-export function constantSources(manifest, pe, buf, e) {
+export function constantSources(manifest: Manifest, pe: Pe, buf: Buffer, e: Entry): ConstantSources {
   const a = e.anchors;
-  /** @param {import("./manifest.ts").Entry|null|undefined} x */
-  const usable = (x) => !!x && (!x.port || String(x.port.status).startsWith("ported"));
-  /** @type {{ slot: number|null, arg: number|null, notes: string[] }} */
-  const r = { slot: null, arg: null, notes: [] };
+  const usable = (x: Entry | null | undefined): boolean => !!x && (!x.port || String(x.port.status).startsWith("ported"));
+  const r: ConstantSources = { slot: null, arg: null, notes: [] };
   if (a.derive && a.derive.vtable) {
     const vt = entry(manifest, a.derive.vtable);
-    r.slot = usable(vt) && vt ? deriveFromVtableSlot(pe, buf, parseInt(vt.rva || "0", 16), a.derive.slot, a.derive.bodyPattern, a.derive.imm32At) : null;
+    r.slot = usable(vt) && vt ? deriveFromVtableSlot(pe, buf, parseInt(vt.rva || "0", 16), a.derive.slot!, a.derive.bodyPattern!, a.derive.imm32At!) : null;
     r.notes.push(r.slot === null ? (usable(vt) ? `slot ${a.derive.slot} of ${a.derive.vtable} does not match ${a.derive.bodyPattern}` : `${a.derive.vtable} did not port`) : `slot body gives ${hex(r.slot)}`);
   }
   if (a.witness && a.witness.callee) {
     const w = a.witness;
     const f = entry(manifest, w.function);
-    const c = entry(manifest, w.callee);
-    r.arg = usable(f) && usable(c) && f && c ? deriveFromCallArg(pe, buf, parseInt(f.rva || "0", 16), parseInt(c.rva || "0", 16), w.pattern, w.imm32At, w.maxBack ?? 8) : null;
+    const c = entry(manifest, a.witness.callee);
+    r.arg = usable(f) && usable(c) && f && c ? deriveFromCallArg(pe, buf, parseInt(f.rva || "0", 16), parseInt(c.rva || "0", 16), w.pattern!, w.imm32At!, w.maxBack ?? 8) : null;
     r.notes.push(r.arg === null ? `call-arg witness ${w.pattern} before the call to ${w.callee} in ${w.function} not found` : `call-arg witness in ${w.function} gives ${hex(r.arg)}`);
   }
   return r;
 }
 
-/**
- * @typedef {{ name: string, kind: string, status: "harvested"|"verified"|"mismatch"|"unresolved"|"unanchored"|"skipped", detail: string }} HarvestRow
- */
+export type HarvestStatus = "harvested" | "verified" | "mismatch" | "unresolved" | "unanchored" | "skipped";
+export interface HarvestRow {
+  name: string;
+  kind: string;
+  status: HarvestStatus;
+  detail: string;
+}
 
 /**
  * Fill and verify every entry's anchors against this exe. Values are never rewritten: a
  * mismatch is reported for the port step / a human. Returns a new manifest object.
- * @param {import("./pe.ts").Pe} pe @param {Buffer} buf @param {import("./manifest.ts").Manifest} manifest
- * @returns {{ manifest: import("./manifest.ts").Manifest, report: HarvestRow[], changed: boolean }}
  */
-export function harvestManifest(pe, buf, manifest) {
-  /** @type {import("./manifest.ts").Manifest} */
-  const out = JSON.parse(JSON.stringify(manifest));
-  /** @type {Map<number, string>} */
-  const names = new Map();
+export function harvestManifest(pe: Pe, buf: Buffer, manifest: Manifest): { manifest: Manifest; report: HarvestRow[]; changed: boolean } {
+  const out: Manifest = JSON.parse(JSON.stringify(manifest));
+  const names = new Map<number, string>();
   for (const e of out.entries) if (e.kind === "function" && e.rva) names.set(parseInt(e.rva, 16), e.name);
-  /** @type {HarvestRow[]} */
-  const report = [];
-  /** @type {Map<string, FunctionHarvest>} */
-  const fnCache = new Map();
-  /** @param {import("./manifest.ts").Entry} e */
-  const harvestOf = (e) => {
+  const report: HarvestRow[] = [];
+  const fnCache = new Map<string, FunctionHarvest>();
+  const harvestOf = (e: Entry): FunctionHarvest => {
     let h = fnCache.get(e.name);
     if (!h) { h = harvestFunction(pe, buf, parseInt(e.rva || "0", 16), { names }); fnCache.set(e.name, h); }
     return h;
@@ -342,7 +320,7 @@ export function harvestManifest(pe, buf, manifest) {
     if (e.kind === "function") {
       const h = harvestOf(e);
       // hand-written literal anchors (e.g. a config key the function reads) are kept and re-checked
-      const manual = (Array.isArray(a.strings) ? a.strings : []).filter((/** @type {any} */ s) => s && s.role === "literal").map((/** @type {any} */ s) => ({ text: s.text, role: "literal", unique: findString(pe, buf, s.text).count === 1 }));
+      const manual: StringAnchor[] = (Array.isArray(a.strings) ? a.strings : []).filter((s) => s && s.role === "literal").map((s) => ({ text: s.text, role: "literal" as const, unique: findString(pe, buf, s.text).count === 1 }));
       a.strings = [...manual, ...h.strings];
       a.callees = h.callees;
       a.cfgLite = h.cfgLite;
@@ -375,7 +353,7 @@ export function harvestManifest(pe, buf, manifest) {
     }
     if (e.kind === "constant" && ((a.derive && a.derive.vtable) || (a.witness && a.witness.callee))) {
       const src = constantSources(out, pe, buf, e);
-      const vals = [src.slot, src.arg].filter((v) => v !== null);
+      const vals = [src.slot, src.arg].filter((v): v is number => v !== null);
       if (!vals.length) { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: src.notes.join("; ") }); continue; }
       const want = parseValue(e.value || "0");
       const same = vals.every((v) => v === want);
@@ -384,7 +362,7 @@ export function harvestManifest(pe, buf, manifest) {
     }
     if (e.kind === "data" && a.derive && a.derive.table) {
       const t = entry(out, a.derive.table);
-      const v = t ? parseInt(t.rva || "0", 16) + 8 * a.derive.index : null;
+      const v = t ? parseInt(t.rva || "0", 16) + 8 * a.derive.index! : null;
       if (v === null) { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: `table ${a.derive.table} missing` }); continue; }
       const same = v === parseInt(e.rva || "0", 16);
       report.push({ name: e.name, kind: e.kind, status: same ? "verified" : "mismatch", detail: `${a.derive.table} + 8*${a.derive.index} = ${hex(v)}; manifest says ${e.rva}` });

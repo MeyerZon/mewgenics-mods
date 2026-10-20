@@ -25,8 +25,7 @@ if (existsSync(tsv)) {
 // Base-data index.
 if (hasBaseData()) {
   const idx = buildIndex();
-  /** @type {Record<string, { count: number, names: string[], files: Record<string,string> }>} */
-  const out = {};
+  const out: Record<string, { count: number; names: string[]; files: Record<string, string> }> = {};
   for (const [cat, ci] of idx.entries()) {
     out[cat] = { count: ci.names.length, names: ci.names, files: Object.fromEntries(ci.entryFile) };
   }

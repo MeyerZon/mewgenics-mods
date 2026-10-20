@@ -7,17 +7,24 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EDITOR = join(HERE, "..");
 
-/** A failing import becomes a failing test, not a crashed runner. @param {string} rel */
-async function load(rel) {
+/** A failing import becomes a failing test, not a crashed runner. The module is read loosely on purpose. */
+async function load(rel: string): Promise<Record<string, any> & { __error?: string }> {
   try {
-    return await import(rel);
+    return (await import(rel)) as Record<string, any>;
   } catch (e) {
     return { __error: String(e instanceof Error ? e.message : e) };
   }
+}
+
+interface ServerHandle {
+  port: number;
+  stop: () => Promise<void>;
+  stderr: string;
 }
 
 /** Every POST route the web server accepts; each needs a body schema in src/core/api-schemas. */
@@ -35,11 +42,8 @@ export const POST_ROUTES = [
   "/api/art/prepare-swf-gate",
 ];
 
-/**
- * Start web/server.ts on an OS-chosen port and return { port, stop }.
- * @returns {Promise<{port:number, stop:()=>Promise<void>, stderr:string}>}
- */
-function startServer() {
+/** Start web/server.ts on an OS-chosen port and return { port, stop }. */
+function startServer(): Promise<ServerHandle> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.argv[0], [join(EDITOR, "web", "server.ts")], {
       env: { ...process.env, PORT: "0" },
@@ -51,12 +55,12 @@ function startServer() {
       reject(new Error(`server did not announce a port within 10 s; stderr: ${err.slice(0, 300)}`));
     }, 10_000);
     child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk) => {
+    child.stderr.on("data", (chunk: string) => {
       err += chunk;
       const m = /http:\/\/127\.0\.0\.1:(\d+)\//.exec(err);
       if (m && Number(m[1]) > 0) {
         clearTimeout(timer);
-        const stop = () => /** @type {Promise<void>} */ (new Promise((done) => { child.on("exit", () => done(undefined)); child.kill(); }));
+        const stop = () => new Promise<void>((done) => { child.on("exit", () => done()); child.kill(); });
         resolve({ port: Number(m[1]), stop, stderr: err });
       }
     });
@@ -67,17 +71,12 @@ function startServer() {
   });
 }
 
-/**
- * @param {(name: string, fn: () => void) => void} test
- * @param {(cond: boolean, msg: string) => void} assert
- * @param {(a: unknown, b: unknown, msg?: string) => void} eq
- */
-export async function runWebTests(test, assert, eq) {
+export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
   console.log("\n# web layer: React store, pure UI helpers, zod request schemas, server request gate");
 
   // ---- store ------------------------------------------------------------------
   const store = await load("../web/src/store.ts");
-  test("web/src/store.ts loads (Node runs the TS source directly)", () => assert(!store.__error, store.__error));
+  test("web/src/store.ts loads (Node runs the TS source directly)", () => assert(!store.__error, store.__error ?? ""));
   test("createStore: get() returns the initial state", () => {
     const s = store.createStore({ a: 1, b: "x" });
     eq(s.get().a, 1);
@@ -104,7 +103,7 @@ export async function runWebTests(test, assert, eq) {
     const before = s.get();
     let n = 0;
     const off = s.subscribe(() => n++);
-    s.set((/** @type {{a:number}} */ cur) => ({ a: cur.a + 10 }));
+    s.set((cur: { a: number }) => ({ a: cur.a + 10 }));
     eq(s.get().a, 11);
     assert(s.get() !== before, "state identity must change so React sees the update");
     off();
@@ -114,7 +113,7 @@ export async function runWebTests(test, assert, eq) {
 
   // ---- pure UI helpers ----------------------------------------------------------
   const hl = await load("../web/src/gon-highlight.ts");
-  test("web/src/gon-highlight.ts loads", () => assert(!hl.__error, hl.__error));
+  test("web/src/gon-highlight.ts loads", () => assert(!hl.__error, hl.__error ?? ""));
   test("highlightGon: stripping the spans gives back the escaped input (nothing is ever hidden)", () => {
     const src = 'Foo { variant_of = "Spin" // c <b>\n  x = -1.5e3; y = [1, 2] }\n';
     const out = hl.highlightGon(src);
@@ -132,7 +131,7 @@ export async function runWebTests(test, assert, eq) {
     assert(out.includes('<span class="k">x</span>'), "k");
   });
   const tree = await load("../web/src/tree.ts");
-  test("web/src/tree.ts loads", () => assert(!tree.__error, tree.__error));
+  test("web/src/tree.ts loads", () => assert(!tree.__error, tree.__error ?? ""));
   test("buildTree: nests by '/', keeps leaf names and the original fields, preserves order", () => {
     const t = tree.buildTree([
       { relPath: "abilities/a.gon.append", mode: "append" },
@@ -141,17 +140,17 @@ export async function runWebTests(test, assert, eq) {
       { relPath: "mod.gon", mode: "replace" },
     ]);
     eq([...t.dirs.keys()].join(","), "abilities,text");
-    eq(t.files.map((/** @type {any} */ f) => f.leaf).join(","), "mod.gon");
+    eq(t.files.map((f: { leaf: string }) => f.leaf).join(","), "mod.gon");
     const ab = t.dirs.get("abilities");
     eq(ab.path, "abilities");
-    eq(ab.files.map((/** @type {any} */ f) => f.leaf).join(","), "a.gon.append,b.gon");
+    eq(ab.files.map((f: { leaf: string }) => f.leaf).join(","), "a.gon.append,b.gon");
     eq(ab.files[0].mode, "append");
     eq(ab.files[0].relPath, "abilities/a.gon.append");
   });
 
   // ---- zod request schemas (shared by web/server.ts and the browser client) ----
   const sch = await load("../src/core/api-schemas.ts");
-  test("src/core/api-schemas.ts loads", () => assert(!sch.__error, sch.__error));
+  test("src/core/api-schemas.ts loads", () => assert(!sch.__error, sch.__error ?? ""));
   test("api-schemas: every POST route has a body schema (API_BODY)", () => {
     for (const r of POST_ROUTES) assert(!!(sch.API_BODY && sch.API_BODY[r]), `missing schema for ${r}`);
     eq(Object.keys(sch.API_BODY).length, POST_ROUTES.length, "no unknown routes");
@@ -159,7 +158,7 @@ export async function runWebTests(test, assert, eq) {
   test("api-schemas: /api/write needs mod, path, content as strings; the issues name each missing key", () => {
     const r = sch.API_BODY["/api/write"].safeParse({});
     assert(!r.success, "empty body must fail");
-    const paths = r.error.issues.map((/** @type {any} */ i) => i.path.join(".")).sort().join(",");
+    const paths = r.error.issues.map((i: { path: (string | number)[] }) => i.path.join(".")).sort().join(",");
     eq(paths, "content,mod,path");
     const ok = sch.API_BODY["/api/write"].safeParse({ mod: "m", path: "abilities/x.gon.append", content: "X {}" });
     assert(ok.success, "valid body");
@@ -195,8 +194,7 @@ export async function runWebTests(test, assert, eq) {
   });
 
   // ---- server request gate (spawns web/server.ts on an OS-chosen port) --------------
-  /** @type {{port:number, stop:()=>Promise<void>, stderr:string}|null} */
-  let srv = null;
+  let srv: ServerHandle | null = null;
   try {
     srv = await startServer();
   } catch (e) {
@@ -204,8 +202,7 @@ export async function runWebTests(test, assert, eq) {
   }
   if (srv) {
     const base = `http://127.0.0.1:${srv.port}`;
-    /** @type {{status:number, json:any, text:string}} */
-    let w = { status: 0, json: null, text: "" };
+    let w: { status: number; json: any; text: string } = { status: 0, json: null, text: "" };
     try {
       const r = await fetch(`${base}/api/write`, { method: "POST", headers: { "Content-Type": "application/json", Connection: "close" }, body: "{}" });
       w = { status: r.status, text: await r.text(), json: null };
@@ -217,11 +214,10 @@ export async function runWebTests(test, assert, eq) {
       eq(w.status, 400, `status (body: ${w.text.slice(0, 200)})`);
       assert(w.json && typeof w.json.error === "string", "error string");
       assert(Array.isArray(w.json.issues), "issues array");
-      const paths = w.json.issues.map((/** @type {any} */ i) => (i.path || []).join(".")).sort().join(",");
+      const paths = (w.json.issues as { path?: (string | number)[] }[]).map((i) => (i.path || []).join(".")).sort().join(",");
       eq(paths, "content,mod,path");
     });
-    /** @type {{status:number, text:string}} */
-    let nf = { status: 0, text: "" };
+    let nf: { status: number; text: string } = { status: 0, text: "" };
     try {
       const r = await fetch(`${base}/api/nope`, { headers: { Connection: "close" } });
       nf = { status: r.status, text: await r.text() };
@@ -233,8 +229,7 @@ export async function runWebTests(test, assert, eq) {
     });
     const dist = join(EDITOR, "web", "dist", "index.html");
     if (existsSync(dist)) {
-      /** @type {{status:number, text:string}} */
-      let idx = { status: 0, text: "" };
+      let idx: { status: number; text: string } = { status: 0, text: "" };
       try {
         const r = await fetch(`${base}/`, { headers: { Connection: "close" } });
         idx = { status: r.status, text: await r.text() };

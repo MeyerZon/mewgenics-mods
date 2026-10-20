@@ -25,10 +25,11 @@ import { ReportBuilder } from "./result.ts";
 import { identifyExe } from "../bindings/check.ts";
 import { listManifests } from "../bindings/manifest.ts";
 import { locateGameDir } from "../ingame/launch.ts";
-
-/** @typedef {import('../gon/types.ts').VObject} VObject */
-/** @typedef {import('../gon/types.ts').VNode} VNode */
-/** @typedef {import('./result.ts').Report} Report */
+import type { VObject, VNode } from "../gon/types.ts";
+import type { Report, SourceLocation } from "./result.ts";
+import type { OverlayMode, FileType } from "../overlay/overlay.ts";
+import type { ResolutionSets } from "../names.ts";
+import type { LocTable } from "../base-data.ts";
 
 const LOC_FIELDS = new Set([
   "name", "desc", "description", "tooltip", "tooltip_stackless",
@@ -39,10 +40,9 @@ const LOC_KEY_RE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
 
 /**
  * Map a pack-relative base file name to a data category.
- * @param {string} baseName  e.g. "data/abilities/fighter_abilities.gon"
- * @returns {string|null}
+ * @param baseName e.g. "data/abilities/fighter_abilities.gon"
  */
-function categoryForPath(baseName) {
+function categoryForPath(baseName: string): string | null {
   const p = baseName.replace(/\\/g, "/");
   if (p === "data/keyword_tooltips.gon") return "statuses";
   if (p === "data/difficulties.gon") return "difficulties";
@@ -56,26 +56,22 @@ function categoryForPath(baseName) {
   return null;
 }
 
-/**
- * @typedef {Object} OverlayFile
- * @property {string} relPath   path relative to the mod folder (posix)
- * @property {string} text      file contents
- * @property {string} baseName  base pack path (mode suffix stripped)
- * @property {'append'|'merge'|'patch'|'replace'} mode
- * @property {'gon'|'csv'|'txt'|'other'} fileType
- * @property {string|null} category
- */
+export interface OverlayFile {
+  /** path relative to the mod folder (posix) */
+  relPath: string;
+  /** file contents */
+  text: string;
+  /** base pack path (mode suffix stripped) */
+  baseName: string;
+  mode: OverlayMode;
+  fileType: FileType;
+  category: string | null;
+}
 
-/**
- * Recursively collect overlay files under a mod folder.
- * @param {string} modDir
- * @returns {Array<{ relPath: string, abs: string }>}
- */
-function listModFiles(modDir) {
-  /** @type {Array<{ relPath: string, abs: string }>} */
-  const out = [];
-  /** @param {string} dir */
-  const walk = (dir) => {
+/** Recursively collect overlay files under a mod folder. */
+function listModFiles(modDir: string): Array<{ relPath: string; abs: string }> {
+  const out: Array<{ relPath: string; abs: string }> = [];
+  const walk = (dir: string): void => {
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, ent.name);
       if (ent.isDirectory()) walk(abs);
@@ -86,18 +82,19 @@ function listModFiles(modDir) {
   return out;
 }
 
+export interface TextOverride {
+  relPath?: string;
+  text?: string;
+}
+
 /**
  * Build the set of overlay files for a mod, applying an optional unsaved text
  * override for one file (and optionally including a not-yet-saved file).
- * @param {string} modName
- * @param {{ relPath?: string, text?: string }} [override]
- * @returns {OverlayFile[]}
  */
-function collectOverlays(modName, override) {
+function collectOverlays(modName: string, override?: TextOverride): OverlayFile[] {
   const modDir = join(MODS_DIR, modName);
   const files = listModFiles(modDir);
-  /** @type {Map<string, string>} */
-  const texts = new Map();
+  const texts = new Map<string, string>();
   for (const f of files) {
     if (f.relPath === "description.json") continue;
     try {
@@ -109,8 +106,7 @@ function collectOverlays(modName, override) {
   if (override && override.relPath !== undefined && override.text !== undefined) {
     texts.set(override.relPath, override.text);
   }
-  /** @type {OverlayFile[]} */
-  const out = [];
+  const out: OverlayFile[] = [];
   for (const [relPath, text] of texts) {
     const fileName = relPath.split("/").pop() || relPath;
     const { baseName: baseLeaf, mode, fileType } = parseOverlayName(fileName);
@@ -120,20 +116,20 @@ function collectOverlays(modName, override) {
   return out;
 }
 
-/**
- * Gather mod-local names added across overlays (so same-mod references resolve).
- * @param {OverlayFile[]} overlays
- */
-function modLocalNames(overlays) {
-  /** @type {Set<string>} */
-  const statuses = new Set();
-  /** @type {Map<string, Set<string>>} */
-  const byCategory = new Map();
-  /** @type {Map<string, string[]>} */
-  const locRows = new Map();
+interface ModLocalNames {
+  statuses: Set<string>;
+  byCategory: Map<string, Set<string>>;
+  locRows: Map<string, string[]>;
+}
+
+/** Gather mod-local names added across overlays (so same-mod references resolve). */
+function modLocalNames(overlays: OverlayFile[]): ModLocalNames {
+  const statuses = new Set<string>();
+  const byCategory = new Map<string, Set<string>>();
+  const locRows = new Map<string, string[]>();
   for (const o of overlays) {
     if (o.fileType === "gon") {
-      let root;
+      let root: VNode;
       try {
         root = toValue(parse(o.text));
       } catch {
@@ -156,17 +152,17 @@ function modLocalNames(overlays) {
   return { statuses, byCategory, locRows };
 }
 
-/**
- * @typedef {{ known: boolean, identity?: { timeDateStamp: string, sizeOfImage: string }|null, matched?: { steamBuildId: string, name?: string }|null }} NativeBuild
- */
+export interface NativeBuild {
+  known: boolean;
+  identity?: { timeDateStamp: string; sizeOfImage: string } | null;
+  matched?: { steamBuildId: string; name?: string } | null;
+}
 
 /**
  * The installed exe's identity against bindings/*.json (header-only, memoized), or null when no
  * exe is installed. A mod that uses a native-registered name only works when this is a known build.
- * @param {Record<string, string|undefined>} [env]
- * @returns {NativeBuild|null}
  */
-export function installedNativeBuild(env = process.env) {
+export function installedNativeBuild(env: Record<string, string | undefined> = process.env): NativeBuild | null {
   try {
     const r = identifyExe(join(locateGameDir(env), "Mewgenics.exe"), listManifests().map((m) => m.manifest));
     return r ? { known: r.known, identity: r.identity, matched: r.matched } : null;
@@ -175,16 +171,18 @@ export function installedNativeBuild(env = process.env) {
   }
 }
 
+export interface ValidateOptions {
+  /** injects the installed-exe identity (tests); undefined = look it up, null = no exe installed */
+  nativeBuild?: NativeBuild | null;
+  env?: Record<string, string | undefined>;
+}
+
 /**
  * Validate one mod. Pass an override to validate unsaved text for one file.
  * `opts.nativeBuild` injects the installed-exe identity (tests); undefined means "look it up",
  * null means "no exe installed".
- * @param {string} modName
- * @param {{ relPath?: string, text?: string }} [override]
- * @param {{ nativeBuild?: NativeBuild|null, env?: Record<string, string|undefined> }} [opts]
- * @returns {Report}
  */
-export function validateMod(modName, override, opts = {}) {
+export function validateMod(modName: string, override?: TextOverride, opts: ValidateOptions = {}): Report {
   const rb = new ReportBuilder();
   const modDir = join(MODS_DIR, modName);
   if (!existsSync(modDir)) {
@@ -202,8 +200,7 @@ export function validateMod(modName, override, opts = {}) {
   const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
 
   // Union of localization keys available: base + mod-added.
-  /** @type {(key: string) => string[] | undefined} */
-  const findLocRow = (key) => local.locRows.get(key) || loc.rows.get(key);
+  const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
 
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
@@ -218,16 +215,16 @@ export function validateMod(modName, override, opts = {}) {
   return rb.build();
 }
 
-/**
- * @param {OverlayFile} o
- * @param {ReportBuilder} rb
- * @param {ReturnType<typeof resolutionSets>} sets
- * @param {ReturnType<typeof modLocalNames>} local
- * @param {(key: string) => string[] | undefined} findLocRow
- * @param {string} modName
- * @param {NativeBuild|null} nativeBuild  installed-exe identity; null = no exe
- */
-function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild) {
+/** @param nativeBuild installed-exe identity; null = no exe */
+function validateGonOverlay(
+  o: OverlayFile,
+  rb: ReportBuilder,
+  sets: ResolutionSets,
+  local: ModLocalNames,
+  findLocRow: (key: string) => string[] | undefined,
+  modName: string,
+  nativeBuild: NativeBuild | null,
+): void {
   const file = `mods/${modName}/${o.relPath}`;
   let root;
   try {
@@ -253,11 +250,7 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild
       ? new Set([...sets.characters, ...(local.byCategory.get("characters") ?? [])])
       : new Set([...sets.abilities, ...(local.byCategory.get("abilities") ?? [])]);
 
-  /**
-   * @param {VNode} node
-   * @param {string[]} path
-   */
-  const walk = (node, path) => {
+  const walk = (node: VNode, path: string[]): void => {
     if (node.t === "obj") {
       for (const e of node.entries) handleField(e.key, e.value, path);
     } else if (node.t === "arr") {
@@ -265,14 +258,9 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild
     }
   };
 
-  /**
-   * @param {string} key
-   * @param {VNode} value
-   * @param {string[]} path
-   */
-  const handleField = (key, value, path) => {
+  const handleField = (key: string, value: VNode, path: string[]): void => {
     const here = [...path, key];
-    const at = { file, path: here.join(".") };
+    const at: SourceLocation = { file, path: here.join(".") };
     if (key === "effects" || key === "temporary_effects") {
       if (value.t === "obj") for (const se of value.entries) checkStatus(se.key, { file, path: [...here, se.key].join(".") });
       return;
@@ -337,27 +325,15 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild
     if (value.t === "obj" || value.t === "arr") walk(value, here);
   };
 
-  /**
-   * @param {string} name
-   * @param {import('./result.ts').SourceLocation} at
-   */
   /** names provided only by native mod code (editor/registered-names.json), warned once per file */
-  const nativeWarned = new Set();
-  /**
-   * @param {string} name
-   * @param {import('./result.ts').SourceLocation} at
-   */
-  const checkNative = (name, at) => {
+  const nativeWarned = new Set<string>();
+  const checkNative = (name: string, at: SourceLocation): void => {
     if (!sets.registered.has(name) || !nativeBuild || nativeBuild.known || nativeWarned.has(name)) return;
     nativeWarned.add(name);
     const id = nativeBuild.identity ? ` (TimeDateStamp ${nativeBuild.identity.timeDateStamp}, SizeOfImage ${nativeBuild.identity.sizeOfImage})` : "";
     rb.warn("native-build-unknown", `"${name}" is provided by native mod code (mewframework), but the installed Mewgenics.exe is not a build the bindings know${id}: the framework will stay inactive and the game will report NO_*_NAMED. Port the bindings first (docs/binding-port.md, check_game_build / port_bindings).`, at);
   };
-  /**
-   * @param {string} name
-   * @param {import('./result.ts').SourceLocation} at
-   */
-  const checkStatus = (name, at) => {
+  const checkStatus = (name: string, at: SourceLocation): void => {
     if (!statusSet.has(name)) {
       rb.error("unknown-status", `status "${name}" is not defined in base data, not native-registered, and not added by this mod`, at);
       return;
@@ -365,11 +341,7 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild
     checkNative(name, at);
   };
 
-  /**
-   * @param {string} key
-   * @param {import('./result.ts').SourceLocation} at
-   */
-  const checkLoc = (key, at) => {
+  const checkLoc = (key: string, at: SourceLocation): void => {
     const row = findLocRow(key);
     if (!row) {
       rb.error("missing-loc-key", `localization key "${key}" not found in combined.csv (base or this mod's .csv overlay)`, at);
@@ -380,9 +352,10 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild
       return;
     }
     // Translation columns are indices 3..11 (sp..zh-cn); en is 1, notes is 2.
-    const missing = [];
+    const missing: string[] = [];
     for (let i = 3; i < LOC_COLUMNS.length; i++) {
-      if (!row[i] || row[i].trim() === "") missing.push(LOC_COLUMNS[i]);
+      const cell = row[i];
+      if (!cell || cell.trim() === "") missing.push(LOC_COLUMNS[i]!);
     }
     if (missing.length > 0) {
       rb.warn("missing-translation", `localization key "${key}" is missing translations: ${missing.join(", ")}`, at);
@@ -398,7 +371,7 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild
     rb.warn("base-missing", `${o.relPath} is a ${o.mode} overlay but base file ${o.baseName} was not found under .extracted/ (cannot verify targets)`, { file });
   }
   if (baseExists && (o.mode === "merge" || o.mode === "patch" || o.mode === "append")) {
-    let baseRoot;
+    let baseRoot: VNode | null;
     try {
       baseRoot = toValue(parse(readFileSync(baseAbs, "utf8")));
     } catch {
@@ -423,33 +396,22 @@ function validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild
 /**
  * Warn about merge fields whose target does not exist in the base (merge would
  * silently add them, which usually indicates a value-change mistake).
- * @param {VObject} overlay
- * @param {VObject} base
- * @param {string[]} path
- * @param {ReportBuilder} rb
- * @param {string} file
  */
-function checkMergeTargets(overlay, base, path, rb, file) {
+function checkMergeTargets(overlay: VObject, base: VObject, path: string[], rb: ReportBuilder, file: string): void {
   for (const e of overlay.entries) {
     const i = findIndex(base, e.key);
     const here = [...path, e.key];
     if (i < 0) {
       rb.warn("merge-target-missing", `.merge target "${here.join(".")}" does not exist in the base file; it will be ADDED, not changed`, { file, path: here.join(".") });
-    } else if (e.value.t === "obj" && base.entries[i].value.t === "obj") {
-      checkMergeTargets(e.value, /** @type {VObject} */ (base.entries[i].value), here, rb, file);
+    } else {
+      const bv = base.entries[i]!.value;
+      if (e.value.t === "obj" && bv.t === "obj") checkMergeTargets(e.value, bv, here, rb, file);
     }
   }
 }
 
-/**
- * Warn about patch policies whose target does not exist.
- * @param {VObject} overlay
- * @param {VObject} base
- * @param {string[]} path
- * @param {ReportBuilder} rb
- * @param {string} file
- */
-function checkPatchTargets(overlay, base, path, rb, file) {
+/** Warn about patch policies whose target does not exist. */
+function checkPatchTargets(overlay: VObject, base: VObject, path: string[], rb: ReportBuilder, file: string): void {
   for (const e of overlay.entries) {
     const { name, policy } = parsePolicy(e.key);
     const here = [...path, name];
@@ -460,8 +422,9 @@ function checkPatchTargets(overlay, base, path, rb, file) {
       }
       continue;
     }
-    if ((policy === "default" || policy === "merge") && e.value.t === "obj" && base.entries[i].value.t === "obj") {
-      checkPatchTargets(e.value, /** @type {VObject} */ (base.entries[i].value), here, rb, file);
+    const bv = base.entries[i]!.value;
+    if ((policy === "default" || policy === "merge") && e.value.t === "obj" && bv.t === "obj") {
+      checkPatchTargets(e.value, bv, here, rb, file);
     }
     if ((policy === "add" || policy === "multiply") && (e.value.t !== "str" || e.value.num === null)) {
       rb.warn("patch-nonnumeric", `.${policy} on "${here.join(".")}" but the value is not a number`, { file, path: here.join(".") });
@@ -469,13 +432,7 @@ function checkPatchTargets(overlay, base, path, rb, file) {
   }
 }
 
-/**
- * @param {OverlayFile} o
- * @param {ReportBuilder} rb
- * @param {ReturnType<typeof loadLocalization>} loc
- * @param {string} modName
- */
-function validateCsvOverlay(o, rb, loc, modName) {
+function validateCsvOverlay(o: OverlayFile, rb: ReportBuilder, loc: LocTable, modName: string): void {
   const file = `mods/${modName}/${o.relPath}`;
   const rows = parseCsv(o.text);
   if (o.mode === "merge" || o.mode === "patch") {
@@ -493,7 +450,6 @@ function validateCsvOverlay(o, rb, loc, modName) {
   });
 }
 
-/** @param {string} p */
-export function repoRelative(p) {
+export function repoRelative(p: string): string {
   return relative(REPO_ROOT, p).replace(/\\/g, "/");
 }

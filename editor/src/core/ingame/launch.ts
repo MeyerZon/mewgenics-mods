@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import { join, isAbsolute } from "node:path";
 import { spawnSync } from "node:child_process";
 import { REPO_ROOT, MODS_DIR, touchesSaves } from "../repo.ts";
-import { SAVESUFFIX_RE } from "./script.ts";
+import { SAVESUFFIX_RE, type Plan } from "./script.ts";
 
 export const DEFAULT_GAME_DIR = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Mewgenics";
 export const STEAM_APP_ID = "686060";
@@ -16,27 +16,21 @@ export const NATIVE_DIST_DIR = join(REPO_ROOT, "native", "dist");
 export const MEWTEST_DLL_NAME = "mewtest.dll";
 export const FRAMEWORK_DLL_NAME = "mewframework.dll";
 
+export type Env = Record<string, string | undefined>;
+
 export class LaunchError extends Error {
-  /** @param {string} message */
-  constructor(message) {
+  constructor(message: string) {
     super(message);
     this.name = "LaunchError";
   }
 }
 
-/**
- * @param {Record<string, string|undefined>} env
- * @returns {string}
- */
-export function locateGameDir(env) {
+export function locateGameDir(env: Env): string {
   return env.MEWGENICS_DIR && env.MEWGENICS_DIR.trim() ? env.MEWGENICS_DIR.trim() : DEFAULT_GAME_DIR;
 }
 
-/**
- * Is steam.exe running? true / false / null (could not tell).
- * @returns {boolean|null}
- */
-export function detectSteam() {
+/** Is steam.exe running? true / false / null (could not tell). */
+export function detectSteam(): boolean | null {
   try {
     const r = spawnSync("tasklist", ["/FI", "IMAGENAME eq steam.exe", "/NH"], { encoding: "utf8", windowsHide: true });
     if (r.error || r.status !== 0) return null;
@@ -46,28 +40,38 @@ export function detectSteam() {
   }
 }
 
-/**
- * @typedef {{ ok: boolean, skipped: boolean, reasons: string[], checks: Record<string, { ok: boolean, path?: string, detail?: string }> }} Preflight
- */
+export interface PreflightCheck {
+  ok: boolean;
+  path?: string;
+  detail?: string;
+}
 
-/**
- * @param {import("./script.ts").Plan} plan
- * @param {{ gameDir: string, env: Record<string, string|undefined>, exists?: (p: string) => boolean, steamRunning?: () => boolean|null, modsDir?: string, appdataLogsDir: string|null }} ctx
- * @returns {Preflight}
- */
-export function preflight(plan, ctx) {
+export interface Preflight {
+  ok: boolean;
+  skipped: boolean;
+  reasons: string[];
+  checks: Record<string, PreflightCheck>;
+}
+
+export interface PreflightContext {
+  gameDir: string;
+  env: Env;
+  exists?: (p: string) => boolean;
+  steamRunning?: () => boolean | null;
+  modsDir?: string;
+  appdataLogsDir: string | null;
+}
+
+export function preflight(plan: Plan, ctx: PreflightContext): Preflight {
   const env = ctx.env || {};
   if (env.MEWTEST_SKIP === "1") return { ok: false, skipped: true, reasons: ["MEWTEST_SKIP=1"], checks: {} };
   const exists = ctx.exists || existsSync;
   const modsDir = ctx.modsDir || MODS_DIR;
   const fake = Boolean(env.MEWTEST_FAKE_GAME);
-  /** @type {Preflight["checks"]} */
-  const checks = {};
-  /** @type {string[]} */
-  const reasons = [];
+  const checks: Preflight["checks"] = {};
+  const reasons: string[] = [];
 
-  /** @param {string} key @param {string} path @param {string} what */
-  const need = (key, path, what) => {
+  const need = (key: string, path: string, what: string) => {
     if (fake) { checks[key] = { ok: true, path, detail: "fake game" }; return; }
     const ok = exists(path);
     checks[key] = { ok, path };
@@ -96,15 +100,27 @@ export function preflight(plan, ctx) {
   return { ok: reasons.length === 0, skipped: false, reasons, checks };
 }
 
-/**
- * @param {import("./script.ts").Plan} plan
- * @param {{ gameDir: string, scriptPath: string, outPath: string, env: Record<string, string|undefined>, modsDir?: string }} ctx
- * @returns {{ command: string, args: string[], cwd: string, env: Record<string, string>, fake: boolean }}
- */
-export function buildLaunch(plan, ctx) {
+export interface LaunchContext {
+  gameDir: string;
+  scriptPath: string;
+  outPath: string;
+  env: Env;
+  modsDir?: string;
+}
+
+export interface LaunchSpec {
+  command: string;
+  args: string[];
+  cwd: string;
+  env: Record<string, string>;
+  fake: boolean;
+}
+
+export function buildLaunch(plan: Plan, ctx: LaunchContext): LaunchSpec {
   const modsDir = ctx.modsDir || MODS_DIR;
   if (!SAVESUFFIX_RE.test(plan.savesuffix)) throw new LaunchError(`invalid save suffix ${JSON.stringify(plan.savesuffix)}`);
-  for (const [what, p] of [["script path", ctx.scriptPath], ["result path", ctx.outPath], ["game dir", ctx.gameDir], ["mods dir", modsDir]]) {
+  const paths: [string, string][] = [["script path", ctx.scriptPath], ["result path", ctx.outPath], ["game dir", ctx.gameDir], ["mods dir", modsDir]];
+  for (const [what, p] of paths) {
     if (!isAbsolute(p)) throw new LaunchError(`${what} must be absolute: ${p}`);
     if (touchesSaves(p)) throw new LaunchError(`refusing a ${what} under a saves directory: ${p}`);
   }
@@ -123,13 +139,12 @@ export function buildLaunch(plan, ctx) {
     "-mewtest_clean", plan.clean ? "1" : "0",
     "-modpaths", ...modPaths,
   ];
-  /** @type {Record<string, string>} */
-  const env = {};
+  const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(ctx.env || {})) if (typeof v === "string") env[k] = v;
   env.SteamAppId = STEAM_APP_ID;
   env.SteamGameId = STEAM_APP_ID;
 
   const fake = ctx.env && ctx.env.MEWTEST_FAKE_GAME ? String(ctx.env.MEWTEST_FAKE_GAME) : "";
-  if (fake) return { command: process.argv[0], args: [fake, ...args], cwd: ctx.gameDir, env, fake: true };
+  if (fake) return { command: process.argv[0]!, args: [fake, ...args], cwd: ctx.gameDir, env, fake: true };
   return { command: join(ctx.gameDir, "Mewgenics.exe"), args, cwd: ctx.gameDir, env, fake: false };
 }

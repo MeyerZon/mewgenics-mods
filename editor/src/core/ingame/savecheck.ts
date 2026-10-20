@@ -19,41 +19,35 @@ import { createHash } from "node:crypto";
 export const KNOWN_REAL_SAVE_SHA256 = "09a68a36f6337e4eb493a7b2c119fdae494c02d0ef5438881e032faa03a7af08";
 export const REAL_SAVE_FILE = "steamcampaign01.sav";
 
-/** @typedef {{ path: string, present: boolean, sha256: string|null, bytes: number, mtimeMs: number }} SaveSnapshot */
+export interface SaveSnapshot {
+  path: string;
+  present: boolean;
+  sha256: string | null;
+  bytes: number;
+  mtimeMs: number;
+}
 
-/**
- * @param {string} path
- * @returns {SaveSnapshot}
- */
-export function snapshotFile(path) {
+export function snapshotFile(path: string): SaveSnapshot {
   if (!existsSync(path)) return { path, present: false, sha256: null, bytes: 0, mtimeMs: 0 };
   const buf = readFileSync(path);
   const st = statSync(path);
   return { path, present: true, sha256: createHash("sha256").update(buf).digest("hex"), bytes: buf.length, mtimeMs: st.mtimeMs };
 }
 
-/**
- * %APPDATA%\Glaiel Games\Mewgenics\<single steamid>\saves\steamcampaign01.sav, or null.
- * @param {Record<string, string|undefined>} env
- * @returns {string|null}
- */
-export function realSavePath(env) {
+/** %APPDATA%\Glaiel Games\Mewgenics\<single steamid>\saves\steamcampaign01.sav, or null. */
+export function realSavePath(env: Record<string, string | undefined>): string | null {
   if (!env.APPDATA) return null;
   const base = join(env.APPDATA, "Glaiel Games", "Mewgenics");
   if (!existsSync(base)) return null;
   const ids = readdirSync(base, { withFileTypes: true })
-    .filter((/** @type {any} */ d) => d.isDirectory() && /^\d+$/.test(d.name))
-    .map((/** @type {any} */ d) => d.name);
+    .filter((d) => d.isDirectory() && /^\d+$/.test(d.name))
+    .map((d) => d.name);
   if (ids.length !== 1) return null;
-  return join(base, ids[0], "saves", REAL_SAVE_FILE);
+  return join(base, ids[0]!, "saves", REAL_SAVE_FILE);
 }
 
-/**
- * %APPDATA%\Glaiel Games\Mewgenics\<single steamid>\saves, or null (two ids: never guess).
- * @param {Record<string, string|undefined>} env
- * @returns {string|null}
- */
-export function realSavesDir(env) {
+/** %APPDATA%\Glaiel Games\Mewgenics\<single steamid>\saves, or null (two ids: never guess). */
+export function realSavesDir(env: Record<string, string | undefined>): string | null {
   const p = realSavePath(env);
   return p ? p.slice(0, p.length - REAL_SAVE_FILE.length - 1) : null;
 }
@@ -67,32 +61,33 @@ export function realSavesDir(env) {
  * build: it does not rename or relocate saves. So the allow-list is the local/test families; the Steam-cloud slots
  * (the real saves) are always protected. The <suffix>-prefixed forms stay in case a future build does use it.
  * OBSERVED 2026-10-18: dev launches wrote campaign02.sav and test00.sav; steamcampaign01.sav untouched.
- * @param {string} suffix
- * @returns {RegExp}
  */
-export function devSavePattern(suffix) {
+export function devSavePattern(suffix: string): RegExp {
   const s = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`^(campaign\\d+\\.sav|test\\d+\\.sav|housetest\\d+\\.sav|${s}campaign\\d+\\.sav|${s}\\d+\\.sav)$`, "i");
 }
 
-/** @typedef {{ dir: string, present: boolean, files: (SaveSnapshot & { name: string })[], skipped: string[] }} SaveSetSnapshot */
+export type NamedSaveSnapshot = SaveSnapshot & { name: string };
+
+export interface SaveSetSnapshot {
+  dir: string;
+  present: boolean;
+  files: NamedSaveSnapshot[];
+  skipped: string[];
+}
 
 /**
  * Hash every *.sav in `dir` except the names `allow` matches (the suffixed launch's own files, listed in `skipped`).
  * Read-only; never follows into other directories.
- * @param {string} dir @param {{ allow: RegExp }} opts
- * @returns {SaveSetSnapshot}
  */
-export function snapshotSaves(dir, opts) {
+export function snapshotSaves(dir: string, opts: { allow: RegExp }): SaveSetSnapshot {
   if (!existsSync(dir)) return { dir, present: false, files: [], skipped: [] };
   const names = readdirSync(dir, { withFileTypes: true })
-    .filter((/** @type {any} */ d) => d.isFile() && /\.sav$/i.test(d.name))
-    .map((/** @type {any} */ d) => d.name)
+    .filter((d) => d.isFile() && /\.sav$/i.test(d.name))
+    .map((d) => d.name)
     .sort();
-  /** @type {string[]} */
-  const skipped = [];
-  /** @type {(SaveSnapshot & { name: string })[]} */
-  const files = [];
+  const skipped: string[] = [];
+  const files: NamedSaveSnapshot[] = [];
   for (const name of names) {
     if (opts.allow.test(name)) { skipped.push(name); continue; }
     files.push({ name, ...snapshotFile(join(dir, name)) });
@@ -100,19 +95,17 @@ export function snapshotSaves(dir, opts) {
   return { dir, present: true, files, skipped };
 }
 
-/**
- * @param {SaveSetSnapshot} before @param {SaveSetSnapshot} after
- * @returns {{ unchanged: boolean, changed: string[], detail: string }}
- */
-export function compareSaveSets(before, after) {
-  /** @type {Map<string, SaveSnapshot>} */
-  const b = new Map(before.files.map((f) => [f.name, f]));
-  /** @type {Map<string, SaveSnapshot>} */
-  const a = new Map(after.files.map((f) => [f.name, f]));
-  /** @type {string[]} */
-  const changed = [];
-  /** @type {string[]} */
-  const why = [];
+export interface SaveSetComparison {
+  unchanged: boolean;
+  changed: string[];
+  detail: string;
+}
+
+export function compareSaveSets(before: SaveSetSnapshot, after: SaveSetSnapshot): SaveSetComparison {
+  const b = new Map<string, SaveSnapshot>(before.files.map((f) => [f.name, f]));
+  const a = new Map<string, SaveSnapshot>(after.files.map((f) => [f.name, f]));
+  const changed: string[] = [];
+  const why: string[] = [];
   for (const [name, x] of b) {
     const y = a.get(name);
     if (!y) { changed.push(name); why.push(`${name} vanished`); continue; }
@@ -126,11 +119,13 @@ export function compareSaveSets(before, after) {
   return { unchanged: changed.length === 0, changed, detail };
 }
 
-/**
- * @param {SaveSnapshot} before @param {SaveSnapshot} after
- * @returns {{ unchanged: boolean, matchesKnownBaseline: boolean, detail: string }}
- */
-export function compareSnapshots(before, after) {
+export interface SnapshotComparison {
+  unchanged: boolean;
+  matchesKnownBaseline: boolean;
+  detail: string;
+}
+
+export function compareSnapshots(before: SaveSnapshot, after: SaveSnapshot): SnapshotComparison {
   const unchanged = before.present === after.present && before.sha256 === after.sha256 && before.bytes === after.bytes;
   const matchesKnownBaseline = after.sha256 === KNOWN_REAL_SAVE_SHA256;
   const detail = !before.present && !after.present

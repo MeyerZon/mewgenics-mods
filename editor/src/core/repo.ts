@@ -24,30 +24,21 @@ export const REGISTERED_NAMES_PATH = join(EDITOR_DIR, "registered-names.json");
 export const ANALYSIS_DIR = join(REPO_ROOT, ".analysis");
 export const COMBINED_CSV = join(EXTRACTED_DATA, "text", "combined.csv");
 
-/**
- * True if `child` is the same as or located inside `parent`.
- * @param {string} parent
- * @param {string} child
- * @returns {boolean}
- */
-export function isInside(parent, child) {
+/** True if `child` is the same as or located inside `parent`. */
+export function isInside(parent: string, child: string): boolean {
   const rel = relative(resolve(parent), resolve(child));
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
-/**
- * True if any path segment is a `saves` directory (case-insensitive).
- * @param {string} p
- */
-export function touchesSaves(p) {
+/** True if any path segment is a `saves` directory (case-insensitive). */
+export function touchesSaves(p: string): boolean {
   return resolve(p)
     .split(sep)
     .some((seg) => seg.toLowerCase() === "saves");
 }
 
 export class SafetyError extends Error {
-  /** @param {string} message */
-  constructor(message) {
+  constructor(message: string) {
     super(message);
     this.name = "SafetyError";
   }
@@ -56,10 +47,10 @@ export class SafetyError extends Error {
 /**
  * Validate and resolve a path for reading base/extracted data. Must live under
  * .extracted/ (or the repo generally) and must not touch a saves directory.
- * @param {string} p absolute or repo-relative
- * @returns {string} resolved absolute path
+ * @param p absolute or repo-relative
+ * @returns resolved absolute path
  */
-export function resolveReadPath(p) {
+export function resolveReadPath(p: string): string {
   const abs = isAbsolute(p) ? resolve(p) : resolve(REPO_ROOT, p);
   if (touchesSaves(abs)) throw new SafetyError(`refusing to read a saves path: ${abs}`);
   return abs;
@@ -68,11 +59,10 @@ export function resolveReadPath(p) {
 /**
  * Validate and resolve a write path under mods/<name>/. Rejects writes outside
  * mods/, any saves path, and the protected game files.
- * @param {string} modName
- * @param {string} relPath  path relative to the mod folder, e.g. "data/abilities/x.gon.append"
- * @returns {string} resolved absolute path
+ * @param relPath path relative to the mod folder, e.g. "data/abilities/x.gon.append"
+ * @returns resolved absolute path
  */
-export function resolveModWritePath(modName, relPath) {
+export function resolveModWritePath(modName: string, relPath: string): string {
   if (!modName || /[\\/]/.test(modName) || modName === "." || modName === "..") {
     throw new SafetyError(`invalid mod name: ${JSON.stringify(modName)}`);
   }
@@ -89,7 +79,7 @@ export function resolveModWritePath(modName, relPath) {
 }
 
 /** Ensure the git-ignored editor/data/ cache directory exists. */
-export function ensureDataCacheDir() {
+export function ensureDataCacheDir(): string {
   if (!existsSync(DATA_CACHE_DIR)) mkdirSync(DATA_CACHE_DIR, { recursive: true });
   return DATA_CACHE_DIR;
 }

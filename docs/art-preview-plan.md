@@ -228,11 +228,12 @@ un-remapped 16-level art), background colour, zoom/fit. Playback runs at the sce
   `resolveModWritePath`, so they stay inside `mods/<mod>/` and can never touch saves or
   game files. `.swf` outputs are git-ignored already (`*.swf`).
 - **Web server (`web/server.ts`, additive):** `/api/art/*` routes over those calls,
-  plus a read-only static mount `/core-art/<file>.mjs` for the pure shared modules and
+  plus (then) a read-only static mount `/core-art/<file>.mjs` for the pure shared modules — since the Vite
+  build the browser bundle imports them directly — and
   `/api/art/asset` to stream a mod's PNG for the preview. No existing route changes.
 - **MCP (`src/mcp/tools.ts`):** untouched in this pass (the existing 9-tool test pins
   the count). Exposing `build_swf`/`import_svg` as MCP tools is a follow-up.
-- **UI (`web/app.mjs`, `web/index.html`):** a top-bar mode switch **Data | Art**. In Art
+- **UI (then `web/app.mjs`; now `web/src/**/*.tsx`, `web/index.html`):** a top-bar mode switch **Data | Art**. In Art
   mode the explorer lists `art/*.scene.json` + `swfs/*.swf` + `swflist.gon.append`; the
   center hosts the **Art authoring** panel (scene summary, shapes with gray-level
   swatches, sprites/layers/keys, import-SVG drop zone + file picker, "Build SWF"
