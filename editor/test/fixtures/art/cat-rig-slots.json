@@ -1,0 +1,76 @@
+{
+  "note": "Vanilla cat rig layout (instance names and depths only; read by test/art-catrig-tests.ts from .extracted/swfs when present). The longest catanis.swf sprite is the main cat animation.",
+  "minecartCat": {
+    "labels": [
+      "idle",
+      "duck"
+    ],
+    "slots": [
+      {
+        "name": "tail",
+        "depth": 1
+      },
+      {
+        "name": "leg2",
+        "depth": 3
+      },
+      {
+        "name": "arm2",
+        "depth": 5
+      },
+      {
+        "name": "body",
+        "depth": 7
+      },
+      {
+        "name": "head",
+        "depth": 10
+      },
+      {
+        "name": "leg1",
+        "depth": 12
+      },
+      {
+        "name": "arm1",
+        "depth": 14
+      },
+      {
+        "name": "cq1",
+        "depth": 16
+      }
+    ]
+  },
+  "catanisMain": {
+    "frames": 1095,
+    "slots": [
+      {
+        "name": "tail",
+        "depth": 1
+      },
+      {
+        "name": "leg2",
+        "depth": 3
+      },
+      {
+        "name": "arm2",
+        "depth": 5
+      },
+      {
+        "name": "body",
+        "depth": 7
+      },
+      {
+        "name": "leg1",
+        "depth": 9
+      },
+      {
+        "name": "arm1",
+        "depth": 11
+      },
+      {
+        "name": "head",
+        "depth": 13
+      }
+    ]
+  }
+}
