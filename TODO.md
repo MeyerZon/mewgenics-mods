@@ -195,8 +195,14 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 7. [ ] **Validator fixtures per check**: one failing fixture per finding code (`unknown-status`, `missing-loc-key`,
    `merge-target-missing`, …) so the four checks are each pinned by a T0 test instead of only by the sample mods.
 8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
-   (via a `.mewtest` that reads the live value, once 1 lands) so the overlay engine is tested against the game, not
-   only against the decompile.
+   so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1
+   (2026-10-20):** no console command reads a live GON value — the full in-run command set (84, pinned in
+   `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`) has `spawn`/`load`/`status`/`passive`/`equip`
+   but nothing that prints a field, and the decompiled file resolver works on parsed GON trees, so an in-game golden
+   needs the GON object layout (new RE). Owner to accept or reject the weaker sub-item:
+   - [ ] "golden through `dump`": spawn a unit whose character is changed by a `.merge`/`.append` overlay and pin
+     its `move`/`act`/`faction`/`statuses` from the units event against a vanilla dump — pins the merge and append
+     policies differentially, not the `.patch` per-field policies on non-numeric fields.
 9. [x] **`npm test` without `.extracted/`** (done 2026-10-19, leftovers PR 3: round-trip, real-overlay, validator and the two
    base-data MCP calls skip with a logged `(skipped: …)`; a nested run with `MEWGENICS_EXTRACTED_DATA` = empty dir is
    itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged
