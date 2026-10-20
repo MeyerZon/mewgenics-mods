@@ -31,8 +31,9 @@ export function runArtImportTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     eq((sc.entries || sc.symbols).map((e: any) => e.name).filter((n: string) => !n.includes("_fla.")).sort().join(","), fx["catparts.swf"]!.join(","));
   });
 
-  test("validateScene: an import is a placeable character; import-unknown for a name the source does not export, import-from for a non-.swf source, dup-id across imports", () => {
-    assert((validateScene(withImport()) as any).ok, JSON.stringify((validateScene(withImport()) as any).findings));
+  test("validateScene: any import is import-unsupported (OBSERVED: the game crashes instantiating a clip that places one); import-unknown for a name the source does not export, import-from for a non-.swf source, dup-id across imports", () => {
+    const v0 = validateScene(withImport()) as any;
+    assert(!v0.ok && v0.findings.some((f: any) => f.code === "import-unsupported" && f.severity === "error"), JSON.stringify(v0.findings));
     const bad = withImport();
     bad.imports.nope = { from: "catparts.swf", name: "CatWing" };
     bad.imports.body = { from: "catparts.swf", name: "CatBody" };
@@ -63,8 +64,9 @@ export function runArtImportTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     assert(names.includes("ImportAssets2"), names.join(","));
   });
 
-  test("OBSERVED fixture (artprobe-cat-summary.json): the import experiment's outcome is recorded", () => {
-    const j = JSON.parse(readFileSync(join(HERE, "fixtures", "ingame", "artprobe-cat-summary.json"), "utf8")) as { importParts?: string };
-    assert(j.importParts === "drawn" || j.importParts === "not-drawn", `importParts: ${j.importParts}`);
+  test("OBSERVED 2026-10-20 fixture (artprobe-cat-summary.json): the import experiment — a SWF with ImportAssets2 entries loads, but spawning a character whose clip places an imported catparts.swf symbol crashes (0xc0000005); the same clip without the imports runs", () => {
+    const j = JSON.parse(readFileSync(join(HERE, "fixtures", "ingame", "artprobe-cat-summary.json"), "utf8")) as { importParts?: { verdict: string; boot: string; control: string } };
+    const ip = j.importParts;
+    assert(!!ip && ip.verdict === "crash" && ip.boot === "pass" && ip.control === "pass", JSON.stringify(ip));
   });
 }
