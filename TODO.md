@@ -173,9 +173,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    `Component_GetGame`, `FW_DATA_MewDirector`, …). Not taken: the Continue-button/campaign route (would open a
    `campaign0N.sav`; recorded, not wired) and SDL input injection. Bonus: the watchdog now closes the game's modal
    WARNING/ERROR boxes and reports them as `popup` events, so a run never hangs on a dialog.
-2. [ ] **Joker's Luck real feature test (T2)** once 1 lands: `bind JokersGambit`, use it, `wait turns 2`,
-   `expect status JokersLuck on 0`, `dump` twice and assert the luck stacks differ between turns (needs the stacks
-   value in the units event: add `stacks` per status to `MtUnit`/the JSONL, host-tested first).
+2. [x] **Joker's Luck real feature test (T2)** (2026-10-20): `mods/jokers-luck/tests/luck-rerolls.mewtest` — `enter
+   TacticsTest`, `bind JokersGambit` (accepted), `expect status JokersLuck on 0`, `expect stacks JokersLuck on 0 >= 1`,
+   four `dump`s across three rounds, `expect stacks JokersLuck on 0 varied`: **pass** (stacks 1 → 10 → 7 → 9). The
+   status is put on the cats at battle start by the test-only overlay `mods/_jokersluck-test/`
+   (`StatusOnBattleStart { JokersLuck 1 }`); `stacks` per status is in the units event (host-tested). Found: the
+   harness had refused the status's cloned vtable (framework thunks outside the exe) — fixed.
 3. [x] **Auto-resolve overlay mod** `mods/_autoplay/` (`data/characters/player_cat.gon.merge` → `PlayerCat { passives {
    Uncontrollable 1 } }`), 2026-10-20: validator + merge-preview tests (`run-tests.ts` 4c, PR #43), T2 load smoke, and
    `tests/round2.mewtest` — `enter TacticsTest`, `spawn Rat`, `wait rounds 1`, `expect round >= 2`: **pass**, the
@@ -199,8 +202,14 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    and ignored `MEWGENICS_EXTRACTED_DATA` (fixed). Follow-up: `preview-merge.ts` still joins `.extracted` directly
    (same fix, when the merge preview gets its own fixtures).
 8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
-   (via a `.mewtest` that reads the live value, once 1 lands) so the overlay engine is tested against the game, not
-   only against the decompile.
+   so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1
+   (2026-10-20):** no console command reads a live GON value — the full in-run command set (84, pinned in
+   `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`) has `spawn`/`load`/`status`/`passive`/`equip`
+   but nothing that prints a field, and the decompiled file resolver works on parsed GON trees, so an in-game golden
+   needs the GON object layout (new RE). Owner to accept or reject the weaker sub-item:
+   - [ ] "golden through `dump`": spawn a unit whose character is changed by a `.merge`/`.append` overlay and pin
+     its `move`/`act`/`faction`/`statuses` from the units event against a vanilla dump — pins the merge and append
+     policies differentially, not the `.patch` per-field policies on non-numeric fields.
 9. [x] **`npm test` without `.extracted/`** (done 2026-10-19, leftovers PR 3: round-trip, real-overlay, validator and the two
    base-data MCP calls skip with a logged `(skipped: …)`; a nested run with `MEWGENICS_EXTRACTED_DATA` = empty dir is
    itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged

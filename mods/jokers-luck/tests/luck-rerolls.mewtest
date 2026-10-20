@@ -1,0 +1,21 @@
+mods: jokers-luck, _autoplay, _jokersluck-test
+timeout: 120s
+# TDD target 2: Joker's Luck in a real fight. _jokersluck-test gives every player cat JokersLuck 1 at battle start;
+# _autoplay lets the fight run unattended; the native status rerolls its stacks at the start of each turn, so three
+# dumps across rounds must show at least two distinct values on the first cat.
+wait frames 120
+enter TacticsTest
+wait turns 1
+cmd bind JokersGambit
+expect noconsole "No command named"
+expect status JokersLuck on 0
+expect stacks JokersLuck on 0 >= 1
+dump
+wait rounds 1
+dump
+wait rounds 1
+dump
+wait rounds 1
+dump
+expect stacks JokersLuck on 0 varied
+quit

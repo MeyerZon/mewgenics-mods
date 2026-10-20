@@ -139,7 +139,13 @@ static int read_ptr(const void *addr, void **out) { return safe_read(addr, out, 
 static int read_u32(const void *addr, uint32_t *out) { return safe_read(addr, out, sizeof *out); }
 static int read_i32(const void *addr, int *out) { return safe_read(addr, out, sizeof *out); }
 #define AT(base, off) ((const void *)((const char *)(base) + (off)))
-static int code_ptr_ok(const void *p) { return (uintptr_t)p >= g_base && (uintptr_t)p < g_imageEnd; }
+/* a code pointer the harness may call: inside the game image, or inside mewframework.dll — a framework-registered
+ * status (Joker's Luck) carries a cloned vtable whose slots 0-3 are the framework's thunks, outside the exe */
+static uintptr_t g_fwBase, g_fwEnd;
+static int code_ptr_ok(const void *p) {
+    uintptr_t a = (uintptr_t)p;
+    return (a >= g_base && a < g_imageEnd) || (g_fwBase && a >= g_fwBase && a < g_fwEnd);
+}
 
 /* copy an MSVC std::string living in game memory into buf */
 static int read_msvc_string(const void *addr, char *buf, size_t cap) {
@@ -773,6 +779,15 @@ static void init(void) {
         const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)g_base;
         const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64 *)(g_base + dos->e_lfanew);
         g_imageEnd = g_base + nt->OptionalHeader.SizeOfImage;
+    }
+    {
+        HMODULE fw = GetModuleHandleA("mewframework.dll");
+        if (fw) {
+            const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)fw;
+            const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64 *)((const char *)fw + dos->e_lfanew);
+            g_fwBase = (uintptr_t)fw;
+            g_fwEnd = g_fwBase + nt->OptionalHeader.SizeOfImage;
+        }
     }
     g_Execute = (fn_Execute)g_fw.GetSymbol(FW_SYM_DebugConsole_Execute);
     g_Allocate = (fn_Allocate)g_fw.GetSymbol(FW_SYM_string_Allocate);
