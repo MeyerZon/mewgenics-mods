@@ -21,7 +21,7 @@ import { IDENTITY, normalizePath, flattenSubpath, signedArea, subpathBounds } fr
 import type { Mat, SubPath, Edge } from "./geometry.ts";
 import { parseFill, fillToRgba } from "./scene.ts";
 import type { SceneShape, SceneGradient, Finding } from "./scene.ts";
-import { gradientMatrix, gradientFocal, gradientProblems, resolveStops, swfSpread } from "./gradient.ts";
+import { gradientMatrix, gradientFocal, gradientProblems, gradientNeedsShape4, resolveStops, swfSpread, MAX_STOPS_SHAPE3 } from "./gradient.ts";
 import type { ResolvedStop } from "./gradient.ts";
 import { BitWriter, TAG, nbitsForSigned, nbitsForUnsigned, writeRect, writeMatrix, writeRgba, tag } from "./swf-bits.ts";
 import type { Rect, Rgba } from "./swf-bits.ts";
@@ -38,8 +38,10 @@ export interface ShapeContext {
 }
 
 export interface EncodedShape {
-  /** framed DefineShape3 tag */
+  /** framed DefineShape3 / DefineShape4 tag */
   bytes: Uint8Array;
+  /** the DefineShape version written */
+  version?: 3 | 4;
   /** twips */
   bounds: Rect;
   fillCount: number;
@@ -54,8 +56,43 @@ type FillDef =
   | { kind: "bitmap"; id: number; matrix: Mat }
   | { kind: "gradient"; type: 0x10 | 0x12 | 0x13; matrix: Mat; stops: ResolvedStop[]; spread: 0 | 1 | 2; focal: number };
 interface LineDef {
+  /** twips */
   width: number;
-  color: Rgba;
+  color: Rgba | null;
+  /** LINESTYLE2 fill (DefineShape4 only) */
+  fill: FillDef | null;
+  /** SWF cap / join codes: 0 round, 1 none(butt) / bevel, 2 square / miter */
+  cap: 0 | 1 | 2;
+  join: 0 | 1 | 2;
+  miter: number;
+  noScale: boolean;
+}
+
+const CAP_CODE: Record<string, 0 | 1 | 2> = { round: 0, butt: 1, square: 2 };
+const JOIN_CODE: Record<string, 0 | 1 | 2> = { round: 0, bevel: 1, miter: 2 };
+
+/** True when a path's stroke needs LINESTYLE2 (a cap/join other than round, a miter limit, a non-scaling stroke). */
+function strokeNeedsShape4(p: { strokeCap?: string; strokeJoin?: string; strokeScale?: string }): boolean {
+  return (!!p.strokeCap && p.strokeCap !== "round") || (!!p.strokeJoin && p.strokeJoin !== "round") || p.strokeScale === "none";
+}
+
+/**
+ * The DefineShape version a scene shape needs: 4 for LINESTYLE2 strokes (caps, joins, non-scaling, gradient strokes)
+ * and DefineShape4-only gradients (>8 stops, focal, reflect/repeat); otherwise 3, so plain art stays byte-identical.
+ */
+export function shapeVersion(shape: SceneShape, gradients: Record<string, SceneGradient> = {}): 3 | 4 {
+  const g4 = (fill: string | null | undefined): boolean => {
+    const f = parseFill(fill).fill;
+    return f.kind === "gradient" && !!gradients[f.id] && gradientNeedsShape4(gradients[f.id]!);
+  };
+  for (const p of shape.paths || []) {
+    if (g4(p.fill)) return 4;
+    if (p.stroke && (p.strokeWidth ?? 0) > 0) {
+      if (strokeNeedsShape4(p)) return 4;
+      if (parseFill(p.stroke).fill.kind === "gradient") return 4;
+    }
+  }
+  return 3;
 }
 interface Run {
   fill0: number;
@@ -69,11 +106,17 @@ export type FillSide = "left" | "right" | "none";
 
 const MAX_EDGE_BITS = 17; // NumBits (4 bits) + 2
 
+/** Encode one scene shape as a DefineShape3 tag (LINESTYLE2 / DefineShape4-only features dropped with a warning). */
+export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: ShapeContext = {}): EncodedShape {
+  return encodeDefineShape(shapeId, shape, { ...ctx, version: 3 });
+}
+
 /**
- * Encode one scene shape as a DefineShape3 tag.
+ * Encode one scene shape as DefineShape3 or DefineShape4 (`ctx.version`, default: shapeVersion()).
  * @param shapeId character id
  */
-export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: ShapeContext = {}): EncodedShape {
+export function encodeDefineShape(shapeId: number, shape: SceneShape, ctx: ShapeContext & { version?: 3 | 4 } = {}): EncodedShape {
+  const version = ctx.version ?? shapeVersion(shape, ctx.gradients || {});
   const findings: Finding[] = [];
   const at = `shapes.${ctx.shapeName ?? shapeId}`;
   const fillStyles: FillDef[] = [];
@@ -109,14 +152,9 @@ export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: Shap
         fillIdx = fillStyles.length;
       }
     } else if (pf.fill.kind === "gradient") {
-      const g = ctx.gradients ? ctx.gradients[pf.fill.id] : undefined;
-      const problems = g ? gradientProblems(g) : [];
-      if (!g) findings.push({ severity: "error", code: "gradient-missing", message: `fill references gradient "${pf.fill.id}" which is not in scene.gradients`, path: `${pat}.fill` });
-      else if (problems.length) findings.push({ severity: "error", code: problems[0]!.code, message: `gradient "${pf.fill.id}": ${problems[0]!.message}`, path: `${pat}.fill` });
-      else {
-        const focal = gradientFocal(g);
-        const type = g.kind === "linear" ? 0x10 : focal !== 0 ? 0x13 : 0x12;
-        fillStyles.push({ kind: "gradient", type, matrix: gradientMatrix(g, p.transform || IDENTITY), stops: resolveStops(g.stops), spread: swfSpread(g.spread), focal });
+      const gf = gradientFill(pf.fill.id, p.transform || IDENTITY, `${pat}.fill`);
+      if (gf) {
+        fillStyles.push(gf);
         fillIdx = fillStyles.length;
       }
     } else if (pf.error) {
@@ -126,11 +164,24 @@ export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: Shap
     let lineIdx = 0;
     if (p.stroke) {
       const sw = p.strokeWidth ?? 0;
-      const color = fillToRgba(parseFill(p.stroke).fill);
-      if (!(sw > 0) || !color) {
-        findings.push({ severity: "warning", code: "stroke-dropped", message: !(sw > 0) ? "stroke has no width; dropped" : `stroke ${p.stroke} is not a solid colour; dropped`, path: `${pat}.stroke` });
+      const sf = parseFill(p.stroke).fill;
+      const color = fillToRgba(sf);
+      const lineFill = version === 4 && sf.kind === "gradient" && sw > 0 ? gradientFill(sf.id, p.transform || IDENTITY, `${pat}.stroke`) : null;
+      if (!(sw > 0) || (!color && !lineFill)) {
+        findings.push({ severity: "warning", code: "stroke-dropped", message: !(sw > 0) ? "stroke has no width; dropped" : `stroke ${p.stroke} is not a solid colour${version === 3 ? " (gradient strokes need DefineShape4)" : ""}; dropped`, path: `${pat}.stroke` });
       } else {
-        lineStyles.push({ width: Math.max(1, Math.round(sw * 20)), color });
+        const v4 = version === 4;
+        if (!v4 && (strokeNeedsShape4(p) || p.miterLimit !== undefined)) findings.push({ severity: "warning", code: "stroke-style-dropped", message: "caps / joins / miter limit / non-scaling need DefineShape4; drawn with round caps and joins", path: `${pat}.stroke` });
+        const join = v4 ? JOIN_CODE[p.strokeJoin || "round"] ?? 0 : 0;
+        lineStyles.push({
+          width: Math.max(1, Math.round(sw * 20)),
+          color: lineFill ? null : color,
+          fill: lineFill,
+          cap: v4 ? CAP_CODE[p.strokeCap || "round"] ?? 0 : 0,
+          join,
+          miter: join === 2 ? p.miterLimit ?? 4 : 0,
+          noScale: v4 && p.strokeScale === "none",
+        });
         lineIdx = lineStyles.length;
       }
     }
@@ -159,45 +210,48 @@ export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: Shap
     if (dropped) findings.push({ severity: "info", code: "subpath-dropped", message: `${dropped} sub-path(s) lie entirely inside/outside the fill and were dropped`, path: pat });
   });
 
-  // bounds in twips (+ half the widest stroke)
+  // bounds in twips (+ half the widest stroke); EdgeBounds (DefineShape4) is the geometry alone
   const pseudo: SubPath[] = runs.map((r) => ({ start: r.start, edges: r.edges, closed: true }));
   let bounds = subpathBounds(pseudo);
+  const edgeBounds = bounds ? { ...bounds } : { xmin: 0, ymin: 0, xmax: 0, ymax: 0 };
   if (!bounds) {
     bounds = { xmin: 0, ymin: 0, xmax: 0, ymax: 0 };
     findings.push({ severity: "warning", code: "shape-no-edges", message: "shape has no drawable edges", path: at });
   } else if (lineStyles.length) {
-    const half = Math.ceil(Math.max(...lineStyles.map((l) => l.width)) / 2);
+    // half the widest stroke, times how far a miter (its limit) or a square cap (√2 at a corner) reaches past it
+    const half = Math.ceil(Math.max(...lineStyles.map((l) => (l.width / 2) * (l.join === 2 ? Math.max(l.miter, Math.SQRT2) : l.cap === 2 ? Math.SQRT2 : 1))));
     bounds = { xmin: bounds.xmin - half, ymin: bounds.ymin - half, xmax: bounds.xmax + half, ymax: bounds.ymax + half };
   }
 
   const w = new BitWriter(1024);
   w.u16(shapeId);
   writeRect(w, bounds);
-  writeStyleCount(w, fillStyles.length);
-  for (const f of fillStyles) {
-    if (f.kind === "solid") {
-      w.u8(0x00);
-      writeRgba(w, f.color);
-    } else if (f.kind === "gradient") {
-      w.u8(f.type);
-      writeMatrix(w, f.matrix);
-      // GRADIENT: SpreadMode(2) InterpolationMode(2, 0 = normal RGB) NumGradients(4), then RATIO + RGBA per stop
-      w.u8((f.spread << 6) | (f.stops.length & 0x0f));
-      for (const s of f.stops) {
-        w.u8(s.ratio);
-        writeRgba(w, s.color);
-      }
-      if (f.type === 0x13) w.u16(Math.round(f.focal * 256) & 0xffff); // FIXED8 focal point
-    } else {
-      w.u8(0x41); // clipped bitmap
-      w.u16(f.id);
-      writeMatrix(w, f.matrix);
-    }
+  if (version === 4) {
+    writeRect(w, edgeBounds);
+    // Reserved(5) UsesFillWindingRule(1) UsesNonScalingStrokes(1) UsesScalingStrokes(1)
+    w.u8((lineStyles.some((l) => l.noScale) ? 0x02 : 0) | (lineStyles.some((l) => !l.noScale) ? 0x01 : 0));
   }
+  writeStyleCount(w, fillStyles.length);
+  for (const f of fillStyles) writeFillStyle(w, f);
   writeStyleCount(w, lineStyles.length);
   for (const l of lineStyles) {
     w.u16(l.width);
-    writeRgba(w, l.color);
+    if (version === 4) {
+      // LINESTYLE2: StartCap(2) Join(2) HasFill(1) NoHScale(1) NoVScale(1) PixelHinting(1) Reserved(5) NoClose(1) EndCap(2)
+      const ns = l.noScale ? 1 : 0;
+      w.writeUB(2, l.cap);
+      w.writeUB(2, l.join);
+      w.writeUB(1, l.fill ? 1 : 0);
+      w.writeUB(1, ns);
+      w.writeUB(1, ns);
+      w.writeUB(1, 0);
+      w.writeUB(5, 0);
+      w.writeUB(1, 0);
+      w.writeUB(2, l.cap);
+      if (l.join === 2) w.u16(Math.round(Math.max(1, l.miter) * 256) & 0xffff); // FIXED8 MiterLimitFactor
+      if (l.fill) writeFillStyle(w, l.fill);
+      else writeRgba(w, l.color as Rgba);
+    } else writeRgba(w, l.color as Rgba);
   }
   const numFillBits = nbitsForUnsigned(fillStyles.length);
   const numLineBits = nbitsForUnsigned(lineStyles.length);
@@ -232,7 +286,55 @@ export function encodeDefineShape3(shapeId: number, shape: SceneShape, ctx: Shap
   }
   w.writeUB(6, 0); // EndShapeRecord
   w.align();
-  return { bytes: tag(TAG.DefineShape3, w.finish()), bounds, fillCount: fillStyles.length, lineCount: lineStyles.length, edgeCount, findings };
+  return { bytes: tag(version === 4 ? TAG.DefineShape4 : TAG.DefineShape3, w.finish()), bounds, version, fillCount: fillStyles.length, lineCount: lineStyles.length, edgeCount, findings };
+
+  /** A gradient fill style for scene gradient `id` (null + a finding when it cannot be written in this version). */
+  function gradientFill(id: string, transform: Mat, where: string): FillDef | null {
+    const g = ctx.gradients ? ctx.gradients[id] : undefined;
+    const problems = g ? gradientProblems(g) : [];
+    if (!g) {
+      findings.push({ severity: "error", code: "gradient-missing", message: `references gradient "${id}" which is not in scene.gradients`, path: where });
+      return null;
+    }
+    if (problems.length) {
+      findings.push({ severity: "error", code: problems[0]!.code, message: `gradient "${id}": ${problems[0]!.message}`, path: where });
+      return null;
+    }
+    if (version === 3 && g.stops.length > MAX_STOPS_SHAPE3) {
+      findings.push({ severity: "error", code: "gradient-stops", message: `gradient "${id}" has ${g.stops.length} stops; DefineShape3 allows ${MAX_STOPS_SHAPE3}`, path: where });
+      return null;
+    }
+    let focal = gradientFocal(g);
+    let spread = swfSpread(g.spread);
+    if (version === 3 && (focal !== 0 || spread !== 0)) {
+      findings.push({ severity: "warning", code: "gradient-shape4-dropped", message: `gradient "${id}": a focus / reflect / repeat needs DefineShape4; written as a plain pad gradient`, path: where });
+      focal = 0;
+      spread = 0;
+    }
+    const type = g.kind === "linear" ? 0x10 : focal !== 0 ? 0x13 : 0x12;
+    return { kind: "gradient", type, matrix: gradientMatrix(g, transform), stops: resolveStops(g.stops), spread, focal };
+  }
+}
+
+function writeFillStyle(w: BitWriter, f: FillDef): void {
+  if (f.kind === "solid") {
+    w.u8(0x00);
+    writeRgba(w, f.color);
+  } else if (f.kind === "gradient") {
+    w.u8(f.type);
+    writeMatrix(w, f.matrix);
+    // GRADIENT: SpreadMode(2) InterpolationMode(2, 0 = normal RGB) NumGradients(4), then RATIO + RGBA per stop
+    w.u8((f.spread << 6) | (f.stops.length & 0x0f));
+    for (const s of f.stops) {
+      w.u8(s.ratio);
+      writeRgba(w, s.color);
+    }
+    if (f.type === 0x13) w.u16(Math.round(f.focal * 256) & 0xffff); // FIXED8 focal point
+  } else {
+    w.u8(0x41); // clipped bitmap
+    w.u16(f.id);
+    writeMatrix(w, f.matrix);
+  }
 }
 
 function writeStyleCount(w: BitWriter, n: number): void {

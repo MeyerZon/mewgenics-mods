@@ -10,10 +10,10 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     type Px = [number, number, number];
     const Y: Px = [255, 255, 0], M: Px = [255, 0, 255], C: Px = [0, 255, 255];
     /** a synthetic shot: background, the probe clip drawn at scale s from (ox, oy), optionally mirrored, with knobs */
-    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat" }) => {
-      const W = 1200, H = 400, img = new Uint8Array(W * H * 4);
+    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round" }) => {
+      const W = 1400, H = 400, img = new Uint8Array(W * H * 4);
       for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
-      const s = o.s, ox = o.mirrored ? 1000 : 200, oy = 100;
+      const s = o.s, ox = o.mirrored ? 1150 : 200, oy = 100;
       const put = (cx: number, cy: number, c: Px) => { // clip px -> screen px
         const x = Math.round(o.mirrored ? ox - cx * s : ox + cx * s), y = Math.round(oy + cy * s);
         if (x >= 0 && y >= 0 && x < W && y < H) img.set([c[0], c[1], c[2], 255], (y * W + x) * 4);
@@ -43,6 +43,11 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
         const t = o.grad === "flat" ? 0.5 : (cx - 360) / 60;
         put(cx, cy, [Math.round(255 * t), Math.round(32 * t), Math.round(32 * t)]);
       }
+      // two 12 px green strokes from clip x 440 to 500: y 10 butt caps, y 50 square caps (a game that ignores
+      // LINESTYLE2 draws both with round caps: both reach x 434)
+      const line = (y: number, ext: number) => { for (let cy = y - 6; cy < y + 6; cy += step) for (let cx = 440 - ext; cx < 500 + ext; cx += step) put(cx, cy, [32, 255, 32]); };
+      line(10, o.caps === "round" ? 6 : 0);
+      line(50, 6);
       return { width: W, height: H, rgba: img };
     };
     test("analyzeProbeShot: finds the checker marker, its scale and orientation; reads sampling, edge mode, the blink colour, the control and the cxform square", () => {
@@ -61,6 +66,9 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       const nz = pc.analyzeProbeShot(noisy);
       assert(nz.found && Math.abs(nz.scale - 2) < 0.1 && nz.blink === "green", `stray yellow ignored: ${JSON.stringify(nz)}`);
       eq(a.gradient, "drawn", "black → red in clip x");
+      eq(a.caps, "honoured", "butt ends at the endpoint, square reaches past it");
+      eq(m.caps, "honoured", "mirrored too");
+      eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", caps: "round" })).caps, "ignored");
       eq(m.gradient, "drawn", "read in clip x when mirrored too");
       eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", grad: "flat" })).gradient, "flat");
       const none = pc.analyzeProbeShot({ width: 10, height: 10, rgba: new Uint8Array(400) });
@@ -70,6 +78,7 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       const shots = ([[255, 32, 32], [32, 255, 32], [32, 32, 255]] as Px[]).map((b) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, edge: "clamp", smooth: true, blink: b })));
       const s = pc.summarizeProbe(shots);
       eq(s.gradient, "drawn");
+      eq(s.caps, "honoured");
       eq(s.childFraming, "free-running"); eq(s.sampling, "smooth"); eq(s.edge, "clamp"); eq(s.cxform, "applied"); eq(s.mirrored, true);
       const held = pc.summarizeProbe([0, 1, 2].map(() => pc.analyzeProbeShot(shot({ s: 2, blink: [255, 32, 32] }))));
       eq(held.childFraming, "held");
@@ -80,6 +89,10 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
 
 /** OBSERVED in the game (npm run test:artprobe, 2026-10-20): the facts the art preview must follow */
 export function runProbeFixtureTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture: (name: string) => string): void {
+  test("OBSERVED 2026-10-20 fixture: the game honours LINESTYLE2 caps (DefineShape4): a butt stroke ends at its endpoint, a square one reaches past it", () => {
+    const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { caps?: string } };
+    eq(j.summary.caps, "honoured");
+  });
   test("OBSERVED 2026-10-20 fixture: the game draws a linear gradient fill as a gradient, along the authored axis (the (390,30) square runs black → red in clip x)", () => {
     const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { gradient?: string } };
     eq(j.summary.gradient, "drawn");

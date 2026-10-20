@@ -13,7 +13,7 @@ import { parseSvgTransform, multiply, IDENTITY, normalizePath, subpathBounds } f
 import type { Mat } from "./geometry.ts";
 import { parseFill } from "./scene.ts";
 import type { ScenePath, Finding, SceneGradient, GradientStopDef } from "./scene.ts";
-import { MAX_STOPS_SHAPE3 } from "./gradient.ts";
+import { MAX_STOPS_SHAPE4 } from "./gradient.ts";
 
 export interface XNode {
   name: string;
@@ -150,6 +150,10 @@ interface SvgStyle {
   opacity?: string;
   fillOpacity?: string;
   display?: string;
+  strokeLinecap?: string;
+  strokeLinejoin?: string;
+  strokeMiterlimit?: string;
+  vectorEffect?: string;
 }
 
 /** Import an SVG document's drawable elements as scene paths (in SVG user units ≡ px). */
@@ -301,6 +305,13 @@ export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResu
     if (stroke && strokeWidth > 0) {
       p.stroke = stroke;
       p.strokeWidth = strokeWidth;
+      // SVG defaults: butt caps, miter joins, miter limit 4 (they make the shape a DefineShape4)
+      const cap = style.strokeLinecap;
+      p.strokeCap = cap === "round" || cap === "square" ? cap : "butt";
+      const join = style.strokeLinejoin;
+      p.strokeJoin = join === "round" || join === "bevel" ? join : "miter";
+      if (p.strokeJoin === "miter") p.miterLimit = Math.max(1, numOr(style.strokeMiterlimit, 4));
+      if (style.vectorEffect === "non-scaling-stroke") p.strokeScale = "none";
     }
     if (m !== IDENTITY && !(m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0)) p.transform = m.map((v) => Math.round(v * 1e6) / 1e6) as Mat;
     if (fill === null && !p.stroke) {
@@ -392,10 +403,10 @@ export function importSvg(svgText: string, opts: ImportOptions = {}): ImportResu
       return "gray:8";
     }
     if (stops.length === 1) return stops[0]!.color;
-    if (stops.length > MAX_STOPS_SHAPE3) {
+    if (stops.length > MAX_STOPS_SHAPE4) {
       const n = stops.length;
-      stops = Array.from({ length: MAX_STOPS_SHAPE3 }, (_, i) => stops[Math.round((i * (n - 1)) / (MAX_STOPS_SHAPE3 - 1))]!);
-      findings.push({ severity: "warning", code: "svg-gradient-stops", message: `${where}: gradient #${id} has ${n} stops; DefineShape3 allows ${MAX_STOPS_SHAPE3}, resampled evenly` });
+      stops = Array.from({ length: MAX_STOPS_SHAPE4 }, (_, i) => stops[Math.round((i * (n - 1)) / (MAX_STOPS_SHAPE4 - 1))]!);
+      findings.push({ severity: "warning", code: "svg-gradient-stops", message: `${where}: gradient #${id} has ${n} stops; SWF allows ${MAX_STOPS_SHAPE4}, resampled evenly` });
     }
     const linear = localName(chain[0]!.name).toLowerCase() === "lineargradient";
     const bbox = (attr("gradientUnits") || "objectBoundingBox") !== "userSpaceOnUse";
@@ -513,8 +524,13 @@ function inherit(parent: SvgStyle, attrs: Record<string, string>): SvgStyle {
     else if (k === "opacity") out.opacity = v;
     else if (k === "fill-opacity") out.fillOpacity = v;
     else if (k === "display") out.display = v;
+    else if (k === "stroke-linecap") out.strokeLinecap = v;
+    else if (k === "stroke-linejoin") out.strokeLinejoin = v;
+    else if (k === "stroke-miterlimit") out.strokeMiterlimit = v;
+    else if (k === "vector-effect") out.vectorEffect = v;
   };
-  for (const k of ["fill", "stroke", "stroke-width", "fill-rule", "opacity", "fill-opacity", "display"]) set(k, attrs[k]);
+  delete out.vectorEffect; // vector-effect does not inherit
+  for (const k of ["fill", "stroke", "stroke-width", "fill-rule", "opacity", "fill-opacity", "display", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "vector-effect"]) set(k, attrs[k]);
   if (attrs.style) {
     for (const decl of attrs.style.split(";")) {
       const i = decl.indexOf(":");

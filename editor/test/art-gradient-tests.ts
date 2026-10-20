@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { encodeDefineShape3 } from "../src/core/art/shape.ts";
+import * as shapeMod from "../src/core/art/shape.ts";
 import { readTags, readSwf } from "../src/core/art/swf-reader.ts";
 import { emitSwf, minimalGateSwf } from "../src/core/art/swf-emitter.ts";
 import { exampleScene, validateScene, parseFill } from "../src/core/art/scene.ts";
@@ -34,7 +35,7 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
     assert(!f.error, String(f.error));
   });
 
-  test("validateScene: gradient-missing for an unknown id, gradient-stops for <2 / >8 / unordered / bad colour stops, gradient-geometry for a zero-length linear or r<=0 radial, dup-id across gradients", () => {
+  test("validateScene: gradient-missing for an unknown id, gradient-stops for <2 / >15 / unordered / bad colour stops, gradient-geometry for a zero-length linear or r<=0 radial, dup-id across gradients", () => {
     const sc = exampleScene("g") as any;
     sc.shapes.body.paths[0].fill = "gradient:nope";
     let v = validateScene(sc) as any;
@@ -42,7 +43,7 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
     const sc2 = exampleScene("g") as any;
     sc2.gradients = {
       one: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: [{ offset: 0, color: "gray:1" }] },
-      many: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: Array.from({ length: 9 }, (_, i) => ({ offset: i / 8, color: "gray:1" })) },
+      many: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: Array.from({ length: 16 }, (_, i) => ({ offset: i / 15, color: "gray:1" })) },
       order: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: [{ offset: 0.6, color: "gray:1" }, { offset: 0.2, color: "gray:2" }] },
       colour: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: [{ offset: 0, color: "bitmap:x" }, { offset: 1, color: "zzz" }] },
       flat: { kind: "linear", x1: 5, y1: 5, x2: 5, y2: 5, stops: linear.stops },
@@ -118,7 +119,8 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
       { d: "M0 60 L100 60 L100 110 L0 110 Z", fill: "gradient:rad" },
       { d: "M0 120 L80 120 L80 200 L0 200 Z", fill: "gradient:foc" },
     ] };
-    const enc = encodeDefineShape3(5, shape as any, { gradients: { lin: linear, rad: radial, foc: focal } } as any);
+    // auto version: the focal radial and the reflect spread need DefineShape4 (art-shape4-tests.ts)
+    const enc = ((shapeMod as any).encodeDefineShape || encodeDefineShape3)(5, shape as any, { gradients: { lin: linear, rad: radial, foc: focal } } as any);
     assert(!enc.findings.some((f: any) => f.severity === "error"), JSON.stringify(enc.findings));
     const sh = readTags(enc.bytes, 0, enc.bytes.length)[0]!.shape as any;
     eq(sh.fillStyles.length, 3);

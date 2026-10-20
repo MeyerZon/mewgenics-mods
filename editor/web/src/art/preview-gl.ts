@@ -37,12 +37,13 @@ import {
   multiply,
   apply,
   invert,
-  signedArea,
   IDENTITY,
 } from "../../../src/core/art/geometry.ts";
 import { parseFill, fillToRgba, parseColor } from "../../../src/core/art/scene.ts";
 import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline.ts";
 import { nestedFrame } from "../../../src/core/art/engine-behaviour.ts";
+import { strokePolys } from "../../../src/core/art/stroke.ts";
+import type { StrokeStyle } from "../../../src/core/art/stroke.ts";
 import { gradientUnitMatrix, gradientFocal, rasterizeStops, resolveStops, swfSpread } from "../../../src/core/art/gradient.ts";
 import type { Scene, Fill, SceneShape } from "../../../src/core/art/scene.ts";
 import type { Mat, SubPath } from "../../../src/core/art/geometry.ts";
@@ -243,7 +244,12 @@ interface PreparedPath {
   fillRgba: Rgba | null;
   fillRule: "nonzero" | "evenodd";
   strokeRgba: Rgba | null;
+  /** the stroke's parsed fill (a gradient stroke has strokeRgba null) */
+  strokeFill: Fill | null;
   strokeWidth: number;
+  strokeStyle: StrokeStyle;
+  /** non-scaling stroke: the width is in stage px whatever the placement scale */
+  strokeFixed: boolean;
   /** the path's own transform (bitmap pixel space → shape-local) */
   transform: Mat;
   bounds: Bounds | null;
@@ -278,7 +284,10 @@ function prepareShape(shape: SceneShape): PreparedShape {
       fillRgba: fillToRgba(fill),
       fillRule: p.fillRule === "evenodd" ? "evenodd" : "nonzero",
       strokeRgba: strokeFill ? fillToRgba(strokeFill) : null,
+      strokeFill,
       strokeWidth,
+      strokeStyle: { cap: p.strokeCap || "round", join: p.strokeJoin || "round", miterLimit: p.miterLimit ?? 4 },
+      strokeFixed: p.strokeScale === "none",
       transform,
       bounds: b,
     });
@@ -310,61 +319,6 @@ function flattenPath(path: PreparedPath, mat: Mat, tolLocal: number): number[][]
     polys.push(out);
   }
   return polys;
-}
-
-/**
- * Stroke polygons (one quad per segment + a round join octagon per vertex), all with the
- * same orientation so one nonzero stencil pass covers their union exactly once.
- * @param polys stage-space polylines @param width stage px
- */
-function strokePolys(polys: number[][], closed: boolean[], width: number): number[][] {
-  const out: number[][] = [];
-  const h = width / 2;
-  for (let k = 0; k < polys.length; k++) {
-    const pts = polys[k]!;
-    const n = pts.length / 2;
-    if (n < 2) continue;
-    const segs = closed[k] ? n : n - 1;
-    for (let i = 0; i < segs; i++) {
-      const j = (i + 1) % n;
-      const x0 = pts[2 * i]!;
-      const y0 = pts[2 * i + 1]!;
-      const x1 = pts[2 * j]!;
-      const y1 = pts[2 * j + 1]!;
-      const dx = x1 - x0;
-      const dy = y1 - y0;
-      const len = Math.hypot(dx, dy);
-      if (len < 1e-9) continue;
-      const nx = (-dy / len) * h;
-      const ny = (dx / len) * h;
-      out.push(orientNegative([x0 + nx, y0 + ny, x1 + nx, y1 + ny, x1 - nx, y1 - ny, x0 - nx, y0 - ny]));
-    }
-    // round joins (and round caps on open paths) as octagons
-    for (let i = 0; i < n; i++) {
-      const cx = pts[2 * i]!;
-      const cy = pts[2 * i + 1]!;
-      const oct: number[] = [];
-      for (let s = 0; s < 8; s++) {
-        const a = (s / 8) * Math.PI * 2;
-        oct.push(cx + Math.cos(a) * h, cy + Math.sin(a) * h);
-      }
-      out.push(orientNegative(oct));
-    }
-  }
-  return out;
-}
-
-function orientNegative(poly: number[]): number[] {
-  if (signedArea(poly) > 0) {
-    const n = poly.length / 2;
-    const rev: number[] = new Array(poly.length);
-    for (let i = 0; i < n; i++) {
-      rev[2 * i] = poly[2 * (n - 1 - i)]!;
-      rev[2 * i + 1] = poly[2 * (n - 1 - i) + 1]!;
-    }
-    return rev;
-  }
-  return poly;
 }
 
 function polysBounds(polys: number[][]): Bounds | null {
@@ -1041,10 +995,15 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
               glFill(polys, path.fillRule, { color: path.fillRgba, cx, bitmap: null });
             }
           }
-          if (path.strokeRgba && path.strokeWidth > 0) {
-            const w = Math.max(path.strokeWidth * scale, 1 / Math.max(zoom, 1e-6));
-            const sp = strokePolys(polys, path.subs.map((s) => s.closed), w);
-            if (sp.length) glFill(sp, "nonzero", definingMask ? null : { color: path.strokeRgba, cx, bitmap: null });
+          const sg = path.strokeFill && path.strokeFill.kind === "gradient" ? gradTex.get(path.strokeFill.id) : undefined;
+          if ((path.strokeRgba || sg) && path.strokeWidth > 0) {
+            const w = Math.max(path.strokeWidth * (path.strokeFixed ? 1 : scale), 1 / Math.max(zoom, 1e-6));
+            const sp = strokePolys(polys, path.subs.map((s) => s.closed), w, path.strokeStyle);
+            const inv = sg ? invert(multiply(multiply(mat, path.transform), sg.unit)) : null;
+            const cover: CoverSpec | null = definingMask ? null : sg && inv
+              ? { color: { r: 255, g: 255, b: 255, a: 255 }, cx, bitmap: { tex: sg.tex, width: 1, height: 1, inv }, grad: { mode: sg.mode, focal: sg.focal, spread: sg.spread } }
+              : path.strokeRgba ? { color: path.strokeRgba, cx, bitmap: null } : null;
+            if (sp.length && (cover || definingMask)) glFill(sp, "nonzero", cover);
           }
         }
       },
@@ -1257,9 +1216,10 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
             }
           }
           if (path.strokeRgba && path.strokeWidth > 0 && !defining) {
-            c.lineWidth = Math.max(path.strokeWidth * scale, 1 / Math.max(zoom, 1e-6));
-            c.lineJoin = "round";
-            c.lineCap = "round";
+            c.lineWidth = Math.max(path.strokeWidth * (path.strokeFixed ? 1 : scale), 1 / Math.max(zoom, 1e-6));
+            c.lineJoin = path.strokeStyle.join || "round";
+            c.miterLimit = path.strokeStyle.miterLimit ?? 4;
+            c.lineCap = path.strokeStyle.cap === "butt" ? "butt" : path.strokeStyle.cap || "round";
             c.strokeStyle = css(remapColor(path.strokeRgba, cx, palBytes, paletteRow, showGray));
             c.stroke(toPath(polys, path.subs.map((s) => s.closed)));
             drawCalls++;

@@ -40,10 +40,18 @@ export interface ScenePath {
   /** "gray:N" | "#rrggbb" | "#rrggbbaa" | "bitmap:<id>" | "gradient:<id>" | "none" | null */
   fill?: string | null;
   fillRule?: "nonzero" | "evenodd";
-  /** colour or "gray:N" or null */
+  /** colour, "gray:N", "gradient:<id>" (DefineShape4) or null */
   stroke?: string | null;
   /** px */
   strokeWidth?: number;
+  /** stroke ends (default round); anything but round makes the shape a DefineShape4 */
+  strokeCap?: "round" | "butt" | "square";
+  /** stroke corners (default round) */
+  strokeJoin?: "round" | "bevel" | "miter";
+  /** miter length / stroke width before a miter is bevelled (default 4) */
+  miterLimit?: number;
+  /** "none": the stroke keeps its width when the shape is scaled (LINESTYLE2 NoHScale + NoVScale) */
+  strokeScale?: "normal" | "none";
   transform?: Mat;
 }
 
@@ -367,8 +375,14 @@ export function validateScene(input: unknown): SceneValidation {
       if (p.stroke) {
         const sf = parseFill(p.stroke);
         if (sf.error) err("stroke", sf.error, [at + ".stroke"]);
+        else if (sf.fill.kind === "bitmap") err("stroke", "bitmap strokes are not supported (use a colour, gray:N or gradient:<id>)", [at + ".stroke"]);
+        else if (sf.fill.kind === "gradient" && !(scene.gradients || {})[sf.fill.id]) err("gradient-missing", `stroke references unknown gradient "${sf.fill.id}"`, [at + ".stroke"]);
         if (!((p.strokeWidth ?? 0) > 0)) warn("stroke-width", "stroke set but strokeWidth is 0; stroke dropped", [at + ".strokeWidth"]);
       }
+      if (p.strokeCap !== undefined && !["round", "butt", "square"].includes(p.strokeCap)) err("stroke-style", "strokeCap must be round, butt or square", [at + ".strokeCap"]);
+      if (p.strokeJoin !== undefined && !["round", "bevel", "miter"].includes(p.strokeJoin)) err("stroke-style", "strokeJoin must be round, bevel or miter", [at + ".strokeJoin"]);
+      if (p.miterLimit !== undefined && !(typeof p.miterLimit === "number" && p.miterLimit >= 1 && p.miterLimit < 256)) err("stroke-style", "miterLimit must be a number in 1..255", [at + ".miterLimit"]);
+      if (p.strokeScale !== undefined && p.strokeScale !== "normal" && p.strokeScale !== "none") err("stroke-style", "strokeScale must be normal or none", [at + ".strokeScale"]);
       if (p.transform && (!Array.isArray(p.transform) || p.transform.length !== 6 || p.transform.some((n) => typeof n !== "number"))) err("path-transform", "transform must be a 6-number matrix", [at + ".transform"]);
     });
   }
