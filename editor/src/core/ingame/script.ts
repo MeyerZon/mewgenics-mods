@@ -26,6 +26,8 @@ export type Directive =
   | { line: number; kind: "expect"; what: "console" | "noconsole"; substr: string; within?: number }
   | { line: number; kind: "expect"; what: "status"; status: string; unit: string }
   | { line: number; kind: "expect"; what: "units"; op: string; n: number }
+  /** runner-side: debug.log (after the `[file: …]` prefix) contains substr; evaluated after the run, never sent to the DLL */
+  | { line: number; kind: "expect"; what: "log"; substr: string }
   | { line: number; kind: "dump" }
   | { line: number; kind: "log"; text: string }
   | { line: number; kind: "quit"; code: number | null };
@@ -126,7 +128,14 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (!UNITS_OPS.includes(m[1]!)) return { error: `expect units: bad operator "${m[1]}" (${UNITS_OPS.join(" ")})` };
         return { line: lineNo, kind: "expect", what: "units", op: m[1]!, n: Number(m[2]) };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units)" };
+      if (what === "log") {
+        const q = parseQuoted(arg, 0);
+        if (!q) return { error: arg ? "expect log: unterminated or missing quoted string" : "expect log needs a quoted substring" };
+        const tail = arg.slice(q.end).trim();
+        if (tail) return { error: `expect log: unexpected trailing text "${tail}" (no within: debug.log is read once, after the run)` };
+        return { line: lineNo, kind: "expect", what: "log", substr: q.value };
+      }
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|log)" };
     }
     case "dump":
       if (rest) return { error: "dump takes no arguments" };
@@ -144,6 +153,11 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
     default:
       return { error: `unknown directive "${word}"` };
   }
+}
+
+/** Directives the Node runner evaluates itself (the DLL gets a comment placeholder instead). */
+export function isRunnerSide(d: Directive): d is Extract<Directive, { what: "log" }> {
+  return d.kind === "expect" && d.what === "log";
 }
 
 export interface ParseScriptOptions {
@@ -201,7 +215,9 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
     const d = parseDirective(raw, lineNo);
     if ("error" in d) { errors.push({ line: lineNo, message: d.error }); continue; }
     directives.push(d);
-    bodyLines.push(raw);
+    // runner-side directives go into the DLL body as a comment, so the body's line numbers stay those of the
+    // script and the harness (which tolerates # lines) never sees a directive it does not know
+    bodyLines.push(isRunnerSide(d) ? `# runner: ${raw}` : raw);
   }
 
   if (mods === null) mods = opts.owningMod ? [opts.owningMod] : [];

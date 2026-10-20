@@ -211,8 +211,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 12. [~] **Harness features**: ~~expose `-mewtest_clean` in the runner (`clean: true` header)~~ done 2026-10-19 (leftovers
     PR 4) — but it does not yield a complete `debug.log` (the game never shuts itself down; see `ingame-testing.md`
     "Clean mode"), so a log flush needs another lever;
-    named-pipe interactive mode (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`); RNG seed pinning via `TLS+0x178`
-    for exact numeric assertions; `expect log "<substr>"` against `debug.log` from the runner side.
+    ~~`expect log "<substr>"` against `debug.log` from the runner side~~ done 2026-10-20 (`report.logExpects`; the DLL
+    gets a `# runner: …` comment in its place). Still open, each for a reason: named-pipe interactive mode
+    (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`) is a native IPC feature — a pipe thread marshalling commands
+    onto the frame hook — with its own DLL host tests and T2, not a runner change; RNG seed pinning via `TLS+0x178` for
+    exact numeric assertions needs that fact in `engine-map.md` + a fixture first and only pays off once a run can be
+    entered from the menu (target 1).
 
 ### Verification still owed (things built but not yet validated in-game)
 - [ ] **Unit walk** (`dump` with units, `expect status`, `expect units`): only exercised with `available:false`

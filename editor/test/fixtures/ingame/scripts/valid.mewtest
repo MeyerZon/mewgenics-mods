@@ -15,4 +15,5 @@ dump
 log "hello \"world\""
 wait turns 2
 wait ms 500
+expect log "Save File Suffix: dev"
 quit 0

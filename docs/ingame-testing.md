@@ -45,7 +45,8 @@ the runner always emits
 ## Script format (`.mewtest`)
 
 Header lines `key: value` end at the first blank, comment or directive line. The runner owns the header and strips
-it; the DLL only ever sees directives (it tolerates whole-line `#` comments). Scripts committed with a mod live in
+it; the DLL only ever sees directives (it tolerates whole-line `#` comments) — a runner-side directive such as
+`expect log` is passed to the DLL as a `# runner: …` comment so the body's line numbers stay the script's. Scripts committed with a mod live in
 `mods/<mod>/tests/*.mewtest`; inline scripts (MCP `script`) are allowed too.
 
 ```
@@ -62,6 +63,8 @@ expect console "<substr>" [within <frames>]      a console line since the last c
 expect noconsole "<substr>"                      no such line since the last cmd
 expect status <Name> on <index|bareword|"name">  a unit carries the status (vanilla or framework-registered)
 expect units <==|!=|>=|<=|>|<> <N>               unit count in the current combat
+expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
+                                                 evaluated once, after the run — no within; no JSONL event, see report.logExpects
 dump                                             snapshot the units into a units event
 log "<text>"                                     echo into the result file
 quit [code]                                      no code: 0 if every expect passed, else 1; end of script == quit
@@ -122,7 +125,7 @@ for logs; a flush of the game's log stream would need a different lever.
 | `crash` | crash event, exit code 3, an abnormal exit code, or a new crash report under `mod_logs/crashes/` or the appdata logs |
 | `harness-error` | exit code 4 / `script_error` / framework inactive on a *known* build (the reason names the failed signature(s)) |
 | `timeout` | exit code 2 |
-| `fail` | exit code 1, any failed `expect`, or an `end` code ≠ 0 while the process exit code is 0/absent (clean mode) |
+| `fail` | exit code 1, any failed `expect`, an `end` code ≠ 0 while the process exit code is 0/absent (clean mode), or a runner-side `expect log` whose substring is not in `debug.log` (`expect log failed at line N: "…" not found in debug.log`; decided after `log-errors`, which names the root cause). Mind that `debug.log` is cut mid-line (block-buffered), so only text the game flushed early is reliable |
 | `no-result` | exit 0 but no result file or no `end` event (truncated) |
 | `log-errors` | exit 0 but `debug.log` contains a known marker: `NO_STATUS_NAMED`, `NO_BRAIN_NAMED`, `NO_ABILITY_NAMED`, `NO_PASSIVE_NAMED`, `No level named`, `No enemy named`, `GON_ERROR:` |
 | `pass` | everything above is clean |

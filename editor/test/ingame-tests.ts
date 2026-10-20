@@ -92,7 +92,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("every directive kind parses with its line number", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const d = p.directives;
-      eq(d.length, 12);
+      eq(d.length, 13);
       eq(JSON.stringify(d[0]), JSON.stringify({ line: 7, kind: "wait", unit: "frames", n: 120 }));
       eq(JSON.stringify(d[1]), JSON.stringify({ line: 8, kind: "cmd", text: "bind JokersGambit # not a comment, part of the command" }));
       eq(JSON.stringify(d[2]), JSON.stringify({ line: 9, kind: "expect", what: "console", substr: 'No command named "bind" found', within: 5 }));
@@ -104,7 +104,29 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(JSON.stringify(d[8]), JSON.stringify({ line: 15, kind: "log", text: 'hello "world"' }));
       eq(JSON.stringify(d[9]), JSON.stringify({ line: 16, kind: "wait", unit: "turns", n: 2 }));
       eq(JSON.stringify(d[10]), JSON.stringify({ line: 17, kind: "wait", unit: "ms", n: 500 }));
-      eq(JSON.stringify(d[11]), JSON.stringify({ line: 18, kind: "quit", code: 0 }));
+      eq(JSON.stringify(d[11]), JSON.stringify({ line: 18, kind: "expect", what: "log", substr: "Save File Suffix: dev" }));
+      eq(JSON.stringify(d[12]), JSON.stringify({ line: 19, kind: "quit", code: 0 }));
+    });
+
+    test("expect log parses a quoted substring; within, bare words and an unterminated quote are line errors", () => {
+      const d = parseDirective('expect log "NO_STATUS_NAMED"', 3) as { kind: string; what: string; substr: string };
+      eq(d.kind, "expect"); eq(d.what, "log"); eq(d.substr, "NO_STATUS_NAMED");
+      for (const bad of ['expect log "x" within 5', "expect log bare", 'expect log "unterminated', "expect log"]) {
+        const r = parseDirective(bad, 9);
+        assert("error" in r, `${bad} should be an error`);
+      }
+      const p = parseScript("expect log bare\nquit\n", { owningMod: "m" });
+      assert(!p.ok && p.errors[0].line === 1, JSON.stringify(p.errors));
+    });
+
+    test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
+      const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
+      const lines = p.body.split("\n");
+      eq(lines.length - 1, 13, "one body line per directive (plus the trailing newline)");
+      assert(!lines.some((l) => l.startsWith("expect log")), "the DLL never sees expect log");
+      assert(lines[11]!.startsWith("# runner: expect log"), `placeholder comment at the directive's position, got ${JSON.stringify(lines[11])}`);
+      eq(lines[12], "quit 0");
+      assert(typeof script.isRunnerSide === "function" && script.isRunnerSide(p.directives[11]!) && !script.isRunnerSide(p.directives[0]!), "isRunnerSide marks only expect log");
     });
 
     test("all six units ops parse; a bad op is an error with its line", () => {
@@ -273,6 +295,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.findings.length, 0);
       eq(r.saveSuffix, "dev");
       eq(r.modPaths.join("|"), "C:\\repo\\mods\\dev-sandbox|C:\\repo\\mods\\jokers-luck");
+    });
+    test("checkLogExpects: matches after the [file: ...] prefix is stripped, reports the missing substring and line, and an absent debug.log", () => {
+      const check = (logs as unknown as { checkLogExpects?: (text: string | null, e: { line: number; substr: string }[]) => { line: number; substr: string; ok: boolean; detail: string }[] }).checkLogExpects;
+      assert(typeof check === "function", "checkLogExpects exported from logs.ts");
+      const text = fixture("debug-clean.log");
+      const r = check!(text, [{ line: 4, substr: "Save File Suffix: dev" }, { line: 9, substr: "NOT IN THIS LOG" }]);
+      eq(r.length, 2);
+      assert(r[0]!.ok && /matched debug\.log line \d+/.test(r[0]!.detail), JSON.stringify(r[0]));
+      assert(!r[1]!.ok && r[1]!.line === 9 && /not found in debug\.log/.test(r[1]!.detail), JSON.stringify(r[1]));
+      assert(!check!(text, [{ line: 1, substr: "[file:" }])[0]!.ok, "the [file: …] prefix is not part of the message");
+      const absent = check!(null, [{ line: 2, substr: "x" }]);
+      assert(!absent[0]!.ok && /debug\.log absent/.test(absent[0]!.detail), JSON.stringify(absent));
+      eq(check!(text, []).length, 0);
     });
     test("checkSaveSuffix: ok / missing / different", () => {
       assert(checkSaveSuffix("dev", "dev").ok, "same");
@@ -655,9 +690,34 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       expectV("no-result no end", { preflight: pre, exit: exit(0), result: res({ end: null }), logs: logs({}), safety: safe }, "no-result");
       expectV("log-errors", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ debugLog: { findings: [{ marker: "NO_STATUS_NAMED", line: 1, text: "x" }] } }), safety: safe }, "log-errors");
       expectV("pass", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe }, "pass");
+      // runner-side expect log: a miss is a fail naming line and substring; log-errors still wins; all ok -> pass
+      const missLog = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 5, substr: "Luck changed", ok: false, detail: "not found in debug.log" }] });
+      eq(missLog.verdict, "fail", "expect log miss -> fail");
+      assert(/expect log failed at line 5/.test(missLog.reason) && /Luck changed/.test(missLog.reason), missLog.reason);
+      expectV("log-errors beats a missed expect log", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ debugLog: { findings: [{ marker: "NO_STATUS_NAMED", line: 1, text: "x" }] } }), safety: safe, logExpects: [{ line: 5, substr: "x", ok: false, detail: "not found in debug.log" }] }, "log-errors");
+      const okLog = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 5, substr: "x", ok: true, detail: "matched debug.log line 2" }] });
+      eq(okLog.verdict, "pass", "expect log ok -> pass");
+      assert(/1 log expectation/.test(okLog.reason), okLog.reason);
       // crash beats fail/timeout; safety beats crash
       expectV("crash > fail", { preflight: pre, exit: exit(1), result: res({ crash: { code: "x" }, end: { code: 1 } }), logs: logs({}), safety: safe }, "crash");
       expectV("safety > crash", { preflight: pre, exit: exit(3), result: res({ crash: { code: "x" }, end: { code: 3 } }), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");
+    });
+
+    const logPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 1s\ncmd listcmds\nexpect console \"listcmds\"\nexpect log \"ZZ custom marker\"\nquit\n", { owningMod: "jokers-luck", name: "smoke" });
+    const logHit = await run("pass", { FAKE_GAME_DEBUG_LINES: "something else|ZZ custom marker here" }, { plan: logPlan });
+    test("fake pass with FAKE_GAME_DEBUG_LINES -> expect log matched -> pass, report.logExpects ok, DLL body has the comment placeholder", () => {
+      eq(logHit.verdict, "pass", logHit.reason);
+      const le = (logHit as unknown as { logExpects?: { ok: boolean; line: number }[] }).logExpects;
+      assert(Array.isArray(le) && le.length === 1 && le[0]!.ok && le[0]!.line === 5, `logExpects: ${JSON.stringify(le)}`);
+      eq(logHit.result.expects.passed, 1, "the DLL's own count is untouched");
+      assert(/1 log expectation/.test(logHit.reason), logHit.reason);
+      const copied = readFileSync(logHit.artifacts.script!, "utf8");
+      assert(copied.includes("# runner: expect log") && !copied.split("\n").some((l) => l.startsWith("expect log")), copied);
+    });
+    const logMiss = await run("pass", {}, { plan: logPlan });
+    test("fake pass without the line -> fail naming the expect log line and substring", () => {
+      eq(logMiss.verdict, "fail", logMiss.reason);
+      assert(/expect log failed at line 5/.test(logMiss.reason) && /ZZ custom marker/.test(logMiss.reason), logMiss.reason);
     });
 
     const pass = await run("pass");
