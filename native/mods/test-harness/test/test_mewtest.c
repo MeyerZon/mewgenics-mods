@@ -495,6 +495,31 @@ TEST(runner_enter_unavailable_ends_script_with_code_4) {
     CHECK_EQ(fk.exitCode, 4);
 }
 
+TEST(runner_enter_retries_while_the_host_says_not_ready_then_enters) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = 2;                               /* 2 = not ready yet (e.g. the game has not made its director) */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.enterCalls, 2);
+    CHECK_EQ(count_ev("enter"), 0);                   /* no event while retrying */
+    CHECK_EQ(rr.pc, 0);
+    fk.enterResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("enter"), 1); CHECK(has(last_ev(), "\"ok\":true"));
+    CHECK_EQ(rr.pc, 1);
+}
+
+TEST(runner_enter_not_ready_for_too_long_ends_with_code_1_enter_failed) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = 2;
+    fk.now = 1000;
+    mt_runner_step(&rr, &HOST);
+    fk.now = 1000 + MT_CONSOLE_WAIT_MS + 1;           /* the same budget cmd gives the console */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "{\"ev\":\"enter\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "not ready"));
+    CHECK(has(last_ev(), "\"reason\":\"enter_failed\"")); CHECK_EQ(fk.exitCode, 1);
+}
+
 TEST(runner_enter_twice_is_refused_without_a_host_call) {
     fk_reset("enter TacticsTest\nenter TacticsTest\nquit\n");
     fk.enterResult = 1;
