@@ -1,0 +1,72 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\<run>\\script.mewtest","out":"C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\<run>\\result.jsonl","pid":34236,"hide":0,"timeout_ms":90000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":2890,"frame":120}
+{"ev":"enter","line":2,"name":"Campaign","mode":"house","ok":true,"detail":"save=mewtest01.sav mainScene=0000024322ba0008 entity=00000245948b2f50 director=0000024b244107a0 (old 0000024b24410008; global after destroy 0000024b24410008, after start 0000024b244107a0); game_began set (node 00000245964928c0) -> resume into the House","t":3609,"frame":183}
+{"ev":"wait","line":3,"kind":"frames","n":300,"actual":300,"t":6453,"frame":483}
+{"ev":"shot","line":4,"label":"house","hold_ms":700,"t":6453,"frame":484}
+{"ev":"cmd","line":5,"text":"listcmds","t":7156,"frame":586}
+{"ev":"console","text":"listcmds","t":7156,"frame":586}
+{"ev":"console","text":"clear","t":7156,"frame":586}
+{"ev":"console","text":"clear_history","t":7156,"frame":586}
+{"ev":"console","text":"record_macro arg0","t":7156,"frame":586}
+{"ev":"console","text":"end_recording_macro","t":7156,"frame":586}
+{"ev":"console","text":"save_commands_as_macro arg0 arg1","t":7156,"frame":586}
+{"ev":"console","text":"macro arg0","t":7156,"frame":586}
+{"ev":"console","text":"clear_macros arg0","t":7156,"frame":586}
+{"ev":"console","text":"nofilter","t":7156,"frame":586}
+{"ev":"console","text":"toggle_filter","t":7156,"frame":586}
+{"ev":"console","text":"soundevent_debug arg0","t":7156,"frame":586}
+{"ev":"console","text":"vsync arg0","t":7156,"frame":586}
+{"ev":"console","text":"debug_output_loaded_bitmap_atlas_pages","t":7156,"frame":586}
+{"ev":"console","text":"debug_bitmap_atlas_cpu_memory_use","t":7156,"frame":586}
+{"ev":"console","text":"soft_reset","t":7156,"frame":586}
+{"ev":"console","text":"toggle_cursor_mode","t":7156,"frame":586}
+{"ev":"console","text":"debug_memory_tesselate_everything","t":7156,"frame":586}
+{"ev":"console","text":"crash","t":7156,"frame":586}
+{"ev":"console","text":"crash_silent","t":7156,"frame":586}
+{"ev":"console","text":"freeze","t":7156,"frame":586}
+{"ev":"console","text":"debug_list_loaded_files","t":7156,"frame":586}
+{"ev":"console","text":"list_steam_friends","t":7156,"frame":586}
+{"ev":"console","text":"english_word_count","t":7156,"frame":586}
+{"ev":"console","text":"measure_characters","t":7156,"frame":586}
+{"ev":"console","text":"debug_sfx_memory_use","t":7156,"frame":586}
+{"ev":"console","text":"set_language arg0","t":7156,"frame":586}
+{"ev":"console","text":"test_locale_sort_order","t":7156,"frame":586}
+{"ev":"console","text":"showdebug","t":7156,"frame":586}
+{"ev":"console","text":"hidedebug","t":7156,"frame":586}
+{"ev":"console","text":"ObtainRandomItems","t":7156,"frame":586}
+{"ev":"console","text":"ObtainItemSet arg0","t":7156,"frame":586}
+{"ev":"console","text":"ObtainItem arg0","t":7156,"frame":586}
+{"ev":"console","text":"ObtainCoins arg0","t":7156,"frame":586}
+{"ev":"console","text":"ObtainFood arg0","t":7156,"frame":586}
+{"ev":"console","text":"AddChapterWeather arg0","t":7156,"frame":586}
+{"ev":"console","text":"UnlockClass arg0","t":7156,"frame":586}
+{"ev":"console","text":"UnlockAllAdventureContent","t":7156,"frame":586}
+{"ev":"console","text":"DebugClearCatTempEffects","t":7156,"frame":586}
+{"ev":"console","text":"TriggerAllProgressionUnlocks","t":7156,"frame":586}
+{"ev":"console","text":"TriggerProgressionUnlock arg0","t":7156,"frame":586}
+{"ev":"console","text":"skip_tutorial","t":7156,"frame":586}
+{"ev":"console","text":"calculate_combat_reward_averages_food","t":7156,"frame":586}
+{"ev":"console","text":"calculate_combat_reward_averages_coins","t":7156,"frame":586}
+{"ev":"console","text":"set_day arg0","t":7156,"frame":586}
+{"ev":"console","text":"debug_deconstruct_item_pools","t":7156,"frame":586}
+{"ev":"console","text":"trigger_butterfly_effect","t":7156,"frame":586}
+{"ev":"console","text":"upgrade","t":7156,"frame":586}
+{"ev":"console","text":"upgrade_all","t":7156,"frame":586}
+{"ev":"console","text":"upgrade_all_nobasement","t":7156,"frame":586}
+{"ev":"console","text":"house_boss_event arg0","t":7156,"frame":586}
+{"ev":"console","text":"max_npc_favor arg0","t":7156,"frame":586}
+{"ev":"console","text":"interstitial_test arg0","t":7156,"frame":586}
+{"ev":"console","text":"spawn_custom_stray arg0","t":7156,"frame":586}
+{"ev":"console","text":"house_weather arg0","t":7156,"frame":586}
+{"ev":"console","text":"get_furniture arg0","t":7156,"frame":586}
+{"ev":"console","text":"get_rare_furniture arg0","t":7156,"frame":586}
+{"ev":"console","text":"noui","t":7156,"frame":586}
+{"ev":"console","text":"Executed: listcmds","t":7156,"frame":586}
+{"ev":"expect","line":6,"kind":"console","arg":"skip_tutorial","ok":true,"detail":"matched console line 40","t":7187,"frame":587}
+{"ev":"expect","line":7,"kind":"console","arg":"set_day arg0","ok":true,"detail":"matched console line 43","t":7203,"frame":588}
+{"ev":"expect","line":8,"kind":"noconsole","arg":"spawn arg0","ok":true,"detail":"not found in 58 console line(s) since the last cmd","t":7203,"frame":589}
+{"ev":"cmd","line":9,"text":"set_day 2","t":7203,"frame":590}
+{"ev":"console","text":"Executed: set_day","t":7203,"frame":590}
+{"ev":"expect","line":10,"kind":"console","arg":"Executed: set_day","ok":true,"detail":"matched console line 58","t":7219,"frame":591}
+{"ev":"shot","line":11,"label":"house after set_day","hold_ms":700,"t":7219,"frame":592}
+{"ev":"end","code":0,"reason":"quit","frames":693,"turns":0,"elapsed_ms":7922,"expect_pass":4,"expect_fail":0,"t":7922,"frame":693}

@@ -40,7 +40,7 @@ export type Directive =
   | { line: number; kind: "log"; text: string }
   | { line: number; kind: "quit"; code: number | null }
   /** replay a dev-menu scene entry inside the game (mewtest.dll: MtHost.enter_scene); once per script */
-  | { line: number; kind: "enter"; scene: string }
+  | { line: number; kind: "enter"; scene: string; mode?: "house" }
   /** the DLL emits a shot event and holds the scene ~700 ms; the runner captures the game window into the run dir */
   | { line: number; kind: "shot"; label: string }
   /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
@@ -230,9 +230,15 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
     }
     case "enter": {
       if (!rest) return { error: `enter needs a scene name (${KNOWN_SCENES.join("|")})` };
-      if (/\s/.test(rest)) return { error: "enter takes exactly one scene name" };
-      if (!KNOWN_SCENES.includes(rest)) return { error: `unknown scene "${rest}" (${KNOWN_SCENES.join("|")})` };
-      return { line: lineNo, kind: "enter", scene: rest };
+      const words = rest.split(/\s+/);
+      if (words.length > 2) return { error: "enter takes a scene name and at most one mode word" };
+      const [scene, mode] = words as [string, string | undefined];
+      if (!KNOWN_SCENES.includes(scene)) return { error: `unknown scene "${scene}" (${KNOWN_SCENES.join("|")})` };
+      if (mode !== undefined) {
+        if (scene !== CAMPAIGN_SCENE || mode !== "house") return { error: "enter: the only mode is `enter Campaign house`" };
+        return { line: lineNo, kind: "enter", scene, mode: "house" };
+      }
+      return { line: lineNo, kind: "enter", scene };
     }
     case "quit": {
       if (!rest) return { line: lineNo, kind: "quit", code: null };

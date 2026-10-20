@@ -80,6 +80,11 @@ typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT }
 /* the disposable campaign slot: created/opened by `enter Campaign`, moved aside by the runner before every such run
  * (editor savecheck.ts CAMPAIGN_SLOT_FILE must agree); no save-select UI lists this name. Under 16 chars (SSO). */
 #define MT_CAMPAIGN_SAVE "mewtest01.sav"
+/* enter modes: default; house = Campaign only: mark the fresh slot as begun (game_began 1, what the new-game branch
+ * 0x3af310 writes before the intro) so MewDirector::start resumes into the House instead of the interactive intro */
+#define MT_ENTER_DEFAULT 0
+#define MT_ENTER_HOUSE   1
+const char *mt_enter_mode_name(int mode);     /* "" for the default */
 int         mt_scene_id(const char *name);    /* 0 if unknown */
 const char *mt_scene_name(int scene);         /* "" if unknown */
 typedef struct MtDirective {
@@ -96,6 +101,7 @@ typedef struct MtDirective {
     long value;         /* expect stacks: N (the unit index lives in n) */
     int varied;         /* expect stacks … varied: >= 2 distinct values recorded for (unit, status) so far */
     unsigned long long seed;   /* seed: the value (full 64-bit) */
+    int enterMode;      /* enter: MT_ENTER_* */
     MtUnitField field;  /* expect unit: the field; a string value lives in a, an integer one in value */
 } MtDirective;
 typedef struct MtScript {
@@ -171,7 +177,7 @@ typedef struct MtHost {
     void     (*request_exit)(void *u, int code);   /* called once, after the end event, on quit/eof */
     /* enter <scene> on the game thread: 1 entered, 0 refused (detail says why), -1 unavailable (symbols missing),
      * 2 not ready yet (the runner retries next frame, for at most MT_CONSOLE_WAIT_MS) */
-    int      (*enter_scene)(void *u, int scene, char *detail, size_t cap);
+    int      (*enter_scene)(void *u, int scene, int mode, char *detail, size_t cap);
     /* seed <N> on the game thread: 1 seeded, 0 refused (detail), -1 unavailable (symbol / TLS missing) */
     int      (*seed_rng)(void *u, unsigned long long seed, char *detail, size_t cap);
     /* interactive mode: hand a reply to the pipe right now (used for quit, which exits before the pipe thread
