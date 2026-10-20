@@ -1,0 +1,17 @@
+mods: dev-sandbox, _autoplay
+timeout: 90s
+# Combat assertions on the test fight. `_autoplay` makes the player cats Uncontrollable (the AI takes their turns),
+# so the fight advances without input; `spawn Rat` gives them an opponent on the empty "blank" level.
+wait frames 120
+enter TacticsTest
+wait turns 1
+dump
+expect round >= 1
+expect units >= 2
+cmd spawn Rat
+expect console "Spawned Rat" within 5
+expect units >= 7
+wait rounds 1
+expect round >= 2
+dump
+quit
