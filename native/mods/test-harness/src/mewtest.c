@@ -39,6 +39,10 @@ typedef MtMsvcString *(*fn_GetTypeName)(void *self, MtMsvcString *out);
 typedef int (*fn_IsA)(void *self, MtMsvcString *name);
 typedef int (*fn_SDL_SetSwapInterval)(int);
 typedef int (*fn_SDL_HideWindow)(void *window);
+/* run entry (framework v4 symbols): the dev menu's TacticsTest button, replayed */
+typedef void *(*fn_CreateScene)(void *sceneManager, MtMsvcString *name);   /* by-value string, callee destroys */
+typedef void *(*fn_CreateEntity)(void *scene);
+typedef void *(*fn_AddTacticsTest)(void *scene, void *entity);
 
 static MewjectorAPI g_mj;
 static int g_mjOk;
@@ -62,6 +66,9 @@ static fn_TidyDeallocate g_Tidy;
 static fn_DCInit g_origDCInit;
 static fn_FrameBegin g_origFrameBegin;
 static fn_NextTurn g_origNextTurn;
+static fn_CreateScene g_CreateScene;        /* NULL when the framework predates v4: `enter` reports enter_unavailable */
+static fn_CreateEntity g_CreateEntity;
+static fn_AddTacticsTest g_AddTacticsTest;
 
 static void *volatile g_dc;
 static volatile LONG g_dcInits;
@@ -266,6 +273,38 @@ static int char_array(void **data, int *count) {
     *count = (int)n;
     return 1;
 }
+/* enter <scene>: replay what the dev menu's "TacticsTest" button does (DevMenu_TacticsTest_lambda_0x32fc00.c):
+ * a new scene named "Battle" from the scene manager, one entity in it, AddComponent<TacticsTest>(scene, entity)
+ * whose init registers the run console commands and starts the test fight. Runs on the game thread (FrameBegin
+ * hook, same as cmd). The lambda also reseeds the RNG and copies three dev-menu widget values into the director's
+ * settings; neither is replayed (the director keeps its defaults, the RNG stays as it is). No save file is opened:
+ * the boot-time test director (test00.sav) is the one TacticsTest reads. Returns 1 / 0 (detail) / -1 (symbols). */
+static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
+    (void)u;
+    if (scene != MT_SCENE_TACTICS_TEST) { snprintf(detail, cap, "unknown scene id %d", scene); return 0; }
+    if (!g_CreateScene || !g_CreateEntity || !g_AddTacticsTest) {
+        snprintf(detail, cap, "symbols missing: FW_SYM_SceneManager_CreateScene/Scene_CreateEntity/AddComponent_TacticsTest (framework older than v4?)");
+        return -1;
+    }
+    void *dc = g_dc, *mgr = NULL, *director = NULL, *directorGlobal = (void *)g_fw.GetData(FW_DATA_MewDirector);
+    if (!dc) { snprintf(detail, cap, "no debug console yet (main menu not reached)"); return 0; }
+    if (g_tc) { snprintf(detail, cap, "a fight is already running (TurnControl seen)"); return 0; }
+    if (!directorGlobal || !read_ptr(directorGlobal, &director) || !director) { snprintf(detail, cap, "no MewDirector (the boot-time test director is missing)"); return 0; }
+    if (!read_ptr(AT(dc, OFF_COMPONENT_SCENEMANAGER), &mgr) || !mgr) { snprintf(detail, cap, "no scene manager on the console component (+0x%x)", OFF_COMPONENT_SCENEMANAGER); return 0; }
+    MtMsvcString name;
+    if (!mt_msvcstr_build(&name, "Battle", 6, (MtAllocFn)g_Allocate)) { snprintf(detail, cap, "cannot build the scene name"); return 0; }
+    void *battle = g_CreateScene(mgr, &name); /* callee destroys the string */
+    char destroyed = 1;
+    if (!battle || !safe_read(AT(battle, OFF_SCENE_DESTROYED), &destroyed, 1) || destroyed) { snprintf(detail, cap, "CreateScene(\"Battle\") gave %p (destroyed=%d)", battle, (int)destroyed); return 0; }
+    void *entity = g_CreateEntity(battle);
+    if (!entity) { snprintf(detail, cap, "CreateEntity returned NULL on scene %p", battle); return 0; }
+    void *tt = g_AddTacticsTest(battle, entity);
+    if (!tt) { snprintf(detail, cap, "AddComponent<TacticsTest> returned NULL (scene %p being destroyed?)", battle); return 0; }
+    snprintf(detail, cap, "scene=%p entity=%p component=%p director=%p manager=%p", battle, entity, tt, director, mgr);
+    logf_("enter TacticsTest: %s", detail);
+    return 1;
+}
+
 static int h_units_available(void *u) { (void)u; void *d[MAX_UNITS]; int n; return char_array(d, &n); }
 static int h_unit_count(void *u) { (void)u; void *d[MAX_UNITS]; int n; return char_array(d, &n) ? n : 0; }
 
@@ -359,7 +398,7 @@ static void h_request_exit(void *u, int code) {
 
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
-    h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit,
+    h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
@@ -609,6 +648,12 @@ static void init(void) {
     g_Allocate = (fn_Allocate)g_fw.GetSymbol(FW_SYM_string_Allocate);
     g_Tidy = (fn_TidyDeallocate)g_fw.GetSymbol(FW_SYM_string_TidyDeallocate);
     if (!g_Execute || !g_Allocate || !g_Tidy) { logf_("required symbols missing; inert"); return; }
+    /* v4 run-entry symbols: optional (an older framework returns 0 for an enum it does not know; `enter` then
+     * reports enter_unavailable instead of the harness going inert) */
+    g_CreateScene = (fn_CreateScene)g_fw.GetSymbol(FW_SYM_SceneManager_CreateScene);
+    g_CreateEntity = (fn_CreateEntity)g_fw.GetSymbol(FW_SYM_Scene_CreateEntity);
+    g_AddTacticsTest = (fn_AddTacticsTest)g_fw.GetSymbol(FW_SYM_AddComponent_TacticsTest);
+    logf_("run-entry symbols: CreateScene=%p CreateEntity=%p AddComponent<TacticsTest>=%p", (void *)g_CreateScene, (void *)g_CreateEntity, (void *)g_AddTacticsTest);
     for (int i = 0; i < FW_DATA_COUNT_; i++) {
         void **slot = (void **)g_fw.GetData(i);
         g_sdlInitial[i] = NULL;
