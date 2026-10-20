@@ -65,8 +65,18 @@ Fixtures are hand-written excerpts shaped like the real thing (log lines, JSONL,
 Never commit game assets, saves or exe bytes; the only game-derived data in git is the short byte signatures in
 `bindings/`. T1 tests read the real files in place and skip when they are absent.
 
-## Enforcement (current: convention; see `TODO.md` for the mechanical options)
+## Enforcement (mechanical since 2026-10-20, plus convention)
 
+- **CI runs T0** (`.github/workflows/t0.yml`) on every PR and push to `main` that touches `editor/`, `native/`,
+  `bindings/`, `tools/` or `mods/`, on Linux runners: `npm run typecheck`, `npm test`, `npm run bindings:check` and
+  the native host suites via `native/test-all.sh` (the POSIX twin of `test-all.bat`). The game is never part of CI;
+  everything that needs the exe, `.extracted/` or Steam prints `(skipped: …)` there. Docs-only PRs do not trigger
+  it, so the jobs are not "required" checks.
+- **A source change needs a test change**: the `test-change` job runs `editor/scripts/check-test-change.ts` over
+  the PR's diff. A file under `editor/src/`, `native/*/src/` or `mods/<mod>/` (outside `tests/`) must come with a
+  file under `editor/test/`, `editor/tests/`, `native/**/test/` or `mods/<mod>/tests/`, or the PR body / a commit
+  message carries `[no-test-change: <reason>]`. Run it locally with
+  `node editor/scripts/check-test-change.ts --base origin/main --head HEAD`.
 - PR body must carry the evidence table; a PR without it is sent back.
 - `npm test`, `npm run typecheck` and `native\test-all.bat` must be green before `gh pr create`.
 - A change to `mods/`, `native/framework/`, `native/mods/` or `bindings/` must include a T2 run (or an explicit
