@@ -472,7 +472,14 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     game. Units are **tinted by where they stand** (the rig's colours came back at ~0.80–0.86 in a shaded spot while
     the main probe's gray control stood lit and read exact). Out of scope (engine work): adding parts to
     catparts.swf or making the game swap its own cat parts into our slots. Not done: copying vanilla part geometry
-    into a mod (owner's call, H2). Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+    into a mod (owner's call, H2).
+    **Text done 2026-10-21, the base game's way (owner: "use whatever base game uses"):** vanilla ability_icons.swf and
+    ui.swf declare `ImportAssets2("fonts.swf")` with zero assets and use `DefineEditText` with a font *class* (flags
+    0xeca3, HTML `<p align><font size color letterSpacing kerning>`), so no glyphs live in the file. `src/core/art/text.ts`
+    writes exactly that from `scene.texts` (`GAME_FONTS` = fonts.swf's eight classes, pinned in
+    `test/fixtures/art/game-fonts.json` against the installed game). OBSERVED: gate `text` boots; the probe's PROBE
+    text draws in the game's font and the class is honoured (Swanky draws other glyphs than Peralta). Not done:
+    localized text (the game sets text by code/loc keys; a mod's text is the literal initial text). Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. **Done 2026-10-20:** MCP tools `list_art_scenes`, `read_art_scene`, `write_art_scene` (dryRun validates), `new_art_scene`,
     `import_svg` (with `into { scene, shapeId }` it saves the shape), `build_swf`, `inspect_swf`. Was: MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool

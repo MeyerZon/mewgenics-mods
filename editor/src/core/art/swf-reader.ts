@@ -106,6 +106,26 @@ export interface ParsedBitmap {
   pixels: Uint8Array;
 }
 
+export interface ParsedEditText {
+  id: number;
+  bounds: Rect;
+  /** the two flag bytes in file order (vanilla: 0xeca3) */
+  flags: number;
+  fontId?: number;
+  fontClass?: string;
+  /** twips */
+  fontHeight?: number;
+  color?: Rgba;
+  maxLength?: number;
+  align?: "left" | "right" | "center" | "justify";
+  leftMargin?: number;
+  rightMargin?: number;
+  indent?: number;
+  leading?: number;
+  variableName: string;
+  initialText: string;
+}
+
 export interface Tag {
   code: number;
   name: string;
@@ -131,6 +151,12 @@ export interface Tag {
   abcBytes?: Uint8Array;
   entries?: Array<{ id: number; name: string }>;
   bitmap?: ParsedBitmap;
+  /** DefineEditText */
+  editText?: ParsedEditText;
+  /** ImportAssets / ImportAssets2 */
+  importUrl?: string;
+  importCount?: number;
+  imports?: Array<{ id: number; name: string }>;
   error?: string;
 }
 
@@ -397,6 +423,41 @@ function parseTag(code: number, body: Uint8Array, offset: number): Tag {
         const pixels = new Uint8Array(inflateSync(z));
         t.id = id;
         t.bitmap = { id, format, width, height, colorTableSize, pixels };
+        break;
+      }
+      case TAG.DefineEditText: {
+        t.raw = body;
+        const id = r.u16();
+        const bounds = r.rect();
+        const flags = (r.u8() << 8) | r.u8();
+        const et: ParsedEditText = { id, bounds, flags, variableName: "", initialText: "" };
+        if (flags & 0x0100) et.fontId = r.u16();
+        if (flags & 0x0080) et.fontClass = r.string();
+        if (flags & 0x0180) et.fontHeight = r.u16();
+        if (flags & 0x0400) et.color = r.color(true);
+        if (flags & 0x0200) et.maxLength = r.u16();
+        if (flags & 0x0020) {
+          et.align = (["left", "right", "center", "justify"] as const)[r.u8()] || "left";
+          et.leftMargin = r.u16();
+          et.rightMargin = r.u16();
+          et.indent = r.u16();
+          et.leading = r.s16();
+        }
+        et.variableName = r.string();
+        if (flags & 0x8000) et.initialText = r.string();
+        t.id = id;
+        t.editText = et;
+        break;
+      }
+      case TAG.ImportAssets2: {
+        t.raw = body;
+        t.importUrl = r.string();
+        r.u8(); // reserved
+        r.u8(); // reserved
+        const n = r.u16();
+        t.importCount = n;
+        t.imports = [];
+        for (let i = 0; i < n; i++) t.imports.push({ id: r.u16(), name: r.string() });
         break;
       }
       default:

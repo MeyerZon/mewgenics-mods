@@ -510,6 +510,8 @@ await mcpSmoke();
   await runArtCatRigTests(test, assert, eq);
   const { runArtSvgExportTests } = await import("./art-svg-export-tests.ts");
   await runArtSvgExportTests(test, assert, eq);
+  const { runArtTextTests } = await import("./art-text-tests.ts");
+  await runArtTextTests(test, assert, eq);
 }
 
 // ---- 7. In-game test harness runner (fake game; never launches Mewgenics) ---

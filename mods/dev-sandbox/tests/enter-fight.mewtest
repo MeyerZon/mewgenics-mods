@@ -11,8 +11,10 @@ expect console "bind" within 5
 expect console "Executed: listcmds"
 log "TacticsTest is up: its init registered the run console commands"
 # not `wait turns 1`: turn 1 can fire in the same frame as the line above, before the wait starts, and the
-# player's turn then never ends without _autoplay (OBSERVED 2026-10-20: a 40 s timeout). The round counter is stable.
-wait frames 60
+# player's turn then never ends without _autoplay (OBSERVED 2026-10-20: a 40 s timeout). Not `wait frames 60` either:
+# the battle intro runs on wall-clock time, and with the window hidden 60 frames passed before turn 1 (round 0 in five
+# runs out of five on main, 2026-10-20). The round counter is stable once set.
+wait ms 4000
 expect round >= 1
 dump
 expect units >= 2

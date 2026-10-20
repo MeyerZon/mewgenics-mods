@@ -24,6 +24,9 @@
     "CatProbe_head": { "paths": [ { "d": "M22 -78 C22 -100 70 -100 70 -78 C70 -56 22 -56 22 -78 Z M26 -92 L30 -112 L42 -96 Z M50 -96 L62 -112 L66 -92 Z", "fill": "#ffd0a0", "fillRule": "nonzero" } ] }
   },
   "bitmaps": { "checkerbmp": { "file": "art/checker.png" } },
+  "texts": {
+    "probetext": { "text": "PROBE", "font": "Peralta", "size": 24, "color": "#00ffa0", "align": "center", "width": 160, "height": 40 }
+  },
   "gradients": {
     "rampgrad": { "kind": "linear", "x1": -30, "y1": 0, "x2": 30, "y2": 0, "stops": [ { "offset": 0, "color": "gray:0" }, { "offset": 1, "color": "#ff2020" } ] }
   },
@@ -65,7 +68,8 @@
         { "name": "cap butt", "depth": 6, "keys": [ { "frame": 0, "ref": "capbutt", "x": 470, "y": 10 } ] },
         { "name": "cap square", "depth": 7, "keys": [ { "frame": 0, "ref": "capsquare", "x": 470, "y": 50 } ] },
         { "name": "blend add", "depth": 8, "keys": [ { "frame": 0, "ref": "addsq", "x": 550, "y": 30, "blend": "add" } ] },
-        { "name": "walker", "depth": 9, "keys": [ { "frame": 0, "ref": "walker", "x": 600, "y": 30, "tween": "linear" }, { "frame": 59, "ref": "walker", "x": 680, "y": 30 } ] }
+        { "name": "walker", "depth": 9, "keys": [ { "frame": 0, "ref": "walker", "x": 600, "y": 30, "tween": "linear" }, { "frame": 59, "ref": "walker", "x": 680, "y": 30 } ] },
+        { "name": "text", "depth": 10, "keys": [ { "frame": 0, "ref": "probetext", "x": 300, "y": 90 } ] }
       ]
     }
   },

@@ -10,7 +10,7 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     type Px = [number, number, number];
     const Y: Px = [255, 255, 0], M: Px = [255, 0, 255], C: Px = [0, 255, 255];
     /** a synthetic shot: background, the probe clip drawn at scale s from (ox, oy), optionally mirrored, with knobs */
-    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round"; blend?: "honoured" | "ignored"; walker?: number }) => {
+    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round"; blend?: "honoured" | "ignored"; walker?: number; text?: boolean }) => {
       const W = 1800, H = 400, img = new Uint8Array(W * H * 4);
       for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
       const s = o.s, ox = o.mirrored ? 1550 : 200, oy = 100;
@@ -51,6 +51,8 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       // (550,30): #600000 placed with blend add — over the 40,44,40 background add gives 136,44,40, normal 96,0,0
       square(550, 30, o.blend === "ignored" ? [96, 0, 0] : [136, 44, 40]);
       // the root timeline's walker: a 20 px white square at clip y 30 whose x moves 600..680 over the root's 60 frames
+      // the PROBE text: mint (#00ffa0) glyph strokes inside the clip box x 220..380, y 70..110
+      if (o.text !== false) for (let cy = 80; cy < 100; cy += step) for (let cx = 240; cx < 360; cx += step) if (Math.floor(cx / 6) % 2 === 0) put(cx, cy, [0, 255, 160]);
       const wx = o.walker ?? 640;
       for (let cy = 20; cy < 40; cy += step) for (let cx = wx - 10; cx < wx + 10; cx += step) put(cx, cy, [255, 255, 255]);
       return { width: W, height: H, rgba: img };
@@ -73,6 +75,8 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       eq(a.gradient, "drawn", "black → red in clip x");
       eq(a.caps, "honoured", "butt ends at the endpoint, square reaches past it");
       eq(a.blend, "honoured", "add lets the background through");
+      eq(a.text, "drawn", "mint glyph pixels in the text box");
+      eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", text: false })).text, "missing");
       assert(Math.abs(a.walkerX - 640) <= 2, `walker x ${a.walkerX}`);
       assert(Math.abs(pc.analyzeProbeShot(shot({ s: 1.5, mirrored: true, walker: 610 })).walkerX - 610) <= 2, "walker read in clip x when mirrored");
       eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", blend: "ignored" })).blend, "ignored");
