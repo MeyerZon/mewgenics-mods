@@ -363,6 +363,7 @@ typedef struct Fake {
     int unitsAvailable; MtUnit units[8]; int unitCount;
     char emitted[FK_MAX][1024]; int emitCount;
     int exitCode; int exitCalls;
+    int enterResult; int enterCalls; int enterScene;   /* enter_scene: programmable result (1 ok / 0 refused / -1 unavailable) */
 } Fake;
 static Fake fk;
 
@@ -390,10 +391,16 @@ static int fk_unit_has_status(void *u, int i, const char *st) {
 }
 static void fk_emit(void *u, const char *json) { (void)u; if (fk.emitCount < FK_MAX) snprintf(fk.emitted[fk.emitCount++], 1024, "%s", json); }
 static void fk_request_exit(void *u, int code) { (void)u; fk.exitCode = code; fk.exitCalls++; }
+static int fk_enter_scene(void *u, int scene, char *detail, size_t cap) {
+    (void)u;
+    fk.enterCalls++; fk.enterScene = scene;
+    snprintf(detail, cap, "fake enter %d", scene);
+    return fk.enterResult;
+}
 
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
-    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit,
+    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene,
 };
 
 static MtRunner rr;
@@ -428,6 +435,76 @@ TEST(runner_cmd_then_same_step_console_then_expect_ok) {
     CHECK_EQ(fk.exitCalls, 1); CHECK_EQ(fk.exitCode, 0);
     CHECK_EQ(mt_runner_step(&rr, &HOST), 0); /* stepping after finished is a no-op */
     CHECK_EQ(fk.exitCalls, 1);
+}
+
+/* ---- enter <SceneName>: the harness replays the dev menu's "TacticsTest" entry through the host ---- */
+TEST(script_enter_directive_parses_known_scene_and_rejects_unknown_or_missing) {
+    char err[256]; int line = 0;
+    CHECK(mt_script_parse("enter TacticsTest\nquit\n", 23, &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 2);
+    CHECK_EQ(g_s.d[0].kind, MT_D_ENTER);
+    CHECK_EQ(g_s.d[0].scene, MT_SCENE_TACTICS_TEST);
+    CHECK_EQ(g_s.d[0].line, 1);
+    CHECK_STR(mt_scene_name(MT_SCENE_TACTICS_TEST), "TacticsTest");
+    CHECK_EQ(mt_scene_id("TacticsTest"), MT_SCENE_TACTICS_TEST);
+    CHECK_EQ(mt_scene_id("Nope"), 0);
+    const char *bad = "enter Nope\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    CHECK(strstr(err, "unknown scene") != NULL); CHECK_EQ(line, 1);
+    bad = "enter\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    CHECK(strstr(err, "scene name") != NULL);
+    bad = "enter TacticsTest extra\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_enter_waits_for_console_then_calls_host_and_emits_enter_event) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.ready = 0; fk.enterResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.enterCalls, 0);                       /* like cmd: no console yet, no call */
+    CHECK_EQ(rr.state, MT_S_WAIT_CONSOLE);
+    fk.ready = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.enterCalls, 1); CHECK_EQ(fk.enterScene, MT_SCENE_TACTICS_TEST);
+    CHECK(has(last_ev(), "{\"ev\":\"enter\"")); CHECK(has(last_ev(), "\"line\":1"));
+    CHECK(has(last_ev(), "\"name\":\"TacticsTest\"")); CHECK(has(last_ev(), "\"ok\":true"));
+    CHECK(has(last_ev(), "\"detail\":\"fake enter 1\""));
+    CHECK_EQ(rr.entered, 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);          /* quit */
+    CHECK(has(last_ev(), "\"code\":0")); CHECK_EQ(fk.exitCode, 0);
+}
+
+TEST(runner_enter_failure_ends_script_with_code_1_enter_failed) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = 0;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK_EQ(fk.enterCalls, 1);
+    CHECK_EQ(count_ev("enter"), 1);
+    CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "\"detail\":\"fake enter 1\""));
+    CHECK(has(last_ev(), "{\"ev\":\"end\"")); CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"enter_failed\""));
+    CHECK_EQ(fk.exitCode, 1); CHECK_EQ(fk.exitCalls, 1);
+}
+
+TEST(runner_enter_unavailable_ends_script_with_code_4) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "{\"ev\":\"enter\"")); CHECK(has(ev(0), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"enter_unavailable\""));
+    CHECK_EQ(fk.exitCode, 4);
+}
+
+TEST(runner_enter_twice_is_refused_without_a_host_call) {
+    fk_reset("enter TacticsTest\nenter TacticsTest\nquit\n");
+    fk.enterResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);          /* first: ok */
+    CHECK_EQ(fk.enterCalls, 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);          /* second: refused, script ends */
+    CHECK_EQ(fk.enterCalls, 1);
+    CHECK_EQ(count_ev("enter"), 2);
+    CHECK(has(ev(1), "\"ok\":false")); CHECK(has(ev(1), "once"));
+    CHECK(has(last_ev(), "\"reason\":\"enter_failed\"")); CHECK_EQ(fk.exitCode, 1);
 }
 
 TEST(runner_expect_console_fail_and_quit_code_1) {
