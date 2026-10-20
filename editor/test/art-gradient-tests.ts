@@ -34,7 +34,7 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
     assert(!f.error, String(f.error));
   });
 
-  test("validateScene: gradient-missing for an unknown id, gradient-stops for <2 / >8 / unordered / bad colour stops, gradient-geometry for a zero-length linear or r<=0 radial, dup-id across gradients", () => {
+  test("validateScene: gradient-missing for an unknown id, gradient-stops for <2 / >15 / unordered / bad colour stops, gradient-geometry for a zero-length linear or r<=0 radial, dup-id across gradients", () => {
     const sc = exampleScene("g") as any;
     sc.shapes.body.paths[0].fill = "gradient:nope";
     let v = validateScene(sc) as any;
@@ -42,7 +42,7 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
     const sc2 = exampleScene("g") as any;
     sc2.gradients = {
       one: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: [{ offset: 0, color: "gray:1" }] },
-      many: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: Array.from({ length: 9 }, (_, i) => ({ offset: i / 8, color: "gray:1" })) },
+      many: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: Array.from({ length: 16 }, (_, i) => ({ offset: i / 15, color: "gray:1" })) },
       order: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: [{ offset: 0.6, color: "gray:1" }, { offset: 0.2, color: "gray:2" }] },
       colour: { kind: "linear", x1: 0, y1: 0, x2: 10, y2: 0, stops: [{ offset: 0, color: "bitmap:x" }, { offset: 1, color: "zzz" }] },
       flat: { kind: "linear", x1: 5, y1: 5, x2: 5, y2: 5, stops: linear.stops },
