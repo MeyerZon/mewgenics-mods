@@ -37,6 +37,13 @@ export interface EnterEvent {
   detail: string;
 }
 
+/** `popup`: a modal dialog the harness's watchdog dismissed (the game's own WARNING/ERROR boxes). */
+export interface PopupEvent {
+  title: string;
+  text: string;
+  frame: number;
+}
+
 export interface ExpectFailure {
   line: number;
   kind: string;
@@ -63,6 +70,8 @@ export interface ResultSummary {
   units: ResultEvent | null;
   /** the enter event (one per script), null when the script had none */
   enter: EnterEvent | null;
+  /** dialogs the watchdog dismissed, in order */
+  popups: PopupEvent[];
 }
 
 export function parseResults(text: string | null | undefined): ResultSummary {
@@ -80,6 +89,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
     expects: { passed: 0, failed: 0, failures: [] },
     units: null,
     enter: null,
+    popups: [],
   };
   if (typeof text !== "string") return r;
 
@@ -109,6 +119,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
       case "console": r.consoleLines.push(String(e.text ?? "")); break;
       case "units": r.units = e; break;
       case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
+      case "popup": r.popups.push({ title: String(e.title ?? ""), text: String(e.text ?? ""), frame: Number(e.frame ?? 0) }); break;
       case "expect":
         if (e.ok) r.expects.passed++;
         else {

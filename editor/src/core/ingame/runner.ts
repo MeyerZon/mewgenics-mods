@@ -164,8 +164,17 @@ export interface VerdictInput {
   };
 }
 
-/** Pure verdict from the collected evidence. First match wins; see docs/ingame-testing.md. */
+/** Pure verdict from the collected evidence. First match wins; see docs/ingame-testing.md. Dialogs the harness
+ * dismissed (`popup` events) never decide the verdict but are appended to the reason, since they usually explain it. */
 export function decideVerdict(input: VerdictInput): { verdict: Verdict; reason: string } {
+  const v = decideVerdictBase(input);
+  const popups = input.result && Array.isArray(input.result.popups) ? input.result.popups : [];
+  if (!popups.length) return v;
+  if (v.verdict === "pass") return { verdict: v.verdict, reason: `${v.reason}, ${popups.length} popup(s) dismissed` };
+  return { verdict: v.verdict, reason: `${v.reason}; popup ${popups.map((p) => `${p.title}: ${p.text}`).join(" | ")}` };
+}
+
+function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: string } {
   const { preflight: pre, exit, result, logs, safety } = input;
   if (pre.skipped) return { verdict: "skipped", reason: pre.reasons.join("; ") || "skipped" };
   if (!pre.ok) return { verdict: "cannot-run", reason: pre.reasons.join("; ") };
