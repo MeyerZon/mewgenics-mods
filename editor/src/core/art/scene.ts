@@ -462,7 +462,8 @@ export function validateScene(input: unknown): SceneValidation {
           if (!Array.isArray(k.filters)) err("filter", "filters must be an array", [kat + ".filters"]);
           else {
             k.filters.forEach((fl, fi) => { for (const msg of filterProblems(fl)) err("filter", `filters[${fi}]: ${msg}`, [`${kat}.filters[${fi}]`]); });
-            if (k.filters.length) findings.push({ severity: "info", code: "filter-not-previewed", message: "filters are written to the SWF (PlaceObject3); the preview does not draw them", path: kat + ".filters" });
+            // OBSERVED 2026-10-20 (gate "filters"): the game stops with "ERROR: FILTERS NOT SUPPORTED <swf>" on any filter list
+            if (k.filters.length) err("filter-unsupported", "the game does not support filters: it stops with \"ERROR: FILTERS NOT SUPPORTED\" when a SWF carries one (bake glows/shadows into the art instead)", [kat + ".filters"]);
           }
         }
       });
