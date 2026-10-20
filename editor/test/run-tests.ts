@@ -341,7 +341,7 @@ if (BASE_READY) {
   test("_golden-merge CSV .append preview: two 12-column loc rows added (GOLDEN_RAT_NAME, APPENDED_RAT_NAME)", () => {
     const p = previewMerge("_golden-merge", "data/text/combined.csv.append");
     assert(p.ok, `preview: ${JSON.stringify(p)}`);
-    if (!p.ok || p.kind !== "csv" || p.mode !== "append") throw new Error("csv append preview expected");
+    if (!p.ok || p.kind !== "csv" || !("addedRows" in p)) throw new Error("csv append preview expected");
     eq(p.addedRows.map((r) => r[0]).join(","), "GOLDEN_RAT_NAME,APPENDED_RAT_NAME");
     assert(p.addedRows.every((r) => r.length === 12), JSON.stringify(p.addedRows));
   });

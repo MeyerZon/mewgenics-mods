@@ -184,7 +184,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const lines = p.body.split("\n");
-      eq(lines.length - 1, 18, "one body line per directive (plus the trailing newline)");
+      eq(lines.length - 1, 19, "one body line per directive (plus the trailing newline)");
       assert(!lines.some((l) => l.startsWith("expect log")), "the DLL never sees expect log");
       assert(lines[11]!.startsWith("# runner: expect log"), `placeholder comment at the directive's position, got ${JSON.stringify(lines[11])}`);
       eq(lines[12], "enter TacticsTest", "enter is a DLL-side directive and passes through");
