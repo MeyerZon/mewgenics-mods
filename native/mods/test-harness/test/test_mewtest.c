@@ -827,7 +827,7 @@ TEST(runner_serves_exec_during_wait_frames_collects_lines_for_n_frames_and_repli
     CHECK_EQ(count_ev("exec"), 1); CHECK_STR(last_ev(), req->reply);   /* the same line went to the result file */
     int n = 3;
     while (mt_runner_step(&rr, &HOST)) n++;
-    CHECK_EQ(n, 11);                                            /* the wait still lasted exactly 10 frames, then quit */
+    CHECK_EQ(n, 10); CHECK_EQ(count_ev("wait"), 1); CHECK(has(ev(3), "\"actual\":10"));   /* events: console, console, exec, wait, end: the wait still lasted exactly 10 frames; quit was the 11th step */
     CHECK(has(last_ev(), "\"reason\":\"quit\""));
 }
 
@@ -846,6 +846,22 @@ TEST(runner_does_not_serve_while_waiting_for_the_console_or_between_run_directiv
     CHECK_EQ(req->state, MT_Q_PENDING); CHECK_EQ(fk.cmdCount, 1);
     CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* wait frames 2 starts: served now */
     CHECK_EQ(fk.cmdCount, 2); CHECK_STR(fk.cmds[1], "spawn Rat");
+}
+
+TEST(runner_does_not_serve_before_the_console_exists) {
+    /* OBSERVED 2026-10-20: an exec served at frame 1 (inside `wait frames 120`, before DebugConsole::init) crashed
+     * the game inside DebugConsole::Execute; requests wait for the console like a cmd directive does */
+    fk_reset("wait frames 5\nquit\n");
+    mt_queue_init(&g_q);
+    mt_runner_attach_queue(&rr, &g_q);
+    fk.ready = 0;
+    MtRequest *req = mt_queue_push(&g_q, 1, MT_QOP_EXEC, "spawn Rat", 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(req->state, MT_Q_PENDING); CHECK_EQ(fk.cmdCount, 0);
+    fk.ready = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.cmdCount, 1); CHECK_STR(fk.cmds[0], "spawn Rat");
 }
 
 TEST(runner_interactive_eof_goes_idle_emits_idle_once_and_serves_dump) {

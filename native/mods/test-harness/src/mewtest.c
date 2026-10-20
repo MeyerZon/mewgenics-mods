@@ -62,6 +62,13 @@ static char g_scriptErr[256];
 static int g_scriptErrLine;
 static HANDLE g_out = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_outLock, g_runLock;
+/* interactive mode (-mewtest_pipe 1): one named pipe, one reader thread, one request queue shared with the runner.
+ * g_pipeLock guards the queue and every pipe write; the frame thread holds it for the whole runner step (it never
+ * waits on anything while holding it), the pipe thread only for push / poll / release. Never taken with g_outLock. */
+static HANDLE g_pipe = INVALID_HANDLE_VALUE;
+static CRITICAL_SECTION g_pipeLock;
+static MtQueue g_queue;
+static char g_pipeName[64];
 static int g_active;
 static DWORD g_startTick;
 static uintptr_t g_base, g_imageEnd;
@@ -584,13 +591,98 @@ static void h_request_exit(void *u, int code) {
     ExitProcess((UINT)code);
 }
 
+/* write one reply line to the pipe (adds the newline when the line has none); no-op without a client */
+static void pipe_write_line(const char *line) {
+    if (g_pipe == INVALID_HANDLE_VALUE) return;
+    size_t n = strlen(line);
+    DWORD written = 0;
+    WriteFile(g_pipe, line, (DWORD)n, &written, NULL);
+    if (!n || line[n - 1] != '\n') WriteFile(g_pipe, "\n", 1, &written, NULL);
+    FlushFileBuffers(g_pipe);
+}
+static void h_pipe_reply(void *u, const char *json) { (void)u; pipe_write_line(json); }
+
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
     h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
+    h_pipe_reply,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
-static void step_runner(void) { mt_runner_step(&g_runner, &HOST); }
+static void step_runner(void) {
+    if (g_args.pipe) EnterCriticalSection(&g_pipeLock);
+    mt_runner_step(&g_runner, &HOST);
+    if (g_args.pipe) LeaveCriticalSection(&g_pipeLock);
+}
+
+/* one request line from the client: parse, queue, wait for the frame thread's reply, write it back */
+static void handle_pipe_line(const char *line) {
+    const char *p = line;
+    while (*p == ' ' || *p == '\t' || *p == '\r') p++;
+    if (!*p) return;
+    long id = 0; MtQOp op; char text[MT_Q_TEXT]; int frames; char err[128]; char buf[MT_Q_REPLY];
+    if (!mt_pipe_parse_request(p, &id, &op, text, sizeof text, &frames, err, sizeof err)) {
+        mt_pipe_error_reply(buf, sizeof buf, id, err);
+        pipe_write_line(buf);
+        return;
+    }
+    EnterCriticalSection(&g_pipeLock);
+    MtRequest *req = mt_queue_push(&g_queue, id, op, text, frames);
+    LeaveCriticalSection(&g_pipeLock);
+    if (!req) { mt_pipe_error_reply(buf, sizeof buf, id, "queue full"); pipe_write_line(buf); return; }
+    DWORD t0 = GetTickCount();
+    for (;;) {
+        Sleep(5);
+        EnterCriticalSection(&g_pipeLock);
+        MtQState st = req->state;
+        if (st == MT_Q_DONE) { snprintf(buf, sizeof buf, "%s", req->reply); mt_queue_release(req); }
+        LeaveCriticalSection(&g_pipeLock);
+        if (st == MT_Q_DONE) { pipe_write_line(buf); return; }
+        if (st == MT_Q_FREE) return;                     /* the frame thread answered and released it itself (quit) */
+        if (GetTickCount() - t0 > g_args.timeoutMs + 5000) {
+            EnterCriticalSection(&g_pipeLock);
+            if (req->state == MT_Q_PENDING) mt_queue_release(req);
+            LeaveCriticalSection(&g_pipeLock);
+            mt_pipe_error_reply(buf, sizeof buf, id, "request never served (the runner is not idle or waiting)");
+            pipe_write_line(buf);
+            return;
+        }
+    }
+}
+
+static DWORD WINAPI pipe_thread(LPVOID p) {
+    (void)p;
+    static char acc[MT_Q_TEXT + 512];
+    for (;;) {
+        if (!ConnectNamedPipe(g_pipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) { Sleep(100); continue; }
+        logf_("pipe: client connected on %s", g_pipeName);
+        size_t used = 0;
+        for (;;) {
+            DWORD n = 0;
+            if (!ReadFile(g_pipe, acc + used, (DWORD)(sizeof acc - used - 1), &n, NULL) || n == 0) break;
+            used += n;
+            acc[used] = 0;
+            char *nl;
+            while ((nl = (char *)memchr(acc, '\n', used)) != NULL) {
+                *nl = 0;
+                handle_pipe_line(acc);
+                size_t rest = used - (size_t)(nl + 1 - acc);
+                memmove(acc, nl + 1, rest);
+                used = rest;
+                acc[used] = 0;
+            }
+            if (used >= sizeof acc - 1) {
+                char buf[256];
+                mt_pipe_error_reply(buf, sizeof buf, 0, "request line too long");
+                pipe_write_line(buf);
+                used = 0;
+            }
+        }
+        logf_("pipe: client disconnected");
+        DisconnectNamedPipe(g_pipe);
+    }
+    return 0;
+}
 
 /* ----------------------------------------------------------------------- */
 /* end-of-run paths: script error, timeout, crash                           */
@@ -815,6 +907,7 @@ static void write_start_event(const char *build) {
     mt_jw_int(&w, "hide", g_args.hide);
     mt_jw_int(&w, "timeout_ms", g_args.timeoutMs);
     mt_jw_int(&w, "clean", g_args.clean);
+    if (g_args.pipe) mt_jw_str(&w, "pipe", g_pipeName);
     mt_jw_int(&w, "t", 0);
     mt_jw_int(&w, "frame", 0);
     mt_jw_end(&w);
@@ -920,6 +1013,19 @@ static void init(void) {
         if (g_out == INVALID_HANDLE_VALUE) { logf_("cannot create result file %s (err %lu); inert", g_args.out, GetLastError()); return; }
     }
     mt_runner_init(&g_runner, &g_script, (uint64_t)GetTickCount64());
+    if (g_args.pipe) {
+        snprintf(g_pipeName, sizeof g_pipeName, "\\\\.\\pipe\\mewtest-%lu", (unsigned long)GetCurrentProcessId());
+        g_pipe = CreateNamedPipeA(g_pipeName, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, 65536, 65536, 0, NULL);
+        if (g_pipe == INVALID_HANDLE_VALUE) { logf_("cannot create the pipe %s (err %lu); interactive mode off", g_pipeName, GetLastError()); g_args.pipe = 0; }
+        else {
+            InitializeCriticalSection(&g_pipeLock);
+            mt_queue_init(&g_queue);
+            mt_runner_set_interactive(&g_runner, 1);
+            mt_runner_attach_queue(&g_runner, &g_queue);
+            CreateThread(NULL, 0, pipe_thread, NULL, 0, NULL);
+            logf_("interactive mode: pipe %s (idle at end of script until a quit request)", g_pipeName);
+        }
+    }
 
     if (!install_hook(FW_SYM_DebugConsole_init, (void *)hook_DCInit, (void **)&g_origDCInit, 50, "DebugConsole::init")) return;
     if (!install_hook(FW_SYM_ApplicationBase_FrameBegin, (void *)hook_FrameBegin, (void **)&g_origFrameBegin, 50, "ApplicationBase::FrameBegin")) return;

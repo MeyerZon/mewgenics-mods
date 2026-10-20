@@ -274,6 +274,8 @@ export interface RunPlanArgs {
   steamRunning?: () => boolean | null;
   /** screenshot taker for `shot` directives (tests inject one); default: the PowerShell window capture */
   capture?: CaptureFn;
+  /** called right after the game process was spawned (sessions connect the pipe from here) */
+  onLaunched?: (info: { pid: number | null; runDir: string; outPath: string }) => void;
 }
 
 interface SpawnOutcome extends ExitInfo {
@@ -391,6 +393,7 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
       let backstop = false;
       let killedAfterEnd = false;
       const child = spawn(launch.command, launch.args, { cwd: launch.cwd, env: launch.env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+      if (args.onLaunched) { try { args.onLaunched({ pid: child.pid ?? null, runDir, outPath }); } catch { /* the hook's problem */ } }
       const grace = args.backstopGraceMs !== undefined ? args.backstopGraceMs : BACKSTOP_GRACE_MS;
       const endGrace = args.endGraceMs !== undefined ? args.endGraceMs : END_GRACE_MS;
       // the harness flushes every record; once `end` is on disk the verdict exists and only the process lifetime is

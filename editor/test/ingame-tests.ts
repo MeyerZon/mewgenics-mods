@@ -975,12 +975,14 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     let session: Sess | null = null, execReply: Awaited<ReturnType<Sess["exec"]>> | null = null, dumpReply: Awaited<ReturnType<Sess["dump"]>> | null = null, sessionReport: Awaited<ReturnType<Sess["stop"]>> | null = null, sessionErr = "";
     try {
       session = await sessionMod.startSession(sessionArgs);
+      await session.waitForIdle(3000);     // the script ran to its end: the DLL idles for requests (OBSERVED: commands sent mid-script were served inside `wait turns`, before the fight)
+      if (!session.idle) throw new Error("waitForIdle resolved without the idle event");
       execReply = await session.exec("listcmds");
       dumpReply = await session.dump();
       sessionReport = await session.stop();
     } catch (e) { sessionErr = e instanceof Error ? e.message : String(e); }
     test("session against the interactive fake: start -> exec replies with the exec event -> dump replies with units -> stop returns a pass report carrying the exec events", () => {
-      assert(!sessionErr && session && execReply && dumpReply && sessionReport, `session flow: ${sessionErr}`);
+      assert(!!(!sessionErr && session && execReply && dumpReply && sessionReport), `session flow: ${sessionErr}`);
       if (!session || !execReply || !dumpReply || !sessionReport) return;
       assert(session.pid > 0 && session.runDir.length > 0 && session.pipe.length > 0, JSON.stringify({ pid: session.pid, pipe: session.pipe }));
       eq(execReply.ev, "exec"); eq(execReply.op, "exec"); eq(execReply.ok, true);
@@ -1333,10 +1335,10 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       }
       return out;
     })();
-    test("MCP tools/list returns the 13 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings)", () => {
+    test("MCP tools/list returns the 16 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools)", () => {
       assert(!mcp.error, mcp.error);
       const names = mcp.list.tools.map((t: { name: string }) => t.name);
-      eq(names.length, 13, names.join(","));
+      eq(names.length, 16, names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {
