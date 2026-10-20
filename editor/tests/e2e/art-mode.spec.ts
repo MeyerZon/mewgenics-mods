@@ -84,6 +84,37 @@ test.describe("Art mode — explorer & scene authoring", () => {
     await expect(page.locator(".artpanel")).toContainText("No shapes yet");
   });
 
+  test("Timeline tab: rows per layer with key marks, a click scrubs the preview, + key at a frame, edit its y, a label pill (in memory, not saved)", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Timeline" }).click();
+    await expect(page.locator(".tl-row", { hasText: "body" })).toBeVisible();
+    await expect(page.locator(".tl-row", { hasText: "eye" })).toBeVisible();
+    // the label pills of the sprite (idle at 0, blink at 12)
+    await expect(page.locator(".tl-label", { hasText: "blink" })).toBeVisible();
+    // a key mark where body has a key (frame 12), none at 6
+    await expect(page.locator('[aria-label="layer body, frame 12"]')).toHaveClass(/key/);
+    await expect(page.locator('[aria-label="layer body, frame 6"]')).not.toHaveClass(/key/);
+    await page.locator('[aria-label="layer body, frame 6"]').click();
+    await expect.poll(async () => (await readFrame(page)).join("/")).toBe("7/24");
+    await page.getByRole("button", { name: "Add key" }).click();
+    await expect(page.locator('[aria-label="layer body, frame 6"]')).toHaveClass(/key/);
+    const y = page.locator('input[aria-label="key y"]');
+    await y.fill("33");
+    await y.press("Enter");
+    await page.locator('input[aria-label="label name"]').fill("wave");
+    await page.getByRole("button", { name: "Add label" }).click();
+    await expect(page.locator(".tl-label", { hasText: "wave" })).toBeVisible();
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const json = await page.locator("textarea").first().inputValue();
+    const sc = JSON.parse(json);
+    const k6 = sc.sprites.Starter.layers.find((l: any) => l.name === "body").keys.find((k: any) => k.frame === 6);
+    expect(k6 && k6.y).toBe(33);
+    expect(sc.sprites.Starter.labels.wave).toBe(6);
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
   test("import an SVG via the file input adds a shape", async ({ page }) => {
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
