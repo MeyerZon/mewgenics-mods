@@ -371,6 +371,15 @@ static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
     if (!entity) { snprintf(detail, cap, "CreateEntity returned NULL on scene %p", battle); return 0; }
     void *tt = g_AddTacticsTest(battle, entity);
     if (!tt) { snprintf(detail, cap, "AddComponent<TacticsTest> returned NULL (scene %p being destroyed?)", battle); return 0; }
+    /* the button marks its own scene (where the run's director lives) with +0x4db = 1 — scheduled for destruction —
+     * so the director dies with it and TacticsTest can create its own; replay that on the scene our director is on */
+    if (directorMade) {
+        void *mainScene = NULL;
+        if (read_ptr(AT(mgr, OFF_SCENEMANAGER_MAINSCENE), &mainScene) && mainScene) {
+            *(volatile char *)((char *)mainScene + OFF_SCENE_DESTROY_NEXT) = 1;
+            logf_("enter: main scene %p marked destroy-next (+0x%x) so the test director hands over", mainScene, OFF_SCENE_DESTROY_NEXT);
+        }
+    }
     void *directorAfter = NULL;
     read_ptr(directorGlobal, &directorAfter);
     snprintf(detail, cap, "scene=%p entity=%p component=%p manager=%p director=%p%s GetGame(console)=%p director(after init)=%p",
@@ -590,10 +599,49 @@ static __attribute__((noreturn)) void exit_now(int code) {
     ExitProcess((UINT)code); /* only if TerminateProcess somehow returned */
 }
 
+/* A modal message box on the game's main thread (its own WARNING popup, e.g. "no saved winning teams - win at least
+ * one run first!" from MewDirector::DebugGenAdventureCats) stops the frame loop for as long as nobody clicks OK —
+ * with a hidden window, forever. The watchdog closes every visible dialog-class window of this process and records
+ * it as a `popup` event (title + text), so a run reports the message instead of hanging on it. */
+static BOOL CALLBACK popup_text_enum(HWND child, LPARAM lp) {
+    char cls[32] = "";
+    GetClassNameA(child, cls, sizeof cls);
+    if (strcmp(cls, "Static") != 0) return TRUE;
+    char *out = (char *)lp;
+    if (out[0]) return TRUE;                                 /* first non-empty Static wins (the icon is a Static too) */
+    GetWindowTextA(child, out, 512);
+    return TRUE;
+}
+static BOOL CALLBACK popup_enum(HWND h, LPARAM lp) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid != GetCurrentProcessId() || !IsWindowVisible(h)) return TRUE;
+    char cls[32] = "", title[128] = "", text[512] = "";
+    GetClassNameA(h, cls, sizeof cls);
+    if (strcmp(cls, "#32770") != 0) return TRUE;           /* the dialog class MessageBox uses */
+    GetWindowTextA(h, title, sizeof title);
+    EnumChildWindows(h, popup_text_enum, (LPARAM)text);     /* the message is the dialog's text Static */
+    char buf[1024];
+    MtJsonW w;
+    mt_jw_begin(&w, buf, sizeof buf, "popup");
+    mt_jw_str(&w, "title", title);
+    mt_jw_str(&w, "text", text);
+    mt_jw_int(&w, "t", t_ms());
+    mt_jw_int(&w, "frame", g_runner.frame);
+    mt_jw_end(&w);
+    emit_locked(buf);
+    logf_("popup dismissed: [%s] %s", title, text);
+    PostMessageA(h, WM_CLOSE, 0, 0);
+    (*(int *)lp)++;
+    return TRUE;
+}
+static void dismiss_popups(void) { int n = 0; EnumWindows(popup_enum, (LPARAM)&n); }
+
 static DWORD WINAPI watchdog(LPVOID p) {
     (void)p;
     for (;;) {
         Sleep(250);
+        if (g_active) dismiss_popups();
         MtExitState s;
         s.crashed = g_crashed != 0;             s.crashTick = g_crashTick;
         s.cleanRequested = g_cleanExitTick != 0; s.cleanTick = g_cleanExitTick;

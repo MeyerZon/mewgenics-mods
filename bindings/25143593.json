@@ -5045,6 +5045,30 @@
         ".analysis/decompiled/Component_GetGame_0x908e0.c"
       ],
       "note": "set to 1 by the TacticsTest button on its captured director right before the Battle scene is created (hypothesis: hands the run over to the test battle)"
+    },
+    {
+      "name": "Scene_destroyNext",
+      "kind": "offset",
+      "struct": "Scene",
+      "value": "0x4db",
+      "ctype": "char",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_SCENE_DESTROY_NEXT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/FindEntityByName_0x9d4950.c"
+      ],
+      "note": "zeroed by SceneManager::CreateScene; the dev-menu buttons set it to 1 on their own scene right before creating the next one (hypothesis: destroy at the end of the frame — the run's director lives there and dies with it, so the test scene can make its own without the \"More than one mew director\" assert); +0x4b0 is the being-destroyed flag"
     }
   ]
 }
