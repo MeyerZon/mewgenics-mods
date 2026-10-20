@@ -70,6 +70,10 @@ typedef enum MtDirKind {
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
 /* scenes `enter` knows; 0 = unknown. The DLL and the Node parser (script.ts KNOWN_SCENES) must agree. */
 #define MT_SCENE_TACTICS_TEST 1
+#define MT_SCENE_CAMPAIGN     2   /* the save-slot click replayed on the harness-owned slot MT_CAMPAIGN_SAVE */
+/* the disposable campaign slot: created/opened by `enter Campaign`, moved aside by the runner before every such run
+ * (editor savecheck.ts CAMPAIGN_SLOT_FILE must agree); no save-select UI lists this name. Under 16 chars (SSO). */
+#define MT_CAMPAIGN_SAVE "mewtest01.sav"
 int         mt_scene_id(const char *name);    /* 0 if unknown */
 const char *mt_scene_name(int scene);         /* "" if unknown */
 typedef struct MtDirective {

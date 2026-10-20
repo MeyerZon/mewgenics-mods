@@ -24,7 +24,9 @@ These are enforced in code and in the launch flow; keep them intact.
 - **Never touch save files.** A real 83%-complete save exists at
   `%APPDATA%\Glaiel Games\Mewgenics\<steamid>\saves\`. Modded play **always** uses `-savesuffix dev` (via
   `launch-dev.bat`) so it writes isolated `*dev*` saves. The editor refuses any write outside `mods/<name>/` and any
-  write under a `saves/` path.
+  write under a `saves/` path — with one owner-approved exception (2026-10-20): before a `.mewtest` script that
+  says `enter Campaign`, the in-game runner moves the harness's own disposable slot `mewtest01.sav` aside into the
+  run dir (`savecheck.resetCampaignSlot`: a rename of that one name, never a delete, never another file).
 - **Never commit game bytes or assets.** `.gitignore` excludes `.extracted/`, `.analysis/`, `*.gpak/exe/dll/wav/ogg/swf/sav`,
   `editor/node_modules/`, and `editor/data/`. Keep it that way; the only game-derived data tracked is short byte
   signatures in `bindings/`.

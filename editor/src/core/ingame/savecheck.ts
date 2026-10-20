@@ -11,13 +11,45 @@
 // (snapshotSaves / compareSaveSets), because a dev launch was seen writing
 // campaign02.sav while only steamcampaign01.sav was checked.
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, renameSync, copyFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
 /** SHA-256 of steamcampaign01.sav recorded on 2026-10-17 (docs/engine-map.md). Informational. */
 export const KNOWN_REAL_SAVE_SHA256 = "09a68a36f6337e4eb493a7b2c119fdae494c02d0ef5438881e032faa03a7af08";
 export const REAL_SAVE_FILE = "steamcampaign01.sav";
+/**
+ * The harness-owned disposable campaign slot (`enter Campaign`; mt_pure.h MT_CAMPAIGN_SAVE must agree). No save-select
+ * UI lists this name, so the owner never sees or plays it. Owner decision 2026-10-20: the ONE write the editor makes
+ * under saves/ is moving this file aside (resetCampaignSlot) — never a delete, never any other name.
+ */
+export const CAMPAIGN_SLOT_FILE = "mewtest01.sav";
+
+export interface CampaignSlotReset {
+  /** the slot's full path */
+  file: string;
+  /** true when a previous slot file existed and was moved aside */
+  reset: boolean;
+  /** where the previous content went (<runDir>/mewtest01.sav.before), null when there was none */
+  backup: string | null;
+}
+
+/**
+ * Start the disposable slot fresh: move an existing CAMPAIGN_SLOT_FILE out of the saves dir into `runDir` (rename;
+ * copy + unlink when the rename crosses volumes). Only that exact name; everything else under saves/ stays untouched.
+ */
+export function resetCampaignSlot(savesDir: string, runDir: string): CampaignSlotReset {
+  const file = join(savesDir, CAMPAIGN_SLOT_FILE);
+  if (!existsSync(file)) return { file, reset: false, backup: null };
+  const backup = join(runDir, CAMPAIGN_SLOT_FILE + ".before");
+  try {
+    renameSync(file, backup);
+  } catch {
+    copyFileSync(file, backup);
+    unlinkSync(file);
+  }
+  return { file, reset: true, backup };
+}
 
 export interface SaveSnapshot {
   path: string;
@@ -57,14 +89,14 @@ export function realSavesDir(env: Record<string, string | undefined>): string | 
  * byte-identical across a harness run. Decoded on build 25143593 (docs/engine-map.md "Save safety"):
  * MewDirector::init(name) -> MewSaveFile::open_or_create(name) -> <userdata>/saves/<name>, where name is a
  * save-selection slot (campaign0N.sav local, steamcampaign0N.sav Steam-cloud), the test director's test00.sav or
- * the house test's housetest01.sav. The suffix string (ApplicationBase+0x370) is read by NO save-path code on this
+ * the house test's housetest01.sav, or the harness's own disposable slot mewtestNN.sav (CAMPAIGN_SLOT_FILE). The suffix string (ApplicationBase+0x370) is read by NO save-path code on this
  * build: it does not rename or relocate saves. So the allow-list is the local/test families; the Steam-cloud slots
  * (the real saves) are always protected. The <suffix>-prefixed forms stay in case a future build does use it.
  * OBSERVED 2026-10-18: dev launches wrote campaign02.sav and test00.sav; steamcampaign01.sav untouched.
  */
 export function devSavePattern(suffix: string): RegExp {
   const s = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^(campaign\\d+\\.sav|test\\d+\\.sav|housetest\\d+\\.sav|${s}campaign\\d+\\.sav|${s}\\d+\\.sav)$`, "i");
+  return new RegExp(`^(campaign\\d+\\.sav|test\\d+\\.sav|housetest\\d+\\.sav|mewtest\\d+\\.sav|${s}campaign\\d+\\.sav|${s}\\d+\\.sav)$`, "i");
 }
 
 export type NamedSaveSnapshot = SaveSnapshot & { name: string };

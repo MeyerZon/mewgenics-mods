@@ -1,0 +1,9 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261020-123552-dev-sandbox-enter-campaign\\script.mewtest","out":"C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261020-123552-dev-sandbox-enter-campaign\\result.jsonl","pid":29436,"hide":0,"timeout_ms":60000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":2719,"frame":120}
+{"ev":"shot","line":2,"label":"menu before enter","hold_ms":700,"t":2734,"frame":121}
+{"ev":"enter","line":3,"name":"Campaign","ok":true,"detail":"save=mewtest01.sav mainScene=000002119b530008 entity=0000021228413460 director=00000219a6d207a0 (old 00000219a6d20008; global after destroy 00000219a6d20008, after start 00000219a6d207a0)","t":3437,"frame":188}
+{"ev":"wait","line":4,"kind":"frames","n":120,"actual":120,"t":4437,"frame":308}
+{"ev":"shot","line":5,"label":"campaign after enter","hold_ms":700,"t":4453,"frame":309}
+{"ev":"wait","line":6,"kind":"frames","n":400,"actual":400,"t":7922,"frame":811}
+{"ev":"shot","line":7,"label":"campaign later","hold_ms":700,"t":7937,"frame":812}
+{"ev":"end","code":0,"reason":"quit","frames":911,"turns":0,"elapsed_ms":8640,"expect_pass":0,"expect_fail":0,"t":8640,"frame":911}

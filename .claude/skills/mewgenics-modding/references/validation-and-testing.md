@@ -70,4 +70,7 @@ quit
 
 A status the mod wants on the cats from the first turn can come from a
 test-only overlay (`mods/_jokersluck-test/`: `StatusOnBattleStart { <Status> 1 }`).
+Meta-flow (new game, intro, house) tests start with `enter Campaign`: a fresh game on the harness's own
+disposable slot `mewtest01.sav`, never a real one. A `shot` reads the game window even when another window
+covers it; a black frame under a covering window is reported as `occluded`, not guessed.
 Manual play through `launch-dev.bat` remains the owner's step (T3), not the agent's.
