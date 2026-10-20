@@ -1,0 +1,7 @@
+{
+  "title": "Art probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: an enemy (ArtProbe, a Rat variant) whose graphics.movieclip is a SWF this mod builds, spawned in a harness fight so screenshots show how the game draws our art (palette remap, cxform order, nested-sprite framing, bitmap sampling). Never for play.",
+  "requirements": []
+}

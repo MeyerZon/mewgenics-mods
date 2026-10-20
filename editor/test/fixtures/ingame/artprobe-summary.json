@@ -1,0 +1,178 @@
+{
+  "summary": {
+    "shots": 6,
+    "found": 6,
+    "childFraming": "free-running",
+    "sampling": "smooth",
+    "edge": "clamp",
+    "cxform": "applied",
+    "mirrored": true,
+    "blinks": [
+      "green",
+      "blue",
+      "red",
+      "green",
+      "blue",
+      "red"
+    ]
+  },
+  "shots": [
+    {
+      "label": "probe 1",
+      "found": true,
+      "scale": 1.71875,
+      "mirrored": true,
+      "sampling": "smooth",
+      "blendedRatio": 0.3383742911153119,
+      "edge": "clamp",
+      "blink": "green",
+      "control": [
+        206,
+        204,
+        204
+      ],
+      "cx": [
+        203,
+        203,
+        203
+      ],
+      "box": {
+        "x0": 2528,
+        "y0": 781,
+        "x1": 2692,
+        "y1": 891
+      }
+    },
+    {
+      "label": "probe 2",
+      "found": true,
+      "scale": 1.7083333333333333,
+      "mirrored": true,
+      "sampling": "smooth",
+      "blendedRatio": 0.7286284394034866,
+      "edge": "clamp",
+      "blink": "blue",
+      "control": [
+        136,
+        136,
+        135
+      ],
+      "cx": [
+        141,
+        0,
+        0
+      ],
+      "box": {
+        "x0": 2528,
+        "y0": 782,
+        "x1": 2691,
+        "y1": 890
+      }
+    },
+    {
+      "label": "probe 3",
+      "found": true,
+      "scale": 1.71875,
+      "mirrored": true,
+      "sampling": "smooth",
+      "blendedRatio": 0.6183574879227053,
+      "edge": "clamp",
+      "blink": "red",
+      "control": [
+        137,
+        134,
+        136
+      ],
+      "cx": [
+        136,
+        0,
+        0
+      ],
+      "box": {
+        "x0": 2528,
+        "y0": 782,
+        "x1": 2692,
+        "y1": 890
+      }
+    },
+    {
+      "label": "probe 4",
+      "found": true,
+      "scale": 1.7395833333333333,
+      "mirrored": true,
+      "sampling": "smooth",
+      "blendedRatio": 0.3230612244897959,
+      "edge": "clamp",
+      "blink": "green",
+      "control": [
+        137,
+        137,
+        138
+      ],
+      "cx": [
+        135,
+        0,
+        0
+      ],
+      "box": {
+        "x0": 2405,
+        "y0": 842,
+        "x1": 2571,
+        "y1": 952
+      }
+    },
+    {
+      "label": "probe 5",
+      "found": true,
+      "scale": 1.7395833333333333,
+      "mirrored": true,
+      "sampling": "smooth",
+      "blendedRatio": 0.25979591836734695,
+      "edge": "clamp",
+      "blink": "blue",
+      "control": [
+        138,
+        139,
+        134
+      ],
+      "cx": [
+        136,
+        0,
+        0
+      ],
+      "box": {
+        "x0": 2040,
+        "y0": 659,
+        "x1": 2206,
+        "y1": 769
+      }
+    },
+    {
+      "label": "probe 6",
+      "found": true,
+      "scale": 1.7395833333333333,
+      "mirrored": true,
+      "sampling": "smooth",
+      "blendedRatio": 0.26163265306122446,
+      "edge": "clamp",
+      "blink": "red",
+      "control": [
+        138,
+        133,
+        136
+      ],
+      "cx": [
+        137,
+        0,
+        0
+      ],
+      "box": {
+        "x0": 2040,
+        "y0": 660,
+        "x1": 2206,
+        "y1": 769
+      }
+    }
+  ],
+  "observed": "2026-10-20, build 25143593, npm run test:artprobe (mods/_artprobe/tests/render-probe.mewtest), 3440x1440 window"
+}

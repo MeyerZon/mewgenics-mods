@@ -38,7 +38,7 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       square(150, 30, o.blink ?? [255, 32, 32]);
       square(230, 30, o.control ?? [136, 136, 136]);
       square(310, 30, o.cx ?? [136, 0, 0]);
-      return { width: W, height: H, data: img };
+      return { width: W, height: H, rgba: img };
     };
     test("analyzeProbeShot: finds the checker marker, its scale and orientation; reads sampling, edge mode, the blink colour, the control and the cxform square", () => {
       const a = pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", blink: [32, 255, 32] }));
@@ -50,7 +50,12 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       const m = pc.analyzeProbeShot(shot({ s: 1.5, mirrored: true, edge: "repeat", smooth: true, blink: [32, 32, 255] }));
       assert(m.found && m.mirrored, JSON.stringify(m));
       eq(m.sampling, "smooth"); eq(m.edge, "repeat"); eq(m.blink, "blue");
-      const none = pc.analyzeProbeShot({ width: 10, height: 10, data: new Uint8Array(400) });
+      // stray yellow elsewhere on screen (UI) must not stretch the marker: the largest connected yellow region wins
+      const noisy = shot({ s: 2, edge: "clamp", blink: [32, 255, 32] });
+      for (let y = 5; y < 9; y++) for (let x = 880; x < 884; x++) noisy.rgba.set([255, 255, 0, 255], (y * noisy.width + x) * 4);
+      const nz = pc.analyzeProbeShot(noisy);
+      assert(nz.found && Math.abs(nz.scale - 2) < 0.1 && nz.blink === "green", `stray yellow ignored: ${JSON.stringify(nz)}`);
+      const none = pc.analyzeProbeShot({ width: 10, height: 10, rgba: new Uint8Array(400) });
       eq(none.found, false);
     });
     test("summarizeProbe: across shots — child framing (free-running when the blink colour changes), sampling, edge, cxform applied, orientation", () => {
@@ -62,4 +67,15 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       assert(/\| shot \|/.test(pc.renderProbeReport(shots, s)), "a markdown table");
     });
   }
+}
+
+/** OBSERVED in the game (npm run test:artprobe, 2026-10-20): the facts the art preview must follow */
+export function runProbeFixtureTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture: (name: string) => string): void {
+  test("OBSERVED 2026-10-20 fixture (artprobe-summary.json): enemy clips are mirrored; a nested sprite runs on its own clock under a one-frame parent; bitmap fills are sampled smoothly and clamped; PlaceObject cxform applies", () => {
+    const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { childFraming: string; sampling: string; edge: string; cxform: string; mirrored: boolean; found: number; shots: number; blinks: string[] } };
+    const s = j.summary;
+    eq(s.found, s.shots, "the marker in every shot");
+    eq(s.childFraming, "free-running"); eq(s.sampling, "smooth"); eq(s.edge, "clamp"); eq(s.cxform, "applied"); eq(s.mirrored, true);
+    assert(new Set(s.blinks.filter((b) => b !== "other")).size === 3, `all three blink colours seen: ${s.blinks.join(",")}`);
+  });
 }

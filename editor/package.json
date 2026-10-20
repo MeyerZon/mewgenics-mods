@@ -17,6 +17,7 @@
     "test": "node test/run-tests.ts",
     "test:ingame": "node scripts/ingame.ts",
     "test:swfgate": "node scripts/swf-gate.ts",
+    "test:artprobe": "node scripts/art-probe.ts",
     "test:e2e": "vite build && playwright test",
     "bindings:gen": "node ../tools/bindings/gen-headers.ts",
     "bindings:check": "node ../tools/bindings/gen-headers.ts --check"
