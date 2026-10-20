@@ -183,8 +183,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 6. [x] **Tools tests (T0)**: `tools/bindings/make-signature.ts` is covered by the siggen section of
    `bindings-tests.ts` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` by
    `editor/test/gpak-tests.ts` on a synthetic archive (2026-10-19; list/cat/extract/stats, truncation, path escapes).
-7. [ ] **Validator fixtures per check**: one failing fixture per finding code (`unknown-status`, `missing-loc-key`,
-   `merge-target-missing`, …) so the four checks are each pinned by a T0 test instead of only by the sample mods.
+7. [x] **Validator fixtures per check** (2026-10-20): `editor/test/validator-tests.ts` + `editor/test/fixtures/validator/`
+   — a synthetic base and one minimal mod per finding code (all 20: `mod-missing` … `csv-column-count`, plus a clean
+   mod), driven through injectable `ValidateOptions` (`modDir`, `extractedData`, `components`, `registeredNames`), so
+   the checks run at T0 without game data. Found on the way: the overlay-target check joined a hardcoded `.extracted/`
+   and ignored `MEWGENICS_EXTRACTED_DATA` (fixed). Follow-up: `preview-merge.ts` still joins `.extracted` directly
+   (same fix, when the merge preview gets its own fixtures).
 8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
    (via a `.mewtest` that reads the live value, once 1 lands) so the overlay engine is tested against the game, not
    only against the decompile.

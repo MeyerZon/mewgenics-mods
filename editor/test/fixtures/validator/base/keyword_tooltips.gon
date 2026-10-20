@@ -1,0 +1,7 @@
+// Synthetic base: two statuses (hand-written fixture, not game data).
+LuckUp {
+	name KEYWORD_LUCKUP
+}
+Poison {
+	name KEYWORD_POISON
+}

@@ -274,6 +274,13 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
   });
 }
 
+// ---- 4b. Validator fixtures (synthetic base; one mod per finding code; T0) ----
+{
+  let vt: typeof import("./validator-tests.ts") | null = null;
+  try { vt = await import("./validator-tests.ts"); } catch (e) { test("validator-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (vt) vt.runValidatorTests(test, assert, eq);
+}
+
 // ---- 5. MCP smoke test ------------------------------------------------------
 /** The `tools/call` result shape the smoke reads (MCP content blocks). */
 interface ToolCallResult {

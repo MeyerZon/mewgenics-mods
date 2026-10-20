@@ -50,9 +50,18 @@ export function clearRegisteredCache(): void {
   registeredCache = null;
 }
 
-function entryNameSet(category: string): Set<string> {
-  const ci = buildIndex().get(category);
+function entryNameSet(category: string, root?: string): Set<string> {
+  const ci = buildIndex(root).get(category);
   return new Set(ci ? ci.names : []);
+}
+
+export interface ResolutionSources {
+  /** the extracted `data/` tree to index; default EXTRACTED_DATA */
+  root?: string;
+  /** component class names; default the editor/data cache */
+  components?: Set<string>;
+  /** native-registered names; default editor/registered-names.json */
+  registered?: Set<string>;
 }
 
 export interface ResolutionSets {
@@ -67,23 +76,24 @@ export interface ResolutionSets {
   registered: Set<string>;
 }
 
-/** The resolution sets the validator uses. Each is a Set of names. */
-export function resolutionSets(): ResolutionSets {
-  const components = componentNameSet();
-  const registered = registeredNameSet();
+/** The resolution sets the validator uses. Each is a Set of names. Sources default to the real ones. */
+export function resolutionSets(src: ResolutionSources = {}): ResolutionSets {
+  const root = src.root;
+  const components = src.components ?? componentNameSet();
+  const registered = src.registered ?? registeredNameSet();
   // Every status is a glaiel component; keyword_tooltips lists display/status
   // names (incl. aliases). A status reference resolves if it is any of these or
   // native-registered.
-  const keywords = entryNameSet("statuses");
+  const keywords = entryNameSet("statuses", root);
   const statuses = new Set([...keywords, ...components, ...registered]);
   return {
     statuses,
-    abilities: new Set([...entryNameSet("abilities"), ...registered]),
-    passives: entryNameSet("passives"),
-    items: entryNameSet("items"),
-    characters: new Set([...entryNameSet("characters"), ...registered]),
-    classes: entryNameSet("classes"),
-    templates: entryNameSet("ability_templates"),
+    abilities: new Set([...entryNameSet("abilities", root), ...registered]),
+    passives: entryNameSet("passives", root),
+    items: entryNameSet("items", root),
+    characters: new Set([...entryNameSet("characters", root), ...registered]),
+    classes: entryNameSet("classes", root),
+    templates: entryNameSet("ability_templates", root),
     components: new Set([...components, ...registered]),
     registered,
   };

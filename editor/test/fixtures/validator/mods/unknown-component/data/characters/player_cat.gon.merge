@@ -1,0 +1,8 @@
+PlayerCat {
+	passives {
+		NotAComponent 1
+	}
+	ai {
+		brain NotABrain
+	}
+}

@@ -1,0 +1,7 @@
+PlayerCat {
+	passives {
+	}
+	ai {
+		brain PlayerBrain
+	}
+}

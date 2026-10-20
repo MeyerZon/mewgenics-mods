@@ -21,7 +21,10 @@ layer, which tier of test covers what, where a human still has to look, and what
   `tsc --noEmit` (strict TypeScript, no JSDoc typing left). The overlay engine's oracle is the decompiled
   `Gon_merge_{a,b,c}.c`.
 - **Data mods** (`mods/`): the validator (reference integrity, localization, overlay targets, merge preview) is the T0/T1
-  test; the harness load smoke is the T2 test (no `NO_*_NAMED` / `GON_ERROR` marker, framework active).
+  test; the harness load smoke is the T2 test (no `NO_*_NAMED` / `GON_ERROR` marker, framework active). Every validator
+  finding code is pinned at T0 by `editor/test/validator-tests.ts` on the synthetic base and fixture mods under
+  `editor/test/fixtures/validator/` (one mod per code, plus a clean one); the sample mods against the real
+  `.extracted/` remain the T1 check.
 - **Native framework**: the signature scanner is a pure unit with 13 host tests; everything else is verified by the
   harness run (15 symbols resolve, hooks install, Joker's Luck registers).
 - **Harness DLL**: 46 host tests for the pure modules (incl. the watchdog's exit decision); the glue by the real runs
