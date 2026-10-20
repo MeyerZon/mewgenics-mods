@@ -7,24 +7,38 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "target": "es2022",
-    "lib": ["es2023", "dom"],
+    "lib": [
+      "es2023",
+      "dom"
+    ],
     "types": [],
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": false,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noUncheckedIndexedAccess": false
   },
   "include": [
     "src/**/*.mjs",
     "src/**/*.js",
+    "src/**/*.ts",
     "web/**/*.mjs",
+    "web/**/*.ts",
+    "web/**/*.tsx",
     "web/**/*.d.ts",
     "scripts/**/*.mjs",
     "test/**/*.mjs",
-    "types/**/*.d.ts"
+    "types/**/*.d.ts",
+    "vite.config.ts",
+    "tests/**/*.ts",
+    "playwright.config.ts"
   ],
   "exclude": [
     "node_modules",
-    "data"
+    "data",
+    "web/dist"
   ]
 }

@@ -389,6 +389,14 @@ await mcpSmoke();
   if (gp) await gp.runGpakTests(test, assert, eq);
 }
 
+// ---- 9b. web layer: React store, pure UI helpers, zod request schemas, server gate ----
+{
+  /** @type {any} */
+  let wt = null;
+  try { wt = await import("./web-tests.mjs"); } catch (e) { test("web-tests.mjs loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (wt) await wt.runWebTests(test, assert, eq);
+}
+
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
 if (!process.env.MEWGENICS_EXTRACTED_DATA) {
   console.log("\n# T0 without .extracted/ (nested run with MEWGENICS_EXTRACTED_DATA pointing at an empty dir)");
@@ -406,4 +414,6 @@ if (!process.env.MEWGENICS_EXTRACTED_DATA) {
 console.log(`\n${passed} passed, ${failed} failed${filter.only ? ` (${skipped} skipped by --only ${JSON.stringify(filter.only)})` : ""}`);
 void pretty;
 void HERE;
-process.exit(failed > 0 ? 1 : 0);
+// exitCode, not process.exit(): on Windows, Node 26 fail-fasts (libuv async.c assertion) when exit() runs while
+// the undici/fetch and child-process handles from web-tests.mjs are still closing; letting the loop drain is clean.
+process.exitCode = failed > 0 ? 1 : 0;

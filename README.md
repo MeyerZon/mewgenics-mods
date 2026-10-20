@@ -48,19 +48,23 @@ and localization; the native half (`native/mods/jokers-luck/`) supplies the per-
 
 ## The editor
 
-A zero-runtime-dependency tool whose **core is the single source of truth** — the MCP server and web UI are thin
-adapters over it, so there is one GON engine and one validator. The validator catches the mistake class that actually
-crashed the game once (a referenced name that doesn't resolve, a missing localization key, a `.merge` onto a
-non-existent key). VanJS is vendored as a single hash-pinned file; the only installed dependency is a dev-only
-TypeScript typechecker (JSDoc-typed ESM, no bundler).
+A tool whose **core is the single source of truth** — the MCP server and web UI are thin adapters over it, so there
+is one GON engine and one validator. The validator catches the mistake class that actually crashed the game once (a
+referenced name that doesn't resolve, a missing localization key, a `.merge` onto a non-existent key). The web UI is
+React + TypeScript built by Vite; zod types the `/api` request bodies at both ends; the Node side (core, MCP server,
+scripts) runs straight from the checkout with no bundler. Runtime dependencies are exactly `react`, `react-dom` and
+`zod` (`docs/editor-ts-react-plan.md`).
 
 ```sh
 cd editor
-npm install          # dev-only typescript@7.0.2
+npm install          # react, react-dom, zod + dev-only vite, typescript, playwright
 npm run build:index  # generate the git-ignored data/ caches (component list + base-data index)
-npm test             # unit suite (GON, overlays, validator, art, in-game runner against a fake game, MCP smoke)
+npm test             # unit suite (GON, overlays, validator, art, in-game runner against a fake game, MCP smoke, web layer)
 npm run test:ingame  # T2: launch the real game per mods/<mod>/tests/*.mewtest (needs Steam + native/dist/mewtest.dll)
-npm run web          # http://127.0.0.1:4173/
+npm run build        # Vite build of the web UI → web/dist/ (git-ignored)
+npm run web          # http://127.0.0.1:4173/ (serves web/dist + the /api bridge)
+npm run dev          # hot-reloading UI at http://127.0.0.1:5173/ (proxies /api to `npm run web`)
+npm run test:e2e     # vite build && playwright test (34 browser checks)
 npm run mcp          # MCP stdio server (register with Claude Code as `mewgenics-editor`)
 ```
 

@@ -63,7 +63,8 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 
 ## Build / run / test
 
-**Editor** (run from `editor/`; zero runtime deps, dev-only `typescript@7.0.2`):
+**Editor** (run from `editor/`; runtime deps `react`, `react-dom`, `zod`; dev-only `vite`, `typescript@7.0.2`,
+`@playwright/test`; see `docs/editor-ts-react-plan.md`):
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates).
 - `npm test` — the full unit suite (`node test/run-tests.mjs`: GON, overlays, validator, art, the in-game runner
@@ -74,7 +75,12 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   `tools/gpak.py` is covered by `test/gpak-tests.mjs` on a synthetic archive (needs a Python 3 on PATH, else skips).
 - `npm run bindings:gen` / `bindings:check` — regenerate / verify `native/framework/src/signatures.h` + `offsets.h`
   from `bindings/*.json` (see "Everything native is pinned" below).
-- `npm run typecheck` — `tsc --noEmit` over JSDoc-typed ESM (there are no `.ts` files and no bundler by design).
+- `npm run typecheck` — `tsc --noEmit` (strict) over the TS/TSX web UI and the JSDoc-typed core. The Node side runs
+  from the checkout with no bundler (Node ≥ 22.18 strips types natively); only the browser UI is built.
+- `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
+  (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
+- `npm run test:e2e` — `vite build && playwright test`: the 34-check browser suite in `editor/tests/e2e/` that pins
+  the UI's DOM and flows (Data mode, Art mode, preview, onboarding). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.

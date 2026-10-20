@@ -12,6 +12,7 @@ declare const process: {
   env: Record<string, string | undefined>;
   cwd(): string;
   exit(code?: number): never;
+  exitCode: number | undefined;
   kill(pid: number, signal?: number | string): boolean;
   pid: number;
   platform: string;
@@ -104,7 +105,7 @@ declare module "node:child_process" {
   export interface ChildProcess {
     stdin: { write(data: string): boolean; end(): void };
     stdout: { on(event: string, cb: (chunk: any) => void): void };
-    stderr: { on(event: string, cb: (chunk: any) => void): void };
+    stderr: { on(event: string, cb: (chunk: any) => void): void; setEncoding(enc: string): void };
     on(event: string, cb: (...args: any[]) => void): void;
     kill(signal?: string | number): boolean;
     pid?: number;
@@ -134,6 +135,7 @@ declare module "node:http" {
     write(data: string | Uint8Array): boolean;
   }
   export interface Server {
+    address(): { port: number; address: string } | string | null;
     listen(port: number, host: string, cb?: () => void): Server;
     on(event: string, cb: (...args: any[]) => void): void;
   }

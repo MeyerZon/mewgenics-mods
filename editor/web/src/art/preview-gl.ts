@@ -1,9 +1,9 @@
 // In-suite "as in-game" animated preview renderer for the art pipeline.
 //
-// Hand-written raw WebGL1 (Canvas2D fallback), zero dependencies, browser ESM, no
-// build step. Independent of VanJS and of app state: `createPreview(canvas)` returns a
-// plain object the panel drives. Nothing here touches the DOM at module top level, so
-// the module is importable (and type-checked) outside a browser.
+// Hand-written raw WebGL1 (Canvas2D fallback), zero dependencies. Independent of React and
+// of app state: `createPreview(canvas)` returns a plain object the panel drives. Nothing here
+// touches the DOM at module top level, so the module is importable (and type-checked)
+// outside a browser.
 //
 // Render model (docs/art-preview-plan.md §3, docs/art-pipeline.md §5):
 //   * frames come from the SAME pure baking the SWF emitter uses (`timeline.mjs`), so
@@ -38,89 +38,116 @@ import {
   invert,
   signedArea,
   IDENTITY,
-} from "../../src/core/art/geometry.mjs";
-import { parseFill, fillToRgba, parseColor } from "../../src/core/art/scene.mjs";
-import { bakeSprite, bakeStage, labelList } from "../../src/core/art/timeline.mjs";
+} from "../../../src/core/art/geometry.mjs";
+import { parseFill, fillToRgba, parseColor } from "../../../src/core/art/scene.mjs";
+import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline.mjs";
+import type { Scene, Fill, SceneShape } from "../../../src/core/art/scene.mjs";
+import type { Mat, SubPath } from "../../../src/core/art/geometry.mjs";
+import type { BakedSprite, Cxform, Placement } from "../../../src/core/art/timeline.mjs";
 
-/** @typedef {import('../../src/core/art/scene.mjs').Scene} Scene */
-/** @typedef {import('../../src/core/art/scene.mjs').Fill} Fill */
-/** @typedef {import('../../src/core/art/geometry.mjs').Mat} Mat */
-/** @typedef {import('../../src/core/art/geometry.mjs').SubPath} SubPath */
-/** @typedef {import('../../src/core/art/timeline.mjs').BakedSprite} BakedSprite */
-/** @typedef {import('../../src/core/art/timeline.mjs').Cxform} Cxform */
-/** @typedef {import('../../src/core/art/timeline.mjs').Placement} Placement */
+export type { Scene, Fill, Mat, SubPath, BakedSprite, Cxform, Placement };
 
-/** @typedef {{ xmin: number, ymin: number, xmax: number, ymax: number }} Bounds */
-/** @typedef {{ r: number, g: number, b: number, a: number }} Rgba */
+export interface Bounds {
+  xmin: number;
+  ymin: number;
+  xmax: number;
+  ymax: number;
+}
+export interface Rgba {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
 
-/**
- * 256 palette rows × 16 columns × [r, g, b] bytes — the rows of `textures/palette.png`.
- * @typedef {Array<Array<[number, number, number]>>} PaletteRows
- */
+/** 256 palette rows × 16 columns × [r, g, b] bytes — the rows of `textures/palette.png`. */
+export type PaletteRows = Array<Array<[number, number, number]>>;
 
-/** @typedef {{ id: string, kind: 'sprite' | 'shape' | 'stage', frames: number }} PreviewTarget */
+export interface PreviewTarget {
+  id: string;
+  kind: "sprite" | "shape" | "stage";
+  frames: number;
+}
 
-/**
- * @typedef {Object} PreviewInfo
- * @property {'webgl' | 'canvas2d' | 'none'} backend   'none' only after destroy() or when no context at all
- * @property {number} frames                            frame count of the current target
- * @property {number} frame                             current frame (0-based)
- * @property {number} drawCalls                         GL draw calls (or Canvas2D fill/stroke/drawImage calls) in the last render()
- * @property {number} fillsDrawn                        path fills (including strokes and mask shapes) in the last render()
- * @property {'stencil' | 'clip'} masks                 how clipDepth masks are implemented on this backend
- * @property {number} maskOverflow                      masks beyond the supported nesting depth in the last render() (drawn unmasked)
- * @property {number} missingBitmaps                    bitmap fills whose image has not been provided with setBitmap()
- * @property {string | null} target
- * @property {number} zoom                              effective zoom (stage px → CSS px)
- * @property {number} paletteRow
- * @property {boolean} playing
- */
+export interface PreviewInfo {
+  /** 'none' only after destroy() or when no context at all */
+  backend: "webgl" | "canvas2d" | "none";
+  /** frame count of the current target */
+  frames: number;
+  /** current frame (0-based) */
+  frame: number;
+  /** GL draw calls (or Canvas2D fill/stroke/drawImage calls) in the last render() */
+  drawCalls: number;
+  /** path fills (including strokes and mask shapes) in the last render() */
+  fillsDrawn: number;
+  /** how clipDepth masks are implemented on this backend */
+  masks: "stencil" | "clip";
+  /** masks beyond the supported nesting depth in the last render() (drawn unmasked) */
+  maskOverflow: number;
+  /** bitmap fills whose image has not been provided with setBitmap() */
+  missingBitmaps: number;
+  target: string | null;
+  /** effective zoom (stage px → CSS px) */
+  zoom: number;
+  paletteRow: number;
+  playing: boolean;
+}
 
-/**
- * @typedef {Object} Preview
- * @property {(scene: Scene) => void} setScene                an already-validated scene (validateScene().scene)
- * @property {(id: string) => void} setTarget                a sprite id, a shape id, or "stage" (the main timeline)
- * @property {() => PreviewTarget[]} getTargets
- * @property {() => string | null} getTarget
- * @property {(rows: PaletteRows | null) => void} setPalette null → identity ramp (gray passthrough)
- * @property {(row: number) => void} setPaletteRow
- * @property {() => number} getPaletteRow
- * @property {(frame: number) => void} setFrame
- * @property {() => number} getFrame
- * @property {() => number} getFrameCount
- * @property {() => Array<{ frame: number, label: string }>} getLabels
- * @property {() => void} play
- * @property {() => void} pause
- * @property {() => boolean} isPlaying
- * @property {(loop: boolean) => void} setLoop
- * @property {() => boolean} getLoop
- * @property {(delta: number) => void} step
- * @property {(name: string) => boolean} gotoLabel
- * @property {(show: boolean) => void} setShowGray         bypass the palette remap (show the authored 16-level art)
- * @property {() => boolean} getShowGray
- * @property {(bg: string | null) => void} setBackground   CSS colour, "checker", or null (transparent)
- * @property {(zoom: number | 'fit') => void} setZoom       stage px → CSS px, or "fit" (re-fits on resize/target change)
- * @property {() => number} getZoom
- * @property {(x: number, y: number) => void} setCenter    stage coordinate shown at the canvas centre (locks zoom to its current numeric value)
- * @property {() => [number, number]} getCenter
- * @property {() => void} resize                           re-read the canvas client size × devicePixelRatio
- * @property {(id: string, image: TexImageSource | null) => void} setBitmap   image for scene.bitmaps[id]; null removes it
- * @property {() => void} render
- * @property {() => void} destroy
- * @property {() => PreviewInfo} info
- */
+export interface Preview {
+  /** an already-validated scene (validateScene().scene) */
+  setScene(scene: Scene): void;
+  /** a sprite id, a shape id, or "stage" (the main timeline) */
+  setTarget(id: string): void;
+  getTargets(): PreviewTarget[];
+  getTarget(): string | null;
+  /** null → identity ramp (gray passthrough) */
+  setPalette(rows: PaletteRows | null): void;
+  setPaletteRow(row: number): void;
+  getPaletteRow(): number;
+  setFrame(frame: number): void;
+  getFrame(): number;
+  getFrameCount(): number;
+  getLabels(): Array<{ frame: number; label: string }>;
+  play(): void;
+  pause(): void;
+  isPlaying(): boolean;
+  setLoop(loop: boolean): void;
+  getLoop(): boolean;
+  step(delta: number): void;
+  gotoLabel(name: string): boolean;
+  /** bypass the palette remap (show the authored 16-level art) */
+  setShowGray(show: boolean): void;
+  getShowGray(): boolean;
+  /** CSS colour, "checker", or null (transparent) */
+  setBackground(bg: string | null): void;
+  /** stage px → CSS px, or "fit" (re-fits on resize/target change) */
+  setZoom(zoom: number | "fit"): void;
+  getZoom(): number;
+  /** stage coordinate shown at the canvas centre (locks zoom to its current numeric value) */
+  setCenter(x: number, y: number): void;
+  getCenter(): [number, number];
+  /** re-read the canvas client size × devicePixelRatio */
+  resize(): void;
+  /** image for scene.bitmaps[id]; null removes it */
+  setBitmap(id: string, image: TexImageSource | null): void;
+  render(): void;
+  destroy(): void;
+  info(): PreviewInfo;
+}
 
-/**
- * @typedef {Object} PreviewOptions
- * @property {(status: string) => void} [onStatus]   human-readable backend/status messages
- * @property {(frame: number) => void} [onFrame]     called whenever the current frame changes
- * @property {(playing: boolean) => void} [onPlaying] called when playback starts or stops (NOT on a visibility suspend, so the UI's play/pause stays truthful while off-screen)
- */
+export interface PreviewOptions {
+  /** human-readable backend/status messages */
+  onStatus?: (status: string) => void;
+  /** called whenever the current frame changes */
+  onFrame?: (frame: number) => void;
+  /** called when playback starts or stops (NOT on a visibility suspend, so the UI's play/pause stays truthful while off-screen) */
+  onPlaying?: (playing: boolean) => void;
+}
 
 // ---- constants -------------------------------------------------------------------
 
-const CHECKER_A = [0x1a / 255, 0x21 / 255, 0x2b / 255];
-const CHECKER_B = [0x14 / 255, 0x1a / 255, 0x22 / 255];
+const CHECKER_A = [0x1a / 255, 0x21 / 255, 0x2b / 255] as const;
+const CHECKER_B = [0x14 / 255, 0x1a / 255, 0x22 / 255] as const;
 const CHECKER_CELL_CSS = 8;
 const MAX_MASK_LEVELS = 4; // stencil bits 0x80, 0x40, 0x20, 0x10; the rest hold winding counts
 const MAX_NEST = 32;
@@ -186,36 +213,32 @@ void main() {
 
 // ---- pure helpers -----------------------------------------------------------------
 
-/**
- * @typedef {Object} PreparedPath
- * @property {SubPath[]} subs            normalized in shape-local space (path.transform applied)
- * @property {Fill} fill
- * @property {Rgba | null} fillRgba
- * @property {'nonzero' | 'evenodd'} fillRule
- * @property {Rgba | null} strokeRgba
- * @property {number} strokeWidth
- * @property {Mat} transform             the path's own transform (bitmap pixel space → shape-local)
- * @property {Bounds | null} bounds
- */
+interface PreparedPath {
+  /** normalized in shape-local space (path.transform applied) */
+  subs: SubPath[];
+  fill: Fill;
+  fillRgba: Rgba | null;
+  fillRule: "nonzero" | "evenodd";
+  strokeRgba: Rgba | null;
+  strokeWidth: number;
+  /** the path's own transform (bitmap pixel space → shape-local) */
+  transform: Mat;
+  bounds: Bounds | null;
+}
 
-/** @typedef {{ paths: PreparedPath[], bounds: Bounds | null }} PreparedShape */
+interface PreparedShape {
+  paths: PreparedPath[];
+  bounds: Bounds | null;
+}
 
-/**
- * Normalize a shape's paths once per scene (geometry.mjs owns the interpretation).
- * @param {import('../../src/core/art/scene.mjs').SceneShape} shape
- * @returns {PreparedShape}
- */
-function prepareShape(shape) {
-  /** @type {PreparedPath[]} */
-  const paths = [];
-  /** @type {Bounds | null} */
-  let bounds = null;
+/** Normalize a shape's paths once per scene (geometry.mjs owns the interpretation). */
+function prepareShape(shape: SceneShape): PreparedShape {
+  const paths: PreparedPath[] = [];
+  let bounds: Bounds | null = null;
   for (const p of shape.paths || []) {
     if (!p || typeof p.d !== "string") continue;
-    /** @type {Mat} */
-    const transform = p.transform && p.transform.length === 6 ? /** @type {Mat} */ ([...p.transform]) : IDENTITY;
-    /** @type {SubPath[]} */
-    let subs;
+    const transform: Mat = p.transform && p.transform.length === 6 ? ([...p.transform] as Mat) : IDENTITY;
+    let subs: SubPath[];
     try {
       subs = normalizePath(p.d, { matrix: transform });
     } catch {
@@ -223,7 +246,7 @@ function prepareShape(shape) {
     }
     const fill = parseFill(p.fill).fill;
     const strokeFill = p.stroke ? parseFill(p.stroke).fill : null;
-    const strokeWidth = p.stroke && (p.strokeWidth ?? 0) > 0 ? /** @type {number} */ (p.strokeWidth) : 0;
+    const strokeWidth = p.stroke && (p.strokeWidth ?? 0) > 0 ? (p.strokeWidth as number) : 0;
     const b = subpathBounds(subs);
     bounds = unionBounds(bounds, b);
     paths.push({
@@ -240,25 +263,24 @@ function prepareShape(shape) {
   return { paths, bounds };
 }
 
-/** @param {Mat} m uniform scale estimate of a matrix (sqrt |det|) */
-function matScale(m) {
+/** uniform scale estimate of a matrix (sqrt |det|) */
+function matScale(m: Mat): number {
   return Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1e-6;
 }
 
 /**
  * Flatten a prepared path's sub-paths into stage-space polygons.
- * @param {PreparedPath} path @param {Mat} mat composed placement matrix @param {number} tolLocal flatten tolerance in shape-local px
- * @returns {number[][]} flat polygons [x0,y0,x1,y1,...] (stage space)
+ * @param mat composed placement matrix @param tolLocal flatten tolerance in shape-local px
+ * @returns flat polygons [x0,y0,x1,y1,...] (stage space)
  */
-function flattenPath(path, mat, tolLocal) {
-  /** @type {number[][]} */
-  const polys = [];
+function flattenPath(path: PreparedPath, mat: Mat, tolLocal: number): number[][] {
+  const polys: number[][] = [];
   for (const sub of path.subs) {
     const flat = flattenSubpath(sub, tolLocal);
-    const out = new Array(flat.length);
+    const out: number[] = new Array(flat.length);
     for (let i = 0; i < flat.length; i += 2) {
-      const x = flat[i];
-      const y = flat[i + 1];
+      const x = flat[i]!;
+      const y = flat[i + 1]!;
       out[i] = mat[0] * x + mat[2] * y + mat[4];
       out[i + 1] = mat[1] * x + mat[3] * y + mat[5];
     }
@@ -270,24 +292,22 @@ function flattenPath(path, mat, tolLocal) {
 /**
  * Stroke polygons (one quad per segment + a round join octagon per vertex), all with the
  * same orientation so one nonzero stencil pass covers their union exactly once.
- * @param {number[][]} polys stage-space polylines @param {boolean[]} closed @param {number} width stage px
- * @returns {number[][]}
+ * @param polys stage-space polylines @param width stage px
  */
-function strokePolys(polys, closed, width) {
-  /** @type {number[][]} */
-  const out = [];
+function strokePolys(polys: number[][], closed: boolean[], width: number): number[][] {
+  const out: number[][] = [];
   const h = width / 2;
   for (let k = 0; k < polys.length; k++) {
-    const pts = polys[k];
+    const pts = polys[k]!;
     const n = pts.length / 2;
     if (n < 2) continue;
     const segs = closed[k] ? n : n - 1;
     for (let i = 0; i < segs; i++) {
       const j = (i + 1) % n;
-      const x0 = pts[2 * i];
-      const y0 = pts[2 * i + 1];
-      const x1 = pts[2 * j];
-      const y1 = pts[2 * j + 1];
+      const x0 = pts[2 * i]!;
+      const y0 = pts[2 * i + 1]!;
+      const x1 = pts[2 * j]!;
+      const y1 = pts[2 * j + 1]!;
       const dx = x1 - x0;
       const dy = y1 - y0;
       const len = Math.hypot(dx, dy);
@@ -298,9 +318,9 @@ function strokePolys(polys, closed, width) {
     }
     // round joins (and round caps on open paths) as octagons
     for (let i = 0; i < n; i++) {
-      const cx = pts[2 * i];
-      const cy = pts[2 * i + 1];
-      const oct = [];
+      const cx = pts[2 * i]!;
+      const cy = pts[2 * i + 1]!;
+      const oct: number[] = [];
       for (let s = 0; s < 8; s++) {
         const a = (s / 8) * Math.PI * 2;
         oct.push(cx + Math.cos(a) * h, cy + Math.sin(a) * h);
@@ -311,31 +331,27 @@ function strokePolys(polys, closed, width) {
   return out;
 }
 
-/** @param {number[]} poly */
-function orientNegative(poly) {
+function orientNegative(poly: number[]): number[] {
   if (signedArea(poly) > 0) {
     const n = poly.length / 2;
-    const rev = new Array(poly.length);
+    const rev: number[] = new Array(poly.length);
     for (let i = 0; i < n; i++) {
-      rev[2 * i] = poly[2 * (n - 1 - i)];
-      rev[2 * i + 1] = poly[2 * (n - 1 - i) + 1];
+      rev[2 * i] = poly[2 * (n - 1 - i)]!;
+      rev[2 * i + 1] = poly[2 * (n - 1 - i) + 1]!;
     }
     return rev;
   }
   return poly;
 }
 
-/** @param {number[][]} polys @returns {Bounds | null} */
-function polysBounds(polys) {
-  /** @type {Bounds | null} */
-  let b = null;
+function polysBounds(polys: number[][]): Bounds | null {
+  let b: Bounds | null = null;
   for (const p of polys) b = unionBounds(b, boundsOf(p));
   return b;
 }
 
-/** @param {Bounds} b @param {Mat} m @returns {Bounds} */
-function transformBounds(b, m) {
-  const c = [apply(m, b.xmin, b.ymin), apply(m, b.xmax, b.ymin), apply(m, b.xmin, b.ymax), apply(m, b.xmax, b.ymax)];
+function transformBounds(b: Bounds, m: Mat): Bounds {
+  const c = [apply(m, b.xmin, b.ymin), apply(m, b.xmax, b.ymin), apply(m, b.xmin, b.ymax), apply(m, b.xmax, b.ymax)] as const;
   return {
     xmin: Math.min(c[0][0], c[1][0], c[2][0], c[3][0]),
     ymin: Math.min(c[0][1], c[1][1], c[2][1], c[3][1]),
@@ -347,19 +363,18 @@ function transformBounds(b, m) {
 /**
  * Compose colour transforms: child applied first, then parent.
  * mul = parent.mul * child.mul; add = parent.mul * child.add + parent.add.
- * @param {Cxform | null} parent @param {Cxform | null} child @returns {Cxform | null}
  */
-export function composeCxform(parent, child) {
+export function composeCxform(parent: Cxform | null, child: Cxform | null): Cxform | null {
   if (!child) return parent;
   if (!parent) return child;
   return {
-    mul: /** @type {[number, number, number, number]} */ (parent.mul.map((v, i) => v * child.mul[i])),
-    add: /** @type {[number, number, number, number]} */ (parent.add.map((v, i) => parent.mul[i] * child.add[i] + v)),
+    mul: parent.mul.map((v, i) => v * child.mul[i]!) as [number, number, number, number],
+    add: parent.add.map((v, i) => parent.mul[i]! * child.add[i]! + v) as [number, number, number, number],
   };
 }
 
-/** Identity palette: column N → (17N, 17N, 17N) for every row. @returns {Uint8Array} */
-function identityPaletteBytes() {
+/** Identity palette: column N → (17N, 17N, 17N) for every row. */
+function identityPaletteBytes(): Uint8Array {
   const bytes = new Uint8Array(16 * 256 * 3);
   for (let row = 0; row < 256; row++) {
     for (let col = 0; col < 16; col++) {
@@ -370,11 +385,8 @@ function identityPaletteBytes() {
   return bytes;
 }
 
-/**
- * Pack palette rows into the 16×256 RGB texture bytes (missing entries keep the identity ramp).
- * @param {PaletteRows | null} rows @returns {Uint8Array}
- */
-export function paletteBytes(rows) {
+/** Pack palette rows into the 16×256 RGB texture bytes (missing entries keep the identity ramp). */
+export function paletteBytes(rows: PaletteRows | null): Uint8Array {
   const bytes = identityPaletteBytes();
   if (!rows) return bytes;
   for (let row = 0; row < 256 && row < rows.length; row++) {
@@ -392,21 +404,19 @@ export function paletteBytes(rows) {
   return bytes;
 }
 
-/** @param {number} v */
-function clampByte(v) {
+function clampByte(v: number): number {
   return Math.max(0, Math.min(255, Math.round(Number(v) || 0)));
 }
-/** @param {number} v */
-function clamp01(v) {
+function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
 /**
  * CPU version of the fragment shader (Canvas2D fallback, swatches, tests).
- * @param {Rgba} c fill bytes @param {Cxform | null} cx @param {Uint8Array} pal 16×256×3 bytes @param {number} row @param {boolean} showGray
- * @returns {[number, number, number, number]} r,g,b in 0..255 and a in 0..1
+ * @param c fill bytes @param pal 16×256×3 bytes
+ * @returns r,g,b in 0..255 and a in 0..1
  */
-export function remapColor(c, cx, pal, row, showGray) {
+export function remapColor(c: Rgba, cx: Cxform | null, pal: Uint8Array, row: number, showGray: boolean): [number, number, number, number] {
   let r = c.r / 255;
   let g = c.g / 255;
   let b = c.b / 255;
@@ -415,47 +425,61 @@ export function remapColor(c, cx, pal, row, showGray) {
   if (isGray && !showGray) {
     const col = Math.max(0, Math.min(15, Math.floor(r * 15 + 0.5)));
     const o = (Math.max(0, Math.min(255, row | 0)) * 16 + col) * 3;
-    r = pal[o] / 255;
-    g = pal[o + 1] / 255;
-    b = pal[o + 2] / 255;
+    r = pal[o]! / 255;
+    g = pal[o + 1]! / 255;
+    b = pal[o + 2]! / 255;
   }
-  const mul = cx ? cx.mul : [1, 1, 1, 1];
-  const add = cx ? cx.add : [0, 0, 0, 0];
+  const mul: readonly number[] = cx ? cx.mul : [1, 1, 1, 1];
+  const add: readonly number[] = cx ? cx.add : [0, 0, 0, 0];
   return [
-    Math.round(clamp01(r * mul[0] + add[0]) * 255),
-    Math.round(clamp01(g * mul[1] + add[1]) * 255),
-    Math.round(clamp01(b * mul[2] + add[2]) * 255),
-    clamp01(a * mul[3] + add[3]),
+    Math.round(clamp01(r * mul[0]! + add[0]!) * 255),
+    Math.round(clamp01(g * mul[1]! + add[1]!) * 255),
+    Math.round(clamp01(b * mul[2]! + add[2]!) * 255),
+    clamp01(a * mul[3]! + add[3]!),
   ];
 }
 
 // ---- the preview ------------------------------------------------------------------
 
+interface BitmapTexture {
+  tex: WebGLTexture;
+  width: number;
+  height: number;
+}
+
+interface CoverSpec {
+  color: Rgba;
+  cx: Cxform | null;
+  bitmap: (BitmapTexture & { inv: Mat }) | null;
+}
+
+/** Visitor-based depth walk shared by the GL, Canvas2D and bounds passes. */
+interface Visitor {
+  shape(shapeId: string, prep: PreparedShape, mat: Mat, cx: Cxform | null): void;
+  /** start defining a mask; false = unsupported here (draw the mask shape normally) */
+  beginMask(): boolean;
+  /** mask shape(s) done; following shapes are masked */
+  endMaskDef(): void;
+  /** masked range done */
+  endMask(): void;
+}
+
 /**
  * Create a preview renderer on `canvas`. Tries WebGL1 (stencil fill + palette shader);
  * falls back to Canvas2D with the same colour math done on the CPU.
- * @param {HTMLCanvasElement} canvas
- * @param {PreviewOptions} [opts]
- * @returns {Preview}
  */
-export function createPreview(canvas, opts = {}) {
+export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = {}): Preview {
   const onStatus = opts.onStatus || (() => {});
   const onFrame = opts.onFrame || (() => {});
   const onPlaying = opts.onPlaying || (() => {});
 
   // ---- state ----
-  /** @type {Scene | null} */
-  let scene = null;
-  /** @type {string | null} */
-  let targetId = null;
-  /** @type {Map<string, PreparedShape>} */
-  let prepared = new Map();
-  /** @type {Map<string, BakedSprite>} */
-  let bakedCache = new Map();
-  /** @type {Map<string, Bounds | null>} */
-  let boundsCache = new Map();
-  /** @type {Uint8Array} */
-  let palBytes = identityPaletteBytes();
+  let scene: Scene | null = null;
+  let targetId: string | null = null;
+  let prepared = new Map<string, PreparedShape>();
+  let bakedCache = new Map<string, BakedSprite>();
+  let boundsCache = new Map<string, Bounds | null>();
+  let palBytes: Uint8Array = identityPaletteBytes();
   let paletteRow = 0;
   let frame = 0;
   let playing = false;
@@ -465,37 +489,31 @@ export function createPreview(canvas, opts = {}) {
   // is preserved across a suspend so playback resumes automatically when visible again.
   let suspended = false;
   let showGray = false;
-  /** @type {string | null} */
-  let background = "checker";
-  /** @type {number | 'fit'} */
-  let zoomMode = "fit";
+  let background: string | null = "checker";
+  let zoomMode: number | "fit" = "fit";
   let zoom = 1;
-  let center = /** @type {[number, number]} */ ([0, 0]);
+  let center: [number, number] = [0, 0];
   let destroyed = false;
-  /** @type {number | null} */
-  let rafId = null;
+  let rafId: number | null = null;
   let lastTime = 0;
   let acc = 0;
   let drawCalls = 0;
   let fillsDrawn = 0;
   let maskOverflow = 0;
   let missingBitmaps = 0;
-  /** @type {Map<string, TexImageSource>} */
-  const bitmapSources = new Map();
+  const bitmapSources = new Map<string, TexImageSource>();
 
   // ---- backend selection ----
-  /** @type {WebGLRenderingContext | null} */
-  let gl = null;
-  /** @type {CanvasRenderingContext2D | null} */
-  let ctx2d = null;
+  let gl: WebGLRenderingContext | null = null;
+  let ctx2d: CanvasRenderingContext2D | null = null;
   try {
-    const attrs = { stencil: true, premultipliedAlpha: false, antialias: true, preserveDrawingBuffer: false, alpha: true };
-    gl = /** @type {WebGLRenderingContext | null} */ (canvas.getContext("webgl", attrs) || canvas.getContext("experimental-webgl", attrs));
+    const attrs: WebGLContextAttributes = { stencil: true, premultipliedAlpha: false, antialias: true, preserveDrawingBuffer: false, alpha: true };
+    gl = (canvas.getContext("webgl", attrs) || canvas.getContext("experimental-webgl", attrs)) as WebGLRenderingContext | null;
   } catch {
     gl = null;
   }
   if (gl) {
-    const bits = gl.getParameter(gl.STENCIL_BITS);
+    const bits = gl.getParameter(gl.STENCIL_BITS) as number;
     if (!(bits >= 8)) {
       // the stencil technique needs the stencil plane; fall back rather than draw garbage
       onStatus(`WebGL has ${bits} stencil bits (need 8); using Canvas2D fallback`);
@@ -509,29 +527,19 @@ export function createPreview(canvas, opts = {}) {
   }
 
   // ---- GL resources ----
-  /** @type {WebGLProgram | null} */
-  let prog = null;
-  /** @type {WebGLProgram | null} */
-  let checkerProg = null;
-  /** @type {WebGLBuffer | null} */
-  let vbo = null;
-  /** @type {WebGLTexture | null} */
-  let palTex = null;
-  /** @type {Map<string, { tex: WebGLTexture, width: number, height: number }>} */
-  const bitmapTex = new Map();
-  /** @type {Record<string, WebGLUniformLocation | null>} */
-  let U = {};
-  /** @type {Record<string, WebGLUniformLocation | null>} */
-  let UC = {};
+  let prog: WebGLProgram | null = null;
+  let checkerProg: WebGLProgram | null = null;
+  let vbo: WebGLBuffer | null = null;
+  let palTex: WebGLTexture | null = null;
+  const bitmapTex = new Map<string, BitmapTexture>();
+  let U: Record<string, WebGLUniformLocation | null> = {};
+  let UC: Record<string, WebGLUniformLocation | null> = {};
   let aPos = -1;
   let aUv = -1;
   let aPosC = -1;
   let scratch = new Float32Array(4096);
 
-  /**
-   * @param {WebGLRenderingContext} g @param {number} type @param {string} src
-   */
-  function compile(g, type, src) {
+  function compile(g: WebGLRenderingContext, type: number, src: string): WebGLShader {
     const sh = g.createShader(type);
     if (!sh) throw new Error("createShader failed");
     g.shaderSource(sh, src);
@@ -543,8 +551,7 @@ export function createPreview(canvas, opts = {}) {
     }
     return sh;
   }
-  /** @param {WebGLRenderingContext} g @param {string} vs @param {string} fs */
-  function link(g, vs, fs) {
+  function link(g: WebGLRenderingContext, vs: string, fs: string): WebGLProgram {
     const p = g.createProgram();
     if (!p) throw new Error("createProgram failed");
     g.attachShader(p, compile(g, g.VERTEX_SHADER, vs));
@@ -554,7 +561,7 @@ export function createPreview(canvas, opts = {}) {
     return p;
   }
 
-  function initGL() {
+  function initGL(): void {
     const g = gl;
     if (!g) return;
     prog = link(g, VERT_SRC, FRAG_SRC);
@@ -578,7 +585,7 @@ export function createPreview(canvas, opts = {}) {
     g.blendFuncSeparate(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA, g.ONE, g.ONE_MINUS_SRC_ALPHA);
   }
 
-  function uploadPalette() {
+  function uploadPalette(): void {
     const g = gl;
     if (!g || !palTex) return;
     g.activeTexture(g.TEXTURE0);
@@ -592,8 +599,7 @@ export function createPreview(canvas, opts = {}) {
     g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
   }
 
-  /** @param {string} id @param {TexImageSource} img */
-  function uploadBitmap(id, img) {
+  function uploadBitmap(id: string, img: TexImageSource): void {
     const g = gl;
     if (!g) return;
     const old = bitmapTex.get(id);
@@ -616,22 +622,20 @@ export function createPreview(canvas, opts = {}) {
     bitmapTex.set(id, { tex, width: size[0], height: size[1] });
   }
 
-  /** @param {TexImageSource} img @returns {[number, number]} */
-  function imageSize(img) {
-    const any = /** @type {any} */ (img);
+  function imageSize(img: TexImageSource): [number, number] {
+    const any = img as { naturalWidth?: number; videoWidth?: number; width?: number; naturalHeight?: number; videoHeight?: number; height?: number };
     const w = any.naturalWidth || any.videoWidth || any.width || 0;
     const h = any.naturalHeight || any.videoHeight || any.height || 0;
     return [Number(w) || 0, Number(h) || 0];
   }
 
-  /** @param {Event} e */
-  const onLost = (e) => {
+  const onLost = (e: Event): void => {
     e.preventDefault();
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = null;
     onStatus("WebGL context lost; waiting for restore");
   };
-  const onRestored = () => {
+  const onRestored = (): void => {
     try {
       initGL();
       onStatus("WebGL context restored");
@@ -659,11 +663,9 @@ export function createPreview(canvas, opts = {}) {
   // The playback loop is paused whenever the canvas scrolls out of view, the panel is
   // detached (e.g. switching to Data mode or another right-panel tab), or the tab is
   // hidden. `playing` is kept intact so it resumes on its own when the canvas is seen again.
-  /** @type {IntersectionObserver | null} */
-  let io = null;
-  /** @type {(() => void) | null} */
-  let visHandler = null;
-  const docHidden = () => typeof document !== "undefined" && document.hidden;
+  let io: IntersectionObserver | null = null;
+  let visHandler: (() => void) | null = null;
+  const docHidden = (): boolean => typeof document !== "undefined" && document.hidden;
   if (typeof document !== "undefined") {
     visHandler = () => (docHidden() ? suspend() : resume());
     document.addEventListener("visibilitychange", visHandler);
@@ -679,13 +681,12 @@ export function createPreview(canvas, opts = {}) {
 
   // ---- scene / target plumbing ----
 
-  /** @param {string} id @returns {BakedSprite | null} */
-  function bakedFor(id) {
+  function bakedFor(id: string): BakedSprite | null {
     if (!scene) return null;
     let b = bakedCache.get(id);
     if (b) return b;
     if (id === STAGE_KEY) b = bakeStage(scene);
-    else if (scene.sprites[id]) b = bakeSprite(scene.sprites[id]);
+    else if (scene.sprites[id]) b = bakeSprite(scene.sprites[id]!);
     else if (scene.shapes[id]) b = { frames: 1, placements: [[{ depth: 1, ref: id, matrix: IDENTITY, cxform: null, clipDepth: null, name: null }]], labels: [[]] };
     else return null;
     bakedCache.set(id, b);
@@ -693,7 +694,7 @@ export function createPreview(canvas, opts = {}) {
   }
 
   /** Frames a target animates over (the stage holds its single frame while its children loop). */
-  function frameCountOf(/** @type {string} */ id) {
+  function frameCountOf(id: string): number {
     if (!scene) return 1;
     if (id === STAGE_KEY) {
       let n = 1;
@@ -703,38 +704,27 @@ export function createPreview(canvas, opts = {}) {
       }
       return n;
     }
-    if (scene.sprites[id]) return Math.max(1, scene.sprites[id].frames | 0);
+    const sprite = scene.sprites[id];
+    if (sprite) return Math.max(1, sprite.frames | 0);
     return 1;
   }
 
-  /** @param {BakedSprite} baked @param {number} f */
-  function placementsAt(baked, f) {
+  function placementsAt(baked: BakedSprite, f: number): Placement[] {
     return baked.placements[Math.min(baked.frames - 1, Math.max(0, f))] || [];
   }
 
-  /**
-   * Visitor-based depth walk shared by the GL, Canvas2D and bounds passes.
-   * @typedef {Object} Visitor
-   * @property {(shapeId: string, prep: PreparedShape, mat: Mat, cx: Cxform | null) => void} shape
-   * @property {() => boolean} beginMask     start defining a mask; false = unsupported here (draw the mask shape normally)
-   * @property {() => void} endMaskDef       mask shape(s) done; following shapes are masked
-   * @property {() => void} endMask          masked range done
-   */
-
-  /**
-   * @param {Placement[]} placements @param {number} f frame within this timeline @param {Mat} mat @param {Cxform | null} cx @param {number} depthLeft @param {Visitor} v
-   */
-  function walk(placements, f, mat, cx, depthLeft, v) {
+  /** @param f frame within this timeline */
+  function walk(placements: Placement[], f: number, mat: Mat, cx: Cxform | null, depthLeft: number, v: Visitor): void {
     let i = 0;
     while (i < placements.length) {
-      const p = placements[i];
+      const p = placements[i]!;
       // a placement with clipDepth masks the placements with depth in (depth, clipDepth]
       if (p.clipDepth !== null && p.clipDepth > p.depth && v.beginMask()) {
         drawPlacement(p, f, mat, cx, depthLeft, v);
         v.endMaskDef();
         i++;
-        while (i < placements.length && placements[i].depth <= p.clipDepth) {
-          drawPlacement(placements[i], f, mat, cx, depthLeft, v);
+        while (i < placements.length && placements[i]!.depth <= p.clipDepth) {
+          drawPlacement(placements[i]!, f, mat, cx, depthLeft, v);
           i++;
         }
         v.endMask();
@@ -745,10 +735,7 @@ export function createPreview(canvas, opts = {}) {
     }
   }
 
-  /**
-   * @param {Placement} p @param {number} f @param {Mat} mat @param {Cxform | null} cx @param {number} depthLeft @param {Visitor} v
-   */
-  function drawPlacement(p, f, mat, cx, depthLeft, v) {
+  function drawPlacement(p: Placement, f: number, mat: Mat, cx: Cxform | null, depthLeft: number, v: Visitor): void {
     if (!scene) return;
     const m = multiply(mat, p.matrix);
     const c = composeCxform(cx, p.cxform);
@@ -767,25 +754,22 @@ export function createPreview(canvas, opts = {}) {
     }
   }
 
-  /** @param {string} id @param {number} f @param {Visitor} v */
-  function walkTarget(id, f, v) {
+  function walkTarget(id: string, f: number, v: Visitor): void {
     const b = bakedFor(id);
     if (!b) return;
     walk(placementsAt(b, f), f, IDENTITY, null, MAX_NEST, v);
   }
 
-  /** Union bounds of a target across all of its frames (stage: the stage rect). @param {string} id */
-  function targetBounds(id) {
+  /** Union bounds of a target across all of its frames (stage: the stage rect). */
+  function targetBounds(id: string): Bounds | null {
     if (!scene) return null;
     if (boundsCache.has(id)) return boundsCache.get(id) || null;
-    /** @type {Bounds | null} */
-    let out = null;
+    let out: Bounds | null = null;
     if (id === STAGE_KEY && scene.stage) {
       out = { xmin: 0, ymin: 0, xmax: scene.stage.width, ymax: scene.stage.height };
     } else {
       const n = frameCountOf(id);
-      /** @type {Visitor} */
-      const v = {
+      const v: Visitor = {
         shape: (_id, prep, mat) => {
           if (prep.bounds) out = unionBounds(out, transformBounds(prep.bounds, mat));
         },
@@ -801,13 +785,13 @@ export function createPreview(canvas, opts = {}) {
 
   // ---- view ----
 
-  function cssSize() {
+  function cssSize(): [number, number] {
     const w = canvas.clientWidth || canvas.width || 1;
     const h = canvas.clientHeight || canvas.height || 1;
     return [w, h];
   }
 
-  function updateFit() {
+  function updateFit(): void {
     if (zoomMode !== "fit") return;
     const [w, h] = cssSize();
     const b = targetId ? targetBounds(targetId) : null;
@@ -821,7 +805,7 @@ export function createPreview(canvas, opts = {}) {
     center = [(b.xmin + b.xmax) / 2, (b.ymin + b.ymax) / 2];
   }
 
-  function resize() {
+  function resize(): number {
     const dpr = typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1;
     const [w, h] = cssSize();
     const pw = Math.max(1, Math.round(w * dpr));
@@ -835,21 +819,20 @@ export function createPreview(canvas, opts = {}) {
 
   // ---- WebGL drawing ----
 
-  /** @type {{ bits: number }[]} */
-  const maskStack = [];
+  const maskStack: { bits: number }[] = [];
   let definingMask = 0; // the stencil bit being defined, 0 when not defining a mask
 
-  function activeMaskBits() {
+  function activeMaskBits(): number {
     let bits = 0;
     for (const m of maskStack) bits |= m.bits;
     return bits;
   }
-  function windingMask() {
+  function windingMask(): number {
     return 0xff >> maskStack.length;
   }
 
-  /** @param {number} n floats */
-  function ensureScratch(n) {
+  /** @param n floats */
+  function ensureScratch(n: number): void {
     if (scratch.length < n) {
       let len = scratch.length;
       while (len < n) len *= 2;
@@ -859,10 +842,9 @@ export function createPreview(canvas, opts = {}) {
 
   /**
    * Stencil fill of stage-space polygons, then the cover quad.
-   * @param {number[][]} polys @param {'nonzero' | 'evenodd'} rule
-   * @param {{ color: Rgba, cx: Cxform | null, bitmap: { tex: WebGLTexture, width: number, height: number, inv: Mat } | null } | null} cover  null while defining a mask
+   * @param cover null while defining a mask
    */
-  function glFill(polys, rule, cover) {
+  function glFill(polys: number[][], rule: "nonzero" | "evenodd", cover: CoverSpec | null): void {
     const g = gl;
     if (!g || !prog) return;
     const b = polysBounds(polys);
@@ -872,15 +854,14 @@ export function createPreview(canvas, opts = {}) {
     for (const p of polys) total += p.length / 2;
     ensureScratch(total * 4 + 16);
     let o = 0;
-    /** @type {Array<[number, number]>} */
-    const ranges = [];
+    const ranges: Array<[number, number]> = [];
     for (const p of polys) {
       const n = p.length / 2;
       if (n < 3) continue;
       ranges.push([o / 4, n]);
       for (let i = 0; i < p.length; i += 2) {
-        scratch[o++] = p[i];
-        scratch[o++] = p[i + 1];
+        scratch[o++] = p[i]!;
+        scratch[o++] = p[i + 1]!;
         scratch[o++] = 0;
         scratch[o++] = 0;
       }
@@ -913,11 +894,11 @@ export function createPreview(canvas, opts = {}) {
     const corners = [x0, y0, x1, y0, x0, y1, x1, y1];
     o = 0;
     for (let i = 0; i < 8; i += 2) {
-      scratch[o++] = corners[i];
-      scratch[o++] = corners[i + 1];
+      scratch[o++] = corners[i]!;
+      scratch[o++] = corners[i + 1]!;
       if (cover && cover.bitmap) {
         // stage → bitmap px through inverse(placement ∘ pathTransform); affine, so linear across the quad
-        const uv = apply(cover.bitmap.inv, corners[i], corners[i + 1]);
+        const uv = apply(cover.bitmap.inv, corners[i]!, corners[i + 1]!);
         scratch[o++] = uv[0] / Math.max(1, cover.bitmap.width);
         scratch[o++] = uv[1] / Math.max(1, cover.bitmap.height);
       } else {
@@ -937,17 +918,17 @@ export function createPreview(canvas, opts = {}) {
       g.stencilOp(g.KEEP, g.KEEP, g.ZERO);
       if (cover) {
         const c = cover.color;
-        g.uniform4f(U.u_color, c.r / 255, c.g / 255, c.b / 255, c.a / 255);
-        const mul = cover.cx ? cover.cx.mul : [1, 1, 1, 1];
-        const add = cover.cx ? cover.cx.add : [0, 0, 0, 0];
-        g.uniform4f(U.u_cxmul, mul[0], mul[1], mul[2], mul[3]);
-        g.uniform4f(U.u_cxadd, add[0], add[1], add[2], add[3]);
+        g.uniform4f(U.u_color!, c.r / 255, c.g / 255, c.b / 255, c.a / 255);
+        const mul: readonly number[] = cover.cx ? cover.cx.mul : [1, 1, 1, 1];
+        const add: readonly number[] = cover.cx ? cover.cx.add : [0, 0, 0, 0];
+        g.uniform4f(U.u_cxmul!, mul[0]!, mul[1]!, mul[2]!, mul[3]!);
+        g.uniform4f(U.u_cxadd!, add[0]!, add[1]!, add[2]!, add[3]!);
         if (cover.bitmap) {
           g.activeTexture(g.TEXTURE1);
           g.bindTexture(g.TEXTURE_2D, cover.bitmap.tex);
-          g.uniform1f(U.u_useBitmap, 1);
+          g.uniform1f(U.u_useBitmap!, 1);
         } else {
-          g.uniform1f(U.u_useBitmap, 0);
+          g.uniform1f(U.u_useBitmap!, 0);
         }
       }
     }
@@ -956,9 +937,8 @@ export function createPreview(canvas, opts = {}) {
     g.stencilMask(0xff);
   }
 
-  /** @returns {Visitor} */
-  function glVisitor() {
-    const g = /** @type {WebGLRenderingContext} */ (gl);
+  function glVisitor(): Visitor {
+    const g = gl as WebGLRenderingContext;
     return {
       shape: (_id, prep, mat, cx) => {
         const scale = matScale(mat);
@@ -1014,7 +994,7 @@ export function createPreview(canvas, opts = {}) {
     };
   }
 
-  function renderGL() {
+  function renderGL(): void {
     const g = gl;
     if (!g || !prog || !checkerProg) return;
     const dpr = resize();
@@ -1035,9 +1015,9 @@ export function createPreview(canvas, opts = {}) {
       g.bufferData(g.ARRAY_BUFFER, scratch.subarray(0, 8), g.DYNAMIC_DRAW);
       g.enableVertexAttribArray(aPosC);
       g.vertexAttribPointer(aPosC, 2, g.FLOAT, false, 8, 0);
-      g.uniform1f(UC.u_cell, CHECKER_CELL_CSS * dpr);
-      g.uniform3f(UC.u_c0, CHECKER_A[0], CHECKER_A[1], CHECKER_A[2]);
-      g.uniform3f(UC.u_c1, CHECKER_B[0], CHECKER_B[1], CHECKER_B[2]);
+      g.uniform1f(UC.u_cell!, CHECKER_CELL_CSS * dpr);
+      g.uniform3f(UC.u_c0!, CHECKER_A[0], CHECKER_A[1], CHECKER_A[2]);
+      g.uniform3f(UC.u_c1!, CHECKER_B[0], CHECKER_B[1], CHECKER_B[2]);
       g.disable(g.BLEND);
       g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
       drawCalls++;
@@ -1061,14 +1041,14 @@ export function createPreview(canvas, opts = {}) {
       g.enableVertexAttribArray(aUv);
       g.vertexAttribPointer(aUv, 2, g.FLOAT, false, 16, 8);
     }
-    g.uniform4f(U.u_view, sx, sy, -center[0] * sx, -center[1] * sy);
+    g.uniform4f(U.u_view!, sx, sy, -center[0] * sx, -center[1] * sy);
     g.activeTexture(g.TEXTURE0);
     g.bindTexture(g.TEXTURE_2D, palTex);
-    g.uniform1i(U.u_palette, 0);
-    g.uniform1i(U.u_bitmap, 1);
-    g.uniform1f(U.u_row, paletteRow);
-    g.uniform1f(U.u_showGray, showGray ? 1 : 0);
-    g.uniform1f(U.u_useBitmap, 0);
+    g.uniform1i(U.u_palette!, 0);
+    g.uniform1i(U.u_bitmap!, 1);
+    g.uniform1f(U.u_row!, paletteRow);
+    g.uniform1f(U.u_showGray!, showGray ? 1 : 0);
+    g.uniform1f(U.u_useBitmap!, 0);
     g.enable(g.STENCIL_TEST);
     maskStack.length = 0;
     definingMask = 0;
@@ -1079,22 +1059,16 @@ export function createPreview(canvas, opts = {}) {
 
   // ---- Canvas2D drawing ----
 
-  /** @type {Map<string, HTMLCanvasElement>} */
-  const remapCache = new Map();
-  /** @type {CanvasPattern | null} */
-  let checkerPattern = null;
+  const remapCache = new Map<string, HTMLCanvasElement>();
+  let checkerPattern: CanvasPattern | null = null;
   let checkerPatternDpr = 0;
 
-  /** @param {TexImageSource} src */
-  function asCanvasImage(src) {
-    return /** @type {CanvasImageSource} */ (/** @type {unknown} */ (src));
+  function asCanvasImage(src: TexImageSource): CanvasImageSource {
+    return src as unknown as CanvasImageSource;
   }
 
-  /**
-   * Bitmap with the palette remap applied per pixel (cached per id/row/showGray).
-   * @param {string} id @returns {CanvasImageSource | null}
-   */
-  function remappedBitmap(id) {
+  /** Bitmap with the palette remap applied per pixel (cached per id/row/showGray). */
+  function remappedBitmap(id: string): CanvasImageSource | null {
     const src = bitmapSources.get(id);
     if (!src) return null;
     const key = `${id}|${paletteRow}|${showGray ? 1 : 0}`;
@@ -1113,13 +1087,13 @@ export function createPreview(canvas, opts = {}) {
       const d = img.data;
       if (!showGray) {
         for (let i = 0; i < d.length; i += 4) {
-          const r = d[i];
+          const r = d[i]!;
           if (r === d[i + 1] && r === d[i + 2]) {
             const col = Math.floor((r / 255) * 15 + 0.5);
             const o = (paletteRow * 16 + col) * 3;
-            d[i] = palBytes[o];
-            d[i + 1] = palBytes[o + 1];
-            d[i + 2] = palBytes[o + 2];
+            d[i] = palBytes[o]!;
+            d[i + 1] = palBytes[o + 1]!;
+            d[i + 2] = palBytes[o + 2]!;
           }
         }
       }
@@ -1131,25 +1105,22 @@ export function createPreview(canvas, opts = {}) {
     }
   }
 
-  /** @returns {Visitor} */
-  function c2dVisitor() {
-    const c = /** @type {CanvasRenderingContext2D} */ (ctx2d);
-    /** @type {Path2D[]} */
-    const maskPaths = [];
+  function c2dVisitor(): Visitor {
+    const c = ctx2d as CanvasRenderingContext2D;
+    const maskPaths: Path2D[] = [];
     let defining = false;
-    /** @param {number[][]} polys @param {boolean[] | null} closed null = close every sub-path */
-    const toPath = (polys, closed) => {
+    /** @param closed null = close every sub-path */
+    const toPath = (polys: number[][], closed: boolean[] | null): Path2D => {
       const p = new Path2D();
       polys.forEach((poly, i) => {
         if (poly.length < 4) return;
-        p.moveTo(poly[0], poly[1]);
-        for (let k = 2; k < poly.length; k += 2) p.lineTo(poly[k], poly[k + 1]);
+        p.moveTo(poly[0]!, poly[1]!);
+        for (let k = 2; k < poly.length; k += 2) p.lineTo(poly[k]!, poly[k + 1]!);
         if (!closed || closed[i]) p.closePath();
       });
       return p;
     };
-    /** @param {[number, number, number, number]} rgba */
-    const css = (rgba) => `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${rgba[3].toFixed(4)})`;
+    const css = (rgba: [number, number, number, number]): string => `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${rgba[3].toFixed(4)})`;
     return {
       shape: (_id, prep, mat, cx) => {
         const scale = matScale(mat);
@@ -1219,7 +1190,7 @@ export function createPreview(canvas, opts = {}) {
     };
   }
 
-  function render2D() {
+  function render2D(): void {
     const c = ctx2d;
     if (!c) return;
     const dpr = resize();
@@ -1266,20 +1237,20 @@ export function createPreview(canvas, opts = {}) {
 
   // ---- playback ----
 
-  /** @param {boolean} v report a play-state change to the owner (deduped) */
-  function setPlaying(v) {
+  /** report a play-state change to the owner (deduped) */
+  function setPlaying(v: boolean): void {
     if (playing === v) return;
     playing = v;
     onPlaying(v);
   }
   // Pause the loop without clearing the user's play intent (off-screen / tab hidden).
-  function suspend() {
+  function suspend(): void {
     if (suspended) return;
     suspended = true;
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = null;
   }
-  function resume() {
+  function resume(): void {
     if (!suspended) return;
     suspended = false;
     if (destroyed) return;
@@ -1287,8 +1258,7 @@ export function createPreview(canvas, opts = {}) {
     else render();
   }
 
-  /** @param {number} t */
-  function tick(t) {
+  function tick(t: number): void {
     rafId = null;
     if (destroyed || !playing || suspended) return;
     const fps = (scene && scene.frameRate) || 60;
@@ -1317,7 +1287,7 @@ export function createPreview(canvas, opts = {}) {
     if (changed) onFrame(frame);
     if (playing) rafId = requestAnimationFrame(tick);
   }
-  function startLoop() {
+  function startLoop(): void {
     if (rafId !== null || destroyed || suspended) return;
     lastTime = 0;
     acc = 0;
@@ -1326,12 +1296,11 @@ export function createPreview(canvas, opts = {}) {
 
   // ---- API ----
 
-  function getFrameCount() {
+  function getFrameCount(): number {
     return targetId ? frameCountOf(targetId) : 1;
   }
 
-  /** @param {number} n */
-  function setFrame(n) {
+  function setFrame(n: number): void {
     const count = getFrameCount();
     const f = Math.max(0, Math.min(count - 1, Math.floor(Number(n) || 0)));
     if (f !== frame) {
@@ -1341,7 +1310,7 @@ export function createPreview(canvas, opts = {}) {
     render();
   }
 
-  function render() {
+  function render(): void {
     if (destroyed) return;
     drawCalls = 0;
     fillsDrawn = 0;
@@ -1352,16 +1321,15 @@ export function createPreview(canvas, opts = {}) {
     else if (ctx2d) render2D();
   }
 
-  /** @type {Preview} */
-  const preview = {
+  const preview: Preview = {
     setScene(s) {
       scene = s;
       prepared = new Map();
       bakedCache = new Map();
       boundsCache = new Map();
       remapCache.clear();
-      for (const id of Object.keys(s.shapes || {})) prepared.set(id, prepareShape(s.shapes[id]));
-      if (s.preview && Number.isInteger(s.preview.palette)) paletteRow = Math.max(0, Math.min(255, /** @type {number} */ (s.preview.palette)));
+      for (const id of Object.keys(s.shapes || {})) prepared.set(id, prepareShape(s.shapes[id]!));
+      if (s.preview && Number.isInteger(s.preview.palette)) paletteRow = Math.max(0, Math.min(255, s.preview.palette as number));
       const exists = targetId !== null && (targetId === STAGE_KEY || !!s.sprites[targetId] || !!s.shapes[targetId]);
       if (!exists) {
         const firstExport = Object.values(s.exports || {}).find((ref) => s.sprites[ref] || s.shapes[ref]);
@@ -1390,9 +1358,8 @@ export function createPreview(canvas, opts = {}) {
     getTarget: () => targetId,
     getTargets() {
       if (!scene) return [];
-      /** @type {PreviewTarget[]} */
-      const out = [{ id: STAGE_KEY, kind: "stage", frames: frameCountOf(STAGE_KEY) }];
-      for (const id of Object.keys(scene.sprites)) out.push({ id, kind: "sprite", frames: Math.max(1, scene.sprites[id].frames | 0) });
+      const out: PreviewTarget[] = [{ id: STAGE_KEY, kind: "stage", frames: frameCountOf(STAGE_KEY) }];
+      for (const id of Object.keys(scene.sprites)) out.push({ id, kind: "sprite", frames: Math.max(1, scene.sprites[id]!.frames | 0) });
       for (const id of Object.keys(scene.shapes)) out.push({ id, kind: "shape", frames: 1 });
       return out;
     },

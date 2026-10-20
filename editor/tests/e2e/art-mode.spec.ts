@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { rmSync } from "node:fs";
-import { openApp, seedToursSeen, selectMod, readFrame, collectConsole } from "./helpers.js";
+import { openApp, seedToursSeen, selectMod, readFrame, collectConsole } from "./helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..", "..");
@@ -10,7 +11,7 @@ const SANDBOX = join(REPO_ROOT, "mods", "dev-sandbox");
 const SVG_FIXTURE = join(HERE, "fixtures", "e2e_import.svg");
 
 /** Enter Art mode on dev-sandbox and open the my_rat starter scene (24 frames). */
-async function openSandboxScene(page) {
+async function openSandboxScene(page: Page) {
   await openApp(page, "?mode=art");
   await selectMod(page, "dev-sandbox");
   await page.locator(".explorer .srow", { hasText: "my_rat" }).first().click();
@@ -52,6 +53,16 @@ test.describe("Art mode — explorer & scene authoring", () => {
     await page.waitForTimeout(300);
     const glErrors = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
     expect(glErrors, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
+  test("the SVG drop zone is one block box (display:block, spanning its container), not inline fragments", async ({ page }) => {
+    await openSandboxScene(page);
+    const dz = page.locator(".dropzone").first();
+    await expect(dz).toBeVisible();
+    expect(await dz.evaluate((el) => getComputedStyle(el).display)).toBe("block");
+    const box = (await dz.boundingBox())!;
+    const parentWidth = await dz.evaluate((el) => el.parentElement!.getBoundingClientRect().width);
+    expect(box.width).toBeGreaterThan(parentWidth * 0.9);
   });
 
   test("empty states: no scene (jokers-luck) shows the Art empty hero", async ({ page }) => {
@@ -132,7 +143,7 @@ test.describe("Art mode — preview (loop/suspend/resume, play-pause, resize, pa
     await loop.uncheck();
     // scrub to near the end
     await page.evaluate(() => {
-      const r = /** @type {HTMLInputElement} */ (document.querySelector(".scrub input[type=range]"));
+      const r = (document.querySelector(".scrub input[type=range]") as HTMLInputElement);
       r.value = "22";
       r.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -147,7 +158,7 @@ test.describe("Art mode — preview (loop/suspend/resume, play-pause, resize, pa
   test("resize re-fits: the canvas backing store tracks its element size", async ({ page }) => {
     await openSandboxScene(page);
     const before = await page.evaluate(() => {
-      const c = /** @type {HTMLCanvasElement} */ (document.querySelector(".pvcanvasbox canvas"));
+      const c = (document.querySelector(".pvcanvasbox canvas") as HTMLCanvasElement);
       return { cw: c.clientWidth, w: c.width, dpr: window.devicePixelRatio || 1 };
     });
     expect(before.cw).toBeGreaterThan(0);
@@ -157,7 +168,7 @@ test.describe("Art mode — preview (loop/suspend/resume, play-pause, resize, pa
     await page.setViewportSize({ width: 900, height: 820 });
     await expect
       .poll(async () => page.evaluate(() => {
-        const c = /** @type {HTMLCanvasElement} */ (document.querySelector(".pvcanvasbox canvas"));
+        const c = (document.querySelector(".pvcanvasbox canvas") as HTMLCanvasElement);
         const dpr = window.devicePixelRatio || 1;
         return c.clientWidth > 0 && Math.abs(c.width - Math.round(c.clientWidth * dpr)) <= 2 ? c.clientWidth : 0;
       }), { timeout: 5000 })
@@ -173,7 +184,7 @@ test.describe("Art mode — preview (loop/suspend/resume, play-pause, resize, pa
       const spans = document.querySelectorAll(".pvwrap .ramp.big span");
       return [...spans].map((s) => getComputedStyle(s).backgroundColor);
     });
-    const parse = (c) => (c.match(/\d+/g) || []).map(Number);
+    const parse = (c: string) => (c.match(/\d+/g) || []).map(Number);
 
     // palette row 54 (from the scene) is not fully grayscale
     const colored = await readRamp();

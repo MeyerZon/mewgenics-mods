@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { openApp, seedToursSeen, selectMod, collectConsole } from "./helpers.js";
+import { openApp, seedToursSeen, selectMod, collectConsole } from "./helpers.ts";
 
 test.describe("smoke", () => {
   test("app loads with no console errors (data mode)", async ({ page }) => {

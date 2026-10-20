@@ -1,13 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { openApp, seedLocalStorage, seedToursSeen, selectMod, LS, collectConsole } from "./helpers.js";
+import type { Page } from "@playwright/test";
+import { openApp, seedLocalStorage, seedToursSeen, selectMod, LS, collectConsole } from "./helpers.ts";
 
 /** Open the Help (?) menu. */
-async function openHelp(page) {
+async function openHelp(page: Page) {
   await page.locator('.topbar .dropdown button[aria-label="Help and onboarding"]').click();
 }
 
-async function lsValue(page, key) {
-  return page.evaluate((k) => window.localStorage.getItem(k), key);
+async function lsValue(page: Page, key: string) {
+  return page.evaluate((k: string) => window.localStorage.getItem(k), key);
 }
 
 test.describe("Onboarding — data-mode first-run tour", () => {
