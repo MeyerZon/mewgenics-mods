@@ -189,7 +189,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(lines[11]!.startsWith("# runner: expect log"), `placeholder comment at the directive's position, got ${JSON.stringify(lines[11])}`);
       eq(lines[12], "enter TacticsTest", "enter is a DLL-side directive and passes through");
       eq(lines[13], "wait rounds 1"); eq(lines[16], 'expect stacks LuckUp on "Mr Whiskers" varied');
-      eq(lines[17], "quit 0");
+      eq(lines[17], "expect unit \"Lil' Rat\" faction != 1"); eq(lines[18], "quit 0");
       assert(typeof script.isRunnerSide === "function" && script.isRunnerSide(p.directives[11]!) && !script.isRunnerSide(p.directives[0]!), "isRunnerSide marks only expect log");
     });
 
