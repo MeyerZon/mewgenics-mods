@@ -459,6 +459,9 @@ await mcpSmoke();
   let ct: typeof import("./ci-tests.ts") | null = null;
   try { ct = await import("./ci-tests.ts"); } catch (e) { test("ci-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (ct) await ct.runCiTests(test, assert, eq);
+  let dt: typeof import("./deps-tests.ts") | null = null;
+  try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (dt) await dt.runDepsTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
