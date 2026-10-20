@@ -440,7 +440,12 @@ static int h_unit_info(void *u, int i, MtUnit *out) {
             if (!read_ptr(AT(comps, k * sizeof(void *)), &comp) || !comp) continue;
             if (!component_is_status(comp)) continue;
             if (safe_read(AT(comp, OFF_STATUS_REMOVING), &removing, 1) && removing) continue;
-            if (component_type_name(comp, out->statuses[out->statusCount], MT_STATUS_NAME)) out->statusCount++;
+            if (component_type_name(comp, out->statuses[out->statusCount], MT_STATUS_NAME)) {
+                int st = 0;
+                read_i32(AT(comp, OFF_STATUS_STACKS), &st);   /* the same +0x5c status_engine.c writes */
+                out->stacks[out->statusCount] = st;
+                out->statusCount++;
+            }
         }
     }
     return 1;

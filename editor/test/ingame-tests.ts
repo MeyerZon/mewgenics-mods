@@ -92,7 +92,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("every directive kind parses with its line number", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const d = p.directives;
-      eq(d.length, 14);
+      eq(d.length, 18);
       eq(JSON.stringify(d[0]), JSON.stringify({ line: 7, kind: "wait", unit: "frames", n: 120 }));
       eq(JSON.stringify(d[1]), JSON.stringify({ line: 8, kind: "cmd", text: "bind JokersGambit # not a comment, part of the command" }));
       eq(JSON.stringify(d[2]), JSON.stringify({ line: 9, kind: "expect", what: "console", substr: 'No command named "bind" found', within: 5 }));
@@ -106,7 +106,21 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(JSON.stringify(d[10]), JSON.stringify({ line: 17, kind: "wait", unit: "ms", n: 500 }));
       eq(JSON.stringify(d[11]), JSON.stringify({ line: 18, kind: "expect", what: "log", substr: "Save File Suffix: dev" }));
       eq(JSON.stringify(d[12]), JSON.stringify({ line: 19, kind: "enter", scene: "TacticsTest" }));
-      eq(JSON.stringify(d[13]), JSON.stringify({ line: 20, kind: "quit", code: 0 }));
+      eq(JSON.stringify(d[13]), JSON.stringify({ line: 20, kind: "wait", unit: "rounds", n: 1 }));
+      eq(JSON.stringify(d[14]), JSON.stringify({ line: 21, kind: "expect", what: "round", op: ">=", n: 2 }));
+      eq(JSON.stringify(d[15]), JSON.stringify({ line: 22, kind: "expect", what: "stacks", status: "JokersLuck", unit: "0", op: "==", n: 1 }));
+      eq(JSON.stringify(d[16]), JSON.stringify({ line: 23, kind: "expect", what: "stacks", status: "LuckUp", unit: "Mr Whiskers", varied: true }));
+      eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "quit", code: 0 }));
+    });
+
+    test("combat directives: wait rounds needs N >= 1; expect round needs <op> <N>; expect stacks needs <op> <N> or varied", () => {
+      assert("error" in parseDirective("wait rounds 0", 1), "rounds 0");
+      assert("error" in parseDirective("expect round 3", 1), "round without op");
+      assert("error" in parseDirective("expect stacks LuckUp on 0", 1), "stacks without op/varied");
+      assert("error" in parseDirective("expect stacks LuckUp on 0 varied now", 1), "trailing text after varied");
+      assert("error" in parseDirective("expect stacks LuckUp 0 == 1", 1), "missing on");
+      const ok = parseDirective("expect stacks LuckUp on Lumee != 0", 1) as { what: string; unit: string; op: string; n: number };
+      eq(ok.what, "stacks"); eq(ok.unit, "Lumee"); eq(ok.op, "!="); eq(ok.n, 0);
     });
 
     test("enter directive parses a known scene; unknown or missing scene, or extra words, are line errors", () => {
@@ -133,11 +147,12 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const lines = p.body.split("\n");
-      eq(lines.length - 1, 14, "one body line per directive (plus the trailing newline)");
+      eq(lines.length - 1, 18, "one body line per directive (plus the trailing newline)");
       assert(!lines.some((l) => l.startsWith("expect log")), "the DLL never sees expect log");
       assert(lines[11]!.startsWith("# runner: expect log"), `placeholder comment at the directive's position, got ${JSON.stringify(lines[11])}`);
       eq(lines[12], "enter TacticsTest", "enter is a DLL-side directive and passes through");
-      eq(lines[13], "quit 0");
+      eq(lines[13], "wait rounds 1"); eq(lines[16], 'expect stacks LuckUp on "Mr Whiskers" varied');
+      eq(lines[17], "quit 0");
       assert(typeof script.isRunnerSide === "function" && script.isRunnerSide(p.directives[11]!) && !script.isRunnerSide(p.directives[0]!), "isRunnerSide marks only expect log");
     });
 
@@ -249,6 +264,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.expects.failed, 0);
       eq(r.units!.count, 2);
       eq((r.units!.list as { name: string }[])[0]!.name, "Lumee");
+      eq(JSON.stringify((r.units!.list as { stacks: number[] }[]).map((u) => u.stacks)), JSON.stringify([[1], []]), "units snapshot: stacks parallel to statuses");
     });
     test("fail fixture lists failures with line, kind, arg, detail", () => {
       const r = parseResults(fixture("result-fail.jsonl"));
