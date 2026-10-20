@@ -4576,7 +4576,7 @@
       },
       "anchors": {
         "strings": [],
-        "note": "MewGame* (Component* this) — the component of type 0x50c on the component's scene (or the manager's main scene); the dev-menu lambda sets its +0x780/+0x78c flags before entering TacticsTest.",
+        "note": "MewDirector* (Component* this) — the component of type 0x50c (= MewDirector) on the component's scene, else on the manager's main scene; NULL at the main menu of a dev launch (no director exists there). The dev-menu lambdas flag the director they get from it before entering TacticsTest.",
         "callees": [],
         "cfgLite": {
           "bytes": 142,
@@ -4892,6 +4892,159 @@
         ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
       ],
       "note": "non-zero while the scene is being torn down: CreateEntity returns NULL and the dev-menu lambda skips the entry"
+    },
+    {
+      "name": "AddComponent_MewDirector_test",
+      "kind": "function",
+      "rva": "0x758650",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 40 48 8B EA 48 8B D9 80 B9 B0 04 00 00 00 74 07 33 C0 E9 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B F8 48 89 44 24 50 48 85 C0 74 1D 33 D2 41 B8 90 07",
+        "exactLen": 73,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 38,
+            "len": 4,
+            "why": "E9 rel32"
+          },
+          {
+            "at": 45,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 50,
+            "len": 4,
+            "why": "E8 rel32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "MewDirector* (Scene* scene, Entity* entity) — AddComponent<MewDirector> with the inline name \"test00.sav\": pool alloc (0x790 bytes), ctor 0x1be7f0, attach, MewDirector::init(this, \"test00.sav\"). The game's own load path (0x750f90) calls it on the manager's main scene. Reference only: OBSERVED 2026-10-20 that TacticsTest::init creates its own director, and a second one trips the \"More than one mew director\" assert (the main loop stalls), so the harness never calls this.",
+        "callees": [
+          {
+            "ordinal": 7,
+            "name": "MewDirector_init",
+            "target": "0x3a6b90"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 508,
+          "calls": 8,
+          "ripRefs": 5,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89"
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_SYM_AddComponent_MewDirector_test",
+          "index": 21
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/opencaller_c3_0x758650.c",
+        ".analysis/decompiled/MewApplication_LoadGame_0x750f90.c"
+      ]
+    },
+    {
+      "name": "SceneManager_mainScene",
+      "kind": "offset",
+      "struct": "SceneManager",
+      "value": "0x18",
+      "ctype": "Scene*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_SCENEMANAGER_MAINSCENE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/opencaller_c3_0x758650.c",
+        ".analysis/decompiled/MewApplication_LoadGame_0x750f90.c"
+      ],
+      "note": "the scene the load path creates the test director on ((App+0x28)->+0x18; Component::GetGame falls back to it)"
+    },
+    {
+      "name": "MewDirector_devFightFlag",
+      "kind": "offset",
+      "struct": "MewDirector",
+      "value": "0x780",
+      "ctype": "char",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_DIRECTOR_DEVFIGHT_FLAG"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/Component_GetGame_0x908e0.c"
+      ],
+      "note": "component type id 0x50c is MewDirector (GetTypeId thunk 0x1bdb60 -> vftable 0xee7a50): Component::GetGame returns the scene's director. Every dev-menu fight button sets this byte to 1 on it before creating the Battle scene"
+    },
+    {
+      "name": "MewDirector_devFightMode",
+      "kind": "offset",
+      "struct": "MewDirector",
+      "value": "0x78c",
+      "ctype": "char",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_DIRECTOR_DEVFIGHT_MODE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/Component_GetGame_0x908e0.c"
+      ],
+      "note": "the TacticsTest button sets this byte to 1 (its sibling sets the int at +0x784 to 4 instead)"
+    },
+    {
+      "name": "MewDirector_handoffFlag",
+      "kind": "offset",
+      "struct": "MewDirector",
+      "value": "0x6dc",
+      "ctype": "int32",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_DIRECTOR_HANDOFF_FLAG"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/Component_GetGame_0x908e0.c"
+      ],
+      "note": "set to 1 by the TacticsTest button on its captured director right before the Battle scene is created (hypothesis: hands the run over to the test battle)"
     }
   ]
 }

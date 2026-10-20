@@ -42,6 +42,7 @@ typedef enum FwSymbol {
     FW_SYM_Component_GetGame,           /* MewGame* (Component*) */
     FW_SYM_TacticsTest_init,            /* reference only: registers the run console commands (bind, load, win, …) */
     FW_SYM_MewDirector_init,            /* reference only: void (MewDirector*, std::string name) — opens/creates that save */
+    FW_SYM_AddComponent_MewDirector_test, /* MewDirector* (Scene*, Entity*) — the test director on test00.sav, as the load path makes it */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 

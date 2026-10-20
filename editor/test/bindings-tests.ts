@@ -381,10 +381,11 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (21, incl. the v4 run-entry symbols), each with a signature", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (22, incl. the v4 run-entry symbols), each with a signature", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 21);
+    eq(want.length, 22);
+    eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     for (const n of ["FW_SYM_SceneManager_CreateScene", "FW_SYM_Scene_CreateEntity", "FW_SYM_AddComponent_TacticsTest", "FW_SYM_Component_GetGame", "FW_SYM_TacticsTest_init"]) assert(want.includes(n), `${n} in framework_api.h`);
     eq(entry(m, "AddComponent_TacticsTest")!.rva, "0x31c3e0");
     eq(entry(m, "SceneManager_CreateScene")!.rva, "0x9d4950");

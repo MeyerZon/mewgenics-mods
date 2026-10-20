@@ -1,5 +1,5 @@
 mods: dev-sandbox
-timeout: 90s
+timeout: 40s
 # TDD target 1: enter a fight from the main menu through the harness. `enter TacticsTest` replays the dev menu's
 # "TacticsTest" entry (a new "Battle" scene with the TacticsTest driver component, whose init registers the run
 # console commands). No save file is opened: the boot-time test director (test00.sav) already exists.

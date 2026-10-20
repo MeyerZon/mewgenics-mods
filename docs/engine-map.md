@@ -273,6 +273,55 @@ cannot drive yet (TODO target 1). The donor now mirrors the vanilla frame (depth
 visual one. Evidence and gate table: `docs/swf-emitter-fix-spec.md` §0. The `_Append_AbilityIcon` name is correct;
 char-ID collision was ruled out.
 
+## Dev scenes and run entry (static decode + Ghidra, 2026-10-20)
+
+How the harness enters a fight from the main menu (`enter TacticsTest`, `docs/ingame-testing.md`). Every address is
+build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4) with signatures and anchors.
+
+- **The dev menu's entries are component classes.** Under `-dev_mode true` the dev menu lists scene drivers by
+  class name — `TacticsTest`, `LevelAutoPlay`, `LevelAutoPlay_Kaiju`, `BreedingTest`, `DebugScene`, `ShopScene`,
+  `Tutorial`, "Kaiju Fight Rapid Sim", plus house-boss `.lvl` and world `.gon` names (`.rdata` 0xf0c2e0…). Each
+  class has an RTTI `.?AV<Name>@glaiel@@` and a 171-byte `IsA(name)` (`TacticsTest`: 0x31add0). `TacticsTest`:
+  TypeDescriptor 0x134fc50, COL 0x1167810, vftable 0xf0f4b8, ctor 0x31c5f0 (no `.pdata` entry).
+- **`AddComponent<TacticsTest>(Scene*, Entity*)` 0x31c3e0** (520 bytes): pool alloc 0x120 bytes, ctor, attach, push
+  into the scene's two component arrays, then `TacticsTest::init(this, "blank", 0, 0, 0)` 0x833390 (345 KB; the
+  sole referrer of the console-command names `bind`, `load`, `win`, `battle`, `spawn`, `spawntile`, `champion`,
+  `elite`, `status`, `passive`, `killall`, `takeover`, `noui`, `equip`, `weather`, `benchmark`, …).
+- **The dev-menu button** (`std::function` body 0x32fc00; 0x32fd40 is its sibling with `+0x784 = 4` instead of
+  `+0x78c = 1`) reads two captures and does, in order: `d = Component::GetGame(menu)` (0x908e0 — **type id 0x50c is
+  `MewDirector`**: the component of that type on the component's scene, else on the manager's main scene);
+  `d->+0x780 = 1; d->+0x78c = 1`; `cap1->+0x5a8->{+0x410,+0x428,+0x440} = menu->+0x5c` (a widget value);
+  `cap1->+0x6dc = 1`; `menu->scene->+0x4db = 1` (closes the menu's scene); reseeds the RNG (`0x94f0a0(TLS+0x178)`);
+  `battle = SceneManager::CreateScene(menu->+0x28, "Battle")` (0x9d4950: pool-allocates a Scene, name at +0x4b8,
+  `+0x4b0` destroyed flag, pushes it into the manager's vector at +0..+8; by-value string, callee destroys); if the
+  scene is not destroyed: `e = Scene::CreateEntity(battle)` (0x96b3e0; NULL when +0x4b0 is set) and
+  `AddComponent<TacticsTest>(battle, e)`.
+- **Component layout used:** `+0x18` entity, `+0x20` scene, `+0x28` scene manager (= `*scene`, the scene's first
+  field). Scene manager: `+0..+8` scene vector (begin, end), `+0x18` main scene.
+- **`MewDirector::init(this, std::string name)` 0x3a6b90** sets the global `DAT_1413dac30` (`FW_DATA_MewDirector`)
+  and `DAT_1413dac38 = *(this-8)` (pool generation), and asserts **"More than one mew director"** when the global
+  is set and its generation still matches. Three creation helpers: 0x1be1a0 (name argument; the save-slot path),
+  0x31c1e0 (`housetest01.sav`; dev-menu house-test buttons 0x317230/0x317c50/0x318b50), 0x758650 (`test00.sav`;
+  the boot path 0x750f90 ← 0x748200 ← 0x7469b0, which also creates the `DebugOverlay`/`ToolTip`/`PostProcess`/
+  `PauseMenu` scenes and then either plays `game_intro` or, in dev mode, calls 0x3af490(director)).
+- **OBSERVED at the main menu of a dev launch (harness, 2026-10-20):** 6 scenes — `Shared` (the manager's main
+  scene), `Base`, `DebugOverlay`, `ToolTip`, `PostProcess`, `PauseMenu` — and **no MewDirector anywhere** (type 0x50c
+  count 0 on every scene; the global is NULL). `MewDirector::init` with `test00.sav` on `Shared` works from the
+  harness and adds a 7th scene, `Tutorial`.
+- **OBSERVED entry attempts (`mods/dev-sandbox/tests/enter-fight.mewtest`):**
+  1. CreateScene + CreateEntity + AddComponent<TacticsTest> with no director: access violation at
+     `Mewgenics.exe+0x835a32` inside `TacticsTest::init` (the harness's crash path reported it: VEH, `crash` event,
+     exit 3, crash log, no dialog).
+  2. The test director created first, no flags: `init` runs (`LOAD LEVEL: levels/blank.lvl`), then a second
+     director is created a few frames later and trips the "More than one mew director" assert, whose handler never
+     returns — the main loop stalls until the watchdog exits 2.
+  3. Test director + the button's flags (`+0x780`, `+0x78c`, `+0x6dc` on the director): no assert, no crash,
+     `LOAD LEVEL: levels/blank.lvl`, then `no saved winning teams - win at least one run first!` (logged by
+     0x3b24c0 → 0x9522c0 → 0xd3e10c) and the main loop stalls inside the entry (frames stop, 0 turns). The test
+     fight takes its party from a saved winning team, which a fresh `test00.sav` lacks.
+- **Save safety of the route:** only `test00.sav` is named (hard-coded in 0x758650); `savecheck.ts` allows that
+  family; every run above ended with `1 real save file(s) unchanged`.
+
 ## Save safety
 
 Backups: `%USERPROFILE%\Documents\Mewgenics-save-backups\<timestamp>\` (first: 2026-10-17_1911, 24 files, hashes verified;

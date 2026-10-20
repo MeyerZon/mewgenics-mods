@@ -43,6 +43,8 @@ typedef int (*fn_SDL_HideWindow)(void *window);
 typedef void *(*fn_CreateScene)(void *sceneManager, MtMsvcString *name);   /* by-value string, callee destroys */
 typedef void *(*fn_CreateEntity)(void *scene);
 typedef void *(*fn_AddTacticsTest)(void *scene, void *entity);
+typedef void *(*fn_AddDirectorTest)(void *scene, void *entity);   /* the test director on test00.sav (name hard-coded in the callee) */
+typedef void *(*fn_GetGame)(void *component);                       /* Component::GetGame: the MewGame object of the component's scene */
 
 static MewjectorAPI g_mj;
 static int g_mjOk;
@@ -69,6 +71,8 @@ static fn_NextTurn g_origNextTurn;
 static fn_CreateScene g_CreateScene;        /* NULL when the framework predates v4: `enter` reports enter_unavailable */
 static fn_CreateEntity g_CreateEntity;
 static fn_AddTacticsTest g_AddTacticsTest;
+static fn_AddDirectorTest g_AddDirectorTest;
+static fn_GetGame g_GetGame;
 
 static void *volatile g_dc;
 static volatile LONG g_dcInits;
@@ -289,8 +293,75 @@ static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
     void *dc = g_dc, *mgr = NULL, *director = NULL, *directorGlobal = (void *)g_fw.GetData(FW_DATA_MewDirector);
     if (!dc) { snprintf(detail, cap, "no debug console yet (main menu not reached)"); return 0; }
     if (g_tc) { snprintf(detail, cap, "a fight is already running (TurnControl seen)"); return 0; }
-    if (!directorGlobal || !read_ptr(directorGlobal, &director) || !director) { snprintf(detail, cap, "no MewDirector (the boot-time test director is missing)"); return 0; }
     if (!read_ptr(AT(dc, OFF_COMPONENT_SCENEMANAGER), &mgr) || !mgr) { snprintf(detail, cap, "no scene manager on the console component (+0x%x)", OFF_COMPONENT_SCENEMANAGER); return 0; }
+    if (!directorGlobal || !read_ptr(directorGlobal, &director)) { snprintf(detail, cap, "cannot read the MewDirector global"); return 0; }
+    /* OBSERVED 2026-10-20: TacticsTest::init creates its own MewDirector (debug.log: "LOAD LEVEL: levels/blank.lvl"
+     * right before it); a director made here first trips the game's "More than one mew director" assert, whose
+     * handler never returns (the main loop stalls until the watchdog exits 2). So a director that already exists is
+     * refused — nothing is created here — and the global is read only for the report. */
+    int directorMade = 0;
+    if (!director) {
+        /* OBSERVED 2026-10-20: a dev launch sits at the main menu with no MewDirector (6 scenes: Shared, Base,
+         * DebugOverlay, ToolTip, PostProcess, PauseMenu; none carries type 0x50c), and TacticsTest::init
+         * dereferences the director it gets from Component::GetGame (crash at +0x835a32 without one). Make the test
+         * director the way the game's own load path does (0x750f90): on the manager's main scene, test00.sav —
+         * a name the save-set check allows; the callee hard-codes it, so no steamcampaign slot can be named here. */
+        void *mainScene = NULL;
+        char mainDestroyed = 1;
+        if (!g_AddDirectorTest) { snprintf(detail, cap, "symbol missing: FW_SYM_AddComponent_MewDirector_test"); return -1; }
+        if (!read_ptr(AT(mgr, OFF_SCENEMANAGER_MAINSCENE), &mainScene) || !mainScene) { snprintf(detail, cap, "no main scene on the scene manager (+0x%x)", OFF_SCENEMANAGER_MAINSCENE); return 0; }
+        if (!safe_read(AT(mainScene, OFF_SCENE_DESTROYED), &mainDestroyed, 1) || mainDestroyed) { snprintf(detail, cap, "main scene %p is being destroyed", mainScene); return 0; }
+        void *de = g_CreateEntity(mainScene);
+        if (!de) { snprintf(detail, cap, "CreateEntity on the main scene %p returned NULL", mainScene); return 0; }
+        director = g_AddDirectorTest(mainScene, de);
+        if (!director) { snprintf(detail, cap, "AddComponent<MewDirector>(test00.sav) returned NULL"); return 0; }
+        directorMade = 1;
+        logf_("enter: created the test director %p on the main scene %p (test00.sav)", director, mainScene);
+    }
+    /* diagnostic for the record: the scenes the manager holds (vector at +0 .. +8), each with its name (+0x4b8),
+     * destroyed flag (+0x4b0) and whether it carries a MewGame (type 0x50c list at scene+0x20 -> +0x50c0) */
+    {
+        void *begin = NULL, *end = NULL, *mainScene = NULL;
+        read_ptr(mgr, &begin); read_ptr(AT(mgr, 8), &end); read_ptr(AT(mgr, OFF_SCENEMANAGER_MAINSCENE), &mainScene);
+        logf_("enter: scene manager %p, main scene %p, %d scene(s)", mgr, mainScene, (begin && end && end >= begin) ? (int)(((char *)end - (char *)begin) / 8) : -1);
+        for (int i = 0; begin && end && i < 32 && (char *)begin + i * 8 < (char *)end; i++) {
+            void *sc = NULL, *lists = NULL, *entry = NULL, *first = NULL, *firstArr = NULL;
+            char nm[64] = "?", destroyedFlag = 0;
+            uint32_t cnt = 0;
+            if (!read_ptr(AT(begin, i * 8), &sc) || !sc) continue;
+            read_msvc_string(AT(sc, 0x4b8), nm, sizeof nm);
+            safe_read(AT(sc, OFF_SCENE_DESTROYED), &destroyedFlag, 1);
+            if (read_ptr(AT(sc, 0x20), &lists) && lists && read_ptr(AT(lists, 0x50c0), &entry) && entry && read_u32(AT(entry, 0xc), &cnt) && cnt && read_ptr(AT(entry, 0x10), &firstArr) && firstArr) read_ptr(firstArr, &first);
+            logf_("enter:   scene[%d] %p \"%s\" destroyed=%d MewGame(0x50c)=%p (count %u)", i, sc, nm, (int)destroyedFlag, first, cnt);
+        }
+    }
+    /* the dev-menu button flags the director (Component::GetGame = the scene's MewDirector, type 0x50c) before it
+     * creates the Battle scene (lambda 0x32fc00): +0x780 = 1, +0x78c = 1, +0x6dc = 1. Replay that on ours. */
+    void *game = g_GetGame ? g_GetGame(dc) : NULL;   /* should now resolve to the director on the main scene */
+    void *flagTarget = game ? game : director;
+    char probe = 0;
+    if (!safe_read(AT(flagTarget, OFF_DIRECTOR_DEVFIGHT_MODE), &probe, 1)) { snprintf(detail, cap, "director %p unreadable", flagTarget); return 0; }
+    *(volatile char *)((char *)flagTarget + OFF_DIRECTOR_DEVFIGHT_FLAG) = 1;
+    *(volatile char *)((char *)flagTarget + OFF_DIRECTOR_DEVFIGHT_MODE) = 1;
+    *(volatile int *)((char *)flagTarget + OFF_DIRECTOR_HANDOFF_FLAG) = 1;
+    /* the button also copies its party-source widget into the director's settings struct (+0x5a8 -> +0x410/+0x428/
+     * +0x440); MewDirector::DebugGenAdventureCats(enum) refuses mode 0 without a saved winning team ("win at least
+     * one run first!"), so the harness asks for the generated party instead (MEWTEST_PARTY_MODE overrides, default 1) */
+    {
+        void *settings = NULL;
+        int mode = 1;
+        char envMode[16];
+        if (GetEnvironmentVariableA("MEWTEST_PARTY_MODE", envMode, sizeof envMode)) mode = atoi(envMode);
+        if (read_ptr(AT(flagTarget, 0x5a8), &settings) && settings) {
+            int probeI = 0;
+            if (safe_read(AT(settings, 0x440), &probeI, 4)) {
+                *(volatile int *)((char *)settings + 0x410) = mode;
+                *(volatile int *)((char *)settings + 0x428) = mode;
+                *(volatile int *)((char *)settings + 0x440) = mode;
+                logf_("enter: director settings %p: party-source fields +0x410/+0x428/+0x440 set to %d", settings, mode);
+            } else logf_("enter: director settings %p unreadable; party-source fields left alone", settings);
+        } else logf_("enter: director %p has no settings struct at +0x5a8", flagTarget);
+    }
     MtMsvcString name;
     if (!mt_msvcstr_build(&name, "Battle", 6, (MtAllocFn)g_Allocate)) { snprintf(detail, cap, "cannot build the scene name"); return 0; }
     void *battle = g_CreateScene(mgr, &name); /* callee destroys the string */
@@ -300,7 +371,10 @@ static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
     if (!entity) { snprintf(detail, cap, "CreateEntity returned NULL on scene %p", battle); return 0; }
     void *tt = g_AddTacticsTest(battle, entity);
     if (!tt) { snprintf(detail, cap, "AddComponent<TacticsTest> returned NULL (scene %p being destroyed?)", battle); return 0; }
-    snprintf(detail, cap, "scene=%p entity=%p component=%p director=%p manager=%p", battle, entity, tt, director, mgr);
+    void *directorAfter = NULL;
+    read_ptr(directorGlobal, &directorAfter);
+    snprintf(detail, cap, "scene=%p entity=%p component=%p manager=%p director=%p%s GetGame(console)=%p director(after init)=%p",
+             battle, entity, tt, mgr, director, directorMade ? " (test director created, test00.sav)" : "", game, directorAfter);
     logf_("enter TacticsTest: %s", detail);
     return 1;
 }
@@ -653,7 +727,10 @@ static void init(void) {
     g_CreateScene = (fn_CreateScene)g_fw.GetSymbol(FW_SYM_SceneManager_CreateScene);
     g_CreateEntity = (fn_CreateEntity)g_fw.GetSymbol(FW_SYM_Scene_CreateEntity);
     g_AddTacticsTest = (fn_AddTacticsTest)g_fw.GetSymbol(FW_SYM_AddComponent_TacticsTest);
-    logf_("run-entry symbols: CreateScene=%p CreateEntity=%p AddComponent<TacticsTest>=%p", (void *)g_CreateScene, (void *)g_CreateEntity, (void *)g_AddTacticsTest);
+    g_AddDirectorTest = (fn_AddDirectorTest)g_fw.GetSymbol(FW_SYM_AddComponent_MewDirector_test);
+    g_GetGame = (fn_GetGame)g_fw.GetSymbol(FW_SYM_Component_GetGame);
+    logf_("run-entry symbols: CreateScene=%p CreateEntity=%p AddComponent<TacticsTest>=%p GetGame=%p AddComponent<MewDirector>(test, reference)=%p",
+          (void *)g_CreateScene, (void *)g_CreateEntity, (void *)g_AddTacticsTest, (void *)g_GetGame, (void *)g_AddDirectorTest);
     for (int i = 0; i < FW_DATA_COUNT_; i++) {
         void **slot = (void **)g_fw.GetData(i);
         g_sdlInitial[i] = NULL;
