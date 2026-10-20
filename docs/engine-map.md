@@ -380,7 +380,8 @@ the functions that reference the App global or build the saves root finds no rea
 `MewApplication` destructor (`0x7459b0`, which frees the string after `SteamAPI_Shutdown`). The isolation we rely on
 is therefore **not** a renamed save: a dev launch that enters a Steam slot would write `steamcampaign0N.sav`. The
 harness enforces the rule instead (`editor/src/core/ingame/savecheck.ts`): every `*.sav` in the saves dir is hashed
-before and after a run and only `campaign0N.sav`, `test0N.sav`, `housetest0N.sav` (and `<suffix>`-prefixed forms,
+before and after a run and only `campaign0N.sav`, `test0N.sav`, `housetest0N.sav`, the harness's own
+`mewtestNN.sav` (the disposable `enter Campaign` slot, 2026-10-20) (and `<suffix>`-prefixed forms,
 in case a future build uses the suffix) may change; any other change is a `safety-violation`. OBSERVED 2026-10-18:
 dev launches wrote `campaign02.sav` and `test00.sav`; `steamcampaign01.sav` untouched since 2026-03-31. Open: what
 else the game does with the suffix (`Inherit Save File Suffix` exists in `ProcessCmds`); Steam Cloud's

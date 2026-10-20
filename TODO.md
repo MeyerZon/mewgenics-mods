@@ -52,9 +52,9 @@ Things no test can see: they need a human at the game, a decision, or an account
 - [ ] **Remove the leftover agent worktree safely**: `.claude/worktrees/agent-ac7ac5f970624f89d` (PR #27's branch) still
   holds junctions to `.analysis` and `.extracted`. Only after #27 is merged: `cmd /c rmdir` each junction, confirm the
   targets still have contents, then `git worktree remove` (`CLAUDE.md` "Worktrees with junctions"). Never before.
-- [ ] **Delete the merged local/remote branches** when convenient: `chore/leftovers-hygiene`, `fix/port-report-old-column`,
-  `test/t0-skips-gpak-filter`, `fix/harness-clean-exit`, `docs/save-suffix-mapping`, `feat/bindings-typeid-witness`
-  (all 0 commits ahead of `main`; `git branch -d` refuses anything unmerged).
+- [x] **Delete the merged local/remote branches** — pruned 2026-10-20 (29 remote branches, every one 0 commits
+  ahead of `main` per `git branch -r --merged origin/main`; nothing unmerged existed). The leftover agent worktree
+  is still yours (item above).
 - [ ] **A fuller `debug.log`**: clean mode does not make the game shut down or flush its log. If you still want load-time
   diagnostics past the truncation, the lever has to come from you (a game setting, a console command that flushes,
   or asking the developer); agents have no safe handle on the game's log stream.
@@ -79,9 +79,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   caught it. Caveat: every anchored function had identical size/call counts on both builds, so only the relink case
   is proven. Result and the ladder candidates it suggests: `docs/binding-port.md` "T1 cross-build result". Repeat
   with any build that changes SDL or function bodies.
-- [x] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` (done 2026-10-19, git-ignored,
-  sha256 `4127cd6a…`). Redo this before every Steam update: the anchors are committed, the binary is not, and the
-  self-port/harvest tests need it once the install moves on.
+- [ ] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` — was done 2026-10-19 (sha256
+  `4127cd6a…`) but the worktree-junction wipe of 2026-10-19 took `.analysis/exe/` with it (checked 2026-10-20: the
+  dir does not exist). An agent redoes the copy with the decompile rebuild (queued); redo it yourself before every
+  Steam update: the anchors are committed, the binary is not, and the self-port/harvest tests need it once the
+  install moves on.
 
 ### Decisions
 - [x] **`sigCap` / `FW_SIG_MAX_BYTES` stays at 128** (owner, 2026-10-19): wait until a port actually reports a pattern
@@ -108,8 +110,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   `--resolve Name=0x..` after a green `npm run test:ingame` that exercises it (`docs/binding-port.md` "The ladder").
 
 ### Known gaps you are accepting for now
-- [ ] 38 entries (32 struct offsets, 6 vtable slot constants) are still `unanchored`: every port reports them as
-  `needs-human` instead of guessing. Follow-up below ("Witness patterns for the 38 unanchored entries").
+- [ ] 46 entries (40 struct offsets — the 32 of the cross-build run plus the 8 added for dev scenes and the RNG on
+  2026-10-20 — and 6 vtable slot constants) are still `unanchored`: every port reports them as `needs-human`
+  instead of guessing. Follow-up below ("Witness patterns for the 46 unanchored entries"); agent work, queued.
 - [ ] A changed arity of the 13 status lookups (shapes A–E in `status_engine.c`), a compiler/CRT change (`MsvcString`
   layout, `_Allocate<16>`), or a changed vtable layout cannot be ported mechanically; the port will say so.
 
@@ -209,7 +212,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    the checks run at T0 without game data. Found on the way: the overlay-target check joined a hardcoded `.extracted/`
    and ignored `MEWGENICS_EXTRACTED_DATA` (fixed). Follow-up: `preview-merge.ts` still joins `.extracted` directly
    (same fix, when the merge preview gets its own fixtures).
-8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
+8. [ ] **Golden merge cases** (owner 2026-10-20: "tdd 8 - ok" — the "golden through `dump`" sub-item is approved and
+   queued as agent work, first of the 2026-10-20 run): freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
    so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1
    (2026-10-20):** no console command reads a live GON value — the full in-run command set (84, pinned in
    `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`) has `spawn`/`load`/`status`/`passive`/`equip`
@@ -309,10 +313,17 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   the skeptic dep-gate (source review, no injection, vuln scan) and the owner's explicit per-install go before anything
   is added to `editor/package.json`.
 - [x] Dead key `mewged.onboard.conceptsDontShowStart` — button and key removed (PR #25, 2026-10-19, red unit test first).
-- [ ] GitHub Actions running T0 (`npm test`, `npm run typecheck`, `native\test-all.bat` where a Windows runner allows)
-  on PRs that touch `editor/`, `native/`, `bindings/`, `tools/` or `mods/`; docs-only PRs skip it. Depends on target 9
-  (T0 must skip, not fail, without `.extracted/`).
+- [x] GitHub Actions running T0 — done 2026-10-20 (PR #40, target 11): `.github/workflows/t0.yml` on Linux runners
+  (editor typecheck + `npm test` + `bindings:check`; native host suites via `native/test-all.sh`; the game never)
+  for PRs touching `editor/`, `native/`, `bindings/`, `tools/`, `mods/`; docs-only PRs skip it.
 - [x] PR template with the red→green table and the T3 checklist (`.github/pull_request_template.md`) — PR #26, 2026-10-19.
+
+### The 2026-10-20 run — "proceed over every agent task" (owner), in this order, one PR each, owner merges
+TODO truth (this PR) → golden through `dump` (target 8) → named-pipe `exec` (target 12) → intro skip after
+`enter Campaign` → witnesses for the 46 unanchored entries (4 PRs) → `.analysis/decompiled/` rebuild + evidence
+truth → Ruffle (install approved 2026-10-20) → in-game probe of the renderer's INFERRED behaviours → gradients →
+MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip authoring → cat-rig UI → fonts/text
+(owner decision first) → VectorCraft handoff (owner info first). Plan: the session's plan file; progress: the PR list.
 
 ### Larger build-out
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
@@ -324,7 +335,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 
 ### Open engine unknowns to resolve
 - [~] Exact SWF-format + `_Append_`/SymbolClass convention the loader requires — binding needs no DoABC; `_Append_<Target>` merges at boot; an unknown target stalls the boot (OBSERVED 2026-10-19); what the display path needs is the open half
-- [ ] RNG seeding for deterministic test runs (no user-facing command; the state is `TLS+0x178`, pin it from the harness → target 12)
+- [x] RNG seeding for deterministic test runs — done 2026-10-20 (target 12, PR #48): `seed <N>` pins `TLS+0x178`
+  through `Rng_SeedState` once the game's startup is over; `luck-seeded.mewtest` asserts exact values run to run.
 - [x] Headless / startup-macro mode — solved by the harness (in-process console execution + hidden window), not by the game
 - [ ] Verify the INFERRED preview behaviors (nested-sprite framing, cxform-after-remap, engine fill rule, bitmap sampling)
 - [x] Per-build fragility: `docs/binding-port.md` + the `port-bindings` skill (manifest `bindings/<build>.json`, generated
@@ -337,7 +349,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   Candidates from the cross-build run: a callee-set rung, a tolerant ordinal window, a vftable-store rung for
   constructors (needs the RTTI phase before the function rungs). Done in PR #29: `--gameVersion` on `cross-build.ts`
   and the rung-2 size/call drift in the report. The new rungs themselves need a body-changing build to test against.
-- [ ] **Witness patterns for the 38 unanchored entries** (struct offsets, vtable slot constants) so the port stops
+- [ ] **Witness patterns for the 46 unanchored entries** (40 struct offsets, 6 vtable slot constants) so the port stops
   reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.ts`. The
   second witness for `LuckUp_typeid` (the `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in
   `Status_ApplyLuckUp`) landed in PR #32; harvest and port now require every source of a constant to agree.

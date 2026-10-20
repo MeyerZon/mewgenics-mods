@@ -89,7 +89,7 @@ log "<text>"                                     echo into the result file
 quit [code]                                      no code: 0 if every expect passed, else 1; end of script == quit
 ```
 
-String literals use double quotes with `\"` and `\\` escapes. Limits: 1024 directives, 1024-byte lines. Everything
+String literals use double quotes with `\"` and `\\` escapes. Limits: 1024 directives, 4096-byte lines (`MT_MAX_LINE`). Everything
 executes on the game's main thread from the per-frame hook, one directive per frame; waits consume frames.
 
 ## Result file (JSON lines)
@@ -255,7 +255,8 @@ under `mods/`.
   `MewDirector::start` (a fresh slot = the new-game intro cutscene; a kept one would resume). ~900 frames later
   the game was still running the cutscene (seen in a `shot`), the slot existed (32 KB), no popup, real saves
   unchanged. A second run moved the first slot into its run dir (`reset: true`). No combat commands exist on this
-  path until the cutscene is over and the house is reached (open: skipping the intro from the harness).- The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
+  path until the cutscene is over and the house is reached (open: skipping the intro from the harness).
+- The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
   mode" above: the game does not shut itself down when its running flag is cleared, so nothing flushes). Load-time
   markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.
 - Mewjector loads mods on the first `version.dll` proxy call, which on this machine is after SDL has initialized;
