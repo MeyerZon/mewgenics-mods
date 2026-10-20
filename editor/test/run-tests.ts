@@ -540,7 +540,7 @@ await mcpSmoke();
   if (ct) await ct.runCiTests(test, assert, eq);
   let pt: typeof import("./probe-tests.ts") | null = null;
   try { pt = await import("./probe-tests.ts"); } catch (e) { test("probe-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
-  if (pt) { pt.runProbeTests(test, assert, eq); pt.runProbeFixtureTests(test, assert, eq, (n) => readFileSync(join(HERE, "fixtures", "ingame", n), "utf8")); }
+  if (pt) { pt.runProbeTests(test, assert, eq); pt.runProbeFixtureTests(test, assert, eq, (n) => readFileSync(join(HERE, "fixtures", "ingame", n), "utf8")); await pt.runPreviewAgreementTests(test, assert, eq, (n) => readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"), readFileSync(join(HERE, "..", "web", "src", "art", "preview-gl.ts"), "utf8")); }
   let dt: typeof import("./deps-tests.ts") | null = null;
   try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (dt) await dt.runDepsTests(test, assert, eq);

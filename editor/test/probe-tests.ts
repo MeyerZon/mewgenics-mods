@@ -79,3 +79,29 @@ export function runProbeFixtureTests(test: TestFn, assert: AssertFn, eq: EqFn, f
     assert(new Set(s.blinks.filter((b) => b !== "other")).size === 3, `all three blink colours seen: ${s.blinks.join(",")}`);
   });
 }
+
+/** the preview renderer follows what the probe observed (engine-behaviour.ts is the single place those facts live) */
+export async function runPreviewAgreementTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture: (name: string) => string, previewSource: string): Promise<void> {
+  let eb: Record<string, any> = {};
+  let err = "";
+  try { eb = await import("../src/core/art/engine-behaviour.ts"); } catch (e) { err = e instanceof Error ? e.message : String(e); }
+  test("engine-behaviour.ts agrees with the observed probe fixture (own-clock nested sprites, linear + clamped bitmap sampling, mirrored enemy clips)", () => {
+    assert(!err && !!eb.ENGINE_DRAWING, `engine-behaviour.ts loads: ${err}`);
+    const s = (JSON.parse(fixture("artprobe-summary.json")) as { summary: { childFraming: string; sampling: string; edge: string; mirrored: boolean } }).summary;
+    eq(eb.ENGINE_DRAWING.nestedSprites, s.childFraming === "free-running" ? "own-clock" : "parent-frame");
+    eq(eb.ENGINE_DRAWING.bitmapSampling, s.sampling === "smooth" ? "linear" : "nearest");
+    eq(eb.ENGINE_DRAWING.bitmapEdge, s.edge);
+    eq(eb.ENGINE_DRAWING.enemyClipsMirrored, s.mirrored);
+  });
+  test("nestedFrame(clock, frames): a nested sprite's frame comes from the clock, not from its parent's frame (a one-frame holder does not freeze its child)", () => {
+    assert(typeof eb.nestedFrame === "function", "exported");
+    eq(eb.nestedFrame(0, 90), 0); eq(eb.nestedFrame(45, 90), 45); eq(eb.nestedFrame(95, 90), 5); eq(eb.nestedFrame(-1, 90), 89);
+  });
+  test("preview-gl.ts uses the observed behaviour: nested frames from nestedFrame(clock, …), LINEAR + CLAMP_TO_EDGE for bitmap textures, smoothing on in the Canvas2D fallback", () => {
+    assert(/import \{[^}]*nestedFrame[^}]*\} from "..\/..\/..\/src\/core\/art\/engine-behaviour\.ts"/.test(previewSource), "imports nestedFrame");
+    assert(/nestedFrame\(clk, b\.frames\)/.test(previewSource), "nested frames use the clock");
+    const up = previewSource.slice(previewSource.indexOf("function uploadBitmap"), previewSource.indexOf("function uploadBitmap") + 1500);
+    assert(/TEXTURE_MAG_FILTER, g\.LINEAR/.test(up) && /TEXTURE_MIN_FILTER, g\.LINEAR/.test(up) && /CLAMP_TO_EDGE/.test(up), "bitmap textures: LINEAR + clamp");
+    assert(/imageSmoothingEnabled = true/.test(previewSource) && !/imageSmoothingEnabled = false/.test(previewSource), "Canvas2D smoothing on");
+  });
+}

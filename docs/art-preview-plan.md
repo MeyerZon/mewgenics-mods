@@ -416,7 +416,9 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
   a cat-part probe would need the native MewCatPartFramework.
 
 **Unverified engine behaviors (INFERRED, flagged in the UI as such)**
-5. ~~Nested sprite frame advance = parent frame mod child frames~~ — wrong, see OBSERVED above (own clock).
+5. ~~Nested sprite frame advance = parent frame mod child frames~~ — wrong, see OBSERVED above (own clock). The
+   preview follows the observations since 2026-10-20: `src/core/art/engine-behaviour.ts` holds them (a test ties it to
+   the probe fixture), `preview-gl.ts` runs nested sprites on a clock and samples bitmaps LINEAR + clamped.
 6. `_Append_<Clip>` applies to `AbilityIcon` the way it does to `Furniture`.
 7. The exact case/suffix rule mapping GON `"rat.png"` → SymbolClass `Rat`; the emitter
    writes whatever string the scene's `exports` key says, so both spellings can be
