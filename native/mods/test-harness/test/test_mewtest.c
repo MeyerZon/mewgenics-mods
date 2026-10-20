@@ -365,6 +365,7 @@ typedef struct Fake {
     int exitCode; int exitCalls;
     int enterResult; int enterCalls; int enterScene;   /* enter_scene: programmable result (1 ok / 0 refused / -1 unavailable) */
     int seedResult; int seedCalls; unsigned long long seedValue;   /* seed_rng: programmable result (1 ok / 0 refused / -1 unavailable) */
+    char pipeReply[8192]; int pipeReplies;                          /* pipe_reply: the last reply the runner handed to the glue */
 } Fake;
 static Fake fk;
 
@@ -406,9 +407,12 @@ static int fk_seed_rng(void *u, unsigned long long seed, char *detail, size_t ca
     return fk.seedResult;
 }
 
+static void fk_pipe_reply(void *u, const char *json) { (void)u; fk.pipeReplies++; snprintf(fk.pipeReply, sizeof fk.pipeReply, "%s", json); }
+
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
+    fk_pipe_reply,
 };
 
 static MtRunner rr;
@@ -759,6 +763,147 @@ TEST(runner_expect_unit_by_index_and_name_string_and_int_fields) {
     fk_reset("expect unit 0 faction == 0\nquit\n");     /* no combat */
     steps_until_done(5);
     CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
+}
+
+/* ---- interactive mode: a request queue fed by the pipe thread, served by the runner on the frame thread ---- */
+TEST(queue_push_take_fifo_full_and_text_limit) {
+    MtQueue q;
+    mt_queue_init(&q);
+    CHECK(mt_queue_take(&q) == NULL);
+    for (int i = 0; i < MT_Q_SLOTS; i++) { char t[32]; snprintf(t, sizeof t, "cmd %d", i); CHECK(mt_queue_push(&q, 100 + i, MT_QOP_EXEC, t, 3) != NULL); }
+    CHECK(mt_queue_push(&q, 999, MT_QOP_EXEC, "one too many", 3) == NULL);          /* full */
+    MtRequest *a = mt_queue_take(&q);
+    CHECK(a != NULL); CHECK_EQ(a->state, MT_Q_ACTIVE); CHECK_EQ(a->id, 100); CHECK_STR(a->text, "cmd 0"); CHECK_EQ(a->op, MT_QOP_EXEC); CHECK_EQ(a->frames, 3);
+    CHECK(mt_queue_take(&q) == NULL);                                               /* one active at a time */
+    mt_queue_complete(a, "{\"ev\":\"exec\",\"id\":100}");
+    CHECK_EQ(a->state, MT_Q_DONE); CHECK_STR(a->reply, "{\"ev\":\"exec\",\"id\":100}");
+    MtRequest *b = mt_queue_take(&q);
+    CHECK(b != NULL); CHECK_EQ(b->id, 101);                                          /* FIFO */
+    mt_queue_release(a);
+    CHECK_EQ(a->state, MT_Q_FREE);
+    CHECK(mt_queue_push(&q, 200, MT_QOP_DUMP, "", 0) != NULL);                      /* the freed slot is reusable */
+    char big[MT_MAX_CMD + 2]; memset(big, 'x', sizeof big - 1); big[sizeof big - 1] = 0;
+    CHECK(mt_queue_push(&q, 201, MT_QOP_EXEC, big, 3) == NULL);                     /* text over MT_MAX_CMD */
+}
+
+TEST(pipe_parse_request_minimal_json_and_errors) {
+    long id = -1; MtQOp op; char text[MT_Q_TEXT]; int frames = -1; char err[128];
+    CHECK(mt_pipe_parse_request("{\"id\":3,\"op\":\"exec\",\"text\":\"spawn Rat\"}", &id, &op, text, sizeof text, &frames, err, sizeof err));
+    CHECK_EQ(id, 3); CHECK_EQ(op, MT_QOP_EXEC); CHECK_STR(text, "spawn Rat"); CHECK_EQ(frames, 3);   /* frames default 3 */
+    CHECK(mt_pipe_parse_request("{\"op\":\"exec\",\"frames\":900,\"id\":7,\"text\":\"say \\\"hi\\\" \\\\ ok\"}", &id, &op, text, sizeof text, &frames, err, sizeof err));
+    CHECK_EQ(id, 7); CHECK_STR(text, "say \"hi\" \\ ok"); CHECK_EQ(frames, 600);                     /* escapes; frames clamped to 600 */
+    CHECK(mt_pipe_parse_request("{\"id\":1,\"op\":\"dump\"}", &id, &op, text, sizeof text, &frames, err, sizeof err));
+    CHECK_EQ(op, MT_QOP_DUMP); CHECK_STR(text, "");
+    CHECK(mt_pipe_parse_request("{\"id\":2,\"op\":\"quit\"}", &id, &op, text, sizeof text, &frames, err, sizeof err));
+    CHECK_EQ(op, MT_QOP_QUIT);
+    CHECK(!mt_pipe_parse_request("{\"op\":\"exec\",\"text\":\"x\"}", &id, &op, text, sizeof text, &frames, err, sizeof err)); CHECK(has(err, "id"));
+    CHECK(!mt_pipe_parse_request("{\"id\":1,\"text\":\"x\"}", &id, &op, text, sizeof text, &frames, err, sizeof err)); CHECK(has(err, "op"));
+    CHECK(!mt_pipe_parse_request("{\"id\":1,\"op\":\"fly\"}", &id, &op, text, sizeof text, &frames, err, sizeof err)); CHECK(has(err, "op"));
+    CHECK(!mt_pipe_parse_request("{\"id\":1,\"op\":\"exec\"}", &id, &op, text, sizeof text, &frames, err, sizeof err)); CHECK(has(err, "text"));
+    CHECK(!mt_pipe_parse_request("not json", &id, &op, text, sizeof text, &frames, err, sizeof err));
+    char out[256];
+    CHECK(mt_pipe_error_reply(out, sizeof out, 5, "queue full"));
+    CHECK_STR(out, "{\"ev\":\"exec\",\"id\":5,\"ok\":false,\"error\":\"queue full\"}");
+}
+
+static MtQueue g_q;
+TEST(runner_serves_exec_during_wait_frames_collects_lines_for_n_frames_and_replies_with_the_event) {
+    fk_reset("wait frames 10\nquit\n");
+    mt_queue_init(&g_q);
+    mt_runner_attach_queue(&rr, &g_q);
+    MtRequest *req = mt_queue_push(&g_q, 42, MT_QOP_EXEC, "spawn Rat", 2);
+    fk_reply("Spawned Rat");                                   /* pushed when the cmd executes */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* step 1: wait starts; the request is served in the same step */
+    CHECK_EQ(fk.cmdCount, 1); CHECK_STR(fk.cmds[0], "spawn Rat");
+    CHECK_EQ(req->state, MT_Q_ACTIVE);                          /* still collecting */
+    fk_push("Executed: spawn Rat");                             /* a line that arrives one frame later */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* 2 frames after the exec: complete */
+    CHECK_EQ(req->state, MT_Q_DONE);
+    CHECK(has(req->reply, "{\"ev\":\"exec\"")); CHECK(has(req->reply, "\"id\":42")); CHECK(has(req->reply, "\"op\":\"exec\""));
+    CHECK(has(req->reply, "\"text\":\"spawn Rat\"")); CHECK(has(req->reply, "\"ok\":true"));
+    CHECK(has(req->reply, "\"lines\":[\"Spawned Rat\",\"Executed: spawn Rat\"]"));
+    CHECK(has(req->reply, "\"frame\":"));
+    CHECK_EQ(count_ev("exec"), 1); CHECK_STR(last_ev(), req->reply);   /* the same line went to the result file */
+    int n = 3;
+    while (mt_runner_step(&rr, &HOST)) n++;
+    CHECK_EQ(n, 11);                                            /* the wait still lasted exactly 10 frames, then quit */
+    CHECK(has(last_ev(), "\"reason\":\"quit\""));
+}
+
+TEST(runner_does_not_serve_while_waiting_for_the_console_or_between_run_directives) {
+    fk_reset("cmd listcmds\nlog \"a\"\nlog \"b\"\nwait frames 2\nquit\n");
+    mt_queue_init(&g_q);
+    mt_runner_attach_queue(&rr, &g_q);
+    fk.ready = 0;
+    MtRequest *req = mt_queue_push(&g_q, 1, MT_QOP_EXEC, "spawn Rat", 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* cmd waits for the console: not served */
+    CHECK_EQ(req->state, MT_Q_PENDING); CHECK_EQ(fk.cmdCount, 0);
+    fk.ready = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* cmd listcmds runs (MT_S_RUN): not served between directives */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* log a */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* log b */
+    CHECK_EQ(req->state, MT_Q_PENDING); CHECK_EQ(fk.cmdCount, 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* wait frames 2 starts: served now */
+    CHECK_EQ(fk.cmdCount, 2); CHECK_STR(fk.cmds[1], "spawn Rat");
+}
+
+TEST(runner_interactive_eof_goes_idle_emits_idle_once_and_serves_dump) {
+    fk_reset("wait frames 1\n");
+    mt_queue_init(&g_q);
+    mt_runner_attach_queue(&rr, &g_q);
+    mt_runner_set_interactive(&rr, 1);
+    fk_two_units();
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* wait frames 1 */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* eof: idle, not end */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("idle"), 1); CHECK_EQ(count_ev("end"), 0); CHECK_EQ(fk.exitCalls, 0);
+    CHECK_EQ(rr.state, MT_S_IDLE);
+    MtRequest *req = mt_queue_push(&g_q, 9, MT_QOP_DUMP, "", 0);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(req->state, MT_Q_DONE);
+    CHECK(has(req->reply, "{\"ev\":\"units\"")); CHECK(has(req->reply, "\"id\":9")); CHECK(has(req->reply, "\"count\":2"));
+    CHECK_EQ(count_ev("units"), 1);
+}
+
+TEST(runner_quit_request_ends_with_reason_quit_and_the_expect_derived_code) {
+    fk_reset("expect units == 99\nwait frames 100\n");
+    mt_queue_init(&g_q);
+    mt_runner_attach_queue(&rr, &g_q);
+    mt_runner_set_interactive(&rr, 1);
+    fk_two_units();
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* expect fails */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);                   /* wait starts */
+    MtRequest *req = mt_queue_push(&g_q, 3, MT_QOP_QUIT, "", 0);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);                   /* quit during the wait */
+    CHECK_EQ(req->state, MT_Q_DONE);
+    CHECK(has(req->reply, "\"op\":\"quit\"")); CHECK(has(req->reply, "\"id\":3")); CHECK(has(req->reply, "\"ok\":true"));
+    CHECK_EQ(fk.pipeReplies, 1); CHECK_STR(fk.pipeReply, req->reply);   /* written to the pipe before the exit */
+    CHECK(has(last_ev(), "\"reason\":\"quit\"")); CHECK(has(last_ev(), "\"code\":1"));
+    CHECK_EQ(fk.exitCalls, 1); CHECK_EQ(fk.exitCode, 1);
+}
+
+TEST(runner_non_interactive_eof_still_ends) {
+    fk_reset("wait frames 1\n");
+    mt_queue_init(&g_q);
+    mt_runner_attach_queue(&rr, &g_q);                          /* a queue without interactive: eof ends as before */
+    steps_until_done(5);
+    CHECK(has(last_ev(), "\"reason\":\"eof\"")); CHECK_EQ(count_ev("idle"), 0); CHECK_EQ(fk.exitCalls, 1);
+}
+
+TEST(args_pipe_flag) {
+    MtArgs a;
+    CHECK(mt_args_parse("game.exe -mewtest s.mewtest", &a)); CHECK_EQ(a.pipe, 0);
+    CHECK(mt_args_parse("game.exe -mewtest s.mewtest -mewtest_pipe 1", &a)); CHECK_EQ(a.pipe, 1);
+    CHECK(!mt_args_parse("game.exe -mewtest s.mewtest -mewtest_pipe yes", &a)); CHECK(has(a.err, "-mewtest_pipe"));
+}
+
+TEST(script_enter_errors_name_both_scenes) {
+    char err[256]; int line = 0;
+    const char *bad = "enter Nope\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line)); CHECK(has(err, "TacticsTest|Campaign"));
+    bad = "enter\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line)); CHECK(has(err, "TacticsTest|Campaign"));
 }
 
 TEST(runner_expect_stacks_varied_needs_two_distinct_recorded_values) {
