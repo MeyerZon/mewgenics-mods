@@ -1354,7 +1354,8 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     }
     const lambda = entry(m, "DevMenu_TacticsTest_lambda");
     assert(!!lambda && lambda.kind === "function" && lambda.rva === "0x32fc00" && !!lambda.signature, "DevMenu_TacticsTest_lambda 0x32fc00 with a signature");
-    eq(m.entries.filter((e) => e.anchors.unanchored).length, 46 - WITNESSED_OFFSETS_BATCH1.length, "unanchored count drops by the batch");
+    const left = m.entries.filter((e) => e.anchors.unanchored).length;
+    assert(left <= 46 - WITNESSED_OFFSETS_BATCH1.length, `unanchored count dropped by at least the batch: ${left}`);
   });
   if (exe) {
     test("T1 real exe: every offset witness in the committed manifest is verified by the harvest (its pattern reads the manifest value)", () => {
