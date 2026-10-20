@@ -92,7 +92,7 @@ export interface IngameReport {
     chainloaderLog: string | null;
     report: string | null;
     /** one entry per `shot` directive: the PNG the runner captured while the DLL held the scene */
-    shots: { label: string; line: number; path: string | null; hidden: boolean }[];
+    shots: { label: string; line: number; path: string | null; hidden: boolean; note?: string }[];
   };
   stdoutTail: string;
   stderrTail: string;
@@ -321,7 +321,7 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     report.killedAfterEnd = !!exit.killedAfterEnd;
     const shots = report.artifacts.shots;
     const shotNote = shots.length
-      ? `; ${shots.length} shot(s)${shots.some((s) => s.hidden) ? " taken with the window hidden (set hide: false to see the game)" : ""}${shots.some((s) => !s.path) ? ", some not captured" : ""}`
+      ? `; ${shots.length} shot(s)${shots.some((s) => s.hidden) ? " taken with the window hidden (set hide: false to see the game)" : ""}${shots.some((s) => !s.path) ? `, ${shots.filter((s) => !s.path).length} not captured (${[...new Set(shots.filter((s) => !s.path).map((s) => s.note || "unknown"))].join(", ")})` : ""}`
       : "";
     report.reason = v.reason + (exit.killedAfterEnd ? "; the game lingered after its end record and was killed after the end grace" : "") + shotNote;
     report.ok = v.verdict === "pass";
@@ -401,9 +401,10 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
       const takeShots = (res: ReturnType<typeof parseResults>) => {
         for (let i = report.artifacts.shots.length; i < res.shots.length; i++) {
           const s = res.shots[i]!;
-          let path: string | null = null;
-          try { path = capture(s.label, runDir, child.pid ?? null); } catch { path = null; }
-          report.artifacts.shots.push({ label: s.label, line: s.line, path, hidden: plan.hide });
+          let cap: ReturnType<CaptureFn>;
+          try { cap = capture(s.label, runDir, child.pid ?? null); } catch (e) { cap = { path: null, note: e instanceof Error ? e.message : String(e) }; }
+          const c = typeof cap === "string" || cap === null ? { path: cap } : cap;
+          report.artifacts.shots.push({ label: s.label, line: s.line, path: c.path, hidden: plan.hide, ...(c.note ? { note: c.note } : {}) });
         }
       };
       const poll = setInterval(() => {
@@ -450,9 +451,10 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     // shot events the poll did not get to (a game that ended within one poll tick): capture what is on screen now
     for (let i = report.artifacts.shots.length; i < report.result.shots.length; i++) {
       const s = report.result.shots[i]!;
-      let path: string | null = null;
-      try { path = (args.capture || captureWindow)(s.label, runDir, null); } catch { path = null; }
-      report.artifacts.shots.push({ label: s.label, line: s.line, path, hidden: plan.hide });
+      let cap: ReturnType<CaptureFn>;
+      try { cap = (args.capture || captureWindow)(s.label, runDir, null); } catch (e) { cap = { path: null, note: e instanceof Error ? e.message : String(e) }; }
+      const c = typeof cap === "string" || cap === null ? { path: cap } : cap;
+      report.artifacts.shots.push({ label: s.label, line: s.line, path: c.path, hidden: plan.hide, ...(c.note ? { note: c.note } : {}) });
     }
     report.artifacts.resultFile = existsSync(outPath) ? outPath : null;
     const logs = collectLogs({ gameDir, appdataLogsDir, frameworkLogOffset, launchedAtMs, expectedSuffix });
