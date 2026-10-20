@@ -20,7 +20,7 @@ export function runArtPo3Tests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   const E = emitter as Record<string, any>;
   const glow = { type: "glow", color: "#ff2020", blurX: 16, blurY: 16, strength: 2 };
 
-  test("validateScene: key blend must be a SWF blend mode (code blend), filters known types with sane numbers (code filter); blends/filters the preview cannot draw are info findings", () => {
+  test("validateScene: key blend must be a SWF blend mode (code blend), filters known types with sane numbers (code filter); a blend the preview cannot draw is an info finding; any filter is filter-unsupported (the game crashes on them)", () => {
     const sc = exampleScene("p3") as any;
     const k = sc.sprites.Starter.layers[0].keys[0];
     k.blend = "sparkle";
@@ -30,11 +30,16 @@ export function runArtPo3Tests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     assert(errs.includes("blend"), errs.join(","));
     eq(errs.filter((c: string) => c === "filter").length, 2, errs.join(","));
     const ok = exampleScene("p3") as any;
-    Object.assign(ok.sprites.Starter.layers[0].keys[0], { blend: "difference", filters: [glow, { type: "blur", blurX: 4, blurY: 4 }, { type: "dropShadow", color: "#000000", angle: 45, distance: 4, blurX: 4, blurY: 4, strength: 1 }] });
+    ok.sprites.Starter.layers[0].keys[0].blend = "difference";
     const v2 = validateScene(ok) as any;
     assert(v2.ok, JSON.stringify(v2.findings));
     const info = v2.findings.filter((f: any) => f.severity === "info").map((f: any) => f.code);
-    assert(info.includes("filter-not-previewed"), info.join(","));
+    assert(info.includes("blend-not-previewed"), info.join(","));
+    // OBSERVED 2026-10-20 (gate "filters"): the game stops with "ERROR: FILTERS NOT SUPPORTED <swf>" on any filter list,
+    // so well-formed filters are still an error: a build must never ship them
+    ok.sprites.Starter.layers[0].keys[0].filters = [glow];
+    const v3 = validateScene(ok) as any;
+    assert(!v3.ok && v3.findings.some((f: any) => f.code === "filter-unsupported" && f.severity === "error"), JSON.stringify(v3.findings));
   });
 
   test("bakeSprite carries blend / filters on placements (held from their key, never tweened); diffFrames moves a placement whose blend or filters changed", () => {
