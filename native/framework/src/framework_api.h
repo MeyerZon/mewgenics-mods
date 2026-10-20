@@ -45,6 +45,9 @@ typedef enum FwSymbol {
     FW_SYM_AddComponent_MewDirector_test, /* MewDirector* (Scene*, Entity*) — the test director on test00.sav, as the load path makes it */
     FW_SYM_Rng_SeedState,               /* uint64_t* (uint64_t out[4], uint64_t seed) — expands a seed into the 32-byte RNG state */
     FW_SYM_Rng_Reseed,                  /* reference only: void (uint64_t state[4]) — the game's time-based reseed */
+    FW_SYM_Entity_DestroyOwnerOf,       /* void (Component*) — destroys the component's entity (what the save-slot click does to the old director) */
+    FW_SYM_AddComponent_MewDirector_named, /* MewDirector* (Scene*, Entity*, std::string* saveName) — caller keeps the string */
+    FW_SYM_MewDirector_start,           /* void (MewDirector*) — new game / resume from the save's properties */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 

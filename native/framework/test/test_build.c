@@ -72,6 +72,7 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(OFF_SCENEMANAGER_MAINSCENE, 0x18);
     CHECK_EQ(OFF_TLS_RNG_STATE, 0x178);
     CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Rng_SeedState].expectedRva, 0x94ee40u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MewDirector_start].expectedRva, 0x3aefd0u);
     CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_AddComponent_MewDirector_test].expectedRva, 0x758650u);
     CHECK_EQ(FW_LK_COUNT, 13);
     CHECK_EQ(OFF_STATUS_STACKS, 0x5c);

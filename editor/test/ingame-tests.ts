@@ -144,7 +144,10 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("enter directive parses a known scene; unknown or missing scene, or extra words, are line errors", () => {
       const d = parseDirective("enter TacticsTest", 2) as { kind: string; scene: string };
       eq(d.kind, "enter"); eq(d.scene, "TacticsTest");
-      assert(Array.isArray(script.KNOWN_SCENES) && script.KNOWN_SCENES.includes("TacticsTest"), "KNOWN_SCENES lists TacticsTest");
+      assert(Array.isArray(script.KNOWN_SCENES) && script.KNOWN_SCENES.includes("TacticsTest") && script.KNOWN_SCENES.includes("Campaign"), "KNOWN_SCENES lists TacticsTest and Campaign");
+      const c = parseScript("enter Campaign\nquit\n", { owningMod: "m" });
+      assert(c.ok && c.usesCampaignSlot === true, "a script that enters the campaign is flagged (the runner resets the disposable slot)");
+      assert(parseScript("enter TacticsTest\nquit\n", { owningMod: "m" }).usesCampaignSlot === false, "TacticsTest does not use the slot");
       const bad = parseScript("enter Nope\nquit\n", { owningMod: "m" });
       assert(!bad.ok && bad.errors[0].line === 1 && /unknown scene "Nope"/.test(bad.errors[0].message), JSON.stringify(bad.errors));
       assert("error" in parseDirective("enter", 3), "missing scene");
@@ -841,6 +844,32 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       // crash beats fail/timeout; safety beats crash
       expectV("crash > fail", { preflight: pre, exit: exit(1), result: res({ crash: { code: "x" }, end: { code: 1 } }), logs: logs({}), safety: safe }, "crash");
       expectV("safety > crash", { preflight: pre, exit: exit(3), result: res({ crash: { code: "x" }, end: { code: 3 } }), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");
+    });
+
+    // the disposable campaign slot: a script with `enter Campaign` starts from a fresh slot — the runner moves the
+    // harness-owned mewtest01.sav aside into the run dir before launching (never deletes, never any other save) and
+    // reports it; after the run it says whether the game created a new one
+    const campaignPlan = script.parseScript("mods: jokers-luck\ntimeout: 1s\nenter Campaign\nquit\n", { owningMod: "jokers-luck", name: "campaign" });
+    const savesDirC = join(ROOT, "saves-campaign");
+    mkdirSync(savesDirC, { recursive: true });
+    writeFileSync(join(savesDirC, "mewtest01.sav"), "old harness run");
+    writeFileSync(join(savesDirC, "campaign02.sav"), "the owner's local slot");
+    writeFileSync(join(savesDirC, "steamcampaign01.sav"), fixture("sample-save.bin"));
+    const campaignRun = await run("pass", {}, { plan: campaignPlan, realSavesDir: savesDirC, realSavePath: join(savesDirC, "steamcampaign01.sav") });
+    test("enter Campaign -> the runner moves only the harness-owned mewtest01.sav into the run dir before the run and says so in safety", () => {
+      assert(!existsSync(join(savesDirC, "mewtest01.sav")), "mewtest01.sav moved out of the saves dir");
+      assert(existsSync(join(savesDirC, "campaign02.sav")) && existsSync(join(savesDirC, "steamcampaign01.sav")), "other saves untouched");
+      const s = campaignRun.safety as unknown as { campaignSlot?: { file: string; reset: boolean; backup: string | null; after: string } };
+      assert(!!s.campaignSlot && /mewtest01.sav$/.test(s.campaignSlot.file) && s.campaignSlot.reset === true, `safety.campaignSlot: ${JSON.stringify(s.campaignSlot)}`);
+      assert(!!s.campaignSlot!.backup && existsSync(s.campaignSlot!.backup) && readFileSync(s.campaignSlot!.backup, "utf8") === "old harness run", "the previous slot content is kept in the run dir");
+      eq(s.campaignSlot!.after, "absent", "the fake game creates no save");
+      eq(campaignRun.verdict, "pass", campaignRun.reason);
+      eq(savecheck.CAMPAIGN_SLOT_FILE, "mewtest01.sav");
+      assert(savecheck.devSavePattern("dev").test("mewtest01.sav") && !savecheck.devSavePattern("dev").test("mewtest.sav"), "the slot family is allowed to change; nothing else new");
+    });
+    const tacticsRun = await run("pass", {}, { plan: script.parseScript("mods: jokers-luck\ntimeout: 1s\nenter TacticsTest\nquit\n", { owningMod: "jokers-luck", name: "t" }), realSavesDir: savesDirC, realSavePath: join(savesDirC, "steamcampaign01.sav") });
+    test("enter TacticsTest (or no enter) leaves the campaign slot alone: safety.campaignSlot is null", () => {
+      eq((tacticsRun.safety as unknown as { campaignSlot: unknown }).campaignSlot, null);
     });
 
     const shotPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 2s\nhide: false\nshot \"menu\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });

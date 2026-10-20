@@ -455,6 +455,8 @@ TEST(script_enter_directive_parses_known_scene_and_rejects_unknown_or_missing) {
     CHECK_EQ(g_s.d[0].line, 1);
     CHECK_STR(mt_scene_name(MT_SCENE_TACTICS_TEST), "TacticsTest");
     CHECK_EQ(mt_scene_id("TacticsTest"), MT_SCENE_TACTICS_TEST);
+    CHECK_EQ(mt_scene_id("Campaign"), MT_SCENE_CAMPAIGN);
+    CHECK_STR(mt_scene_name(MT_SCENE_CAMPAIGN), "Campaign");
     CHECK_EQ(mt_scene_id("Nope"), 0);
     const char *bad = "enter Nope\n";
     CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
