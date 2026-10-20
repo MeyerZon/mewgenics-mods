@@ -345,8 +345,8 @@ original movieclip" warning when the target is missing (§6); the fault builder'
 `catquotes.gon` / team-name formatting (§4/§6); the cutscene-command handler's
 `"embark"/"return"/"defeat"` dispatch (§4/§6).
 
-Not decompiled (would pin the last INFERRED step in §6): `FUN_140a58440` (the actual frame
-merge) and `0x9a8f30` (the movieclip advance that calls `RunObjectScript`). **No Ghidra
+Decompiled since 2026-10-20 (not yet read against §6): `.analysis/decompiled/Swf_Merge_0xa58440.c` (the actual
+frame merge) and `Swf_MovieClipAdvance_0x9a8f30.c` (the movieclip advance that calls `RunObjectScript`). **No Ghidra
 container or watcher is left running** (verified: `docker ps` clean, all `rea_ghidra_*`
 containers removed, watcher processes killed).
 

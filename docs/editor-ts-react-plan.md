@@ -18,7 +18,7 @@ contains. `CLAUDE.md` and `README.md` carry the short version; this is the refer
 ## What does not change
 
 - The core's behaviour and the test oracle: GON tokenizer/parser/serializer, overlay merge semantics (faithful to the
-  decompiled `Gon_merge_{a,b,c}.c`), validator, art model, SWF emitter, bindings, in-game runner. Renames and type
+  decompiled `Gon_PatchMerge_a_0x944cc0.c`, `Gon_PatchMerge_b_0x944f50.c` and `Gon_DeepMerge_0x946680.c`), validator, art model, SWF emitter, bindings, in-game runner. Renames and type
   annotations only; the 260 unit checks and the 34 e2e checks must stay green through every commit.
 - The MCP server remains hand-rolled JSON-RPC over stdio, no SDK. `src/mcp/server.ts` stays as a two-line shim
   importing `server.ts`, because `~/.claude.json` registers the server by that absolute path and other sessions use

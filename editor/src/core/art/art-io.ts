@@ -7,10 +7,11 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
-import { MODS_DIR, resolveModWritePath } from "../repo.ts";
+import { MODS_DIR, REPO_ROOT, resolveModWritePath, isInside, touchesSaves } from "../repo.ts";
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
 import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
 import { importSvg } from "./svg-import.ts";
+import { adoptGradients } from "./gradient.ts";
 import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
 import type { RgbaImage } from "./png.ts";
@@ -228,6 +229,35 @@ export function importSvgShape(args: ImportSvgArgs): ImportSvgResult {
   return { ok: res.ok, shape, gradients: res.gradients, findings: res.findings, info: res.info };
 }
 
+export interface ImportSvgIntoSceneArgs {
+  mod: string;
+  /** the scene file inside the mod, e.g. art/my_rat.scene.json */
+  scenePath: string;
+  /** the shape id to add (or replace) */
+  shapeId: string;
+  svgText?: string;
+  /** an .svg inside the mod instead of svgText */
+  svgPath?: string;
+  options?: ImportOptions;
+  /** replace a shape with the same id (default false: refuse) */
+  replace?: boolean;
+}
+/** Import an SVG and save it as a shape of a scene in one step (the agent-facing convenience behind MCP import_svg). */
+export function importSvgIntoScene(args: ImportSvgIntoSceneArgs): { ok: boolean; error?: string; paths?: number; findings: Finding[] } {
+  const rd = readArtScene(args.mod, args.scenePath);
+  if (!rd.ok || !rd.scene) return { ok: false, error: rd.error || "scene does not validate (fix it or write it with force first)", findings: rd.findings || [] };
+  if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(args.shapeId)) return { ok: false, error: `bad shape id ${JSON.stringify(args.shapeId)}`, findings: [] };
+  if (rd.scene.shapes[args.shapeId] && !args.replace) return { ok: false, error: `shape "${args.shapeId}" exists (pass replace: true to overwrite it)`, findings: [] };
+  const imp = importSvgShape({ svgText: args.svgText, mod: args.svgText === undefined ? args.mod : undefined, relPath: args.svgPath, options: args.options });
+  if (!imp.ok || !imp.shape) return { ok: false, error: imp.error || "import failed", findings: imp.findings || [] };
+  const next: Scene = { ...rd.scene, shapes: { ...rd.scene.shapes }, gradients: { ...(rd.scene.gradients || {}) } };
+  delete next.shapes[args.shapeId];
+  next.shapes[args.shapeId] = adoptGradients(next, imp.shape, imp.gradients);
+  const w = writeArtScene(args.mod, args.scenePath, next);
+  if (!w.ok) return { ok: false, error: w.error || "write failed", findings: [...(imp.findings || []), ...((w as { findings?: Finding[] }).findings || [])] };
+  return { ok: true, paths: imp.shape.paths.length, findings: imp.findings || [] };
+}
+
 /** Decode every bitmap the scene references (PNG files inside the mod). */
 export function loadSceneBitmaps(modName: string, scene: Scene): { bitmaps: Map<string, RgbaImage>; findings: Finding[] } {
   const bitmaps = new Map<string, RgbaImage>();
@@ -418,6 +448,51 @@ export function inspectSwf(modName: string, relPath: string): InspectSwfResult {
 // (`pass`) or faults in the post-load merge (`crash`). Variants isolate the cause:
 
 /** The mod the gate lives in; `*.swf` and the generated `.append` are git-ignored there. */
+// ---- vanilla SWFs (read-only reference copies in the git-ignored .extracted/swfs/) ----------------------------
+/** where extracted vanilla SWFs live; MEWGENICS_VANILLA_SWF_DIR overrides (tests) */
+export function vanillaSwfDir(): string {
+  return process.env.MEWGENICS_VANILLA_SWF_DIR ? process.env.MEWGENICS_VANILLA_SWF_DIR : join(REPO_ROOT, ".extracted", "swfs");
+}
+const VANILLA_HINT = (name: string) => `python -I tools/gpak.py extract .extracted --prefix swfs/${name || ""}`;
+
+export interface VanillaSwfListing {
+  ok: true;
+  dir: string;
+  files: { name: string; present: boolean; bytes?: number }[];
+  hint: string;
+}
+/** The vanilla SWF names the game loads (swflist.gon: the loader line and the game [...] block), with presence. */
+export function listVanillaSwfs(): VanillaSwfListing {
+  const dir = vanillaSwfDir();
+  const listPath = join(dir, "swflist.gon");
+  const names: string[] = [];
+  if (existsSync(listPath)) {
+    const text = readFileSync(listPath, "utf8").replace(/\/\/[^\n]*/g, "");
+    const loader = /^\s*loader\s+("?)([^\s"]+)\1/m.exec(text);
+    if (loader) names.push(loader[2]!);
+    const game = /game\s*\[([^\]]*)\]/.exec(text);
+    if (game) for (const tok of game[1]!.split(/\s+/)) { const n = tok.replace(/^"|"$/g, ""); if (n && !names.includes(n)) names.push(n); }
+  }
+  const files = names.map((name) => {
+    const abs = join(dir, name);
+    if (!existsSync(abs)) return { name, present: false };
+    return { name, present: true, bytes: statSync(abs).size };
+  });
+  return { ok: true, dir, files, hint: `extract the vanilla SWFs with: ${VANILLA_HINT("")}` };
+}
+
+export type VanillaSwfRead = { ok: true; name: string; bytes: Uint8Array } | { ok: false; error: string; hint?: string };
+/** Bytes of one extracted vanilla SWF, by its swflist name (e.g. "ability_icons.swf", "cutscenes/game_intro.swf"). */
+export function readVanillaSwf(name: string): VanillaSwfRead {
+  const n = String(name || "");
+  if (!/^[A-Za-z0-9_-][A-Za-z0-9_./-]*\.swf$/.test(n) || n.split("/").some((seg) => seg === ".." || seg === "") || n.includes(":")) return { ok: false, error: `not a vanilla SWF name: ${JSON.stringify(n)}` };
+  const dir = vanillaSwfDir();
+  const abs = join(dir, n);
+  if (!isInside(dir, abs) || touchesSaves(abs)) return { ok: false, error: `refusing ${JSON.stringify(n)}` };
+  if (!existsSync(abs)) return { ok: false, error: `${n} is not extracted`, hint: VANILLA_HINT(n) };
+  return { ok: true, name: n, bytes: new Uint8Array(readFileSync(abs)) };
+}
+
 export const SWF_GATE_MOD = "swf-gate";
 export const SWF_GATE_FILE = "gate.swf";
 /** The frame label = the ability whose icon the donor appends (a jokers-luck ability with no vanilla icon). */

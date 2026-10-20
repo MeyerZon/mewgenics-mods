@@ -386,11 +386,14 @@ Real-browser profiling is a follow-up.
 **Needs the user / a decision**
 1. §7 gate result → default ABC mode. Until then `abc: "none"` is the default and the
    UI shows the toggle.
-2. **Proposed dependency (NOT installed, NOT vendored):** a vanilla-SWF *import*
-   preview (showing `catparts.swf` parts next to the user's art) would want a real SWF
-   renderer. Candidate: Ruffle's web build (WASM, MIT/Apache-2.0). It is a large binary
-   with its own loader; it must go through a skeptic audit + explicit approval before
-   it can be vendored. Without it, vanilla import is limited to what `swf-reader.ts`
+2. **Installed 2026-10-20 (owner's go; dep-gate in the PR):** `@ruffle-rs/ruffle@0.7.1` (WASM, MIT/Apache-2.0,
+   exact pin, no install scripts, no dependencies, `npm audit` clean), browser-only: `scripts/vendor-ruffle.ts`
+   copies its `.js`/`.wasm`/licenses into the git-ignored `web/public/ruffle/` at `npm run build` / `dev`; the Art
+   right panel's **Ruffle** tab plays a built mod SWF or an extracted vanilla SWF from bytes with
+   `allowNetworking: "none"`, `allowScriptAccess: false`, `openUrlMode: "deny"` (the e2e test asserts no request
+   leaves the editor's origin). It is a reference player, not glaiel::swf (no palette remap, no `_Append_` merge).
+   Vanilla SWFs come from `/api/art/vanilla-swfs` / `vanilla-swf` (`art-io.ts` `listVanillaSwfs` / `readVanillaSwf`,
+   names from `swflist.gon`, read-only, traversal and saves paths refused). Was: proposed, not installed. Without it, vanilla import is limited to what `swf-reader.ts`
    decodes (DefineShape/Sprite/PlaceObject2 → our model), which is the planned no-dep
    route.
 3. **External tool (optional, not a dependency):** JPEXS FFDEC remains the recommended
@@ -464,7 +467,8 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     catparts.swf or making the game swap its own cat parts into our slots. Not done: copying vanilla part geometry
     into a mod (owner's call, H2). Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
-11. MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
+11. **Done 2026-10-20:** MCP tools `list_art_scenes`, `read_art_scene`, `write_art_scene` (dryRun validates), `new_art_scene`,
+    `import_svg` (with `into { scene, shapeId }` it saves the shape), `build_swf`, `inspect_swf`. Was: MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
     contract and `src/mcp/` untouched.
 12. Part-indexed cat assembly as a first-class preview mode (slots `body/head/tail/leg1/
     leg2/arm1/arm2`, OBSERVED as named instances on `MinecartCat`): the data model

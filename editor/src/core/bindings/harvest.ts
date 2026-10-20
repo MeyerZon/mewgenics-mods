@@ -13,7 +13,7 @@ import { parsePattern, patternToString } from "./scan.ts";
 import { decodeInstruction } from "./siggen.ts";
 import type { Instruction } from "./siggen.ts";
 import { hex, parseValue, entry } from "./manifest.ts";
-import type { Manifest, Entry, StringAnchor, CalleeAnchor, CfgLite } from "./manifest.ts";
+import type { Manifest, Entry, StringAnchor, CalleeAnchor, CfgLite, Anchors } from "./manifest.ts";
 
 export type { StringAnchor, CalleeAnchor } from "./manifest.ts";
 
@@ -223,6 +223,94 @@ export function vtableSlotTarget(pe: Pe, buf: Buffer, vftableRva: number, slot: 
   return pe.sectionOf(rva) ? rva : null;
 }
 
+/** How many consecutive qwords from `vftableRva` point into an executable section (the vtable's slot count); cap 4096. */
+export function vtableExtent(pe: Pe, buf: Buffer, vftableRva: number): number {
+  let n = 0;
+  for (; n < 4096; n++) {
+    const abs = u64At(pe, buf, vftableRva + 8 * n);
+    if (abs === null) break;
+    const s = pe.sectionOf(abs - pe.imageBase);
+    if (!s || !s.exec) break;
+  }
+  return n;
+}
+
+/**
+ * A vtable slot's body: its .pdata range when the slot begins one, else the bytes up to and including the first
+ * `ret` (C3 / C2 iw), at most 256 — so a tiny leaf slot never "contains" the function laid out after it.
+ */
+export function slotBody(pe: Pe, buf: Buffer, rva: number): Uint8Array {
+  const fn = pe.pdata.find(rva);
+  const off = pe.rvaToOff(rva);
+  if (off < 0) return new Uint8Array(0);
+  if (fn && fn.begin === rva) return Uint8Array.from(buf.subarray(off, Math.min(buf.length, off + (fn.end - fn.begin))));
+  const max = Uint8Array.from(buf.subarray(off, Math.min(buf.length, off + 256)));
+  let i = 0;
+  while (i < max.length) {
+    if (max[i] === 0xc3) return max.subarray(0, i + 1);
+    if (max[i] === 0xc2) return max.subarray(0, Math.min(max.length, i + 3));
+    const ins = decodeInstruction(max, i);
+    i += ins ? ins.length : 1;
+  }
+  return max;
+}
+
+/**
+ * The index of the vtable slot whose body starts with `bodyPattern`, contains `contains`, and/or whose bounded body holds
+ * a rip-relative reference into the unique string `stringRef` (a lea of it or mov loads of its bytes); candidates[nth] when exactly `expect` (default 1) slots qualify, else null — never a guess.
+ */
+export function findVtableSlot(pe: Pe, buf: Buffer, vftableRva: number, search: { bodyPattern?: string; contains?: string; stringRef?: string; nth?: number; expect?: number }): number | null {
+  const n = vtableExtent(pe, buf, vftableRva);
+  const pat = search.bodyPattern ? parsePattern(search.bodyPattern) : null;
+  const inner = search.contains ? parsePattern(search.contains) : null;
+  let strRva: number | null = null;
+  if (search.stringRef) {
+    const f = findString(pe, buf, search.stringRef);
+    if (f.count !== 1 || f.rva === null) return null;
+    strRva = f.rva;
+  }
+  const hits: number[] = [];
+  for (let slot = 0; slot < n; slot++) {
+    const target = vtableSlotTarget(pe, buf, vftableRva, slot);
+    if (target === null) continue;
+    const body = slotBody(pe, buf, target);
+    if (pat) {
+      if (body.length < pat.length) continue;
+      let ok = true;
+      for (let k = 0; k < pat.length; k++) if (pat.mask[k] && body[k] !== pat.bytes[k]) { ok = false; break; }
+      if (!ok) continue;
+    }
+    if (inner) {
+      let found = false;
+      for (let i = 0; !found && i + inner.length <= body.length; i++) {
+        let k = 0;
+        for (; k < inner.length; k++) if (inner.mask[k] && body[i + k] !== inner.bytes[k]) break;
+        if (k === inner.length) found = true;
+      }
+      if (!found) continue;
+    }
+    if (strRva !== null) {
+      // any rip-relative reference into the string counts: a lea of it, or mov loads of its bytes (MSVC builds a
+      // short std::string from mov eax,[rip+str] / movzx eax,word [rip+str+4] — LuckUp's GetTypeName does)
+      const strLen = search.stringRef!.length;
+      let refs = false, i = 0;
+      while (!refs && i < body.length) {
+        const ins = decodeInstruction(body, i);
+        if (!ins) { i++; continue; }
+        if (ins.reloc && ins.reloc.why === "rip-relative disp32" && ins.relTarget !== null) {
+          const tgt = target + i + ins.length + ins.relTarget;
+          if (tgt >= strRva && tgt < strRva + strLen) refs = true;
+        }
+        i += ins.length;
+      }
+      if (!refs) continue;
+    }
+    hits.push(slot);
+  }
+  if (hits.length !== (search.expect ?? 1)) return null;
+  return hits[search.nth || 0] ?? null;
+}
+
 /** Read an imm32 out of a vtable slot's body when the body matches `bodyPattern` (e.g. "B8 ?? ?? ?? ?? C3"). */
 export function deriveFromVtableSlot(pe: Pe, buf: Buffer, vftableRva: number, slot: number, bodyPattern: string, imm32At: number): number | null {
   const target = vtableSlotTarget(pe, buf, vftableRva, slot);
@@ -260,9 +348,56 @@ export function deriveFromCallArg(pe: Pe, buf: Buffer, fnRva: number, calleeRva:
   return null;
 }
 
+/**
+ * Read a displacement (or any immediate) out of the `nth` match of a byte pattern inside a function's .pdata body:
+ * what a struct-offset witness is. `dispSize` 1 (default) reads a signed byte, anything else a signed 32-bit value;
+ * `scale` divides it (a `call [rax+8*slot]` witnesses the slot index). Byte-scanning on purpose: the decoder's
+ * instruction boundaries are not needed and a mis-sized instruction cannot shift the match.
+ */
+export interface OffsetWitnessRead {
+  found: boolean;
+  /** byte index of the match inside the function body, or null */
+  at: number | null;
+  /** the raw signed displacement, or null */
+  raw: number | null;
+  /** raw / scale, or null (also when the quotient is not integral) */
+  value: number | null;
+  /** how many times the pattern matched in the body */
+  matches: number;
+}
+export function readOffsetWitness(pe: Pe, buf: Buffer, fnRva: number, w: { pattern: string; nth?: number; dispAt?: number; dispSize?: number; scale?: number }, sigCap?: number): OffsetWitnessRead {
+  const d = decodeFunction(pe, buf, fnRva);
+  const pat = parsePattern(w.pattern, sigCap);
+  const want = w.nth || 0;
+  let matches = 0, at = -1;
+  for (let i = 0; i + pat.length <= d.bytes.length; i++) {
+    let k = 0;
+    for (; k < pat.length; k++) if (pat.mask[k] && d.bytes[i + k] !== pat.bytes[k]) break;
+    if (k !== pat.length) continue;
+    if (matches === want) at = i;
+    matches++;
+  }
+  if (at < 0) return { found: false, at: null, raw: null, value: null, matches };
+  const size = w.dispSize || 1;
+  const off = at + (w.dispAt || 0);
+  if (off + (size === 1 ? 1 : 4) > d.bytes.length) return { found: false, at, raw: null, value: null, matches };
+  let raw: number;
+  if (size === 1) { raw = d.bytes[off]; if (raw > 127) raw -= 256; }
+  else raw = (d.bytes[off] | (d.bytes[off + 1] << 8) | (d.bytes[off + 2] << 16) | (d.bytes[off + 3] << 24)) | 0;
+  const scale = w.scale || 1;
+  if (raw % scale !== 0) return { found: false, at, raw, value: null, matches };
+  return { found: true, at, raw, value: raw / scale, matches };
+}
+
 export interface ConstantSources {
   slot: number | null;
   arg: number | null;
+  /** derive.extent: the vtable's slot count */
+  extent: number | null;
+  /** derive.slotSearch: the index of the matching slot */
+  search: number | null;
+  /** a displacement witness (pattern + dispAt [+ scale]) without a callee, e.g. the slot index of a vtable call */
+  disp: number | null;
   notes: string[];
 }
 
@@ -275,8 +410,21 @@ export interface ConstantSources {
 export function constantSources(manifest: Manifest, pe: Pe, buf: Buffer, e: Entry): ConstantSources {
   const a = e.anchors;
   const usable = (x: Entry | null | undefined): boolean => !!x && (!x.port || String(x.port.status).startsWith("ported"));
-  const r: ConstantSources = { slot: null, arg: null, notes: [] };
-  if (a.derive && a.derive.vtable) {
+  const r: ConstantSources = { slot: null, arg: null, extent: null, search: null, disp: null, notes: [] };
+  if (a.derive && a.derive.vtable && (a.derive.extent || a.derive.slotSearch)) {
+    const vt = entry(manifest, a.derive.vtable);
+    const vtRva = usable(vt) && vt ? parseInt(vt.rva || "0", 16) : null;
+    if (a.derive.extent) {
+      r.extent = vtRva !== null ? vtableExtent(pe, buf, vtRva) || null : null;
+      r.notes.push(r.extent === null ? `${a.derive.vtable}: no extent` : `${a.derive.vtable} has ${r.extent} code slots`);
+    }
+    if (a.derive.slotSearch) {
+      const ss = a.derive.slotSearch;
+      r.search = vtRva !== null ? findVtableSlot(pe, buf, vtRva, ss) : null;
+      const what = [ss.bodyPattern ? `body ${ss.bodyPattern}` : "", ss.contains ? `contains ${ss.contains}` : "", ss.stringRef ? `ref "${ss.stringRef}"` : ""].filter(Boolean).join(" + ");
+      r.notes.push(r.search === null ? `${a.derive.vtable}: no single answer for ${what} (expect ${ss.expect ?? 1})` : `${a.derive.vtable}: ${what} -> slot ${r.search}`);
+    }
+  } else if (a.derive && a.derive.vtable) {
     const vt = entry(manifest, a.derive.vtable);
     r.slot = usable(vt) && vt ? deriveFromVtableSlot(pe, buf, parseInt(vt.rva || "0", 16), a.derive.slot!, a.derive.bodyPattern!, a.derive.imm32At!) : null;
     r.notes.push(r.slot === null ? (usable(vt) ? `slot ${a.derive.slot} of ${a.derive.vtable} does not match ${a.derive.bodyPattern}` : `${a.derive.vtable} did not port`) : `slot body gives ${hex(r.slot)}`);
@@ -288,7 +436,26 @@ export function constantSources(manifest: Manifest, pe: Pe, buf: Buffer, e: Entr
     r.arg = usable(f) && usable(c) && f && c ? deriveFromCallArg(pe, buf, parseInt(f.rva || "0", 16), parseInt(c.rva || "0", 16), w.pattern!, w.imm32At!, w.maxBack ?? 8) : null;
     r.notes.push(r.arg === null ? `call-arg witness ${w.pattern} before the call to ${w.callee} in ${w.function} not found` : `call-arg witness in ${w.function} gives ${hex(r.arg)}`);
   }
+  if (a.witness && !a.witness.callee && a.witness.pattern && Number.isInteger(a.witness.dispAt)) {
+    const w = a.witness;
+    const f = entry(manifest, w.function);
+    const rd = usable(f) && f ? readOffsetWitness(pe, buf, parseInt(f.rva || "0", 16), { pattern: w.pattern!, nth: w.nth, dispAt: w.dispAt, dispSize: w.dispSize, scale: w.scale }, manifest.sigCap) : null;
+    r.disp = rd && rd.found ? rd.value : null;
+    r.notes.push(r.disp === null
+      ? `displacement witness ${w.pattern} #${w.nth || 0} in ${w.function} ${rd ? (rd.matches ? "matched but gave no value" : "not found") : "unusable (function did not port)"}`
+      : `displacement witness in ${w.function} gives ${hex(rd!.raw!)}${w.scale && w.scale !== 1 ? ` / ${w.scale} = ${r.disp}` : ""}`);
+  }
   return r;
+}
+
+/** constants with any derivation or witness source (the harvest verifies them, the port re-derives them) */
+export function constantHasSources(a: Anchors): boolean {
+  return !!((a.derive && a.derive.vtable) || (a.witness && a.witness.callee) || (a.witness && !a.witness.callee && a.witness.pattern && Number.isInteger(a.witness.dispAt)));
+}
+
+/** every value a constant's sources produced, in a fixed order (all must agree) */
+export function constantValues(src: ConstantSources): number[] {
+  return [src.slot, src.arg, src.extent, src.search, src.disp].filter((v): v is number => v !== null);
 }
 
 export type HarvestStatus = "harvested" | "verified" | "mismatch" | "unresolved" | "unanchored" | "skipped";
@@ -351,9 +518,18 @@ export function harvestManifest(pe: Pe, buf: Buffer, manifest: Manifest): { mani
       report.push({ name: e.name, kind: e.kind, status: same ? "verified" : "mismatch", detail: `rtti gives ${hex(r.vftable)} (col ${hex(r.col)}, typedesc ${hex(r.typeDescriptor)}); manifest says ${e.rva}` });
       continue;
     }
-    if (e.kind === "constant" && ((a.derive && a.derive.vtable) || (a.witness && a.witness.callee))) {
+    if (e.kind === "offset" && a.witness && typeof a.witness.function === "string" && a.witness.pattern) {
+      const w = entry(out, a.witness.function);
+      if (!w || w.kind !== "function") { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: `witness ${a.witness.function} is not a function entry` }); continue; }
+      const rd = readOffsetWitness(pe, buf, parseInt(w.rva || "0", 16), { pattern: a.witness.pattern, nth: a.witness.nth, dispAt: a.witness.dispAt, dispSize: a.witness.dispSize, scale: a.witness.scale }, out.sigCap);
+      if (!rd.found) { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: `${w.name}: ${a.witness.pattern} #${a.witness.nth || 0} ${rd.matches ? "matched but gave no value" : "not found"} (${rd.matches} match(es))` }); continue; }
+      const want = parseValue(e.value || "0");
+      report.push({ name: e.name, kind: e.kind, status: rd.value === want ? "verified" : "mismatch", detail: `${w.name}: ${a.witness.pattern} #${a.witness.nth || 0} reads ${hex(rd.value!)} (${rd.matches} match(es)); manifest says ${e.value}` });
+      continue;
+    }
+    if (e.kind === "constant" && constantHasSources(a)) {
       const src = constantSources(out, pe, buf, e);
-      const vals = [src.slot, src.arg].filter((v): v is number => v !== null);
+      const vals = constantValues(src);
       if (!vals.length) { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: src.notes.join("; ") }); continue; }
       const want = parseValue(e.value || "0");
       const same = vals.every((v) => v === want);

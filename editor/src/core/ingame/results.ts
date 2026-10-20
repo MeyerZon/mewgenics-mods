@@ -33,8 +33,21 @@ export interface ScriptErrorEvent extends ResultEvent {
 export interface EnterEvent {
   line: number;
   name: string;
+  /** "house" for `enter Campaign house`, "" otherwise */
+  mode: string;
   ok: boolean;
   detail: string;
+}
+
+/** `exec`: a pipe request the DLL served (interactive mode); `lines` = the console output collected for it */
+export interface ExecEvent {
+  id: number;
+  op: string;
+  text?: string;
+  ok: boolean;
+  lines?: string[];
+  error?: string;
+  frame: number;
 }
 
 /** `seed`: the harness pinned (or failed to pin) the game's RNG. */
@@ -92,6 +105,10 @@ export interface ResultSummary {
   shots: ShotEvent[];
   /** the seed event (one per script), null when the script had none */
   seed: SeedEvent | null;
+  /** pipe requests served, in order (interactive mode) */
+  execs: ExecEvent[];
+  /** the script ended and the DLL idled for pipe requests (interactive mode) */
+  idle: boolean;
 }
 
 export function parseResults(text: string | null | undefined): ResultSummary {
@@ -112,6 +129,8 @@ export function parseResults(text: string | null | undefined): ResultSummary {
     popups: [],
     shots: [],
     seed: null,
+    execs: [],
+    idle: false,
   };
   if (typeof text !== "string") return r;
 
@@ -140,10 +159,23 @@ export function parseResults(text: string | null | undefined): ResultSummary {
       case "turn": r.turns++; break;
       case "console": r.consoleLines.push(String(e.text ?? "")); break;
       case "units": r.units = e; break;
-      case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
+      case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), mode: String(e.mode ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "popup": r.popups.push({ title: String(e.title ?? ""), text: String(e.text ?? ""), frame: Number(e.frame ?? 0) }); break;
       case "shot": r.shots.push({ line: Number(e.line ?? 0), label: String(e.label ?? ""), frame: Number(e.frame ?? 0) }); break;
       case "seed": r.seed = { line: Number(e.line ?? 0), seed: String(e.seed ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
+      case "exec": {
+        r.execs.push({
+          id: Number(e.id ?? -1),
+          op: String(e.op ?? ""),
+          ...(typeof e.text === "string" ? { text: e.text } : {}),
+          ok: Boolean(e.ok),
+          ...(Array.isArray(e.lines) ? { lines: (e.lines as unknown[]).map(String) } : {}),
+          ...(typeof e.error === "string" ? { error: e.error } : {}),
+          frame: Number(e.frame ?? 0),
+        });
+        break;
+      }
+      case "idle": r.idle = true; break;
       case "expect":
         if (e.ok) r.expects.passed++;
         else {

@@ -25,6 +25,42 @@ test.beforeEach(async ({ page }) => {
   await seedToursSeen(page);
 });
 
+test.describe("Art mode — Ruffle reference player", () => {
+  test("the Ruffle tab plays a built mod SWF from bytes, with no request leaving the editor's origin", async ({ page }) => {
+    const errors = collectConsole(page);
+    const foreign: string[] = [];
+    page.on("request", (r) => { const u = new URL(r.url()); if (u.hostname !== "127.0.0.1" && u.protocol !== "data:" && u.protocol !== "blob:") foreign.push(r.url()); });
+    await openSandboxScene(page);
+    // build my_rat so a mod SWF exists, then load it in the Ruffle tab
+    await page.locator(".rightpanel .tabs button", { hasText: "Build" }).click();
+    await page.locator(".rightpanel button", { hasText: "Build SWF" }).click();
+    await expect(page.locator(".explorer")).toContainText("my_rat.swf", { timeout: 15000 });
+    await page.locator(".rightpanel .tabs button", { hasText: "Ruffle" }).click();
+    await expect(page.locator(".ruffle-caption")).toContainText("not glaiel::swf");
+    await page.locator(".ruffle-source").selectOption({ label: "mod: my_rat.swf" });
+    await page.locator(".ruffle-load").click();
+    // the root timeline holds one frame; the 24-frame clip is a sprite inside it (Ruffle reports the root's header)
+    await expect(page.locator(".ruffle-status")).toContainText("1 frames, 60 fps", { timeout: 30000 });
+    await expect(page.locator(".ruffle-status")).toContainText("SWF v17");
+    await expect(page.locator("ruffle-player")).toBeVisible();
+    // vanilla files that are not extracted are listed but disabled
+    const opts = await page.locator(".ruffle-source option").allTextContents();
+    assert_ok(opts.some((t) => /vanilla:/.test(t)), `vanilla entries listed: ${opts.join(" | ")}`);
+    // where the vanilla SWFs are extracted (not in CI), one plays too: CWS-compressed, with its own frame count
+    const extracted = await page.locator(".ruffle-source option:not([disabled])", { hasText: "vanilla: minecarts.swf" }).count();
+    if (extracted) {
+      await page.locator(".ruffle-source").selectOption({ label: "vanilla: minecarts.swf" });
+      await page.locator(".ruffle-load").click();
+      await expect(page.locator(".ruffle-status")).toContainText(/minecarts\.swf: \d+ frames, \d+ fps/, { timeout: 30000 });
+    }
+    expect(foreign, foreign.join(", ")).toEqual([]);
+    const bad = errors.filter((e) => e.type !== "warning" && !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(bad, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+});
+
+function assert_ok(cond: boolean, msg: string) { if (!cond) throw new Error(msg); }
+
 test.describe("Art mode — explorer & scene authoring", () => {
   test("scenes / built-SWFs / assets explorer and scene tabs", async ({ page }) => {
     const errors = collectConsole(page);
