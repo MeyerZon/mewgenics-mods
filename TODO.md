@@ -178,8 +178,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    run entry"; bindings v4 (`FW_SYM_SceneManager_CreateScene`, `Scene_CreateEntity`, `AddComponent_TacticsTest`,
    `Component_GetGame`, `FW_DATA_MewDirector`, …). Same day, second route: `enter Campaign` replays the save-slot click on the harness-owned disposable slot
    `mewtest01.sav` (the runner moves it aside before each such run; `mods/dev-sandbox/tests/enter-campaign.mewtest`:
-   new-game cutscene reached and seen in a shot, slot created, real saves unchanged). Open on that route: skipping
-   the intro to reach the house from a script. Not taken: SDL input injection. Bonus: the watchdog now closes the game's modal
+   new-game cutscene reached and seen in a shot, slot created, real saves unchanged). The intro skip is done too:
+   `enter Campaign house` marks the slot `game_began 1` so `MewDirector::start` resumes into the real House
+   (`mods/dev-sandbox/tests/enter-house.mewtest`, the campaign director's 57 commands pinned, `set_day` executes). Not taken: SDL input injection. Bonus: the watchdog now closes the game's modal
    WARNING/ERROR boxes and reports them as `popup` events, so a run never hangs on a dialog.
 2. [x] **Joker's Luck real feature test (T2)** (2026-10-20): `mods/jokers-luck/tests/luck-rerolls.mewtest` — `enter
    TacticsTest`, `bind JokersGambit` (accepted), `expect status JokersLuck on 0`, `expect stacks JokersLuck on 0 >= 1`,
