@@ -33,7 +33,8 @@ export interface CategoryIndex {
   entryFile: Map<string, string>;
 }
 
-let indexCache: Map<string, CategoryIndex> | null = null;
+/** index per base-data root (the default root is EXTRACTED_DATA; tests inject a synthetic one) */
+const indexCache = new Map<string, Map<string, CategoryIndex>>();
 
 /** Whether extracted base data is present. */
 export function hasBaseData(): boolean {
@@ -62,33 +63,37 @@ function topLevelKeys(absFile: string): string[] {
   }
 }
 
-/** Build (and cache) the base-data index. */
-export function buildIndex(): Map<string, CategoryIndex> {
-  if (indexCache) return indexCache;
+/**
+ * Build (and cache) the base-data index.
+ * @param root the extracted `data/` tree; default EXTRACTED_DATA (tests pass a synthetic one)
+ */
+export function buildIndex(root: string = EXTRACTED_DATA): Map<string, CategoryIndex> {
+  const cached = indexCache.get(root);
+  if (cached) return cached;
   const index = new Map<string, CategoryIndex>();
   for (const [cat, src] of Object.entries(CATEGORY_SOURCES)) {
     const entryFile = new Map<string, string>();
     let files: string[] = [];
-    if (src.dir) files = listGon(join(EXTRACTED_DATA, src.dir));
+    if (src.dir) files = listGon(join(root, src.dir));
     else if (src.file) {
-      const f = join(EXTRACTED_DATA, src.file);
+      const f = join(root, src.file);
       if (existsSync(f)) files = [f];
     }
     for (const f of files) {
       for (const key of topLevelKeys(f)) {
-        if (!entryFile.has(key)) entryFile.set(key, relative(EXTRACTED_DATA, f).replace(/\\/g, "/"));
+        if (!entryFile.has(key)) entryFile.set(key, relative(root, f).replace(/\\/g, "/"));
       }
     }
     index.set(cat, { names: [...entryFile.keys()].sort(), entryFile });
   }
-  indexCache = index;
+  indexCache.set(root, index);
   return index;
 }
 
-/** Clear the in-memory index (e.g. after regeneration). */
+/** Clear the in-memory index and localization caches (e.g. after regeneration). */
 export function clearCache(): void {
-  indexCache = null;
-  locCache = null;
+  indexCache.clear();
+  locCache.clear();
 }
 
 export interface CategoryCount {
@@ -152,17 +157,23 @@ export interface LocTable {
   columns: number;
 }
 
-let locCache: LocTable | null = null;
+/** localization table per base-data root */
+const locCache = new Map<string, LocTable>();
 
 /** The 12 expected localization columns. */
 export const LOC_COLUMNS = ["KEY", "en", "notes", "sp", "fr", "de", "it", "pt-br", "ru", "ko", "ja", "zh-cn"];
 
-/** Load the base localization table (cached). */
-export function loadLocalization(): LocTable {
-  if (locCache) return locCache;
+/**
+ * Load the base localization table (cached per root).
+ * @param root the extracted `data/` tree holding `text/combined.csv`; default EXTRACTED_DATA
+ */
+export function loadLocalization(root: string = EXTRACTED_DATA): LocTable {
+  const cached = locCache.get(root);
+  if (cached) return cached;
+  const csv = root === EXTRACTED_DATA ? COMBINED_CSV : join(root, "text", "combined.csv");
   let table: LocTable = { header: LOC_COLUMNS.slice(), rows: new Map(), columns: LOC_COLUMNS.length };
-  if (existsSync(COMBINED_CSV)) {
-    const rows = parseCsv(readFileSync(COMBINED_CSV, "utf8"));
+  if (existsSync(csv)) {
+    const rows = parseCsv(readFileSync(csv, "utf8"));
     const header = rows.length ? rows[0]! : LOC_COLUMNS.slice();
     const map = new Map<string, string[]>();
     for (let i = 1; i < rows.length; i++) {
@@ -172,6 +183,6 @@ export function loadLocalization(): LocTable {
     }
     table = { header, rows: map, columns: header.length };
   }
-  locCache = table;
+  locCache.set(root, table);
   return table;
 }
