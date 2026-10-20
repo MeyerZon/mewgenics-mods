@@ -272,6 +272,7 @@ test.afterAll(() => {
   try {
     rmSync(join(SANDBOX, "swfs"), { recursive: true, force: true });
     rmSync(join(SANDBOX, "art", "e2e_import.svg"), { force: true });
+    rmSync(join(SANDBOX, "art", "e2e_gradient.svg"), { force: true });
   } catch {
     /* non-fatal */
   }

@@ -9,9 +9,13 @@
     "sq": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "gray:8" } ] },
     "red": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#ff2020" } ] },
     "green": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#20ff20" } ] },
-    "blue": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#2020ff" } ] }
+    "blue": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#2020ff" } ] },
+    "ramp": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "gradient:rampgrad" } ] }
   },
   "bitmaps": { "checkerbmp": { "file": "art/checker.png" } },
+  "gradients": {
+    "rampgrad": { "kind": "linear", "x1": -30, "y1": 0, "x2": 30, "y2": 0, "stops": [ { "offset": 0, "color": "gray:0" }, { "offset": 1, "color": "#ff2020" } ] }
+  },
   "sprites": {
     "Blink": {
       "frames": 90,
@@ -31,7 +35,8 @@
         { "name": "checker", "depth": 1, "keys": [ { "frame": 0, "ref": "checker", "x": 0, "y": 0 } ] },
         { "name": "holder", "depth": 2, "keys": [ { "frame": 0, "ref": "Holder", "x": 150, "y": 30 } ] },
         { "name": "control", "depth": 3, "keys": [ { "frame": 0, "ref": "sq", "x": 230, "y": 30 } ] },
-        { "name": "cx", "depth": 4, "keys": [ { "frame": 0, "ref": "sq", "x": 310, "y": 30, "cxform": { "mul": [1, 0, 0, 1] } } ] }
+        { "name": "cx", "depth": 4, "keys": [ { "frame": 0, "ref": "sq", "x": 310, "y": 30, "cxform": { "mul": [1, 0, 0, 1] } } ] },
+        { "name": "gradient", "depth": 5, "keys": [ { "frame": 0, "ref": "ramp", "x": 390, "y": 30 } ] }
       ]
     }
   },

@@ -11,9 +11,9 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     const Y: Px = [255, 255, 0], M: Px = [255, 0, 255], C: Px = [0, 255, 255];
     /** a synthetic shot: background, the probe clip drawn at scale s from (ox, oy), optionally mirrored, with knobs */
     const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat" }) => {
-      const W = 900, H = 400, img = new Uint8Array(W * H * 4);
+      const W = 1200, H = 400, img = new Uint8Array(W * H * 4);
       for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
-      const s = o.s, ox = o.mirrored ? 700 : 200, oy = 100;
+      const s = o.s, ox = o.mirrored ? 1000 : 200, oy = 100;
       const put = (cx: number, cy: number, c: Px) => { // clip px -> screen px
         const x = Math.round(o.mirrored ? ox - cx * s : ox + cx * s), y = Math.round(oy + cy * s);
         if (x >= 0 && y >= 0 && x < W && y < H) img.set([c[0], c[1], c[2], 255], (y * W + x) * 4);
