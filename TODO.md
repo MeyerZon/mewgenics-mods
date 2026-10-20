@@ -25,9 +25,13 @@ Things no test can see: they need a human at the game, a decision, or an account
   `download_depot 686060 686061 8229879464648565847`, then copy): lost on 2026-10-19 when a worktree removal followed a
   junction and emptied `.analysis/` (`CLAUDE.md` "Worktrees with junctions"). Needed again only for the opt-in
   cross-build T1 (`BINDINGS_NEW_EXE`).
-- [x] **Merges.** The leftovers stack (#28–#33, #32) was merged on your word, 2026-10-19 night. Still open: PR #27
-  (docs, cross-build port, from another session) — its TODO.md hunk now overlaps tonight's edits and needs a rebase
-  before it can merge; say so per PR as always (`CLAUDE.md`).
+- [x] **Merges.** The leftovers stack (#28–#33, #32) was merged on your word, 2026-10-19 night; PR #27 (docs,
+  cross-build port) merged after its rebase; the editor's TypeScript/React stack (#36, #37) merged 2026-10-20 on your
+  word. Say so per PR as always (`CLAUDE.md`).
+- [ ] **After the TypeScript switch (T3 of PR #37)**: restart the `mewgenics-editor` MCP server in Claude Code once and
+  call `list_base_data` / `validate_mod` (your registration still names `editor/src/mcp/server.mjs`, now a 4-line shim);
+  optionally re-register with `claude mcp add mewgenics-editor -- node "<repo>/editor/src/mcp/server.ts"`. Run
+  `npm run test:ingame` once with Steam up (the runner is typed, not changed).
 
 ### Only you can do these — added 2026-10-19 night (after the leftovers stack)
 
@@ -118,9 +122,17 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 ### Data-layer mod editor (`editor/`)
 - [x] Core (single source of truth): GON parse/serialize (byte-faithful), overlay merge engine, schema, 4-check validator
 - [x] Hand-rolled MCP stdio server (9 tools) — registered with Claude Code as `mewgenics-editor`
-- [x] Local web UI (VanJS, vendored, zero runtime deps)
+- [x] Local web UI (VanJS, vendored, zero runtime deps) — replaced 2026-10-20, see the TypeScript entry below
 - [x] IDE-style UI redesign + onboarding (first-run tour, empty states, concepts drawer, worked example) — **PR #1 merged to `master`**
 - [x] Design canvas (8 artboards: data editor + onboarding + the 3 Art-mode screens)
+- [x] **Whole editor to TypeScript; web UI to React + Vite; zod at the boundaries** (PRs #36 + #37, 2026-10-20;
+  `docs/editor-ts-react-plan.md`). Every `.mjs` under `editor/{src,scripts,test,web}` and `tools/bindings` is `.ts`
+  with real types (JSDoc retired, `@types/node`); Node runs the sources directly (no bundler; explicit `.ts` imports,
+  `erasableSyntaxOnly`); the UI is TSX built by Vite into `web/dist/` (VanJS removed); one zod schema per `/api` POST
+  body shared by server and client; MCP tool inputs are zod schemas with the published JSON Schema generated from them
+  and pinned to a golden fixture. `src/mcp/server.mjs` stays as a shim for existing registrations; `tools/rea-mcp.mjs`
+  deliberately untouched. End state: typecheck clean, 288 unit + 35 e2e green. Found on the way: the swf-gate CLI read
+  an always-empty crash-report field (fixed); the SVG drop zone rendered as inline border fragments (fixed).
 
 ### Repo / docs / ops
 - [x] Private GitHub repo `MeyerZon/mewgenics-mods` created + pushed
@@ -136,7 +148,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] `docs/art-preview-plan.md`; all of the above: typecheck clean, 77/77 unit tests pass
 
 ### Testing
-- [x] **Playwright E2E suite** (`editor/tests/e2e/`, 33 tests) + real-browser validation — Data + Art flows + onboarding; `test:e2e` script; Chromium dev-only dep (user-authorized). typecheck + 77 unit + 33 e2e all green
+- [x] **Playwright E2E suite** (`editor/tests/e2e/`, 33 tests then, 35 now in `.spec.ts`) + real-browser validation — Data + Art flows + onboarding; `test:e2e` script; Chromium dev-only dep (user-authorized). typecheck + 77 unit + 33 e2e all green
 - [x] **In-game test harness `mewtest`** (2026-10-18, three stacked PRs) — `docs/ingame-testing.md`. Node runner + MCP `run_ingame_test` + `npm run test:ingame` (68 unit tests via a fake game); framework API v3 (console dispatcher `DebugConsole::Execute`, `FrameBegin`, SDL DYNAPI slots; 13 host tests); `mewtest.dll` (40 host tests). Verified in the real game: console commands executed in-process, output captured, exit codes/verdicts, hidden window keeps ticking, timeout path, real save untouched.
 - [x] **TDD rule adopted** (2026-10-18): `docs/tdd-procedure.md` + `CLAUDE.md` section; tiers T0 unit / T1 local data / T2 in-game / T3 human; PRs carry red→green evidence
 - [x] **Fixed the real UI bug** the user was seeing: Art-mode Findings/Build tabs rendered JS source as literal text (VanJS binding returned a function into a child slot) — `editor/web/art-ui.mjs`
