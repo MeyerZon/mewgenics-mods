@@ -68,7 +68,8 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 
 ## Build / run / test
 
-**Editor** (run from `editor/`; runtime deps `react`, `react-dom`, `zod`; dev-only `vite`, `typescript@7.0.2`,
+**Editor** (run from `editor/`; runtime deps `react`, `react-dom`, `zod`, `@ruffle-rs/ruffle` (browser-only, vendored into the git-ignored
+`web/public/ruffle/` by `npm run build` / `dev`); dev-only `vite`, `typescript@7.0.2`,
 `@playwright/test`; see `docs/editor-ts-react-plan.md`):
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates).
