@@ -173,8 +173,10 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 2. [ ] **Joker's Luck real feature test (T2)** once 1 lands: `bind JokersGambit`, use it, `wait turns 2`,
    `expect status JokersLuck on 0`, `dump` twice and assert the luck stacks differ between turns (needs the stacks
    value in the units event: add `stacks` per status to `MtUnit`/the JSONL, host-tested first).
-3. [ ] **Auto-resolve overlay mod** `mods/_autoplay/` (`player_cat.gon.merge` → `passives { Uncontrollable 1 }`) so
-   combat scripts run without input; validator test for the overlay, T2 test that a fight reaches round 2 unattended.
+3. [~] **Auto-resolve overlay mod** `mods/_autoplay/` (`data/characters/player_cat.gon.merge` → `PlayerCat { passives {
+   Uncontrollable 1 } }`): landed 2026-10-20 with the validator + merge-preview tests (`run-tests.ts` 4c) and a T2
+   load smoke (`tests/load.mewtest`, pass). Still owed: the T2 that a fight reaches round 2 unattended — needs
+   `enter TacticsTest` to reach a fight (target 1).
 4. [x] **Bindings regression test (T1)** — `editor/test/bindings-tests.ts`: every manifest signature matches exactly
    once at its RVA in the installed exe, every function RVA begins a `.pdata` entry, anchors re-verify, self-port
    changes nothing; `check_game_build` reports it live. (2026-10-19, binding-port series)
