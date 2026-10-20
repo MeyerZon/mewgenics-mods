@@ -78,6 +78,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.body.endsWith("quit 0\n"), "body ends with trailing newline");
     });
 
+    test("header: interactive parsed (true/1/false/0), default false, bad value is a line error", () => {
+      eq(parseScript("cmd listcmds\nquit\n", { owningMod: "x" }).interactive, false, "default");
+      for (const [v, want] of [["true", true], ["1", true], ["false", false], ["0", false]]) {
+        const p = parseScript(`interactive: ${v}\ncmd listcmds\n`, { owningMod: "x" });
+        assert(p.ok, `interactive: ${v}: ${JSON.stringify(p.errors)}`);
+        eq(p.interactive, want, `interactive: ${v}`);
+      }
+      const bad = parseScript("interactive: maybe\ncmd listcmds\nquit\n", { owningMod: "x" });
+      assert(!bad.ok && bad.errors.some((e: { line: number; message: string }) => e.line === 1 && /interactive must be true or false/.test(e.message)), JSON.stringify(bad.errors));
+      const p = parseScript("interactive: true\nwait frames 1\n", { owningMod: "x" });
+      assert(p.ok && !p.warnings.some((w: { message: string }) => /no quit directive/.test(w.message)), "an interactive script without quit is not warned about (quit arrives over the pipe)");
+    });
+
     test("header: clean parsed (true/1/false/0), default false, bad value is a line error", () => {
       eq(parseScript("cmd listcmds\nquit\n", { owningMod: "x" }).clean, false, "default");
       for (const [v, want] of [["true", true], ["1", true], ["false", false], ["0", false]]) {
@@ -388,6 +401,15 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(!!varied && varied.ok === true, `expect stacks varied ok: ${JSON.stringify(varied)}`);
       assert(r.events.some((e) => e.ev === "expect" && e.kind === "noconsole" && e.ok === true), "bind JokersGambit was accepted (no 'No command named')");
       eq(r.expects.failed, 0); eq(r.end!.code, 0);
+    });
+    test("exec and idle events are kept: result.execs (id, op, text, ok, lines) and result.idle", () => {
+      const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"idle","line":2,"t":10,"frame":5}\n{"ev":"exec","id":1,"op":"exec","text":"spawn Rat","ok":true,"lines":["Spawned Rat"],"t":20,"frame":9}\n{"ev":"exec","id":2,"op":"dump","ok":true,"t":21,"frame":10}\n{"ev":"end","code":0,"reason":"quit","t":30,"frame":12}\n';
+      const r = parseResults(text) as unknown as { execs: { id: number; op: string; text?: string; ok: boolean; lines?: string[]; frame: number }[]; idle: boolean };
+      eq(r.execs.length, 2);
+      eq(JSON.stringify(r.execs[0]), JSON.stringify({ id: 1, op: "exec", text: "spawn Rat", ok: true, lines: ["Spawned Rat"], frame: 9 }));
+      eq(r.execs[1]!.op, "dump"); eq(r.idle, true);
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { execs: unknown[]; idle: boolean }).execs.length, 0);
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { idle: boolean }).idle, false);
     });
     test("seed event is surfaced as result.seed (line, seed, ok, detail); absent -> null", () => {
       const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"seed","line":2,"seed":42,"ok":true,"detail":"state at 0x1: 00… -> 11…","t":10,"frame":5}\n{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
@@ -917,6 +939,66 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq((tacticsRun.safety as unknown as { campaignSlot: unknown }).campaignSlot, null);
     });
 
+    // ---- interactive mode: a named pipe into the running game -------------------------------------------
+    const pipeMod = await load<typeof import("../src/core/ingame/pipe.ts")>("../src/core/ingame/pipe.ts") as typeof import("../src/core/ingame/pipe.ts");
+    const sessionMod = await load<typeof import("../src/core/ingame/session.ts")>("../src/core/ingame/session.ts") as typeof import("../src/core/ingame/session.ts");
+    test("pipePath: win32 -> \\\\.\\pipe\\mewtest-<pid>; elsewhere a socket file in the tmp dir; never under saves/", () => {
+      eq(pipeMod.pipePath(123, "win32"), "\\\\.\\pipe\\mewtest-123");
+      const p = pipeMod.pipePath(123, "linux");
+      assert(p.endsWith("mewtest-123.sock") && p.startsWith(tmpdir()), p);
+      assert(!/[\\/]saves[\\/]/.test(pipeMod.pipePath(1, "win32")), "never a saves path");
+    });
+    test("launch: plan.interactive -> -mewtest_pipe 1 before -modpaths; otherwise 0", () => {
+      const bl = (launch as typeof import("../src/core/ingame/launch.ts")).buildLaunch;
+      const on = bl({ ...plan, interactive: true }, { gameDir, scriptPath: join(ROOT, "s.mewtest"), outPath: join(ROOT, "s.jsonl"), env: {}, modsDir });
+      const i = on.args.indexOf("-mewtest_pipe");
+      assert(i >= 0 && on.args[i + 1] === "1" && i < on.args.indexOf("-modpaths"), on.args.join(" "));
+      const off = bl(plan, { gameDir, scriptPath: join(ROOT, "s.mewtest"), outPath: join(ROOT, "s.jsonl"), env: {}, modsDir });
+      eq(off.args[off.args.indexOf("-mewtest_pipe") + 1], "0");
+    });
+    test("connectPipe: retries until the server exists and gives up after timeoutMs", async () => {
+      const t0 = Date.now();
+      let err = "";
+      try { await pipeMod.connectPipe(pipeMod.pipePath(999999, process.platform), { retryMs: 20, timeoutMs: 150 }); } catch (e) { err = e instanceof Error ? e.message : String(e); }
+      assert(/timed out|not available|ENOENT|ECONNREFUSED/.test(err), `rejects with a reason: ${err}`);
+      assert(Date.now() - t0 >= 120, "waited for the timeout");
+    });
+    const interactivePlan = script.parseScript("mods: jokers-luck\ninteractive: true\ntimeout: 3s\nwait frames 1\n", { owningMod: "jokers-luck", name: "interactive" });
+    assert(interactivePlan.ok && interactivePlan.interactive, "interactive plan parses");
+    const sessionArgs = {
+      plan: interactivePlan,
+      test: { mod: "jokers-luck", name: "interactive", scriptPath: null },
+      env: { MEWTEST_FAKE_GAME: FAKE, FAKE_GAME_MODE: "interactive", FAKE_GAME_APPDATA_LOGS: appLogs, PATH: process.env.PATH || "" },
+      gameDir, appdataLogsDir: appLogs, modsDir, runsDir, realSavePath: savePath, backstopGraceMs: 500,
+    };
+    type Sess = Awaited<ReturnType<typeof sessionMod.startSession>>;
+    let session: Sess | null = null, execReply: Awaited<ReturnType<Sess["exec"]>> | null = null, dumpReply: Awaited<ReturnType<Sess["dump"]>> | null = null, sessionReport: Awaited<ReturnType<Sess["stop"]>> | null = null, sessionErr = "";
+    try {
+      session = await sessionMod.startSession(sessionArgs);
+      await session.waitForIdle(3000);     // the script ran to its end: the DLL idles for requests (OBSERVED: commands sent mid-script were served inside `wait turns`, before the fight)
+      if (!session.idle) throw new Error("waitForIdle resolved without the idle event");
+      execReply = await session.exec("listcmds");
+      dumpReply = await session.dump();
+      sessionReport = await session.stop();
+    } catch (e) { sessionErr = e instanceof Error ? e.message : String(e); }
+    test("session against the interactive fake: start -> exec replies with the exec event -> dump replies with units -> stop returns a pass report carrying the exec events", () => {
+      assert(!!(!sessionErr && session && execReply && dumpReply && sessionReport), `session flow: ${sessionErr}`);
+      if (!session || !execReply || !dumpReply || !sessionReport) return;
+      assert(session.pid > 0 && session.runDir.length > 0 && session.pipe.length > 0, JSON.stringify({ pid: session.pid, pipe: session.pipe }));
+      eq(execReply.ev, "exec"); eq(execReply.op, "exec"); eq(execReply.ok, true);
+      assert(Array.isArray(execReply.lines) && execReply.lines.includes("Executed: listcmds"), JSON.stringify(execReply));
+      eq(dumpReply.ev, "units"); eq((dumpReply as { count?: number }).count, 2);
+      eq(sessionReport.verdict, "pass", sessionReport.reason);
+      const execs = (sessionReport.result as unknown as { execs: { op: string }[] }).execs;
+      assert(execs.length >= 2 && execs[0]!.op === "exec", JSON.stringify(execs));
+      assert(session.ended, "ended after stop");
+    });
+    test("session: exec after the game ended rejects with the verdict", async () => {
+      let err = "";
+      if (!session) throw new Error("no session");
+      try { await session.exec("listcmds"); } catch (e) { err = e instanceof Error ? e.message : String(e); }
+      assert(/session ended/.test(err), err);
+    });
     const shotPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 2s\nhide: false\nshot \"menu\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
     const captured: { label: string; dir: string }[] = [];
     const shotRun = await run("shot", {}, { plan: shotPlan, capture: (label: string, dir: string) => { captured.push({ label, dir }); const p = join(dir, `shot-${label}.png`); writeFileSync(p, "png"); return p; } });
@@ -1253,10 +1335,10 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       }
       return out;
     })();
-    test("MCP tools/list returns the 13 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings)", () => {
+    test("MCP tools/list returns the 16 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools)", () => {
       assert(!mcp.error, mcp.error);
       const names = mcp.list.tools.map((t: { name: string }) => t.name);
-      eq(names.length, 13, names.join(","));
+      eq(names.length, 16, names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {

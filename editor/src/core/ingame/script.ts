@@ -7,7 +7,7 @@
 
 export const DEFAULT_SAVESUFFIX = "dev";
 export const DEFAULT_TIMEOUT_MS = 120000;
-export const HEADER_KEYS = ["mods", "savesuffix", "timeout", "hide", "clean"];
+export const HEADER_KEYS = ["mods", "savesuffix", "timeout", "hide", "clean", "interactive"];
 export const SAVESUFFIX_RE = /^[A-Za-z0-9_-]{1,32}$/;
 export const MAX_CMD_BYTES = 4078; // the game's std::string small/large allocation boundary
 export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
@@ -60,6 +60,8 @@ export interface Plan {
   hide: boolean;
   /** -mewtest_clean 1: after the end event the harness lets the game shut itself down (complete debug.log); default false */
   clean: boolean;
+  /** -mewtest_pipe 1: the DLL serves a named pipe and idles at the end of the script until a quit request (sessions) */
+  interactive: boolean;
   directives: Directive[];
   /** true when an `enter Campaign` is present: the runner moves the disposable slot aside before launching */
   usesCampaignSlot: boolean;
@@ -262,6 +264,7 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
   let timeoutMs = DEFAULT_TIMEOUT_MS;
   let hide = true;
   let clean = false;
+  let interactive = false;
   let inHeader = true;
 
   const lines = String(text).split(/\r?\n/);
@@ -293,6 +296,10 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
         if (val === "true" || val === "1") clean = true;
         else if (val === "false" || val === "0") clean = false;
         else errors.push({ line: lineNo, message: `clean must be true or false` });
+      } else if (key === "interactive") {
+        if (val === "true" || val === "1") interactive = true;
+        else if (val === "false" || val === "0") interactive = false;
+        else errors.push({ line: lineNo, message: `interactive must be true or false` });
       } else {
         errors.push({ line: lineNo, message: `unknown header key "${hm[1]}" (${HEADER_KEYS.join(", ")})` });
       }
@@ -310,7 +317,7 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
   if (mods === null) mods = opts.owningMod ? [opts.owningMod] : [];
   if (mods.length === 0) errors.push({ line: 0, message: "no mods: add a `mods:` header or pass the owning mod" });
   if (!directives.some((d) => d.kind === "quit")) {
-    warnings.push({ line: 0, message: "no quit directive; the harness quits at end of script (code 0 if all expects passed, else 1)" });
+    if (!interactive) warnings.push({ line: 0, message: "no quit directive; the harness quits at end of script (code 0 if all expects passed, else 1)" });
   }
 
   return {
@@ -321,6 +328,7 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
     timeoutMs,
     hide,
     clean,
+    interactive,
     directives,
     usesCampaignSlot: directives.some((d) => d.kind === "enter" && d.scene === CAMPAIGN_SCENE),
     body: bodyLines.length ? bodyLines.join("\n") + "\n" : "",

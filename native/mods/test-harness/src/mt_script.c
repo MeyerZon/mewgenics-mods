@@ -250,7 +250,7 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
         if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
     } else if (wl == 5 && !strncmp(p, "enter", 5)) {
         size_t sl = tok_len(rest);
-        if (!sl) return fail(err, errCap, errLine, lineNo, "enter needs a scene name (TacticsTest)");
+        if (!sl) return fail(err, errCap, errLine, lineNo, "enter needs a scene name (TacticsTest|Campaign)");
         if (*skip_ws(rest + sl)) return fail(err, errCap, errLine, lineNo, "enter takes exactly one scene name");
         char name[64];
         snprintf(name, sizeof name, "%.*s", (int)(sl > 63 ? 63 : sl), rest);
@@ -258,7 +258,7 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
         d.scene = mt_scene_id(name);
         if (!d.scene) {
             char msg[128];
-            snprintf(msg, sizeof msg, "unknown scene \"%s\" (TacticsTest)", name);
+            snprintf(msg, sizeof msg, "unknown scene \"%s\" (TacticsTest|Campaign)", name);
             return fail(err, errCap, errLine, lineNo, msg);
         }
     } else if (wl == 4 && !strncmp(p, "quit", 4)) {

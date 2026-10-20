@@ -253,6 +253,103 @@
     }
   },
   {
+    "name": "start_ingame_session",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "mod folder; its tests/ dir is searched and it is the default -modpaths entry"
+        },
+        "test": {
+          "type": "string",
+          "description": "script name without .mewtest (made interactive: the DLL idles at its end)"
+        },
+        "script": {
+          "type": "string",
+          "description": "inline .mewtest text (alternative to `test`); e.g. \"wait frames 120\\nenter TacticsTest\\nwait turns 1\\n\""
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "the session's wall-clock budget (default the script's timeout, 120 s); the game is killed after it"
+        },
+        "hide": {
+          "type": "boolean",
+          "description": "hide the game window (default true)"
+        },
+        "savesuffix": {
+          "type": "string",
+          "description": "override the save suffix (default dev); never empty"
+        },
+        "connectTimeoutMs": {
+          "type": "number",
+          "description": "how long to wait for the DLL's pipe after the launch (default 30000)"
+        },
+        "waitIdle": {
+          "type": "boolean",
+          "description": "return only once the script has run to its end and the DLL idles (default true); false returns right after the pipe connects, and requests are then served inside the script's waits"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "ingame_exec",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "from start_ingame_session"
+        },
+        "cmd": {
+          "type": "string",
+          "description": "a console line to run (op exec), e.g. \"spawn Rat\""
+        },
+        "op": {
+          "type": "string",
+          "enum": [
+            "exec",
+            "dump",
+            "quit"
+          ],
+          "description": "exec (default when cmd is given) | dump (the units event) | quit (ends the session and returns the report)"
+        },
+        "frames": {
+          "type": "number",
+          "description": "frames to keep collecting console output after the command (default 3, max 600; ~180 frames/s hidden)"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "stop_ingame_session",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "from start_ingame_session"
+        },
+        "includeEvents": {
+          "type": "boolean",
+          "description": "include the raw JSONL events in the report"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "check_game_build",
     "inputSchema": {
       "type": "object",

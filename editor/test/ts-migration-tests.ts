@@ -119,6 +119,14 @@ export async function runTsMigrationTests(test: TestFn, assert: AssertFn, eq: Eq
     assert(tools.TOOL_INPUT && typeof tools.TOOL_INPUT === "object", "TOOL_INPUT");
     assert(typeof tools.callTool === "function", "callTool");
   });
+  test("the session tools exist: start_ingame_session / ingame_exec / stop_ingame_session; ingame_exec on an unknown session is a ToolError", async () => {
+    if (tools.__error) throw new Error("tools.ts did not load");
+    const names = (tools.TOOLS as ToolLike[]).map((t) => t.name);
+    for (const n of ["start_ingame_session", "ingame_exec", "stop_ingame_session"]) assert(names.includes(n), `${n} listed`);
+    let err = "";
+    try { await tools.callTool("ingame_exec", { sessionId: "nope", cmd: "listcmds" }); } catch (e) { err = e instanceof Error ? e.message : String(e); }
+    assert(/unknown session/.test(err), err);
+  });
   test("every tool has a zod input schema and its published inputSchema is generated from it", () => {
     if (tools.__error) throw new Error("tools.ts did not load");
     for (const t of tools.TOOLS as ToolLike[]) {

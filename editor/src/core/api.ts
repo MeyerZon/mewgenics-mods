@@ -204,6 +204,93 @@ export async function runIngameTest(args: RunIngameTestArgs) {
   return report;
 }
 
+// ---- interactive in-game sessions (named pipe; docs/ingame-testing.md "Interactive mode") ----
+const sessions = new Map<string, ingame.IngameSession>();
+let sessionSeq = 0;
+
+export interface StartIngameSessionArgs extends RunIngameTestArgs {
+  /** how long to wait for the DLL's pipe (default 30 s) */
+  connectTimeoutMs?: number;
+  /** wait until the script has run to its end before returning (default true), so requests do not land inside its waits */
+  waitIdle?: boolean;
+}
+
+/** Launch the game on an `interactive: true` script (or make the given script interactive) and connect the pipe. */
+export async function startIngameSession(args: StartIngameSessionArgs) {
+  const { mod, test, script } = args || {};
+  if (!mod || typeof mod !== "string") return { ok: false as const, error: "mod is required" };
+  if ((test && script) || (!test && !script)) return { ok: false as const, error: "pass exactly one of `test` (a name under mods/<mod>/tests/) or `script` (inline .mewtest text)" };
+  let plan: ReturnType<typeof ingame.parseScript>;
+  let scriptPath: string | null = null;
+  let name = "inline";
+  if (test) {
+    const entry = ingame.listIngameTests(mod).tests.find((t) => t.name === test);
+    if (!entry) return { ok: false as const, error: `no test "${test}" under mods/${mod}/tests/` };
+    plan = entry.plan;
+    scriptPath = entry.absPath;
+    name = entry.name;
+  } else {
+    plan = ingame.parseScript(String(script), { owningMod: mod, name });
+  }
+  if (!plan.ok) return { ok: false as const, error: `script errors: ${plan.errors.map((e) => `line ${e.line}: ${e.message}`).join("; ")}` };
+  plan = { ...plan, interactive: true };
+  if (args.timeoutMs !== undefined) plan = { ...plan, timeoutMs: args.timeoutMs };
+  if (args.hide !== undefined) plan = { ...plan, hide: args.hide };
+  if (args.savesuffix !== undefined) plan = { ...plan, savesuffix: args.savesuffix };
+  try {
+    const session = await ingame.startSession({ plan, test: { mod, name, scriptPath }, env: args.env, saveCheck: args.saveCheck, connectTimeoutMs: args.connectTimeoutMs });
+    const sessionId = `s${++sessionSeq}-${session.pid}`;
+    sessions.set(sessionId, session);
+    if (args.waitIdle !== false) {
+      try { await session.waitForIdle(plan.timeoutMs); } catch (e) {
+        const report = await session.stop();
+        sessions.delete(sessionId);
+        return { ok: false as const, error: e instanceof Error ? e.message : String(e), report };
+      }
+    }
+    return { ok: true as const, sessionId, pid: session.pid, runDir: session.runDir, pipe: session.pipe, idle: session.idle };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export interface IngameExecArgs {
+  sessionId: string;
+  /** console line (op exec) */
+  cmd?: string;
+  /** exec (default when cmd is given) | dump | quit */
+  op?: "exec" | "dump" | "quit";
+  /** frames to keep collecting console output after the command (DLL default 3, max 600) */
+  frames?: number;
+}
+
+export async function ingameExec(args: IngameExecArgs) {
+  const s = sessions.get(String(args.sessionId));
+  if (!s) return { ok: false as const, error: `unknown session "${args.sessionId}" (start one with start_ingame_session; sessions end when the game exits)` };
+  const op = args.op || (args.cmd !== undefined ? "exec" : "dump");
+  try {
+    if (op === "exec") {
+      if (typeof args.cmd !== "string" || !args.cmd.trim()) return { ok: false as const, error: "cmd is required for op exec" };
+      return { ok: true as const, reply: await s.exec(args.cmd, args.frames) };
+    }
+    if (op === "dump") return { ok: true as const, reply: await s.dump() };
+    const report = await s.stop();
+    sessions.delete(String(args.sessionId));
+    return { ok: true as const, report };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e), ended: s.ended };
+  }
+}
+
+export async function stopIngameSession(args: { sessionId: string; includeEvents?: boolean }) {
+  const s = sessions.get(String(args.sessionId));
+  if (!s) return { ok: false as const, error: `unknown session "${args.sessionId}"` };
+  const report = await s.stop();
+  sessions.delete(String(args.sessionId));
+  if (!args.includeEvents) report.result = { ...report.result, events: [] };
+  return { ok: true as const, report };
+}
+
 // ---- native bindings (bindings/<build>.json, docs/binding-port.md) ------------
 
 export interface CheckGameBuildArgs {

@@ -412,7 +412,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 13 editor tools", () => eq(list.tools.length, 13));
+    test("tools/list returns the 16 editor tools", () => eq(list.tools.length, 16));
     let pres2: unknown = null;
     let perr2 = "";
     try { pres2 = await req("tools/call", { name: "port_bindings", arguments: { build: "25143593", dryRun: true } }); } catch (e) { perr2 = String(e); }

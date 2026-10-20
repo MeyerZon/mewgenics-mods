@@ -244,7 +244,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
     PR 4) — but it does not yield a complete `debug.log` (the game never shuts itself down; see `ingame-testing.md`
     "Clean mode"), so a log flush needs another lever;
     ~~`expect log "<substr>"` against `debug.log` from the runner side~~ done 2026-10-20 (`report.logExpects`; the DLL
-    gets a `# runner: …` comment in its place). Still open, each for a reason: named-pipe interactive mode
+    gets a `# runner: …` comment in its place). ~~named-pipe interactive mode~~ done 2026-10-20 (`interactive: true` /
+    `-mewtest_pipe 1`, `mt_queue.c`, `MT_S_IDLE`, `editor/src/core/ingame/{pipe,session}.ts`, MCP `start_ingame_session` /
+    `ingame_exec` / `stop_ingame_session`; `docs/ingame-testing.md` "Interactive mode"). Was: named-pipe interactive mode
     (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`) is a native IPC feature — a pipe thread marshalling commands
     onto the frame hook — with its own DLL host tests and T2, not a runner change. ~~RNG seed pinning via
     `TLS+0x178`~~ done 2026-10-20: `seed <N>` (bindings `Rng_SeedState` / `Rng_Reseed`, offset `Tls_rngState`);

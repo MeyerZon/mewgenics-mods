@@ -78,6 +78,26 @@ export const TOOL_INPUT = {
   check_game_build: z.object({
     exe: str("optional path to a Mewgenics.exe to check instead of the installed one (read-only)").optional(),
   }),
+  start_ingame_session: z.object({
+    mod: str("mod folder; its tests/ dir is searched and it is the default -modpaths entry"),
+    test: str("script name without .mewtest (made interactive: the DLL idles at its end)").optional(),
+    script: str("inline .mewtest text (alternative to `test`); e.g. \"wait frames 120\\nenter TacticsTest\\nwait turns 1\\n\"").optional(),
+    timeoutMs: num("the session's wall-clock budget (default the script's timeout, 120 s); the game is killed after it").optional(),
+    hide: bool("hide the game window (default true)").optional(),
+    savesuffix: str("override the save suffix (default dev); never empty").optional(),
+    connectTimeoutMs: num("how long to wait for the DLL's pipe after the launch (default 30000)").optional(),
+    waitIdle: bool("return only once the script has run to its end and the DLL idles (default true); false returns right after the pipe connects, and requests are then served inside the script's waits").optional(),
+  }),
+  ingame_exec: z.object({
+    sessionId: str("from start_ingame_session"),
+    cmd: str("a console line to run (op exec), e.g. \"spawn Rat\"").optional(),
+    op: z.enum(["exec", "dump", "quit"]).describe("exec (default when cmd is given) | dump (the units event) | quit (ends the session and returns the report)").optional(),
+    frames: num("frames to keep collecting console output after the command (default 3, max 600; ~180 frames/s hidden)").optional(),
+  }),
+  stop_ingame_session: z.object({
+    sessionId: str("from start_ingame_session"),
+    includeEvents: bool("include the raw JSONL events in the report").optional(),
+  }),
   port_bindings: z.object({
     build: str("the NEW Steam build id (digits), e.g. 25200000; names bindings/<build>.json"),
     exe: str("path to the new Mewgenics.exe (default: the installed game)").optional(),
@@ -182,6 +202,34 @@ export const TOOLS: ToolDef[] = [
         savesuffix: a.savesuffix,
         includeEvents: a.includeEvents,
       });
+    },
+  ),
+  def(
+    "start_ingame_session",
+    "Launch Mewgenics on an interactive .mewtest (the harness runs the script, then idles and serves a named pipe instead of exiting) and connect to it. Returns { sessionId, pid, runDir, pipe }. Then ingame_exec sends console lines (after `enter TacticsTest` the run commands exist: spawn, bind, status, win, ...), op dump reads the units, and stop_ingame_session (or op quit) ends the game and returns the ordinary report (verdict, log findings, save-set check). One game at a time; the session dies at the script's timeout. Never the real save (-savesuffix); docs/ingame-testing.md \"Interactive mode\".",
+    async (a) => {
+      if ((a.test && a.script) || (!a.test && !a.script)) throw new ToolError("pass exactly one of `test` or `script`");
+      const r = await api.startIngameSession({ mod: a.mod, test: a.test, script: a.script, timeoutMs: a.timeoutMs, hide: a.hide, savesuffix: a.savesuffix, connectTimeoutMs: a.connectTimeoutMs, waitIdle: a.waitIdle });
+      if (!r.ok) throw new ToolError(r.error);
+      return r;
+    },
+  ),
+  def(
+    "ingame_exec",
+    "Send one request to a running in-game session: a console line (cmd; the reply is the DLL's exec event with the console lines it produced within `frames` frames), op dump (the units event: names, classes, factions, statuses, stacks) or op quit (ends the game; returns the report). Rejects with \"unknown session\" after the game exited.",
+    async (a) => {
+      const r = await api.ingameExec({ sessionId: a.sessionId, cmd: a.cmd, op: a.op, frames: a.frames });
+      if (!r.ok) throw new ToolError(r.error);
+      return r;
+    },
+  ),
+  def(
+    "stop_ingame_session",
+    "End an in-game session (sends quit, waits for the game to exit) and return the run's report, exactly as run_ingame_test would (every exec exchange is also in result.jsonl / report.result.execs).",
+    async (a) => {
+      const r = await api.stopIngameSession({ sessionId: a.sessionId, includeEvents: a.includeEvents });
+      if (!r.ok) throw new ToolError(r.error);
+      return r;
     },
   ),
   def(

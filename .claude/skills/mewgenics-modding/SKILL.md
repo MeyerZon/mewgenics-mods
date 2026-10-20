@@ -111,7 +111,9 @@ an ~83%-complete main save that must stay untouched.
    (`docs/tdd-procedure.md`). For combat behaviour: `enter TacticsTest`, load
    `_autoplay` next to the mod so the fight runs unattended, `spawn Rat` for an
    opponent, then `expect status` / `expect stacks … varied` / `expect round`
-   (`docs/ingame-testing.md`). Run it with `run_ingame_test`.
+   (`docs/ingame-testing.md`). Run it with `run_ingame_test`. To poke at a live fight instead of scripting it
+   (try a command, read the units, try another), `start_ingame_session` on `dev-sandbox/interactive-smoke`, then
+   `ingame_exec { cmd }` / `{ op: "dump" }`, then `stop_ingame_session` — every exchange lands in the report.
 3. Look at it: a script with `hide: false` and `shot "<label>"` lines; open the
    PNGs from `artifacts.shots` and check the scene, the icon, the text (T3a).
 4. Open the PR with the red→green table and the T2 verdict lines.
