@@ -18,15 +18,13 @@
 //   * bitmaps are uploaded premultiplied and un-premultiplied in the shader exactly like
 //     `swf_lib.shader` (`rgb /= max(a, .001)`).
 //
-// OBSERVED 2026-10-20 in the game (npm run test:artprobe; docs/art-preview-plan.md §8) — NOT yet what this renderer
-// does (the follow-up corrects it): a nested sprite advances on its own clock under a held parent; bitmap fills are
-// sampled smoothly and clamped. Enemy clips are drawn mirrored by the game.
+// OBSERVED 2026-10-20 in the game (npm run test:artprobe; src/core/art/engine-behaviour.ts) and followed here: a
+// nested sprite advances on its own clock (`clock`: frames since playback started, not the parent's frame);
+// bitmap fills are sampled LINEAR and clamped. Enemy clips are drawn mirrored by the game (the preview does not).
 // INFERRED engine behaviours this renderer relies on (not verified in-engine):
-//   * nested sprite frame = parent frame mod child.frames (Flash default looping) — WRONG, see above;
 //   * PlaceObject2 cxform applies AFTER the palette remap (as the shader's
 //     `* color_xform[0] + color_xform[1]` suggests);
-//   * bitmap fills are sampled NEAREST and clamped at their edges, like a Flash
-//     "clipped bitmap" fill (the engine's atlas sampling mode is not observed);
+//   * (bitmap sampling: OBSERVED, see above)
 //   * a bitmap fill's pixel space is the path's local space (bitmap px (u,v) sits at
 //     local (u,v)); the emitter's fill matrix convention must match.
 
@@ -44,6 +42,7 @@ import {
 } from "../../../src/core/art/geometry.ts";
 import { parseFill, fillToRgba, parseColor } from "../../../src/core/art/scene.ts";
 import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline.ts";
+import { nestedFrame } from "../../../src/core/art/engine-behaviour.ts";
 import type { Scene, Fill, SceneShape } from "../../../src/core/art/scene.ts";
 import type { Mat, SubPath } from "../../../src/core/art/geometry.ts";
 import type { BakedSprite, Cxform, Placement } from "../../../src/core/art/timeline.ts";
@@ -485,6 +484,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
   let palBytes: Uint8Array = identityPaletteBytes();
   let paletteRow = 0;
   let frame = 0;
+  /** frames elapsed since playback started: nested sprites run on this clock (OBSERVED), not on their parent's frame */
+  let clock = 0;
   let playing = false;
   let loop = true;
   // suspended = the rAF loop is paused because the canvas is off-screen or the tab
@@ -615,11 +616,10 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     g.pixelStorei(g.UNPACK_FLIP_Y_WEBGL, false);
     g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, img);
     g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    // NPOT-safe (WebGL1): clamp + no mipmaps. NEAREST keeps authored texels exact: linear
-    // filtering blends a gray texel with a coloured neighbour into a non-gray value that
-    // the remap `if` then passes through (observed with ANGLE/SwiftShader).
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.NEAREST);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.NEAREST);
+    // NPOT-safe (WebGL1): clamp + no mipmaps. LINEAR because the game filters bitmap fills (OBSERVED, engine-behaviour.ts):
+    // the blend of a gray texel with a coloured neighbour then passes the remap `if` unremapped — in the game too.
+    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
+    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
     g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
     g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
     bitmapTex.set(id, { tex, width: size[0], height: size[1] });
@@ -717,28 +717,28 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
   }
 
   /** @param f frame within this timeline */
-  function walk(placements: Placement[], f: number, mat: Mat, cx: Cxform | null, depthLeft: number, v: Visitor): void {
+  function walk(placements: Placement[], f: number, mat: Mat, cx: Cxform | null, depthLeft: number, v: Visitor, clk: number = f): void {
     let i = 0;
     while (i < placements.length) {
       const p = placements[i]!;
       // a placement with clipDepth masks the placements with depth in (depth, clipDepth]
       if (p.clipDepth !== null && p.clipDepth > p.depth && v.beginMask()) {
-        drawPlacement(p, f, mat, cx, depthLeft, v);
+        drawPlacement(p, f, mat, cx, depthLeft, v, clk);
         v.endMaskDef();
         i++;
         while (i < placements.length && placements[i]!.depth <= p.clipDepth) {
-          drawPlacement(placements[i]!, f, mat, cx, depthLeft, v);
+          drawPlacement(placements[i]!, f, mat, cx, depthLeft, v, clk);
           i++;
         }
         v.endMask();
         continue;
       }
-      drawPlacement(p, f, mat, cx, depthLeft, v);
+      drawPlacement(p, f, mat, cx, depthLeft, v, clk);
       i++;
     }
   }
 
-  function drawPlacement(p: Placement, f: number, mat: Mat, cx: Cxform | null, depthLeft: number, v: Visitor): void {
+  function drawPlacement(p: Placement, f: number, mat: Mat, cx: Cxform | null, depthLeft: number, v: Visitor, clk: number = f): void {
     if (!scene) return;
     const m = multiply(mat, p.matrix);
     const c = composeCxform(cx, p.cxform);
@@ -750,17 +750,16 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     if (scene.sprites[p.ref] && depthLeft > 0) {
       const b = bakedFor(p.ref);
       if (!b) return;
-      // INFERRED (engine): a nested sprite shows frame (parent frame mod its own frame count),
-      // i.e. Flash's default looping child timeline. Not verified against glaiel::swf.
-      const cf = ((f % b.frames) + b.frames) % b.frames;
-      walk(placementsAt(b, cf), cf, m, c, depthLeft - 1, v);
+      // OBSERVED (engine-behaviour.ts): a nested sprite runs on its own clock, so a one-frame holder does not freeze it
+      const cf = nestedFrame(clk, b.frames);
+      walk(placementsAt(b, cf), cf, m, c, depthLeft - 1, v, clk);
     }
   }
 
-  function walkTarget(id: string, f: number, v: Visitor): void {
+  function walkTarget(id: string, f: number, v: Visitor, clk: number = f): void {
     const b = bakedFor(id);
     if (!b) return;
-    walk(placementsAt(b, f), f, IDENTITY, null, MAX_NEST, v);
+    walk(placementsAt(b, f), f, IDENTITY, null, MAX_NEST, v, clk);
   }
 
   /** Union bounds of a target across all of its frames (stage: the stage rect). */
@@ -1055,7 +1054,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     g.enable(g.STENCIL_TEST);
     maskStack.length = 0;
     definingMask = 0;
-    walkTarget(targetId, frame, glVisitor());
+    walkTarget(targetId, frame, glVisitor(), clock);
     g.disable(g.STENCIL_TEST);
     g.colorMask(true, true, true, true);
   }
@@ -1145,7 +1144,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
                 c.transform(fm[0], fm[1], fm[2], fm[3], fm[4], fm[5]);
                 // cxform approximated for bitmaps: alpha multiplier only
                 c.globalAlpha = clamp01(cx ? cx.mul[3] : 1);
-                c.imageSmoothingEnabled = false; // match the GL NEAREST sampling
+                c.imageSmoothingEnabled = true; // the game filters bitmap fills (OBSERVED; matches the GL LINEAR sampling)
                 c.drawImage(img, 0, 0);
                 c.restore();
                 drawCalls++;
@@ -1234,7 +1233,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     if (!scene || !targetId) return;
     const s = zoom * dpr;
     c.setTransform(s, 0, 0, s, W / 2 - center[0] * s, H / 2 - center[1] * s);
-    walkTarget(targetId, frame, c2dVisitor());
+    walkTarget(targetId, frame, c2dVisitor(), clock);
     c.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -1275,6 +1274,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
       if (frame + 1 >= n) {
         if (loop) {
           frame = 0;
+          clock++;
           changed = true;
         } else {
           setPlaying(false); // stop on the last frame (tell the owner so its play/pause flips)
@@ -1283,6 +1283,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
         }
       } else {
         frame++;
+        clock++;
         changed = true;
       }
     }
@@ -1306,6 +1307,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
   function setFrame(n: number): void {
     const count = getFrameCount();
     const f = Math.max(0, Math.min(count - 1, Math.floor(Number(n) || 0)));
+    clock = f;   // a scrub or step shows the state at that frame, children as if they had run since frame 0
     if (f !== frame) {
       frame = f;
       onFrame(frame);
@@ -1340,6 +1342,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
       }
       if (frame >= getFrameCount()) {
         frame = 0;
+        clock = 0;
         onFrame(0);
       }
       render();
@@ -1355,6 +1358,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
       }
       targetId = id;
       frame = 0;
+      clock = 0;
       onFrame(0);
       render();
     },
@@ -1389,6 +1393,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
       if (destroyed || playing) return;
       if (!loop && frame >= getFrameCount() - 1) {
         frame = 0;
+        clock = 0;
         onFrame(0);
       }
       setPlaying(true);
