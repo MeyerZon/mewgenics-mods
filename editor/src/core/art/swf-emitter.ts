@@ -15,6 +15,8 @@ import { buildLinkageAbc } from "./abc-stub.ts";
 import { BitWriter, TAG, tag, tagName, concat, writeRect, writeMatrix, writeCxformWithAlpha, writeRgb } from "./swf-bits.ts";
 import type { Mat } from "./geometry.ts";
 import type { RgbaImage } from "./png.ts";
+import { BLEND_MODES, hasEffects, writeFilterList } from "./effects.ts";
+import type { SceneFilter } from "./effects.ts";
 
 export const SWF_VERSION = 17;
 export const FILE_ATTRIBUTES_AS3 = 0x00000008;
@@ -75,6 +77,13 @@ export interface PlaceObject2Fields {
   cxform?: Cxform | null;
   name?: string | null;
   clipDepth?: number | null;
+}
+
+export interface PlaceObject3Fields extends PlaceObject2Fields {
+  /** a BLEND_MODES name; written when given (normal included, to reset a previous blend) */
+  blend?: string | null;
+  /** written when given (an empty list resets previous filters) */
+  filters?: SceneFilter[] | null;
 }
 
 export interface EncodedTimeline {
@@ -266,6 +275,36 @@ export function encodePlaceObject2(p: PlaceObject2Fields): Uint8Array {
   return tag(TAG.PlaceObject2, w.finish());
 }
 
+/**
+ * PlaceObject3 tag: PlaceObject2's fields plus a filter list and a blend mode.
+ * @returns framed tag
+ */
+export function encodePlaceObject3(p: PlaceObject3Fields): Uint8Array {
+  let flags = 0;
+  if (p.move) flags |= 0x01;
+  if (p.characterId !== undefined) flags |= 0x02;
+  if (p.matrix) flags |= 0x04;
+  if (p.cxform) flags |= 0x08;
+  if (p.name) flags |= 0x20;
+  if (p.clipDepth !== undefined && p.clipDepth !== null) flags |= 0x40;
+  // flags2: Reserved OpaqueBackground HasVisible HasImage HasClassName HasCacheAsBitmap HasBlendMode HasFilterList
+  let flags2 = 0;
+  if (p.blend !== undefined && p.blend !== null) flags2 |= 0x02;
+  if (p.filters) flags2 |= 0x01;
+  const w = new BitWriter(64);
+  w.u8(flags);
+  w.u8(flags2);
+  w.u16(p.depth);
+  if (p.characterId !== undefined) w.u16(p.characterId);
+  if (p.matrix) writeMatrix(w, p.matrix);
+  if (p.cxform) writeCxformWithAlpha(w, p.cxform);
+  if (p.name) w.string(p.name);
+  if (p.clipDepth !== undefined && p.clipDepth !== null) w.u16(p.clipDepth);
+  if (p.filters) writeFilterList(w, p.filters);
+  if (p.blend !== undefined && p.blend !== null) w.u8(BLEND_MODES[p.blend] ?? 1);
+  return tag(TAG.PlaceObject3, w.finish());
+}
+
 /** One timeline frame-op → tag (null when the referenced character is unknown). */
 function frameOpToTag(op: FrameOp, ids: Map<string, number>, findings: Finding[], at: string): FramedTag | null {
   if (op.op === "remove") {
@@ -274,6 +313,19 @@ function frameOpToTag(op: FrameOp, ids: Map<string, number>, findings: Finding[]
     return { code: TAG.RemoveObject2, bytes: tag(TAG.RemoveObject2, w.finish()) };
   }
   const p = op.p;
+  if (op.op === "move" && op.changedEffects) {
+    return {
+      code: TAG.PlaceObject3,
+      bytes: encodePlaceObject3({
+        move: true,
+        depth: p.depth,
+        matrix: op.changedMatrix ? p.matrix : undefined,
+        cxform: op.changedCxform ? p.cxform || CXFORM_IDENTITY : undefined,
+        blend: p.blend || "normal",
+        filters: p.filters || [],
+      }),
+    };
+  }
   if (op.op === "move") {
     return {
       code: TAG.PlaceObject2,
@@ -289,6 +341,12 @@ function frameOpToTag(op: FrameOp, ids: Map<string, number>, findings: Finding[]
   if (cid === undefined) {
     findings.push({ severity: "error", code: "ref-unresolved", message: `placement references unknown id "${p.ref}"`, path: at });
     return null;
+  }
+  if (hasEffects(p.blend, p.filters)) {
+    return {
+      code: TAG.PlaceObject3,
+      bytes: encodePlaceObject3({ move: op.op === "replace", depth: p.depth, characterId: cid, matrix: p.matrix, cxform: p.cxform, name: p.name, clipDepth: p.clipDepth, blend: p.blend || null, filters: p.filters && p.filters.length ? p.filters : null }),
+    };
   }
   return {
     code: TAG.PlaceObject2,
@@ -341,6 +399,8 @@ export interface GateSwfOptions {
   fill?: "gray" | "gradient";
   /** "shape4": add a butt-cap, miter-join, non-scaling gray:1 stroke (the shape becomes a DefineShape4) */
   stroke?: "shape4";
+  /** PlaceObject3 on the icon: "blend" (blend add only) or "filters" (a red glow only) */
+  effects?: "blend" | "filters";
 }
 
 /**
@@ -368,7 +428,7 @@ export function minimalGateSwf(o: GateSwfOptions): Uint8Array {
     ...(o.fill === "gradient" ? { gradients: { ramp: { kind: "linear" as const, x1: 0, y1: 0, x2: 64, y2: 0, stops: [{ offset: 0, color: "gray:2" }, { offset: 1, color: "gray:14" }] } } } : {}),
     sprites: {
       ...(nested ? { Icon: { frames: 1, labels: {}, layers: [{ depth: 1, keys: [{ frame: 0, ref: "square", x: 0, y: 0 }] }] } } : {}),
-      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0 }] }] },
+      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0, ...(o.effects === "blend" ? { blend: "add" } : o.effects === "filters" ? { filters: [{ type: "glow" as const, color: "#ff2020", blurX: 8, blurY: 8, strength: 2 }] } : {}) }] }] },
     },
     exports: { [o.linkage]: "Clip" },
     stage_instances: [],

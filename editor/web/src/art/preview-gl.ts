@@ -43,6 +43,7 @@ import { parseFill, fillToRgba, parseColor } from "../../../src/core/art/scene.t
 import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline.ts";
 import { nestedFrame } from "../../../src/core/art/engine-behaviour.ts";
 import { strokePolys } from "../../../src/core/art/stroke.ts";
+import { C2D_COMPOSITE } from "../../../src/core/art/effects.ts";
 import type { StrokeStyle } from "../../../src/core/art/stroke.ts";
 import { gradientUnitMatrix, gradientFocal, rasterizeStops, resolveStops, swfSpread } from "../../../src/core/art/gradient.ts";
 import type { Scene, Fill, SceneShape } from "../../../src/core/art/scene.ts";
@@ -472,6 +473,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
   let frame = 0;
   /** frames elapsed since playback started: nested sprites run on this clock (OBSERVED), not on their parent's frame */
   let clock = 0;
+  /** the PlaceObject3 blend of the placement being drawn (nested placements inherit it unless they set their own) */
+  let curBlend = "normal";
   let playing = false;
   let loop = true;
   // suspended = the rAF loop is paused because the canvas is off-screen or the tab
@@ -760,6 +763,16 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
   }
 
   function drawPlacement(p: Placement, f: number, mat: Mat, cx: Cxform | null, depthLeft: number, v: Visitor, clk: number = f): void {
+    const prevBlend = curBlend;
+    if (p.blend && p.blend !== "normal") curBlend = p.blend;
+    try {
+      drawPlacementInner(p, f, mat, cx, depthLeft, v, clk);
+    } finally {
+      curBlend = prevBlend;
+    }
+  }
+
+  function drawPlacementInner(p: Placement, f: number, mat: Mat, cx: Cxform | null, depthLeft: number, v: Visitor, clk: number): void {
     if (!scene) return;
     const m = multiply(mat, p.matrix);
     const c = composeCxform(cx, p.cxform);
@@ -959,9 +972,19 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
         }
       }
     }
+    if (cover && !definingMask) blendModeFunc(g, curBlend);
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+    if (cover && !definingMask && curBlend !== "normal") blendModeFunc(g, "normal");
     drawCalls++;
     g.stencilMask(0xff);
+  }
+
+  /** GL approximation of a PlaceObject3 blend on straight-alpha output: add, multiply, screen; anything else as normal. */
+  function blendModeFunc(g: WebGLRenderingContext, mode: string): void {
+    if (mode === "add") g.blendFuncSeparate(g.SRC_ALPHA, g.ONE, g.ONE, g.ONE_MINUS_SRC_ALPHA);
+    else if (mode === "multiply") g.blendFuncSeparate(g.DST_COLOR, g.ONE_MINUS_SRC_ALPHA, g.ONE, g.ONE_MINUS_SRC_ALPHA);
+    else if (mode === "screen") g.blendFuncSeparate(g.ONE, g.ONE_MINUS_SRC_COLOR, g.ONE, g.ONE_MINUS_SRC_ALPHA);
+    else g.blendFuncSeparate(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA, g.ONE, g.ONE_MINUS_SRC_ALPHA);
   }
 
   function glVisitor(): Visitor {
@@ -1161,6 +1184,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     const css = (rgba: [number, number, number, number]): string => `rgba(${rgba[0]},${rgba[1]},${rgba[2]},${rgba[3].toFixed(4)})`;
     return {
       shape: (_id, prep, mat, cx) => {
+        // PlaceObject3 blend of the enclosing placement (approximated per fill, not on a group layer)
+        c.globalCompositeOperation = (C2D_COMPOSITE[curBlend] || "source-over") as GlobalCompositeOperation;
         const scale = matScale(mat);
         const tol = Math.max(1e-3, Math.min(1e3, FLATTEN_TOL_CSS / (zoom * scale)));
         for (const path of prep.paths) {
@@ -1252,6 +1277,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     const W = canvas.width;
     const H = canvas.height;
     c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalCompositeOperation = "source-over";
     c.globalAlpha = 1;
     c.clearRect(0, 0, W, H);
     if (background === "checker") {

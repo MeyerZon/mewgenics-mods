@@ -10,6 +10,8 @@
 
 import type { Mat } from "./geometry.ts";
 import { gradientProblems } from "./gradient.ts";
+import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
+import type { SceneFilter } from "./effects.ts";
 
 /**
  * SymbolClass alone binds linkage names; a DoABC is not needed for that (docs/swf-emitter-fix-spec.md §3.2: the
@@ -109,6 +111,10 @@ export interface SceneKey {
   alpha?: number;
   /** how to reach the next key (default hold) */
   tween?: "hold" | "linear";
+  /** PlaceObject3 blend mode (held until the next key; not tweened) */
+  blend?: string;
+  /** PlaceObject3 filters (held until the next key; not tweened) */
+  filters?: SceneFilter[];
 }
 
 export interface SceneLayer {
@@ -446,6 +452,17 @@ export function validateScene(input: unknown): SceneValidation {
           for (const f of ["mul", "add"] as const) {
             const v = k.cxform[f];
             if (v !== undefined && (!Array.isArray(v) || v.length !== 4)) err("key-cxform", `cxform.${f} must have 4 numbers`, [kat + ".cxform"]);
+          }
+        }
+        if (k.blend !== undefined) {
+          if (typeof k.blend !== "string" || !Object.prototype.hasOwnProperty.call(BLEND_MODES, k.blend)) err("blend", `blend must be one of ${Object.keys(BLEND_MODES).join(", ")}`, [kat + ".blend"]);
+          else if (!GL_PREVIEW_BLENDS.has(k.blend)) findings.push({ severity: "info", code: "blend-not-previewed", message: `blend "${k.blend}" is written to the SWF; the WebGL preview draws it as normal`, path: kat + ".blend" });
+        }
+        if (k.filters !== undefined) {
+          if (!Array.isArray(k.filters)) err("filter", "filters must be an array", [kat + ".filters"]);
+          else {
+            k.filters.forEach((fl, fi) => { for (const msg of filterProblems(fl)) err("filter", `filters[${fi}]: ${msg}`, [`${kat}.filters[${fi}]`]); });
+            if (k.filters.length) findings.push({ severity: "info", code: "filter-not-previewed", message: "filters are written to the SWF (PlaceObject3); the preview does not draw them", path: kat + ".filters" });
           }
         }
       });
