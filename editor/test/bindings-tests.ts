@@ -1385,6 +1385,23 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(/0x4d6/.test(r2.detail ?? "") && /0x4d7/.test(r2.detail ?? ""), r2.detail ?? "");
     eq(entry(split.manifest, "Foo_typeid")!.value, "0x4d6", "old value kept until a human decides");
   });
+  // ---- evidence truth: every manifest evidence path is a doc section or a file that exists under .analysis/ ----
+  test("every manifest evidence string is a doc section or an .analysis/ path (optionally :line)", () => {
+    const m = loadManifest(realPath);
+    const bad = m.entries.flatMap((e) => (e.evidence || []).filter((ev) => !/^(docs\/[\w./-]+\.md(#[\w-]+)?|\.analysis\/[\w./-]+(:\d+)?)$/.test(ev)).map((ev) => `${e.name}: ${ev}`));
+    assert(bad.length === 0, bad.join("; "));
+  });
+  {
+    const REPO = join(BINDINGS_DIR, "..");
+    const ANALYSIS = join(REPO, ".analysis");
+    if (existsSync(join(ANALYSIS, "decompiled"))) {
+      test("every .analysis/ evidence path in the committed manifest exists on disk (the decompile store is rebuilt; .analysis/ is git-ignored, so this runs only where it exists)", () => {
+        const m = loadManifest(realPath);
+        const missing = m.entries.flatMap((e) => (e.evidence || []).filter((ev) => ev.startsWith(".analysis/")).map((ev) => ev.replace(/:\d+$/, "")).filter((ev) => !existsSync(join(REPO, ev))).map((ev) => `${e.name}: ${ev}`));
+        assert(missing.length === 0, missing.join("; "));
+      });
+    } else console.log("  (skipped: .analysis/decompiled absent — the evidence-on-disk check runs where the decompile store exists)");
+  }
   /** offsets that carry a witness in the committed manifest (batch 1: the harness's unit walk, console, app and scene offsets) */
   const WITNESSED_OFFSETS_BATCH1 = [
     "App_running", "App_window", "DebugConsole_outBegin", "DebugConsole_outEnd", "TurnControl_scene", "Scene_entityManager",

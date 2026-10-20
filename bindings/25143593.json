@@ -199,7 +199,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Character_BeginTurn.c"
+        ".analysis/decompiled/Character_BeginTurn_0x10a9b0.c"
       ],
       "verify": {
         "log": "hook installed: Character::BeginTurn"
@@ -629,7 +629,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/ApplyStatusByName_140483120.c"
+        ".analysis/decompiled/Status_ApplyByName_0x483120.c"
       ],
       "verify": {
         "log": "status hooks: apply_status + 13/13 name lookups aliased"
@@ -785,7 +785,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Lookup_140493190.c"
+        ".analysis/decompiled/Status_GetFlags_0x493190.c"
       ],
       "note": "glaiel::get_status_flags(std::string) hit-effect flag bits. Also FW_LK[4]."
     },
@@ -847,7 +847,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/LuckUp_ctor_140711c90.c"
+        ".analysis/decompiled/LuckUp_ctor_0x711c90.c"
       ]
     },
     {
@@ -1074,7 +1074,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/debugconsole_init.c"
+        ".analysis/decompiled/DebugConsole_init_0xa11ef0.c"
       ]
     },
     {
@@ -1202,7 +1202,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140492c20.c"
+        ".analysis/decompiled/Status_GetStackMode_0x492c20.c"
       ]
     },
     {
@@ -1311,7 +1311,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140492f20.c"
+        ".analysis/decompiled/Status_GetValue_0x492f20.c"
       ]
     },
     {
@@ -1369,7 +1369,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_1405028e0.c"
+        ".analysis/decompiled/Status_IsHitEffect_0x5028e0.c"
       ]
     },
     {
@@ -1422,7 +1422,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140493690.c"
+        ".analysis/decompiled/Status_OnAppliedToDamageInstance_0x493690.c"
       ]
     },
     {
@@ -1475,7 +1475,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140493910.c"
+        ".analysis/decompiled/Status_OnAppliedToTile_0x493910.c"
       ]
     },
     {
@@ -1528,7 +1528,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140493b80.c"
+        ".analysis/decompiled/Status_OnKilledCharacter_0x493b80.c"
       ]
     },
     {
@@ -1581,7 +1581,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140493e00.c"
+        ".analysis/decompiled/Status_OnDamageReport_0x493e00.c"
       ]
     },
     {
@@ -1639,7 +1639,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_1404933e0.c"
+        ".analysis/decompiled/Status_GetIcon_0x4933e0.c"
       ]
     },
     {
@@ -1687,7 +1687,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140494080.c"
+        "docs/binding-port.md#known-limits-and-human-decisions"
       ]
     },
     {
@@ -2100,7 +2100,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Lookup_140502b40.c"
+        ".analysis/decompiled/Status_SpawnTile_0x502b40.c"
       ]
     },
     {
@@ -2175,7 +2175,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/ProcessCmds.c"
+        ".analysis/decompiled/ProcessCmds_0x9b8bb0.c"
       ]
     },
     {
@@ -2410,7 +2410,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/gpak_load.c"
+        ".analysis/decompiled/Gpak_Load_0x9b5380.c"
       ]
     },
     {
@@ -2889,7 +2889,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Gon_merge_a.c"
+        ".analysis/decompiled/Gon_PatchMerge_a_0x944cc0.c"
       ]
     },
     {
@@ -2928,7 +2928,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Gon_merge_b.c"
+        ".analysis/decompiled/Gon_PatchMerge_b_0x944f50.c"
       ]
     },
     {
@@ -3012,7 +3012,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Gon_merge_c.c"
+        ".analysis/decompiled/Gon_DeepMerge_0x946680.c"
       ]
     },
     {
@@ -3061,7 +3061,7 @@
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Dispatcher_1405f9760.c"
+        ".analysis/decompiled/Status_ApplyLuckUp_0x5f9760.c"
       ]
     },
     {
@@ -3221,7 +3221,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/debugconsole_init.c",
+        ".analysis/decompiled/DebugConsole_init_0xa11ef0.c",
         "docs/engine-map.md#debug-console-and-application-loop"
       ],
       "verify": {
@@ -3465,8 +3465,8 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/ApplyStatusByName_140483120.c:18",
-        ".analysis/decompiled/Dispatcher_1405f9760.c:31"
+        ".analysis/decompiled/Status_ApplyByName_0x483120.c",
+        ".analysis/decompiled/Status_ApplyLuckUp_0x5f9760.c"
       ]
     },
     {
@@ -3500,8 +3500,8 @@
       ],
       "evidence": [
         "docs/engine-map.md#status-effects",
-        ".analysis/decompiled/LuckUpVT0_140566ed0.c",
-        ".analysis/decompiled/LuckUpVT1_140566ec0.c",
+        ".analysis/decompiled/LuckUp_GetTypeName_0x566ed0.c",
+        ".analysis/decompiled/LuckUp_GetTypeId_0x566ec0.c",
         ".analysis/luckup-vtable.hex"
       ],
       "verify": {
@@ -3557,7 +3557,7 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/LuckUpVT1_140566ec0.c"
+        ".analysis/decompiled/LuckUp_GetTypeId_0x566ec0.c"
       ],
       "note": "slot 1 body on this build: B8 D6 04 00 00 C3 (mov eax, 0x4d6; ret); second source: mov r8d, 0x4d6 (41 B8 D6 04 00 00) four instructions before the call to Entity_FindComponentsByTypeId in Status_ApplyLuckUp (call #4). Both must agree or the port reports needs-human."
     },

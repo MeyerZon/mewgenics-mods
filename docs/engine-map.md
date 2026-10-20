@@ -98,8 +98,11 @@ ParaboxAPI's `GameSymbols.h` (TheMegax/Mewtiplayer) targets this exact build and
 decompiled code. Known community hook points: `ApplicationBase::FrameBegin`, `TurnControl::NextTurn`,
 `StatusMenu::update`, SDL3 DYNAPI `SDL_GL_SwapWindow`.
 
-Full inventories from the Ghidra session live in `.analysis/` (git-ignored): `list_procedures.tsv` (56,360 rows),
-`list_names.tsv` (452,868 rows incl. RTTI vftables), `decompiled/*.c`.
+Full inventories from the Ghidra session lived in `.analysis/` (git-ignored): `list_procedures.tsv` (56,360 rows) and
+`list_names.tsv` (452,868 rows incl. RTTI vftables) are not on disk since the 2026-10-19 wipe — regenerate with the
+REA `list_procedures` / `list_names` tools when a task needs them; `decompiled/*.c` was rebuilt 2026-10-20 (every
+manifest evidence path exists again, pinned by a test in `editor/test/bindings-tests.ts`), and the exe copy is back at
+`.analysis/exe/25143593/Mewgenics.exe` (sha256 `4127cd6a…`, as in the manifest).
 
 ## Debug console and application loop (static decode 2026-10-18)
 
