@@ -37,7 +37,9 @@ export type Directive =
   /** replay a dev-menu scene entry inside the game (mewtest.dll: MtHost.enter_scene); once per script */
   | { line: number; kind: "enter"; scene: string }
   /** the DLL emits a shot event and holds the scene ~700 ms; the runner captures the game window into the run dir */
-  | { line: number; kind: "shot"; label: string };
+  | { line: number; kind: "shot"; label: string }
+  /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
+  | { line: number; kind: "seed"; seed: string };
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
 export const KNOWN_SCENES = ["TacticsTest"];
@@ -182,6 +184,10 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
       const q = parseQuoted(rest, 0);
       if (!q || rest.slice(q.end).trim()) return { error: "shot needs one quoted label" };
       return { line: lineNo, kind: "shot", label: q.value };
+    }
+    case "seed": {
+      if (!/^\d{1,20}$/.test(rest) || BigInt(rest) > 18446744073709551615n) return { error: "seed needs one unsigned integer (0..18446744073709551615)" };
+      return { line: lineNo, kind: "seed", seed: BigInt(rest).toString() };
     }
     case "enter": {
       if (!rest) return { error: `enter needs a scene name (${KNOWN_SCENES.join("|")})` };
