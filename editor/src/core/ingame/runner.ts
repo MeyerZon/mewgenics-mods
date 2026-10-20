@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
 import { DATA_CACHE_DIR } from "../repo.ts";
 import { locateGameDir, preflight, buildLaunch, LaunchError, type Preflight, type LaunchSpec, type Env } from "./launch.ts";
 import { parseResults, type ResultSummary } from "./results.ts";
-import { collectLogs, locateAppdataLogsDir, readWindow, checkLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
+import { collectLogs, listCrashFiles, locateAppdataLogsDir, readWindow, checkLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
 import { isRunnerSide } from "./script.ts";
 import { captureWindow, type CaptureFn } from "./shot.ts";
 import {
@@ -383,6 +383,7 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     const slot = plan.usesCampaignSlot && savesDir ? resetCampaignSlot(savesDir, runDir) : null;
 
     // 5. spawn + wait (backstop kill)
+    const crashesBefore = listCrashFiles(gameDir, appdataLogsDir);
     const launchedAtMs = Date.now();
     const exit = await new Promise<SpawnOutcome>((resolve) => {
       let stdout = "";
@@ -457,7 +458,7 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
       report.artifacts.shots.push({ label: s.label, line: s.line, path: c.path, hidden: plan.hide, ...(c.note ? { note: c.note } : {}) });
     }
     report.artifacts.resultFile = existsSync(outPath) ? outPath : null;
-    const logs = collectLogs({ gameDir, appdataLogsDir, frameworkLogOffset, launchedAtMs, expectedSuffix });
+    const logs = collectLogs({ gameDir, appdataLogsDir, frameworkLogOffset, launchedAtMs, expectedSuffix, crashesBefore });
     report.logFindings = logs;
     const runnerSide = plan.directives.filter(isRunnerSide);
     if (runnerSide.length) {
