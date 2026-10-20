@@ -102,7 +102,7 @@ export interface DeriveAnchor {
   /** the constant is the vtable's slot count: consecutive qwords pointing into an exec section */
   extent?: boolean;
   /** the constant is the index of the slot whose body matches `bodyPattern` as a prefix and/or whose bounded body rip-lea's `stringRef` */
-  slotSearch?: { bodyPattern?: string; stringRef?: string; nth?: number; expect?: number };
+  slotSearch?: { bodyPattern?: string; contains?: string; stringRef?: string; nth?: number; expect?: number };
 }
 export interface AfterAnchor {
   function: string;

@@ -165,14 +165,16 @@ What the run suggests for the ladder (candidates, not implemented):
   cfgLite tolerance); a *vftable-store* rung for constructors (`LuckUp_ctor` is the `.pdata` function that stores
   `LuckUp_vftable` through a rip-relative `lea`) — RTTI has no function dependency, so the vtable phase could run
   before the function rungs to make that possible.
-- **Anchor the six constants**: `LuckUp_vtableSlots` from the vftable's extent (next RTTI object or first non-`.text`
-  pointer), the `VT_*` indices by slot-body pattern or by the slot whose code references a known string; and
-  corroborate the derived `LuckUp_typeid` with a second witness (the imm32 passed to `Entity_FindComponentsByTypeId`
-  at call #4 of `Status_ApplyLuckUp`) now that it is known to change between builds.
-- **The 32 offsets are the real gap**: a cross-build run cannot say whether `Status_stacks` or `Character_turnKind`
-  moved. Harvest `witness { function, pattern, dispAt }` per offset from its consumer (`Status_ctor`,
-  `Character_BeginTurn`, `DebugConsole_init`, …) so the next run reports `ported-witness` / `proposed` instead of
-  `needs-human`.
+- ~~Anchor the six constants~~ — done 2026-10-20: `LuckUp_vtableSlots` = `derive { vtable, extent: true }` (172
+  consecutive code pointers); `VT_GetTypeId` / `VT_GetTypeHierarchy` = `derive.slotSearch { bodyPattern }` (the only
+  slot whose body is `mov eax,imm32; ret` / `lea rax,[rip+x]; ret`); `VT_GetTypeName` / `VT_IsA` = `slotSearch {
+  stringRef: "LuckUp", nth 0/1, expect 2 }` (the only two slots whose bounded body references the string — GetTypeName
+  by `mov` loads of its bytes, IsA by a `lea`); `VT_OnStacksChanged` = a displacement witness `FF 90 ?? ?? ?? ?? 83 7B
+  ?? 00` in `Status_ApplyLuckUp` with `scale: 8` (`call [rax+0x550]` = slot 170). Slot bodies are bounded by `.pdata`
+  or their first `ret`, so a leaf slot never "contains" its neighbour. A search that does not find exactly `expect`
+  slots is `needs-human`, never a guess. `LuckUp_typeid` carries its second witness since PR #32.
+- ~~The 32 offsets are the real gap~~ — done 2026-10-20: every struct offset (40) carries `witness { function, pattern,
+  dispAt[, dispSize, nth] }` with a note naming the instruction; `harvest.ts` verifies all of them on the current exe.
 - `cross-build.ts` has no `--gameVersion`, so the ported build block keeps the old manifest's `1.1.21239`;
   `port.ts` already accepts `opts.gameVersion`, pass it through.
 - Record the size/call deltas rung 2 saw in the report (all 0 here) so the tolerances can be tightened on evidence,

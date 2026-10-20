@@ -3566,8 +3566,11 @@
       "kind": "constant",
       "value": "172",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "extent": true
+        },
+        "note": "the LuckUp vftable has exactly this many consecutive pointers into .text; the next qword is the following vftable's COL (.rdata). Status_vftable has the same count."
       },
       "consumers": [
         "native/framework/src/status_engine.c"
@@ -3587,8 +3590,15 @@
       "kind": "constant",
       "value": "0",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "stringRef": "LuckUp",
+            "nth": 0,
+            "expect": 2
+          }
+        },
+        "note": "the first of the two LuckUp slots whose bounded body references the unique string \"LuckUp\": GetTypeName loads its bytes with mov eax,[rip+str] / movzx eax,word [rip+str+4] (LuckUp_GetTypeName_0x566ed0.c shows them folded to constants); a build that inlines the name as immediates gives no answer -> needs-human, never a wrong slot"
       },
       "consumers": [
         "native/framework/src/status_engine.c",
@@ -3609,8 +3619,13 @@
       "kind": "constant",
       "value": "1",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "bodyPattern": "B8 ?? ?? ?? ?? C3"
+          }
+        },
+        "note": "the only LuckUp slot whose body is mov eax,imm32; ret (the type id 0x4d6)"
       },
       "consumers": [
         "native/framework/src/status_engine.c"
@@ -3630,8 +3645,15 @@
       "kind": "constant",
       "value": "2",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "stringRef": "LuckUp",
+            "nth": 1,
+            "expect": 2
+          }
+        },
+        "note": "the second of the two LuckUp slots referencing \"LuckUp\": IsA leas it to compare the queried name, then \"Status\" (LuckUp_IsA_0x566df0.c)"
       },
       "consumers": [
         "native/framework/src/status_engine.c",
@@ -3652,8 +3674,13 @@
       "kind": "constant",
       "value": "3",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "bodyPattern": "48 8D 05 ?? ?? ?? ?? C3"
+          }
+        },
+        "note": "the only LuckUp slot whose body is lea rax,[rip+table]; ret"
       },
       "consumers": [
         "native/framework/src/status_engine.c"
@@ -3673,8 +3700,14 @@
       "kind": "constant",
       "value": "170",
       "anchors": {
-        "unanchored": true,
-        "note": "vtable layout of the Status hierarchy; re-verify slot bodies when the class hierarchy changes"
+        "witness": {
+          "function": "Status_ApplyLuckUp",
+          "pattern": "FF 90 ?? ?? ?? ?? 83 7B ?? 00",
+          "dispAt": 2,
+          "dispSize": 4,
+          "scale": 8
+        },
+        "note": "call [rax+0x550] right before cmp dword [rbx+0x5c],0 in the merge path: slot 0x550/8 = 170 (status_engine.c calls the same slot)"
       },
       "consumers": [
         "native/framework/src/status_engine.c"

@@ -18,7 +18,7 @@
 import { createHash } from "node:crypto";
 import { parsePattern, scanExec } from "./scan.ts";
 import { makeSignature } from "./siggen.ts";
-import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, decodeFunction, constantSources, constantHasSources, readOffsetWitness } from "./harvest.ts";
+import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, decodeFunction, constantSources, constantHasSources, constantValues, readOffsetWitness } from "./harvest.ts";
 import type { FunctionHarvest, RipRef } from "./harvest.ts";
 import { hex, parseValue, entry } from "./manifest.ts";
 import type { Manifest, Entry, PortCandidate } from "./manifest.ts";
@@ -243,14 +243,18 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
     if (constantHasSources(a)) {
       // every independent source must agree; a split is a human decision, never a coin toss
       const src = constantSources(out, pe, buf, e);
-      const vals = [src.slot, src.arg, src.disp].filter((v): v is number => v !== null);
+      const vals = constantValues(src);
       const was = e.value || "";
-      if (!vals.length) { finish(e, "failed", "derive", src.notes.join("; "), null); continue; }
+      if (!vals.length) {
+        // a slot search that found no single answer is a human decision (the layout changed), not a failure to port
+        if (src.search === null && e.anchors.derive?.slotSearch) { finish(e, "needs-human", "slot-search", `${src.notes.join("; ")}; value ${was} kept`, null); continue; }
+        finish(e, "failed", "derive", src.notes.join("; "), null); continue;
+      }
       if (vals.some((v) => v !== vals[0])) { finish(e, "needs-human", "derive", `sources disagree: ${src.notes.join("; ")}; value ${was} kept`, null); continue; }
       const v = vals[0];
-      e.value = hex(v);
-      const method = [src.slot !== null ? "slot-body" : "", src.arg !== null ? "call-arg" : "", src.disp !== null ? "call-slot" : ""].filter(Boolean).join("+");
-      finish(e, "ported-derived", method, `${src.notes.join("; ")}${vals.length > 1 ? " (agree)" : ""}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.value, undefined, was);
+      e.value = was && parseValue(was) === v ? was : hex(v);   // keep the manifest's spelling (172 stays 172) when the number is unchanged
+      const method = [src.slot !== null ? "slot-body" : "", src.arg !== null ? "call-arg" : "", src.extent !== null ? "extent" : "", src.search !== null ? "slot-search" : "", src.disp !== null ? "call-slot" : ""].filter(Boolean).join("+");
+      finish(e, "ported-derived", method, `${src.notes.join("; ")}${vals.length > 1 ? " (agree)" : ""}${was && parseValue(was) === v ? " (unchanged)" : ` (was ${was})`}`, e.value, undefined, was);
       continue;
     }
     finish(e, "needs-human", "none", e.anchors.unanchored ? "unanchored constant carried over unchanged; verify by hand" : "no derivation anchor", e.value || null);

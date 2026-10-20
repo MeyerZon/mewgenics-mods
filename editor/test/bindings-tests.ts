@@ -1493,7 +1493,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       assert(bad.length === 0, bad.join("; "));
       eq(r.summary["ported-exact"], m.entries.filter((e) => e.kind === "function" && e.signature).length, "every signed function ported-exact");
       assert((r.summary["ported-witness"] || 0) >= 2 && (r.summary["ported-derived"] || 0) >= 11, JSON.stringify(r.summary));
-      eq(r.summary["needs-human"], m.entries.filter((e) => e.anchors.unanchored).length, "exactly the unanchored entries need a human");
+      eq(r.summary["needs-human"] || 0, m.entries.filter((e) => e.anchors.unanchored).length, "exactly the unanchored entries need a human");
       eq(validateManifest(r.manifest).ok, true);
     });
   }
