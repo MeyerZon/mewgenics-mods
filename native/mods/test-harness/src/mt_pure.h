@@ -57,9 +57,14 @@ size_t          mt_wstr_to_utf8(const uint16_t *w, size_t n, char *out, size_t c
 typedef enum MtDirKind {
     MT_D_CMD, MT_D_WAIT_FRAMES, MT_D_WAIT_TURNS, MT_D_WAIT_MS,
     MT_D_EXPECT_CONSOLE, MT_D_EXPECT_NOCONSOLE, MT_D_EXPECT_STATUS, MT_D_EXPECT_UNITS,
-    MT_D_DUMP, MT_D_LOG, MT_D_QUIT
+    MT_D_DUMP, MT_D_LOG, MT_D_QUIT,
+    MT_D_ENTER          /* enter <SceneName>: replay a dev-menu scene entry (TacticsTest) through the host */
 } MtDirKind;
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
+/* scenes `enter` knows; 0 = unknown. The DLL and the Node parser (script.ts KNOWN_SCENES) must agree. */
+#define MT_SCENE_TACTICS_TEST 1
+int         mt_scene_id(const char *name);    /* 0 if unknown */
+const char *mt_scene_name(int scene);         /* "" if unknown */
 typedef struct MtDirective {
     MtDirKind kind;
     int line;
@@ -70,6 +75,7 @@ typedef struct MtDirective {
     int within;         /* expect console: extra frames to keep polling */
     int unitIsIndex;
     int hasCode;        /* quit with an explicit code */
+    int scene;          /* enter: MT_SCENE_* */
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
@@ -110,6 +116,9 @@ typedef struct MtHost {
     int      (*unit_has_status)(void *u, int i, const char *status);
     void     (*emit)(void *u, const char *jsonLine);
     void     (*request_exit)(void *u, int code);   /* called once, after the end event, on quit/eof */
+    /* enter <scene> on the game thread: 1 entered, 0 refused (detail says why), -1 unavailable (symbols missing),
+     * 2 not ready yet (the runner retries next frame, for at most MT_CONSOLE_WAIT_MS) */
+    int      (*enter_scene)(void *u, int scene, char *detail, size_t cap);
 } MtHost;
 
 typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN } MtState;
@@ -130,6 +139,7 @@ typedef struct MtRunner {
     int expectPass, expectFail;
     int exitCode;
     int finished;
+    int entered;            /* enter succeeded once; a second enter is refused */
     uint64_t t0, now;
 } MtRunner;
 void mt_runner_init(MtRunner *r, const MtScript *s, uint64_t now);

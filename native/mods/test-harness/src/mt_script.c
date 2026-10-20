@@ -40,6 +40,13 @@ static const char *parse_quoted(const char *p, char *out, size_t cap, size_t *ou
     return NULL;
 }
 
+int mt_scene_id(const char *name) {
+    return name && strcmp(name, "TacticsTest") == 0 ? MT_SCENE_TACTICS_TEST : 0;
+}
+const char *mt_scene_name(int scene) {
+    return scene == MT_SCENE_TACTICS_TEST ? "TacticsTest" : "";
+}
+
 static int parse_uint(const char *p, size_t n, long *out) {
     if (n == 0 || n > 9) return 0;
     for (size_t i = 0; i < n; i++) if (p[i] < '0' || p[i] > '9') return 0;
@@ -145,6 +152,19 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
         if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "log needs one quoted string");
         d.kind = MT_D_LOG;
         if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
+    } else if (wl == 5 && !strncmp(p, "enter", 5)) {
+        size_t sl = tok_len(rest);
+        if (!sl) return fail(err, errCap, errLine, lineNo, "enter needs a scene name (TacticsTest)");
+        if (*skip_ws(rest + sl)) return fail(err, errCap, errLine, lineNo, "enter takes exactly one scene name");
+        char name[64];
+        snprintf(name, sizeof name, "%.*s", (int)(sl > 63 ? 63 : sl), rest);
+        d.kind = MT_D_ENTER;
+        d.scene = mt_scene_id(name);
+        if (!d.scene) {
+            char msg[128];
+            snprintf(msg, sizeof msg, "unknown scene \"%s\" (TacticsTest)", name);
+            return fail(err, errCap, errLine, lineNo, msg);
+        }
     } else if (wl == 4 && !strncmp(p, "quit", 4)) {
         d.kind = MT_D_QUIT;
         if (*rest) {

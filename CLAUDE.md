@@ -177,9 +177,10 @@ registered name `JokersLuck`. See `docs/data-mods.md` "Pairing data with a nativ
 **The in-game harness is the T2 tier.** `mewtest.dll` (`native/mods/test-harness/`) runs `.mewtest` scripts inside the
 game through the real console dispatcher and writes a JSON-lines result; the editor's runner (`editor/src/core/ingame/`)
 launches, scans the logs, hashes the real save and decides the verdict. Contracts (grammar, events, exit codes,
-verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with that file. Known limit: only the engine's
-11 console commands exist at the main menu; entering a run via console is an open item, so combat assertions are not
-yet possible.
+verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with that file. Only the engine's 11 console
+commands exist at the main menu; `enter TacticsTest` (2026-10-20) replays the dev menu's test-fight button inside the
+DLL, after which the run commands (`spawn`, `bind`, `load`, `win`, …) exist, turns fire and `dump` / `expect units` /
+`expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry").
 
 Read `docs/engine-map.md` (binary facts, build identity, function RVAs, status model), `docs/data-mods.md` (overlay
 semantics and content shapes), `docs/ingame-testing.md` (the harness), `docs/binding-port.md` (the bindings manifest and
