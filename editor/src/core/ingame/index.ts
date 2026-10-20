@@ -4,4 +4,8 @@ export { listIngameTests } from "./discover.ts";
 export { runPlan, decideVerdict, acquireLock, RUNS_DIR } from "./runner.ts";
 export { locateGameDir, preflight, buildLaunch, detectSteam, LaunchError } from "./launch.ts";
 export { parseResults } from "./results.ts";
+export { startSession } from "./session.ts";
+export type { IngameSession, StartSessionArgs } from "./session.ts";
+export { pipePath, connectPipe } from "./pipe.ts";
+export type { PipeReply } from "./pipe.ts";
 export { collectLogs, locateAppdataLogsDir } from "./logs.ts";

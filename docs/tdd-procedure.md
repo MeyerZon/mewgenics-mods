@@ -20,7 +20,7 @@ layer, which tier of test covers what, where a human still has to look, and what
 
 - **Editor core** (`editor/src/core/`): 145 unit tests (`npm test`), 33 Playwright end-to-end tests (`npm run test:e2e`),
   `tsc --noEmit` (strict TypeScript, no JSDoc typing left). The overlay engine's oracle is the decompiled
-  `Gon_merge_{a,b,c}.c`.
+  `Gon_PatchMerge_a_0x944cc0.c`, `Gon_PatchMerge_b_0x944f50.c` and `Gon_DeepMerge_0x946680.c` (`.analysis/decompiled/`).
 - **Data mods** (`mods/`): the validator (reference integrity, localization, overlay targets, merge preview) is the T0/T1
   test; the harness load smoke is the T2 test (no `NO_*_NAMED` / `GON_ERROR` marker, framework active). Every validator
   finding code is pinned at T0 by `editor/test/validator-tests.ts` on the synthetic base and fixture mods under

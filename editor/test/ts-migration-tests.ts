@@ -17,6 +17,8 @@ function jsFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name === "data") continue;
     const p = join(dir, name);
+    // vendored third-party runtime (git-ignored; scripts/vendor-ruffle.ts copies it from node_modules)
+    if (relative(REPO, p).split(sep).join("/") === "editor/web/public/ruffle") continue;
     if (statSync(p).isDirectory()) jsFiles(p, out);
     else if (/\.(mjs|cjs|js)$/.test(name)) out.push(relative(REPO, p).split(sep).join("/"));
   }
@@ -116,6 +118,22 @@ export async function runTsMigrationTests(test: TestFn, assert: AssertFn, eq: Eq
     assert(Array.isArray(tools.TOOLS), "TOOLS");
     assert(tools.TOOL_INPUT && typeof tools.TOOL_INPUT === "object", "TOOL_INPUT");
     assert(typeof tools.callTool === "function", "callTool");
+  });
+  let sessErr = "";
+  if (!tools.__error) { try { await tools.callTool("ingame_exec", { sessionId: "nope", cmd: "listcmds" }); } catch (e) { sessErr = e instanceof Error ? e.message : String(e); } }
+  test("the session tools exist: start_ingame_session / ingame_exec / stop_ingame_session; ingame_exec on an unknown session is a ToolError", () => {
+    if (tools.__error) throw new Error("tools.ts did not load");
+    const names = (tools.TOOLS as ToolLike[]).map((t) => t.name);
+    for (const n of ["start_ingame_session", "ingame_exec", "stop_ingame_session"]) assert(names.includes(n), `${n} listed`);
+    assert(/unknown session/.test(sessErr), sessErr);
+  });
+  let artErr = "", artRes: unknown = null;
+  if (!tools.__error) { try { artRes = await tools.callTool("write_art_scene", { mod: "dev-sandbox", path: "../escape.scene.json", scene: {} }); } catch (e) { artErr = e instanceof Error ? e.message : String(e); } }
+  test("the art tools exist (list/read/write/new scene, import_svg, build_swf, inspect_swf); a write outside mods/<name>/ is refused by the core", () => {
+    if (tools.__error) throw new Error("tools.ts did not load");
+    const names = (tools.TOOLS as ToolLike[]).map((t) => t.name);
+    for (const n of ["list_art_scenes", "read_art_scene", "write_art_scene", "new_art_scene", "import_svg", "build_swf", "inspect_swf"]) assert(names.includes(n), `${n} listed`);
+    assert(!!artErr || /"ok":\s*false/.test(JSON.stringify(artRes)), `refused: ${artErr} ${JSON.stringify(artRes)}`);
   });
   test("every tool has a zod input schema and its published inputSchema is generated from it", () => {
     if (tools.__error) throw new Error("tools.ts did not load");

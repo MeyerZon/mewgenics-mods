@@ -17,7 +17,7 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 | Data RVAs: App global, SDL3 DYNAPI jump table + 8 slots, default status source | 11 | `BuildInfo.rva_data`, `FW_GetData` |
 | Vftables (LuckUp, Status) and the LuckUp type id | 3 | vtable cloning, sanity check |
 | Vtable slot indices / count | 6 | `offsets.h` |
-| Struct offsets | 32 | `offsets.h` (`status_engine.c`, `mewtest.c`) |
+| Struct offsets | 40 | `offsets.h` (`status_engine.c`, `mewtest.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG) |
 
 ## The manifest: `bindings/<steamBuildId>.json`
 
@@ -37,8 +37,8 @@ and **anchors**, the evidence that finds it again:
 | function | `signature` (shortest unique masked prefix, rel32 / rip-relative disp32 / imm64 wildcarded, may start inside the function with a negative `offset`), `strings` (the MSVC `__FUNCSIG__` / `__FILE__` strings it references via rip-relative `lea`, with uniqueness; hand-added `literal` strings are kept), `callees` (calls to other manifest entries, by ordinal among all calls), `cfgLite` (bytes from `.pdata`, calls, rip refs), `prologue`, optionally `after` (the `.pdata` function it follows) |
 | data | `witness` (the function that references it and the ordinal of that rip-relative reference), or `derive { table, index }` |
 | vtable | `rtti { typeDescriptorName }` (TypeDescriptor → CompleteObjectLocator → vftable) + `slotChecks` |
-| constant | `derive { vtable, slot, bodyPattern, imm32At }` (read from the slot's code) and/or `witness { function, callee, pattern, imm32At, maxBack }` (the imm32 of the instruction matching `pattern` within `maxBack` instructions before the first call to `callee` inside `function`). With two sources the port applies a value only when both agree; a split is `needs-human` with both values. `LuckUp_typeid` carries both since 2026-10-19 (slot 1 body of the LuckUp vftable; `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in `Status_ApplyLuckUp`). |
-| offset | `witness { function, pattern, dispAt, dispSize, nth }` or `unanchored: true` |
+| constant | `derive { vtable, slot, bodyPattern, imm32At }` (read from the slot's code) and/or `witness { function, callee, pattern, imm32At, maxBack }` (the imm32 of the instruction matching `pattern` within `maxBack` instructions before the first call to `callee` inside `function`) and/or a displacement witness `witness { function, pattern, dispAt, dispSize, scale }` without a callee (the displacement of the matching instruction divided by `scale`: a `call [reg+8*slot]` witnesses a vtable slot index; port method `call-slot`). With two sources the port applies a value only when both agree; a split is `needs-human` with both values. `LuckUp_typeid` carries both since 2026-10-19 (slot 1 body of the LuckUp vftable; `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in `Status_ApplyLuckUp`). |
+| offset | `witness { function, pattern, dispAt, dispSize, nth, scale }` — the `nth` match of the byte pattern inside the function's `.pdata` body, the signed displacement at `dispAt` (1 byte, or 4 when `dispSize` is 4), divided by `scale` (default 1). `harvest.ts` verifies it against the manifest value on the current exe (`verified` / `mismatch` / `unresolved`; the CLI exits 1 on a mismatch or an unresolved offset) and `port.ts` ports it. Or `unanchored: true`. |
 
 Facts the design rests on (verified on build 25143593): the exe's `.pdata` has 55,712 `RUNTIME_FUNCTION`
 entries, so any address maps to its function without a disassembler; 12 of the 13 status lookups reference a
@@ -83,7 +83,7 @@ agree (`ported-derived`, method `slot-body+call-arg`), otherwise `needs-human` w
 (`ported-witness`; a shifted ordinal is accepted only when exactly one reference of the same opcode remains) and
 table+index (`ported-derived`, or `needs-human` when the SDL version changed), struct offsets via their witness
 pattern (`ported-witness` when the displacement is unchanged, **`proposed` with the value NOT applied** when it
-moved). Unanchored entries are carried over as `needs-human`. Every ported function gets a fresh signature and
+moved; the same `readOffsetWitness` the harvest verifies with, so an anchor that verifies today ports tomorrow). Unanchored entries are carried over as `needs-human`. Every ported function gets a fresh signature and
 fresh anchors on the new image; every entry gets a `port { from, status, method, note, candidates? }` block.
 
 Rungs 2–4 iterate until nothing more ports, so a string-less helper becomes reachable once its caller is ported.
@@ -145,7 +145,8 @@ Per status, 98 entries: `ported-rescan` 32 · `ported-anchor` 14 · `ported-witn
   the one value that genuinely differs between the builds, and the derivation caught it. The three data witnesses
   held at their rip-ref ordinals (#44, #6, #0); the 8 DYNAPI slots ported by table index, which proves nothing yet
   because SDL did not change.
-- No non-offset entry fell off the ladder. The 38 `needs-human` rows are the known unanchored set (`LuckUp_vtableSlots`,
+- No non-offset entry fell off the ladder. The 38 `needs-human` rows (46 since 2026-10-20: eight offsets were added
+  for the dev scenes and the RNG) are the known unanchored set (`LuckUp_vtableSlots`,
   the five `VT_*` slot indices, 32 struct offsets) carried over unchanged — this run verifies none of them.
 - Caveat on what was proven: all 14 anchor-ported functions have **byte-identical size and call counts** on both
   builds (e.g. `Status_AttachPassive` 232,096 bytes / 6,438 calls on each), so this update was a layout shift around
@@ -165,14 +166,16 @@ What the run suggests for the ladder (candidates, not implemented):
   cfgLite tolerance); a *vftable-store* rung for constructors (`LuckUp_ctor` is the `.pdata` function that stores
   `LuckUp_vftable` through a rip-relative `lea`) — RTTI has no function dependency, so the vtable phase could run
   before the function rungs to make that possible.
-- **Anchor the six constants**: `LuckUp_vtableSlots` from the vftable's extent (next RTTI object or first non-`.text`
-  pointer), the `VT_*` indices by slot-body pattern or by the slot whose code references a known string; and
-  corroborate the derived `LuckUp_typeid` with a second witness (the imm32 passed to `Entity_FindComponentsByTypeId`
-  at call #4 of `Status_ApplyLuckUp`) now that it is known to change between builds.
-- **The 32 offsets are the real gap**: a cross-build run cannot say whether `Status_stacks` or `Character_turnKind`
-  moved. Harvest `witness { function, pattern, dispAt }` per offset from its consumer (`Status_ctor`,
-  `Character_BeginTurn`, `DebugConsole_init`, …) so the next run reports `ported-witness` / `proposed` instead of
-  `needs-human`.
+- ~~Anchor the six constants~~ — done 2026-10-20: `LuckUp_vtableSlots` = `derive { vtable, extent: true }` (172
+  consecutive code pointers); `VT_GetTypeId` / `VT_GetTypeHierarchy` = `derive.slotSearch { bodyPattern }` (the only
+  slot whose body is `mov eax,imm32; ret` / `lea rax,[rip+x]; ret`); `VT_GetTypeName` / `VT_IsA` = `slotSearch {
+  stringRef: "LuckUp", nth 0/1, expect 2 }` (the only two slots whose bounded body references the string — GetTypeName
+  by `mov` loads of its bytes, IsA by a `lea`); `VT_OnStacksChanged` = a displacement witness `FF 90 ?? ?? ?? ?? 83 7B
+  ?? 00` in `Status_ApplyLuckUp` with `scale: 8` (`call [rax+0x550]` = slot 170). Slot bodies are bounded by `.pdata`
+  or their first `ret`, so a leaf slot never "contains" its neighbour. A search that does not find exactly `expect`
+  slots is `needs-human`, never a guess. `LuckUp_typeid` carries its second witness since PR #32.
+- ~~The 32 offsets are the real gap~~ — done 2026-10-20: every struct offset (40) carries `witness { function, pattern,
+  dispAt[, dispSize, nth] }` with a note naming the instruction; `harvest.ts` verifies all of them on the current exe.
 - `cross-build.ts` has no `--gameVersion`, so the ported build block keeps the old manifest's `1.1.21239`;
   `port.ts` already accepts `opts.gameVersion`, pass it through.
 - Record the size/call deltas rung 2 saw in the report (all 0 here) so the tolerances can be tightened on evidence,
@@ -184,7 +187,7 @@ What the run suggests for the ladder (candidates, not implemented):
 - `FW_SIG_MAX_BYTES` / `sigCap` is 128; `Status_GetCategory` needs 126. Raising it means changing `fw_sig.h`
   and the host test together.
 - An SDL upgrade changes the DYNAPI slot order: the 8 slots become `needs-human` until re-verified.
-- 38 entries (struct offsets, vtable slot constants) are still `unanchored`: the port reports them instead of
+- 46 entries (40 struct offsets, 6 vtable slot constants) are still `unanchored`: the port reports them instead of
   guessing. Adding witness patterns is the next improvement.
 - A changed arity of the 13 lookups (shapes A–E), a compiler/CRT change (`MsvcString` layout), or a changed
   vtable layout cannot be ported mechanically.

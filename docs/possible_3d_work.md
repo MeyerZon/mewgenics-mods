@@ -16,7 +16,7 @@ and classification on the way there.
 
 - [x] Spatial model: gameplay is strictly 2D (`spatial-model.md`)
 - [x] Renderer RE: mvp composition, iso matrix, camera, sort, depth, GL table, shadow placement
-      (`.analysis/decompiled/r3d_*`, 108 functions)
+      (`.analysis/decompiled/r3d_*`, 108 functions — not on disk since 2026-10-19; re-decompile on demand)
 - [x] Board geometry measured from vanilla art (2:1 diamonds, feet-registered sprites)
 - [x] Prior-art survey (Helix/geo-11, 3dSen, Stardew 3D, Don't Starve, Flash 2.5D, billboard math)
 - [x] Feasibility write-up with design levels A–D and hook table
