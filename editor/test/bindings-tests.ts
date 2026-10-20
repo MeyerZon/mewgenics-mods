@@ -1274,6 +1274,63 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(b.status, "needs-human", b.detail);   // slot body says 0x4d6, the displacement witness says 0x12345678
     assert(/0x4d6/.test(b.detail ?? "") && /0x12345678/.test(b.detail ?? ""), b.detail ?? "");
   });
+  // ---- vtable-slot constants: the slot count (extent) and slot indices found by body shape or by a string reference ----
+  /*
+   * .text 0x1000: slot0 0x1000 lea rcx,[rip->"Foo"]; xor eax,eax; ret (.pdata) | slot1 0x1010 mov eax,0x2a; ret (no .pdata)
+   *               slot2 0x1020 push rbx; lea rdx,[rip->"Foo"]; pop rbx; ret (.pdata) | slot3 0x1030 lea rax,[rip->0x2080]; ret
+   *               slot4 0x1040 xor eax,eax; ret — immediately followed at 0x1043 by a lea to "Foo" (a 256-byte fallback would bleed into it)
+   * .rdata 0x2000: "Foo" @0x2010 (unique), vftable @0x2040 = 5 slots, then @0x2068 a pointer into .rdata (the next COL): extent 5
+   */
+  const VT_TEXT = 0x1000, VT_RDATA = 0x2000;
+  const vtText = new Uint8Array(0x60);
+  const rel = (from: number, to: number) => le32(to - from);
+  vtText.set([0x48, 0x8d, 0x0d, ...rel(VT_TEXT + 0x07, VT_RDATA + 0x10), 0x31, 0xc0, 0xc3], 0x00);
+  vtText.set([0xb8, 0x2a, 0x00, 0x00, 0x00, 0xc3], 0x10);
+  vtText.set([0x53, 0x48, 0x8d, 0x15, ...rel(VT_TEXT + 0x28, VT_RDATA + 0x10), 0x5b, 0xc3], 0x20);
+  vtText.set([0x48, 0x8d, 0x05, ...rel(VT_TEXT + 0x37, VT_RDATA + 0x80), 0xc3], 0x30);
+  vtText.set([0x31, 0xc0, 0xc3, 0x48, 0x8d, 0x0d, ...rel(VT_TEXT + 0x4a, VT_RDATA + 0x10), 0xc3], 0x40);
+  const vtRdata = Buffer.alloc(0x100);
+  vtRdata.write("Foo\0", 0x10, "latin1");
+  for (const [i, t] of [0x00, 0x10, 0x20, 0x30, 0x40].entries()) vtRdata.writeBigUInt64LE(BigInt(BASE + VT_TEXT + t), 0x40 + 8 * i);
+  vtRdata.writeBigUInt64LE(BigInt(BASE + VT_RDATA + 0xc0), 0x68);
+  const vtPe = buildFakePe({ timeDateStamp: 0x47474747, sections: [{ name: ".text", bytes: vtText, exec: true }, { name: ".rdata", bytes: vtRdata }], pdata: [{ section: ".text", begin: 0x00, end: 0x0a }, { section: ".text", begin: 0x20, end: 0x2a }] });
+  const vp = parsePe(vtPe.buf);
+  eq(vtPe.rva(".rdata", 0), VT_RDATA, "fake layout assumption");
+  test("vtableExtent / slotBody / findVtableSlot: slot count up to the first non-code pointer; bodies bounded by .pdata or the first ret; a slot found by body prefix or by a unique string reference, with an expected candidate count", () => {
+    eq(hv.vtableExtent(vp, vtPe.buf, VT_RDATA + 0x40), 5);
+    eq(hv.slotBody(vp, vtPe.buf, VT_TEXT + 0x40).length, 3, "slot4 ends at its own ret, not 256 bytes later");
+    eq(hv.slotBody(vp, vtPe.buf, VT_TEXT + 0x20).length, 10, "a .pdata body is the .pdata range");
+    eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { bodyPattern: "B8 ?? ?? ?? ?? C3" }), 1);
+    eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { bodyPattern: "48 8D 05 ?? ?? ?? ?? C3" }), 3);
+    eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { stringRef: "Foo", nth: 0, expect: 2 }), 0);
+    eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { stringRef: "Foo", nth: 1, expect: 2 }), 2);
+    eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { stringRef: "Foo", nth: 0, expect: 3 }), null, "a candidate count other than expected is no answer");
+    eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { bodyPattern: "90 90" }), null);
+  });
+  test("harvest + port: extent and slotSearch constants verify / port as ported-derived (methods extent, slot-search); a broken expectation is needs-human, never a guess", () => {
+    const base = (vals: Record<string, string>) => parseManifest({
+      format: 1,
+      build: { steamBuildId: "471", gameVersion: "4.7.1", name: "4.7.1 (steam 471)", timeDateStamp: "0x47474747", sizeOfImage: "0x" + vp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "c".repeat(64), exeSize: vtPe.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        { name: "Foo_vftable", kind: "vtable", rva: hex(VT_RDATA + 0x40), slots: 5, anchors: {}, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
+        { name: "Foo_slots", kind: "constant", value: vals.slots ?? "5", anchors: { derive: { vtable: "Foo_vftable", extent: true } }, consumers: [], exposure: [{ macro: "VT_FOO_SLOTS" }], evidence: [] },
+        { name: "VT_Id", kind: "constant", value: vals.id ?? "1", anchors: { derive: { vtable: "Foo_vftable", slotSearch: { bodyPattern: "B8 ?? ?? ?? ?? C3" } } }, consumers: [], exposure: [{ macro: "VT_ID" }], evidence: [] },
+        { name: "VT_IsA", kind: "constant", value: vals.isa ?? "2", anchors: { derive: { vtable: "Foo_vftable", slotSearch: { stringRef: "Foo", nth: 1, expect: vals.expect ? Number(vals.expect) : 2 } } }, consumers: [], exposure: [{ macro: "VT_ISA" }], evidence: [] },
+      ],
+    });
+    const rep = harvestManifest(vp, vtPe.buf, base({})).report;
+    for (const n of ["Foo_slots", "VT_Id", "VT_IsA"]) eq(rep.find((r) => r.name === n)!.status, "verified", rep.find((r) => r.name === n)!.detail);
+    eq(harvestManifest(vp, vtPe.buf, base({ slots: "6" })).report.find((r) => r.name === "Foo_slots")!.status, "mismatch");
+    const old = harvestManifest(vp, vtPe.buf, base({})).manifest;
+    old.entries.find((e) => e.name === "Foo_vftable")!.port = { from: "470", status: "ported-exact", method: "test" };
+    const r = portManifest(old, vp, vtPe.buf, { steamBuildId: "472", gameVersion: "4.7.2" });
+    eq(row(r, "Foo_slots").status, "ported-derived", row(r, "Foo_slots").detail); eq(row(r, "Foo_slots").method, "extent");
+    eq(row(r, "VT_Id").status, "ported-derived", row(r, "VT_Id").detail); eq(row(r, "VT_Id").method, "slot-search");
+    eq(row(r, "VT_IsA").status, "ported-derived", row(r, "VT_IsA").detail);
+    const bad = portManifest(harvestManifest(vp, vtPe.buf, base({ expect: "3" })).manifest, vp, vtPe.buf, { steamBuildId: "473", gameVersion: "4.7.3" });
+    eq(row(bad, "VT_IsA").status, "needs-human", row(bad, "VT_IsA").detail);
+  });
   test("renderPortReport: summary line, one row per entry, needs-attention sections with candidates and next steps", () => {
     const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x58585858 });
     const r = port(v2);
@@ -1329,6 +1386,23 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     "Status_temporary", "Status_applier", "Status_applierOwner", "ApplyCtx_character", "ApplyCtx_entity", "ApplyP6_applier",
     "Applier_owner", "Character_touchedPassives",
   ];
+  test("the committed manifest has no unanchored entry: the six vtable-slot constants derive from the LuckUp vftable (extent, slot search) or a call-slot witness", () => {
+    const m = loadManifest(realPath);
+    eq(m.entries.filter((e) => e.anchors.unanchored).map((e) => e.name).join(","), "", "nothing unanchored");
+    eq(JSON.stringify(entry(m, "LuckUp_vtableSlots")!.anchors.derive), JSON.stringify({ vtable: "LuckUp_vftable", extent: true }));
+    for (const n of ["VT_GetTypeName", "VT_GetTypeId", "VT_IsA", "VT_GetTypeHierarchy"]) assert(!!entry(m, n)!.anchors.derive?.slotSearch, `${n}: slotSearch`);
+    assert(entry(m, "VT_OnStacksChanged")!.anchors.witness?.scale === 8, "VT_OnStacksChanged: a scaled call-slot witness");
+  });
+  if (exe) {
+    test("T1 real exe: the six vtable-slot constants verify on the installed exe (harvest)", () => {
+      const m = loadManifest(realPath);
+      const rep = harvestManifest(parsePe(exe), exe, m).report;
+      for (const n of ["LuckUp_vtableSlots", "VT_GetTypeName", "VT_GetTypeId", "VT_IsA", "VT_GetTypeHierarchy", "VT_OnStacksChanged"]) {
+        const x = rep.find((r) => r.name === n)!;
+        eq(x.status, "verified", `${n}: ${x.detail}`);
+      }
+    });
+  }
   test("the committed manifest anchors the batch-2 offsets (status_engine): every offset now carries a witness; exactly the six vtable-slot constants are still unanchored", () => {
     const m = loadManifest(realPath);
     for (const name of WITNESSED_OFFSETS_BATCH2) {
@@ -1339,7 +1413,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       assert(e!.anchors.unanchored !== true, `${name}: no longer unanchored`);
     }
     eq(m.entries.filter((e) => e.kind === "offset" && !(e.anchors.witness && e.anchors.witness.pattern)).map((e) => e.name).join(","), "", "no offset without a witness");
-    eq(m.entries.filter((e) => e.anchors.unanchored).map((e) => e.name).sort().join(","), ["LuckUp_vtableSlots", "VT_GetTypeHierarchy", "VT_GetTypeId", "VT_GetTypeName", "VT_IsA", "VT_OnStacksChanged"].sort().join(","), "only the six constants remain");
+    assert(m.entries.filter((e) => e.anchors.unanchored).every((e) => e.kind === "constant"), "whatever is still unanchored is a constant");
   });
   test("the committed manifest anchors the batch-1 offsets: each carries anchors.witness {function, pattern, dispAt} and no unanchored flag; the dev-menu lambda is a function entry", () => {
     const m = loadManifest(realPath);
