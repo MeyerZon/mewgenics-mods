@@ -46,14 +46,29 @@
             "target": "0x52a40"
           },
           {
+            "ordinal": 7,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 10,
             "name": "string_Allocate",
             "target": "0x52a40"
           },
           {
+            "ordinal": 12,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 15,
             "name": "string_Allocate",
             "target": "0x52a40"
+          },
+          {
+            "ordinal": 17,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 20,
@@ -66,6 +81,11 @@
             "target": "0x52a40"
           },
           {
+            "ordinal": 29,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 39,
             "name": "string_Allocate",
             "target": "0x52a40"
@@ -74,6 +94,11 @@
             "ordinal": 44,
             "name": "string_Allocate",
             "target": "0x52a40"
+          },
+          {
+            "ordinal": 48,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 51,
@@ -1691,9 +1716,19 @@
         },
         "callees": [
           {
+            "ordinal": 1,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 3,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 5,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 7,
@@ -1701,9 +1736,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 9,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 11,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 13,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 15,
@@ -1711,9 +1756,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 17,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 19,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 21,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 23,
@@ -1721,9 +1776,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 25,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 27,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 29,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 31,
@@ -1731,9 +1796,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 33,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 35,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 37,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 39,
@@ -1741,9 +1816,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 41,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 43,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 45,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 47,
@@ -1751,9 +1836,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 49,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 51,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 53,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 55,
@@ -1761,9 +1856,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 57,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 59,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 61,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 63,
@@ -1771,9 +1876,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 65,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 67,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 69,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 71,
@@ -1781,9 +1896,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 73,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 75,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 77,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 79,
@@ -1791,9 +1916,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 81,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 83,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 85,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 87,
@@ -1801,9 +1936,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 89,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 91,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 93,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 95,
@@ -1811,9 +1956,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 97,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 99,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 101,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 103,
@@ -1821,9 +1976,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 105,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 107,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 109,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 111,
@@ -1831,14 +1996,29 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 113,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 115,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
           },
           {
+            "ordinal": 117,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 119,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 121,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 123,
@@ -1851,9 +2031,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 128,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 130,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 132,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 134,
@@ -1861,9 +2051,19 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 136,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
             "ordinal": 138,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 140,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
           },
           {
             "ordinal": 142,
@@ -2425,6 +2625,11 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 65,
+            "name": "SceneManager_CreateScene",
+            "target": "0x9d4950"
+          },
+          {
             "ordinal": 68,
             "name": "ApplicationBase_Step",
             "target": "0x9bad00"
@@ -2575,6 +2780,16 @@
           "resyncs": 0
         },
         "callees": [
+          {
+            "ordinal": 1,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 4,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
           {
             "ordinal": 13,
             "name": "string_Allocate",
@@ -4225,6 +4440,458 @@
         "docs/engine-map.md#debug-console-and-application-loop"
       ],
       "note": "SDL3's SDL_InitDynamicAPI: reads the SDL3_DYNAMIC_API env var and fills the jump table; its rip-relative lea to the table start is the SDL_DYNAPI_table witness."
+    },
+    {
+      "name": "SceneManager_CreateScene",
+      "kind": "function",
+      "rva": "0x9d4950",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 74 24 20 48 89 54 24 10 57 48 83 EC 20",
+        "exactLen": 20,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Scene* (SceneManager* this, std::string* name) — pool-allocates a Scene, stores the name at +0x4b8, pushes it into the manager's scene vector; by-value string, callee destroys. The dev menu's TacticsTest button creates the \"Battle\" scene with it.",
+        "callees": [
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 193,
+          "calls": 6,
+          "ripRefs": 1,
+          "resyncs": 1
+        },
+        "prologue": "48 89 5C 24 18 48 89 74 24 20 48 89"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_SceneManager_CreateScene",
+          "index": 15
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
+      ]
+    },
+    {
+      "name": "Scene_CreateEntity",
+      "kind": "function",
+      "rva": "0x96b3e0",
+      "signature": {
+        "pattern": "40 57 48 83 EC 20 80 B9 B0 04 00 00 00 48 8B F9 74 08 33 C0 48 83 C4 20 5F C3 B9",
+        "exactLen": 27,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Entity* (Scene* this) — NULL when the scene is being destroyed (+0x4b0); pushes the entity into the scene's entity vector (+8).",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 134,
+          "calls": 2,
+          "ripRefs": 1,
+          "resyncs": 0
+        },
+        "prologue": "40 57 48 83 EC 20 80 B9 B0 04 00 00"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Scene_CreateEntity",
+          "index": 16
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
+      ]
+    },
+    {
+      "name": "AddComponent_TacticsTest",
+      "kind": "function",
+      "rva": "0x31c3e0",
+      "signature": {
+        "pattern": "48 89 5C 24 20 55 48 83 EC 50 80 B9",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "TacticsTest* (Scene* scene, Entity* entity) — AddComponent<TacticsTest>: pool alloc (0x120 bytes), ctor 0x31c5f0 (vftable 0xf0f4b8), attach, then TacticsTest::init(this, \"blank\", 0, 0, 0). Called by the four dev-menu lambdas 0x32fc00/0x32fd40/0x32fe90/0x32ffe0.",
+        "callees": [
+          {
+            "ordinal": 7,
+            "name": "TacticsTest_init",
+            "target": "0x833390"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 520,
+          "calls": 8,
+          "ripRefs": 5,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 20 55 48 83 EC 50 80 B9"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_AddComponent_TacticsTest",
+          "index": 17
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
+      ]
+    },
+    {
+      "name": "Component_GetGame",
+      "kind": "function",
+      "rva": "0x908e0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 57 48 83 EC 20 48 8B 79 18 BA 0C",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "MewGame* (Component* this) — the component of type 0x50c on the component's scene (or the manager's main scene); the dev-menu lambda sets its +0x780/+0x78c flags before entering TacticsTest.",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 142,
+          "calls": 2,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 57 48 83 EC 20 48 8B"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Component_GetGame",
+          "index": 18
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
+      ]
+    },
+    {
+      "name": "TacticsTest_init",
+      "kind": "function",
+      "rva": "0x833390",
+      "signature": {
+        "pattern": "44 88 4C 24 20 44 88 44 24 18 48 89 54 24 10 48 89 4C 24 08 56",
+        "exactLen": 21,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (TacticsTest* this, std::string* levelName, int, int, int) — registers the run console commands (bind, load, win, spawn, battle, …); reference only, never called by the harness.",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 345763,
+          "calls": 6459,
+          "ripRefs": 4097,
+          "resyncs": 36
+        },
+        "prologue": "44 88 4C 24 20 44 88 44 24 18 48 89"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_TacticsTest_init",
+          "index": 19
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
+      ]
+    },
+    {
+      "name": "MewDirector_global",
+      "kind": "data",
+      "rva": "0x13dac30",
+      "anchors": {
+        "witness": {
+          "function": "MewDirector_init",
+          "kind": "rip-mov",
+          "ripRefOrdinal": 0,
+          "needsHarvest": false
+        },
+        "note": "MewDirector* global (DAT_1413dac30): set by MewDirector::init, which asserts \"More than one mew director\" when already set. A dev launch creates the test director (test00.sav) at boot, so it is non-null at the main menu; TacticsTest reads the director's settings."
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_MewDirector",
+          "index": 9
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c",
+        ".analysis/decompiled/MewSaveFile_open_caller_0x3a6b90.c",
+        ".analysis/decompiled/MewApplication_LoadGame_0x750f90.c"
+      ]
+    },
+    {
+      "name": "MewDirector_init",
+      "kind": "function",
+      "rva": "0x3a6b90",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 54 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC E0",
+        "exactLen": 30,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\MewDirector.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::MewDirector::init(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "note": "void (MewDirector* this, std::string name) — opens/creates the save named by its argument (never pass a steamcampaign name); reference + witness host for the MewDirector global.",
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "MewSaveFile_open_or_create",
+            "target": "0x229cd0"
+          },
+          {
+            "ordinal": 6,
+            "name": "SceneManager_CreateScene",
+            "target": "0x9d4950"
+          },
+          {
+            "ordinal": 29,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 30,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 36,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 42,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 64,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 68,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 73,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 75,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 77,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 80,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 86,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 87,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 88,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 90,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 92,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 94,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 96,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 98,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 102,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 103,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 105,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 107,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 110,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 112,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 6610,
+          "calls": 123,
+          "ripRefs": 115,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 48 89 54 24 10 55 56"
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_SYM_MewDirector_init",
+          "index": 20
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
+      ]
+    },
+    {
+      "name": "Component_sceneManager",
+      "kind": "offset",
+      "struct": "Component",
+      "value": "0x28",
+      "ctype": "SceneManager*",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_COMPONENT_SCENEMANAGER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
+      ],
+      "note": "AddComponent stores *scene (the manager, Scene+0) at component+0x28; the dev-menu lambda reads it from its own component to create the Battle scene"
+    },
+    {
+      "name": "Scene_destroyed",
+      "kind": "offset",
+      "struct": "Scene",
+      "value": "0x4b0",
+      "ctype": "char",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_enter_scene"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_SCENE_DESTROYED"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry",
+        ".analysis/decompiled/DevMenu_TacticsTest_lambda_0x32fc00.c",
+        ".analysis/decompiled/AddComponent_TacticsTest_0x31c3e0.c"
+      ],
+      "note": "non-zero while the scene is being torn down: CreateEntity returns NULL and the dev-menu lambda skips the entry"
     }
   ]
 }

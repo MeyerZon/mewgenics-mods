@@ -381,10 +381,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (20, incl. the v4 run-entry symbols), each with a signature", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (21, incl. the v4 run-entry symbols), each with a signature", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 20);
+    eq(want.length, 21);
     for (const n of ["FW_SYM_SceneManager_CreateScene", "FW_SYM_Scene_CreateEntity", "FW_SYM_AddComponent_TacticsTest", "FW_SYM_Component_GetGame", "FW_SYM_TacticsTest_init"]) assert(want.includes(n), `${n} in framework_api.h`);
     eq(entry(m, "AddComponent_TacticsTest")!.rva, "0x31c3e0");
     eq(entry(m, "SceneManager_CreateScene")!.rva, "0x9d4950");
@@ -410,7 +410,12 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const t = entry(m, "SDL_DYNAPI_table");
     assert(!!(t && t.rva === "0x12e7000"), "the DYNAPI jump_table struct is its own entry (exported slots start at +0x78)");
     assert(!!(t && t.anchors.witness && t.anchors.witness.function === "SDL_InitDynamicAPI"), "anchored by the function that fills it");
-    for (const e of got.slice(1)) assert(!!(e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table"), `${e.name} derives from the table`);
+    for (const e of got.slice(1)) {
+      if (/_slot$/.test(e.name)) assert(!!(e.anchors.derive && e.anchors.derive.table === "SDL_DYNAPI_table"), `${e.name} derives from the table`);
+      else assert(!!(e.anchors.witness && e.anchors.witness.function), `${e.name} is a global anchored by a witness function`);
+    }
+    const md = entry(m, "MewDirector_global")!;
+    eq(md.anchors.witness!.function, "MewDirector_init", "the director global is witnessed by the function that sets it");
   });
   test("25143593.json: FW_LK table is the 13 status lookups in status_engine.c g_lk_rva order, shapes A-E", () => {
     const m = loadManifest(realPath);
