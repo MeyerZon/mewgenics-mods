@@ -883,6 +883,24 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const shots = (shotRun.artifacts as unknown as { shots?: { label: string; path: string; line: number; hidden: boolean }[] }).shots;
       assert(Array.isArray(shots) && shots.length === 1 && shots[0]!.label === "menu" && shots[0]!.line === 1 && existsSync(shots[0]!.path) && shots[0]!.hidden === false, `artifacts.shots: ${JSON.stringify(shots)}`);
     });
+    // T3a finding 2026-10-20: the game runs full-screen, so a screen-region capture shows whatever is in front (the
+    // owner's browser, twice). The capture must read the window itself and, when it cannot, say so instead of
+    // guessing; the whole-screen fallback is gone.
+    const shotMod = await load<typeof import("../src/core/ingame/shot.ts")>("../src/core/ingame/shot.ts") as typeof import("../src/core/ingame/shot.ts");
+    test("CAPTURE_PS1 reads the window with PrintWindow (PW_RENDERFULLCONTENT) and never falls back to the whole screen", () => {
+      const ps1 = String((shotMod as { CAPTURE_PS1?: string }).CAPTURE_PS1 || "");
+      assert(/PrintWindow\(/.test(ps1), "PrintWindow P/Invoke present");
+      assert(!/PrimaryScreen/.test(ps1), "no whole-screen fallback");
+      assert(/GetForegroundWindow/.test(ps1) && /occluded/.test(ps1), "a covered window is reported as occluded, not captured from the screen");
+    });
+    const occludedPlan = script.parseScript("mods: jokers-luck\ntimeout: 2s\nhide: false\nshot \"menu\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
+    const occluded = await run("shot", {}, { plan: occludedPlan, capture: () => ({ path: null, note: "occluded" }) });
+    test("capture returns {path: null, note} -> artifacts.shots[].path is null with the note, and the pass reason names it", () => {
+      const shots = (occluded.artifacts as unknown as { shots?: { path: string | null; note?: string }[] }).shots;
+      assert(Array.isArray(shots) && shots.length === 1 && shots[0]!.path === null && shots[0]!.note === "occluded", JSON.stringify(shots));
+      eq(occluded.verdict, "pass", occluded.reason);
+      assert(/1 not captured \(occluded\)/.test(occluded.reason), occluded.reason);
+    });
     const hiddenShotPlan = script.parseScript("mods: jokers-luck\ntimeout: 2s\nshot \"menu\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
     const hiddenShot = await run("shot", {}, { plan: hiddenShotPlan, capture: (label: string, dir: string) => { const p = join(dir, `shot-${label}.png`); writeFileSync(p, "png"); return p; } });
     test("fake shot with hide: true -> captured anyway but artifacts.shots[].hidden is true and the pass reason says so", () => {
