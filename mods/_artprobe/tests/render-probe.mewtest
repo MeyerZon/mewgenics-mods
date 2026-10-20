@@ -1,0 +1,26 @@
+mods: _artprobe, _autoplay
+timeout: 90s
+hide: false
+# The art probe: an ArtProbe enemy (a Rat whose graphics.movieclip is our probe.swf) in a seeded fight, shot six
+# times. editor/scripts/art-probe.ts builds the SWF first, then reads the shots (probe-compare.ts): the yellow-bordered
+# checker is the marker and gives the scale; the nested blink sprite, the gray control and the cxform square are
+# sampled at their offsets from it.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+cmd spawn ArtProbe
+expect console "Spawned ArtProbe" within 10
+wait frames 60
+shot "probe 1"
+wait frames 40
+shot "probe 2"
+wait frames 40
+shot "probe 3"
+wait frames 40
+shot "probe 4"
+wait frames 40
+shot "probe 5"
+wait frames 40
+shot "probe 6"
+quit

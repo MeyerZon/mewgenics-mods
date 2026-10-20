@@ -1,0 +1,10 @@
+// test-only: a Rat whose art is the ArtProbe clip from mods/_artprobe/swfs/probe.swf (built from art/probe.scene.json)
+ArtProbe {
+    variant_of Rat
+    graphics {
+        movieclip ArtProbe
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}

@@ -401,8 +401,22 @@ Real-browser profiling is a follow-up.
    bundle it.
 4. Design artboards: run `/design` with the §6 brief.
 
+**OBSERVED in the game 2026-10-20** (`npm run test:artprobe`: an ArtProbe enemy whose `graphics.movieclip` is our SWF,
+spawned in a seeded harness fight and screenshot six times; `editor/src/core/art/probe-compare.ts` reads the shots;
+the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
+- a character's art is the SymbolClass named by `graphics.movieclip` — a mod SWF listed in `swflist.gon.append` works;
+- enemy clips are drawn **mirrored** (they face left);
+- a nested sprite under a one-frame parent **runs on its own clock** (the blink cycled red → green → blue); the
+  preview's "parent frame mod child frames" was wrong;
+- bitmap fills are sampled **smoothly** (bilinear-looking blends inside 8× magnified texels) and **clamped** at the
+  bitmap's edge (the border colour streaks across the rest of the path); the preview's NEAREST was wrong;
+- `PlaceObject` cxform **applies** (gray:8 × mul [1,0,0,1] → (136,0,0));
+- enemies carry **no palette row** (only cats have one), so gray:8 drew as plain 136 gray and the order
+  "cxform before/after the palette remap" cannot be decided on an enemy (both give the same pixels) — still open;
+  a cat-part probe would need the native MewCatPartFramework.
+
 **Unverified engine behaviors (INFERRED, flagged in the UI as such)**
-5. Nested sprite frame advance = parent frame mod child frames (Flash default).
+5. ~~Nested sprite frame advance = parent frame mod child frames~~ — wrong, see OBSERVED above (own clock).
 6. `_Append_<Clip>` applies to `AbilityIcon` the way it does to `Furniture`.
 7. The exact case/suffix rule mapping GON `"rat.png"` → SymbolClass `Rat`; the emitter
    writes whatever string the scene's `exports` key says, so both spellings can be
@@ -413,7 +427,8 @@ Real-browser profiling is a follow-up.
    The engine's fill rule (nonzero vs even-odd) is also unknown; `shape.ts` emits
    shapes that render identically under both (§1.3).
 8. Whether the engine honors `PlaceObject2` cxform on palette-remapped art the same way
-   the shader suggests (`* mul + add` after the remap) — the preview does exactly that.
+   the shader suggests (`* mul + add` after the remap) — the preview does exactly that. The cxform itself is
+   OBSERVED to apply; the order relative to the remap is undecidable on an (unpaletted) enemy.
 9. Tessellation tolerance: engine `per_file_curve_resolution` vs. our preview flatten
    tolerance; a `swflist.gon.append` `per_file_curve_resolution { <name>.swf N }` entry
    is written when the scene sets `curveResolution`.
