@@ -1306,6 +1306,9 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { stringRef: "Foo", nth: 1, expect: 2 }), 2);
     eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { stringRef: "Foo", nth: 0, expect: 3 }), null, "a candidate count other than expected is no answer");
     eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { bodyPattern: "90 90" }), null);
+    // contains: a byte pattern anywhere in the bounded body (e.g. a name built from imm32 stores instead of a string reference)
+    eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { contains: "31 C0 C3", nth: 1, expect: 2 }), 4, "slot0 ends with xor eax,eax; ret too");
+    eq(hv.findVtableSlot(vp, vtPe.buf, VT_RDATA + 0x40, { contains: "B8 2A 00 00 00" }), 1);
   });
   test("harvest + port: extent and slotSearch constants verify / port as ported-derived (methods extent, slot-search); a broken expectation is needs-human, never a guess", () => {
     const base = (vals: Record<string, string>) => parseManifest({
@@ -1322,14 +1325,23 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const rep = harvestManifest(vp, vtPe.buf, base({})).report;
     for (const n of ["Foo_slots", "VT_Id", "VT_IsA"]) eq(rep.find((r) => r.name === n)!.status, "verified", rep.find((r) => r.name === n)!.detail);
     eq(harvestManifest(vp, vtPe.buf, base({ slots: "6" })).report.find((r) => r.name === "Foo_slots")!.status, "mismatch");
-    const old = harvestManifest(vp, vtPe.buf, base({})).manifest;
-    old.entries.find((e) => e.name === "Foo_vftable")!.port = { from: "470", status: "ported-exact", method: "test" };
-    const r = portManifest(old, vp, vtPe.buf, { steamBuildId: "472", gameVersion: "4.7.2" });
+    // the port re-derives through a vftable that itself ports (RTTI): the hv fixture's Foo vftable (slot 0 -> fnC, slot 1 -> fnB "mov eax,0x4d6; ret"; 2 code slots)
+    const pm = (search: Record<string, unknown>) => parseManifest({
+      format: 1,
+      build: { steamBuildId: "444", gameVersion: "4.4.4", name: "4.4.4 (steam 444)", timeDateStamp: "0x44444444", sizeOfImage: "0x" + hp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "d".repeat(64), exeSize: hvPe.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        { name: "Foo_vftable", kind: "vtable", rva: "0x2080", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
+        { name: "Foo_slots", kind: "constant", value: "2", anchors: { derive: { vtable: "Foo_vftable", extent: true } }, consumers: [], exposure: [{ macro: "VT_FOO_SLOTS" }], evidence: [] },
+        { name: "VT_Id", kind: "constant", value: "1", anchors: { derive: { vtable: "Foo_vftable", slotSearch: search } }, consumers: [], exposure: [{ macro: "VT_ID" }], evidence: [] },
+      ],
+    });
+    const r = portManifest(harvestManifest(hp, hvPe.buf, pm({ bodyPattern: "B8 ?? ?? ?? ?? C3" })).manifest, hp, hvPe.buf, { steamBuildId: "445", gameVersion: "4.4.5" });
     eq(row(r, "Foo_slots").status, "ported-derived", row(r, "Foo_slots").detail); eq(row(r, "Foo_slots").method, "extent");
     eq(row(r, "VT_Id").status, "ported-derived", row(r, "VT_Id").detail); eq(row(r, "VT_Id").method, "slot-search");
-    eq(row(r, "VT_IsA").status, "ported-derived", row(r, "VT_IsA").detail);
-    const bad = portManifest(harvestManifest(vp, vtPe.buf, base({ expect: "3" })).manifest, vp, vtPe.buf, { steamBuildId: "473", gameVersion: "4.7.3" });
-    eq(row(bad, "VT_IsA").status, "needs-human", row(bad, "VT_IsA").detail);
+    const bad = portManifest(harvestManifest(hp, hvPe.buf, pm({ bodyPattern: "90 90 90" })).manifest, hp, hvPe.buf, { steamBuildId: "446", gameVersion: "4.4.6" });
+    eq(row(bad, "VT_Id").status, "needs-human", row(bad, "VT_Id").detail);
+    eq(entry(bad.manifest, "VT_Id")!.value, "1", "kept until a human decides");
   });
   test("renderPortReport: summary line, one row per entry, needs-attention sections with candidates and next steps", () => {
     const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x58585858 });
