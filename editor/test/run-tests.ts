@@ -431,7 +431,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 23 editor tools", () => eq(list.tools.length, 23));
+    test("tools/list returns the 24 editor tools", () => eq(list.tools.length, 24));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -508,6 +508,8 @@ await mcpSmoke();
   await runArtTimelineEditTests(test, assert, eq);
   const { runArtCatRigTests } = await import("./art-catrig-tests.ts");
   await runArtCatRigTests(test, assert, eq);
+  const { runArtSvgExportTests } = await import("./art-svg-export-tests.ts");
+  await runArtSvgExportTests(test, assert, eq);
 }
 
 // ---- 7. In-game test harness runner (fake game; never launches Mewgenics) ---
