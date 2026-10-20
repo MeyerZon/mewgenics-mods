@@ -57,6 +57,12 @@ export const ArtNewSceneBody = z.object({
 
 export const ArtValidateBody = z.object({ scene: anyObject });
 
+export const ArtExportSvgBody = z.object({
+  mod: str,
+  path: str,
+  shapeId: str,
+});
+
 export const ArtImportSvgBody = z.object({
   svgText: str,
   mod: str.optional(),
@@ -90,6 +96,7 @@ export const API_BODY = {
   "/api/art/new-scene": ArtNewSceneBody,
   "/api/art/validate": ArtValidateBody,
   "/api/art/import-svg": ArtImportSvgBody,
+  "/api/art/export-svg": ArtExportSvgBody,
   "/api/art/build": ArtBuildBody,
   "/api/art/asset": ArtAssetBody,
   "/api/art/prepare-swf-gate": PrepareSwfGateBody,

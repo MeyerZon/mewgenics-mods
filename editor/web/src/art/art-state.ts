@@ -12,6 +12,7 @@ import { getJson, post, url } from "../api.ts";
 import { createPreview, type Preview } from "./preview-gl.ts";
 import { grayLevelToByte } from "../../../src/core/art/scene.ts";
 import { adoptGradients } from "../../../src/core/art/gradient.ts";
+import { shapeToSvg } from "../../../src/core/art/svg-export.ts";
 import type {
   AbcMode,
   ArtAssets,
@@ -291,6 +292,40 @@ export async function importSvgFile(file: File): Promise<void> {
   toast(`imported ${file.name} as shape "${id}" (${r.shape.paths.length} paths)`);
   scheduleValidate();
   bump();
+}
+
+/**
+ * Write one shape of the open scene (unsaved edits included) as art/<id>.svg in the mod, for an external vector editor
+ * (VectorCraft, Inkscape, …: static drawing; animation stays in this editor's timeline).
+ */
+export async function exportShapeSvgFile(id: string): Promise<void> {
+  const sc = scene;
+  if (!sc || !sc.shapes[id]) return toast(`no shape "${id}"`);
+  const out = shapeToSvg(sc.shapes[id]!, sc.gradients || {});
+  const rel = `art/${id.replace(/[^A-Za-z0-9_.-]/g, "_")}.svg`;
+  const bytes = new TextEncoder().encode(out.svg);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  const r = await post<"/api/art/asset", { ok: boolean; error?: string }>("/api/art/asset", { mod: mod(), path: rel, base64: btoa(bin) });
+  if (!r.ok) return toast(`export failed: ${r.error || "?"}`);
+  if (out.findings.length) A.set((a) => ({ findings: [...out.findings.map((f) => ({ ...f, path: `shapes.${id}` })), ...a.findings] }));
+  toast(`wrote mods/${mod()}/${rel} — edit it in VectorCraft or any SVG editor, then Replace… brings it back`);
+}
+
+/** An edited SVG replaces shape `id` in place (viewBox not applied, so the exported coordinates come back unchanged). */
+export async function replaceShapeFromSvg(id: string, file: File): Promise<void> {
+  const sc = scene;
+  if (!sc || !sc.shapes[id]) return toast(`no shape "${id}"`);
+  const r = await post<"/api/art/import-svg", ImportSvgResponse>("/api/art/import-svg", { svgText: await file.text(), options: { applyViewBox: false } });
+  if (!r.ok) {
+    A.set((a) => ({ findings: [...(r.findings || []), ...a.findings] }));
+    return toast(`replace failed: ${r.error || "see findings"}`);
+  }
+  const prev = sc.shapes[id]!;
+  sc.shapes[id] = { ...adoptGradients(sc, r.shape, r.gradients), ...(prev.source ? { source: prev.source } : {}) };
+  scheduleValidate();
+  bump();
+  toast(`replaced shape "${id}" from ${file.name} (${r.shape.paths.length} paths)`);
 }
 
 /** Drop / file-picker entry: an SVG becomes a shape of the open scene, or of a new scene if none is open. */

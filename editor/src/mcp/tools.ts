@@ -95,6 +95,11 @@ export const TOOL_INPUT = {
       replace: bool("overwrite a shape with that id").optional(),
     }).describe("save the imported shape into a scene (needs mod); without it nothing is written").optional(),
   }),
+  export_svg: z.object({
+    mod: str(),
+    path: str("scene file inside the mod"),
+    shapeId: str("the shape to export"),
+  }),
   build_swf: z.object({
     mod: str(),
     path: str("scene file inside the mod"),
@@ -304,6 +309,11 @@ export const TOOLS: ToolDef[] = [
       if (!a.svgText && !(a.mod && a.path)) throw new ToolError("pass svgText, or mod + path");
       return api.importSvgShape({ svgText: a.svgText, mod: a.mod, relPath: a.path, options: a.options });
     },
+  ),
+  def(
+    "export_svg",
+    "Export one shape of a scene as mods/<mod>/art/<shapeId>.svg for an external vector editor (VectorCraft, Inkscape, …: static drawing only — animation stays in the scene's sprites). Re-import the edited file with import_svg { mod, path: 'art/<shapeId>.svg', options: { applyViewBox: false }, into: { scene, shapeId, replace: true } } to keep its coordinates.",
+    (a) => api.exportShapeSvg(a.mod, a.path, a.shapeId),
   ),
   def(
     "build_swf",
