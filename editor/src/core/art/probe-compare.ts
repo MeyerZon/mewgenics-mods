@@ -3,7 +3,8 @@
 // texels wide, with a pure-yellow 1-texel border, so its last third is outside the bitmap — then 60×60 squares
 // centred at (150,30) the nested blink sprite (red → green → blue every 30 frames inside a one-frame holder),
 // (230,30) a gray:8 control, (310,30) gray:8 with cxform mul [1,0,0,1] and (390,30) a linear gradient gray:0 → #ff2020
-// along clip x. The yellow marker gives the screen
+// along clip x, and two 12 px #20ff20 strokes from clip x 440 to 500 (y 10 butt caps, y 50 square caps; DefineShape4).
+// The yellow marker gives the screen
 // scale and position; whether the magenta/cyan cells sit left or right inside it gives the orientation (enemies
 // face left: the clip is mirrored). Pure: works on any RGBA image (decodePng of the shot).
 
@@ -31,6 +32,8 @@ export interface ProbeShot {
   /** its left / right patches (clip x 370 / 410) */
   gradLeft: Rgb;
   gradRight: Rgb;
+  /** LINESTYLE2 caps: "honoured" (butt stops at the endpoint, square reaches past it), "ignored" (both reach past: round) */
+  caps: "honoured" | "ignored" | "unknown";
   /** the marker's screen bbox */
   box: { x0: number; y0: number; x1: number; y1: number } | null;
 }
@@ -62,7 +65,7 @@ function classifyBlink(c: Rgb): ProbeShot["blink"] {
 }
 
 export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
-  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], box: null };
+  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", box: null };
   // 1. the yellow marker: the largest 8-connected region of near-yellow pixels (stray UI yellow elsewhere is ignored)
   const W = img.width, H = img.height;
   const mask = new Uint8Array(W * H);
@@ -136,8 +139,20 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   const gradLeft = patch(img, sx(370), sy(30)), gradRight = patch(img, sx(410), sy(30));
   const dr = gradRight[0] - gradLeft[0];
   const gradient: ProbeShot["gradient"] = dr > 60 ? "drawn" : dr < -60 ? "reversed" : Math.abs(dr) < 25 && gradRight[0] > 40 ? "flat" : "unknown";
+  // the two strokes' green lengths in clip px (robust to a few px of placement offset): butt 60, square 72
+  const green = (c: Rgb) => c[1] > 160 && c[0] < 120 && c[2] < 120;
+  const greenLength = (cy: number): number => {
+    let n = 0;
+    for (let cx = 410; cx <= 540; cx += 0.5) {
+      const x = Math.round(sx(cx)), y = Math.round(sy(cy));
+      if (x >= 0 && y >= 0 && x < img.width && y < img.height && green(px(img, x, y))) n++;
+    }
+    return n / 2;
+  };
+  const buttLen = greenLength(10), squareLen = greenLength(50);
+  const caps: ProbeShot["caps"] = buttLen < 40 || squareLen < 40 ? "unknown" : squareLen - buttLen >= 7 ? "honoured" : Math.abs(squareLen - buttLen) <= 3 ? "ignored" : "unknown";
   return {
-    gradient, gradLeft, gradRight,
+    gradient, gradLeft, gradRight, caps,
     found: true, scale, mirrored,
     sampling: blendedRatio > 0.1 ? "smooth" : "nearest",
     blendedRatio, edge, blink,
@@ -160,6 +175,8 @@ export interface ProbeSummary {
   blinks: ProbeShot["blink"][];
   /** the linear gradient square across shots */
   gradient: ProbeShot["gradient"];
+  /** LINESTYLE2 caps across shots */
+  caps: ProbeShot["caps"];
 }
 
 function majority<T extends string>(xs: T[], fallback: T): T {
@@ -186,6 +203,7 @@ export function summarizeProbe(shots: ProbeShot[]): ProbeSummary {
     mirrored: ok.length ? majority(ok.map((s) => (s.mirrored ? "y" : "n")), "n") === "y" : false,
     blinks,
     gradient: majority(ok.map((s) => s.gradient), "unknown"),
+    caps: majority(ok.map((s) => s.caps), "unknown"),
   };
 }
 
@@ -202,6 +220,7 @@ export function renderProbeReport(shots: ProbeShot[], s: ProbeSummary, labels: s
     `- bitmap sampling: **${s.sampling}**; outside the bitmap: **${s.edge}**`,
     `- PlaceObject cxform mul [1,0,0,1]: **${s.cxform}**`,
     `- orientation: ${s.mirrored ? "**mirrored** (the enemy faces left)" : "as authored"}`,
+    `- LINESTYLE2 caps (DefineShape4; butt vs square stroke length): **${s.caps}**`,
     `- linear gradient fill (gray:0 → #ff2020 along clip x): **${s.gradient}** (left/right rgb per shot: ${shots.map((p) => `${p.gradLeft.join(",")} / ${p.gradRight.join(",")}`).join("; ") || "-"})`,
     `- marker found in ${s.found} of ${s.shots} shot(s)`,
     "",
