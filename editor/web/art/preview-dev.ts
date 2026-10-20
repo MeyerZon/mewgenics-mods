@@ -5,7 +5,7 @@
 
 import { createPreview, paletteBytes } from "../src/art/preview-gl.ts";
 import type { PaletteRows } from "../src/art/preview-gl.ts";
-import { exampleScene, validateScene } from "../../src/core/art/scene.mjs";
+import { exampleScene, validateScene } from "../../src/core/art/scene.ts";
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const node = document.getElementById(id);

@@ -7,8 +7,8 @@ import { toast } from "../state.ts";
 import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, rampColor } from "./art-state.ts";
 import { sx, Ramp, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
-import { shapeGrayUsage, parseFill } from "../../../src/core/art/scene.mjs";
-import { bakeSprite, type BakedSprite } from "../../../src/core/art/timeline.mjs";
+import { shapeGrayUsage, parseFill } from "../../../src/core/art/scene.ts";
+import { bakeSprite, type BakedSprite } from "../../../src/core/art/timeline.ts";
 import type { Scene, SceneSprite } from "./types.ts";
 
 export function ShapesTab() {

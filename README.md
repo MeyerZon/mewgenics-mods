@@ -22,7 +22,7 @@ and fast to author.
 | `mods/` | Data-layer mods (GON/CSV overlays). Sample: `jokers-luck`, plus a `dev-sandbox`. |
 | `native/` | Native framework (`framework/`), the `version.dll` chainloader setup, and native mods (`mods/`). |
 | `editor/` | The data-layer mod editor (core + MCP server + web UI). See [editor usage](#the-editor). |
-| `tools/` | `gpak.py` (read-only pack reader), `bindings/make-signature.mjs` + `bindings/gen-headers.mjs` (signature + header generators), `rea-mcp.mjs` (REA/Ghidra driver). |
+| `tools/` | `gpak.py` (read-only pack reader), `bindings/make-signature.ts` + `bindings/gen-headers.ts` (signature + header generators), `rea-mcp.mjs` (REA/Ghidra driver). |
 | `bindings/` | Per-build manifest `<steamBuildId>.json` (signatures, RVAs, offsets + the anchors that re-find them); `signatures.h`/`offsets.h` are generated from it. See [`docs/binding-port.md`](docs/binding-port.md). |
 | `docs/` | The authoritative notes — start here. |
 
@@ -71,7 +71,7 @@ npm run mcp          # MCP stdio server (register with Claude Code as `mewgenics
 Register the MCP server so agents can author and validate mods through it:
 
 ```sh
-claude mcp add mewgenics-editor -- node "<repo>/editor/src/mcp/server.mjs"
+claude mcp add mewgenics-editor -- node "<repo>/editor/src/mcp/server.ts"
 ```
 
 **Art mode** (web UI, top-bar switch *Data | Art*): author vector art as a JSON scene (`mods/<mod>/art/*.scene.json`,

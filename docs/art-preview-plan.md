@@ -23,22 +23,22 @@ Evidence tags as in the sibling docs: **OBSERVED** (measured on this machine),
 
 ```
                  editor/src/core/art/                      (single source of truth)
-  SVG text ──► svg-import.mjs ──► scene.json model ──► swf-emitter.mjs ──► mods/<m>/swfs/<x>.swf
+  SVG text ──► svg-import.ts ──► scene.json model ──► swf-emitter.ts ──► mods/<m>/swfs/<x>.swf
                                        │                     ▲
-                                       │ (same model)        │ shape.mjs / lossless.mjs /
-                                       ▼                     │ abc-stub.mjs / swf-bits.mjs
-                 geometry.mjs + timeline.mjs (pure, shared)  │
+                                       │ (same model)        │ shape.ts / lossless.ts /
+                                       ▼                     │ abc-stub.ts / swf-bits.ts
+                 geometry.ts + timeline.ts (pure, shared)  │
                         │                                    │
-      browser ◄─────────┘ bundled by Vite (imports the pure modules)  └── swf-reader.mjs (self-check)
+      browser ◄─────────┘ bundled by Vite (imports the pure modules)  └── swf-reader.ts (self-check)
       editor/web/src/art/preview-gl.ts  (raw WebGL: stencil fill + paletted_full remap)
       editor/web/src/art/*.tsx          Art panel + Preview panel (React; was VanJS, see editor-ts-react-plan.md)
-      editor/web/server.mjs             additive /api/art/* routes → src/core/api.mjs (zod-gated bodies)
+      editor/web/server.ts             additive /api/art/* routes → src/core/api.ts (zod-gated bodies)
 ```
 
 Dependency direction is unchanged from the rest of the editor: `core` owns parsing,
 validation, emission and writes; `web/` and `mcp/` are thin adapters. The browser
-preview imports only the **pure** modules (`geometry.mjs`, `timeline.mjs`,
-`scene.mjs`) so the pixels on screen are computed from the exact same baked frames the
+preview imports only the **pure** modules (`geometry.ts`, `timeline.ts`,
+`scene.ts`) so the pixels on screen are computed from the exact same baked frames the
 emitter writes into `PlaceObject2` tags. Nothing in the preview re-interprets SVG or
 SWF bytes.
 
@@ -57,18 +57,18 @@ bitmap** path, both reproduced in our fragment shader from `paletted_full.shader
 `swf_lib.shader` (OBSERVED GLSL, quoted in `art-pipeline.md` §5).
 
 ### 1.2 Ownership
-- `scene.mjs` owns the model: schema, defaults, validation, gray quantization. All
+- `scene.ts` owns the model: schema, defaults, validation, gray quantization. All
   consumers use its parsed facts.
-- `geometry.mjs` owns path normalization (SVG `d` → absolute lines + quadratics in
+- `geometry.ts` owns path normalization (SVG `d` → absolute lines + quadratics in
   twips; cubic→quadratic subdivision; arc flattening; transforms). Emitter and preview
   both consume its output; neither re-parses `d`.
-- `timeline.mjs` owns frame baking (layers + keys → per-frame per-depth placements with
+- `timeline.ts` owns frame baking (layers + keys → per-frame per-depth placements with
   matrix/cxform; linear tween or hold). Emitter turns baked frames into
   `PlaceObject2`/`RemoveObject2`; preview draws baked frame N.
-- `swf-emitter.mjs` owns tag framing and file layout; `shape.mjs` owns SHAPERECORD
-  encoding; `lossless.mjs` owns PNG decode + premultiply + zlib; `abc-stub.mjs` owns
+- `swf-emitter.ts` owns tag framing and file layout; `shape.ts` owns SHAPERECORD
+  encoding; `lossless.ts` owns PNG decode + premultiply + zlib; `abc-stub.ts` owns
   the optional `DoABC`.
-- `swf-reader.mjs` is a verification-only reader (tests, and later vanilla import).
+- `swf-reader.ts` is a verification-only reader (tests, and later vanilla import).
 
 ### 1.3 New observations used by this plan (OBSERVED 2026-10-18, read-only)
 Parsed `swfs/minecarts.swf` (7,024 B), `testing_stuff.swf`, `ability_icons.swf` from the
@@ -85,10 +85,10 @@ gpak into the session scratchpad (never into the repo):
   `0x46` (+clipDepth = mask). Inside `DefineSprite`: `FrameLabel` ("idle", "duck")
   precede the frame's placements.
 - **Fill-side convention confirmed from vanilla bytes:** decoding `minecarts.swf` with
-  `swf-reader.mjs`, all 17 single-sided sub-paths that run clockwise on screen (positive
+  `swf-reader.ts`, all 17 single-sided sub-paths that run clockwise on screen (positive
   shoelace area in y-down twips) use `FillStyle1` and none use `FillStyle0`. So
   positive area → fill on the right → `FillStyle1`; negative → `FillStyle0`.
-  `shape.mjs` additionally assigns sides nesting-aware (a hole inside an "O" gets the
+  `shape.ts` additionally assigns sides nesting-aware (a hole inside an "O" gets the
   side that leaves the hole unpainted under both nonzero and even-odd), so output
   renders the same whichever rule the engine's tessellator uses — that rule is
   unknown (§8).
@@ -98,7 +98,7 @@ gpak into the session scratchpad (never into the repo):
   `d0 30 47`, `iinit` = `d0 30 d0 49 00 47`, and a script-init that walks
   `Object→EventDispatcher→DisplayObject→InteractiveObject→DisplayObjectContainer→Sprite→MovieClip`
   with `getlex/pushscope`, `newclass`, 7×`popscope`, `initproperty`. One script per
-  class. `abc-stub.mjs` reproduces exactly this shape, so the "with-ABC" variant is
+  class. `abc-stub.ts` reproduces exactly this shape, so the "with-ABC" variant is
   byte-pattern-faithful to Flash output rather than a guess.
 - `ability_icons.swf`: `SymbolClass {AbilityIcon, PassiveIcon}`; `AbilityIcon` is a
   sprite with **1,361 `FrameLabel`s named after abilities** (`LongShot`, `Traps`,
@@ -158,7 +158,7 @@ Units are **pixels** (SWF twips = px × 20, computed at the boundary). `y` is do
 }
 ```
 
-Rules enforced by `scene.mjs`:
+Rules enforced by `scene.ts`:
 - Fills: `gray:N` → emitted RGB `(17N,17N,17N)`; the shader computes
   `floor(r*15+.5)` = N exactly (OBSERVED formula). Any `#rrggbb` with r==g==b is
   quantized to the nearest level with a warning; non-gray colors pass through unchanged
@@ -169,7 +169,7 @@ Rules enforced by `scene.mjs`:
 - Character IDs are assigned deterministically at build (shapes, bitmaps, sprites in
   dependency order) so rebuilding the same scene yields identical bytes.
 
-Tool-agnostic import (`svg-import.mjs`): accepts an SVG document (VectorCraft,
+Tool-agnostic import (`svg-import.ts`): accepts an SVG document (VectorCraft,
 Inkscape, Illustrator export…) and produces `shapes[<id>].paths[]`: `<path d>`,
 `<rect>`, `<circle>`, `<ellipse>`, `<polygon>`, `<polyline>`, `<line>` and `<g>`
 transforms (translate/scale/rotate/skew/matrix), `fill`/`stroke` from attributes or
@@ -219,7 +219,7 @@ un-remapped 16-level art), background colour, zoom/fit. Playback runs at the sce
 
 ## 4. Editor integration
 
-- **Core (`src/core/api.mjs`, additive):** `listArtScenes(mod)`, `readArtScene(mod,
+- **Core (`src/core/api.ts`, additive):** `listArtScenes(mod)`, `readArtScene(mod,
   rel)`, `writeArtScene(mod, rel, scene)` (validates first), `importSvgToScene(svgText,
   opts)`, `buildSwf(mod, rel, {abc:"none"|"stub"})` → writes `swfs/<name>.swf` and
   returns a tag report + findings, `writeSwflistAppend(mod, names)`,
@@ -227,12 +227,13 @@ un-remapped 16-level art), background colour, zoom/fit. Playback runs at the sce
   `prepareSwfGate({ mod, variant })` (writes or removes the §7 gate files). All writes go through
   `resolveModWritePath`, so they stay inside `mods/<mod>/` and can never touch saves or
   game files. `.swf` outputs are git-ignored already (`*.swf`).
-- **Web server (`web/server.mjs`, additive):** `/api/art/*` routes over those calls,
-  plus a read-only static mount `/core-art/<file>.mjs` for the pure shared modules and
+- **Web server (`web/server.ts`, additive):** `/api/art/*` routes over those calls,
+  plus (then) a read-only static mount `/core-art/<file>.mjs` for the pure shared modules — since the Vite
+  build the browser bundle imports them directly — and
   `/api/art/asset` to stream a mod's PNG for the preview. No existing route changes.
-- **MCP (`src/mcp/tools.mjs`):** untouched in this pass (the existing 9-tool test pins
+- **MCP (`src/mcp/tools.ts`):** untouched in this pass (the existing 9-tool test pins
   the count). Exposing `build_swf`/`import_svg` as MCP tools is a follow-up.
-- **UI (`web/app.mjs`, `web/index.html`):** a top-bar mode switch **Data | Art**. In Art
+- **UI (then `web/app.mjs`; now `web/src/**/*.tsx`, `web/index.html`):** a top-bar mode switch **Data | Art**. In Art
   mode the explorer lists `art/*.scene.json` + `swfs/*.swf` + `swflist.gon.append`; the
   center hosts the **Art authoring** panel (scene summary, shapes with gray-level
   swatches, sprites/layers/keys, import-SVG drop zone + file picker, "Build SWF"
@@ -248,15 +249,15 @@ un-remapped 16-level art), background colour, zoom/fit. Playback runs at the sce
 |---|---|---|
 | 1 | This plan | done |
 | 2 | UX artboards on the "Mewgenics Mod Editor UI" design canvas | **blocked for the agent — see §6** |
-| 3 | `swf-bits.mjs` (bit writer, RECT/MATRIX/CXFORM, tag framing), `shape.mjs` (DefineShape3 from normalized paths), `swf-emitter.mjs` (header, FileAttributes, SceneAndFrameLabelData, shapes, SymbolClass, End), `swf-reader.mjs` + tests | built |
-| 4 | `DefineSprite` timelines: `timeline.mjs` baking → `PlaceObject2`/`RemoveObject2`/`ShowFrame`/`FrameLabel`; masks via clipDepth | built |
-| 5 | `lossless.mjs`: PNG decode (8-bit, non-interlaced) → premultiply → zlib → `DefineBitsLossless2` fmt 5; bitmap fills | built |
-| 6 | `abc-stub.mjs`: Flash-faithful linkage ABC behind `abc: "stub"`; `abc: "none"` default until §7 settles | built |
-| 7 | `svg-import.mjs` + `geometry.mjs` (SVG path → lines/quads; cubic→quad; arcs) | built |
-| 8 | WebGL preview (`web/art/preview-gl.mjs`) with palette remap, stencil fill, cxform, nesting, Canvas2D fallback | built |
+| 3 | `swf-bits.ts` (bit writer, RECT/MATRIX/CXFORM, tag framing), `shape.ts` (DefineShape3 from normalized paths), `swf-emitter.ts` (header, FileAttributes, SceneAndFrameLabelData, shapes, SymbolClass, End), `swf-reader.ts` + tests | built |
+| 4 | `DefineSprite` timelines: `timeline.ts` baking → `PlaceObject2`/`RemoveObject2`/`ShowFrame`/`FrameLabel`; masks via clipDepth | built |
+| 5 | `lossless.ts`: PNG decode (8-bit, non-interlaced) → premultiply → zlib → `DefineBitsLossless2` fmt 5; bitmap fills | built |
+| 6 | `abc-stub.ts`: Flash-faithful linkage ABC behind `abc: "stub"`; `abc: "none"` default until §7 settles | built |
+| 7 | `svg-import.ts` + `geometry.ts` (SVG path → lines/quads; cubic→quad; arcs) | built |
+| 8 | WebGL preview (`web/art/preview-gl.ts`) with palette remap, stencil fill, cxform, nesting, Canvas2D fallback | built |
 | 9 | Editor wiring: `/api/art/*`, Art + Preview panels | built |
 | 10 | §7 SWF gate | `npm run test:swfgate -- <variant>` (T2, agents may run); visual half is the owner's T3 |
-| 11 | Follow-ups: MCP tools, vanilla-SWF import via `swf-reader.mjs`, gradients, DefineShape4 line styles, part-indexed cat assembly UI | open |
+| 11 | Follow-ups: MCP tools, vanilla-SWF import via `swf-reader.ts`, gradients, DefineShape4 line styles, part-indexed cat assembly UI | open |
 
 ---
 
@@ -298,7 +299,7 @@ survive the boot-time merge? See `swf-emitter-fix-spec.md` §0 for the findings.
 both git-ignored); the game is launched through the in-game harness on `-savesuffix dev`,
 which hashes the real save before and after. Agents may run it.
 
-### 7.1 Variants (`editor/src/core/art/art-io.mjs` `SWF_GATE_VARIANTS`)
+### 7.1 Variants (`editor/src/core/art/art-io.ts` `SWF_GATE_VARIANTS`)
 `flat` (the fix: icon shape at depth 3, like every `AbilityIcon` frame) · `nested` (icon in a
 nested movieclip at depth 3) · `legacy` (depth 1, the pre-fix donor) · `probe` (same bytes under
 the non-append linkage `GateProbe`: load only) · `missing` (`_Append_NoSuchClipXYZ`: must
@@ -389,7 +390,7 @@ Real-browser profiling is a follow-up.
    preview (showing `catparts.swf` parts next to the user's art) would want a real SWF
    renderer. Candidate: Ruffle's web build (WASM, MIT/Apache-2.0). It is a large binary
    with its own loader; it must go through a skeptic audit + explicit approval before
-   it can be vendored. Without it, vanilla import is limited to what `swf-reader.mjs`
+   it can be vendored. Without it, vanilla import is limited to what `swf-reader.ts`
    decodes (DefineShape/Sprite/PlaceObject2 → our model), which is the planned no-dep
    route.
 3. **External tool (optional, not a dependency):** JPEXS FFDEC remains the recommended
@@ -406,7 +407,7 @@ Real-browser profiling is a follow-up.
    name follows Flash's package rule, so `"starter.png"` declares class `png` in
    package `starter` — harmless as a linkage string, but vanilla files export the
    class-style name (`Rat`), so prefer that spelling once the mapping is known.
-   The engine's fill rule (nonzero vs even-odd) is also unknown; `shape.mjs` emits
+   The engine's fill rule (nonzero vs even-odd) is also unknown; `shape.ts` emits
    shapes that render identically under both (§1.3).
 8. Whether the engine honors `PlaceObject2` cxform on palette-remapped art the same way
    the shader suggests (`* mul + add` after the remap) — the preview does exactly that.

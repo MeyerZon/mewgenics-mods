@@ -5,7 +5,7 @@
 Branch `fix/swf-append-frame` (worktree). What changed since the spec below was written:
 
 - **§8.1's premise was wrong (OBSERVED, read-only parse of `swfs/ability_icons.swf`, pinned by a T1 test in
-  `editor/test/art-emitter-tests.mjs`):** `AbilityIcon` (sprite 1346, 901 frames, 842 unique labels, first
+  `editor/test/art-emitter-tests.ts`):** `AbilityIcon` (sprite 1346, 901 frames, 842 unique labels, first
   `unknown`) places **no nested movieclips**. Every labeled icon frame is `FrameLabel` + exactly one
   `PlaceObject2` at **depth 3** of a bare `DefineShape/2/3/4` — flags 6 (HasCharacter|HasMatrix, identity) on
   first use, flags 3 (Move|HasCharacter) on swaps (one scaled outlier). Frame 0 adds a background shape at depth 1,
@@ -63,7 +63,7 @@ observed evidence, not directly proven. **COMMUNITY-SOURCED** = external modding
 ## 1. Executive summary
 
 - **The SWF is NOT rejected by the tag parser.** Our gate SWF (`mod_abc_gate_none.swf` /
-  `mod_abc_gate_stub.swf`, produced by `editor/src/core/art/swf-emitter.mjs
+  `mod_abc_gate_stub.swf`, produced by `editor/src/core/art/swf-emitter.ts
   → minimalGateSwf`) parses cleanly: header, `FileAttributes`, `SetBackgroundColor`,
   `DefineSceneAndFrameLabelData`, `DefineShape3`, `DefineSprite`, `SymbolClass`
   (`_Append_AbilityIcon` → the sprite), `ShowFrame`, `End`. The crash happens **after**
@@ -250,7 +250,7 @@ Our gate SWFs were regenerated with `node` into the session scratch dir (no `npm
 nothing written into `editor/` or `mods/`); vanilla `minecarts.swf` (7,024 B) and
 `ability_icons.swf` (2,243,520 B) were extracted read-only with
 `python -I tools/gpak.py cat …` and both were parsed with
-`editor/src/core/art/swf-reader.mjs`.
+`editor/src/core/art/swf-reader.ts`.
 
 ### 5.1 Tag stream — ours vs. vanilla
 
@@ -370,7 +370,7 @@ structure**, not its byte/ID layout.
    `emitSwf`/`minimalGateSwf` should treat `SymbolClass` as sufficient for linkage
    (COMMUNITY-SOURCED + variant A OBSERVED crashes without a DoABC). Keep the `abc:"stub"` path
    only for the explicit gate experiment, and if ever required it must be byte-exact (see #5).
-   Set `scene.mjs DEFAULT_ABC_MODE = "none"`.
+   Set `scene.ts DEFAULT_ABC_MODE = "none"`.
 
 3. **Do not alter the `_Append_` linkage spelling, and keep FWS/uncompressed output.**
    `exports` key `_Append_AbilityIcon` is correct — the engine matches the exact 8-byte
@@ -385,7 +385,7 @@ structure**, not its byte/ID layout.
    shows an ID-keyed path. Do not spend effort here first.
 
 5. **If a DoABC is emitted at all, keep it strictly Flash-faithful with no frame scripts.**
-   `abc-stub.mjs` must not emit `addFrameScript` or any frame-script-bearing trait; its
+   `abc-stub.ts` must not emit `addFrameScript` or any frame-script-bearing trait; its
    class-init must only declare the class. (Our stub already does only this; keep it so, because
    glaielswf *does* execute DoABC via its AVM2 interpreter — §4 frame 14 — unlike some community
    parsers that ignore it.)
@@ -414,9 +414,9 @@ structure**, not its byte/ID layout.
 - Static analysis scripts (session scratch, not committed): `resolve-crash.mjs`,
   `analyze-frames.mjs`, `dump-sites.mjs`, `probe-append.mjs`, `find-vtables.mjs`,
   `callers.mjs`, `emit-and-diff.mjs`, `parse-abilityicons.mjs`.
-- Gate fixtures: `editor/src/core/art/swf-emitter.mjs#minimalGateSwf`,
-  `editor/src/core/art/art-io.mjs#prepareSwfGate` (variants flat/nested/legacy/probe/missing/control, mod
-  `mods/swf-gate/`, runner `editor/scripts/swf-gate.mjs`).
+- Gate fixtures: `editor/src/core/art/swf-emitter.ts#minimalGateSwf`,
+  `editor/src/core/art/art-io.ts#prepareSwfGate` (variants flat/nested/legacy/probe/missing/control, mod
+  `mods/swf-gate/`, runner `editor/scripts/swf-gate.ts`).
 - Append convention corroboration (COMMUNITY-SOURCED):
   `github.com/CVS-otherwise-Callie/mewgenics-modding-documents` (`docs/SWF_appendation.md`,
   `SWF_home.md`, `SWFOverview.md`); `ombrellus/MewgenicsScriptResources`;

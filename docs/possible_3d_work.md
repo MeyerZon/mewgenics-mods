@@ -35,7 +35,7 @@ and classification on the way there.
       state flags `0x1412f714c`, mat stack `0x1413c5bd0`, GLEW table `0x1413bc370`.
       Why: the framework only activates on a verified build; code addresses are pattern-scanned, data
       addresses live in `BuildInfo` and are sanity-checked (e.g. ISO m0 ≈ 0.8944).
-      Takes: `tools/bindings/make-signature.mjs` runs; the manifest + `npm run bindings:gen` carry the full unique pattern (lesson from the status engine).
+      Takes: `tools/bindings/make-signature.ts` runs; the manifest + `npm run bindings:gen` carry the full unique pattern (lesson from the status engine).
 - [ ] **Log a few instance records in-process.**
       What: observer hook on `FUN_140a47e50`, dump 10 mat4s + depth_bias to the framework log, once.
       Why: confirms the column-major layout and m14 = 0 for iso objects in a live frame. The z

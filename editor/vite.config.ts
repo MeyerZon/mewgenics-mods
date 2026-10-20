@@ -1,7 +1,7 @@
 // Vite config for the editor web UI (docs/editor-ts-react-plan.md).
 //
 // `vite build` bundles web/index.html (+ the art preview dev page) into web/dist/, which
-// web/server.mjs serves next to its /api bridge — that is what `npm run web` and the e2e
+// web/server.ts serves next to its /api bridge — that is what `npm run web` and the e2e
 // suite use. `vite dev` is the hot-reloading alternative for UI work: it proxies /api to the
 // node server, so run `npm run web` in a second terminal.
 

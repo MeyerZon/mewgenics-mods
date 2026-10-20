@@ -101,7 +101,7 @@ produces depth and floor art that lies down.
 
 ## 2. The board's geometry (OBSERVED)
 
-From the vanilla SWFs (read with the repo's `editor/src/core/art/swf-reader.mjs`; px = twips/20 at
+From the vanilla SWFs (read with the repo's `editor/src/core/art/swf-reader.ts`; px = twips/20 at
 authoring scale) and the projection constants:
 
 | Symbol | Bounds / shape | Meaning |

@@ -18,7 +18,8 @@ layer, which tier of test covers what, where a human still has to look, and what
 ## What is test-backed today
 
 - **Editor core** (`editor/src/core/`): 145 unit tests (`npm test`), 33 Playwright end-to-end tests (`npm run test:e2e`),
-  `tsc --noEmit` over JSDoc types. The overlay engine's oracle is the decompiled `Gon_merge_{a,b,c}.c`.
+  `tsc --noEmit` (strict TypeScript, no JSDoc typing left). The overlay engine's oracle is the decompiled
+  `Gon_merge_{a,b,c}.c`.
 - **Data mods** (`mods/`): the validator (reference integrity, localization, overlay targets, merge preview) is the T0/T1
   test; the harness load smoke is the T2 test (no `NO_*_NAMED` / `GON_ERROR` marker, framework active).
 - **Native framework**: the signature scanner is a pure unit with 13 host tests; everything else is verified by the
@@ -44,7 +45,8 @@ layer, which tier of test covers what, where a human still has to look, and what
 
 1. **Red.** Write the test that describes the behaviour and run it. It must fail for the right reason: a missing
    module, a wrong value, a `fail` verdict, a `NO_ABILITY_NAMED` marker. Commit it (`test(scope): red …`).
-   - Editor: a `test(...)` in `editor/test/*.mjs` (wire new suites like `runIngameTests`).
+   - Editor: a `test(...)` in `editor/test/*.ts` (wire new suites like `runIngameTests`); UI behaviour in
+     `editor/tests/e2e/*.spec.ts` (Playwright).
    - Data mod: a `.mewtest` under `mods/<mod>/tests/` and, for validator-visible mistakes, a validator fixture.
    - Native: a `TEST(...)` in the module's host suite; the game-facing part gets a `.mewtest`.
    - Docs-only PRs are exempt from red/green but not from T3.

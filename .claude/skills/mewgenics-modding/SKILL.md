@@ -26,7 +26,7 @@ modded launch.
 Start the stdio JSON-RPC 2.0 server:
 
 ```bash
-node editor/src/mcp/server.mjs
+node editor/src/mcp/server.ts
 ```
 
 Tools, by purpose:
@@ -47,7 +47,7 @@ Tools, by purpose:
 - `new_from_template` — scaffold an ability/passive/item/status-data overlay
   plus matching localization rows.
 
-A web UI (`node editor/web/server.mjs`, opened in a browser) browses base data
+A web UI (`node editor/web/server.ts`, opened in a browser) browses base data
 and components and shows inline validation and merge-preview. It is for a human;
 as an agent, drive the MCP tools.
 

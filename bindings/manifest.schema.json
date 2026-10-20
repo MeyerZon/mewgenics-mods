@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "mewgenics-mods/bindings/manifest.schema.json",
   "title": "Mewgenics native bindings manifest",
-  "description": "One file per game build (bindings/<steamBuildId>.json): every value the native layer pins to that build, plus the anchors that let tools/bindings/port.mjs find each value again in a new build. native/framework/src/signatures.h and offsets.h are generated from it. The validator in editor/src/core/bindings/manifest.mjs is authoritative; this schema documents the shape.",
+  "description": "One file per game build (bindings/<steamBuildId>.json): every value the native layer pins to that build, plus the anchors that let tools/bindings/port.ts find each value again in a new build. native/framework/src/signatures.h and offsets.h are generated from it. The validator in editor/src/core/bindings/manifest.ts is authoritative; this schema documents the shape.",
   "type": "object",
   "required": ["format", "build", "sigCap", "entries"],
   "properties": {
@@ -90,7 +90,7 @@
         "evidence": { "type": "array", "items": { "type": "string" }, "description": "decompile paths under .analysis/, doc sections, REA evidence ids" },
         "verify": { "type": "object" },
         "note": { "type": "string" },
-        "port": { "type": "object", "required": ["from", "status", "method"], "properties": { "from": { "type": "string" }, "status": { "enum": ["ported-exact", "ported-rescan", "ported-anchor", "ported-witness", "ported-derived", "proposed", "ambiguous", "failed", "needs-human"] }, "method": { "type": "string" }, "note": { "type": "string" }, "candidates": { "type": "array", "description": "ambiguous only: each candidate's rva, size, call count and how it was found; seed-file.mjs turns them into Name__cand_<rva> seeds", "items": { "type": "object", "required": ["rva"], "properties": { "rva": { "type": "string" }, "bytes": { "type": "integer" }, "calls": { "type": "integer" }, "via": { "type": "string" } } } } } }
+        "port": { "type": "object", "required": ["from", "status", "method"], "properties": { "from": { "type": "string" }, "status": { "enum": ["ported-exact", "ported-rescan", "ported-anchor", "ported-witness", "ported-derived", "proposed", "ambiguous", "failed", "needs-human"] }, "method": { "type": "string" }, "note": { "type": "string" }, "candidates": { "type": "array", "description": "ambiguous only: each candidate's rva, size, call count and how it was found; seed-file.ts turns them into Name__cand_<rva> seeds", "items": { "type": "object", "required": ["rva"], "properties": { "rva": { "type": "string" }, "bytes": { "type": "integer" }, "calls": { "type": "integer" }, "via": { "type": "string" } } } } } }
       }
     }
   }
