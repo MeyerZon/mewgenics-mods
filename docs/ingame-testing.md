@@ -65,6 +65,14 @@ enter <SceneName>                                TacticsTest: replay the dev men
                                                  slot mewtest01.sav (moved aside by the runner before the run, so it is
                                                  always a new game: the intro cutscene). Waits for the console like cmd;
                                                  once per script; an unknown name fails before launch
+enter Campaign house                             the same fresh campaign, but the slot is marked as begun first
+                                                 (game_began 1) so MewDirector::start resumes into the real House — no
+                                                 interactive intro. Day 1, no cats, the neighbor's tutorial dialogue up;
+                                                 the campaign director's commands exist (pinned in
+                                                 editor/test/fixtures/ingame/console-campaign-listcmds.txt: the test
+                                                 director's 17 + upgrade, upgrade_all, house_boss_event, max_npc_favor,
+                                                 interstitial_test, spawn_custom_stray, house_weather, get_furniture, …).
+                                                 The enter event carries "mode":"house"
 seed <N>                                         pin the game's RNG (TLS+0x178) to N (0..2^64-1) once the game's own
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every

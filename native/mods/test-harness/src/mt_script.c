@@ -46,6 +46,7 @@ int mt_scene_id(const char *name) {
     if (strcmp(name, "Campaign") == 0) return MT_SCENE_CAMPAIGN;
     return 0;
 }
+const char *mt_enter_mode_name(int mode) { return mode == MT_ENTER_HOUSE ? "house" : ""; }
 const char *mt_scene_name(int scene) {
     return scene == MT_SCENE_TACTICS_TEST ? "TacticsTest" : scene == MT_SCENE_CAMPAIGN ? "Campaign" : "";
 }
@@ -251,7 +252,7 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
     } else if (wl == 5 && !strncmp(p, "enter", 5)) {
         size_t sl = tok_len(rest);
         if (!sl) return fail(err, errCap, errLine, lineNo, "enter needs a scene name (TacticsTest|Campaign)");
-        if (*skip_ws(rest + sl)) return fail(err, errCap, errLine, lineNo, "enter takes exactly one scene name");
+        const char *modeTok = *skip_ws(rest + sl) ? skip_ws(rest + sl) : NULL;   /* "enter Campaign house" */
         char name[64];
         snprintf(name, sizeof name, "%.*s", (int)(sl > 63 ? 63 : sl), rest);
         d.kind = MT_D_ENTER;
@@ -260,6 +261,12 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             char msg[128];
             snprintf(msg, sizeof msg, "unknown scene \"%s\" (TacticsTest|Campaign)", name);
             return fail(err, errCap, errLine, lineNo, msg);
+        }
+        if (modeTok) {
+            size_t ml = tok_len(modeTok);
+            if (d.scene != MT_SCENE_CAMPAIGN || ml != 5 || strncmp(modeTok, "house", 5)) return fail(err, errCap, errLine, lineNo, "enter: the only mode is: enter Campaign house");
+            if (*skip_ws(modeTok + ml)) return fail(err, errCap, errLine, lineNo, "enter takes a scene name and at most one mode word");
+            d.enterMode = MT_ENTER_HOUSE;
         }
     } else if (wl == 4 && !strncmp(p, "quit", 4)) {
         d.kind = MT_D_QUIT;

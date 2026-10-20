@@ -170,6 +170,14 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.ok && p.body.startsWith("expect unit 6 faction == 1\n"), "DLL-side directive");
     });
 
+    test("enter Campaign house parses (mode house); a mode on another scene, an unknown mode or more words are line errors; no mode adds no key", () => {
+      eq(JSON.stringify(parseDirective("enter Campaign house", 3)), JSON.stringify({ line: 3, kind: "enter", scene: "Campaign", mode: "house" }));
+      eq(JSON.stringify(parseDirective("enter Campaign", 3)), JSON.stringify({ line: 3, kind: "enter", scene: "Campaign" }));
+      for (const bad of ["enter TacticsTest house", "enter Campaign tower", "enter Campaign house now"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript("enter Campaign house\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.usesCampaignSlot && p.body.startsWith("enter Campaign house\n"), "DLL-side, and it uses the disposable slot");
+    });
+
     test("enter directive parses a known scene; unknown or missing scene, or extra words, are line errors", () => {
       const d = parseDirective("enter TacticsTest", 2) as { kind: string; scene: string };
       eq(d.kind, "enter"); eq(d.scene, "TacticsTest");
@@ -323,7 +331,9 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.expects.passed, 1);
       eq(JSON.stringify(r.expects.failures[0]), JSON.stringify({ line: 3, kind: "noconsole", arg: "No command named", detail: "found in console line 0" }));
     });
-    test("enter event is surfaced as result.enter (line, name, ok, detail); absent -> null", () => {
+    test("enter event is surfaced as result.enter (line, name, mode, ok, detail); absent -> null; enter Campaign house reports mode house", () => {
+      const h = parseResults('{"ev":"start","t":0,"frame":0}\n{"ev":"enter","line":1,"name":"Campaign","mode":"house","ok":true,"detail":"x","t":1,"frame":1}\n') as unknown as { enter: { mode: string } };
+      eq(h.enter.mode, "house");
       const text = [
         '{"ev":"start","harness":"mewtest 0.1.0","t":0,"frame":0}',
         '{"ev":"enter","line":2,"name":"TacticsTest","ok":false,"detail":"no MewDirector","t":40,"frame":3}',
@@ -331,7 +341,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       ].join("\n") + "\n";
       const r = parseResults(text) as unknown as { enter: { line: number; name: string; ok: boolean; detail: string } | null; end: { reason?: string } | null };
       assert(r.enter !== null && r.enter !== undefined, "result.enter present");
-      eq(JSON.stringify(r.enter), JSON.stringify({ line: 2, name: "TacticsTest", ok: false, detail: "no MewDirector" }));
+      eq(JSON.stringify(r.enter), JSON.stringify({ line: 2, name: "TacticsTest", mode: "", ok: false, detail: "no MewDirector" }));
       eq(r.end!.reason, "enter_failed");
       eq((parseResults(fixture("result-pass.jsonl")) as unknown as { enter: unknown }).enter, null, "no enter event -> null");
     });
@@ -369,6 +379,15 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       for (let i = 0; i < 8; i++) eq(JSON.stringify(v.units!.list[i]), JSON.stringify(g.units!.list[i]), `unit ${i} identical in both runs (seed 42)`);
       eq(v.expects.failed, 0); eq(g.expects.failed, 0);
       eq(v.end!.code, 0); eq(g.end!.code, 0);
+    });
+    test("OBSERVED 2026-10-20 fixture: enter Campaign house -> the real House (no intro), the campaign director's 57 commands pinned, a house command executes (result-enter-house.jsonl + console-campaign-listcmds.txt)", () => {
+      const r = parseResults(fixture("result-enter-house.jsonl")) as unknown as { enter: { ok: boolean; name: string; mode: string; detail: string } | null; expects: { passed: number; failed: number }; end: { code: number } | null; popups: unknown[]; shots: unknown[] };
+      assert(!!r.enter && r.enter.ok && r.enter.name === "Campaign" && r.enter.mode === "house" && /game_began set/.test(r.enter.detail), JSON.stringify(r.enter));
+      eq(r.expects.failed, 0); eq(r.expects.passed, 4); eq(r.end!.code, 0); eq(r.popups.length, 0); eq(r.shots.length, 2);
+      const cmds = fixture("console-campaign-listcmds.txt").split(/\r?\n/).filter(Boolean);
+      eq(cmds.length, 58, "57 commands + the Executed: line");
+      for (const c of ["skip_tutorial", "set_day arg0", "upgrade_all", "house_boss_event arg0", "spawn_custom_stray arg0", "house_weather arg0", "get_furniture arg0"]) assert(cmds.includes(c), `${c} listed`);
+      assert(!cmds.includes("spawn arg0") && !cmds.includes("bind arg0"), "no TacticsTest commands in the House");
     });
     test("OBSERVED 2026-10-20 fixture: enter Campaign -> ok, the harness-owned slot named in the detail, no popup, quit after the shots (result-enter-campaign.jsonl)", () => {
       const r = parseResults(fixture("result-enter-campaign.jsonl")) as unknown as { enter: { ok: boolean; name: string; detail: string } | null; shots: unknown[]; end: { code: number; reason: string } | null; popups: unknown[]; turns: number };

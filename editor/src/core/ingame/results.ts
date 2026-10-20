@@ -33,6 +33,8 @@ export interface ScriptErrorEvent extends ResultEvent {
 export interface EnterEvent {
   line: number;
   name: string;
+  /** "house" for `enter Campaign house`, "" otherwise */
+  mode: string;
   ok: boolean;
   detail: string;
 }
@@ -157,7 +159,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
       case "turn": r.turns++; break;
       case "console": r.consoleLines.push(String(e.text ?? "")); break;
       case "units": r.units = e; break;
-      case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
+      case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), mode: String(e.mode ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "popup": r.popups.push({ title: String(e.title ?? ""), text: String(e.text ?? ""), frame: Number(e.frame ?? 0) }); break;
       case "shot": r.shots.push({ line: Number(e.line ?? 0), label: String(e.label ?? ""), frame: Number(e.frame ?? 0) }); break;
       case "seed": r.seed = { line: Number(e.line ?? 0), seed: String(e.seed ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;

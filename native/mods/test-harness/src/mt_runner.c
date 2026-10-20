@@ -170,7 +170,7 @@ void mt_runner_abort(MtRunner *r, const MtHost *h, int code, const char *reason)
 
 /* run the directive at pc; returns 1 to keep running, 0 when the script finished */
 static int exec_directive(MtRunner *r, const MtHost *h) {
-    char arg[160], detail[200];
+    char arg[160], detail[512];   /* enter details name pointers and the house note */
     if (r->pc >= r->s->count) {
         if (r->interactive) {
             /* interactive mode: the script is over but the session is not — idle and serve the pipe until quit */
@@ -415,7 +415,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             }
             int rc;
             if (r->entered) { rc = 0; snprintf(detail, sizeof detail, "refused: enter may run only once per script"); }
-            else { detail[0] = 0; rc = h->enter_scene(h->user, d->scene, detail, sizeof detail); }
+            else { detail[0] = 0; rc = h->enter_scene(h->user, d->scene, d->enterMode, detail, sizeof detail); }
             if (rc == 2) {
                 /* not ready yet (the game has not finished its own startup): retry next frame, same budget as the console wait */
                 r->state = MT_S_WAIT_CONSOLE;
@@ -430,6 +430,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             mt_jw_begin(&w, g_json, sizeof g_json, "enter");
             mt_jw_int(&w, "line", d->line);
             mt_jw_str(&w, "name", mt_scene_name(d->scene));
+            if (d->enterMode) mt_jw_str(&w, "mode", mt_enter_mode_name(d->enterMode));
             mt_jw_bool(&w, "ok", rc == 1);
             mt_jw_str(&w, "detail", detail);
             stamp_and_emit(r, h, &w);

@@ -5345,6 +5345,67 @@
         ".analysis/decompiled/opencaller_c1_0x1be1a0.c",
         ".analysis/decompiled/MewDirector_start_0x3aefd0.c"
       ]
+    },
+    {
+      "name": "SaveProps_GetOrCreate",
+      "kind": "function",
+      "rva": "0x61ea0",
+      "signature": {
+        "pattern": "78 18 0F 76 03 49 8B 10 48 BB ?? ?? ?? ?? ?? ?? ?? ?? 45 33 C0 4D 85 C9 74 2A 48 B9 ?? ?? ?? ?? ?? ?? ?? ?? 0F 1F 40 00 0F 1F 84 00 00 00 00 00 42 0F B6 04 02 48 33 D8 48 0F AF D9 49 FF C0 4D 3B C1 72 EC 4C 8B CB 4D 8B C6 48 8D 54 24 20 48 8B CD E8 ?? ?? ?? ?? 48 8B 44 24 28 48 85 C0 74 0C 48 89 06 C6 46 08 00 E9 ?? ?? ?? ?? 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 39 45 10 0F 84 C6",
+        "exactLen": 126,
+        "offset": -48,
+        "wildcards": [
+          {
+            "at": 10,
+            "len": 8,
+            "why": "movabs imm64"
+          },
+          {
+            "at": 28,
+            "len": 8,
+            "why": "movabs imm64"
+          },
+          {
+            "at": 83,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 105,
+            "len": 4,
+            "why": "E9 rel32"
+          },
+          {
+            "at": 111,
+            "len": 8,
+            "why": "movabs imm64"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Node** (PropMap* map, Node** out16, std::string* key): the save property map lookup with insert (FNV-1a hash of the key; a 0x38-byte node, value at +0x30). The new-game branch 0x3af310 writes game_began = 1 through it on director+0x38; the harness does the same for enter Campaign house. The key is copied (the caller keeps it).",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 644,
+          "calls": 6,
+          "ripRefs": 2,
+          "resyncs": 1
+        },
+        "prologue": "48 89 5C 24 08 48 89 6C 24 10 48 89"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:enter_campaign"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_SaveProps_GetOrCreate",
+          "index": 27
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#dev-scenes-and-run-entry"
+      ]
     }
   ]
 }
