@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
-import { MODS_DIR, resolveModWritePath } from "../repo.ts";
+import { MODS_DIR, REPO_ROOT, resolveModWritePath, isInside, touchesSaves } from "../repo.ts";
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
 import type { Scene, SceneShape, Finding } from "./scene.ts";
 import { importSvg } from "./svg-import.ts";
@@ -416,6 +416,51 @@ export function inspectSwf(modName: string, relPath: string): InspectSwfResult {
 // (`pass`) or faults in the post-load merge (`crash`). Variants isolate the cause:
 
 /** The mod the gate lives in; `*.swf` and the generated `.append` are git-ignored there. */
+// ---- vanilla SWFs (read-only reference copies in the git-ignored .extracted/swfs/) ----------------------------
+/** where extracted vanilla SWFs live; MEWGENICS_VANILLA_SWF_DIR overrides (tests) */
+export function vanillaSwfDir(): string {
+  return process.env.MEWGENICS_VANILLA_SWF_DIR ? process.env.MEWGENICS_VANILLA_SWF_DIR : join(REPO_ROOT, ".extracted", "swfs");
+}
+const VANILLA_HINT = (name: string) => `python -I tools/gpak.py extract .extracted --prefix swfs/${name || ""}`;
+
+export interface VanillaSwfListing {
+  ok: true;
+  dir: string;
+  files: { name: string; present: boolean; bytes?: number }[];
+  hint: string;
+}
+/** The vanilla SWF names the game loads (swflist.gon: the loader line and the game [...] block), with presence. */
+export function listVanillaSwfs(): VanillaSwfListing {
+  const dir = vanillaSwfDir();
+  const listPath = join(dir, "swflist.gon");
+  const names: string[] = [];
+  if (existsSync(listPath)) {
+    const text = readFileSync(listPath, "utf8").replace(/\/\/[^\n]*/g, "");
+    const loader = /^\s*loader\s+("?)([^\s"]+)\1/m.exec(text);
+    if (loader) names.push(loader[2]!);
+    const game = /game\s*\[([^\]]*)\]/.exec(text);
+    if (game) for (const tok of game[1]!.split(/\s+/)) { const n = tok.replace(/^"|"$/g, ""); if (n && !names.includes(n)) names.push(n); }
+  }
+  const files = names.map((name) => {
+    const abs = join(dir, name);
+    if (!existsSync(abs)) return { name, present: false };
+    return { name, present: true, bytes: statSync(abs).size };
+  });
+  return { ok: true, dir, files, hint: `extract the vanilla SWFs with: ${VANILLA_HINT("")}` };
+}
+
+export type VanillaSwfRead = { ok: true; name: string; bytes: Uint8Array } | { ok: false; error: string; hint?: string };
+/** Bytes of one extracted vanilla SWF, by its swflist name (e.g. "ability_icons.swf", "cutscenes/game_intro.swf"). */
+export function readVanillaSwf(name: string): VanillaSwfRead {
+  const n = String(name || "");
+  if (!/^[A-Za-z0-9_-][A-Za-z0-9_./-]*\.swf$/.test(n) || n.split("/").some((seg) => seg === ".." || seg === "") || n.includes(":")) return { ok: false, error: `not a vanilla SWF name: ${JSON.stringify(n)}` };
+  const dir = vanillaSwfDir();
+  const abs = join(dir, n);
+  if (!isInside(dir, abs) || touchesSaves(abs)) return { ok: false, error: `refusing ${JSON.stringify(n)}` };
+  if (!existsSync(abs)) return { ok: false, error: `${n} is not extracted`, hint: VANILLA_HINT(n) };
+  return { ok: true, name: n, bytes: new Uint8Array(readFileSync(abs)) };
+}
+
 export const SWF_GATE_MOD = "swf-gate";
 export const SWF_GATE_FILE = "gate.swf";
 /** The frame label = the ability whose icon the donor appends (a jokers-luck ability with no vanilla icon). */

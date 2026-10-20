@@ -12,6 +12,7 @@ import * as artio from "./art/art-io.ts";
 import { readPalette, knownRowHints } from "./art/palette.ts";
 import { validateScene, exampleScene, DEFAULT_ABC_MODE } from "./art/scene.ts";
 import * as ingame from "./ingame/index.ts";
+export { listVanillaSwfs, readVanillaSwf, vanillaSwfDir } from "./art/art-io.ts";
 import { checkInstalledBuild } from "./bindings/check.ts";
 import { portManifest, renderPortReport } from "./bindings/port.ts";
 import { loadManifest, saveManifest, listManifests, BINDINGS_DIR } from "./bindings/manifest.ts";
