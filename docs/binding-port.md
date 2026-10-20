@@ -37,8 +37,8 @@ and **anchors**, the evidence that finds it again:
 | function | `signature` (shortest unique masked prefix, rel32 / rip-relative disp32 / imm64 wildcarded, may start inside the function with a negative `offset`), `strings` (the MSVC `__FUNCSIG__` / `__FILE__` strings it references via rip-relative `lea`, with uniqueness; hand-added `literal` strings are kept), `callees` (calls to other manifest entries, by ordinal among all calls), `cfgLite` (bytes from `.pdata`, calls, rip refs), `prologue`, optionally `after` (the `.pdata` function it follows) |
 | data | `witness` (the function that references it and the ordinal of that rip-relative reference), or `derive { table, index }` |
 | vtable | `rtti { typeDescriptorName }` (TypeDescriptor → CompleteObjectLocator → vftable) + `slotChecks` |
-| constant | `derive { vtable, slot, bodyPattern, imm32At }` (read from the slot's code) and/or `witness { function, callee, pattern, imm32At, maxBack }` (the imm32 of the instruction matching `pattern` within `maxBack` instructions before the first call to `callee` inside `function`). With two sources the port applies a value only when both agree; a split is `needs-human` with both values. `LuckUp_typeid` carries both since 2026-10-19 (slot 1 body of the LuckUp vftable; `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in `Status_ApplyLuckUp`). |
-| offset | `witness { function, pattern, dispAt, dispSize, nth }` or `unanchored: true` |
+| constant | `derive { vtable, slot, bodyPattern, imm32At }` (read from the slot's code) and/or `witness { function, callee, pattern, imm32At, maxBack }` (the imm32 of the instruction matching `pattern` within `maxBack` instructions before the first call to `callee` inside `function`) and/or a displacement witness `witness { function, pattern, dispAt, dispSize, scale }` without a callee (the displacement of the matching instruction divided by `scale`: a `call [reg+8*slot]` witnesses a vtable slot index; port method `call-slot`). With two sources the port applies a value only when both agree; a split is `needs-human` with both values. `LuckUp_typeid` carries both since 2026-10-19 (slot 1 body of the LuckUp vftable; `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in `Status_ApplyLuckUp`). |
+| offset | `witness { function, pattern, dispAt, dispSize, nth, scale }` — the `nth` match of the byte pattern inside the function's `.pdata` body, the signed displacement at `dispAt` (1 byte, or 4 when `dispSize` is 4), divided by `scale` (default 1). `harvest.ts` verifies it against the manifest value on the current exe (`verified` / `mismatch` / `unresolved`; the CLI exits 1 on a mismatch or an unresolved offset) and `port.ts` ports it. Or `unanchored: true`. |
 
 Facts the design rests on (verified on build 25143593): the exe's `.pdata` has 55,712 `RUNTIME_FUNCTION`
 entries, so any address maps to its function without a disassembler; 12 of the 13 status lookups reference a
@@ -83,7 +83,7 @@ agree (`ported-derived`, method `slot-body+call-arg`), otherwise `needs-human` w
 (`ported-witness`; a shifted ordinal is accepted only when exactly one reference of the same opcode remains) and
 table+index (`ported-derived`, or `needs-human` when the SDL version changed), struct offsets via their witness
 pattern (`ported-witness` when the displacement is unchanged, **`proposed` with the value NOT applied** when it
-moved). Unanchored entries are carried over as `needs-human`. Every ported function gets a fresh signature and
+moved; the same `readOffsetWitness` the harvest verifies with, so an anchor that verifies today ports tomorrow). Unanchored entries are carried over as `needs-human`. Every ported function gets a fresh signature and
 fresh anchors on the new image; every entry gets a `port { from, status, method, note, candidates? }` block.
 
 Rungs 2–4 iterate until nothing more ports, so a string-less helper becomes reachable once its caller is ported.
