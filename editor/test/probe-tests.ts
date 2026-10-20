@@ -91,6 +91,8 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       eq(s.blend, "honoured");
       const moving = pc.summarizeProbe([600, 630, 670].map((w) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, walker: w }))));
       eq(moving.rootTimeline, "plays");
+      const driven = pc.summarizeProbe([603, 610, 598].map((w) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, walker: w }))));
+      eq(driven.rootTimeline, "game-driven");
       eq(s.childFraming, "free-running"); eq(s.sampling, "smooth"); eq(s.edge, "clamp"); eq(s.cxform, "applied"); eq(s.mirrored, true);
       const held = pc.summarizeProbe([0, 1, 2].map(() => pc.analyzeProbeShot(shot({ s: 2, blink: [255, 32, 32] }))));
       eq(held.childFraming, "held");
@@ -102,9 +104,9 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
 
 /** OBSERVED in the game (npm run test:artprobe, 2026-10-20): the facts the art preview must follow */
 export function runProbeFixtureTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture: (name: string) => string): void {
-  test("OBSERVED 2026-10-20 fixture: the root clip's own timeline plays in the game (the walker square moves between shots)", () => {
+  test("OBSERVED 2026-10-20 fixture: the game drives an enemy's root clip timeline (the walker stays within its first ~8 frames while nested sprites run free): free-running animation belongs in nested sprites", () => {
     const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { rootTimeline?: string } };
-    eq(j.summary.rootTimeline, "plays");
+    eq(j.summary.rootTimeline, "game-driven");
   });
   test("OBSERVED 2026-10-20 fixture: the game honours a PlaceObject3 blend mode (the add square lets the background through)", () => {
     const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { blend?: string } };
@@ -139,6 +141,7 @@ export async function runPreviewAgreementTests(test: TestFn, assert: AssertFn, e
     eq(eb.ENGINE_DRAWING.bitmapSampling, s.sampling === "smooth" ? "linear" : "nearest");
     eq(eb.ENGINE_DRAWING.bitmapEdge, s.edge);
     eq(eb.ENGINE_DRAWING.enemyClipsMirrored, s.mirrored);
+    eq(eb.ENGINE_DRAWING.rootTimeline, (s as { rootTimeline?: string }).rootTimeline);
   });
   test("nestedFrame(clock, frames): a nested sprite's frame comes from the clock, not from its parent's frame (a one-frame holder does not freeze its child)", () => {
     assert(typeof eb.nestedFrame === "function", "exported");

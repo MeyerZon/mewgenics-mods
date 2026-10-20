@@ -11,6 +11,11 @@ export const ENGINE_DRAWING = {
   bitmapEdge: "clamp" as "clamp" | "repeat",
   /** enemy clips are drawn mirrored horizontally (they face left); the preview shows the clip as authored */
   enemyClipsMirrored: true,
+  /**
+   * a character's root clip timeline is driven by the game (it stays near its first frames: restarted), unlike nested
+   * sprites; free-running animation belongs in a nested sprite, game states in frame labels
+   */
+  rootTimeline: "game-driven" as "game-driven" | "plays" | "held",
   /** still unknown: whether a PlaceObject cxform applies before or after the palette remap (enemies are unpaletted) */
   observed: "2026-10-20, build 25143593, npm run test:artprobe",
 } as const;

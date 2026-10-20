@@ -13,7 +13,8 @@
     "ramp": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "gradient:rampgrad" } ] },
     "capbutt": { "paths": [ { "d": "M-30 0 L30 0", "stroke": "#20ff20", "strokeWidth": 12, "strokeCap": "butt" } ] },
     "capsquare": { "paths": [ { "d": "M-30 0 L30 0", "stroke": "#20ff20", "strokeWidth": 12, "strokeCap": "square" } ] },
-    "addsq": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#600000" } ] }
+    "addsq": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#600000" } ] },
+    "walker": { "paths": [ { "d": "M-10 -10 L10 -10 L10 10 L-10 10 Z", "fill": "#ffffff" } ] }
   },
   "bitmaps": { "checkerbmp": { "file": "art/checker.png" } },
   "gradients": {
@@ -33,7 +34,7 @@
       "layers": [ { "name": "blink", "depth": 1, "keys": [ { "frame": 0, "ref": "Blink", "x": 0, "y": 0 } ] } ]
     },
     "ArtProbe": {
-      "frames": 1,
+      "frames": 60,
       "layers": [
         { "name": "checker", "depth": 1, "keys": [ { "frame": 0, "ref": "checker", "x": 0, "y": 0 } ] },
         { "name": "holder", "depth": 2, "keys": [ { "frame": 0, "ref": "Holder", "x": 150, "y": 30 } ] },
@@ -42,7 +43,8 @@
         { "name": "gradient", "depth": 5, "keys": [ { "frame": 0, "ref": "ramp", "x": 390, "y": 30 } ] },
         { "name": "cap butt", "depth": 6, "keys": [ { "frame": 0, "ref": "capbutt", "x": 470, "y": 10 } ] },
         { "name": "cap square", "depth": 7, "keys": [ { "frame": 0, "ref": "capsquare", "x": 470, "y": 50 } ] },
-        { "name": "blend add", "depth": 8, "keys": [ { "frame": 0, "ref": "addsq", "x": 550, "y": 30, "blend": "add" } ] }
+        { "name": "blend add", "depth": 8, "keys": [ { "frame": 0, "ref": "addsq", "x": 550, "y": 30, "blend": "add" } ] },
+        { "name": "walker", "depth": 9, "keys": [ { "frame": 0, "ref": "walker", "x": 600, "y": 30, "tween": "linear" }, { "frame": 59, "ref": "walker", "x": 680, "y": 30 } ] }
       ]
     }
   },
