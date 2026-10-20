@@ -120,7 +120,7 @@ test.describe("Art mode — explorer & scene authoring", () => {
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Rig" }).click();
     await page.getByRole("button", { name: "New cat rig" }).click();
-    for (const slot of ["tail", "leg2", "arm2", "body", "leg1", "arm1", "head"]) await expect(page.locator(".rig-slot", { hasText: slot })).toBeVisible();
+    for (const slot of ["tail", "leg2", "arm2", "body", "leg1", "arm1", "head"]) await expect(page.locator(".rig-slot .id", { hasText: new RegExp(`^${slot}$`) })).toBeVisible();
     await page.locator('select[aria-label="slot head"]').selectOption("eye");
     await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
     const sc = JSON.parse(await page.locator("textarea").first().inputValue());
