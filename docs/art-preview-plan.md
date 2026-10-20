@@ -454,7 +454,15 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     delete frames with shifting, layer order) behind a Timeline tab (ruler + label pills, layer rows with key / hold /
     tween marks, click to scrub, key inspector). OBSERVED: **the game drives a character's root clip timeline** — a
     walker tweened over the probe root's 60 frames stays within its first ~8 frames across shots, while nested sprites
-    run free. Put free-running animation in nested sprites; the root's frame labels are what the game selects. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+    run free. Put free-running animation in nested sprites; the root's frame labels are what the game selects.
+    **Cat rig done 2026-10-20:** `src/core/art/cat-rig.ts` (`CAT_SLOTS` = the main catanis.swf cat's named instances
+    tail 1 / leg2 3 / arm2 5 / body 7 / leg1 9 / arm1 11 / head 13, pinned in `test/fixtures/art/cat-rig-slots.json`
+    against the installed game with MinecartCat's layout; `addCatRig`, `assignSlot`, rig validation) and a Rig tab.
+    OBSERVED (`npm run test:artprobe -- --cat`): a character drawn by our seven-slot rig shows every slot in the
+    game. Units are **tinted by where they stand** (the rig's colours came back at ~0.80–0.86 in a shaded spot while
+    the main probe's gray control stood lit and read exact). Out of scope (engine work): adding parts to
+    catparts.swf or making the game swap its own cat parts into our slots. Not done: copying vanilla part geometry
+    into a mod (owner's call, H2). Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
     contract and `src/mcp/` untouched.

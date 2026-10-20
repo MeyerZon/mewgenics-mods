@@ -317,6 +317,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 ### Larger build-out
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
 - [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
+- [x] Clip authoring (Timeline tab, timeline-edit.ts) and the cat rig (Rig tab, cat-rig.ts) — 2026-10-20, art build-out G + H; the game drives a character's root timeline, units are tinted by position
 - [ ] Emitter: ~~gradient fills~~ (done 2026-10-20, art build-out C: gradient.ts, gate `gradient`, probe square drawn in-game), ~~LineStyle2~~ (done 2026-10-20, art build-out E: DefineShape4, stroke.ts, gate `shape4`, caps honoured in-game), fonts/text, ~~PlaceObject3~~ (done 2026-10-20, art build-out F: blends load and apply in-game; filters crash the game and are a validation error)
 - [ ] MCP tools for art (so agents can author art, not just data)
 - [ ] "Draw in VectorCraft →" SVG import handoff
