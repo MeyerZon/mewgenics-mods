@@ -151,6 +151,21 @@ test.describe("Art mode — explorer & scene authoring", () => {
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 
+  test("Rig tab: New cat rig adds a rig sprite with the seven vanilla slots; assigning a slot shows in the JSON (in memory)", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Rig" }).click();
+    await page.getByRole("button", { name: "New cat rig" }).click();
+    for (const slot of ["tail", "leg2", "arm2", "body", "leg1", "arm1", "head"]) await expect(page.locator(".rig-slot .id", { hasText: new RegExp(`^${slot}$`) })).toBeVisible();
+    await page.locator('select[aria-label="slot head"]').selectOption("eye");
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const sc = JSON.parse(await page.locator("textarea").first().inputValue());
+    const rig = Object.values(sc.sprites).find((s: any) => s.rig === "cat") as any;
+    expect(rig && rig.layers.find((l: any) => l.name === "head").keys[0].ref).toBe("eye");
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
   test("import an SVG via the file input adds a shape", async ({ page }) => {
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();

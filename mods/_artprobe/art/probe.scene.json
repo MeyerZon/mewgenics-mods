@@ -14,7 +14,14 @@
     "capbutt": { "paths": [ { "d": "M-30 0 L30 0", "stroke": "#20ff20", "strokeWidth": 12, "strokeCap": "butt" } ] },
     "capsquare": { "paths": [ { "d": "M-30 0 L30 0", "stroke": "#20ff20", "strokeWidth": 12, "strokeCap": "square" } ] },
     "addsq": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#600000" } ] },
-    "walker": { "paths": [ { "d": "M-10 -10 L10 -10 L10 10 L-10 10 Z", "fill": "#ffffff" } ] }
+    "walker": { "paths": [ { "d": "M-10 -10 L10 -10 L10 10 L-10 10 Z", "fill": "#ffffff" } ] },
+    "CatProbe_tail": { "paths": [ { "d": "M-38 -38 C-70 -50 -78 -86 -60 -104 L-52 -98 C-64 -82 -58 -60 -34 -48 Z", "fill": "#ff8000", "fillRule": "nonzero" } ] },
+    "CatProbe_leg2": { "paths": [ { "d": "M-24 -22 L-12 -22 L-12 0 L-26 0 Z", "fill": "#8000ff", "fillRule": "nonzero" } ] },
+    "CatProbe_arm2": { "paths": [ { "d": "M14 -22 L26 -22 L26 0 L12 0 Z", "fill": "#00a080", "fillRule": "nonzero" } ] },
+    "CatProbe_body": { "paths": [ { "d": "M-40 -40 C-40 -62 40 -62 40 -40 C40 -16 -40 -16 -40 -40 Z", "fill": "#2080ff", "fillRule": "nonzero" } ] },
+    "CatProbe_leg1": { "paths": [ { "d": "M-34 -22 L-22 -22 L-20 0 L-34 0 Z", "fill": "#ff60a0", "fillRule": "nonzero" } ] },
+    "CatProbe_arm1": { "paths": [ { "d": "M24 -22 L36 -22 L38 0 L24 0 Z", "fill": "#a0ff40", "fillRule": "nonzero" } ] },
+    "CatProbe_head": { "paths": [ { "d": "M22 -78 C22 -100 70 -100 70 -78 C70 -56 22 -56 22 -78 Z M26 -92 L30 -112 L42 -96 Z M50 -96 L62 -112 L66 -92 Z", "fill": "#ffd0a0", "fillRule": "nonzero" } ] }
   },
   "bitmaps": { "checkerbmp": { "file": "art/checker.png" } },
   "gradients": {
@@ -33,6 +40,20 @@
       "frames": 1,
       "layers": [ { "name": "blink", "depth": 1, "keys": [ { "frame": 0, "ref": "Blink", "x": 0, "y": 0 } ] } ]
     },
+    "CatProbe": {
+      "frames": 24,
+      "labels": { "idle": 0 },
+      "rig": "cat",
+      "layers": [
+        { "name": "tail", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_tail", "x": 0, "y": 0 } ] },
+        { "name": "leg2", "depth": 3, "keys": [ { "frame": 0, "ref": "CatProbe_leg2", "x": 0, "y": 0 } ] },
+        { "name": "arm2", "depth": 5, "keys": [ { "frame": 0, "ref": "CatProbe_arm2", "x": 0, "y": 0 } ] },
+        { "name": "body", "depth": 7, "keys": [ { "frame": 0, "ref": "CatProbe_body", "x": 0, "y": 0 } ] },
+        { "name": "leg1", "depth": 9, "keys": [ { "frame": 0, "ref": "CatProbe_leg1", "x": 0, "y": 0 } ] },
+        { "name": "arm1", "depth": 11, "keys": [ { "frame": 0, "ref": "CatProbe_arm1", "x": 0, "y": 0 } ] },
+        { "name": "head", "depth": 13, "keys": [ { "frame": 0, "ref": "CatProbe_head", "x": 0, "y": 0 } ] }
+      ]
+    },
     "ArtProbe": {
       "frames": 60,
       "layers": [
@@ -48,5 +69,5 @@
       ]
     }
   },
-  "exports": { "ArtProbe": "ArtProbe" }
+  "exports": { "ArtProbe": "ArtProbe", "CatProbe": "CatProbe" }
 }

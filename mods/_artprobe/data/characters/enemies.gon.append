@@ -8,3 +8,14 @@ ArtProbe {
         tooltip "ENEMY_LILRAT_DESC"
     }
 }
+
+// test-only: a Rat drawn by the CatProbe cat rig (one passthrough colour per vanilla cat slot; npm run test:artprobe -- --cat)
+ArtProbeCat {
+    variant_of Rat
+    graphics {
+        movieclip CatProbe
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}

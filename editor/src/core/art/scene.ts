@@ -11,6 +11,7 @@
 import type { Mat } from "./geometry.ts";
 import { gradientProblems } from "./gradient.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
+import { rigFindings } from "./cat-rig.ts";
 import type { SceneFilter } from "./effects.ts";
 
 /**
@@ -132,6 +133,8 @@ export interface SceneSprite {
   frames: number;
   labels?: Record<string, number>;
   layers: SceneLayer[];
+  /** "cat": a cat rig (layers named after the vanilla slots; cat-rig.ts checks it) */
+  rig?: "cat";
 }
 
 export interface SceneStage {
@@ -415,6 +418,8 @@ export function validateScene(input: unknown): SceneValidation {
       err("sprite-layers", `sprite "${id}" needs layers[]`, [at]);
       continue;
     }
+    if (sp.rig === "cat") findings.push(...rigFindings(sp, at));
+    else if (sp.rig !== undefined) err("sprite-rig", `rig must be "cat"`, [at + ".rig"]);
     if (!(Number.isInteger(sp.frames) && sp.frames >= 1)) {
       err("sprite-frames", `sprite "${id}" frames must be an integer >= 1`, [at + ".frames"]);
       sp.frames = Math.max(1, sp.frames | 0);

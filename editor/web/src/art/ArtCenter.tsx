@@ -9,6 +9,7 @@ import { sx, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
 import { ShapesTab, SpritesTab, ExportsTab, JsonTab } from "./SceneTabs.tsx";
 import { TimelineTab } from "./TimelineTab.tsx";
+import { RigTab } from "./RigTab.tsx";
 import { NewSceneModal } from "./NewSceneModal.tsx";
 import { PaletteDrawer } from "./PaletteDrawer.tsx";
 import type { ArtSubtab, Scene } from "./types.ts";
@@ -102,6 +103,7 @@ function ScenePanel() {
   if (subtab === "shapes") tab = <ShapesTab />;
   else if (subtab === "sprites") tab = <SpritesTab />;
   else if (subtab === "timeline") tab = <TimelineTab />;
+  else if (subtab === "rig") tab = <RigTab />;
   else if (subtab === "exports") tab = <ExportsTab />;
   else if (subtab === "json") tab = <JsonTab />;
   else tab = <OverviewTab />;
@@ -116,7 +118,7 @@ function ScenePanel() {
             {`● ${e} error${e === 1 ? "" : "s"} · ${w} warning${w === 1 ? "" : "s"}`}
           </span>
         </div>
-        <div className="subtabs">{mk("overview", "Overview")}{mk("shapes", "Shapes")}{mk("sprites", "Sprites")}{mk("timeline", "Timeline")}{mk("exports", "Exports")}{mk("json", "JSON")}</div>
+        <div className="subtabs">{mk("overview", "Overview")}{mk("shapes", "Shapes")}{mk("sprites", "Sprites")}{mk("timeline", "Timeline")}{mk("rig", "Rig")}{mk("exports", "Exports")}{mk("json", "JSON")}</div>
         {tab}
       </div>
     </div>

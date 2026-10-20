@@ -208,6 +208,57 @@ export interface ProbeSummary {
   walkerXs: number[];
 }
 
+/**
+ * Pixels of each named #rrggbb colour, allowing a uniform darkening / brightening (the game tints units by where they
+ * stand: OBSERVED 2026-10-20 the cat rig's colours came back at ~0.8–0.86). With `anchor`, only pixels within
+ * `radius` px of the anchor colour's largest connected region count (UI elsewhere on screen is ignored).
+ */
+export function slotColoursPresent(img: RgbaImageLike, colours: Record<string, string>, opts: { anchor?: string; radius?: number } = {}): Record<string, number> {
+  const want = Object.entries(colours).map(([k, hex]) => [k, [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)] as Rgb] as const);
+  const match = (i: number, c: Rgb): boolean => {
+    const r = img.rgba[i * 4]!, g = img.rgba[i * 4 + 1]!, b = img.rgba[i * 4 + 2]!;
+    const cc = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
+    if (!cc) return r < 24 && g < 24 && b < 24;
+    const k = (r * c[0] + g * c[1] + b * c[2]) / cc;
+    if (k < 0.55 || k > 1.15) return false;
+    return Math.abs(r - k * c[0]) <= 24 && Math.abs(g - k * c[1]) <= 24 && Math.abs(b - k * c[2]) <= 24;
+  };
+  const W = img.width, H = img.height;
+  let win = { x0: 0, y0: 0, x1: W - 1, y1: H - 1 };
+  if (opts.anchor && colours[opts.anchor]) {
+    const c = want.find(([k]) => k === opts.anchor)![1];
+    const seen = new Uint8Array(W * H);
+    let best: { n: number; x0: number; y0: number; x1: number; y1: number } | null = null;
+    for (let i = 0; i < W * H; i++) {
+      if (seen[i] || !match(i, c)) continue;
+      const stack = [i];
+      seen[i] = 1;
+      const reg = { n: 0, x0: W, y0: H, x1: 0, y1: 0 };
+      while (stack.length) {
+        const j = stack.pop()!;
+        const x = j % W, y = (j / W) | 0;
+        reg.n++; reg.x0 = Math.min(reg.x0, x); reg.x1 = Math.max(reg.x1, x); reg.y0 = Math.min(reg.y0, y); reg.y1 = Math.max(reg.y1, y);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          const q = ny * W + nx;
+          if (!seen[q] && match(q, c)) { seen[q] = 1; stack.push(q); }
+        }
+      }
+      if (!best || reg.n > best.n) best = reg;
+    }
+    if (!best) return Object.fromEntries(want.map(([k]) => [k, 0]));
+    const r = opts.radius ?? 400;
+    win = { x0: Math.max(0, best.x0 - r), y0: Math.max(0, best.y0 - r), x1: Math.min(W - 1, best.x1 + r), y1: Math.min(H - 1, best.y1 + r) };
+  }
+  const out: Record<string, number> = Object.fromEntries(want.map(([k]) => [k, 0]));
+  for (let y = win.y0; y <= win.y1; y++) for (let x = win.x0; x <= win.x1; x++) {
+    const i = y * W + x;
+    for (const [k, c] of want) if (match(i, c)) { out[k]!++; break; }
+  }
+  return out;
+}
+
 function walkerVerdict(xs: number[]): ProbeSummary["rootTimeline"] {
   const v = xs.filter((x) => Number.isFinite(x));
   if (v.length < 2) return "unknown";
