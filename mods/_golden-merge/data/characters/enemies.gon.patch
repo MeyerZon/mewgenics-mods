@@ -1,0 +1,11 @@
+// .patch = GON PatchMerge: a per-field suffix picks the policy (.overwrite .append .merge .add .multiply).
+// faction.overwrite is observable through the dump; speed.add is not (no stat field in the units event) and is
+// pinned at T0 against the editor's engine only — see docs/data-mods.md "Test-only overlays".
+Pooter {
+    properties {
+        faction.overwrite allies
+    }
+    stats {
+        speed.add 10
+    }
+}

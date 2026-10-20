@@ -78,6 +78,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.body.endsWith("quit 0\n"), "body ends with trailing newline");
     });
 
+    test("header: interactive parsed (true/1/false/0), default false, bad value is a line error", () => {
+      eq(parseScript("cmd listcmds\nquit\n", { owningMod: "x" }).interactive, false, "default");
+      for (const [v, want] of [["true", true], ["1", true], ["false", false], ["0", false]]) {
+        const p = parseScript(`interactive: ${v}\ncmd listcmds\n`, { owningMod: "x" });
+        assert(p.ok, `interactive: ${v}: ${JSON.stringify(p.errors)}`);
+        eq(p.interactive, want, `interactive: ${v}`);
+      }
+      const bad = parseScript("interactive: maybe\ncmd listcmds\nquit\n", { owningMod: "x" });
+      assert(!bad.ok && bad.errors.some((e: { line: number; message: string }) => e.line === 1 && /interactive must be true or false/.test(e.message)), JSON.stringify(bad.errors));
+      const p = parseScript("interactive: true\nwait frames 1\n", { owningMod: "x" });
+      assert(p.ok && !p.warnings.some((w: { message: string }) => /no quit directive/.test(w.message)), "an interactive script without quit is not warned about (quit arrives over the pipe)");
+    });
+
     test("header: clean parsed (true/1/false/0), default false, bad value is a line error", () => {
       eq(parseScript("cmd listcmds\nquit\n", { owningMod: "x" }).clean, false, "default");
       for (const [v, want] of [["true", true], ["1", true], ["false", false], ["0", false]]) {
@@ -92,7 +105,8 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("every directive kind parses with its line number", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const d = p.directives;
-      eq(d.length, 18);
+      eq(d.length, 19);
+      eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "expect", what: "unit", unit: "Lil' Rat", field: "faction", op: "!=", value: 1 }));
       eq(JSON.stringify(d[0]), JSON.stringify({ line: 7, kind: "wait", unit: "frames", n: 120 }));
       eq(JSON.stringify(d[1]), JSON.stringify({ line: 8, kind: "cmd", text: "bind JokersGambit # not a comment, part of the command" }));
       eq(JSON.stringify(d[2]), JSON.stringify({ line: 9, kind: "expect", what: "console", substr: 'No command named "bind" found', within: 5 }));
@@ -110,7 +124,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(JSON.stringify(d[14]), JSON.stringify({ line: 21, kind: "expect", what: "round", op: ">=", n: 2 }));
       eq(JSON.stringify(d[15]), JSON.stringify({ line: 22, kind: "expect", what: "stacks", status: "JokersLuck", unit: "0", op: "==", n: 1 }));
       eq(JSON.stringify(d[16]), JSON.stringify({ line: 23, kind: "expect", what: "stacks", status: "LuckUp", unit: "Mr Whiskers", varied: true }));
-      eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "quit", code: 0 }));
+      eq(JSON.stringify(d[18]), JSON.stringify({ line: 25, kind: "quit", code: 0 }));
     });
 
     test("seed directive parses an unsigned 64-bit integer (kept as digits); junk, negatives and extra words are line errors", () => {
@@ -141,6 +155,29 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(ok.what, "stacks"); eq(ok.unit, "Lumee"); eq(ok.op, "!="); eq(ok.n, 0);
     });
 
+    test("expect unit directive parses (index / bare / quoted unit; string fields name|class with == !=; integer fields faction|move|act|turnkind with every op); bad forms are line errors", () => {
+      const a = parseDirective("expect unit 6 faction == 1", 1) as { what: string; unit: string; field: string; op: string; value: number };
+      eq(a.what, "unit"); eq(a.unit, "6"); eq(a.field, "faction"); eq(a.op, "=="); eq(a.value, 1);
+      const b = parseDirective('expect unit "Lil\' Rat" name == "Lil\' Rat"', 1) as { unit: string; field: string; op: string; value: string };
+      eq(b.unit, "Lil' Rat"); eq(b.field, "name"); eq(b.op, "=="); eq(b.value, "Lil' Rat");
+      const c = parseDirective("expect unit Pooter turnkind >= 0", 1) as { unit: string; field: string; op: string; value: number };
+      eq(c.unit, "Pooter"); eq(c.field, "turnkind"); eq(c.op, ">="); eq(c.value, 0);
+      eq((parseDirective('expect unit 0 class != "Mage"', 1) as { value: string }).value, "Mage");
+      for (const bad of ["expect unit 6 faction", "expect unit 6 hp == 1", 'expect unit 6 name >= "x"', "expect unit 6 name == bare", "expect unit faction == 1", "expect unit 6 faction == x", "expect unit 6 move == 1 extra"]) {
+        assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      }
+      const p = parseScript("expect unit 6 faction == 1\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.body.startsWith("expect unit 6 faction == 1\n"), "DLL-side directive");
+    });
+
+    test("enter Campaign house parses (mode house); a mode on another scene, an unknown mode or more words are line errors; no mode adds no key", () => {
+      eq(JSON.stringify(parseDirective("enter Campaign house", 3)), JSON.stringify({ line: 3, kind: "enter", scene: "Campaign", mode: "house" }));
+      eq(JSON.stringify(parseDirective("enter Campaign", 3)), JSON.stringify({ line: 3, kind: "enter", scene: "Campaign" }));
+      for (const bad of ["enter TacticsTest house", "enter Campaign tower", "enter Campaign house now"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript("enter Campaign house\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.usesCampaignSlot && p.body.startsWith("enter Campaign house\n"), "DLL-side, and it uses the disposable slot");
+    });
+
     test("enter directive parses a known scene; unknown or missing scene, or extra words, are line errors", () => {
       const d = parseDirective("enter TacticsTest", 2) as { kind: string; scene: string };
       eq(d.kind, "enter"); eq(d.scene, "TacticsTest");
@@ -168,12 +205,12 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const lines = p.body.split("\n");
-      eq(lines.length - 1, 18, "one body line per directive (plus the trailing newline)");
+      eq(lines.length - 1, 19, "one body line per directive (plus the trailing newline)");
       assert(!lines.some((l) => l.startsWith("expect log")), "the DLL never sees expect log");
       assert(lines[11]!.startsWith("# runner: expect log"), `placeholder comment at the directive's position, got ${JSON.stringify(lines[11])}`);
       eq(lines[12], "enter TacticsTest", "enter is a DLL-side directive and passes through");
       eq(lines[13], "wait rounds 1"); eq(lines[16], 'expect stacks LuckUp on "Mr Whiskers" varied');
-      eq(lines[17], "quit 0");
+      eq(lines[17], "expect unit \"Lil' Rat\" faction != 1"); eq(lines[18], "quit 0");
       assert(typeof script.isRunnerSide === "function" && script.isRunnerSide(p.directives[11]!) && !script.isRunnerSide(p.directives[0]!), "isRunnerSide marks only expect log");
     });
 
@@ -294,7 +331,9 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.expects.passed, 1);
       eq(JSON.stringify(r.expects.failures[0]), JSON.stringify({ line: 3, kind: "noconsole", arg: "No command named", detail: "found in console line 0" }));
     });
-    test("enter event is surfaced as result.enter (line, name, ok, detail); absent -> null", () => {
+    test("enter event is surfaced as result.enter (line, name, mode, ok, detail); absent -> null; enter Campaign house reports mode house", () => {
+      const h = parseResults('{"ev":"start","t":0,"frame":0}\n{"ev":"enter","line":1,"name":"Campaign","mode":"house","ok":true,"detail":"x","t":1,"frame":1}\n') as unknown as { enter: { mode: string } };
+      eq(h.enter.mode, "house");
       const text = [
         '{"ev":"start","harness":"mewtest 0.1.0","t":0,"frame":0}',
         '{"ev":"enter","line":2,"name":"TacticsTest","ok":false,"detail":"no MewDirector","t":40,"frame":3}',
@@ -302,7 +341,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       ].join("\n") + "\n";
       const r = parseResults(text) as unknown as { enter: { line: number; name: string; ok: boolean; detail: string } | null; end: { reason?: string } | null };
       assert(r.enter !== null && r.enter !== undefined, "result.enter present");
-      eq(JSON.stringify(r.enter), JSON.stringify({ line: 2, name: "TacticsTest", ok: false, detail: "no MewDirector" }));
+      eq(JSON.stringify(r.enter), JSON.stringify({ line: 2, name: "TacticsTest", mode: "", ok: false, detail: "no MewDirector" }));
       eq(r.end!.reason, "enter_failed");
       eq((parseResults(fixture("result-pass.jsonl")) as unknown as { enter: unknown }).enter, null, "no enter event -> null");
     });
@@ -319,6 +358,36 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(cmds.length, 85, "84 commands + the Executed: line");
       for (const c of ["listcmds", "spawn arg0", "spawntile arg0", "load arg0", "bind arg0", "bind_passive arg0", "status arg0", "passive arg0", "win", "killall", "takeover", "noui", "equip arg0", "weather arg0", "tileset arg0", "skip_tutorial", "set_day arg0"]) assert(cmds.includes(c), `TacticsTest/MewDirector command ${c} listed`);
       eq(cmds[cmds.length - 1], "Executed: listcmds");
+    });
+    test("OBSERVED fixture: golden through dump — the vanilla and _golden-merge dumps of the same seeded fight differ only on the overlaid fields (result-golden-vanilla.jsonl / result-golden-merge.jsonl)", () => {
+      type U = { i: number; name: string; class: string; faction: number };
+      type R = { units: { count: number; list: U[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null };
+      const v = parseResults(fixture("result-golden-vanilla.jsonl")) as unknown as R;
+      const g = parseResults(fixture("result-golden-merge.jsonl")) as unknown as R;
+      assert(!!v.units && !!g.units, "both dumps present");
+      eq(v.units!.count, 10, "vanilla (seed 42): 4 cats + 4 coins + Rat + Pooter");
+      eq(g.units!.count, 11, "golden: + the appended GoldenRat");
+      const rat = v.units!.list[8]!, ratG = g.units!.list[8]!;
+      eq(rat.name, "Lil' Rat"); eq(ratG.name, "Golden Rat", ".merge: graphics.name -> the appended loc row");
+      eq(rat.faction, 2, "enemies dump as faction 2 (allies 1, coins 0)");
+      eq(ratG.faction, 1, ".merge: properties.faction enemies -> allies");
+      const poo = v.units!.list[9]!, pooG = g.units!.list[9]!;
+      eq(poo.name, "Pooter"); eq(pooG.name, "Pooter");
+      assert(poo.faction !== 1 && pooG.faction === 1, `.patch: faction.overwrite allies (${poo.faction} -> ${pooG.faction})`);
+      eq(g.units!.list[10]!.name, "Appended Rat", ".append: a new entry, spawnable, with its own loc row");
+      eq(g.units!.list[10]!.faction, 2, "the appended entry keeps the vanilla faction");
+      for (let i = 0; i < 8; i++) eq(JSON.stringify(v.units!.list[i]), JSON.stringify(g.units!.list[i]), `unit ${i} identical in both runs (seed 42)`);
+      eq(v.expects.failed, 0); eq(g.expects.failed, 0);
+      eq(v.end!.code, 0); eq(g.end!.code, 0);
+    });
+    test("OBSERVED 2026-10-20 fixture: enter Campaign house -> the real House (no intro), the campaign director's 57 commands pinned, a house command executes (result-enter-house.jsonl + console-campaign-listcmds.txt)", () => {
+      const r = parseResults(fixture("result-enter-house.jsonl")) as unknown as { enter: { ok: boolean; name: string; mode: string; detail: string } | null; expects: { passed: number; failed: number }; end: { code: number } | null; popups: unknown[]; shots: unknown[] };
+      assert(!!r.enter && r.enter.ok && r.enter.name === "Campaign" && r.enter.mode === "house" && /game_began set/.test(r.enter.detail), JSON.stringify(r.enter));
+      eq(r.expects.failed, 0); eq(r.expects.passed, 4); eq(r.end!.code, 0); eq(r.popups.length, 0); eq(r.shots.length, 2);
+      const cmds = fixture("console-campaign-listcmds.txt").split(/\r?\n/).filter(Boolean);
+      eq(cmds.length, 58, "57 commands + the Executed: line");
+      for (const c of ["skip_tutorial", "set_day arg0", "upgrade_all", "house_boss_event arg0", "spawn_custom_stray arg0", "house_weather arg0", "get_furniture arg0"]) assert(cmds.includes(c), `${c} listed`);
+      assert(!cmds.includes("spawn arg0") && !cmds.includes("bind arg0"), "no TacticsTest commands in the House");
     });
     test("OBSERVED 2026-10-20 fixture: enter Campaign -> ok, the harness-owned slot named in the detail, no popup, quit after the shots (result-enter-campaign.jsonl)", () => {
       const r = parseResults(fixture("result-enter-campaign.jsonl")) as unknown as { enter: { ok: boolean; name: string; detail: string } | null; shots: unknown[]; end: { code: number; reason: string } | null; popups: unknown[]; turns: number };
@@ -351,6 +420,15 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(!!varied && varied.ok === true, `expect stacks varied ok: ${JSON.stringify(varied)}`);
       assert(r.events.some((e) => e.ev === "expect" && e.kind === "noconsole" && e.ok === true), "bind JokersGambit was accepted (no 'No command named')");
       eq(r.expects.failed, 0); eq(r.end!.code, 0);
+    });
+    test("exec and idle events are kept: result.execs (id, op, text, ok, lines) and result.idle", () => {
+      const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"idle","line":2,"t":10,"frame":5}\n{"ev":"exec","id":1,"op":"exec","text":"spawn Rat","ok":true,"lines":["Spawned Rat"],"t":20,"frame":9}\n{"ev":"exec","id":2,"op":"dump","ok":true,"t":21,"frame":10}\n{"ev":"end","code":0,"reason":"quit","t":30,"frame":12}\n';
+      const r = parseResults(text) as unknown as { execs: { id: number; op: string; text?: string; ok: boolean; lines?: string[]; frame: number }[]; idle: boolean };
+      eq(r.execs.length, 2);
+      eq(JSON.stringify(r.execs[0]), JSON.stringify({ id: 1, op: "exec", text: "spawn Rat", ok: true, lines: ["Spawned Rat"], frame: 9 }));
+      eq(r.execs[1]!.op, "dump"); eq(r.idle, true);
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { execs: unknown[]; idle: boolean }).execs.length, 0);
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { idle: boolean }).idle, false);
     });
     test("seed event is surfaced as result.seed (line, seed, ok, detail); absent -> null", () => {
       const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"seed","line":2,"seed":42,"ok":true,"detail":"state at 0x1: 00… -> 11…","t":10,"frame":5}\n{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
@@ -880,6 +958,67 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq((tacticsRun.safety as unknown as { campaignSlot: unknown }).campaignSlot, null);
     });
 
+    // ---- interactive mode: a named pipe into the running game -------------------------------------------
+    const pipeMod = await load<typeof import("../src/core/ingame/pipe.ts")>("../src/core/ingame/pipe.ts") as typeof import("../src/core/ingame/pipe.ts");
+    const sessionMod = await load<typeof import("../src/core/ingame/session.ts")>("../src/core/ingame/session.ts") as typeof import("../src/core/ingame/session.ts");
+    test("pipePath: win32 -> \\\\.\\pipe\\mewtest-<pid>; elsewhere a socket file in the tmp dir; never under saves/", () => {
+      eq(pipeMod.pipePath(123, "win32"), "\\\\.\\pipe\\mewtest-123");
+      const p = pipeMod.pipePath(123, "linux");
+      assert(p.endsWith("mewtest-123.sock") && p.startsWith(tmpdir()), p);
+      assert(!/[\\/]saves[\\/]/.test(pipeMod.pipePath(1, "win32")), "never a saves path");
+    });
+    test("launch: plan.interactive -> -mewtest_pipe 1 before -modpaths; otherwise 0", () => {
+      const bl = (launch as typeof import("../src/core/ingame/launch.ts")).buildLaunch;
+      const on = bl({ ...plan, interactive: true }, { gameDir, scriptPath: join(ROOT, "s.mewtest"), outPath: join(ROOT, "s.jsonl"), env: {}, modsDir });
+      const i = on.args.indexOf("-mewtest_pipe");
+      assert(i >= 0 && on.args[i + 1] === "1" && i < on.args.indexOf("-modpaths"), on.args.join(" "));
+      const off = bl(plan, { gameDir, scriptPath: join(ROOT, "s.mewtest"), outPath: join(ROOT, "s.jsonl"), env: {}, modsDir });
+      eq(off.args[off.args.indexOf("-mewtest_pipe") + 1], "0");
+    });
+    const cp0 = Date.now();
+    let cpErr = "";
+    try { await pipeMod.connectPipe(pipeMod.pipePath(999999, process.platform), { retryMs: 20, timeoutMs: 150 }); } catch (e) { cpErr = e instanceof Error ? e.message : String(e); }
+    const cpMs = Date.now() - cp0;
+    test("connectPipe: retries until the server exists and gives up after timeoutMs", () => {
+      assert(/timed out|not available|ENOENT|ECONNREFUSED/.test(cpErr), `rejects with a reason: ${cpErr}`);
+      assert(cpMs >= 120, `waited for the timeout (${cpMs} ms)`);
+    });
+    const interactivePlan = script.parseScript("mods: jokers-luck\ninteractive: true\ntimeout: 3s\nwait frames 1\n", { owningMod: "jokers-luck", name: "interactive" });
+    assert(interactivePlan.ok && interactivePlan.interactive, "interactive plan parses");
+    const sessionArgs = {
+      plan: interactivePlan,
+      test: { mod: "jokers-luck", name: "interactive", scriptPath: null },
+      env: { MEWTEST_FAKE_GAME: FAKE, FAKE_GAME_MODE: "interactive", FAKE_GAME_APPDATA_LOGS: appLogs, PATH: process.env.PATH || "" },
+      gameDir, appdataLogsDir: appLogs, modsDir, runsDir, realSavePath: savePath, backstopGraceMs: 500,
+    };
+    type Sess = Awaited<ReturnType<typeof sessionMod.startSession>>;
+    let session: Sess | null = null, execReply: Awaited<ReturnType<Sess["exec"]>> | null = null, dumpReply: Awaited<ReturnType<Sess["dump"]>> | null = null, sessionReport: Awaited<ReturnType<Sess["stop"]>> | null = null, sessionErr = "";
+    try {
+      session = await sessionMod.startSession(sessionArgs);
+      await session.waitForIdle(3000);     // the script ran to its end: the DLL idles for requests (OBSERVED: commands sent mid-script were served inside `wait turns`, before the fight)
+      if (!session.idle) throw new Error("waitForIdle resolved without the idle event");
+      execReply = await session.exec("listcmds");
+      dumpReply = await session.dump();
+      sessionReport = await session.stop();
+    } catch (e) { sessionErr = e instanceof Error ? e.message : String(e); }
+    test("session against the interactive fake: start -> exec replies with the exec event -> dump replies with units -> stop returns a pass report carrying the exec events", () => {
+      assert(!!(!sessionErr && session && execReply && dumpReply && sessionReport), `session flow: ${sessionErr}`);
+      if (!session || !execReply || !dumpReply || !sessionReport) return;
+      assert(session.pid > 0 && session.runDir.length > 0 && session.pipe.length > 0, JSON.stringify({ pid: session.pid, pipe: session.pipe }));
+      eq(execReply.ev, "exec"); eq(execReply.op, "exec"); eq(execReply.ok, true);
+      assert(Array.isArray(execReply.lines) && execReply.lines.includes("Executed: listcmds"), JSON.stringify(execReply));
+      eq(dumpReply.ev, "units"); eq((dumpReply as { count?: number }).count, 2);
+      eq(sessionReport.verdict, "pass", sessionReport.reason);
+      const execs = (sessionReport.result as unknown as { execs: { op: string }[] }).execs;
+      assert(execs.length >= 2 && execs[0]!.op === "exec", JSON.stringify(execs));
+      assert(session.ended, "ended after stop");
+    });
+    let afterErr = "";
+    if (session) { try { await session.exec("listcmds"); } catch (e) { afterErr = e instanceof Error ? e.message : String(e); } }
+    test("session: exec after the game ended rejects with the verdict", () => {
+      assert(!!session, "no session");
+      assert(/session ended/.test(afterErr), afterErr);
+    });
     const shotPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 2s\nhide: false\nshot \"menu\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
     const captured: { label: string; dir: string }[] = [];
     const shotRun = await run("shot", {}, { plan: shotPlan, capture: (label: string, dir: string) => { captured.push({ label, dir }); const p = join(dir, `shot-${label}.png`); writeFileSync(p, "png"); return p; } });
@@ -1216,10 +1355,10 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       }
       return out;
     })();
-    test("MCP tools/list returns the 13 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings)", () => {
+    test("MCP tools/list returns the 23 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools + the 7 art tools)", () => {
       assert(!mcp.error, mcp.error);
       const names = mcp.list.tools.map((t: { name: string }) => t.name);
-      eq(names.length, 13, names.join(","));
+      eq(names.length, 23, names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {

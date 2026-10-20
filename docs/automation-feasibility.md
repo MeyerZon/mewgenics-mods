@@ -285,7 +285,7 @@ the seed is pinned via the DLL (`rngState`/`CatData::random_seed`).
 ---
 
 ## Sources
-- Binary: `.analysis/list_names.tsv`, `.analysis/decompiled/ProcessCmds.c`,
+- Binary: `.analysis/list_names.tsv` (not on disk since 2026-10-19), `.analysis/decompiled/ProcessCmds_0x9b8bb0.c`,
   `.extracted/data/{characters,ai_presets,items,passives}/`, `docs/engine-map.md`.
 - Community: mewgenics.wiki.gg (Debug Console, Help:Debug console, Modding);
   TheMegax/Mewtiplayer → ParaboxAPI (`MewgenicsTypes.h`, `GameSymbols.h`);

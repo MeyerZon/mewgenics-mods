@@ -1,0 +1,10 @@
+mods: dev-sandbox, _autoplay
+interactive: true
+timeout: 60s
+# Interactive mode (TDD target 12): the script enters a fight and then IDLES; the editor sends commands over the
+# named pipe (start_ingame_session / ingame_exec / stop_ingame_session, or ingame.startSession in Node). Run it with
+# `npm run test:ingame` and it only idles until the timeout — it is meant to be driven, not run alone.
+wait frames 120
+enter TacticsTest
+wait turns 1
+log "idle: waiting for pipe requests"

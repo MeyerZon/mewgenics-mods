@@ -136,6 +136,46 @@ switch (mode) {
     writeResult([start]);
     process.exit(0xc0000005 | 0); // what Windows reports for an unhandled AV with no handler
     break;
+  case "interactive": {
+    // a pipe server like mewtest.dll's: line-JSON requests in, replies out = the very events appended to the
+    // result file (exec -> an exec event with the console lines; dump -> a units event; quit -> end + exit 0)
+    const { pipePath } = await import("../../src/core/ingame/pipe.ts");
+    const { createServer } = await import("node:net");
+    const path = pipePath(process.pid, process.platform);
+    writeResult([{ ...start, pipe: path }]);
+    const append = (e: Event) => { if (outPath) appendFileSync(outPath, JSON.stringify(e) + "\n"); };
+    let frame = 3;
+    const timeoutMs = Number(argAfter("-mewtest_timeout") || 1000);
+    const timer = setTimeout(() => { append(end(2, "timeout")); process.exit(2); }, timeoutMs);
+    const server = createServer((sock) => {
+      let buf = "";
+      sock.on("data", (d) => {
+        buf += d.toString("utf8");
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          if (!line.trim()) continue;
+          let req: { id?: number; op?: string; text?: string; frames?: number };
+          try { req = JSON.parse(line) as typeof req; } catch { sock.write(JSON.stringify({ ev: "exec", id: null, ok: false, error: "bad request json" }) + "\n"); continue; }
+          frame++;
+          let reply: Event;
+          if (req.op === "exec") reply = { ev: "exec", id: req.id, op: "exec", text: req.text, ok: true, lines: [`Executed: ${req.text}`], t: frame, frame };
+          else if (req.op === "dump") reply = { ev: "units", id: req.id, available: true, round: 1, count: 2, list: [{ i: 0, name: "Lumee", class: "Fighter", faction: 1, move: 0, act: 0, turnkind: 0, statuses: [], stacks: [] }, { i: 1, name: "Rat", class: "", faction: 2, move: 0, act: 0, turnkind: 0, statuses: [], stacks: [] }], t: frame, frame };
+          else if (req.op === "quit") {
+            reply = { ev: "exec", id: req.id, op: "quit", ok: true, t: frame, frame };
+            append(reply);
+            sock.write(JSON.stringify(reply) + "\n", () => { append(end(0, "quit", 0, 0)); clearTimeout(timer); process.exit(0); });
+            continue;
+          } else reply = { ev: "exec", id: req.id, ok: false, error: `unknown op ${String(req.op)}`, t: frame, frame };
+          append(reply);
+          sock.write(JSON.stringify(reply) + "\n");
+        }
+      });
+    });
+    server.listen(path, () => append({ ev: "idle", line: 1, t: 2, frame: 2 }));
+    break;
+  }
   default:
     process.stderr.write(`fake-game: unknown FAKE_GAME_MODE ${mode}\n`);
     process.exit(99);

@@ -253,6 +253,308 @@
     }
   },
   {
+    "name": "start_ingame_session",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "mod folder; its tests/ dir is searched and it is the default -modpaths entry"
+        },
+        "test": {
+          "type": "string",
+          "description": "script name without .mewtest (made interactive: the DLL idles at its end)"
+        },
+        "script": {
+          "type": "string",
+          "description": "inline .mewtest text (alternative to `test`); e.g. \"wait frames 120\\nenter TacticsTest\\nwait turns 1\\n\""
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "the session's wall-clock budget (default the script's timeout, 120 s); the game is killed after it"
+        },
+        "hide": {
+          "type": "boolean",
+          "description": "hide the game window (default true)"
+        },
+        "savesuffix": {
+          "type": "string",
+          "description": "override the save suffix (default dev); never empty"
+        },
+        "connectTimeoutMs": {
+          "type": "number",
+          "description": "how long to wait for the DLL's pipe after the launch (default 30000)"
+        },
+        "waitIdle": {
+          "type": "boolean",
+          "description": "return only once the script has run to its end and the DLL idles (default true); false returns right after the pipe connects, and requests are then served inside the script's waits"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "ingame_exec",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "from start_ingame_session"
+        },
+        "cmd": {
+          "type": "string",
+          "description": "a console line to run (op exec), e.g. \"spawn Rat\""
+        },
+        "op": {
+          "type": "string",
+          "enum": [
+            "exec",
+            "dump",
+            "quit"
+          ],
+          "description": "exec (default when cmd is given) | dump (the units event) | quit (ends the session and returns the report)"
+        },
+        "frames": {
+          "type": "number",
+          "description": "frames to keep collecting console output after the command (default 3, max 600; ~180 frames/s hidden)"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "stop_ingame_session",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "from start_ingame_session"
+        },
+        "includeEvents": {
+          "type": "boolean",
+          "description": "include the raw JSONL events in the report"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_art_scenes",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "mod folder; lists art/*.scene.json, built swfs/*.swf and art assets"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_art_scene",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "scene file inside the mod, e.g. art/my_rat.scene.json"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "write_art_scene",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "scene file inside the mod (art/<name>.scene.json)"
+        },
+        "scene": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {},
+          "description": "the whole scene (docs/art-preview-plan.md §2: version, name, shapes, bitmaps, sprites, exports, stage_instances)"
+        },
+        "force": {
+          "type": "boolean",
+          "description": "write even when the scene has validation errors (they are returned)"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "validate only, write nothing"
+        }
+      },
+      "required": [
+        "mod",
+        "path",
+        "scene"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "new_art_scene",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "description": "scene name, becomes art/<name>.scene.json"
+        },
+        "starter": {
+          "type": "boolean",
+          "description": "start from the example scene (default true)"
+        }
+      },
+      "required": [
+        "mod",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "import_svg",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "svgText": {
+          "type": "string",
+          "description": "SVG markup (or pass mod + path of an .svg inside the mod)"
+        },
+        "mod": {
+          "type": "string",
+          "description": "mod folder (for path, and for into)"
+        },
+        "path": {
+          "type": "string",
+          "description": "an .svg inside the mod"
+        },
+        "options": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {},
+          "description": "importer options: applyViewBox, quantizeGray, grayTolerance, dropStrokes"
+        },
+        "into": {
+          "type": "object",
+          "properties": {
+            "scene": {
+              "type": "string",
+              "description": "scene file inside the mod to add the shape to"
+            },
+            "shapeId": {
+              "type": "string",
+              "description": "the new shape's id"
+            },
+            "replace": {
+              "type": "boolean",
+              "description": "overwrite a shape with that id"
+            }
+          },
+          "required": [
+            "scene",
+            "shapeId"
+          ],
+          "additionalProperties": false,
+          "description": "save the imported shape into a scene (needs mod); without it nothing is written"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "build_swf",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "scene file inside the mod"
+        },
+        "abc": {
+          "type": "string",
+          "enum": [
+            "none",
+            "stub"
+          ],
+          "description": "DoABC: none (default; SymbolClass binds the name) or stub"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "emit + self-check, write nothing"
+        },
+        "writeSwflist": {
+          "type": "boolean",
+          "description": "also write swfs/swflist.gon.append (default true)"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "inspect_swf",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "a built SWF inside the mod, e.g. swfs/my_rat.swf"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "check_game_build",
     "inputSchema": {
       "type": "object",

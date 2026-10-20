@@ -10,15 +10,15 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:index": "node scripts/build-index.ts",
-    "build": "vite build",
-    "dev": "vite",
+    "build": "node scripts/vendor-ruffle.ts && vite build",
+    "dev": "node scripts/vendor-ruffle.ts && vite",
     "mcp": "node src/mcp/server.ts",
     "web": "node web/server.ts",
     "test": "node test/run-tests.ts",
     "test:ingame": "node scripts/ingame.ts",
     "test:swfgate": "node scripts/swf-gate.ts",
     "test:artprobe": "node scripts/art-probe.ts",
-    "test:e2e": "vite build && playwright test",
+    "test:e2e": "node scripts/vendor-ruffle.ts && vite build && playwright test",
     "bindings:gen": "node ../tools/bindings/gen-headers.ts",
     "bindings:check": "node ../tools/bindings/gen-headers.ts --check"
   },
@@ -32,6 +32,7 @@
     "vite": "8.3.4"
   },
   "dependencies": {
+    "@ruffle-rs/ruffle": "0.7.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "4.6.7"
