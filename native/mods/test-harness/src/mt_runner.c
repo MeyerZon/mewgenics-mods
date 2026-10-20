@@ -248,6 +248,32 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, code);
             return 0;
         }
+        case MT_D_ENTER: {
+            /* like cmd: the scene entry needs the debug console (the main menu has been reached) */
+            if (!h->console_ready(h->user)) {
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince > MT_CONSOLE_WAIT_MS) { finish(r, h, 4, "console_unavailable"); h->request_exit(h->user, 4); return 0; }
+                return 1;
+            }
+            r->consoleWaitSince = 0;
+            r->state = MT_S_RUN;
+            int rc;
+            if (r->entered) { rc = 0; snprintf(detail, sizeof detail, "refused: enter may run only once per script"); }
+            else { detail[0] = 0; rc = h->enter_scene(h->user, d->scene, detail, sizeof detail); }
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "enter");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_str(&w, "name", mt_scene_name(d->scene));
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->entered = 1; r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "enter_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "enter_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
     }
     return 1;
 }
