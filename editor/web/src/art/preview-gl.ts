@@ -18,8 +18,11 @@
 //   * bitmaps are uploaded premultiplied and un-premultiplied in the shader exactly like
 //     `swf_lib.shader` (`rgb /= max(a, .001)`).
 //
+// OBSERVED 2026-10-20 in the game (npm run test:artprobe; docs/art-preview-plan.md §8) — NOT yet what this renderer
+// does (the follow-up corrects it): a nested sprite advances on its own clock under a held parent; bitmap fills are
+// sampled smoothly and clamped. Enemy clips are drawn mirrored by the game.
 // INFERRED engine behaviours this renderer relies on (not verified in-engine):
-//   * nested sprite frame = parent frame mod child.frames (Flash default looping);
+//   * nested sprite frame = parent frame mod child.frames (Flash default looping) — WRONG, see above;
 //   * PlaceObject2 cxform applies AFTER the palette remap (as the shader's
 //     `* color_xform[0] + color_xform[1]` suggests);
 //   * bitmap fills are sampled NEAREST and clamped at their edges, like a Flash
