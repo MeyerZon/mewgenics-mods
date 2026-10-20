@@ -864,8 +864,9 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(!!s.campaignSlot!.backup && existsSync(s.campaignSlot!.backup) && readFileSync(s.campaignSlot!.backup, "utf8") === "old harness run", "the previous slot content is kept in the run dir");
       eq(s.campaignSlot!.after, "absent", "the fake game creates no save");
       eq(campaignRun.verdict, "pass", campaignRun.reason);
-      eq(savecheck.CAMPAIGN_SLOT_FILE, "mewtest01.sav");
-      assert(savecheck.devSavePattern("dev").test("mewtest01.sav") && !savecheck.devSavePattern("dev").test("mewtest.sav"), "the slot family is allowed to change; nothing else new");
+      const sc = savecheck as typeof import("../src/core/ingame/savecheck.ts");
+      eq(sc.CAMPAIGN_SLOT_FILE, "mewtest01.sav");
+      assert(sc.devSavePattern("dev").test("mewtest01.sav") && !sc.devSavePattern("dev").test("mewtest.sav"), "the slot family is allowed to change; nothing else new");
     });
     const tacticsRun = await run("pass", {}, { plan: script.parseScript("mods: jokers-luck\ntimeout: 1s\nenter TacticsTest\nquit\n", { owningMod: "jokers-luck", name: "t" }), realSavesDir: savesDirC, realSavePath: join(savesDirC, "steamcampaign01.sav") });
     test("enter TacticsTest (or no enter) leaves the campaign slot alone: safety.campaignSlot is null", () => {

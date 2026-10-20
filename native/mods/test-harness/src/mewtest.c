@@ -43,6 +43,9 @@ typedef int (*fn_SDL_HideWindow)(void *window);
 typedef void *(*fn_CreateScene)(void *sceneManager, MtMsvcString *name);   /* by-value string, callee destroys */
 typedef void *(*fn_CreateEntity)(void *scene);
 typedef void *(*fn_AddTacticsTest)(void *scene, void *entity);
+typedef void (*fn_DestroyOwnerOf)(void *component);                  /* Entity::destroy of the component's entity */
+typedef void *(*fn_AddDirectorNamed)(void *scene, void *entity, MtMsvcString *saveName); /* AddComponent<MewDirector>; copies the name */
+typedef void (*fn_DirectorStart)(void *director);                    /* MewDirector::start: new game or resume from the save */
 typedef void *(*fn_AddDirectorTest)(void *scene, void *entity);   /* the test director on test00.sav (name hard-coded in the callee) */
 typedef void *(*fn_GetGame)(void *component);                       /* Component::GetGame: the MewGame object of the component's scene */
 typedef uint64_t *(*fn_RngSeedState)(uint64_t *out4, uint64_t seed); /* expands a seed into the 32-byte RNG state */
@@ -72,6 +75,9 @@ static fn_NextTurn g_origNextTurn;
 static fn_CreateScene g_CreateScene;        /* NULL when the framework predates v4: `enter` reports enter_unavailable */
 static fn_CreateEntity g_CreateEntity;
 static fn_AddTacticsTest g_AddTacticsTest;
+static fn_DestroyOwnerOf g_DestroyOwnerOf;
+static fn_AddDirectorNamed g_AddDirectorNamed;
+static fn_DirectorStart g_DirectorStart;
 static fn_AddDirectorTest g_AddDirectorTest;
 static fn_GetGame g_GetGame;
 static fn_RngSeedState g_RngSeedState;
@@ -312,8 +318,53 @@ static int char_array(void **data, int *count) {
  * hook, same as cmd). The lambda also reseeds the RNG and copies three dev-menu widget values into the director's
  * settings; neither is replayed (the director keeps its defaults, the RNG stays as it is). No save file is opened:
  * the boot-time test director (test00.sav) is the one TacticsTest reads. Returns 1 / 0 (detail) / -1 (symbols). */
+/* enter Campaign: replay the save-slot click (AddDirector_indirect_0x1c06c0.c) on the harness-owned slot
+ * MT_CAMPAIGN_SAVE. The click: destroy the entity of the current director (here the dev-mode test director on
+ * test00.sav; MewDirector::init's "More than one mew director" check compares the global's generation, which the
+ * destroy bumps), a new entity on the main scene, AddComponent<MewDirector>(scene, entity, name) — init opens or
+ * creates saves/<name> — then MewDirector::start, which reads game_began / on_adventure / house_night from that
+ * save: a fresh slot starts the new-game cutscene, a kept one resumes. The runner moves the slot aside before
+ * every such run (docs/ingame-testing.md "Save safety"), so a script always starts a new game. The click also flags
+ * its own save-select scene for destruction (+0x4db); there is no such scene here, so that is not replayed. */
+static int enter_campaign(char *detail, size_t cap) {
+    if (!g_CreateEntity || !g_DestroyOwnerOf || !g_AddDirectorNamed || !g_DirectorStart) {
+        snprintf(detail, cap, "symbols missing: FW_SYM_Entity_DestroyOwnerOf/AddComponent_MewDirector_named/MewDirector_start (framework older than v4?)");
+        return -1;
+    }
+    void *dc = g_dc, *mgr = NULL, *director = NULL, *mainScene = NULL, *directorGlobal = (void *)g_fw.GetData(FW_DATA_MewDirector);
+    if (!dc) { snprintf(detail, cap, "no debug console yet (main menu not reached)"); return 0; }
+    if (g_tc) { snprintf(detail, cap, "a fight is already running (TurnControl seen)"); return 0; }
+    if (!read_ptr(AT(dc, OFF_COMPONENT_SCENEMANAGER), &mgr) || !mgr) { snprintf(detail, cap, "no scene manager on the console component (+0x%x)", OFF_COMPONENT_SCENEMANAGER); return 0; }
+    if (!directorGlobal || !read_ptr(directorGlobal, &director)) { snprintf(detail, cap, "cannot read the MewDirector global"); return 0; }
+    /* the game's dev-mode startup makes its test director a few frames after the menu; replacing it before it exists would race it */
+    if (!director) { snprintf(detail, cap, "no MewDirector yet (the game's dev-mode startup makes the test director after the menu)"); return 2; }
+    char destroyed = 1;
+    if (!read_ptr(AT(mgr, OFF_SCENEMANAGER_MAINSCENE), &mainScene) || !mainScene || !safe_read(AT(mainScene, OFF_SCENE_DESTROYED), &destroyed, 1) || destroyed) {
+        snprintf(detail, cap, "main scene %p unusable (destroyed=%d)", mainScene, (int)destroyed);
+        return 0;
+    }
+    _Static_assert(sizeof(MT_CAMPAIGN_SAVE) - 1 < 16, "the slot name must stay SSO: the callee copies it and nothing frees it");
+    MtMsvcString name;
+    if (!mt_msvcstr_build(&name, MT_CAMPAIGN_SAVE, sizeof(MT_CAMPAIGN_SAVE) - 1, (MtAllocFn)g_Allocate)) { snprintf(detail, cap, "cannot build the save name"); return 0; }
+    g_DestroyOwnerOf(director);
+    void *globalAfterDestroy = NULL;
+    read_ptr(directorGlobal, &globalAfterDestroy);
+    void *entity = g_CreateEntity(mainScene);
+    if (!entity) { snprintf(detail, cap, "CreateEntity returned NULL on the main scene %p (old director %p destroyed)", mainScene, director); return 0; }
+    void *d = g_AddDirectorNamed(mainScene, entity, &name);
+    if (!d) { snprintf(detail, cap, "AddComponent<MewDirector>(\"%s\") returned NULL", MT_CAMPAIGN_SAVE); return 0; }
+    g_DirectorStart(d);
+    void *globalAfterStart = NULL;
+    read_ptr(directorGlobal, &globalAfterStart);
+    snprintf(detail, cap, "save=%s mainScene=%p entity=%p director=%p (old %p; global after destroy %p, after start %p)",
+             MT_CAMPAIGN_SAVE, mainScene, entity, d, director, globalAfterDestroy, globalAfterStart);
+    logf_("enter Campaign: %s", detail);
+    return 1;
+}
+
 static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
     (void)u;
+    if (scene == MT_SCENE_CAMPAIGN) return enter_campaign(detail, cap);
     if (scene != MT_SCENE_TACTICS_TEST) { snprintf(detail, cap, "unknown scene id %d", scene); return 0; }
     if (!g_CreateScene || !g_CreateEntity || !g_AddTacticsTest) {
         snprintf(detail, cap, "symbols missing: FW_SYM_SceneManager_CreateScene/Scene_CreateEntity/AddComponent_TacticsTest (framework older than v4?)");
@@ -838,6 +889,9 @@ static void init(void) {
     g_CreateScene = (fn_CreateScene)g_fw.GetSymbol(FW_SYM_SceneManager_CreateScene);
     g_CreateEntity = (fn_CreateEntity)g_fw.GetSymbol(FW_SYM_Scene_CreateEntity);
     g_AddTacticsTest = (fn_AddTacticsTest)g_fw.GetSymbol(FW_SYM_AddComponent_TacticsTest);
+    g_DestroyOwnerOf = (fn_DestroyOwnerOf)g_fw.GetSymbol(FW_SYM_Entity_DestroyOwnerOf);
+    g_AddDirectorNamed = (fn_AddDirectorNamed)g_fw.GetSymbol(FW_SYM_AddComponent_MewDirector_named);
+    g_DirectorStart = (fn_DirectorStart)g_fw.GetSymbol(FW_SYM_MewDirector_start);
     g_AddDirectorTest = (fn_AddDirectorTest)g_fw.GetSymbol(FW_SYM_AddComponent_MewDirector_test);
     g_GetGame = (fn_GetGame)g_fw.GetSymbol(FW_SYM_Component_GetGame);
     g_RngSeedState = (fn_RngSeedState)g_fw.GetSymbol(FW_SYM_Rng_SeedState);

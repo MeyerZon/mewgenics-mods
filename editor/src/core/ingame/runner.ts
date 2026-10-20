@@ -15,6 +15,7 @@ import { isRunnerSide } from "./script.ts";
 import { captureWindow, type CaptureFn } from "./shot.ts";
 import {
   snapshotFile, compareSnapshots, realSavePath, realSavesDir, snapshotSaves, compareSaveSets, devSavePattern,
+  resetCampaignSlot, CAMPAIGN_SLOT_FILE, type CampaignSlotReset,
   type SaveSnapshot,
 } from "./savecheck.ts";
 import type { Plan, Finding } from "./script.ts";
@@ -58,6 +59,8 @@ export interface SafetyReport {
   modPathsObserved: string[];
   saveCheck: SaveCheckResult | null;
   saveSet: SaveSetResult | null;
+  /** `enter Campaign` only: the disposable slot was moved aside before the run; `after` says whether the game wrote a new one */
+  campaignSlot: (CampaignSlotReset & { after: "present" | "absent" }) | null;
 }
 
 export interface IngameReport {
@@ -307,7 +310,7 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     result: parseResults(null),
     logFindings: null,
     logExpects: [],
-    safety: { expectedSuffix, observedSuffix: null, saveSuffixOk: true, modPathsObserved: [], saveCheck: null, saveSet: null },
+    safety: { expectedSuffix, observedSuffix: null, saveSuffixOk: true, modPathsObserved: [], saveCheck: null, saveSet: null, campaignSlot: null },
     artifacts: { runDir: null, script: null, resultFile: null, debugLog: null, frameworkLogWindow: null, chainloaderLog: null, report: null, shots: [] },
     stdoutTail: "",
     stderrTail: "",
@@ -376,6 +379,8 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     const savesDir = args.realSavesDir !== undefined ? args.realSavesDir : realSavesDir(env);
     const allow = devSavePattern(expectedSuffix);
     const setBefore = saveCheckEnabled && savesDir ? snapshotSaves(savesDir, { allow }) : null;
+    // the disposable campaign slot starts fresh for every `enter Campaign` script; the previous one is kept in the run dir
+    const slot = plan.usesCampaignSlot && savesDir ? resetCampaignSlot(savesDir, runDir) : null;
 
     // 5. spawn + wait (backstop kill)
     const launchedAtMs = Date.now();
@@ -467,6 +472,7 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
       modPathsObserved: logs.debugLog.modPaths,
       saveCheck: saveBefore && saveAfter && savePath ? { path: savePath, ...compareSnapshots(saveBefore, saveAfter), before: saveBefore, after: saveAfter } : null,
       saveSet: setBefore && setAfter && savesDir ? { dir: savesDir, ...compareSaveSets(setBefore, setAfter), files: setAfter.files.length, skipped: setAfter.skipped } : null,
+      campaignSlot: slot && savesDir ? { ...slot, after: existsSync(join(savesDir, CAMPAIGN_SLOT_FILE)) ? "present" : "absent" } : null,
     };
     // copies for the record
     if (logs.debugLog.path && logs.debugLog.present) {

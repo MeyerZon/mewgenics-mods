@@ -41,10 +41,13 @@ static const char *parse_quoted(const char *p, char *out, size_t cap, size_t *ou
 }
 
 int mt_scene_id(const char *name) {
-    return name && strcmp(name, "TacticsTest") == 0 ? MT_SCENE_TACTICS_TEST : 0;
+    if (!name) return 0;
+    if (strcmp(name, "TacticsTest") == 0) return MT_SCENE_TACTICS_TEST;
+    if (strcmp(name, "Campaign") == 0) return MT_SCENE_CAMPAIGN;
+    return 0;
 }
 const char *mt_scene_name(int scene) {
-    return scene == MT_SCENE_TACTICS_TEST ? "TacticsTest" : "";
+    return scene == MT_SCENE_TACTICS_TEST ? "TacticsTest" : scene == MT_SCENE_CAMPAIGN ? "Campaign" : "";
 }
 
 static int parse_op(const char *p, size_t n, MtOp *out) {

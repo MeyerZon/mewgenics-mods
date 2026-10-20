@@ -42,7 +42,9 @@ export type Directive =
   | { line: number; kind: "seed"; seed: string };
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
-export const KNOWN_SCENES = ["TacticsTest"];
+export const KNOWN_SCENES = ["TacticsTest", "Campaign"];
+/** the scene whose entry opens the harness-owned disposable save slot (savecheck.ts CAMPAIGN_SLOT_FILE) */
+export const CAMPAIGN_SCENE = "Campaign";
 
 export interface Plan {
   ok: boolean;
@@ -54,6 +56,8 @@ export interface Plan {
   /** -mewtest_clean 1: after the end event the harness lets the game shut itself down (complete debug.log); default false */
   clean: boolean;
   directives: Directive[];
+  /** true when an `enter Campaign` is present: the runner moves the disposable slot aside before launching */
+  usesCampaignSlot: boolean;
   /** directive lines only (no header, no comments), "\n"-terminated */
   body: string;
   errors: Finding[];
@@ -285,6 +289,7 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
     hide,
     clean,
     directives,
+    usesCampaignSlot: directives.some((d) => d.kind === "enter" && d.scene === CAMPAIGN_SCENE),
     body: bodyLines.length ? bodyLines.join("\n") + "\n" : "",
     errors,
     warnings,

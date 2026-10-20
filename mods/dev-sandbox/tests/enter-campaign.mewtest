@@ -1,0 +1,13 @@
+mods: dev-sandbox
+timeout: 60s
+hide: false
+# enter Campaign: the save-slot click replayed on the harness-owned slot mewtest01.sav (moved aside by the runner
+# before the run, so this is always a new game). The new-game path starts the intro cutscene; the slot file appears.
+wait frames 120
+shot "menu before enter"
+enter Campaign
+wait frames 120
+shot "campaign after enter"
+wait frames 400
+shot "campaign later"
+quit
