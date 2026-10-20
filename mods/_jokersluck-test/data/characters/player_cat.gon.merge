@@ -1,0 +1,10 @@
+// Deep-merged into data/characters/player_cat.gon for the Joker's Luck combat test: the player cats carry the
+// native JokersLuck status from the first turn (StatusOnBattleStart, the same passive the base items use), so
+// `expect stacks JokersLuck on 0 varied` can observe the reroll each turn. Test-only; never ship or play with it.
+PlayerCat {
+	passives {
+		StatusOnBattleStart {
+			JokersLuck 1
+		}
+	}
+}

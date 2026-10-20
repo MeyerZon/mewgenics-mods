@@ -95,6 +95,23 @@ static int resolve_unit(const MtHost *h, const MtDirective *d, MtUnit *u) {
     return -1;
 }
 
+/* remember a (unit, status) stacks value; returns the track (NULL when the table is full) */
+static MtStackTrack *record_stacks(MtRunner *r, int unit, const char *status, int value) {
+    MtStackTrack *free = NULL;
+    for (int i = 0; i < MT_STACK_TRACKS; i++) {
+        MtStackTrack *t = &r->tracks[i];
+        if (t->used && t->unit == unit && !strcmp(t->status, status)) {
+            if (value != t->first) t->sawDifferent = 1;
+            return t;
+        }
+        if (!t->used && !free) free = t;
+    }
+    if (!free) return NULL;
+    free->used = 1; free->unit = unit; free->first = value; free->sawDifferent = 0;
+    snprintf(free->status, sizeof free->status, "%s", status);
+    return free;
+}
+
 static void do_dump(MtRunner *r, const MtHost *h) {
     int avail = h->units_available(h->user);
     int count = avail ? h->unit_count(h->user) : 0;
@@ -118,6 +135,9 @@ static void do_dump(MtRunner *r, const MtHost *h) {
         mt_jw_int(&w, "turnkind", u.turnKind);
         mt_jw_arr_begin(&w, "statuses");
         for (int k = 0; k < u.statusCount && k < MT_UNIT_STATUSES; k++) mt_jw_arr_str(&w, u.statuses[k]);
+        mt_jw_arr_end(&w);
+        mt_jw_arr_begin(&w, "stacks");
+        for (int k = 0; k < u.statusCount && k < MT_UNIT_STATUSES; k++) { mt_jw_arr_int(&w, u.stacks[k]); record_stacks(r, i, u.statuses[k], u.stacks[k]); }
         mt_jw_arr_end(&w);
         mt_jw_obj_end(&w);
     }
@@ -230,6 +250,54 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             r->pc++;
             return 1;
         }
+        case MT_D_WAIT_ROUNDS:
+            r->waitStartRound = h->units_available(h->user) ? h->round_number(h->user) : 0;
+            r->waitTargetRound = r->waitStartRound + d->n;
+            r->state = MT_S_WAIT_ROUNDS;
+            return 1;
+        case MT_D_EXPECT_ROUND: {
+            long round = h->units_available(h->user) ? h->round_number(h->user) : 0;
+            snprintf(arg, sizeof arg, "%s %ld", op_text(d->op), d->n);
+            snprintf(detail, sizeof detail, "round %ld", round);
+            emit_expect(r, h, d, "round", arg, op_apply(d->op, round, d->n), detail);
+            r->pc++;
+            return 1;
+        }
+        case MT_D_EXPECT_STACKS: {
+            if (d->unitIsIndex) snprintf(arg, sizeof arg, "%s on %ld %s", d->a, d->n, d->varied ? "varied" : op_text(d->op));
+            else snprintf(arg, sizeof arg, "%s on %s %s", d->a, d->b, d->varied ? "varied" : op_text(d->op));
+            if (!d->varied) snprintf(arg + strlen(arg), sizeof arg - strlen(arg), " %ld", d->value);
+            if (!h->units_available(h->user)) { emit_expect(r, h, d, "stacks", arg, 0, "no combat (units unavailable)"); r->pc++; return 1; }
+            MtUnit u;
+            memset(&u, 0, sizeof u);
+            int idx = resolve_unit(h, d, &u);
+            if (idx < 0) {
+                if (d->unitIsIndex) snprintf(detail, sizeof detail, "unit not found: index %ld of %d", d->n, h->unit_count(h->user));
+                else snprintf(detail, sizeof detail, "unit not found: \"%s\"", d->b);
+                emit_expect(r, h, d, "stacks", arg, 0, detail);
+                r->pc++;
+                return 1;
+            }
+            int k = -1;
+            for (int s = 0; s < u.statusCount && s < MT_UNIT_STATUSES; s++) if (!strcmp(u.statuses[s], d->a)) { k = s; break; }
+            if (k < 0) {
+                snprintf(detail, sizeof detail, "%s absent on unit %d \"%s\"", d->a, idx, u.name);
+                emit_expect(r, h, d, "stacks", arg, 0, detail);
+                r->pc++;
+                return 1;
+            }
+            MtStackTrack *t = record_stacks(r, idx, d->a, u.stacks[k]);
+            if (d->varied) {
+                int distinct = t ? (t->sawDifferent ? 2 : 1) : 1;
+                snprintf(detail, sizeof detail, "%s %d on unit %d \"%s\"; %d distinct value(s) recorded%s", d->a, u.stacks[k], idx, u.name, distinct, t ? "" : " (track table full)");
+                emit_expect(r, h, d, "stacks", arg, distinct >= 2, detail);
+            } else {
+                snprintf(detail, sizeof detail, "%s %d on unit %d \"%s\"", d->a, u.stacks[k], idx, u.name);
+                emit_expect(r, h, d, "stacks", arg, op_apply(d->op, u.stacks[k], d->value), detail);
+            }
+            r->pc++;
+            return 1;
+        }
         case MT_D_DUMP:
             do_dump(r, h);
             r->pc++;
@@ -246,6 +314,40 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             int code = d->hasCode ? (int)d->n : (r->expectFail ? 1 : 0);
             finish(r, h, code, "quit");
             h->request_exit(h->user, code);
+            return 0;
+        }
+        case MT_D_ENTER: {
+            /* like cmd: the scene entry needs the debug console (the main menu has been reached) */
+            if (!h->console_ready(h->user)) {
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince > MT_CONSOLE_WAIT_MS) { finish(r, h, 4, "console_unavailable"); h->request_exit(h->user, 4); return 0; }
+                return 1;
+            }
+            int rc;
+            if (r->entered) { rc = 0; snprintf(detail, sizeof detail, "refused: enter may run only once per script"); }
+            else { detail[0] = 0; rc = h->enter_scene(h->user, d->scene, detail, sizeof detail); }
+            if (rc == 2) {
+                /* not ready yet (the game has not finished its own startup): retry next frame, same budget as the console wait */
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince <= MT_CONSOLE_WAIT_MS) return 1;
+                rc = 0;
+                snprintf(detail, sizeof detail, "not ready after %d ms: %s", MT_CONSOLE_WAIT_MS, detail[0] ? detail : "the game never reported ready");
+            }
+            r->consoleWaitSince = 0;
+            r->state = MT_S_RUN;
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "enter");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_str(&w, "name", mt_scene_name(d->scene));
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->entered = 1; r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "enter_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "enter_failed");
+            h->request_exit(h->user, 1);
             return 0;
         }
     }
@@ -275,6 +377,11 @@ int mt_runner_step(MtRunner *r, const MtHost *h) {
         case MT_S_WAIT_MS:
             if (r->now >= r->waitDeadline) { emit_wait(r, h, d, "ms", (long)(r->now - r->waitStartMs)); r->state = MT_S_RUN; r->pc++; }
             return 1;
+        case MT_S_WAIT_ROUNDS: {
+            long round = h->units_available(h->user) ? h->round_number(h->user) : 0;
+            if (round >= r->waitTargetRound) { emit_wait(r, h, d, "rounds", round - r->waitStartRound); r->state = MT_S_RUN; r->pc++; }
+            return 1;
+        }
         case MT_S_WAIT_WITHIN: {
             char detail[200];
             int i = find_in_window(r, h, d->a);

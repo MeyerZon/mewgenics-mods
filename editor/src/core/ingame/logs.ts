@@ -33,13 +33,38 @@ export interface DebugScan {
   modPaths: string[];
 }
 
+/** debug.log lines with the `[file: …; line: N;]` prefix stripped and trimmed (index = line number - 1). */
+export function debugLogMessages(text: string): string[] {
+  return String(text).split(/\r?\n/).map((l) => l.replace(PREFIX_RE, "").trim());
+}
+
+export interface LogExpect {
+  line: number;
+  substr: string;
+  ok: boolean;
+  detail: string;
+}
+
+/**
+ * Runner-side `expect log "<substr>"`: each substring must occur in some debug.log message (prefix stripped).
+ * Pure; `text` null means the log was not found.
+ */
+export function checkLogExpects(text: string | null, expects: { line: number; substr: string }[]): LogExpect[] {
+  const msgs = text === null ? null : debugLogMessages(text);
+  return expects.map(({ line, substr }) => {
+    if (msgs === null) return { line, substr, ok: false, detail: "debug.log absent" };
+    const i = msgs.findIndex((m) => m.includes(substr));
+    return i >= 0 ? { line, substr, ok: true, detail: `matched debug.log line ${i + 1}` } : { line, substr, ok: false, detail: "not found in debug.log" };
+  });
+}
+
 export function scanDebugLog(text: string): DebugScan {
   const findings: DebugFinding[] = [];
   let saveSuffix: string | null = null;
   const modPaths: string[] = [];
-  const lines = String(text).split(/\r?\n/);
+  const lines = debugLogMessages(text);
   for (let i = 0; i < lines.length; i++) {
-    const msg = lines[i]!.replace(PREFIX_RE, "").trim();
+    const msg = lines[i]!;
     if (!msg) continue;
     const s = /^Save File Suffix:\s*(.*)$/.exec(msg);
     if (s) { saveSuffix = s[1]!.trim(); continue; }

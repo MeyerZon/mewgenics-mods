@@ -10,7 +10,8 @@ import { spawn } from "node:child_process";
 import { DATA_CACHE_DIR } from "../repo.ts";
 import { locateGameDir, preflight, buildLaunch, LaunchError, type Preflight, type LaunchSpec, type Env } from "./launch.ts";
 import { parseResults, type ResultSummary } from "./results.ts";
-import { collectLogs, locateAppdataLogsDir, readWindow, type LogFindings } from "./logs.ts";
+import { collectLogs, locateAppdataLogsDir, readWindow, checkLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
+import { isRunnerSide } from "./script.ts";
 import {
   snapshotFile, compareSnapshots, realSavePath, realSavesDir, snapshotSaves, compareSaveSets, devSavePattern,
   type SaveSnapshot,
@@ -75,6 +76,8 @@ export interface IngameReport {
   durationMs: number;
   result: ResultSummary;
   logFindings: LogFindings | null;
+  /** runner-side `expect log "<substr>"` results (evaluated against debug.log after the run) */
+  logExpects: LogExpect[];
   safety: SafetyReport;
   artifacts: {
     runDir: string | null;
@@ -151,6 +154,8 @@ export interface VerdictInput {
   exit: ExitInfo;
   result: ResultSummary;
   logs: VerdictLogs | null | undefined;
+  /** runner-side expect log results; a miss is a fail (after log-errors, which names the root cause) */
+  logExpects?: LogExpect[];
   safety: {
     saveSuffixOk: boolean;
     saveSuffixReason?: string;
@@ -159,8 +164,17 @@ export interface VerdictInput {
   };
 }
 
-/** Pure verdict from the collected evidence. First match wins; see docs/ingame-testing.md. */
+/** Pure verdict from the collected evidence. First match wins; see docs/ingame-testing.md. Dialogs the harness
+ * dismissed (`popup` events) never decide the verdict but are appended to the reason, since they usually explain it. */
 export function decideVerdict(input: VerdictInput): { verdict: Verdict; reason: string } {
+  const v = decideVerdictBase(input);
+  const popups = input.result && Array.isArray(input.result.popups) ? input.result.popups : [];
+  if (!popups.length) return v;
+  if (v.verdict === "pass") return { verdict: v.verdict, reason: `${v.reason}, ${popups.length} popup(s) dismissed` };
+  return { verdict: v.verdict, reason: `${v.reason}; popup ${popups.map((p) => `${p.title}: ${p.text}`).join(" | ")}` };
+}
+
+function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: string } {
   const { preflight: pre, exit, result, logs, safety } = input;
   if (pre.skipped) return { verdict: "skipped", reason: pre.reasons.join("; ") || "skipped" };
   if (!pre.ok) return { verdict: "cannot-run", reason: pre.reasons.join("; ") };
@@ -183,11 +197,14 @@ export function decideVerdict(input: VerdictInput): { verdict: Verdict; reason: 
   if (crashReports.length) return { verdict: "crash", reason: `crash report(s) written: ${crashReports.join(", ")}` };
   if (code !== null && code !== 0 && code > 255) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   if (code !== null && code < 0) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
+  const enter = result.enter;
   if (code === 4 || result.scriptError || (result.end && result.end.code === 4)) {
     const fwInactive = fw && fw.present && !fw.active;
     const sigs = fw && Array.isArray(fw.signatureFailures) ? fw.signatureFailures : [];
     const detail = result.scriptError
       ? `script error at line ${result.scriptError.line}: ${result.scriptError.msg}`
+      : result.end && result.end.reason === "enter_unavailable" && enter
+        ? `enter ${enter.name} unavailable at line ${enter.line}: ${enter.detail} (enter_unavailable; rebuild mewframework/mewtest with the run-entry symbols)`
       : fwInactive && sigs.length
         ? `mewframework inactive: signature ${sigs.map((s) => `${s.name} (${s.matches} matches)`).join(", ")} failed on build ${fw.build || "?"}; re-derive with tools/bindings/make-signature.ts`
         : fwInactive
@@ -196,6 +213,9 @@ export function decideVerdict(input: VerdictInput): { verdict: Verdict; reason: 
     return { verdict: "harness-error", reason: detail };
   }
   if (code === 2 || (result.end && result.end.reason === "timeout")) return { verdict: "timeout", reason: `script timeout (end reason ${result.end ? result.end.reason : "?"})` };
+  if (result.end && result.end.reason === "enter_failed") {
+    return { verdict: "fail", reason: enter ? `enter ${enter.name} failed at line ${enter.line}: ${enter.detail}` : "enter failed (no enter event)" };
+  }
   if (code === 1 || result.expects.failed > 0 || (result.end && result.end.code === 1)) {
     const f = result.expects.failures[0];
     return { verdict: "fail", reason: f ? `expect ${f.kind} failed at line ${f.line}: ${f.detail}` : "harness exit code 1" };
@@ -210,8 +230,12 @@ export function decideVerdict(input: VerdictInput): { verdict: Verdict; reason: 
     const f = logs.debugLog.findings[0]!;
     return { verdict: "log-errors", reason: `${logs.debugLog.findings.length} debug.log marker(s), first: ${f.marker} at line ${f.line}` };
   }
+  const logExpects = input.logExpects || [];
+  const missedLog = logExpects.find((e) => !e.ok);
+  if (missedLog) return { verdict: "fail", reason: `expect log failed at line ${missedLog.line}: "${missedLog.substr}" ${missedLog.detail}` };
   if (code !== 0 && code !== null) return { verdict: "fail", reason: `exit code ${code}` };
-  return { verdict: "pass", reason: `all ${result.expects.passed} expectation(s) passed` };
+  const extra = logExpects.length ? `, ${logExpects.length} log expectation(s)` : "";
+  return { verdict: "pass", reason: `all ${result.expects.passed} expectation(s) passed${extra}` };
 }
 
 function sizeOf(p: string): number {
@@ -272,13 +296,14 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     durationMs: 0,
     result: parseResults(null),
     logFindings: null,
+    logExpects: [],
     safety: { expectedSuffix, observedSuffix: null, saveSuffixOk: true, modPathsObserved: [], saveCheck: null, saveSet: null },
     artifacts: { runDir: null, script: null, resultFile: null, debugLog: null, frameworkLogWindow: null, chainloaderLog: null, report: null },
     stdoutTail: "",
     stderrTail: "",
   };
   const finish = (launchError: string | null, exit: ExitInfo = { code: null, signal: null, backstop: false }): IngameReport => {
-    const v = decideVerdict({ preflight: report.preflight, launchError, exit, result: report.result, logs: report.logFindings, safety: report.safety });
+    const v = decideVerdict({ preflight: report.preflight, launchError, exit, result: report.result, logs: report.logFindings, logExpects: report.logExpects, safety: report.safety });
     report.verdict = v.verdict;
     report.killedAfterEnd = !!exit.killedAfterEnd;
     report.reason = v.reason + (exit.killedAfterEnd ? "; the game lingered after its end record and was killed after the end grace" : "");
@@ -392,6 +417,11 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     report.artifacts.resultFile = existsSync(outPath) ? outPath : null;
     const logs = collectLogs({ gameDir, appdataLogsDir, frameworkLogOffset, launchedAtMs, expectedSuffix });
     report.logFindings = logs;
+    const runnerSide = plan.directives.filter(isRunnerSide);
+    if (runnerSide.length) {
+      const debugText = logs.debugLog.path && logs.debugLog.present ? readFileSync(logs.debugLog.path, "utf8") : null;
+      report.logExpects = checkLogExpects(debugText, runnerSide);
+    }
     const saveAfter = saveBefore && savePath ? snapshotFile(savePath) : null;
     const setAfter = setBefore && savesDir ? snapshotSaves(savesDir, { allow }) : null;
     report.safety = {

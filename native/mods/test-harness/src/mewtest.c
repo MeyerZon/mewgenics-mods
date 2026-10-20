@@ -39,6 +39,12 @@ typedef MtMsvcString *(*fn_GetTypeName)(void *self, MtMsvcString *out);
 typedef int (*fn_IsA)(void *self, MtMsvcString *name);
 typedef int (*fn_SDL_SetSwapInterval)(int);
 typedef int (*fn_SDL_HideWindow)(void *window);
+/* run entry (framework v4 symbols): the dev menu's TacticsTest button, replayed */
+typedef void *(*fn_CreateScene)(void *sceneManager, MtMsvcString *name);   /* by-value string, callee destroys */
+typedef void *(*fn_CreateEntity)(void *scene);
+typedef void *(*fn_AddTacticsTest)(void *scene, void *entity);
+typedef void *(*fn_AddDirectorTest)(void *scene, void *entity);   /* the test director on test00.sav (name hard-coded in the callee) */
+typedef void *(*fn_GetGame)(void *component);                       /* Component::GetGame: the MewGame object of the component's scene */
 
 static MewjectorAPI g_mj;
 static int g_mjOk;
@@ -62,6 +68,11 @@ static fn_TidyDeallocate g_Tidy;
 static fn_DCInit g_origDCInit;
 static fn_FrameBegin g_origFrameBegin;
 static fn_NextTurn g_origNextTurn;
+static fn_CreateScene g_CreateScene;        /* NULL when the framework predates v4: `enter` reports enter_unavailable */
+static fn_CreateEntity g_CreateEntity;
+static fn_AddTacticsTest g_AddTacticsTest;
+static fn_AddDirectorTest g_AddDirectorTest;
+static fn_GetGame g_GetGame;
 
 static void *volatile g_dc;
 static volatile LONG g_dcInits;
@@ -128,7 +139,13 @@ static int read_ptr(const void *addr, void **out) { return safe_read(addr, out, 
 static int read_u32(const void *addr, uint32_t *out) { return safe_read(addr, out, sizeof *out); }
 static int read_i32(const void *addr, int *out) { return safe_read(addr, out, sizeof *out); }
 #define AT(base, off) ((const void *)((const char *)(base) + (off)))
-static int code_ptr_ok(const void *p) { return (uintptr_t)p >= g_base && (uintptr_t)p < g_imageEnd; }
+/* a code pointer the harness may call: inside the game image, or inside mewframework.dll — a framework-registered
+ * status (Joker's Luck) carries a cloned vtable whose slots 0-3 are the framework's thunks, outside the exe */
+static uintptr_t g_fwBase, g_fwEnd;
+static int code_ptr_ok(const void *p) {
+    uintptr_t a = (uintptr_t)p;
+    return (a >= g_base && a < g_imageEnd) || (g_fwBase && a >= g_fwBase && a < g_fwEnd);
+}
 
 /* copy an MSVC std::string living in game memory into buf */
 static int read_msvc_string(const void *addr, char *buf, size_t cap) {
@@ -170,6 +187,27 @@ static void hook_NextTurn(void *tc) {
     g_tc = tc;
     InterlockedIncrement(&g_turns);
     g_origNextTurn(tc);
+}
+
+/* diagnostic: every MewDirector::init(this, name) with the caller chain as RVAs, so "More than one mew director"
+ * can be attributed (the harness never creates more than one itself) */
+typedef void (*fn_DirectorInit)(void *director, void *nameStr);
+static fn_DirectorInit g_origDirectorInit;
+static void hook_DirectorInit(void *director, void *nameStr) {
+    void *frames[12];
+    USHORT n = RtlCaptureStackBackTrace(1, 12, frames, NULL);
+    char chain[400] = "";
+    for (USHORT i = 0; i < n; i++) {
+        uintptr_t a = (uintptr_t)frames[i];
+        char piece[40];
+        if (a >= g_base && a < g_imageEnd) snprintf(piece, sizeof piece, " exe+0x%llx", (unsigned long long)(a - g_base));
+        else snprintf(piece, sizeof piece, " %p", (void *)a);
+        strncat(chain, piece, sizeof chain - strlen(chain) - 1);
+    }
+    char nm[64] = "?";
+    read_msvc_string(nameStr, nm, sizeof nm);
+    logf_("MewDirector::init(%p, \"%s\") from%s", director, nm, chain);
+    g_origDirectorInit(director, nameStr);
 }
 
 static void maybe_hide(void) {
@@ -266,6 +304,99 @@ static int char_array(void **data, int *count) {
     *count = (int)n;
     return 1;
 }
+/* enter <scene>: replay what the dev menu's "TacticsTest" button does (DevMenu_TacticsTest_lambda_0x32fc00.c):
+ * a new scene named "Battle" from the scene manager, one entity in it, AddComponent<TacticsTest>(scene, entity)
+ * whose init registers the run console commands and starts the test fight. Runs on the game thread (FrameBegin
+ * hook, same as cmd). The lambda also reseeds the RNG and copies three dev-menu widget values into the director's
+ * settings; neither is replayed (the director keeps its defaults, the RNG stays as it is). No save file is opened:
+ * the boot-time test director (test00.sav) is the one TacticsTest reads. Returns 1 / 0 (detail) / -1 (symbols). */
+static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
+    (void)u;
+    if (scene != MT_SCENE_TACTICS_TEST) { snprintf(detail, cap, "unknown scene id %d", scene); return 0; }
+    if (!g_CreateScene || !g_CreateEntity || !g_AddTacticsTest) {
+        snprintf(detail, cap, "symbols missing: FW_SYM_SceneManager_CreateScene/Scene_CreateEntity/AddComponent_TacticsTest (framework older than v4?)");
+        return -1;
+    }
+    void *dc = g_dc, *mgr = NULL, *director = NULL, *directorGlobal = (void *)g_fw.GetData(FW_DATA_MewDirector);
+    if (!dc) { snprintf(detail, cap, "no debug console yet (main menu not reached)"); return 0; }
+    if (g_tc) { snprintf(detail, cap, "a fight is already running (TurnControl seen)"); return 0; }
+    if (!read_ptr(AT(dc, OFF_COMPONENT_SCENEMANAGER), &mgr) || !mgr) { snprintf(detail, cap, "no scene manager on the console component (+0x%x)", OFF_COMPONENT_SCENEMANAGER); return 0; }
+    if (!directorGlobal || !read_ptr(directorGlobal, &director)) { snprintf(detail, cap, "cannot read the MewDirector global"); return 0; }
+    /* OBSERVED 2026-10-20: TacticsTest::init creates its own MewDirector (debug.log: "LOAD LEVEL: levels/blank.lvl"
+     * right before it); a director made here first trips the game's "More than one mew director" assert, whose
+     * handler never returns (the main loop stalls until the watchdog exits 2). So a director that already exists is
+     * refused — nothing is created here — and the global is read only for the report. */
+    /* OBSERVED 2026-10-20 (MewDirector::init hook): in dev mode the game's own load-complete path
+     * (exe+0x751886 <- 0x748395) creates the test director (test00.sav) on the main scene a few frames after the
+     * menu is up, and TacticsTest::init dereferences the director Component::GetGame returns (crash at +0x835a32
+     * without one). An entry made before that director exists raced it ("More than one mew director"). So: not
+     * ready until the game has made its director; the runner retries every frame for MT_CONSOLE_WAIT_MS. */
+    if (!director) { snprintf(detail, cap, "no MewDirector yet (the game's dev-mode startup makes the test director after the menu)"); return 2; }
+    /* diagnostic for the record: the scenes the manager holds (vector at +0 .. +8), each with its name (+0x4b8),
+     * destroyed flag (+0x4b0) and whether it carries a MewGame (type 0x50c list at scene+0x20 -> +0x50c0) */
+    {
+        void *begin = NULL, *end = NULL, *mainScene = NULL;
+        read_ptr(mgr, &begin); read_ptr(AT(mgr, 8), &end); read_ptr(AT(mgr, OFF_SCENEMANAGER_MAINSCENE), &mainScene);
+        logf_("enter: scene manager %p, main scene %p, %d scene(s)", mgr, mainScene, (begin && end && end >= begin) ? (int)(((char *)end - (char *)begin) / 8) : -1);
+        for (int i = 0; begin && end && i < 32 && (char *)begin + i * 8 < (char *)end; i++) {
+            void *sc = NULL, *lists = NULL, *entry = NULL, *first = NULL, *firstArr = NULL;
+            char nm[64] = "?", destroyedFlag = 0;
+            uint32_t cnt = 0;
+            if (!read_ptr(AT(begin, i * 8), &sc) || !sc) continue;
+            read_msvc_string(AT(sc, 0x4b8), nm, sizeof nm);
+            safe_read(AT(sc, OFF_SCENE_DESTROYED), &destroyedFlag, 1);
+            if (read_ptr(AT(sc, 0x20), &lists) && lists && read_ptr(AT(lists, 0x50c0), &entry) && entry && read_u32(AT(entry, 0xc), &cnt) && cnt && read_ptr(AT(entry, 0x10), &firstArr) && firstArr) read_ptr(firstArr, &first);
+            logf_("enter:   scene[%d] %p \"%s\" destroyed=%d MewGame(0x50c)=%p (count %u)", i, sc, nm, (int)destroyedFlag, first, cnt);
+        }
+    }
+    /* the dev-menu button flags the director (Component::GetGame = the scene's MewDirector, type 0x50c) before it
+     * creates the Battle scene (lambda 0x32fc00): +0x780 = 1, +0x78c = 1, +0x6dc = 1. Replay that on ours. */
+    void *game = g_GetGame ? g_GetGame(dc) : NULL;   /* should now resolve to the director on the main scene */
+    void *flagTarget = game ? game : director;
+    char probe = 0;
+    if (!safe_read(AT(flagTarget, OFF_DIRECTOR_DEVFIGHT_MODE), &probe, 1)) { snprintf(detail, cap, "director %p unreadable", flagTarget); return 0; }
+    /* DECOMPILED (MewDirector::DebugGenAdventureCats 0x3b24c0): +0x78c = "take the party from a saved winning
+     * team"; when none is saved it warns ("no saved winning teams - win at least one run first!"), clears the
+     * flag and generates a party anyway. The harness leaves it 0 so a fresh test00.sav gets a generated party
+     * without the popup. +0x780 is set by every dev-menu fight button; +0x6dc is the act (the button sets 1). */
+    *(volatile char *)((char *)flagTarget + OFF_DIRECTOR_DEVFIGHT_FLAG) = 1;
+    *(volatile char *)((char *)flagTarget + OFF_DIRECTOR_DEVFIGHT_MODE) = 0;
+    *(volatile int *)((char *)flagTarget + OFF_DIRECTOR_HANDOFF_FLAG) = 1;
+    /* the button also copies its party-source widget into the director's settings struct (+0x5a8 -> +0x410/+0x428/
+     * +0x440); MewDirector::DebugGenAdventureCats(enum) refuses mode 0 without a saved winning team ("win at least
+     * one run first!"), so the harness asks for the generated party instead (MEWTEST_PARTY_MODE overrides, default 1) */
+    {
+        void *settings = NULL;
+        int mode = 1;
+        char envMode[16];
+        if (GetEnvironmentVariableA("MEWTEST_PARTY_MODE", envMode, sizeof envMode)) mode = atoi(envMode);
+        if (read_ptr(AT(flagTarget, 0x5a8), &settings) && settings) {
+            int probeI = 0;
+            if (safe_read(AT(settings, 0x440), &probeI, 4)) {
+                *(volatile int *)((char *)settings + 0x410) = mode;
+                *(volatile int *)((char *)settings + 0x428) = mode;
+                *(volatile int *)((char *)settings + 0x440) = mode;
+                logf_("enter: director settings %p: party-source fields +0x410/+0x428/+0x440 set to %d", settings, mode);
+            } else logf_("enter: director settings %p unreadable; party-source fields left alone", settings);
+        } else logf_("enter: director %p has no settings struct at +0x5a8", flagTarget);
+    }
+    MtMsvcString name;
+    if (!mt_msvcstr_build(&name, "Battle", 6, (MtAllocFn)g_Allocate)) { snprintf(detail, cap, "cannot build the scene name"); return 0; }
+    void *battle = g_CreateScene(mgr, &name); /* callee destroys the string */
+    char destroyed = 1;
+    if (!battle || !safe_read(AT(battle, OFF_SCENE_DESTROYED), &destroyed, 1) || destroyed) { snprintf(detail, cap, "CreateScene(\"Battle\") gave %p (destroyed=%d)", battle, (int)destroyed); return 0; }
+    void *entity = g_CreateEntity(battle);
+    if (!entity) { snprintf(detail, cap, "CreateEntity returned NULL on scene %p", battle); return 0; }
+    void *tt = g_AddTacticsTest(battle, entity);
+    if (!tt) { snprintf(detail, cap, "AddComponent<TacticsTest> returned NULL (scene %p being destroyed?)", battle); return 0; }
+    void *directorAfter = NULL;
+    read_ptr(directorGlobal, &directorAfter);
+    snprintf(detail, cap, "scene=%p entity=%p component=%p manager=%p director=%p GetGame(console)=%p director(after init)=%p",
+             battle, entity, tt, mgr, director, game, directorAfter);
+    logf_("enter TacticsTest: %s", detail);
+    return 1;
+}
+
 static int h_units_available(void *u) { (void)u; void *d[MAX_UNITS]; int n; return char_array(d, &n); }
 static int h_unit_count(void *u) { (void)u; void *d[MAX_UNITS]; int n; return char_array(d, &n) ? n : 0; }
 
@@ -315,7 +446,12 @@ static int h_unit_info(void *u, int i, MtUnit *out) {
             if (!read_ptr(AT(comps, k * sizeof(void *)), &comp) || !comp) continue;
             if (!component_is_status(comp)) continue;
             if (safe_read(AT(comp, OFF_STATUS_REMOVING), &removing, 1) && removing) continue;
-            if (component_type_name(comp, out->statuses[out->statusCount], MT_STATUS_NAME)) out->statusCount++;
+            if (component_type_name(comp, out->statuses[out->statusCount], MT_STATUS_NAME)) {
+                int st = 0;
+                read_i32(AT(comp, OFF_STATUS_STACKS), &st);   /* the same +0x5c status_engine.c writes */
+                out->stacks[out->statusCount] = st;
+                out->statusCount++;
+            }
         }
     }
     return 1;
@@ -359,7 +495,7 @@ static void h_request_exit(void *u, int code) {
 
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
-    h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit,
+    h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
@@ -477,10 +613,49 @@ static __attribute__((noreturn)) void exit_now(int code) {
     ExitProcess((UINT)code); /* only if TerminateProcess somehow returned */
 }
 
+/* A modal message box on the game's main thread (its own WARNING popup, e.g. "no saved winning teams - win at least
+ * one run first!" from MewDirector::DebugGenAdventureCats) stops the frame loop for as long as nobody clicks OK —
+ * with a hidden window, forever. The watchdog closes every visible dialog-class window of this process and records
+ * it as a `popup` event (title + text), so a run reports the message instead of hanging on it. */
+static BOOL CALLBACK popup_text_enum(HWND child, LPARAM lp) {
+    char cls[32] = "";
+    GetClassNameA(child, cls, sizeof cls);
+    if (strcmp(cls, "Static") != 0) return TRUE;
+    char *out = (char *)lp;
+    if (out[0]) return TRUE;                                 /* first non-empty Static wins (the icon is a Static too) */
+    GetWindowTextA(child, out, 512);
+    return TRUE;
+}
+static BOOL CALLBACK popup_enum(HWND h, LPARAM lp) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid != GetCurrentProcessId() || !IsWindowVisible(h)) return TRUE;
+    char cls[32] = "", title[128] = "", text[512] = "";
+    GetClassNameA(h, cls, sizeof cls);
+    if (strcmp(cls, "#32770") != 0) return TRUE;           /* the dialog class MessageBox uses */
+    GetWindowTextA(h, title, sizeof title);
+    EnumChildWindows(h, popup_text_enum, (LPARAM)text);     /* the message is the dialog's text Static */
+    char buf[1024];
+    MtJsonW w;
+    mt_jw_begin(&w, buf, sizeof buf, "popup");
+    mt_jw_str(&w, "title", title);
+    mt_jw_str(&w, "text", text);
+    mt_jw_int(&w, "t", t_ms());
+    mt_jw_int(&w, "frame", g_runner.frame);
+    mt_jw_end(&w);
+    emit_locked(buf);
+    logf_("popup dismissed: [%s] %s", title, text);
+    PostMessageA(h, WM_CLOSE, 0, 0);
+    (*(int *)lp)++;
+    return TRUE;
+}
+static void dismiss_popups(void) { int n = 0; EnumWindows(popup_enum, (LPARAM)&n); }
+
 static DWORD WINAPI watchdog(LPVOID p) {
     (void)p;
     for (;;) {
         Sleep(250);
+        if (g_active) dismiss_popups();
         MtExitState s;
         s.crashed = g_crashed != 0;             s.crashTick = g_crashTick;
         s.cleanRequested = g_cleanExitTick != 0; s.cleanTick = g_cleanExitTick;
@@ -605,10 +780,28 @@ static void init(void) {
         const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64 *)(g_base + dos->e_lfanew);
         g_imageEnd = g_base + nt->OptionalHeader.SizeOfImage;
     }
+    {
+        HMODULE fw = GetModuleHandleA("mewframework.dll");
+        if (fw) {
+            const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)fw;
+            const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64 *)((const char *)fw + dos->e_lfanew);
+            g_fwBase = (uintptr_t)fw;
+            g_fwEnd = g_fwBase + nt->OptionalHeader.SizeOfImage;
+        }
+    }
     g_Execute = (fn_Execute)g_fw.GetSymbol(FW_SYM_DebugConsole_Execute);
     g_Allocate = (fn_Allocate)g_fw.GetSymbol(FW_SYM_string_Allocate);
     g_Tidy = (fn_TidyDeallocate)g_fw.GetSymbol(FW_SYM_string_TidyDeallocate);
     if (!g_Execute || !g_Allocate || !g_Tidy) { logf_("required symbols missing; inert"); return; }
+    /* v4 run-entry symbols: optional (an older framework returns 0 for an enum it does not know; `enter` then
+     * reports enter_unavailable instead of the harness going inert) */
+    g_CreateScene = (fn_CreateScene)g_fw.GetSymbol(FW_SYM_SceneManager_CreateScene);
+    g_CreateEntity = (fn_CreateEntity)g_fw.GetSymbol(FW_SYM_Scene_CreateEntity);
+    g_AddTacticsTest = (fn_AddTacticsTest)g_fw.GetSymbol(FW_SYM_AddComponent_TacticsTest);
+    g_AddDirectorTest = (fn_AddDirectorTest)g_fw.GetSymbol(FW_SYM_AddComponent_MewDirector_test);
+    g_GetGame = (fn_GetGame)g_fw.GetSymbol(FW_SYM_Component_GetGame);
+    logf_("run-entry symbols: CreateScene=%p CreateEntity=%p AddComponent<TacticsTest>=%p GetGame=%p AddComponent<MewDirector>(test, reference)=%p",
+          (void *)g_CreateScene, (void *)g_CreateEntity, (void *)g_AddTacticsTest, (void *)g_GetGame, (void *)g_AddDirectorTest);
     for (int i = 0; i < FW_DATA_COUNT_; i++) {
         void **slot = (void **)g_fw.GetData(i);
         g_sdlInitial[i] = NULL;
@@ -636,6 +829,7 @@ static void init(void) {
     if (!install_hook(FW_SYM_DebugConsole_init, (void *)hook_DCInit, (void **)&g_origDCInit, 50, "DebugConsole::init")) return;
     if (!install_hook(FW_SYM_ApplicationBase_FrameBegin, (void *)hook_FrameBegin, (void **)&g_origFrameBegin, 50, "ApplicationBase::FrameBegin")) return;
     if (!install_hook(FW_SYM_TurnControl_NextTurn, (void *)hook_NextTurn, (void **)&g_origNextTurn, 110, "TurnControl::NextTurn")) return;
+    install_hook(FW_SYM_MewDirector_init, (void *)hook_DirectorInit, (void **)&g_origDirectorInit, 120, "MewDirector::init (diagnostic)"); /* optional */
 
     AddVectoredExceptionHandler(1, veh);
     g_prevFilter = SetUnhandledExceptionFilter(top_filter);

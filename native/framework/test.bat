@@ -1,6 +1,7 @@
 @echo off
 REM Host-side unit tests for mewframework's pure parts (no game, no windows.h): the signature
-REM scanner (test_sig) and the build gate + GENERATED per-build tables (test_build).
+REM scanner (test_sig), the build gate + GENERATED per-build tables (test_build) and the status
+REM definition rules / name aliasing (test_status_rules).
 REM Builds build\test_*.exe with w64devkit GCC and runs them; exit code = failures.
 setlocal
 if not defined GCC set "GCC=C:\raylib\w64devkit\bin\gcc.exe"
@@ -18,5 +19,11 @@ if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
   -o "%OUT%\test_build.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_build.exe"
+if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_status_rules.c" "%HERE%src\fw_status_rules.c" ^
+  -o "%OUT%\test_status_rules.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_status_rules.exe"
 if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
 endlocal

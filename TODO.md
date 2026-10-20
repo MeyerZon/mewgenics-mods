@@ -163,33 +163,53 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 ## Planned (not started)
 
 ### TDD coverage targets — make every layer test-backed (in priority order)
-1. [ ] **Enter a run from the main menu through the harness** — the one blocker for in-combat tests. Options to
-   evaluate, cheapest first: (a) a console command that exists at the main menu and loads a run (`listcmds` shows
-   only the 11 engine built-ins, so probably none); (b) call the game's "continue run" path from the DLL (needs its
-   RVA: hook/decompile what the main-menu Continue button invokes, likely `MewDirector::init` or a scene push); (c)
-   inject SDL input events through the `SDL_PushEvent` slot to click Continue (brittle, last resort). Red test: a
-   `.mewtest` with `cmd load 1` → `wait turns 1` → `expect units >= 2` that currently fails with
-   `No command named "load"`.
-2. [ ] **Joker's Luck real feature test (T2)** once 1 lands: `bind JokersGambit`, use it, `wait turns 2`,
-   `expect status JokersLuck on 0`, `dump` twice and assert the luck stacks differ between turns (needs the stacks
-   value in the units event: add `stacks` per status to `MtUnit`/the JSONL, host-tested first).
-3. [~] **Auto-resolve overlay mod** `mods/_autoplay/` (`data/characters/player_cat.gon.merge` → `PlayerCat { passives {
-   Uncontrollable 1 } }`): landed 2026-10-20 with the validator + merge-preview tests (`run-tests.ts` 4c) and a T2
-   load smoke (`tests/load.mewtest`, pass). Still owed: the T2 that a fight reaches round 2 unattended — needs
-   `enter TacticsTest` to reach a fight (target 1).
+1. [x] **Enter a run from the main menu through the harness** (2026-10-20): the `.mewtest` directive `enter
+   TacticsTest` replays the dev menu's test-fight button inside `mewtest.dll` (owner's hint: the dev menu has
+   "straight into a fight" entries). The game's dev-mode startup makes the test director (`test00.sav`) itself;
+   `enter` waits for it, flags it (party generated, not read from a saved winning team), creates the `Battle` scene
+   with the `TacticsTest` driver. `mods/dev-sandbox/tests/enter-fight.mewtest`: run commands registered, a turn,
+   `dump` with 6 units, `expect units >= 2` — pass, saves untouched. Facts: `docs/engine-map.md` "Dev scenes and
+   run entry"; bindings v4 (`FW_SYM_SceneManager_CreateScene`, `Scene_CreateEntity`, `AddComponent_TacticsTest`,
+   `Component_GetGame`, `FW_DATA_MewDirector`, …). Not taken: the Continue-button/campaign route (would open a
+   `campaign0N.sav`; recorded, not wired) and SDL input injection. Bonus: the watchdog now closes the game's modal
+   WARNING/ERROR boxes and reports them as `popup` events, so a run never hangs on a dialog.
+2. [x] **Joker's Luck real feature test (T2)** (2026-10-20): `mods/jokers-luck/tests/luck-rerolls.mewtest` — `enter
+   TacticsTest`, `bind JokersGambit` (accepted), `expect status JokersLuck on 0`, `expect stacks JokersLuck on 0 >= 1`,
+   four `dump`s across three rounds, `expect stacks JokersLuck on 0 varied`: **pass** (stacks 1 → 10 → 7 → 9). The
+   status is put on the cats at battle start by the test-only overlay `mods/_jokersluck-test/`
+   (`StatusOnBattleStart { JokersLuck 1 }`); `stacks` per status is in the units event (host-tested). Found: the
+   harness had refused the status's cloned vtable (framework thunks outside the exe) — fixed.
+3. [x] **Auto-resolve overlay mod** `mods/_autoplay/` (`data/characters/player_cat.gon.merge` → `PlayerCat { passives {
+   Uncontrollable 1 } }`), 2026-10-20: validator + merge-preview tests (`run-tests.ts` 4c, PR #43), T2 load smoke, and
+   `tests/round2.mewtest` — `enter TacticsTest`, `spawn Rat`, `wait rounds 1`, `expect round >= 2`: **pass**, the
+   generated player cats take their own turns (turns 2..6 in ~17 s); without the overlay the same fight sits at the
+   player's turn until the timeout.
 4. [x] **Bindings regression test (T1)** — `editor/test/bindings-tests.ts`: every manifest signature matches exactly
    once at its RVA in the installed exe, every function RVA begins a `.pdata` entry, anchors re-verify, self-port
    changes nothing; `check_game_build` reports it live. (2026-10-19, binding-port series)
 5. [~] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
-   the status definition table / name rules are still inside `status_engine.c`.
+   the status definition table / name rules / alias rewrite / hierarchy rewrite are `fw_status_rules.c` since
+   2026-10-20 (`test_status_rules.c`, 14 checks; one cap of 8 shared by `framework.c` and `status_engine.c`, which
+   had disagreed 16 vs 8). Still game-bound and only T2-verified: the vtable clone + thunks, the `ApplyByName` hook
+   and the entity/component walks in `status_engine.c`, and everything in `framework.c` but the build gate.
 6. [x] **Tools tests (T0)**: `tools/bindings/make-signature.ts` is covered by the siggen section of
    `bindings-tests.ts` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` by
    `editor/test/gpak-tests.ts` on a synthetic archive (2026-10-19; list/cat/extract/stats, truncation, path escapes).
-7. [ ] **Validator fixtures per check**: one failing fixture per finding code (`unknown-status`, `missing-loc-key`,
-   `merge-target-missing`, …) so the four checks are each pinned by a T0 test instead of only by the sample mods.
+7. [x] **Validator fixtures per check** (2026-10-20): `editor/test/validator-tests.ts` + `editor/test/fixtures/validator/`
+   — a synthetic base and one minimal mod per finding code (all 20: `mod-missing` … `csv-column-count`, plus a clean
+   mod), driven through injectable `ValidateOptions` (`modDir`, `extractedData`, `components`, `registeredNames`), so
+   the checks run at T0 without game data. Found on the way: the overlay-target check joined a hardcoded `.extracted/`
+   and ignored `MEWGENICS_EXTRACTED_DATA` (fixed). Follow-up: `preview-merge.ts` still joins `.extracted` directly
+   (same fix, when the merge preview gets its own fixtures).
 8. [ ] **Golden merge cases**: freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
-   (via a `.mewtest` that reads the live value, once 1 lands) so the overlay engine is tested against the game, not
-   only against the decompile.
+   so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1
+   (2026-10-20):** no console command reads a live GON value — the full in-run command set (84, pinned in
+   `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`) has `spawn`/`load`/`status`/`passive`/`equip`
+   but nothing that prints a field, and the decompiled file resolver works on parsed GON trees, so an in-game golden
+   needs the GON object layout (new RE). Owner to accept or reject the weaker sub-item:
+   - [ ] "golden through `dump`": spawn a unit whose character is changed by a `.merge`/`.append` overlay and pin
+     its `move`/`act`/`faction`/`statuses` from the units event against a vanilla dump — pins the merge and append
+     policies differentially, not the `.patch` per-field policies on non-numeric fields.
 9. [x] **`npm test` without `.extracted/`** (done 2026-10-19, leftovers PR 3: round-trip, real-overlay, validator and the two
    base-data MCP calls skip with a logged `(skipped: …)`; a nested run with `MEWGENICS_EXTRACTED_DATA` = empty dir is
    itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged
@@ -197,21 +217,27 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    triggered only when relevant paths change (`editor/`, `native/`, `bindings/`, `tools/`, `mods/`), not on docs-only PRs.
 10. [x] **Test runner ergonomics** (done 2026-10-19, leftovers PR 3: `npm test -- --only <substring>` / `TEST_ONLY`): a name filter for `run-tests.ts` (or migrate to built-in `node:test`, zero deps,
     gives `--test-name-pattern`/`--watch`) so red/green per test is cheap.
-11. [~] **Mechanical enforcement** (decided **yes** 2026-10-19): PR template with the red/green table + T3 checklist
-    **done** (PR #26); still open: a check that a change under `src/`/`native/*/src/`/`mods/` comes with a test
-    change, and CI running T0 on relevant PRs (shares the workflow from target 9).
+11. [x] **Mechanical enforcement** (decided **yes** 2026-10-19; done 2026-10-20): PR template with the red/green table +
+    T3 checklist (PR #26); `.github/workflows/t0.yml` runs T0 on Linux runners (editor typecheck + `npm test` +
+    `bindings:check`; native host suites via `native/test-all.sh`; the game is never part of CI) for PRs touching
+    `editor/`, `native/`, `bindings/`, `tools/`, `mods/`; the `test-change` job fails a source change without a test
+    change unless `[no-test-change: <reason>]` is in the PR body or a commit (`editor/scripts/check-test-change.ts`,
+    classifier unit-tested). Owner: keep the jobs non-required in branch protection (docs-only PRs do not trigger them).
 12. [~] **Harness features**: ~~expose `-mewtest_clean` in the runner (`clean: true` header)~~ done 2026-10-19 (leftovers
     PR 4) — but it does not yield a complete `debug.log` (the game never shuts itself down; see `ingame-testing.md`
     "Clean mode"), so a log flush needs another lever;
-    named-pipe interactive mode (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`); RNG seed pinning via `TLS+0x178`
-    for exact numeric assertions; `expect log "<substr>"` against `debug.log` from the runner side.
+    ~~`expect log "<substr>"` against `debug.log` from the runner side~~ done 2026-10-20 (`report.logExpects`; the DLL
+    gets a `# runner: …` comment in its place). Still open, each for a reason: named-pipe interactive mode
+    (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`) is a native IPC feature — a pipe thread marshalling commands
+    onto the frame hook — with its own DLL host tests and T2, not a runner change; RNG seed pinning via `TLS+0x178` for
+    exact numeric assertions needs that fact in `engine-map.md` + a fixture first and only pays off once a run can be
+    entered from the menu (target 1).
 
 ### Verification still owed (things built but not yet validated in-game)
-- [ ] **Unit walk** (`dump` with units, `expect status`, `expect units`): only exercised with `available:false`
-  (main menu). Offsets come from the `TurnControl::NextTurn` decompile; confirm name/class/faction decoding on a real
-  fight (blocked by target 1).
-- [ ] **Crash path**: VEH + top-level filter + watchdog never ran against a real fault (`cmd crash` is in-run only).
-  Expect: `crash` event, `end code 3`, Mewjector dump in `mod_logs\crashes\`, no WER dialog, exit 3.
+- [x] **Unit walk** (`dump` with units, `expect status`, `expect units`): verified on a real fight 2026-10-20
+  (`enter TacticsTest`: 6 units with names, classes and factions decoded — `editor/test/fixtures/ingame/result-enter-fight.jsonl`).
+- [x] **Crash path**: ran against a real fault 2026-10-20 (an access violation inside `TacticsTest::init` during an
+  early entry attempt): `crash` event, `end code 3`, the game's own `crash_*.txt`, no WER dialog, exit 3.
 - [x] **`-mewtest_clean 1`** never exited (OBSERVED 2026-10-19: no "grace elapsed" line, killed after 7 min). Fixed in
   leftovers PR 4: the decision is the pure `mt_exit_decide` (no dependence on `g_active`), the watchdog leaves via
   `TerminateProcess`, the runner kills 5 s after the `end` record as a fallback. T2 `dev-sandbox/console-smoke-clean`:
@@ -233,8 +259,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   hook to `Step`.
 - [ ] **Hidden window on other machines**: verified on this PC (NVIDIA, ~180 fps hidden); confirm elsewhere before
   relying on it in CI-like setups.
-- [ ] **In-run console command set**: `listcmds` at the main menu lists 11 commands; capture the in-run list once
-  target 1 lands and pin it in `ingame-testing.md`.
+- [x] **In-run console command set**: captured 2026-10-20 after `enter TacticsTest` — 84 commands, pinned verbatim in
+  `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt` and listed in `ingame-testing.md`.
 
 ### Next, directly queued
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)

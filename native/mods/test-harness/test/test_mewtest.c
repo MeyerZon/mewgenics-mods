@@ -363,6 +363,7 @@ typedef struct Fake {
     int unitsAvailable; MtUnit units[8]; int unitCount;
     char emitted[FK_MAX][1024]; int emitCount;
     int exitCode; int exitCalls;
+    int enterResult; int enterCalls; int enterScene;   /* enter_scene: programmable result (1 ok / 0 refused / -1 unavailable) */
 } Fake;
 static Fake fk;
 
@@ -390,10 +391,16 @@ static int fk_unit_has_status(void *u, int i, const char *st) {
 }
 static void fk_emit(void *u, const char *json) { (void)u; if (fk.emitCount < FK_MAX) snprintf(fk.emitted[fk.emitCount++], 1024, "%s", json); }
 static void fk_request_exit(void *u, int code) { (void)u; fk.exitCode = code; fk.exitCalls++; }
+static int fk_enter_scene(void *u, int scene, char *detail, size_t cap) {
+    (void)u;
+    fk.enterCalls++; fk.enterScene = scene;
+    snprintf(detail, cap, "fake enter %d", scene);
+    return fk.enterResult;
+}
 
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
-    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit,
+    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene,
 };
 
 static MtRunner rr;
@@ -428,6 +435,101 @@ TEST(runner_cmd_then_same_step_console_then_expect_ok) {
     CHECK_EQ(fk.exitCalls, 1); CHECK_EQ(fk.exitCode, 0);
     CHECK_EQ(mt_runner_step(&rr, &HOST), 0); /* stepping after finished is a no-op */
     CHECK_EQ(fk.exitCalls, 1);
+}
+
+/* ---- enter <SceneName>: the harness replays the dev menu's "TacticsTest" entry through the host ---- */
+TEST(script_enter_directive_parses_known_scene_and_rejects_unknown_or_missing) {
+    char err[256]; int line = 0;
+    CHECK(mt_script_parse("enter TacticsTest\nquit\n", 23, &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 2);
+    CHECK_EQ(g_s.d[0].kind, MT_D_ENTER);
+    CHECK_EQ(g_s.d[0].scene, MT_SCENE_TACTICS_TEST);
+    CHECK_EQ(g_s.d[0].line, 1);
+    CHECK_STR(mt_scene_name(MT_SCENE_TACTICS_TEST), "TacticsTest");
+    CHECK_EQ(mt_scene_id("TacticsTest"), MT_SCENE_TACTICS_TEST);
+    CHECK_EQ(mt_scene_id("Nope"), 0);
+    const char *bad = "enter Nope\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    CHECK(strstr(err, "unknown scene") != NULL); CHECK_EQ(line, 1);
+    bad = "enter\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    CHECK(strstr(err, "scene name") != NULL);
+    bad = "enter TacticsTest extra\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_enter_waits_for_console_then_calls_host_and_emits_enter_event) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.ready = 0; fk.enterResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.enterCalls, 0);                       /* like cmd: no console yet, no call */
+    CHECK_EQ(rr.state, MT_S_WAIT_CONSOLE);
+    fk.ready = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.enterCalls, 1); CHECK_EQ(fk.enterScene, MT_SCENE_TACTICS_TEST);
+    CHECK(has(last_ev(), "{\"ev\":\"enter\"")); CHECK(has(last_ev(), "\"line\":1"));
+    CHECK(has(last_ev(), "\"name\":\"TacticsTest\"")); CHECK(has(last_ev(), "\"ok\":true"));
+    CHECK(has(last_ev(), "\"detail\":\"fake enter 1\""));
+    CHECK_EQ(rr.entered, 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);          /* quit */
+    CHECK(has(last_ev(), "\"code\":0")); CHECK_EQ(fk.exitCode, 0);
+}
+
+TEST(runner_enter_failure_ends_script_with_code_1_enter_failed) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = 0;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK_EQ(fk.enterCalls, 1);
+    CHECK_EQ(count_ev("enter"), 1);
+    CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "\"detail\":\"fake enter 1\""));
+    CHECK(has(last_ev(), "{\"ev\":\"end\"")); CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"enter_failed\""));
+    CHECK_EQ(fk.exitCode, 1); CHECK_EQ(fk.exitCalls, 1);
+}
+
+TEST(runner_enter_unavailable_ends_script_with_code_4) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "{\"ev\":\"enter\"")); CHECK(has(ev(0), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"enter_unavailable\""));
+    CHECK_EQ(fk.exitCode, 4);
+}
+
+TEST(runner_enter_retries_while_the_host_says_not_ready_then_enters) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = 2;                               /* 2 = not ready yet (e.g. the game has not made its director) */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.enterCalls, 2);
+    CHECK_EQ(count_ev("enter"), 0);                   /* no event while retrying */
+    CHECK_EQ(rr.pc, 0);
+    fk.enterResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("enter"), 1); CHECK(has(last_ev(), "\"ok\":true"));
+    CHECK_EQ(rr.pc, 1);
+}
+
+TEST(runner_enter_not_ready_for_too_long_ends_with_code_1_enter_failed) {
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = 2;
+    fk.now = 1000;
+    mt_runner_step(&rr, &HOST);
+    fk.now = 1000 + MT_CONSOLE_WAIT_MS + 1;           /* the same budget cmd gives the console */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "{\"ev\":\"enter\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "not ready"));
+    CHECK(has(last_ev(), "\"reason\":\"enter_failed\"")); CHECK_EQ(fk.exitCode, 1);
+}
+
+TEST(runner_enter_twice_is_refused_without_a_host_call) {
+    fk_reset("enter TacticsTest\nenter TacticsTest\nquit\n");
+    fk.enterResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);          /* first: ok */
+    CHECK_EQ(fk.enterCalls, 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);          /* second: refused, script ends */
+    CHECK_EQ(fk.enterCalls, 1);
+    CHECK_EQ(count_ev("enter"), 2);
+    CHECK(has(ev(1), "\"ok\":false")); CHECK(has(ev(1), "once"));
+    CHECK(has(last_ev(), "\"reason\":\"enter_failed\"")); CHECK_EQ(fk.exitCode, 1);
 }
 
 TEST(runner_expect_console_fail_and_quit_code_1) {
@@ -532,7 +634,7 @@ TEST(runner_dump_with_and_without_units) {
     fk_two_units();
     steps_until_done(5);
     CHECK(has(ev(0), "\"available\":true")); CHECK(has(ev(0), "\"count\":2"));
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"statuses\":[\"LuckUp\",\"JokersLuck\"]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
     CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\""));
 }
 
@@ -546,6 +648,90 @@ TEST(runner_expect_status_by_index_and_name) {
     CHECK(has(ev(3), "\"ok\":false")); CHECK(has(ev(3), "unit not found"));
     CHECK(has(ev(4), "\"ok\":false"));
     CHECK(has(last_ev(), "\"expect_pass\":2")); CHECK(has(last_ev(), "\"expect_fail\":3"));
+}
+
+/* ---- combat assertions: stacks in the units event, wait rounds, expect round, expect stacks (op | varied) ---- */
+static void fk_two_units_with_stacks(void) {
+    fk_two_units();
+    fk.units[0].stacks[0] = 2; fk.units[0].stacks[1] = 7;    /* LuckUp 2, JokersLuck 7 */
+}
+
+TEST(script_wait_rounds_and_expect_round_and_expect_stacks_parse) {
+    char err[256]; int line = 0;
+    const char *s = "wait rounds 2\nexpect round >= 3\nexpect stacks JokersLuck on 0 == 7\nexpect stacks JokersLuck on \"Mr Whiskers\" != 0\nexpect stacks LuckUp on Lumee varied\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 6);
+    CHECK_EQ(g_s.d[0].kind, MT_D_WAIT_ROUNDS); CHECK_EQ(g_s.d[0].n, 2);
+    CHECK_EQ(g_s.d[1].kind, MT_D_EXPECT_ROUND); CHECK_EQ(g_s.d[1].op, MT_OP_GE); CHECK_EQ(g_s.d[1].n, 3);
+    CHECK_EQ(g_s.d[2].kind, MT_D_EXPECT_STACKS); CHECK_STR(g_s.d[2].a, "JokersLuck"); CHECK_EQ(g_s.d[2].unitIsIndex, 1); CHECK_EQ(g_s.d[2].n, 0); CHECK_EQ(g_s.d[2].op, MT_OP_EQ); CHECK_EQ(g_s.d[2].value, 7); CHECK_EQ(g_s.d[2].varied, 0);
+    CHECK_EQ(g_s.d[3].kind, MT_D_EXPECT_STACKS); CHECK_STR(g_s.d[3].b, "Mr Whiskers"); CHECK_EQ(g_s.d[3].op, MT_OP_NE); CHECK_EQ(g_s.d[3].value, 0);
+    CHECK_EQ(g_s.d[4].kind, MT_D_EXPECT_STACKS); CHECK_STR(g_s.d[4].b, "Lumee"); CHECK_EQ(g_s.d[4].varied, 1);
+    const char *bad = "expect stacks LuckUp on 0\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    bad = "expect round 3\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    bad = "wait rounds 0\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_dump_emits_stacks_parallel_to_statuses) {
+    fk_reset("dump\nquit\n");
+    fk_two_units_with_stacks();
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7]}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"statuses\":[],\"stacks\":[]}"));
+}
+
+TEST(runner_wait_rounds_advances_on_round_counter) {
+    fk_reset("wait rounds 2\nquit\n");
+    fk_two_units(); fk.round = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    fk.round = 2; CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("wait"), 0);
+    fk.round = 3; CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("wait"), 1);
+    CHECK(has(last_ev(), "\"kind\":\"rounds\"")); CHECK(has(last_ev(), "\"n\":2")); CHECK(has(last_ev(), "\"actual\":2"));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+}
+
+TEST(runner_expect_round_ops_and_zero_without_combat) {
+    fk_reset("expect round >= 2\nexpect round == 3\nquit\n");
+    fk_two_units(); fk.round = 2;
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"kind\":\"round\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"detail\":\"round 2\""));
+    CHECK(has(ev(1), "\"ok\":false"));
+    fk_reset("expect round == 0\nquit\n");          /* no combat: round reads as 0 */
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"ok\":true"));
+}
+
+TEST(runner_expect_stacks_op_by_index_and_name_and_missing_status) {
+    fk_reset("expect stacks JokersLuck on 0 == 7\nexpect stacks JokersLuck on Lumee > 5\nexpect stacks LuckUp on 0 == 3\nexpect stacks Poison on 0 == 0\nexpect stacks LuckUp on Rat == 0\nexpect stacks LuckUp on 9 == 0\nquit\n");
+    fk_two_units_with_stacks();
+    steps_until_done(10);
+    CHECK(has(ev(0), "\"kind\":\"stacks\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"JokersLuck on 0 == 7\"")); CHECK(has(ev(0), "JokersLuck 7 on unit 0"));
+    CHECK(has(ev(1), "\"ok\":true"));
+    CHECK(has(ev(2), "\"ok\":false")); CHECK(has(ev(2), "LuckUp 2 on unit 0"));
+    CHECK(has(ev(3), "\"ok\":false")); CHECK(has(ev(3), "absent"));
+    CHECK(has(ev(4), "\"ok\":false")); CHECK(has(ev(4), "absent"));
+    CHECK(has(ev(5), "\"ok\":false")); CHECK(has(ev(5), "unit not found"));
+    CHECK(has(last_ev(), "\"expect_pass\":2")); CHECK(has(last_ev(), "\"expect_fail\":4"));
+}
+
+TEST(runner_expect_stacks_varied_needs_two_distinct_recorded_values) {
+    fk_reset("dump\nexpect stacks LuckUp on 0 varied\ndump\nexpect stacks LuckUp on 0 varied\nexpect stacks LuckUp on 0 == 5\nexpect stacks LuckUp on 0 varied\nquit\n");
+    fk_two_units_with_stacks();
+    mt_runner_step(&rr, &HOST);                 /* dump: records LuckUp 2 */
+    mt_runner_step(&rr, &HOST);                 /* varied: one value so far -> fail */
+    CHECK(has(last_ev(), "\"kind\":\"stacks\"")); CHECK(has(last_ev(), "\"ok\":false")); CHECK(has(last_ev(), "1 distinct"));
+    mt_runner_step(&rr, &HOST);                 /* dump again: still 2 */
+    mt_runner_step(&rr, &HOST);                 /* varied: still one value */
+    CHECK(has(last_ev(), "\"ok\":false"));
+    fk.units[0].stacks[0] = 5;
+    mt_runner_step(&rr, &HOST);                 /* == 5 records 5 (ok) */
+    CHECK(has(last_ev(), "\"ok\":true"));
+    mt_runner_step(&rr, &HOST);                 /* varied: 2 and 5 -> ok */
+    CHECK(has(last_ev(), "\"ok\":true")); CHECK(has(last_ev(), "2 distinct"));
 }
 
 TEST(runner_expect_status_without_combat_fails) {

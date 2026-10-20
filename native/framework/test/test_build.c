@@ -63,6 +63,14 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(b->rva_DefaultStatusSource, 0x13c4d30);
     CHECK_EQ(b->rva_data[FW_DATA_App], 0x13c4a30);
     CHECK_EQ(b->rva_data[FW_DATA_SDL_HideWindow], 0x12e82a0);
+    CHECK_EQ(b->rva_data[FW_DATA_MewDirector], 0x13dac30);   /* v4: the live MewDirector* (dev scenes need one) */
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_AddComponent_TacticsTest].expectedRva, 0x31c3e0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_SceneManager_CreateScene].expectedRva, 0x9d4950u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Scene_CreateEntity].expectedRva, 0x96b3e0u);
+    CHECK_EQ(OFF_COMPONENT_SCENEMANAGER, 0x28);
+    CHECK_EQ(OFF_SCENE_DESTROYED, 0x4b0);
+    CHECK_EQ(OFF_SCENEMANAGER_MAINSCENE, 0x18);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_AddComponent_MewDirector_test].expectedRva, 0x758650u);
     CHECK_EQ(FW_LK_COUNT, 13);
     CHECK_EQ(OFF_STATUS_STACKS, 0x5c);
     CHECK_EQ(OFF_CH_ENTITY, 0x18);

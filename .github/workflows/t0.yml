@@ -1,0 +1,70 @@
+# T0 on every PR / push to main that touches code (docs-only changes do not trigger it, so do not make these jobs
+# required in branch protection). The game is never part of CI: everything that needs Mewgenics.exe, .extracted/ or
+# Steam prints "(skipped: …)" (docs/tdd-procedure.md, tiers T1/T2). Node/React/editor tests and the pure-C native
+# host tests run on Linux.
+name: T0
+
+on:
+  pull_request:
+    paths:
+      - "editor/**"
+      - "native/**"
+      - "bindings/**"
+      - "tools/**"
+      - "mods/**"
+      - ".github/workflows/t0.yml"
+  push:
+    branches: [main]
+    paths:
+      - "editor/**"
+      - "native/**"
+      - "bindings/**"
+      - "tools/**"
+      - "mods/**"
+      - ".github/workflows/t0.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  editor:
+    name: editor (typecheck, npm test, bindings:check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run bindings:check
+
+  native:
+    name: native host tests (pure C, gcc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gcc --version
+      - run: sh native/test-all.sh
+
+  test-change:
+    name: source change comes with a test change
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - name: check-test-change
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node editor/scripts/check-test-change.ts --base ${{ github.event.pull_request.base.sha }} --head ${{ github.event.pull_request.head.sha }}

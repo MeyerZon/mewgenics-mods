@@ -29,7 +29,8 @@
 #include <stdio.h>
 #include "framework_internal.h"
 
-#define MAX_DEFS 8
+#define MAX_DEFS FW_STATUS_MAX_DEFS
+_Static_assert(FW_STATUS_MAX_DEFS == 8, "DEF_THUNKS / THUNK_ROW below have exactly 8 rows");
 #define HIER_WORDS 16
 
 typedef struct TypeHierarchy { int ids[HIER_WORDS]; uint64_t count; } TypeHierarchy;
@@ -45,6 +46,9 @@ typedef struct CustomStatus {
 
 static CustomStatus g_defs[MAX_DEFS];
 static int g_defCount = 0;
+static FwStatusTable g_table;      /* the registered names; index == slot in g_defs (fw_status_rules.c) */
+
+const FwStatusTable *status_engine_table(void) { return &g_table; }
 
 /* game functions */
 typedef void *(*fn_ApplyByName)(MsvcString *name, void *ctx, int stacks, void *src, void *p5, void *p6, char p7, char p8);
@@ -78,8 +82,8 @@ static int msvc_eq(const MsvcString *s, const char *lit) {
     return s->size == n && memcmp(msvc_str(s), lit, n) == 0;
 }
 static CustomStatus *find_def_by_string(const MsvcString *s) {
-    for (int i = 0; i < g_defCount; i++) if (msvc_eq(s, g_defs[i].name)) return &g_defs[i];
-    return NULL;
+    int i = fw_status_table_find(&g_table, msvc_str(s), s->size);
+    return i >= 0 ? &g_defs[i] : NULL;
 }
 static CustomStatus *find_def_by_vt(void **vt) {
     for (int i = 0; i < g_defCount; i++) if (g_defs[i].vt == vt) return &g_defs[i];
@@ -105,31 +109,10 @@ static void *find_status_on(void *character, const CustomStatus *d) {
 
 /* ----------------------------------------------------------------------- */
 /* name aliasing: for the duration of one lookup, make a custom status name */
-/* read as its template name, then restore the caller's string exactly.    */
-/* Custom names and template names are both SSO (<=15 chars), so the rewrite */
-/* never reallocates. We still save and restore the raw bytes in case the   */
-/* caller's std::string happened to be heap-backed from reuse.              */
+/* read as its template name, then restore the caller's string exactly —   */
+/* fw_alias_in / fw_alias_out (fw_status_rules.c, host-tested for SSO,     */
+/* heap-backed and shorter-than-template names).                           */
 /* ----------------------------------------------------------------------- */
-typedef struct AliasSave { int did; size_t size; char *dst; char bytes[32]; } AliasSave;
-
-static void alias_in(MsvcString *name, AliasSave *s) {
-    CustomStatus *d = find_def_by_string(name);
-    if (!d) { s->did = 0; return; }
-    s->did = 1;
-    s->dst = (name->cap > 15) ? name->u.ptr : name->u.buf;
-    s->size = name->size;
-    size_t keep = s->size < 31 ? s->size : 31;
-    memcpy(s->bytes, s->dst, keep); s->bytes[keep] = 0;
-    size_t n = strlen(d->def.template_name);   /* "LuckUp" (6) <= our name length */
-    memcpy(s->dst, d->def.template_name, n + 1);
-    name->size = n;
-}
-static void alias_out(MsvcString *name, AliasSave *s) {
-    if (!s->did) return;
-    size_t keep = s->size < 31 ? s->size : 31;
-    memcpy(s->dst, s->bytes, keep); s->dst[keep] = 0;
-    name->size = s->size;
-}
 
 /* The lookups, by argument shape. The std::string name is the first pointer arg except shape C (an out-struct
  * is returned via the first arg, so the name is second). All other arguments pass through untouched. */
@@ -143,11 +126,11 @@ typedef uint64_t (*fnE)(MsvcString *, void *);
  * FW_LK_COUNT and the A-E order are fixed by the manifest's FW_LK table. */
 static void *g_lk_orig[FW_LK_COUNT];
 
-#define LKA(i) static uint64_t lk##i(MsvcString *s){ AliasSave sv; alias_in(s,&sv); uint64_t r=((fnA)g_lk_orig[i])(s); alias_out(s,&sv); return r; }
-#define LKB(i) static void     lk##i(MsvcString *s,void*a,void*b,uint32_t c,void*d,void*e){ AliasSave sv; alias_in(s,&sv); ((fnB)g_lk_orig[i])(s,a,b,c,d,e); alias_out(s,&sv); }
-#define LKC(i) static void    *lk##i(void*o,MsvcString *s,char ch){ AliasSave sv; alias_in(s,&sv); void*r=((fnC)g_lk_orig[i])(o,s,ch); alias_out(s,&sv); return r; }
-#define LKD(i) static uint64_t lk##i(MsvcString *s,void*a,void*b,uint8_t c){ AliasSave sv; alias_in(s,&sv); uint64_t r=((fnD)g_lk_orig[i])(s,a,b,c); alias_out(s,&sv); return r; }
-#define LKE(i) static uint64_t lk##i(MsvcString *s,void*a){ AliasSave sv; alias_in(s,&sv); uint64_t r=((fnE)g_lk_orig[i])(s,a); alias_out(s,&sv); return r; }
+#define LKA(i) static uint64_t lk##i(MsvcString *s){ FwAliasSave sv; fw_alias_in(s,&g_table,&sv); uint64_t r=((fnA)g_lk_orig[i])(s); fw_alias_out(s,&sv); return r; }
+#define LKB(i) static void     lk##i(MsvcString *s,void*a,void*b,uint32_t c,void*d,void*e){ FwAliasSave sv; fw_alias_in(s,&g_table,&sv); ((fnB)g_lk_orig[i])(s,a,b,c,d,e); fw_alias_out(s,&sv); }
+#define LKC(i) static void    *lk##i(void*o,MsvcString *s,char ch){ FwAliasSave sv; fw_alias_in(s,&g_table,&sv); void*r=((fnC)g_lk_orig[i])(o,s,ch); fw_alias_out(s,&sv); return r; }
+#define LKD(i) static uint64_t lk##i(MsvcString *s,void*a,void*b,uint8_t c){ FwAliasSave sv; fw_alias_in(s,&g_table,&sv); uint64_t r=((fnD)g_lk_orig[i])(s,a,b,c); fw_alias_out(s,&sv); return r; }
+#define LKE(i) static uint64_t lk##i(MsvcString *s,void*a){ FwAliasSave sv; fw_alias_in(s,&g_table,&sv); uint64_t r=((fnE)g_lk_orig[i])(s,a); fw_alias_out(s,&sv); return r; }
 LKA(0) LKA(1) LKA(2) LKA(3) LKA(4) LKA(5)
 LKB(6) LKB(7) LKB(8) LKB(9)
 LKC(10)
@@ -245,27 +228,26 @@ int status_engine_install_hooks(void) {
 /* ----------------------------------------------------------------------- */
 int status_engine_register(const FwStatusDef *def) {
     if (!g_orig_ApplyByName) { fw_log("RegisterStatus: engine hooks not installed"); return 0; }
-    if (g_defCount >= MAX_DEFS) { fw_log("RegisterStatus: table full (%d)", MAX_DEFS); return 0; }
-    if (strcmp(def->template_name, "LuckUp") != 0) { fw_log("RegisterStatus(%s): only template LuckUp is supported on this build", def->name); return 0; }
-    if (strlen(def->name) > 15) { fw_log("RegisterStatus(%s): name must be at most 15 characters (SSO)", def->name); return 0; }
+    FwStatusRule why;
+    int slot = fw_status_table_add(&g_table, def, &why);   /* the rules: cap, name length, template, uniqueness */
+    if (slot < 0) { fw_log("RegisterStatus(%s): %s", def && def->name ? def->name : "?", fw_status_rule_text(why)); return 0; }
 
-    CustomStatus *d = &g_defs[g_defCount];
+    CustomStatus *d = &g_defs[slot];
     memset(d, 0, sizeof *d);
     d->def = *def;
     strncpy(d->name, def->name, sizeof d->name - 1);
     d->templateVt = g_luckUpVt;
     d->typeId = g_mj.AllocTypeIdPair(FW_OWNER);
     d->vt = (void **)HeapAlloc(GetProcessHeap(), 0, VT_SLOTS * sizeof(void *));
-    if (!d->vt) return 0;
+    if (!d->vt) { g_table.count = slot; return 0; }
     memcpy(d->vt, g_luckUpVt, VT_SLOTS * sizeof(void *));
-    for (int s = 0; s < 4; s++) d->vt[s] = g_thunks[g_defCount][s];
+    for (int s = 0; s < 4; s++) d->vt[s] = g_thunks[slot][s];
 
     TypeHierarchy *th = ((fn_GetHier)g_luckUpVt[VT_GETTYPEHIERARCHY])(NULL);
     d->hier = *th;
-    for (uint64_t i = 0; i < d->hier.count && i < HIER_WORDS; i++)
-        if ((uintptr_t)d->hier.ids[i] == g_build->luckUpTypeId) d->hier.ids[i] = (int)d->typeId;
+    fw_hier_rewrite(d->hier.ids, d->hier.count, HIER_WORDS, g_build->luckUpTypeId, (int)d->typeId);
 
-    g_defCount++;
+    g_defCount = g_table.count;
     fw_log("RegisterStatus: %s registered (template %s, type id 0x%llx, vtable %p)", d->name, def->template_name, (unsigned long long)d->typeId, (void *)d->vt);
     return 1;
 }

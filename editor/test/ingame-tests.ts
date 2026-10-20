@@ -92,7 +92,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("every directive kind parses with its line number", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const d = p.directives;
-      eq(d.length, 12);
+      eq(d.length, 18);
       eq(JSON.stringify(d[0]), JSON.stringify({ line: 7, kind: "wait", unit: "frames", n: 120 }));
       eq(JSON.stringify(d[1]), JSON.stringify({ line: 8, kind: "cmd", text: "bind JokersGambit # not a comment, part of the command" }));
       eq(JSON.stringify(d[2]), JSON.stringify({ line: 9, kind: "expect", what: "console", substr: 'No command named "bind" found', within: 5 }));
@@ -104,7 +104,56 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(JSON.stringify(d[8]), JSON.stringify({ line: 15, kind: "log", text: 'hello "world"' }));
       eq(JSON.stringify(d[9]), JSON.stringify({ line: 16, kind: "wait", unit: "turns", n: 2 }));
       eq(JSON.stringify(d[10]), JSON.stringify({ line: 17, kind: "wait", unit: "ms", n: 500 }));
-      eq(JSON.stringify(d[11]), JSON.stringify({ line: 18, kind: "quit", code: 0 }));
+      eq(JSON.stringify(d[11]), JSON.stringify({ line: 18, kind: "expect", what: "log", substr: "Save File Suffix: dev" }));
+      eq(JSON.stringify(d[12]), JSON.stringify({ line: 19, kind: "enter", scene: "TacticsTest" }));
+      eq(JSON.stringify(d[13]), JSON.stringify({ line: 20, kind: "wait", unit: "rounds", n: 1 }));
+      eq(JSON.stringify(d[14]), JSON.stringify({ line: 21, kind: "expect", what: "round", op: ">=", n: 2 }));
+      eq(JSON.stringify(d[15]), JSON.stringify({ line: 22, kind: "expect", what: "stacks", status: "JokersLuck", unit: "0", op: "==", n: 1 }));
+      eq(JSON.stringify(d[16]), JSON.stringify({ line: 23, kind: "expect", what: "stacks", status: "LuckUp", unit: "Mr Whiskers", varied: true }));
+      eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "quit", code: 0 }));
+    });
+
+    test("combat directives: wait rounds needs N >= 1; expect round needs <op> <N>; expect stacks needs <op> <N> or varied", () => {
+      assert("error" in parseDirective("wait rounds 0", 1), "rounds 0");
+      assert("error" in parseDirective("expect round 3", 1), "round without op");
+      assert("error" in parseDirective("expect stacks LuckUp on 0", 1), "stacks without op/varied");
+      assert("error" in parseDirective("expect stacks LuckUp on 0 varied now", 1), "trailing text after varied");
+      assert("error" in parseDirective("expect stacks LuckUp 0 == 1", 1), "missing on");
+      const ok = parseDirective("expect stacks LuckUp on Lumee != 0", 1) as { what: string; unit: string; op: string; n: number };
+      eq(ok.what, "stacks"); eq(ok.unit, "Lumee"); eq(ok.op, "!="); eq(ok.n, 0);
+    });
+
+    test("enter directive parses a known scene; unknown or missing scene, or extra words, are line errors", () => {
+      const d = parseDirective("enter TacticsTest", 2) as { kind: string; scene: string };
+      eq(d.kind, "enter"); eq(d.scene, "TacticsTest");
+      assert(Array.isArray(script.KNOWN_SCENES) && script.KNOWN_SCENES.includes("TacticsTest"), "KNOWN_SCENES lists TacticsTest");
+      const bad = parseScript("enter Nope\nquit\n", { owningMod: "m" });
+      assert(!bad.ok && bad.errors[0].line === 1 && /unknown scene "Nope"/.test(bad.errors[0].message), JSON.stringify(bad.errors));
+      assert("error" in parseDirective("enter", 3), "missing scene");
+      assert("error" in parseDirective("enter TacticsTest now", 3), "extra words");
+    });
+
+    test("expect log parses a quoted substring; within, bare words and an unterminated quote are line errors", () => {
+      const d = parseDirective('expect log "NO_STATUS_NAMED"', 3) as { kind: string; what: string; substr: string };
+      eq(d.kind, "expect"); eq(d.what, "log"); eq(d.substr, "NO_STATUS_NAMED");
+      for (const bad of ['expect log "x" within 5', "expect log bare", 'expect log "unterminated', "expect log"]) {
+        const r = parseDirective(bad, 9);
+        assert("error" in r, `${bad} should be an error`);
+      }
+      const p = parseScript("expect log bare\nquit\n", { owningMod: "m" });
+      assert(!p.ok && p.errors[0].line === 1, JSON.stringify(p.errors));
+    });
+
+    test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
+      const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
+      const lines = p.body.split("\n");
+      eq(lines.length - 1, 18, "one body line per directive (plus the trailing newline)");
+      assert(!lines.some((l) => l.startsWith("expect log")), "the DLL never sees expect log");
+      assert(lines[11]!.startsWith("# runner: expect log"), `placeholder comment at the directive's position, got ${JSON.stringify(lines[11])}`);
+      eq(lines[12], "enter TacticsTest", "enter is a DLL-side directive and passes through");
+      eq(lines[13], "wait rounds 1"); eq(lines[16], 'expect stacks LuckUp on "Mr Whiskers" varied');
+      eq(lines[17], "quit 0");
+      assert(typeof script.isRunnerSide === "function" && script.isRunnerSide(p.directives[11]!) && !script.isRunnerSide(p.directives[0]!), "isRunnerSide marks only expect log");
     });
 
     test("all six units ops parse; a bad op is an error with its line", () => {
@@ -215,6 +264,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.expects.failed, 0);
       eq(r.units!.count, 2);
       eq((r.units!.list as { name: string }[])[0]!.name, "Lumee");
+      eq(JSON.stringify((r.units!.list as { stacks: number[] }[]).map((u) => u.stacks)), JSON.stringify([[1], []]), "units snapshot: stacks parallel to statuses");
     });
     test("fail fixture lists failures with line, kind, arg, detail", () => {
       const r = parseResults(fixture("result-fail.jsonl"));
@@ -222,6 +272,68 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.expects.failed, 1);
       eq(r.expects.passed, 1);
       eq(JSON.stringify(r.expects.failures[0]), JSON.stringify({ line: 3, kind: "noconsole", arg: "No command named", detail: "found in console line 0" }));
+    });
+    test("enter event is surfaced as result.enter (line, name, ok, detail); absent -> null", () => {
+      const text = [
+        '{"ev":"start","harness":"mewtest 0.1.0","t":0,"frame":0}',
+        '{"ev":"enter","line":2,"name":"TacticsTest","ok":false,"detail":"no MewDirector","t":40,"frame":3}',
+        '{"ev":"end","code":1,"reason":"enter_failed","frames":3,"turns":0,"elapsed_ms":40,"expect_pass":0,"expect_fail":0,"t":40,"frame":3}',
+      ].join("\n") + "\n";
+      const r = parseResults(text) as unknown as { enter: { line: number; name: string; ok: boolean; detail: string } | null; end: { reason?: string } | null };
+      assert(r.enter !== null && r.enter !== undefined, "result.enter present");
+      eq(JSON.stringify(r.enter), JSON.stringify({ line: 2, name: "TacticsTest", ok: false, detail: "no MewDirector" }));
+      eq(r.end!.reason, "enter_failed");
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { enter: unknown }).enter, null, "no enter event -> null");
+    });
+    test("OBSERVED 2026-10-20 fixture: enter TacticsTest -> run commands registered, a turn, 6 units (result-enter-fight.jsonl + console-tacticstest-listcmds.txt)", () => {
+      const r = parseResults(fixture("result-enter-fight.jsonl")) as unknown as { enter: { ok: boolean; name: string } | null; turns: number; units: { available: boolean; count: number; round: number; list: { name: string; class: string; faction: number }[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null; popups: unknown[] };
+      assert(!!r.enter && r.enter.ok && r.enter.name === "TacticsTest", `enter ok: ${JSON.stringify(r.enter)}`);
+      eq(r.turns, 1, "TurnControl::NextTurn fired once before the dump");
+      assert(!!r.units && r.units.available && r.units.count === 6 && r.units.round === 1, `units: ${JSON.stringify(r.units && { available: r.units.available, count: r.units.count, round: r.units.round })}`);
+      eq(r.units!.list[0]!.name, "Antonieta"); eq(r.units!.list[0]!.class, "Thief"); eq(r.units!.list[0]!.faction, 1);
+      eq(r.expects.passed, 3); eq(r.expects.failed, 0);
+      eq(r.end!.code, 0); eq(r.end!.reason, "quit");
+      eq(r.popups.length, 0, "no popup once the party is generated instead of read from a saved winning team");
+      const cmds = fixture("console-tacticstest-listcmds.txt").split(/\r?\n/).filter(Boolean);
+      eq(cmds.length, 85, "84 commands + the Executed: line");
+      for (const c of ["listcmds", "spawn arg0", "spawntile arg0", "load arg0", "bind arg0", "bind_passive arg0", "status arg0", "passive arg0", "win", "killall", "takeover", "noui", "equip arg0", "weather arg0", "tileset arg0", "skip_tutorial", "set_day arg0"]) assert(cmds.includes(c), `TacticsTest/MewDirector command ${c} listed`);
+      eq(cmds[cmds.length - 1], "Executed: listcmds");
+    });
+    test("OBSERVED 2026-10-20 fixture: combat-asserts — stacks in the units snapshot, round 2 after wait rounds, spawn adds a unit (result-combat-asserts.jsonl)", () => {
+      const r = parseResults(fixture("result-combat-asserts.jsonl")) as unknown as { turns: number; units: { round: number; count: number; list: { name: string; faction: number; statuses: string[]; stacks: number[] }[] } | null; expects: { passed: number; failed: number }; events: { ev: string; kind?: string; actual?: number; detail?: string }[]; end: { code: number } | null };
+      eq(r.turns, 6, "turns 2..6 happened on their own (the player cats are Uncontrollable)");
+      assert(!!r.units && r.units.round === 2 && r.units.count === 7, `last dump: ${JSON.stringify(r.units && { round: r.units.round, count: r.units.count })}`);
+      const withStacks = r.units!.list.filter((u) => u.statuses.length && u.statuses.length === u.stacks.length);
+      assert(withStacks.length >= 2 && withStacks.some((u) => u.statuses.includes("CharismaUp") && u.stacks[u.statuses.indexOf("CharismaUp")]! > 0), `stacks parallel to statuses: ${JSON.stringify(withStacks.map((u) => [u.statuses, u.stacks]))}`);
+      assert(r.units!.list.some((u) => u.name === "Lil' Rat" && u.faction === 2), "the spawned opponent is in the snapshot");
+      const roundsWait = r.events.find((e) => e.ev === "wait" && e.kind === "rounds");
+      assert(!!roundsWait && roundsWait.actual === 1, "wait rounds 1 completed");
+      assert(r.events.some((e) => e.ev === "expect" && e.kind === "round" && /round 2/.test(e.detail || "")), "expect round >= 2 saw round 2");
+      eq(r.expects.failed, 0); eq(r.end!.code, 0);
+    });
+    test("OBSERVED 2026-10-20 fixture: luck-rerolls — the native JokersLuck status rerolls its stacks every turn (result-luck-rerolls.jsonl)", () => {
+      const r = parseResults(fixture("result-luck-rerolls.jsonl")) as unknown as { events: { ev: string; kind?: string; ok?: boolean; detail?: string; list?: { name: string; statuses: string[]; stacks: number[] }[] }[]; expects: { passed: number; failed: number }; end: { code: number } | null };
+      const dumps = r.events.filter((e) => e.ev === "units");
+      eq(dumps.length, 4);
+      const luck = dumps.map((d) => { const u = d.list![0]!; const k = u.statuses.indexOf("JokersLuck"); return k < 0 ? null : u.stacks[k]!; });
+      assert(luck.every((v) => v !== null), `JokersLuck on the first cat in every dump: ${JSON.stringify(luck)}`);
+      eq(luck[0], 1, "1 stack at battle start (StatusOnBattleStart)");
+      assert(new Set(luck).size >= 2, `the stacks change across rounds: ${JSON.stringify(luck)}`);
+      const varied = r.events.find((e) => e.ev === "expect" && e.kind === "stacks" && /varied/.test(e.detail || "") || (e.ev === "expect" && e.kind === "stacks" && /distinct/.test(e.detail || "")));
+      assert(!!varied && varied.ok === true, `expect stacks varied ok: ${JSON.stringify(varied)}`);
+      assert(r.events.some((e) => e.ev === "expect" && e.kind === "noconsole" && e.ok === true), "bind JokersGambit was accepted (no 'No command named')");
+      eq(r.expects.failed, 0); eq(r.end!.code, 0);
+    });
+    test("popup events are collected as result.popups (title, text, frame); none -> empty", () => {
+      const text = [
+        '{"ev":"start","harness":"mewtest 0.1.0","t":0,"frame":0}',
+        '{"ev":"popup","title":"WARNING","text":"no saved winning teams - win at least one run first!","t":3531,"frame":519}',
+        '{"ev":"popup","title":"ERROR","text":"More than one mew director","t":4031,"frame":520}',
+        '{"ev":"end","code":3,"reason":"crash","frames":520,"turns":0,"elapsed_ms":4100,"expect_pass":0,"expect_fail":0,"t":4100,"frame":520}',
+      ].join("\n") + "\n";
+      const r = parseResults(text) as unknown as { popups: { title: string; text: string; frame: number }[] };
+      eq(JSON.stringify(r.popups), JSON.stringify([{ title: "WARNING", text: "no saved winning teams - win at least one run first!", frame: 519 }, { title: "ERROR", text: "More than one mew director", frame: 520 }]));
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { popups: unknown[] }).popups.length, 0);
     });
     test("crash fixture exposes the crash event", () => {
       const r = parseResults(fixture("result-crash.jsonl"));
@@ -273,6 +385,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.findings.length, 0);
       eq(r.saveSuffix, "dev");
       eq(r.modPaths.join("|"), "C:\\repo\\mods\\dev-sandbox|C:\\repo\\mods\\jokers-luck");
+    });
+    test("checkLogExpects: matches after the [file: ...] prefix is stripped, reports the missing substring and line, and an absent debug.log", () => {
+      const check = (logs as unknown as { checkLogExpects?: (text: string | null, e: { line: number; substr: string }[]) => { line: number; substr: string; ok: boolean; detail: string }[] }).checkLogExpects;
+      assert(typeof check === "function", "checkLogExpects exported from logs.ts");
+      const text = fixture("debug-clean.log");
+      const r = check!(text, [{ line: 4, substr: "Save File Suffix: dev" }, { line: 9, substr: "NOT IN THIS LOG" }]);
+      eq(r.length, 2);
+      assert(r[0]!.ok && /matched debug\.log line \d+/.test(r[0]!.detail), JSON.stringify(r[0]));
+      assert(!r[1]!.ok && r[1]!.line === 9 && /not found in debug\.log/.test(r[1]!.detail), JSON.stringify(r[1]));
+      assert(!check!(text, [{ line: 1, substr: "[file:" }])[0]!.ok, "the [file: …] prefix is not part of the message");
+      const absent = check!(null, [{ line: 2, substr: "x" }]);
+      assert(!absent[0]!.ok && /debug\.log absent/.test(absent[0]!.detail), JSON.stringify(absent));
+      eq(check!(text, []).length, 0);
     });
     test("checkSaveSuffix: ok / missing / different", () => {
       assert(checkSaveSuffix("dev", "dev").ok, "same");
@@ -428,6 +553,21 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(a.indexOf("-mewtest_clean") > a.indexOf("-mewtest_timeout") && a.indexOf("-mewtest_clean") < iMod, "-mewtest_clean after -mewtest_timeout and before -modpaths");
       eq(a.slice(iMod).join("|"), "-modpaths|C:\\re po\\mods\\jokers-luck|C:\\re po\\mods\\dev-sandbox");
       assert(!l.fake, "not fake");
+    });
+    test("buildLaunch is OS-neutral: Windows-shaped paths join with backslashes and POSIX-shaped paths with slashes, on any host", () => {
+      // The launched game is always a Windows process, but the suite (and CI) may run on Linux: the joins must follow
+      // the shape of the paths given, not the host. Windows half (ctx above) is asserted by the test before this one.
+      const posix = { gameDir: "/opt/mew", scriptPath: "/tmp/r1/script.mewtest", outPath: "/tmp/r1/result.jsonl", env: {}, modsDir: "/repo/mods" };
+      const l = buildLaunch(plan, posix);
+      eq(l.command, "/opt/mew/Mewgenics.exe");
+      eq(l.args.slice(l.args.indexOf("-modpaths")).join("|"), "-modpaths|/repo/mods/jokers-luck|/repo/mods/dev-sandbox");
+      const w = buildLaunch(plan, ctx);
+      eq(w.command, "C:\\Games\\Mew genics\\Mewgenics.exe");
+      eq(w.args[w.args.length - 1], "C:\\re po\\mods\\dev-sandbox");
+      const throws = (fn: () => void): unknown => { try { fn(); return null; } catch (e) { return e; } };
+      assert(throws(() => buildLaunch(plan, { ...posix, modsDir: "/x/saves/mods" })) instanceof LaunchError, "posix saves path refused");
+      assert(throws(() => buildLaunch(plan, { ...ctx, modsDir: "C:\\x\\saves\\mods" })) instanceof LaunchError, "windows saves path refused");
+      assert(throws(() => buildLaunch(plan, { ...posix, scriptPath: "rel/script.mewtest" })) instanceof LaunchError, "posix relative script refused");
     });
     test("buildLaunch: env adds both Steam ids and keeps the caller's env; hide false -> 0", () => {
       const l = buildLaunch(plan, ctx);
@@ -640,9 +780,68 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       expectV("no-result no end", { preflight: pre, exit: exit(0), result: res({ end: null }), logs: logs({}), safety: safe }, "no-result");
       expectV("log-errors", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ debugLog: { findings: [{ marker: "NO_STATUS_NAMED", line: 1, text: "x" }] } }), safety: safe }, "log-errors");
       expectV("pass", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe }, "pass");
+      // popups the harness dismissed are appended to a non-pass reason (they usually explain it)
+      const popups = [{ title: "WARNING", text: "no saved winning teams - win at least one run first!", frame: 519 }];
+      const crashWithPopup = decideVerdict({ preflight: pre, exit: exit(3), result: res({ end: { code: 3, reason: "crash" }, popups } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(crashWithPopup.verdict, "crash");
+      assert(/popup WARNING: no saved winning teams/.test(crashWithPopup.reason), crashWithPopup.reason);
+      const passWithPopup = decideVerdict({ preflight: pre, exit: exit(0), result: res({ popups } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(passWithPopup.verdict, "pass", "a dismissed popup does not fail a run by itself");
+      assert(/1 popup/.test(passWithPopup.reason), passWithPopup.reason);
+      // enter: end reason enter_failed (code 1) -> fail naming the scene, line and detail; enter_unavailable (code 4) -> harness-error
+      const enterFail = decideVerdict({ preflight: pre, exit: exit(1), result: res({ end: { code: 1, reason: "enter_failed" }, expects: { passed: 0, failed: 0, failures: [] }, enter: { line: 2, name: "TacticsTest", ok: false, detail: "no MewDirector" } } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(enterFail.verdict, "fail", "enter_failed -> fail");
+      assert(/enter TacticsTest failed at line 2: no MewDirector/.test(enterFail.reason), enterFail.reason);
+      const enterUnavail = decideVerdict({ preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "enter_unavailable" }, enter: { line: 2, name: "TacticsTest", ok: false, detail: "symbols missing" } } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(enterUnavail.verdict, "harness-error", "enter_unavailable -> harness-error");
+      assert(/enter_unavailable|symbols missing/.test(enterUnavail.reason), enterUnavail.reason);
+      // runner-side expect log: a miss is a fail naming line and substring; log-errors still wins; all ok -> pass
+      const missLog = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 5, substr: "Luck changed", ok: false, detail: "not found in debug.log" }] });
+      eq(missLog.verdict, "fail", "expect log miss -> fail");
+      assert(/expect log failed at line 5/.test(missLog.reason) && /Luck changed/.test(missLog.reason), missLog.reason);
+      expectV("log-errors beats a missed expect log", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ debugLog: { findings: [{ marker: "NO_STATUS_NAMED", line: 1, text: "x" }] } }), safety: safe, logExpects: [{ line: 5, substr: "x", ok: false, detail: "not found in debug.log" }] }, "log-errors");
+      const okLog = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 5, substr: "x", ok: true, detail: "matched debug.log line 2" }] });
+      eq(okLog.verdict, "pass", "expect log ok -> pass");
+      assert(/1 log expectation/.test(okLog.reason), okLog.reason);
       // crash beats fail/timeout; safety beats crash
       expectV("crash > fail", { preflight: pre, exit: exit(1), result: res({ crash: { code: "x" }, end: { code: 1 } }), logs: logs({}), safety: safe }, "crash");
       expectV("safety > crash", { preflight: pre, exit: exit(3), result: res({ crash: { code: "x" }, end: { code: 3 } }), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");
+    });
+
+    const enterPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 1s\nenter TacticsTest\nwait turns 1\nexpect units >= 2\nquit\n", { owningMod: "jokers-luck", name: "enter-fight" });
+    assert(enterPlan.ok, `enter plan parses: ${JSON.stringify(enterPlan.errors)}`);
+    const enterPass = await run("enter-pass", {}, { plan: enterPlan });
+    test("fake enter-pass -> pass; result.enter carries the enter event", () => {
+      eq(enterPass.verdict, "pass", enterPass.reason);
+      const en = (enterPass.result as unknown as { enter?: { ok: boolean; name: string; line: number } }).enter;
+      assert(!!en && en.ok && en.name === "TacticsTest" && en.line === 3, `result.enter: ${JSON.stringify(en)}`);
+    });
+    const enterFailRun = await run("enter-fail", {}, { plan: enterPlan });
+    test("fake enter-fail -> verdict fail naming the scene and the harness's detail", () => {
+      eq(enterFailRun.verdict, "fail", enterFailRun.reason);
+      assert(/enter TacticsTest failed at line 3/.test(enterFailRun.reason) && /no MewDirector/.test(enterFailRun.reason), enterFailRun.reason);
+    });
+    const enterUnavailRun = await run("enter-unavailable", {}, { plan: enterPlan });
+    test("fake enter-unavailable -> harness-error naming enter_unavailable", () => {
+      eq(enterUnavailRun.verdict, "harness-error", enterUnavailRun.reason);
+      assert(/enter_unavailable|symbol/.test(enterUnavailRun.reason), enterUnavailRun.reason);
+    });
+
+    const logPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 1s\ncmd listcmds\nexpect console \"listcmds\"\nexpect log \"ZZ custom marker\"\nquit\n", { owningMod: "jokers-luck", name: "smoke" });
+    const logHit = await run("pass", { FAKE_GAME_DEBUG_LINES: "something else|ZZ custom marker here" }, { plan: logPlan });
+    test("fake pass with FAKE_GAME_DEBUG_LINES -> expect log matched -> pass, report.logExpects ok, DLL body has the comment placeholder", () => {
+      eq(logHit.verdict, "pass", logHit.reason);
+      const le = (logHit as unknown as { logExpects?: { ok: boolean; line: number }[] }).logExpects;
+      assert(Array.isArray(le) && le.length === 1 && le[0]!.ok && le[0]!.line === 5, `logExpects: ${JSON.stringify(le)}`);
+      eq(logHit.result.expects.passed, 1, "the DLL's own count is untouched");
+      assert(/1 log expectation/.test(logHit.reason), logHit.reason);
+      const copied = readFileSync(logHit.artifacts.script!, "utf8");
+      assert(copied.includes("# runner: expect log") && !copied.split("\n").some((l) => l.startsWith("expect log")), copied);
+    });
+    const logMiss = await run("pass", {}, { plan: logPlan });
+    test("fake pass without the line -> fail naming the expect log line and substring", () => {
+      eq(logMiss.verdict, "fail", logMiss.reason);
+      assert(/expect log failed at line 5/.test(logMiss.reason) && /ZZ custom marker/.test(logMiss.reason), logMiss.reason);
     });
 
     const pass = await run("pass");

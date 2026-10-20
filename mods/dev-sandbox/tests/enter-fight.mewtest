@@ -1,0 +1,16 @@
+mods: dev-sandbox
+timeout: 40s
+# TDD target 1: enter a fight from the main menu through the harness. `enter TacticsTest` replays the dev menu's
+# "TacticsTest" entry (a new "Battle" scene with the TacticsTest driver component, whose init registers the run
+# console commands). No save file is opened: the boot-time test director (test00.sav) already exists.
+wait frames 120
+enter TacticsTest
+wait frames 60
+cmd listcmds
+expect console "bind" within 5
+expect console "Executed: listcmds"
+log "TacticsTest is up: its init registered the run console commands"
+wait turns 1
+dump
+expect units >= 2
+quit

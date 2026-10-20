@@ -30,10 +30,11 @@ export function isInside(parent: string, child: string): boolean {
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
-/** True if any path segment is a `saves` directory (case-insensitive). */
+/** True if any path segment is a `saves` directory (case-insensitive); both separators count, so a Windows-shaped
+ * path is caught on a Linux host too. */
 export function touchesSaves(p: string): boolean {
   return resolve(p)
-    .split(sep)
+    .split(/[\\/]/)
     .some((seg) => seg.toLowerCase() === "saves");
 }
 

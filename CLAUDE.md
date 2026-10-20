@@ -44,6 +44,9 @@ These are enforced in code and in the launch flow; keep them intact.
   `origin`). This applies to everything — code, docs, this file, one-line fixes.
 - Flow: create a branch (`feat/...`, `fix/...`, `docs/...`) → commit there → push → open a PR with `gh pr create` →
   stop and report. Do not merge the PR yourself; merging requires the owner's explicit, per-PR say-so.
+- CI (`.github/workflows/t0.yml`, Linux runners, never the game) runs T0 on PRs touching `editor/`, `native/`,
+  `bindings/`, `tools/` or `mods/`, and fails a source change that has no test change unless the PR body or a
+  commit says `[no-test-change: <reason>]` (`editor/scripts/check-test-change.ts`). Watch it with `gh pr checks`.
 - If you find yourself on `main`/`master` with uncommitted work, move it to a branch (`git switch -c <branch>`) before
   committing. Never `git push` to `main`/`master`, and never force-push anything.
 
@@ -103,7 +106,8 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
-  and generated tables, the harness's modules; 65 checks, `-Werror`), no game needed. Each suite is also runnable as
+  and generated tables, the status definition rules, the harness's modules; 79 checks, `-Werror`), no game needed.
+  `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
 - `tools/install-mewjector.bat` installs a user-verified Mewjector `version.dll` + `native/chainloader.ini` into the
   game folder.
@@ -173,9 +177,10 @@ registered name `JokersLuck`. See `docs/data-mods.md` "Pairing data with a nativ
 **The in-game harness is the T2 tier.** `mewtest.dll` (`native/mods/test-harness/`) runs `.mewtest` scripts inside the
 game through the real console dispatcher and writes a JSON-lines result; the editor's runner (`editor/src/core/ingame/`)
 launches, scans the logs, hashes the real save and decides the verdict. Contracts (grammar, events, exit codes,
-verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with that file. Known limit: only the engine's
-11 console commands exist at the main menu; entering a run via console is an open item, so combat assertions are not
-yet possible.
+verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with that file. Only the engine's 11 console
+commands exist at the main menu; `enter TacticsTest` (2026-10-20) replays the dev menu's test-fight button inside the
+DLL, after which the run commands (`spawn`, `bind`, `load`, `win`, …) exist, turns fire and `dump` / `expect units` /
+`expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry").
 
 Read `docs/engine-map.md` (binary facts, build identity, function RVAs, status model), `docs/data-mods.md` (overlay
 semantics and content shapes), `docs/ingame-testing.md` (the harness), `docs/binding-port.md` (the bindings manifest and

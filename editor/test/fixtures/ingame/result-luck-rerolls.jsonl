@@ -1,0 +1,33 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"<run>/script.mewtest","out":"<run>/result.jsonl","pid":29516,"hide":1,"timeout_ms":120000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":1203,"frame":120}
+{"ev":"enter","line":2,"name":"TacticsTest","ok":true,"detail":"scene=000001f63b5e5a98 entity=00000200e9ad8630 component=00000202ae480008 manager=000001f639acf730 director=000001fe26600008 GetGame(console)=000001fe26600008 director(after init)=000001fe26600008","t":3360,"frame":864}
+{"ev":"turn","n":1,"round":1,"t":4297,"frame":993}
+{"ev":"wait","line":3,"kind":"turns","n":1,"actual":1,"t":4297,"frame":993}
+{"ev":"cmd","line":4,"text":"bind JokersGambit","t":4313,"frame":994}
+{"ev":"expect","line":5,"kind":"noconsole","arg":"No command named","ok":true,"detail":"not found in 1 console line(s) since the last cmd","t":4313,"frame":995}
+{"ev":"expect","line":6,"kind":"status","arg":"JokersLuck on 0","ok":true,"detail":"JokersLuck present on unit 0 \"Antonieta\"","t":4313,"frame":996}
+{"ev":"expect","line":7,"kind":"stacks","arg":"JokersLuck on 0 >= 1","ok":true,"detail":"JokersLuck 1 on unit 0 \"Antonieta\"","t":4328,"frame":997}
+{"ev":"units","available":true,"round":1,"count":6,"list":[{"i":0,"name":"Antonieta","class":"Thief","faction":1,"move":0,"act":0,"turnkind":0,"statuses":["JokersLuck"],"stacks":[1]},{"i":1,"name":"Shadok","class":"Mage","faction":1,"move":0,"act":0,"turnkind":0,"statuses":["JokersLuck"],"stacks":[1]},{"i":2,"name":"Ziva","class":"Medic","faction":1,"move":0,"act":0,"turnkind":0,"statuses":["JokersLuck"],"stacks":[1]},{"i":3,"name":"Mone","class":"Hunter","faction":1,"move":0,"act":0,"turnkind":0,"statuses":["JokersLuck"],"stacks":[1]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]}],"t":4328,"frame":998}
+{"ev":"turn","n":2,"round":1,"t":5594,"frame":1324}
+{"ev":"turn","n":3,"round":1,"t":10391,"frame":2507}
+{"ev":"turn","n":4,"round":1,"t":15078,"frame":3654}
+{"ev":"turn","n":5,"round":1,"t":18328,"frame":4455}
+{"ev":"turn","n":6,"round":2,"t":18375,"frame":4466}
+{"ev":"wait","line":9,"kind":"rounds","n":1,"actual":1,"t":18375,"frame":4466}
+{"ev":"units","available":true,"round":2,"count":6,"list":[{"i":0,"name":"Antonieta","class":"Thief","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","ConjureBonusAbility"],"stacks":[10,1]},{"i":1,"name":"Shadok","class":"Mage","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp"],"stacks":[-2,3]},{"i":2,"name":"Ziva","class":"Medic","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","ConjureBonusAbility","CharismaUp"],"stacks":[3,1,3]},{"i":3,"name":"Mone","class":"Hunter","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","ConjureBonusAbility","CharismaUp"],"stacks":[9,1,2]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":6,"statuses":[],"stacks":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":6,"statuses":[],"stacks":[]}],"t":18375,"frame":4467}
+{"ev":"turn","n":7,"round":2,"t":25594,"frame":6245}
+{"ev":"turn","n":8,"round":2,"t":30391,"frame":7427}
+{"ev":"turn","n":9,"round":2,"t":33641,"frame":8222}
+{"ev":"turn","n":10,"round":2,"t":38328,"frame":9382}
+{"ev":"turn","n":11,"round":3,"t":38375,"frame":9395}
+{"ev":"wait","line":11,"kind":"rounds","n":1,"actual":1,"t":38375,"frame":9395}
+{"ev":"units","available":true,"round":3,"count":6,"list":[{"i":0,"name":"Antonieta","class":"Thief","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp","ConjureBonusAbility"],"stacks":[7,4,1]},{"i":1,"name":"Shadok","class":"Mage","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp"],"stacks":[6,6]},{"i":2,"name":"Ziva","class":"Medic","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp","ConjureBonusAbility"],"stacks":[2,5,1]},{"i":3,"name":"Mone","class":"Hunter","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp","ConjureBonusAbility"],"stacks":[-10,5,1]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":6,"statuses":[],"stacks":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":6,"statuses":[],"stacks":[]}],"t":38391,"frame":9396}
+{"ev":"turn","n":12,"round":3,"t":42719,"frame":10476}
+{"ev":"turn","n":13,"round":3,"t":48938,"frame":12023}
+{"ev":"turn","n":14,"round":3,"t":52203,"frame":12824}
+{"ev":"turn","n":15,"round":3,"t":56891,"frame":13983}
+{"ev":"turn","n":16,"round":4,"t":56938,"frame":13994}
+{"ev":"wait","line":13,"kind":"rounds","n":1,"actual":1,"t":56938,"frame":13994}
+{"ev":"units","available":true,"round":4,"count":6,"list":[{"i":0,"name":"Antonieta","class":"Thief","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp","ConjureBonusAbility"],"stacks":[9,6,1]},{"i":1,"name":"Shadok","class":"Mage","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp"],"stacks":[10,10]},{"i":2,"name":"Ziva","class":"Medic","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp","ConjureBonusAbility"],"stacks":[4,7,1]},{"i":3,"name":"Mone","class":"Hunter","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["JokersLuck","CharismaUp","ConjureBonusAbility"],"stacks":[-5,8,1]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":6,"statuses":[],"stacks":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":6,"statuses":[],"stacks":[]}],"t":56938,"frame":13995}
+{"ev":"expect","line":15,"kind":"stacks","arg":"JokersLuck on 0 varied","ok":true,"detail":"JokersLuck 9 on unit 0 \"Antonieta\"; 2 distinct value(s) recorded","t":56953,"frame":13996}
+{"ev":"end","code":0,"reason":"quit","frames":13997,"turns":16,"elapsed_ms":56953,"expect_pass":4,"expect_fail":0,"t":56953,"frame":13997}

@@ -21,9 +21,15 @@ layer, which tier of test covers what, where a human still has to look, and what
   `tsc --noEmit` (strict TypeScript, no JSDoc typing left). The overlay engine's oracle is the decompiled
   `Gon_merge_{a,b,c}.c`.
 - **Data mods** (`mods/`): the validator (reference integrity, localization, overlay targets, merge preview) is the T0/T1
-  test; the harness load smoke is the T2 test (no `NO_*_NAMED` / `GON_ERROR` marker, framework active).
+  test; the harness load smoke is the T2 test (no `NO_*_NAMED` / `GON_ERROR` marker, framework active). Every validator
+  finding code is pinned at T0 by `editor/test/validator-tests.ts` on the synthetic base and fixture mods under
+  `editor/test/fixtures/validator/` (one mod per code, plus a clean one); the sample mods against the real
+  `.extracted/` remain the T1 check.
 - **Native framework**: the signature scanner is a pure unit with 13 host tests; everything else is verified by the
-  harness run (15 symbols resolve, hooks install, Joker's Luck registers).
+  harness run (the symbols resolve, hooks install, Joker's Luck registers) and, since 2026-10-20, in a real fight:
+  `mods/jokers-luck/tests/luck-rerolls.mewtest` enters a test fight (`enter TacticsTest`), gives the cats the status
+  at battle start (`mods/_jokersluck-test/`, test-only) and asserts the stacks change across rounds
+  (`expect stacks JokersLuck on 0 varied`).
 - **Harness DLL**: 46 host tests for the pure modules (incl. the watchdog's exit decision); the glue by the real runs
   recorded in `docs/ingame-testing.md`.
 - **Bindings** (`bindings/<build>.json`): T0 on fake PE images (scanner parity with `fw_sig.c`, wildcarder, RTTI /
@@ -37,7 +43,7 @@ layer, which tier of test covers what, where a human still has to look, and what
 | Gap | Closest automated check | Human step |
 |---|---|---|
 | Visual correctness of SWF art, text fit, UI look | SWF loads without a loader fault (`log-errors` / `crash` verdicts), Playwright asserts behaviour, not appearance | look at it; say so in the PR's T3 list |
-| Combat behaviour of a mod (e.g. "luck rerolls every turn") | **blocked until the console can enter a run from the main menu** (`docs/ingame-testing.md`); then `expect status` / `dump` per turn | play it; record the console transcript |
+| Combat behaviour of a mod (e.g. "luck rerolls every turn") | `enter TacticsTest` puts the harness into a test fight (`docs/ingame-testing.md`); then `expect status` / `expect units` / `dump` per turn | feel and balance: play it |
 | Balance, fun | none | play |
 | Reverse-engineering claims | none as claims; they become tests when turned into a signature row, a golden merge case, a log-marker fixture or an offset the harness reads | — |
 
@@ -65,8 +71,18 @@ Fixtures are hand-written excerpts shaped like the real thing (log lines, JSONL,
 Never commit game assets, saves or exe bytes; the only game-derived data in git is the short byte signatures in
 `bindings/`. T1 tests read the real files in place and skip when they are absent.
 
-## Enforcement (current: convention; see `TODO.md` for the mechanical options)
+## Enforcement (mechanical since 2026-10-20, plus convention)
 
+- **CI runs T0** (`.github/workflows/t0.yml`) on every PR and push to `main` that touches `editor/`, `native/`,
+  `bindings/`, `tools/` or `mods/`, on Linux runners: `npm run typecheck`, `npm test`, `npm run bindings:check` and
+  the native host suites via `native/test-all.sh` (the POSIX twin of `test-all.bat`). The game is never part of CI;
+  everything that needs the exe, `.extracted/` or Steam prints `(skipped: …)` there. Docs-only PRs do not trigger
+  it, so the jobs are not "required" checks.
+- **A source change needs a test change**: the `test-change` job runs `editor/scripts/check-test-change.ts` over
+  the PR's diff. A file under `editor/src/`, `native/*/src/` or `mods/<mod>/` (outside `tests/`) must come with a
+  file under `editor/test/`, `editor/tests/`, `native/**/test/` or `mods/<mod>/tests/`, or the PR body / a commit
+  message carries `[no-test-change: <reason>]`. Run it locally with
+  `node editor/scripts/check-test-change.ts --base origin/main --head HEAD`.
 - PR body must carry the evidence table; a PR without it is sent back.
 - `npm test`, `npm run typecheck` and `native\test-all.bat` must be green before `gh pr create`.
 - A change to `mods/`, `native/framework/`, `native/mods/` or `bindings/` must include a T2 run (or an explicit

@@ -1,0 +1,6 @@
+Foo {
+	variant_of Spin
+	meta {
+		name KEYWORD_PARTIAL
+	}
+}

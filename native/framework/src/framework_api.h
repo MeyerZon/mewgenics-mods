@@ -35,6 +35,14 @@ typedef enum FwSymbol {
     FW_SYM_DebugConsole_init,           /* void (DebugConsole* this, std::string name); rcx = the console instance */
     FW_SYM_ApplicationBase_FrameBegin,  /* void (ApplicationBase*) — once per frame on the main thread */
     FW_SYM_string_Allocate,             /* void* std::_Allocate<16>(size_t bytes) — pairs with string_TidyDeallocate */
+    /* v4: run entry through the dev menu's scene drivers (test harness `enter`) */
+    FW_SYM_SceneManager_CreateScene,    /* Scene* (SceneManager*, std::string* name) — by-value string, callee destroys */
+    FW_SYM_Scene_CreateEntity,          /* Entity* (Scene*) — NULL while the scene is being destroyed */
+    FW_SYM_AddComponent_TacticsTest,    /* TacticsTest* (Scene*, Entity*) — AddComponent<TacticsTest> + TacticsTest::init */
+    FW_SYM_Component_GetGame,           /* MewGame* (Component*) */
+    FW_SYM_TacticsTest_init,            /* reference only: registers the run console commands (bind, load, win, …) */
+    FW_SYM_MewDirector_init,            /* reference only: void (MewDirector*, std::string name) — opens/creates that save */
+    FW_SYM_AddComponent_MewDirector_test, /* MewDirector* (Scene*, Entity*) — the test director on test00.sav, as the load path makes it */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -50,6 +58,7 @@ typedef enum FwData {
     FW_DATA_SDL_PollEvent,
     FW_DATA_SDL_CreateWindow,
     FW_DATA_SDL_CreateWindowWithProperties,
+    FW_DATA_MewDirector,                       /* MewDirector* global; non-null at the main menu of a dev launch (test director) */
     FW_DATA_COUNT_
 } FwData;
 

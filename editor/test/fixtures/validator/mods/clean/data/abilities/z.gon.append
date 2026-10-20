@@ -1,0 +1,13 @@
+Foo {
+	variant_of Spin
+	template Melee
+	meta {
+		name ABILITY_SPIN
+		class Fighter
+	}
+	damage_instance {
+		effects {
+			LuckUp 1
+		}
+	}
+}

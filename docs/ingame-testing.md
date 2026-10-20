@@ -45,7 +45,8 @@ the runner always emits
 ## Script format (`.mewtest`)
 
 Header lines `key: value` end at the first blank, comment or directive line. The runner owns the header and strips
-it; the DLL only ever sees directives (it tolerates whole-line `#` comments). Scripts committed with a mod live in
+it; the DLL only ever sees directives (it tolerates whole-line `#` comments) — a runner-side directive such as
+`expect log` is passed to the DLL as a `# runner: …` comment so the body's line numbers stay the script's. Scripts committed with a mod live in
 `mods/<mod>/tests/*.mewtest`; inline scripts (MCP `script`) are allowed too.
 
 ```
@@ -57,11 +58,20 @@ clean: false                     # default false: ExitProcess right after the en
                                  # flag and let the game shut down; the DLL terminates after 3 s, the runner kills after 5 s
 
 cmd <rest of line verbatim, 1..4078 bytes>       run a debug-console command
-wait frames|turns|ms <N>                         N >= 1; turns = TurnControl::NextTurn calls
+enter <SceneName>                                replay a dev-menu scene entry (TacticsTest only); waits for the console
+                                                 like cmd; once per script; an unknown name fails before launch
+wait frames|turns|rounds|ms <N>                  N >= 1; turns = TurnControl::NextTurn calls; rounds = TurnControl's
+                                                 round counter advancing by N from the directive
 expect console "<substr>" [within <frames>]      a console line since the last cmd contains substr
 expect noconsole "<substr>"                      no such line since the last cmd
 expect status <Name> on <index|bareword|"name">  a unit carries the status (vanilla or framework-registered)
 expect units <==|!=|>=|<=|>|<> <N>               unit count in the current combat
+expect round <op> <N>                            TurnControl's round (0 outside combat)
+expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail)
+expect stacks <Status> on <unit> varied          >= 2 distinct stacks values seen for (unit, status) by earlier dump /
+                                                 expect stacks directives (and this one)
+expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
+                                                 evaluated once, after the run — no within; no JSONL event, see report.logExpects
 dump                                             snapshot the units into a units event
 log "<text>"                                     echo into the result file
 quit [code]                                      no code: 0 if every expect passed, else 1; end of script == quit
@@ -78,14 +88,19 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"...","out":"...","pid":N,"hide":1,"timeout_ms":N,"clean":0}
 {"ev":"script_error","line":N,"msg":"..."}
 {"ev":"cmd","line":N,"text":"..."}
+{"ev":"enter","line":N,"name":"TacticsTest","ok":true,"detail":"scene=0x… entity=0x… component=0x… director=0x… …"}
 {"ev":"console","text":"..."}
 {"ev":"turn","n":N,"round":N}
 {"ev":"wait","line":N,"kind":"frames","n":N,"actual":N}
 {"ev":"expect","line":N,"kind":"console","arg":"...","ok":true,"detail":"..."}
-{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"]}]}
+{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"],"stacks":[2]}]}
+                                                stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes)
 {"ev":"log","text":"..."}
+{"ev":"popup","title":"WARNING","text":"..."}   a modal dialog of the game (its own WARNING/ERROR boxes) that the watchdog
+                                                closed — it would otherwise stop the frame loop for good under a hidden
+                                                window; never decides the verdict, appended to its reason
 {"ev":"crash","code":"0xC0000005","addr":"0x...","module":"Mewgenics.exe","rva":"0x...","tid":N}
-{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
+{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
 ```
 
 Harness exit codes: `0` pass, `1` an expect failed or `quit 1`, `2` script timeout, `3` crash, `4` harness error
@@ -122,7 +137,7 @@ for logs; a flush of the game's log stream would need a different lever.
 | `crash` | crash event, exit code 3, an abnormal exit code, or a new crash report under `mod_logs/crashes/` or the appdata logs |
 | `harness-error` | exit code 4 / `script_error` / framework inactive on a *known* build (the reason names the failed signature(s)) |
 | `timeout` | exit code 2 |
-| `fail` | exit code 1, any failed `expect`, or an `end` code ≠ 0 while the process exit code is 0/absent (clean mode) |
+| `fail` | exit code 1, any failed `expect`, an `end` code ≠ 0 while the process exit code is 0/absent (clean mode), or a runner-side `expect log` whose substring is not in `debug.log` (`expect log failed at line N: "…" not found in debug.log`; decided after `log-errors`, which names the root cause). Mind that `debug.log` is cut mid-line (block-buffered), so only text the game flushed early is reliable |
 | `no-result` | exit 0 but no result file or no `end` event (truncated) |
 | `log-errors` | exit 0 but `debug.log` contains a known marker: `NO_STATUS_NAMED`, `NO_BRAIN_NAMED`, `NO_ABILITY_NAMED`, `NO_PASSIVE_NAMED`, `No level named`, `No enemy named`, `GON_ERROR:` |
 | `pass` | everything above is clean |
@@ -175,7 +190,9 @@ under `mods/`.
   `safety-violation`. This read lives in `editor/src/core/ingame/savecheck.ts` only, approved by the owner on
   2026-10-18 for this purpose; the editor's no-saves rules are not loosened anywhere else.
 - The harness DLL is inert without `-mewtest` and without `-savesuffix` (the framework already refuses vanilla
-  launches), and never writes anything but its result file and `mod_logs\mewtest.log`.
+  launches), and never writes anything but its result file and `mod_logs\mewtest.log`. `enter` is the one directive
+  that can make the game open a save: the test director's `test00.sav`, whose name is hard-coded in the game
+  function the harness calls (never a `steamcampaign` slot); the save-set check allows that family.
 
 ## Game-state assumptions (verified 2026-10-18 on build 25143593)
 
@@ -184,17 +201,32 @@ under `mods/`.
   `record_macro arg0`, `end_recording_macro`, `save_commands_as_macro arg0 arg1`, `macro arg0`,
   `clear_macros arg0`, `nofilter`, `toggle_filter`, `soundevent_debug arg0`. Game commands (`spawn`, `bind`,
   `load`, `win`, `crash`, ...) are registered by the run's scenes (`MewDirector::init`, `GameBase::init`,
-  `TacticsTest::init`, ...) and answer `No command named "X" found` at the main menu.
+  `TacticsTest::init`, ...) and answer `No command named "X" found` at the main menu. After `enter TacticsTest`
+  the list is 84 lines (the engine's 11, the director's 17 — `ObtainItem arg0`, `UnlockClass arg0`,
+  `skip_tutorial`, `set_day arg0`, … — the app's, and TacticsTest's: `refresh_turns`, `spawn arg0`,
+  `spawntile arg0`, `load arg0`, `benchmark arg0`, `stress_test arg0`, `fuzz_test arg0`, `replay_test`,
+  `passive arg0`, `status arg0`, `global arg0`, `weather arg0`, `bind arg0`, `bind_passive arg0`, `win`, `999`,
+  `wtf`, `killall`, `1hp`, `takeover`, `untakeover`, `noui`, `nohud`, `equip arg0`, `swagout`, `mutate arg0`,
+  `voice arg0`, `zoomout arg0 arg1`, `music arg0`, `tileset arg0`, `play_sound arg0`; pinned verbatim in
+  `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`).
 - `listcmds` pushes one line per command (`<name> arg0 arg1 ...`) followed by `Executed: listcmds`; every
   successful command ends with `Executed: <line>`. An unknown name gives `No command named "X" found`; too few
   arguments gives `command "X" needs at least N arguments`.
 - A hidden window keeps the simulation running: with `hide: true` the harness hides the window at frame 0 and
   sets the swap interval to 0, after which the game ran ~180 frames per second (487 frames in 2.6 s) and every
   expectation behaved as with a visible window.
-- Combat commands need a run in progress on the `dev` save. **Entering that run from the main menu through the
-  console is still open** (no console command does it; the menu is mouse-driven). Until it is solved, committed
-  scripts assert only main-menu-safe things, the unit walk (`dump`, `expect status`, `expect units`) is
-  exercised only with `available:false` / `0 units`, and the crash path (`cmd crash`) is unverified in-game.
+- Combat commands need a run in progress. No console command enters one (the menu is mouse-driven); **`enter
+  TacticsTest` does** (OBSERVED 2026-10-20, `mods/dev-sandbox/tests/enter-fight.mewtest`): it replays the dev
+  menu's "TacticsTest" button inside the DLL (`docs/engine-map.md` "Dev scenes and run entry"). In dev mode the
+  game itself creates the test director on `test00.sav` a few frames after the menu is up; `enter` waits for it
+  (retrying every frame, same budget as the console wait), sets the button's flags on it (party generated, not read
+  from a saved winning team), then creates a `Battle` scene with the `TacticsTest` driver. ~0.3 s later the console
+  lists the run commands (`editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`: `spawn`, `spawntile`,
+  `load`, `bind`, `bind_passive`, `status`, `passive`, `win`, `killall`, `takeover`, `noui`, `equip`, `mutate`,
+  `weather`, `tileset`, …), `TurnControl::NextTurn` fires (round 1) and `dump` lists the generated party and its
+  opponents (6 units; `editor/test/fixtures/ingame/result-enter-fight.jsonl`). The unit walk is therefore verified
+  on a real fight, and so is the crash path (an access violation inside an earlier attempt produced the `crash`
+  event, exit 3 and the game's crash log, with no dialog). Every run left `1 real save file(s) unchanged`.
 - The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
   mode" above: the game does not shut itself down when its running flag is cleared, so nothing flushes). Load-time
   markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.

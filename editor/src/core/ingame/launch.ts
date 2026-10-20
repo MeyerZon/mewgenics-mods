@@ -5,10 +5,20 @@
 // `-modpaths` as a mod path, so all -mewtest* flags come BEFORE -modpaths.
 
 import { existsSync } from "node:fs";
-import { join, isAbsolute } from "node:path";
+import { join, win32, posix } from "node:path";
 import { spawnSync } from "node:child_process";
 import { REPO_ROOT, MODS_DIR, touchesSaves } from "../repo.ts";
 import { SAVESUFFIX_RE, type Plan } from "./script.ts";
+
+/**
+ * The path module for a game-side path. The game is a Windows process, but the suite (and CI) may run on
+ * Linux, so joins follow the shape of the path given (`C:\…` or any backslash → win32), not the host.
+ */
+function pathApi(p: string): typeof win32 | typeof posix {
+  return /^[A-Za-z]:/.test(p) || p.includes("\\") ? win32 : posix;
+}
+const pjoin = (base: string, ...parts: string[]): string => pathApi(base).join(base, ...parts);
+const pabs = (p: string): boolean => pathApi(p).isAbsolute(p);
 
 export const DEFAULT_GAME_DIR = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Mewgenics";
 export const STEAM_APP_ID = "686060";
@@ -77,9 +87,9 @@ export function preflight(plan: Plan, ctx: PreflightContext): Preflight {
     checks[key] = { ok, path };
     if (!ok) reasons.push(`${what} not found: ${path}`);
   };
-  need("exe", join(ctx.gameDir, "Mewgenics.exe"), "Mewgenics.exe");
-  need("versionDll", join(ctx.gameDir, "version.dll"), "Mewjector version.dll (run tools/install-mewjector.bat)");
-  need("chainloaderIni", join(ctx.gameDir, "chainloader.ini"), "chainloader.ini");
+  need("exe", pjoin(ctx.gameDir, "Mewgenics.exe"), "Mewgenics.exe");
+  need("versionDll", pjoin(ctx.gameDir, "version.dll"), "Mewjector version.dll (run tools/install-mewjector.bat)");
+  need("chainloaderIni", pjoin(ctx.gameDir, "chainloader.ini"), "chainloader.ini");
   need("frameworkDll", join(NATIVE_DIST_DIR, FRAMEWORK_DLL_NAME), "mewframework.dll in native/dist");
   need("mewtestDll", join(NATIVE_DIST_DIR, MEWTEST_DLL_NAME), "mewtest.dll in native/dist");
 
@@ -93,9 +103,9 @@ export function preflight(plan: Plan, ctx: PreflightContext): Preflight {
     else checks.steam = { ok: true, detail: s === null ? "unknown" : "running" };
   }
 
-  const missingMods = plan.mods.filter((m) => !exists(join(modsDir, m)));
+  const missingMods = plan.mods.filter((m) => !exists(pjoin(modsDir, m)));
   checks.modDirs = { ok: missingMods.length === 0, detail: plan.mods.join(",") };
-  for (const m of missingMods) reasons.push(`mod folder missing: ${join(modsDir, m)}`);
+  for (const m of missingMods) reasons.push(`mod folder missing: ${pjoin(modsDir, m)}`);
 
   return { ok: reasons.length === 0, skipped: false, reasons, checks };
 }
@@ -121,10 +131,10 @@ export function buildLaunch(plan: Plan, ctx: LaunchContext): LaunchSpec {
   if (!SAVESUFFIX_RE.test(plan.savesuffix)) throw new LaunchError(`invalid save suffix ${JSON.stringify(plan.savesuffix)}`);
   const paths: [string, string][] = [["script path", ctx.scriptPath], ["result path", ctx.outPath], ["game dir", ctx.gameDir], ["mods dir", modsDir]];
   for (const [what, p] of paths) {
-    if (!isAbsolute(p)) throw new LaunchError(`${what} must be absolute: ${p}`);
+    if (!pabs(p)) throw new LaunchError(`${what} must be absolute: ${p}`);
     if (touchesSaves(p)) throw new LaunchError(`refusing a ${what} under a saves directory: ${p}`);
   }
-  const modPaths = plan.mods.map((m) => join(modsDir, m));
+  const modPaths = plan.mods.map((m) => pjoin(modsDir, m));
   for (const p of modPaths) if (touchesSaves(p)) throw new LaunchError(`refusing a mod path under a saves directory: ${p}`);
   if (modPaths.length === 0) throw new LaunchError("no mod paths");
 
@@ -146,5 +156,5 @@ export function buildLaunch(plan: Plan, ctx: LaunchContext): LaunchSpec {
 
   const fake = ctx.env && ctx.env.MEWTEST_FAKE_GAME ? String(ctx.env.MEWTEST_FAKE_GAME) : "";
   if (fake) return { command: process.argv[0]!, args: [fake, ...args], cwd: ctx.gameDir, env, fake: true };
-  return { command: join(ctx.gameDir, "Mewgenics.exe"), args, cwd: ctx.gameDir, env, fake: false };
+  return { command: pjoin(ctx.gameDir, "Mewgenics.exe"), args, cwd: ctx.gameDir, env, fake: false };
 }

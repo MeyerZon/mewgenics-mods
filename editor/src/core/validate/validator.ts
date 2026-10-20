@@ -12,7 +12,7 @@
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { REPO_ROOT, MODS_DIR } from "../repo.ts";
+import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA } from "../repo.ts";
 import { parse, GonParseError } from "../gon/parser.ts";
 import { toValue } from "../gon/value.ts";
 import { parseOverlayName } from "../overlay/overlay.ts";
@@ -91,8 +91,7 @@ export interface TextOverride {
  * Build the set of overlay files for a mod, applying an optional unsaved text
  * override for one file (and optionally including a not-yet-saved file).
  */
-function collectOverlays(modName: string, override?: TextOverride): OverlayFile[] {
-  const modDir = join(MODS_DIR, modName);
+function collectOverlays(modDir: string, override?: TextOverride): OverlayFile[] {
   const files = listModFiles(modDir);
   const texts = new Map<string, string>();
   for (const f of files) {
@@ -175,28 +174,42 @@ export interface ValidateOptions {
   /** injects the installed-exe identity (tests); undefined = look it up, null = no exe installed */
   nativeBuild?: NativeBuild | null;
   env?: Record<string, string | undefined>;
+  /** the mod folder itself (tests/fixtures); default `mods/<modName>` */
+  modDir?: string;
+  /** the base-data root in the `.extracted/data` layout (tests/fixtures); default EXTRACTED_DATA */
+  extractedData?: string;
+  /** component class names (tests/fixtures); default the editor/data cache */
+  components?: Iterable<string>;
+  /** native-registered names (tests/fixtures); default editor/registered-names.json */
+  registeredNames?: Iterable<string>;
 }
 
 /**
  * Validate one mod. Pass an override to validate unsaved text for one file.
  * `opts.nativeBuild` injects the installed-exe identity (tests); undefined means "look it up",
- * null means "no exe installed".
+ * null means "no exe installed". The other options inject the inputs the validator resolves
+ * against so a synthetic base and fixture mods can drive it without game data.
  */
 export function validateMod(modName: string, override?: TextOverride, opts: ValidateOptions = {}): Report {
   const rb = new ReportBuilder();
-  const modDir = join(MODS_DIR, modName);
+  const modDir = opts.modDir ?? join(MODS_DIR, modName);
   if (!existsSync(modDir)) {
     rb.error("mod-missing", `mod folder not found: mods/${modName}`);
     return rb.build();
   }
-  const overlays = collectOverlays(modName, override);
+  const overlays = collectOverlays(modDir, override);
   if (overlays.length === 0) {
     rb.warn("mod-empty", `mods/${modName} has no overlay files`);
   }
 
-  const sets = resolutionSets();
+  const root = opts.extractedData ?? EXTRACTED_DATA;
+  const sets = resolutionSets({
+    root,
+    components: opts.components ? new Set(opts.components) : undefined,
+    registered: opts.registeredNames ? new Set(opts.registeredNames) : undefined,
+  });
   const local = modLocalNames(overlays);
-  const loc = loadLocalization();
+  const loc = loadLocalization(root);
   const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
 
   // Union of localization keys available: base + mod-added.
@@ -205,7 +218,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
     if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -224,6 +237,7 @@ function validateGonOverlay(
   findLocRow: (key: string) => string[] | undefined,
   modName: string,
   nativeBuild: NativeBuild | null,
+  dataRoot: string,
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
   let root;
@@ -365,10 +379,10 @@ function validateGonOverlay(
   for (const e of overlay.entries) handleField(e.key, e.value, []);
 
   // ---- Overlay-target existence --------------------------------------------
-  const baseAbs = join(REPO_ROOT, ".extracted", o.baseName);
+  const baseAbs = basePath(dataRoot, o.baseName);
   const baseExists = existsSync(baseAbs);
   if ((o.mode === "merge" || o.mode === "patch") && !baseExists) {
-    rb.warn("base-missing", `${o.relPath} is a ${o.mode} overlay but base file ${o.baseName} was not found under .extracted/ (cannot verify targets)`, { file });
+    rb.warn("base-missing", `${o.relPath} is a ${o.mode} overlay but base file ${o.baseName} was not found in the extracted base data (cannot verify targets)`, { file });
   }
   if (baseExists && (o.mode === "merge" || o.mode === "patch" || o.mode === "append")) {
     let baseRoot: VNode | null;
@@ -391,6 +405,16 @@ function validateGonOverlay(
       }
     }
   }
+}
+
+/**
+ * Where a pack-relative base file lives on disk. `root` is the extracted `data/` tree, so
+ * `data/<x>` maps straight under it; any other pack directory (`swfs/…`) is a sibling of it
+ * (with the default root `.extracted/data` that is the old `.extracted/<baseName>` path).
+ */
+function basePath(root: string, baseName: string): string {
+  const p = baseName.replace(/\\/g, "/");
+  return p.startsWith("data/") ? join(root, p.slice("data/".length)) : join(root, "..", p);
 }
 
 /**
