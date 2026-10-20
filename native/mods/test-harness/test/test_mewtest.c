@@ -364,6 +364,7 @@ typedef struct Fake {
     char emitted[FK_MAX][1024]; int emitCount;
     int exitCode; int exitCalls;
     int enterResult; int enterCalls; int enterScene;   /* enter_scene: programmable result (1 ok / 0 refused / -1 unavailable) */
+    int seedResult; int seedCalls; unsigned long long seedValue;   /* seed_rng: programmable result (1 ok / 0 refused / -1 unavailable) */
 } Fake;
 static Fake fk;
 
@@ -398,9 +399,16 @@ static int fk_enter_scene(void *u, int scene, char *detail, size_t cap) {
     return fk.enterResult;
 }
 
+static int fk_seed_rng(void *u, unsigned long long seed, char *detail, size_t cap) {
+    (void)u;
+    fk.seedCalls++; fk.seedValue = seed;
+    snprintf(detail, cap, "fake seeded %llu", seed);
+    return fk.seedResult;
+}
+
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
-    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene,
+    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
 };
 
 static MtRunner rr;
@@ -732,6 +740,56 @@ TEST(runner_expect_stacks_varied_needs_two_distinct_recorded_values) {
     CHECK(has(last_ev(), "\"ok\":true"));
     mt_runner_step(&rr, &HOST);                 /* varied: 2 and 5 -> ok */
     CHECK(has(last_ev(), "\"ok\":true")); CHECK(has(last_ev(), "2 distinct"));
+}
+
+/* ---- seed <N>: pin the game's RNG (TLS+0x178) through the host so a fight is reproducible ---- */
+TEST(script_seed_parses_an_unsigned_64_bit_value_and_rejects_junk) {
+    char err[256]; int line = 0;
+    const char *s = "seed 42\nseed 18446744073709551615\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.d[0].kind, MT_D_SEED); CHECK_EQ((long long)g_s.d[0].seed, 42);
+    CHECK(g_s.d[1].seed == 18446744073709551615ULL);
+    const char *bad = "seed\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    bad = "seed -1\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    bad = "seed 42 43\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_seed_calls_host_emits_seed_event_and_continues) {
+    fk_reset("seed 42\nquit\n");
+    fk.seedResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.seedCalls, 1); CHECK(fk.seedValue == 42ULL);
+    CHECK(has(ev(0), "{\"ev\":\"seed\"")); CHECK(has(ev(0), "\"line\":1")); CHECK(has(ev(0), "\"seed\":42")); CHECK(has(ev(0), "\"ok\":true"));
+    CHECK(has(ev(0), "\"detail\":\"fake seeded 42\""));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":0"));
+}
+
+TEST(runner_seed_retries_while_not_ready_then_seeds) {
+    /* the game reseeds during its own startup; the host answers 2 until that is over (director exists) */
+    fk_reset("seed 42\nquit\n");
+    fk.seedResult = 2;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.seedCalls, 2); CHECK_EQ(count_ev("seed"), 0); CHECK_EQ(rr.pc, 0);
+    fk.seedResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("seed"), 1); CHECK(has(last_ev(), "\"ok\":true")); CHECK_EQ(rr.pc, 1);
+}
+
+TEST(runner_seed_refused_or_unavailable_ends_the_script) {
+    fk_reset("seed 7\nquit\n");
+    fk.seedResult = 0;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"seed_failed\""));
+    fk_reset("seed 7\nquit\n");
+    fk.seedResult = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"seed_unavailable\""));
 }
 
 /* ---- shot "<label>": emit a shot event, then hold the frame for MT_SHOT_HOLD_MS so the runner can capture it ---- */

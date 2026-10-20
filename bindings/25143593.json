@@ -5069,6 +5069,117 @@
         ".analysis/decompiled/FindEntityByName_0x9d4950.c"
       ],
       "note": "zeroed by SceneManager::CreateScene; the dev-menu buttons set it to 1 on their own scene right before creating the next one (hypothesis: destroy at the end of the frame — the run's director lives there and dies with it, so the test scene can make its own without the \"More than one mew director\" assert); +0x4b0 is the being-destroyed flag"
+    },
+    {
+      "name": "Rng_SeedState",
+      "kind": "function",
+      "rva": "0x94ee40",
+      "signature": {
+        "pattern": "48 89 5C 24 08 4C 8B C9 48 BB ?? ?? ?? ?? ?? ?? ?? ?? 49",
+        "exactLen": 19,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 10,
+            "len": 8,
+            "why": "movabs imm64"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "uint64_t* (uint64_t out[4], uint64_t seed) — expands a 64-bit seed into the 32-byte RNG state and returns a pointer to it; Rng_Reseed (0x94f0a0) calls it with a time/thread/counter hash and copies the 4 qwords into TLS+0x178. The harness calls it with the script's seed.",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 238,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 4C 8B C9 48 BB ?? ??"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_seed_rng"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Rng_SeedState",
+          "index": 22
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#rng",
+        ".analysis/decompiled/Rng_Reseed_0x94f0a0.c"
+      ]
+    },
+    {
+      "name": "Rng_Reseed",
+      "kind": "function",
+      "rva": "0x94f0a0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 40 48 8B 05 ?? ?? ?? ?? 49",
+        "exactLen": 34,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 29,
+            "len": 4,
+            "why": "rip-relative disp32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (uint64_t state[4]) — reseeds a 32-byte RNG state from clock()/time/thread id/a counter (FNV-1a mixes); the dev-menu buttons and the boot path call it on TLS+0x178. Reference only.",
+        "callees": [
+          {
+            "ordinal": 3,
+            "name": "Rng_SeedState",
+            "target": "0x94ee40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 331,
+          "calls": 4,
+          "ripRefs": 2,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 48 89 6C 24 10 48 89"
+      },
+      "consumers": [],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Rng_Reseed",
+          "index": 23
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#rng",
+        ".analysis/decompiled/Rng_Reseed_0x94f0a0.c"
+      ]
+    },
+    {
+      "name": "Tls_rngState",
+      "kind": "offset",
+      "struct": "TlsBlock",
+      "value": "0x178",
+      "ctype": "uint64_t[4]",
+      "anchors": {
+        "unanchored": true
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_seed_rng"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TLS_RNG_STATE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#rng",
+        ".analysis/decompiled/Rng_Reseed_0x94f0a0.c"
+      ],
+      "note": "the game's global RNG state lives in the main thread's static TLS block (the exe's TLS slot) at +0x178; the save's random_seed property is loaded into it"
     }
   ]
 }

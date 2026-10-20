@@ -250,6 +250,32 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             r->pc++;
             return 1;
         }
+        case MT_D_SEED: {
+            detail[0] = 0;
+            int rc = h->seed_rng(h->user, d->seed, detail, sizeof detail);
+            if (rc == 2) {
+                /* not ready: the game is still in its own startup (it reseeds there); retry next frame, same budget as the console wait */
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince <= MT_CONSOLE_WAIT_MS) return 1;
+                rc = 0;
+                snprintf(detail, sizeof detail, "not ready after %d ms", MT_CONSOLE_WAIT_MS);
+            }
+            r->consoleWaitSince = 0;
+            r->state = MT_S_RUN;
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "seed");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_int(&w, "seed", (long long)d->seed);
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "seed_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "seed_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
         case MT_D_SHOT: {
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "shot");

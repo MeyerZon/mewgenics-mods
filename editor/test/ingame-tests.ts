@@ -113,6 +113,15 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "quit", code: 0 }));
     });
 
+    test("seed directive parses an unsigned 64-bit integer (kept as digits); junk, negatives and extra words are line errors", () => {
+      const d = parseDirective("seed 42", 2) as { kind: string; seed: string };
+      eq(d.kind, "seed"); eq(d.seed, "42");
+      eq((parseDirective("seed 18446744073709551615", 2) as { seed: string }).seed, "18446744073709551615");
+      for (const bad of ["seed", "seed -1", "seed 4x", "seed 1 2", "seed 18446744073709551616"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript("seed 7\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.body.startsWith("seed 7\n"), "DLL-side directive");
+    });
+
     test("shot directive parses a quoted label; bare or missing label is a line error; it passes through to the DLL", () => {
       const d = parseDirective('shot "round one"', 4) as { kind: string; label: string };
       eq(d.kind, "shot"); eq(d.label, "round one");
@@ -332,6 +341,12 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(!!varied && varied.ok === true, `expect stacks varied ok: ${JSON.stringify(varied)}`);
       assert(r.events.some((e) => e.ev === "expect" && e.kind === "noconsole" && e.ok === true), "bind JokersGambit was accepted (no 'No command named')");
       eq(r.expects.failed, 0); eq(r.end!.code, 0);
+    });
+    test("seed event is surfaced as result.seed (line, seed, ok, detail); absent -> null", () => {
+      const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"seed","line":2,"seed":42,"ok":true,"detail":"state at 0x1: 00… -> 11…","t":10,"frame":5}\n{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
+      const r = parseResults(text) as unknown as { seed: { line: number; seed: string; ok: boolean; detail: string } | null };
+      eq(JSON.stringify(r.seed), JSON.stringify({ line: 2, seed: "42", ok: true, detail: "state at 0x1: 00… -> 11…" }));
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { seed: unknown }).seed, null);
     });
     test("shot events are collected as result.shots (line, label, frame)", () => {
       const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"shot","line":3,"label":"round one","hold_ms":700,"t":10,"frame":5}\n{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
@@ -795,6 +810,11 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       expectV("no-result no end", { preflight: pre, exit: exit(0), result: res({ end: null }), logs: logs({}), safety: safe }, "no-result");
       expectV("log-errors", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ debugLog: { findings: [{ marker: "NO_STATUS_NAMED", line: 1, text: "x" }] } }), safety: safe }, "log-errors");
       expectV("pass", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe }, "pass");
+      // seed: seed_failed (code 1) -> fail naming line and detail; seed_unavailable (code 4) -> harness-error
+      const seedFail = decideVerdict({ preflight: pre, exit: exit(1), result: res({ end: { code: 1, reason: "seed_failed" }, expects: { passed: 0, failed: 0, failures: [] }, seed: { line: 2, seed: "42", ok: false, detail: "RNG state not reachable: no TLS block" } } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(seedFail.verdict, "fail"); assert(/seed 42 failed at line 2: RNG state not reachable/.test(seedFail.reason), seedFail.reason);
+      const seedUnavail = decideVerdict({ preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "seed_unavailable" }, seed: { line: 2, seed: "42", ok: false, detail: "symbol missing" } } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(seedUnavail.verdict, "harness-error"); assert(/seed_unavailable|symbol missing/.test(seedUnavail.reason), seedUnavail.reason);
       // popups the harness dismissed are appended to a non-pass reason (they usually explain it)
       const popups = [{ title: "WARNING", text: "no saved winning teams - win at least one run first!", frame: 519 }];
       const crashWithPopup = decideVerdict({ preflight: pre, exit: exit(3), result: res({ end: { code: 3, reason: "crash" }, popups } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });

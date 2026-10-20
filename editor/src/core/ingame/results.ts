@@ -37,6 +37,15 @@ export interface EnterEvent {
   detail: string;
 }
 
+/** `seed`: the harness pinned (or failed to pin) the game's RNG. */
+export interface SeedEvent {
+  line: number;
+  /** the seed as digits (the JSONL carries it as a number; values above 2^53 lose precision there) */
+  seed: string;
+  ok: boolean;
+  detail: string;
+}
+
 /** `shot`: the script asked for a screenshot here; the DLL held the scene for `hold_ms` while the runner captured. */
 export interface ShotEvent {
   line: number;
@@ -81,6 +90,8 @@ export interface ResultSummary {
   popups: PopupEvent[];
   /** screenshot requests, in order */
   shots: ShotEvent[];
+  /** the seed event (one per script), null when the script had none */
+  seed: SeedEvent | null;
 }
 
 export function parseResults(text: string | null | undefined): ResultSummary {
@@ -100,6 +111,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
     enter: null,
     popups: [],
     shots: [],
+    seed: null,
   };
   if (typeof text !== "string") return r;
 
@@ -131,6 +143,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
       case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "popup": r.popups.push({ title: String(e.title ?? ""), text: String(e.text ?? ""), frame: Number(e.frame ?? 0) }); break;
       case "shot": r.shots.push({ line: Number(e.line ?? 0), label: String(e.label ?? ""), frame: Number(e.frame ?? 0) }); break;
+      case "seed": r.seed = { line: Number(e.line ?? 0), seed: String(e.seed ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "expect":
         if (e.ok) r.expects.passed++;
         else {

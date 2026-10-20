@@ -208,6 +208,8 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
       ? `script error at line ${result.scriptError.line}: ${result.scriptError.msg}`
       : result.end && result.end.reason === "enter_unavailable" && enter
         ? `enter ${enter.name} unavailable at line ${enter.line}: ${enter.detail} (enter_unavailable; rebuild mewframework/mewtest with the run-entry symbols)`
+      : result.end && result.end.reason === "seed_unavailable" && result.seed
+        ? `seed ${result.seed.seed} unavailable at line ${result.seed.line}: ${result.seed.detail} (seed_unavailable; rebuild mewframework/mewtest with the RNG symbols)`
       : fwInactive && sigs.length
         ? `mewframework inactive: signature ${sigs.map((s) => `${s.name} (${s.matches} matches)`).join(", ")} failed on build ${fw.build || "?"}; re-derive with tools/bindings/make-signature.ts`
         : fwInactive
@@ -218,6 +220,9 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
   if (code === 2 || (result.end && result.end.reason === "timeout")) return { verdict: "timeout", reason: `script timeout (end reason ${result.end ? result.end.reason : "?"})` };
   if (result.end && result.end.reason === "enter_failed") {
     return { verdict: "fail", reason: enter ? `enter ${enter.name} failed at line ${enter.line}: ${enter.detail}` : "enter failed (no enter event)" };
+  }
+  if (result.end && result.end.reason === "seed_failed") {
+    return { verdict: "fail", reason: result.seed ? `seed ${result.seed.seed} failed at line ${result.seed.line}: ${result.seed.detail}` : "seed failed (no seed event)" };
   }
   if (code === 1 || result.expects.failed > 0 || (result.end && result.end.code === 1)) {
     const f = result.expects.failures[0];

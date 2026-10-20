@@ -45,6 +45,7 @@ typedef void *(*fn_CreateEntity)(void *scene);
 typedef void *(*fn_AddTacticsTest)(void *scene, void *entity);
 typedef void *(*fn_AddDirectorTest)(void *scene, void *entity);   /* the test director on test00.sav (name hard-coded in the callee) */
 typedef void *(*fn_GetGame)(void *component);                       /* Component::GetGame: the MewGame object of the component's scene */
+typedef uint64_t *(*fn_RngSeedState)(uint64_t *out4, uint64_t seed); /* expands a seed into the 32-byte RNG state */
 
 static MewjectorAPI g_mj;
 static int g_mjOk;
@@ -73,6 +74,7 @@ static fn_CreateEntity g_CreateEntity;
 static fn_AddTacticsTest g_AddTacticsTest;
 static fn_AddDirectorTest g_AddDirectorTest;
 static fn_GetGame g_GetGame;
+static fn_RngSeedState g_RngSeedState;
 
 static void *volatile g_dc;
 static volatile LONG g_dcInits;
@@ -397,6 +399,44 @@ static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
     return 1;
 }
 
+/* The game's RNG state: 4 qwords in the main thread's static TLS block at +0x178 (Rng_Reseed_0x94f0a0.c writes it
+ * there). The exe's TLS slot index comes from its PE TLS directory (AddressOfIndex); the thread's TLS array is at
+ * gs:[0x58]. We run on the game thread (FrameBegin hook), so that is the block the game reads. */
+static uint64_t *game_rng_state(char *why, size_t cap) {
+    const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)g_base;
+    const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64 *)(g_base + dos->e_lfanew);
+    const IMAGE_DATA_DIRECTORY *dd = &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
+    if (!dd->VirtualAddress) { snprintf(why, cap, "the exe has no TLS directory"); return NULL; }
+    const IMAGE_TLS_DIRECTORY64 *tls = (const IMAGE_TLS_DIRECTORY64 *)(g_base + dd->VirtualAddress);
+    uint32_t index = 0;
+    if (!read_u32((const void *)(uintptr_t)tls->AddressOfIndex, &index) || index > 64) { snprintf(why, cap, "cannot read the exe's TLS index"); return NULL; }
+    uintptr_t tlsArray = 0;
+    __asm__ volatile("movq %%gs:0x58, %0" : "=r"(tlsArray));
+    void *block = NULL;
+    if (!tlsArray || !read_ptr((const void *)(tlsArray + (uintptr_t)index * 8), &block) || !block) { snprintf(why, cap, "no TLS block for slot %u on this thread", index); return NULL; }
+    return (uint64_t *)((char *)block + OFF_TLS_RNG_STATE);
+}
+static int h_seed_rng(void *u, unsigned long long seed, char *detail, size_t cap) {
+    (void)u;
+    if (!g_RngSeedState) { snprintf(detail, cap, "symbol missing: FW_SYM_Rng_SeedState (framework older than v4?)"); return -1; }
+    /* the game's own startup reseeds (load-complete, MewDirector::init); pin only once the director exists */
+    {
+        void *directorGlobal = (void *)g_fw.GetData(FW_DATA_MewDirector), *director = NULL;
+        if (!g_dc || !directorGlobal || !read_ptr(directorGlobal, &director) || !director) { snprintf(detail, cap, "not ready: the game has not finished its startup (no director yet)"); return 2; }
+    }
+    char why[120] = "";
+    uint64_t *state = game_rng_state(why, sizeof why);
+    if (!state) { snprintf(detail, cap, "RNG state not reachable: %s", why); return 0; }
+    uint64_t before[4] = {0, 0, 0, 0}, tmp[4] = {0, 0, 0, 0};
+    if (!safe_read(state, before, sizeof before)) { snprintf(detail, cap, "RNG state at %p unreadable", (void *)state); return 0; }
+    uint64_t *expanded = g_RngSeedState(tmp, (uint64_t)seed);
+    if (!expanded) { snprintf(detail, cap, "Rng_SeedState returned NULL"); return 0; }
+    memcpy(state, expanded, sizeof tmp);
+    snprintf(detail, cap, "state at %p: %016llx… -> %016llx…", (void *)state, (unsigned long long)before[0], (unsigned long long)state[0]);
+    logf_("seed %llu: %s", seed, detail);
+    return 1;
+}
+
 static int h_units_available(void *u) { (void)u; void *d[MAX_UNITS]; int n; return char_array(d, &n); }
 static int h_unit_count(void *u) { (void)u; void *d[MAX_UNITS]; int n; return char_array(d, &n) ? n : 0; }
 
@@ -495,7 +535,7 @@ static void h_request_exit(void *u, int code) {
 
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
-    h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene,
+    h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
@@ -800,6 +840,7 @@ static void init(void) {
     g_AddTacticsTest = (fn_AddTacticsTest)g_fw.GetSymbol(FW_SYM_AddComponent_TacticsTest);
     g_AddDirectorTest = (fn_AddDirectorTest)g_fw.GetSymbol(FW_SYM_AddComponent_MewDirector_test);
     g_GetGame = (fn_GetGame)g_fw.GetSymbol(FW_SYM_Component_GetGame);
+    g_RngSeedState = (fn_RngSeedState)g_fw.GetSymbol(FW_SYM_Rng_SeedState);
     logf_("run-entry symbols: CreateScene=%p CreateEntity=%p AddComponent<TacticsTest>=%p GetGame=%p AddComponent<MewDirector>(test, reference)=%p",
           (void *)g_CreateScene, (void *)g_CreateEntity, (void *)g_AddTacticsTest, (void *)g_GetGame, (void *)g_AddDirectorTest);
     for (int i = 0; i < FW_DATA_COUNT_; i++) {
