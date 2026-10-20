@@ -529,6 +529,15 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const stale = collectLogs({ gameDir, appdataLogsDir: appLogs, frameworkLogOffset: 0, launchedAtMs: Date.now() + 60_000, expectedSuffix: "dev" });
       assert(!stale.debugLog.fresh, "stale debug log");
       eq(stale.crashReports.length, 0);
+      // a crash file written just before this launch (within the mtime slack) by the previous run is not this run's:
+      // the runner lists the crash files before launching and collectLogs excludes them (2026-10-20: a control gate
+      // run right after an expected crash was reported as a crash)
+      const prior = (logs as Record<string, any>).listCrashFiles;
+      assert(typeof prior === "function", "logs.ts exports listCrashFiles");
+      const before = prior(gameDir, appLogs) as string[];
+      eq(before.length, 2, JSON.stringify(before));
+      const after = collectLogs({ gameDir, appdataLogsDir: appLogs, frameworkLogOffset: 0, launchedAtMs: launchedAt, expectedSuffix: "dev", crashesBefore: before } as any);
+      eq(after.crashReports.length, 0, `pre-existing crash files excluded: ${JSON.stringify(after.crashReports)}`);
       // missing appdata dir
       const none = collectLogs({ gameDir, appdataLogsDir: null, frameworkLogOffset: 0, launchedAtMs: launchedAt, expectedSuffix: "dev" });
       assert(!none.debugLog.present, "no debug log");
