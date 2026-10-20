@@ -1,0 +1,7 @@
+{
+  "title": "Joker's Luck combat test (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for mods/jokers-luck/tests/luck-rerolls.mewtest: every player cat starts a fight with 1 stack of the native JokersLuck status, so the harness can watch the stacks change per turn. Load it with jokers-luck and _autoplay. Never for play.",
+  "requirements": []
+}
