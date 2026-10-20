@@ -250,6 +250,22 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             r->pc++;
             return 1;
         }
+        case MT_D_SEED: {
+            detail[0] = 0;
+            int rc = h->seed_rng(h->user, d->seed, detail, sizeof detail);
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "seed");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_int(&w, "seed", (long long)d->seed);
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "seed_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "seed_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
         case MT_D_SHOT: {
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "shot");

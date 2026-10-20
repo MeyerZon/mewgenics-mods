@@ -63,7 +63,8 @@ typedef enum MtDirKind {
     MT_D_WAIT_ROUNDS,   /* wait rounds N: until TurnControl's round >= round-at-directive + N */
     MT_D_EXPECT_ROUND,  /* expect round <op> N (0 outside combat) */
     MT_D_EXPECT_STACKS, /* expect stacks <Status> on <unit> (<op> N | varied) */
-    MT_D_SHOT           /* shot "<label>": emit a shot event, then hold MT_SHOT_HOLD_MS so the runner can capture the window */
+    MT_D_SHOT,          /* shot "<label>": emit a shot event, then hold MT_SHOT_HOLD_MS so the runner can capture the window */
+    MT_D_SEED           /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
 } MtDirKind;
 #define MT_SHOT_HOLD_MS 700
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
@@ -84,6 +85,7 @@ typedef struct MtDirective {
     int scene;          /* enter: MT_SCENE_* */
     long value;         /* expect stacks: N (the unit index lives in n) */
     int varied;         /* expect stacks … varied: >= 2 distinct values recorded for (unit, status) so far */
+    unsigned long long seed;   /* seed: the value (full 64-bit) */
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
@@ -132,6 +134,8 @@ typedef struct MtHost {
     /* enter <scene> on the game thread: 1 entered, 0 refused (detail says why), -1 unavailable (symbols missing),
      * 2 not ready yet (the runner retries next frame, for at most MT_CONSOLE_WAIT_MS) */
     int      (*enter_scene)(void *u, int scene, char *detail, size_t cap);
+    /* seed <N> on the game thread: 1 seeded, 0 refused (detail), -1 unavailable (symbol / TLS missing) */
+    int      (*seed_rng)(void *u, unsigned long long seed, char *detail, size_t cap);
 } MtHost;
 
 typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT } MtState;

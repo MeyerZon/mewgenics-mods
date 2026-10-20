@@ -187,6 +187,12 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
     } else if (wl == 4 && !strncmp(p, "dump", 4)) {
         if (*rest) return fail(err, errCap, errLine, lineNo, "dump takes no arguments");
         d.kind = MT_D_DUMP;
+    } else if (wl == 4 && !strncmp(p, "seed", 4)) {
+        size_t nl = tok_len(rest);
+        if (!nl || nl > 20 || *skip_ws(rest + nl)) return fail(err, errCap, errLine, lineNo, "seed needs one unsigned integer (0..18446744073709551615)");
+        for (size_t i = 0; i < nl; i++) if (rest[i] < '0' || rest[i] > '9') return fail(err, errCap, errLine, lineNo, "seed needs one unsigned integer (0..18446744073709551615)");
+        d.kind = MT_D_SEED;
+        d.seed = strtoull(rest, NULL, 10);
     } else if (wl == 4 && !strncmp(p, "shot", 4)) {
         const char *after = parse_quoted(rest, q, sizeof q, &qn);
         if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "shot needs one quoted label");
