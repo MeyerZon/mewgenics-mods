@@ -135,7 +135,14 @@ in-game test harness (`docs/ingame-testing.md`). Absolute addresses, image base 
   `SDL_CreateWindowWithProperties` `0x1412e7400`. On disk (and until SDL initializes) the slots point at init
   stubs, so read or patch them only once the window exists. Nothing in `mewframework` hooks these slots yet
   (earlier notes claiming otherwise were wrong).
-- **RNG**: the global state lives at `TLS block + 0x178`; the save's `random_seed` property is loaded into it.
+- **RNG**: the global state is 4 qwords (32 bytes) in the main thread's static TLS block at `+0x178` (the exe's
+  TLS slot, index from its PE TLS directory; the save's `random_seed` property is loaded into it). `Rng_SeedState`
+  0x94ee40 (`uint64_t* (uint64_t out[4], uint64_t seed)`) expands a seed into that state; `Rng_Reseed` 0x94f0a0
+  calls it with an FNV-1a mix of `clock()`, `_time64`, the thread id and a counter, and copies the 4 qwords (the
+  boot's non-dev branch and every dev-menu fight button reseed this way; the dev-mode boot does not). OBSERVED
+  2026-10-20: the harness's `seed 42` right before `enter TacticsTest` makes the generated party and every roll
+  after it identical run to run (`mods/jokers-luck/tests/luck-seeded.mewtest`); the state before the pin was already
+  identical across launches of the same `test00.sav`.
 - The framework exposes the code symbols as `FW_SYM_DebugConsole_Execute`, `FW_SYM_DebugConsole_init`,
   `FW_SYM_ApplicationBase_FrameBegin`, `FW_SYM_string_Allocate` and the data addresses as `FW_DATA_*`
   (`FW_GetData`, API v3).

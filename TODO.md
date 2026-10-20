@@ -229,9 +229,10 @@ Things no test on this machine can decide. Tick them off here; each links to whe
     ~~`expect log "<substr>"` against `debug.log` from the runner side~~ done 2026-10-20 (`report.logExpects`; the DLL
     gets a `# runner: …` comment in its place). Still open, each for a reason: named-pipe interactive mode
     (`node tools/mewtest.mjs exec "<cmd>"` + MCP `exec`) is a native IPC feature — a pipe thread marshalling commands
-    onto the frame hook — with its own DLL host tests and T2, not a runner change; RNG seed pinning via `TLS+0x178` for
-    exact numeric assertions needs that fact in `engine-map.md` + a fixture first and only pays off once a run can be
-    entered from the menu (target 1).
+    onto the frame hook — with its own DLL host tests and T2, not a runner change. ~~RNG seed pinning via
+    `TLS+0x178`~~ done 2026-10-20: `seed <N>` (bindings `Rng_SeedState` / `Rng_Reseed`, offset `Tls_rngState`);
+    `mods/jokers-luck/tests/luck-seeded.mewtest` asserts exact stacks (1 → 10 → 7) and the generated party by name,
+    identical across runs. Also done: `shot "<label>"` screenshots the agent reads (T3a).
 
 ### Verification still owed (things built but not yet validated in-game)
 - [x] **Unit walk** (`dump` with units, `expect status`, `expect units`): verified on a real fight 2026-10-20

@@ -1,0 +1,19 @@
+mods: jokers-luck, _autoplay, _jokersluck-test
+timeout: 120s
+# Determinism (TDD target 12, RNG pinning): with the RNG pinned after the game's startup, the generated party and
+# the JokersLuck rerolls are the same on every run, so the assertions are exact. OBSERVED 2026-10-20 with seed 42
+# on build 25143593 (two runs, identical): party Wengar The Wion/Thief, Flint/Mage, Webster/Medic, Christine/Hunter;
+# JokersLuck on the first cat 1 -> 10 -> 7 across the first three rounds.
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+expect stacks JokersLuck on "Wengar The Wion" == 1
+dump
+wait rounds 1
+expect stacks JokersLuck on 0 == 10
+dump
+wait rounds 1
+expect stacks JokersLuck on 0 == 7
+dump
+quit
