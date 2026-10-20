@@ -2,6 +2,33 @@
 
 Living status snapshot (last updated 2026-10-19 evening: owner ran the game-side checks; every PR through #23 is merged, none open). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 
+## Open decisions — return to these next time (parked 2026-10-21)
+
+Owner: "we will decide on it later". Everything through PR #71 is merged; nothing is waiting on an agent except the
+docs sweep at the end of this list.
+
+- [ ] **Cat parts in a rig — which route, if any?** The import route is closed (#71: `ImportAssets2` entries are never
+      linked, placing one crashes — engine-map "Imports are not linked"). Options:
+      (a) copy part geometry from catparts.swf into the mod — ~1 day, 1–2 PRs; frozen copies that do not follow each
+      cat's look, and publishing the mod redistributes game art;
+      (b) native swap (the game puts its own per-cat parts into our rig's slots) — several RE sessions, 3–6 PRs,
+      uncertain;
+      (c) neither — keep drawing our own parts (Rig tab + SVG round trip).
+- [ ] **Localized text?** Texts (#69) are the literal initial string in a game font. Should mods get localized text
+      (loc keys / per-language strings), and is Peralta the right default font?
+- [ ] **Filters / glows:** the game refuses any PlaceObject3 filter ("FILTERS NOT SUPPORTED", #65), so the validator
+      blocks them. Want a "bake glow / shadow into the art" helper, or leave it?
+- [ ] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
+      draw parts headlessly, or stay with plain SVG round trips (#70)?
+- [ ] **T3 looks** still unticked from the art PRs — the shots are in `editor/data/ingame-runs/` (`npm run
+      test:artprobe`, `npm run test:artprobe -- --cat` rebuild them):
+      gradient square red → black (#63); top green line shorter than the bottom one (#64); the add square a lightened
+      dark red (#65); Timeline and Rig tabs readable and usable (#66, #67); PROBE in the game's lettering (#69); an
+      Export SVG → edit in VectorCraft/Inkscape → Replace… round trip (#70); the Ruffle tab (#59).
+- [ ] **Agent, next session (no decision needed):** the deferred docs sweep — the modding skill's art section (root
+      timeline is game-driven, filters crash, imports crash, text, SVG round trip, export_svg = 24 MCP tools),
+      binding-port.md "Known limits", KNOWLEDGE-BASE's Ruffle line, CLAUDE.md's tool count.
+
 ## Owner checks — only you can do these (agents cannot)
 
 Things no test can see: they need a human at the game, a decision, or an account. Tick them here; the agent-side work they unblock is named.
