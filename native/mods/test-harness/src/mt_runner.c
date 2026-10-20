@@ -253,6 +253,16 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
         case MT_D_SEED: {
             detail[0] = 0;
             int rc = h->seed_rng(h->user, d->seed, detail, sizeof detail);
+            if (rc == 2) {
+                /* not ready: the game is still in its own startup (it reseeds there); retry next frame, same budget as the console wait */
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince <= MT_CONSOLE_WAIT_MS) return 1;
+                rc = 0;
+                snprintf(detail, sizeof detail, "not ready after %d ms", MT_CONSOLE_WAIT_MS);
+            }
+            r->consoleWaitSince = 0;
+            r->state = MT_S_RUN;
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "seed");
             mt_jw_int(&w, "line", d->line);

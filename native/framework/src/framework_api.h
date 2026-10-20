@@ -43,6 +43,8 @@ typedef enum FwSymbol {
     FW_SYM_TacticsTest_init,            /* reference only: registers the run console commands (bind, load, win, …) */
     FW_SYM_MewDirector_init,            /* reference only: void (MewDirector*, std::string name) — opens/creates that save */
     FW_SYM_AddComponent_MewDirector_test, /* MewDirector* (Scene*, Entity*) — the test director on test00.sav, as the load path makes it */
+    FW_SYM_Rng_SeedState,               /* uint64_t* (uint64_t out[4], uint64_t seed) — expands a seed into the 32-byte RNG state */
+    FW_SYM_Rng_Reseed,                  /* reference only: void (uint64_t state[4]) — the game's time-based reseed */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
