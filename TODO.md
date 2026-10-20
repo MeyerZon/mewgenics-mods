@@ -179,7 +179,10 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    once at its RVA in the installed exe, every function RVA begins a `.pdata` entry, anchors re-verify, self-port
    changes nothing; `check_game_build` reports it live. (2026-10-19, binding-port series)
 5. [~] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
-   the status definition table / name rules are still inside `status_engine.c`.
+   the status definition table / name rules / alias rewrite / hierarchy rewrite are `fw_status_rules.c` since
+   2026-10-20 (`test_status_rules.c`, 14 checks; one cap of 8 shared by `framework.c` and `status_engine.c`, which
+   had disagreed 16 vs 8). Still game-bound and only T2-verified: the vtable clone + thunks, the `ApplyByName` hook
+   and the entity/component walks in `status_engine.c`, and everything in `framework.c` but the build gate.
 6. [x] **Tools tests (T0)**: `tools/bindings/make-signature.ts` is covered by the siggen section of
    `bindings-tests.ts` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` by
    `editor/test/gpak-tests.ts` on a synthetic archive (2026-10-19; list/cat/extract/stats, truncation, path escapes).

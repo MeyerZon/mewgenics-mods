@@ -180,13 +180,14 @@ FW_EXPORT uintptr_t FW_GetData(int dataId) {
 }
 
 /* --- custom statuses (API v2) --- */
-#define FW_MAX_STATUS_DEFS 16
-static FwStatusDef g_statusDefs[FW_MAX_STATUS_DEFS];
+static FwStatusDef g_statusDefs[FW_STATUS_MAX_DEFS];   /* one cap, shared with status_engine.c (fw_status_rules.h) */
 static int g_statusDefCount = 0;
 
 FW_EXPORT int FW_RegisterStatus(const FwStatusDef *def) {
-    if (!g_active || !def || !def->name || !def->template_name) return 0;
-    if (g_statusDefCount >= FW_MAX_STATUS_DEFS) { fw_log("RegisterStatus: table full"); return 0; }
+    if (!g_active) return 0;
+    /* validate BEFORE claiming the name with Mewjector, so a refused definition never owns a name */
+    FwStatusRule why = fw_status_validate(def, status_engine_table());
+    if (why != FW_STATUS_OK) { fw_log("RegisterStatus(%s): %s", def && def->name ? def->name : "?", fw_status_rule_text(why)); return 0; }
     if (g_mj.RegisterName && !g_mj.RegisterName("status", def->name, FW_OWNER)) {
         fw_log("RegisterStatus: name %s already owned by %s", def->name, g_mj.LookupName("status", def->name));
         return 0;
