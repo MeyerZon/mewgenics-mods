@@ -1,0 +1,29 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\<run>\\script.mewtest","out":"C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\<run>\\result.jsonl","pid":37160,"hide":1,"timeout_ms":120000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":1109,"frame":120}
+{"ev":"seed","line":2,"seed":42,"ok":true,"detail":"state at 000001b477dbda88: e173fcb82ba22b6e… -> bdd732262feb6e95…","t":3140,"frame":880}
+{"ev":"enter","line":3,"name":"TacticsTest","ok":true,"detail":"scene=000001b400005a98 entity=000001b685d24640 component=000001c0b10f0008 manager=000001b477e1f340 director=000001bc26240008 GetGame(console)=000001bc26240008 director(after init)=000001bc26240008","t":3172,"frame":881}
+{"ev":"turn","n":1,"round":1,"t":4109,"frame":1018}
+{"ev":"wait","line":4,"kind":"turns","n":1,"actual":1,"t":4109,"frame":1018}
+{"ev":"expect","line":5,"kind":"units","arg":"== 8","ok":true,"detail":"8 units","t":4125,"frame":1019}
+{"ev":"cmd","line":6,"text":"spawn Rat","t":4125,"frame":1020}
+{"ev":"console","text":"Spawned Rat","t":4125,"frame":1020}
+{"ev":"console","text":"Executed: spawn","t":4125,"frame":1020}
+{"ev":"expect","line":7,"kind":"console","arg":"Spawned Rat","ok":true,"detail":"matched console line 0","t":4140,"frame":1021}
+{"ev":"cmd","line":8,"text":"spawn Pooter","t":4140,"frame":1022}
+{"ev":"console","text":"Spawned Pooter","t":4140,"frame":1022}
+{"ev":"console","text":"Executed: spawn","t":4140,"frame":1022}
+{"ev":"expect","line":9,"kind":"console","arg":"Spawned Pooter","ok":true,"detail":"matched console line 2","t":4140,"frame":1023}
+{"ev":"cmd","line":10,"text":"spawn GoldenRat","t":4156,"frame":1024}
+{"ev":"console","text":"Spawned GoldenRat","t":4156,"frame":1024}
+{"ev":"console","text":"Executed: spawn","t":4156,"frame":1024}
+{"ev":"expect","line":11,"kind":"console","arg":"Spawned GoldenRat","ok":true,"detail":"matched console line 4","t":4156,"frame":1025}
+{"ev":"wait","line":12,"kind":"frames","n":10,"actual":10,"t":4187,"frame":1035}
+{"ev":"units","available":true,"round":1,"count":11,"list":[{"i":0,"name":"Wengar The Wion","class":"Thief","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":1,"name":"Flint","class":"Mage","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":2,"name":"Webster","class":"Medic","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":3,"name":"Christine","class":"Hunter","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":6,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":7,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":8,"name":"Golden Rat","class":"","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":9,"name":"Pooter","class":"","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":10,"name":"Appended Rat","class":"","faction":2,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]}],"t":4203,"frame":1036}
+{"ev":"expect","line":14,"kind":"units","arg":"== 11","ok":true,"detail":"11 units","t":4203,"frame":1037}
+{"ev":"expect","line":15,"kind":"unit","arg":"8 name == \"Golden Rat\"","ok":true,"detail":"unit 8 \"Golden Rat\": name \"Golden Rat\"","t":4218,"frame":1038}
+{"ev":"expect","line":16,"kind":"unit","arg":"\"Golden Rat\" faction == 1","ok":true,"detail":"unit 8 \"Golden Rat\": faction 1","t":4218,"frame":1039}
+{"ev":"expect","line":17,"kind":"unit","arg":"9 name == \"Pooter\"","ok":true,"detail":"unit 9 \"Pooter\": name \"Pooter\"","t":4218,"frame":1040}
+{"ev":"expect","line":18,"kind":"unit","arg":"Pooter faction == 1","ok":true,"detail":"unit 9 \"Pooter\": faction 1","t":4218,"frame":1041}
+{"ev":"expect","line":19,"kind":"unit","arg":"10 name == \"Appended Rat\"","ok":true,"detail":"unit 10 \"Appended Rat\": name \"Appended Rat\"","t":4234,"frame":1042}
+{"ev":"expect","line":20,"kind":"unit","arg":"\"Appended Rat\" faction == 2","ok":true,"detail":"unit 10 \"Appended Rat\": faction 2","t":4234,"frame":1043}
+{"ev":"end","code":0,"reason":"quit","frames":1044,"turns":1,"elapsed_ms":4250,"expect_pass":11,"expect_fail":0,"t":4250,"frame":1044}

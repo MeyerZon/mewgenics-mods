@@ -147,6 +147,7 @@ export function buildLaunch(plan: Plan, ctx: LaunchContext): LaunchSpec {
     "-mewtest_hide", plan.hide ? "1" : "0",
     "-mewtest_timeout", String(plan.timeoutMs),
     "-mewtest_clean", plan.clean ? "1" : "0",
+    "-mewtest_pipe", plan.interactive ? "1" : "0",
     "-modpaths", ...modPaths,
   ];
   const env: Record<string, string> = {};
