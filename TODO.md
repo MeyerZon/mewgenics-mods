@@ -283,11 +283,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   - [x] PR 1 `chore/leftovers-hygiene`: ignore `mods/*/swfs/`, TODO truth, prune merged branches + stale worktree
     (the removal emptied `.analysis/`, `.extracted/data`, `editor/node_modules`, `native/dist` through junctions;
     data and DLLs regenerated the same night, decompiles and the old exe are not — rule added to `CLAUDE.md`)
-  - [~] **Rebuild `.analysis/decompiled/`**: 2026-10-19 PR 5's import (`rea_ghidra_leftovers`) re-decompiled every
-    bindings function (46), `process_animation_merges` + caller, `ProcessCmds`, the save chain (`MewSaveFile_*`,
-    `SaveSelection_Build`, `MewDirector::init` and its 3 callers) — 60+ files. Still missing: `Gon_merge_{a,b,c}` under
-    those names (the bindings names are `Gon_PatchMerge_a/b`, `Gon_DeepMerge`), `FileManager_resolve_overlays`
-    (= `FileManager_ResolveWithOverlays`), `p2_*`, `r3d_*`, the SWF-crash set (`0xa58440`, `0x9a8f30`).
+  - [x] **Rebuild `.analysis/decompiled/`** (done 2026-10-20, session `rea_ghidra_house`): the nine missing manifest
+    functions (`TurnControl_NextTurn`, the `ApplicationBase` frame/step/appmain set, `Gon_DeepMerge`, `Rng_SeedState`, …),
+    the four LuckUp slot bodies + `.analysis/luckup-vtable.hex`, the SWF-crash pair (`Swf_Merge_0xa58440.c`,
+    `Swf_MovieClipAdvance_0x9a8f30.c`); the manifest's 27 stale evidence names now point at the files on disk (a test
+    pins it); the exe copy is back in `.analysis/exe/25143593/`. Deliberately not regenerated: `r3d_*` / `p2_*` (3D
+    renderer, not current work) and `Status_AttachPassive` (232 KB; only its callers/size are kept).
   - [x] PR 2 `fix/port-report-old-column`: port report `old` column, `--gameVersion`, size/call drift on anchor rows
     (rung-3 hardening — callee-set / vftable-store rungs — stays open; needs a body-changing build to test against)
   - [x] PR 3 `test/t0-skips-gpak-filter`: targets 9 + 10, `tools/gpak.py` T0 suite (characterization: no defect found)
