@@ -1316,7 +1316,38 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(/0x4d6/.test(r2.detail ?? "") && /0x4d7/.test(r2.detail ?? ""), r2.detail ?? "");
     eq(entry(split.manifest, "Foo_typeid")!.value, "0x4d6", "old value kept until a human decides");
   });
+  /** offsets that carry a witness in the committed manifest (batch 1: the harness's unit walk, console, app and scene offsets) */
+  const WITNESSED_OFFSETS_BATCH1 = [
+    "App_running", "App_window", "DebugConsole_outBegin", "DebugConsole_outEnd", "TurnControl_scene", "Scene_entityManager",
+    "EntityManager_x", "X_charArray", "RefArray_count", "RefArray_data", "TurnControl_round", "Component_sceneManager",
+    "Scene_destroyed", "SceneManager_mainScene", "Scene_destroyNext", "MewDirector_devFightFlag", "MewDirector_devFightMode",
+    "MewDirector_handoffFlag", "Tls_rngState",
+  ];
+  test("the committed manifest anchors the batch-1 offsets: each carries anchors.witness {function, pattern, dispAt} and no unanchored flag; the dev-menu lambda is a function entry", () => {
+    const m = loadManifest(realPath);
+    for (const name of WITNESSED_OFFSETS_BATCH1) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset", `${name} is an offset entry`);
+      const w = e!.anchors.witness;
+      assert(!!w && typeof w.function === "string" && typeof w.pattern === "string" && Number.isInteger(w.dispAt), `${name}: witness {function, pattern, dispAt}: ${JSON.stringify(w)}`);
+      assert(e!.anchors.unanchored !== true, `${name}: no longer unanchored`);
+      const f = entry(m, w!.function);
+      assert(!!f && f.kind === "function", `${name}: witness function ${w!.function} is a function entry`);
+    }
+    const lambda = entry(m, "DevMenu_TacticsTest_lambda");
+    assert(!!lambda && lambda.kind === "function" && lambda.rva === "0x32fc00" && !!lambda.signature, "DevMenu_TacticsTest_lambda 0x32fc00 with a signature");
+    eq(m.entries.filter((e) => e.anchors.unanchored).length, 46 - WITNESSED_OFFSETS_BATCH1.length, "unanchored count drops by the batch");
+  });
   if (exe) {
+    test("T1 real exe: every offset witness in the committed manifest is verified by the harvest (its pattern reads the manifest value)", () => {
+      const m = loadManifest(realPath);
+      const p = parsePe(exe);
+      const rep = harvestManifest(p, exe, m).report;
+      const witnessed = m.entries.filter((e) => e.kind === "offset" && e.anchors.witness && e.anchors.witness.pattern);
+      assert(witnessed.length >= WITNESSED_OFFSETS_BATCH1.length, `${witnessed.length} witnessed offsets`);
+      const bad = witnessed.map((e) => rep.find((r) => r.name === e.name)!).filter((r) => r.status !== "verified").map((r) => `${r.name}: ${r.status} (${r.detail})`);
+      assert(bad.length === 0, bad.join("; "));
+    });
     test("T1 real exe: LuckUp type id 0x4d6 is also the imm32 passed to Entity_FindComponentsByTypeId inside Status_ApplyLuckUp (second witness)", () => {
       const m = loadManifest(realPath);
       const p = parsePe(exe);
