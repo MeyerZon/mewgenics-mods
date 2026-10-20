@@ -269,6 +269,17 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.end!.reason, "enter_failed");
       eq((parseResults(fixture("result-pass.jsonl")) as unknown as { enter: unknown }).enter, null, "no enter event -> null");
     });
+    test("popup events are collected as result.popups (title, text, frame); none -> empty", () => {
+      const text = [
+        '{"ev":"start","harness":"mewtest 0.1.0","t":0,"frame":0}',
+        '{"ev":"popup","title":"WARNING","text":"no saved winning teams - win at least one run first!","t":3531,"frame":519}',
+        '{"ev":"popup","title":"ERROR","text":"More than one mew director","t":4031,"frame":520}',
+        '{"ev":"end","code":3,"reason":"crash","frames":520,"turns":0,"elapsed_ms":4100,"expect_pass":0,"expect_fail":0,"t":4100,"frame":520}',
+      ].join("\n") + "\n";
+      const r = parseResults(text) as unknown as { popups: { title: string; text: string; frame: number }[] };
+      eq(JSON.stringify(r.popups), JSON.stringify([{ title: "WARNING", text: "no saved winning teams - win at least one run first!", frame: 519 }, { title: "ERROR", text: "More than one mew director", frame: 520 }]));
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { popups: unknown[] }).popups.length, 0);
+    });
     test("crash fixture exposes the crash event", () => {
       const r = parseResults(fixture("result-crash.jsonl"));
       eq(r.crash!.code, "0xC0000005");
@@ -699,6 +710,14 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       expectV("no-result no end", { preflight: pre, exit: exit(0), result: res({ end: null }), logs: logs({}), safety: safe }, "no-result");
       expectV("log-errors", { preflight: pre, exit: exit(0), result: res({}), logs: logs({ debugLog: { findings: [{ marker: "NO_STATUS_NAMED", line: 1, text: "x" }] } }), safety: safe }, "log-errors");
       expectV("pass", { preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe }, "pass");
+      // popups the harness dismissed are appended to a non-pass reason (they usually explain it)
+      const popups = [{ title: "WARNING", text: "no saved winning teams - win at least one run first!", frame: 519 }];
+      const crashWithPopup = decideVerdict({ preflight: pre, exit: exit(3), result: res({ end: { code: 3, reason: "crash" }, popups } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(crashWithPopup.verdict, "crash");
+      assert(/popup WARNING: no saved winning teams/.test(crashWithPopup.reason), crashWithPopup.reason);
+      const passWithPopup = decideVerdict({ preflight: pre, exit: exit(0), result: res({ popups } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(passWithPopup.verdict, "pass", "a dismissed popup does not fail a run by itself");
+      assert(/1 popup/.test(passWithPopup.reason), passWithPopup.reason);
       // enter: end reason enter_failed (code 1) -> fail naming the scene, line and detail; enter_unavailable (code 4) -> harness-error
       const enterFail = decideVerdict({ preflight: pre, exit: exit(1), result: res({ end: { code: 1, reason: "enter_failed" }, expects: { passed: 0, failed: 0, failures: [] }, enter: { line: 2, name: "TacticsTest", ok: false, detail: "no MewDirector" } } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
       eq(enterFail.verdict, "fail", "enter_failed -> fail");
