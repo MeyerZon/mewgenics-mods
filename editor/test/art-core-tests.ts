@@ -297,6 +297,12 @@ export function runArtCoreTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     assert(!again.ok && /exists/.test(again.error || ""), JSON.stringify(again));
     assert(a.importSvgIntoScene!({ mod: tmpMod, scenePath: "art/starter.scene.json", shapeId: "imported", svgText: svg, replace: true }).ok, "replace");
     assert(!a.importSvgIntoScene!({ mod: tmpMod, scenePath: "../x.scene.json", shapeId: "y", svgText: svg }).ok, "path guard");
+    // an SVG with a gradient: the gradient lands in scene.gradients and the saved scene still validates
+    const gsvg = '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="10" y2="0"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><rect width="10" height="10" fill="url(#g1)"/></svg>';
+    const gr = a.importSvgIntoScene!({ mod: tmpMod, scenePath: "art/starter.scene.json", shapeId: "ramp", svgText: gsvg });
+    assert(gr.ok, JSON.stringify(gr));
+    const grd = api.readArtScene(tmpMod, "art/starter.scene.json");
+    assert(grd.ok && !!grd.scene && !!(grd.scene.gradients || {})["g1"] && grd.scene.shapes["ramp"]!.paths[0]!.fill === "gradient:g1", JSON.stringify(grd).slice(0, 400));
     api.writeArtScene(tmpMod, "art/starter.scene.json", exampleScene("starter"));
   });
   test("buildSwf writes swfs/<name>.swf + swflist.gon.append, self-checks with the reader, is idempotent", () => {
