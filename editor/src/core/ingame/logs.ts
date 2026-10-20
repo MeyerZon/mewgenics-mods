@@ -218,6 +218,17 @@ export interface CollectLogsContext {
   frameworkLogOffset: number;
   launchedAtMs: number;
   expectedSuffix: string;
+  /** crash files that existed before the launch (listCrashFiles); never this run's, whatever their mtime */
+  crashesBefore?: string[];
+}
+
+/** Every crash file the game or the chainloader has written so far (the runner snapshots this before launching). */
+export function listCrashFiles(gameDir: string, appdataLogsDir: string | null): string[] {
+  const out: string[] = [];
+  const crashDir = join(gameDir, "mod_logs", "crashes");
+  if (existsSync(crashDir)) for (const f of readdirSync(crashDir)) out.push(join(crashDir, f));
+  if (appdataLogsDir && existsSync(appdataLogsDir)) for (const f of readdirSync(appdataLogsDir)) if (/^crash_.*\.txt$/i.test(f)) out.push(join(appdataLogsDir, f));
+  return out;
 }
 
 export function collectLogs(ctx: CollectLogsContext): LogFindings {
@@ -239,12 +250,13 @@ export function collectLogs(ctx: CollectLogsContext): LogFindings {
   const cl: ChainloaderScan = clText !== null ? scanChainloaderLog(clText) : { modsLoaded: [], crashLines: [] };
 
   const crashReports: string[] = [];
+  const before = new Set(ctx.crashesBefore || []);
   const crashDir = join(ctx.gameDir, "mod_logs", "crashes");
   if (existsSync(crashDir)) {
     for (const f of readdirSync(crashDir)) {
       const p = join(crashDir, f);
       const m = mtimeOf(p);
-      if (m !== null && m >= since) crashReports.push(p);
+      if (m !== null && m >= since && !before.has(p)) crashReports.push(p);
     }
   }
   if (ctx.appdataLogsDir && existsSync(ctx.appdataLogsDir)) {
@@ -252,7 +264,7 @@ export function collectLogs(ctx: CollectLogsContext): LogFindings {
       if (!/^crash_.*\.txt$/i.test(f)) continue;
       const p = join(ctx.appdataLogsDir, f);
       const m = mtimeOf(p);
-      if (m !== null && m >= since) crashReports.push(p);
+      if (m !== null && m >= since && !before.has(p)) crashReports.push(p);
     }
   }
 

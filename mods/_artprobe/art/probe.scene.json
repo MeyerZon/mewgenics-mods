@@ -12,7 +12,8 @@
     "blue": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#2020ff" } ] },
     "ramp": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "gradient:rampgrad" } ] },
     "capbutt": { "paths": [ { "d": "M-30 0 L30 0", "stroke": "#20ff20", "strokeWidth": 12, "strokeCap": "butt" } ] },
-    "capsquare": { "paths": [ { "d": "M-30 0 L30 0", "stroke": "#20ff20", "strokeWidth": 12, "strokeCap": "square" } ] }
+    "capsquare": { "paths": [ { "d": "M-30 0 L30 0", "stroke": "#20ff20", "strokeWidth": 12, "strokeCap": "square" } ] },
+    "addsq": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "#600000" } ] }
   },
   "bitmaps": { "checkerbmp": { "file": "art/checker.png" } },
   "gradients": {
@@ -40,7 +41,8 @@
         { "name": "cx", "depth": 4, "keys": [ { "frame": 0, "ref": "sq", "x": 310, "y": 30, "cxform": { "mul": [1, 0, 0, 1] } } ] },
         { "name": "gradient", "depth": 5, "keys": [ { "frame": 0, "ref": "ramp", "x": 390, "y": 30 } ] },
         { "name": "cap butt", "depth": 6, "keys": [ { "frame": 0, "ref": "capbutt", "x": 470, "y": 10 } ] },
-        { "name": "cap square", "depth": 7, "keys": [ { "frame": 0, "ref": "capsquare", "x": 470, "y": 50 } ] }
+        { "name": "cap square", "depth": 7, "keys": [ { "frame": 0, "ref": "capsquare", "x": 470, "y": 50 } ] },
+        { "name": "blend add", "depth": 8, "keys": [ { "frame": 0, "ref": "addsq", "x": 550, "y": 30, "blend": "add" } ] }
       ]
     }
   },

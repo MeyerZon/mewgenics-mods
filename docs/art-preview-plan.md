@@ -446,7 +446,13 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     DefineShape3), incl. gradients with >8 stops, a focus or reflect/repeat (DefineShape4-only in SWF); EdgeBounds +
     flags; `src/core/art/stroke.ts` is the preview's stroke geometry. OBSERVED: the game honours LINESTYLE2 caps (the
     probe's butt line is ~60 clip px, the square one ~72). Gate variant `shape4` boots. The fill-winding flag is not
-    written (the emitter resolves fill sides itself). Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+    written (the emitter resolves fill sides itself).
+    **PlaceObject3 done 2026-10-20:** key `blend` (14 SWF modes) and `filters` (blur / glow / dropShadow; `effects.ts`);
+    a placement is written as PlaceObject3 only when it has them. OBSERVED: a blend mode loads (gate `blend`) and is
+    applied (the probe's add square shows the arena through, ~162,68,67 for #600000); **any filter list stops the game
+    with "ERROR: FILTERS NOT SUPPORTED <swf>"** (gate `filters`, a negative control expecting `crash`), so filters are a
+    `filter-unsupported` validation error. The preview draws add / multiply / screen in GL and the Canvas2D composite
+    modes; other blends are an info finding. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. **Done 2026-10-20:** MCP tools `list_art_scenes`, `read_art_scene`, `write_art_scene` (dryRun validates), `new_art_scene`,
     `import_svg` (with `into { scene, shapeId }` it saves the shape), `build_swf`, `inspect_swf`. Was: MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool

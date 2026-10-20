@@ -3,7 +3,7 @@
 // texels wide, with a pure-yellow 1-texel border, so its last third is outside the bitmap — then 60×60 squares
 // centred at (150,30) the nested blink sprite (red → green → blue every 30 frames inside a one-frame holder),
 // (230,30) a gray:8 control, (310,30) gray:8 with cxform mul [1,0,0,1] and (390,30) a linear gradient gray:0 → #ff2020
-// along clip x, and two 12 px #20ff20 strokes from clip x 440 to 500 (y 10 butt caps, y 50 square caps; DefineShape4).
+// along clip x, a #600000 square at (550,30) placed with blend add (PlaceObject3), and two 12 px #20ff20 strokes from clip x 440 to 500 (y 10 butt caps, y 50 square caps; DefineShape4).
 // The yellow marker gives the screen
 // scale and position; whether the magenta/cyan cells sit left or right inside it gives the orientation (enemies
 // face left: the clip is mirrored). Pure: works on any RGBA image (decodePng of the shot).
@@ -34,6 +34,9 @@ export interface ProbeShot {
   gradRight: Rgb;
   /** LINESTYLE2 caps: "honoured" (butt stops at the endpoint, square reaches past it), "ignored" (both reach past: round) */
   caps: "honoured" | "ignored" | "unknown";
+  /** the add-blended square: "honoured" (the background shows through: green > 0), "ignored" (plain #600000) */
+  blend: "honoured" | "ignored" | "unknown";
+  blendRgb: Rgb;
   /** the marker's screen bbox */
   box: { x0: number; y0: number; x1: number; y1: number } | null;
 }
@@ -65,7 +68,7 @@ function classifyBlink(c: Rgb): ProbeShot["blink"] {
 }
 
 export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
-  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", box: null };
+  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", blend: "unknown", blendRgb: [0, 0, 0], box: null };
   // 1. the yellow marker: the largest 8-connected region of near-yellow pixels (stray UI yellow elsewhere is ignored)
   const W = img.width, H = img.height;
   const mask = new Uint8Array(W * H);
@@ -151,8 +154,10 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   };
   const buttLen = greenLength(10), squareLen = greenLength(50);
   const caps: ProbeShot["caps"] = buttLen < 40 || squareLen < 40 ? "unknown" : squareLen - buttLen >= 7 ? "honoured" : Math.abs(squareLen - buttLen) <= 3 ? "ignored" : "unknown";
+  const blendRgb = patch(img, sx(550), sy(30));
+  const blend: ProbeShot["blend"] = blendRgb[0] > 110 && blendRgb[1] > 25 ? "honoured" : blendRgb[1] < 15 && blendRgb[0] > 60 && blendRgb[0] < 135 ? "ignored" : "unknown";
   return {
-    gradient, gradLeft, gradRight, caps,
+    gradient, gradLeft, gradRight, caps, blend, blendRgb,
     found: true, scale, mirrored,
     sampling: blendedRatio > 0.1 ? "smooth" : "nearest",
     blendedRatio, edge, blink,
@@ -177,6 +182,8 @@ export interface ProbeSummary {
   gradient: ProbeShot["gradient"];
   /** LINESTYLE2 caps across shots */
   caps: ProbeShot["caps"];
+  /** PlaceObject3 blend add across shots */
+  blend: ProbeShot["blend"];
 }
 
 function majority<T extends string>(xs: T[], fallback: T): T {
@@ -204,6 +211,7 @@ export function summarizeProbe(shots: ProbeShot[]): ProbeSummary {
     blinks,
     gradient: majority(ok.map((s) => s.gradient), "unknown"),
     caps: majority(ok.map((s) => s.caps), "unknown"),
+    blend: majority(ok.map((s) => s.blend), "unknown"),
   };
 }
 
@@ -220,6 +228,7 @@ export function renderProbeReport(shots: ProbeShot[], s: ProbeSummary, labels: s
     `- bitmap sampling: **${s.sampling}**; outside the bitmap: **${s.edge}**`,
     `- PlaceObject cxform mul [1,0,0,1]: **${s.cxform}**`,
     `- orientation: ${s.mirrored ? "**mirrored** (the enemy faces left)" : "as authored"}`,
+    `- PlaceObject3 blend add (#600000 over the arena): **${s.blend}** (rgb per shot: ${shots.map((p) => p.blendRgb.join(",")).join("; ") || "-"})`,
     `- LINESTYLE2 caps (DefineShape4; butt vs square stroke length): **${s.caps}**`,
     `- linear gradient fill (gray:0 → #ff2020 along clip x): **${s.gradient}** (left/right rgb per shot: ${shots.map((p) => `${p.gradLeft.join(",")} / ${p.gradRight.join(",")}`).join("; ") || "-"})`,
     `- marker found in ${s.found} of ${s.shots} shot(s)`,

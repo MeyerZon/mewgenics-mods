@@ -8,6 +8,8 @@ import { inflateSync } from "node:zlib";
 import { TAG, tagName } from "./swf-bits.ts";
 import type { Rect, Rgba } from "./swf-bits.ts";
 import type { Mat } from "./geometry.ts";
+import { readFilterList } from "./effects.ts";
+import type { ParsedFilter } from "./effects.ts";
 
 export interface SwfHeader {
   /** "FWS" | "CWS" | "ZWS" */
@@ -88,6 +90,11 @@ export interface ParsedPlace {
   name?: string;
   clipDepth?: number;
   clipActions?: Uint8Array;
+  /** PlaceObject3 */
+  blendMode?: number;
+  filters?: ParsedFilter[];
+  className?: string;
+  bitmapCache?: number;
 }
 
 export interface ParsedBitmap {
@@ -356,6 +363,10 @@ function parseTag(code: number, body: Uint8Array, offset: number): Tag {
         t.place = parsePlaceObject2(r);
         t.depth = t.place.depth;
         break;
+      case TAG.PlaceObject3:
+        t.place = parsePlaceObject3(r);
+        t.depth = t.place.depth;
+        break;
       case TAG.RemoveObject2:
         t.depth = r.u16();
         break;
@@ -587,6 +598,24 @@ function parsePlaceObject2(r: BitReader): ParsedPlace {
   if (flags & 0x20) p.name = r.string();
   if (flags & 0x40) p.clipDepth = r.u16();
   if (flags & 0x80) p.clipActions = r.bytes(r.buf.length - r.pos);
+  return p;
+}
+
+function parsePlaceObject3(r: BitReader): ParsedPlace {
+  const flags = r.u8();
+  const flags2 = r.u8();
+  const depth = r.u16();
+  const p: ParsedPlace = { flags, move: !!(flags & 0x01), depth };
+  if (flags2 & 0x08 || (flags2 & 0x10 && flags & 0x02)) p.className = r.string();
+  if (flags & 0x02) p.characterId = r.u16();
+  if (flags & 0x04) p.matrix = r.matrix();
+  if (flags & 0x08) p.cxform = r.cxformWithAlpha();
+  if (flags & 0x10) p.ratio = r.u16();
+  if (flags & 0x20) p.name = r.string();
+  if (flags & 0x40) p.clipDepth = r.u16();
+  if (flags2 & 0x01) p.filters = readFilterList(r);
+  if (flags2 & 0x02) p.blendMode = r.u8();
+  if (flags2 & 0x04) p.bitmapCache = r.u8();
   return p;
 }
 

@@ -7,6 +7,7 @@
 import { matrixFromTransform } from "./geometry.ts";
 import type { Mat } from "./geometry.ts";
 import type { Scene, SceneSprite, SceneKey } from "./scene.ts";
+import type { SceneFilter } from "./effects.ts";
 
 export type Vec4 = [number, number, number, number];
 
@@ -25,6 +26,10 @@ export interface Placement {
   cxform: Cxform | null;
   clipDepth: number | null;
   name: string | null;
+  /** PlaceObject3 blend mode (absent = normal) */
+  blend?: string | null;
+  /** PlaceObject3 filters (absent = none) */
+  filters?: SceneFilter[] | null;
 }
 
 export interface BakedSprite {
@@ -129,6 +134,8 @@ export function bakeSprite(sprite: SceneSprite): BakedSprite {
           cxform: pose.cxform,
           clipDepth: layer.clip ? layer.clipDepth ?? null : null,
           name: layer.name || null,
+          ...(k.blend && k.blend !== "normal" ? { blend: k.blend } : {}),
+          ...(k.filters && k.filters.length ? { filters: k.filters } : {}),
         });
       }
     }
@@ -155,7 +162,7 @@ export function bakeStage(scene: Scene): BakedSprite {
 export type FrameOp =
   | { op: "place"; p: Placement }
   | { op: "replace"; p: Placement }
-  | { op: "move"; p: Placement; changedMatrix: boolean; changedCxform: boolean }
+  | { op: "move"; p: Placement; changedMatrix: boolean; changedCxform: boolean; changedEffects?: boolean }
   | { op: "remove"; depth: number };
 
 /**
@@ -179,7 +186,8 @@ export function diffFrames(prev: Placement[], cur: Placement[]): FrameOp[] {
     }
     const changedMatrix = !sameMat(q.matrix, p.matrix);
     const changedCxform = !sameCx(q.cxform, p.cxform);
-    if (changedMatrix || changedCxform) ops.push({ op: "move", p, changedMatrix, changedCxform });
+    const changedEffects = (q.blend || null) !== (p.blend || null) || JSON.stringify(q.filters || null) !== JSON.stringify(p.filters || null);
+    if (changedMatrix || changedCxform || changedEffects) ops.push(changedEffects ? { op: "move", p, changedMatrix, changedCxform, changedEffects } : { op: "move", p, changedMatrix, changedCxform });
   }
   return ops;
 }

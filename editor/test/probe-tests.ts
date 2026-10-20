@@ -10,10 +10,10 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     type Px = [number, number, number];
     const Y: Px = [255, 255, 0], M: Px = [255, 0, 255], C: Px = [0, 255, 255];
     /** a synthetic shot: background, the probe clip drawn at scale s from (ox, oy), optionally mirrored, with knobs */
-    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round" }) => {
-      const W = 1400, H = 400, img = new Uint8Array(W * H * 4);
+    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round"; blend?: "honoured" | "ignored" }) => {
+      const W = 1600, H = 400, img = new Uint8Array(W * H * 4);
       for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
-      const s = o.s, ox = o.mirrored ? 1150 : 200, oy = 100;
+      const s = o.s, ox = o.mirrored ? 1350 : 200, oy = 100;
       const put = (cx: number, cy: number, c: Px) => { // clip px -> screen px
         const x = Math.round(o.mirrored ? ox - cx * s : ox + cx * s), y = Math.round(oy + cy * s);
         if (x >= 0 && y >= 0 && x < W && y < H) img.set([c[0], c[1], c[2], 255], (y * W + x) * 4);
@@ -48,6 +48,8 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       const line = (y: number, ext: number) => { for (let cy = y - 6; cy < y + 6; cy += step) for (let cx = 440 - ext; cx < 500 + ext; cx += step) put(cx, cy, [32, 255, 32]); };
       line(10, o.caps === "round" ? 6 : 0);
       line(50, 6);
+      // (550,30): #600000 placed with blend add — over the 40,44,40 background add gives 136,44,40, normal 96,0,0
+      square(550, 30, o.blend === "ignored" ? [96, 0, 0] : [136, 44, 40]);
       return { width: W, height: H, rgba: img };
     };
     test("analyzeProbeShot: finds the checker marker, its scale and orientation; reads sampling, edge mode, the blink colour, the control and the cxform square", () => {
@@ -67,6 +69,8 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       assert(nz.found && Math.abs(nz.scale - 2) < 0.1 && nz.blink === "green", `stray yellow ignored: ${JSON.stringify(nz)}`);
       eq(a.gradient, "drawn", "black → red in clip x");
       eq(a.caps, "honoured", "butt ends at the endpoint, square reaches past it");
+      eq(a.blend, "honoured", "add lets the background through");
+      eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", blend: "ignored" })).blend, "ignored");
       eq(m.caps, "honoured", "mirrored too");
       eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", caps: "round" })).caps, "ignored");
       eq(m.gradient, "drawn", "read in clip x when mirrored too");
@@ -79,6 +83,7 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       const s = pc.summarizeProbe(shots);
       eq(s.gradient, "drawn");
       eq(s.caps, "honoured");
+      eq(s.blend, "honoured");
       eq(s.childFraming, "free-running"); eq(s.sampling, "smooth"); eq(s.edge, "clamp"); eq(s.cxform, "applied"); eq(s.mirrored, true);
       const held = pc.summarizeProbe([0, 1, 2].map(() => pc.analyzeProbeShot(shot({ s: 2, blink: [255, 32, 32] }))));
       eq(held.childFraming, "held");
@@ -89,6 +94,10 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
 
 /** OBSERVED in the game (npm run test:artprobe, 2026-10-20): the facts the art preview must follow */
 export function runProbeFixtureTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture: (name: string) => string): void {
+  test("OBSERVED 2026-10-20 fixture: the game honours a PlaceObject3 blend mode (the add square lets the background through)", () => {
+    const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { blend?: string } };
+    eq(j.summary.blend, "honoured");
+  });
   test("OBSERVED 2026-10-20 fixture: the game honours LINESTYLE2 caps (DefineShape4): a butt stroke ends at its endpoint, a square one reaches past it", () => {
     const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { caps?: string } };
     eq(j.summary.caps, "honoured");
