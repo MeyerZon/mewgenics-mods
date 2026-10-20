@@ -437,7 +437,13 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     `gradient:<id>` fills → DefineShape3 fill types 0x10/0x12/0x13 (`src/core/art/gradient.ts`); SVG gradients import;
     the preview samples a stop strip with the same t-function. OBSERVED in the game (`npm run test:artprobe`, the
     (390,30) square): a linear gradient is drawn along its authored axis; whether gray stops are palette-remapped is
-    not observable on an (unpaletted) enemy clip. Gate variant `gradient` boots. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+    not observable on an (unpaletted) enemy clip. Gate variant `gradient` boots.
+    **DefineShape4 / LINESTYLE2 done 2026-10-20:** path `strokeCap` / `strokeJoin` / `miterLimit` / `strokeScale` and
+    gradient strokes; the emitter picks DefineShape4 only when a shape needs it (plain art stays byte-identical
+    DefineShape3), incl. gradients with >8 stops, a focus or reflect/repeat (DefineShape4-only in SWF); EdgeBounds +
+    flags; `src/core/art/stroke.ts` is the preview's stroke geometry. OBSERVED: the game honours LINESTYLE2 caps (the
+    probe's butt line is ~60 clip px, the square one ~72). Gate variant `shape4` boots. The fill-winding flag is not
+    written (the emitter resolves fill sides itself). Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
     contract and `src/mcp/` untouched.
