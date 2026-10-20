@@ -10,6 +10,8 @@ expect round >= 1
 expect units >= 2
 cmd spawn Rat
 expect console "Spawned Rat" within 5
+# the console answers in the spawn frame; the unit list includes the rat a frame or more later (OBSERVED 2026-10-20)
+wait frames 10
 expect units >= 7
 wait rounds 1
 expect round >= 2

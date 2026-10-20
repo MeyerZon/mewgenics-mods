@@ -56,6 +56,8 @@ timeout: 120s                    # 5000 | 90s | 2m, default 120000 ms
 hide: true                       # default true: hide the window + swap interval 0
 clean: false                     # default false: ExitProcess right after the end event. true: clear the app's running
                                  # flag and let the game shut down; the DLL terminates after 3 s, the runner kills after 5 s
+interactive: false               # default false. true: -mewtest_pipe 1 — the DLL serves a named pipe and, at the end of
+                                 # the script, idles for requests instead of ending (see "Interactive mode"); no quit needed
 
 cmd <rest of line verbatim, 1..4078 bytes>       run a debug-console command
 enter <SceneName>                                TacticsTest: replay the dev menu's test-fight button (no save opened);
@@ -63,6 +65,14 @@ enter <SceneName>                                TacticsTest: replay the dev men
                                                  slot mewtest01.sav (moved aside by the runner before the run, so it is
                                                  always a new game: the intro cutscene). Waits for the console like cmd;
                                                  once per script; an unknown name fails before launch
+enter Campaign house                             the same fresh campaign, but the slot is marked as begun first
+                                                 (game_began 1) so MewDirector::start resumes into the real House — no
+                                                 interactive intro. Day 1, no cats, the neighbor's tutorial dialogue up;
+                                                 the campaign director's commands exist (pinned in
+                                                 editor/test/fixtures/ingame/console-campaign-listcmds.txt: the test
+                                                 director's 17 + upgrade, upgrade_all, house_boss_event, max_npc_favor,
+                                                 interstitial_test, spawn_custom_stray, house_weather, get_furniture, …).
+                                                 The enter event carries "mode":"house"
 seed <N>                                         pin the game's RNG (TLS+0x178) to N (0..2^64-1) once the game's own
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every
@@ -77,6 +87,11 @@ expect round <op> <N>                            TurnControl's round (0 outside 
 expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail)
 expect stacks <Status> on <unit> varied          >= 2 distinct stacks values seen for (unit, status) by earlier dump /
                                                  expect stacks directives (and this one)
+expect unit <unit> <field> <op> <value>          one field of one unit as the units event shows it: name|class take a
+                                                 quoted value with == or !=; faction|move|act|turnkind take an integer
+                                                 with any op. Event kind "unit", arg e.g. `8 name == "Lil' Rat"`,
+                                                 detail `unit 8 "Lil' Rat": name "Lil' Rat"`. Faction numbers seen:
+                                                 allies 1, coins 0, enemies 2
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
 dump                                             snapshot the units into a units event
@@ -89,7 +104,7 @@ log "<text>"                                     echo into the result file
 quit [code]                                      no code: 0 if every expect passed, else 1; end of script == quit
 ```
 
-String literals use double quotes with `\"` and `\\` escapes. Limits: 1024 directives, 1024-byte lines. Everything
+String literals use double quotes with `\"` and `\\` escapes. Limits: 1024 directives, 4096-byte lines (`MT_MAX_LINE`). Everything
 executes on the game's main thread from the per-frame hook, one directive per frame; waits consume frames.
 
 ## Result file (JSON lines)
@@ -110,6 +125,10 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"log","text":"..."}
 {"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
 {"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}
+{"ev":"idle","line":N}                               interactive mode: the script ran to its end; the DLL now serves the pipe
+{"ev":"exec","id":N,"op":"exec","text":"...","ok":true,"lines":["..."]}   a pipe request served (also the reply on the pipe)
+{"ev":"units","id":N,...}                            a dump requested over the pipe carries the request id
+{"ev":"exec","id":N,"op":"quit","ok":true,"code":N}  the quit request's reply; the end record follows
 {"ev":"popup","title":"WARNING","text":"..."}   a modal dialog of the game (its own WARNING/ERROR boxes) that the watchdog
                                                 closed — it would otherwise stop the frame loop for good under a hidden
                                                 window; never decides the verdict, appended to its reason
@@ -255,11 +274,46 @@ under `mods/`.
   `MewDirector::start` (a fresh slot = the new-game intro cutscene; a kept one would resume). ~900 frames later
   the game was still running the cutscene (seen in a `shot`), the slot existed (32 KB), no popup, real saves
   unchanged. A second run moved the first slot into its run dir (`reset: true`). No combat commands exist on this
-  path until the cutscene is over and the house is reached (open: skipping the intro from the harness).- The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
+  path until the cutscene is over and the house is reached (open: skipping the intro from the harness).
+- The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
   mode" above: the game does not shut itself down when its running flag is cleared, so nothing flushes). Load-time
   markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.
 - Mewjector loads mods on the first `version.dll` proxy call, which on this machine is after SDL has initialized;
   the DYNAPI slots therefore already hold their final values when `DllMain` runs.
+
+## Interactive mode (named pipe)
+
+`interactive: true` (or MCP `start_ingame_session`, which forces it) launches the game with `-mewtest_pipe 1`: the DLL
+creates `\\.\pipe\mewtest-<pid>` (named in the `start` event as `pipe`), runs the script as usual and, when the script
+is over, emits `idle` and keeps serving the pipe until a quit request or the script's timeout (the usual `timeout`
+verdict). Requests are one JSON object per line, replies one JSON line each — and every reply is the very event the
+DLL appended to `result.jsonl`, so the report (`report.result.execs`, `report.result.idle`), the log checks and the
+save-set check are those of a scripted run.
+
+```
+-> {"id":1,"op":"exec","text":"spawn Rat","frames":10}    run a console line; collect its console output for N frames (default 3, max 600)
+<- {"ev":"exec","id":1,"op":"exec","text":"spawn Rat","ok":true,"lines":["Spawned Rat","Executed: spawn"],"t":…,"frame":…}
+-> {"id":2,"op":"dump"}                                   the units event (with "id")
+-> {"id":3,"op":"quit"}                                   reply {"ev":"exec","id":3,"op":"quit","ok":true,"code":N}, then end, then exit
+<- {"ev":"exec","id":N,"ok":false,"error":"…"}            a bad request, a full queue (8 slots), or a request the runner never served
+```
+
+Rules the runner follows: a request is served on the frame thread, one per frame, only while the script is **idle or
+inside a wait** (`wait frames/turns/ms/rounds`, a `shot` hold) and only once the debug console exists — never between
+two `MT_S_RUN` directives, never while a `cmd` waits for the console, never inside `expect console … within` (an
+exec moves the console window that expect reads). An `exec` stays active until its `frames` have passed, then its
+reply carries every console line seen since the command. OBSERVED 2026-10-20: a request sent right after the launch
+was served inside `wait frames 120`, before the fight — so a driver waits for `idle` first (`session.waitForIdle()`;
+`start_ingame_session` does that by default, `waitIdle: false` returns as soon as the pipe is up) and an exec at frame 1,
+before `DebugConsole::init`, crashed the game inside `DebugConsole::Execute` — hence the console guard.
+
+Node: `ingame.startSession({ plan, test, … })` → `{ pid, runDir, pipe, idle, ended, waitForIdle(), exec(cmd, frames?),
+dump(), stop() }` (`editor/src/core/ingame/session.ts`, over `pipe.ts`'s `connectPipe`/`pipePath`). MCP:
+`start_ingame_session { mod, test | script, timeoutMs?, hide?, savesuffix?, connectTimeoutMs?, waitIdle? }` →
+`{ sessionId, pid, runDir, pipe, idle }`; `ingame_exec { sessionId, cmd | op: dump | op: quit, frames? }`;
+`stop_ingame_session { sessionId, includeEvents? }` → the report. One client at a time, one game at a time (the run lock
+is held for the session). `npm run test:ingame` skips interactive scripts ("drive it through a session"):
+`mods/dev-sandbox/tests/interactive-smoke.mewtest` is the one to start a fight session from.
 
 ## Writing a test (TDD)
 

@@ -12,7 +12,8 @@ Target build 1.1.21239 (Steam build id 25143593). Read-only reconnaissance: `Mew
 code, raw bytes, shaders, GON, vanilla SWF bytes or the game log on this machine), **INFERRED**
 (reasoned from that evidence) or **COMMUNITY-SOURCED** (public material, with a URL). Decompiled
 evidence comes from a Ghidra 12.1.4 session (REA, Docker); the functions are kept under the
-git-ignored `.analysis/decompiled/r3d_*` and `p2_*` (118 files); the full RE reports are
+git-ignored `.analysis/decompiled/r3d_*` and `p2_*` (118 files — **not on disk since the 2026-10-19 worktree wipe**;
+re-decompile on demand from the function tables below, the renderer is not current work); the full RE reports are
 `.analysis/rea-renderer-report-2026-10-18.md` (pass 1: mvp, camera, sort, board) and
 `.analysis/rea-renderer-report-pass2-2026-10-18.md` (pass 2: base matrix and z range, frame model,
 FBO format, cameras, picking, cull/autoflip). All addresses are VAs (image base `0x140000000`).

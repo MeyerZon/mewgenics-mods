@@ -65,6 +65,47 @@ export const TOOL_INPUT = {
   list_ingame_tests: z.object({
     mod: str("optional mod folder to restrict to").optional(),
   }),
+  list_art_scenes: z.object({
+    mod: str("mod folder; lists art/*.scene.json, built swfs/*.swf and art assets"),
+  }),
+  read_art_scene: z.object({
+    mod: str(),
+    path: str("scene file inside the mod, e.g. art/my_rat.scene.json"),
+  }),
+  write_art_scene: z.object({
+    mod: str(),
+    path: str("scene file inside the mod (art/<name>.scene.json)"),
+    scene: anyObject.describe("the whole scene (docs/art-preview-plan.md §2: version, name, shapes, bitmaps, sprites, exports, stage_instances)"),
+    force: bool("write even when the scene has validation errors (they are returned)").optional(),
+    dryRun: bool("validate only, write nothing").optional(),
+  }),
+  new_art_scene: z.object({
+    mod: str(),
+    name: str("scene name, becomes art/<name>.scene.json"),
+    starter: bool("start from the example scene (default true)").optional(),
+  }),
+  import_svg: z.object({
+    svgText: str("SVG markup (or pass mod + path of an .svg inside the mod)").optional(),
+    mod: str("mod folder (for path, and for into)").optional(),
+    path: str("an .svg inside the mod").optional(),
+    options: anyObject.describe("importer options: applyViewBox, quantizeGray, grayTolerance, dropStrokes").optional(),
+    into: z.object({
+      scene: str("scene file inside the mod to add the shape to"),
+      shapeId: str("the new shape's id"),
+      replace: bool("overwrite a shape with that id").optional(),
+    }).describe("save the imported shape into a scene (needs mod); without it nothing is written").optional(),
+  }),
+  build_swf: z.object({
+    mod: str(),
+    path: str("scene file inside the mod"),
+    abc: z.enum(["none", "stub"]).describe("DoABC: none (default; SymbolClass binds the name) or stub").optional(),
+    dryRun: bool("emit + self-check, write nothing").optional(),
+    writeSwflist: bool("also write swfs/swflist.gon.append (default true)").optional(),
+  }),
+  inspect_swf: z.object({
+    mod: str(),
+    path: str("a built SWF inside the mod, e.g. swfs/my_rat.swf"),
+  }),
   run_ingame_test: z.object({
     mod: str("mod folder; its tests/ dir is searched and it is the default -modpaths entry"),
     test: str("script name without .mewtest, e.g. smoke").optional(),
@@ -77,6 +118,26 @@ export const TOOL_INPUT = {
   }),
   check_game_build: z.object({
     exe: str("optional path to a Mewgenics.exe to check instead of the installed one (read-only)").optional(),
+  }),
+  start_ingame_session: z.object({
+    mod: str("mod folder; its tests/ dir is searched and it is the default -modpaths entry"),
+    test: str("script name without .mewtest (made interactive: the DLL idles at its end)").optional(),
+    script: str("inline .mewtest text (alternative to `test`); e.g. \"wait frames 120\\nenter TacticsTest\\nwait turns 1\\n\"").optional(),
+    timeoutMs: num("the session's wall-clock budget (default the script's timeout, 120 s); the game is killed after it").optional(),
+    hide: bool("hide the game window (default true)").optional(),
+    savesuffix: str("override the save suffix (default dev); never empty").optional(),
+    connectTimeoutMs: num("how long to wait for the DLL's pipe after the launch (default 30000)").optional(),
+    waitIdle: bool("return only once the script has run to its end and the DLL idles (default true); false returns right after the pipe connects, and requests are then served inside the script's waits").optional(),
+  }),
+  ingame_exec: z.object({
+    sessionId: str("from start_ingame_session"),
+    cmd: str("a console line to run (op exec), e.g. \"spawn Rat\"").optional(),
+    op: z.enum(["exec", "dump", "quit"]).describe("exec (default when cmd is given) | dump (the units event) | quit (ends the session and returns the report)").optional(),
+    frames: num("frames to keep collecting console output after the command (default 3, max 600; ~180 frames/s hidden)").optional(),
+  }),
+  stop_ingame_session: z.object({
+    sessionId: str("from start_ingame_session"),
+    includeEvents: bool("include the raw JSONL events in the report").optional(),
   }),
   port_bindings: z.object({
     build: str("the NEW Steam build id (digits), e.g. 25200000; names bindings/<build>.json"),
@@ -183,6 +244,76 @@ export const TOOLS: ToolDef[] = [
         includeEvents: a.includeEvents,
       });
     },
+  ),
+  def(
+    "start_ingame_session",
+    "Launch Mewgenics on an interactive .mewtest (the harness runs the script, then idles and serves a named pipe instead of exiting) and connect to it. Returns { sessionId, pid, runDir, pipe }. Then ingame_exec sends console lines (after `enter TacticsTest` the run commands exist: spawn, bind, status, win, ...), op dump reads the units, and stop_ingame_session (or op quit) ends the game and returns the ordinary report (verdict, log findings, save-set check). One game at a time; the session dies at the script's timeout. Never the real save (-savesuffix); docs/ingame-testing.md \"Interactive mode\".",
+    async (a) => {
+      if ((a.test && a.script) || (!a.test && !a.script)) throw new ToolError("pass exactly one of `test` or `script`");
+      const r = await api.startIngameSession({ mod: a.mod, test: a.test, script: a.script, timeoutMs: a.timeoutMs, hide: a.hide, savesuffix: a.savesuffix, connectTimeoutMs: a.connectTimeoutMs, waitIdle: a.waitIdle });
+      if (!r.ok) throw new ToolError(r.error);
+      return r;
+    },
+  ),
+  def(
+    "ingame_exec",
+    "Send one request to a running in-game session: a console line (cmd; the reply is the DLL's exec event with the console lines it produced within `frames` frames), op dump (the units event: names, classes, factions, statuses, stacks) or op quit (ends the game; returns the report). Rejects with \"unknown session\" after the game exited.",
+    async (a) => {
+      const r = await api.ingameExec({ sessionId: a.sessionId, cmd: a.cmd, op: a.op, frames: a.frames });
+      if (!r.ok) throw new ToolError(r.error);
+      return r;
+    },
+  ),
+  def(
+    "stop_ingame_session",
+    "End an in-game session (sends quit, waits for the game to exit) and return the run's report, exactly as run_ingame_test would (every exec exchange is also in result.jsonl / report.result.execs).",
+    async (a) => {
+      const r = await api.stopIngameSession({ sessionId: a.sessionId, includeEvents: a.includeEvents });
+      if (!r.ok) throw new ToolError(r.error);
+      return r;
+    },
+  ),
+  def(
+    "list_art_scenes",
+    "List a mod's art: scenes (art/*.scene.json, with validity), built SWFs (swfs/*.swf) and assets (SVG/PNG). Art is authored as a scene (shapes from SVG paths with gray:N palette fills, bitmaps, sprites with keyed layers and labels, exports = SymbolClass names) and built into a SWF the game loads through swfs/swflist.gon.append.",
+    (a) => api.listArtScenes(a.mod),
+  ),
+  def(
+    "read_art_scene",
+    "Read and validate one scene file; returns { ok, scene, findings }.",
+    (a) => api.readArtScene(a.mod, a.path),
+  ),
+  def(
+    "write_art_scene",
+    "Write a whole scene file inside the mod (validated first; refused with findings when invalid unless force). dryRun validates only. Writes are confined to mods/<mod>/.",
+    (a) => (a.dryRun ? api.validateArtScene(a.scene) : api.writeArtScene(a.mod, a.path, a.scene, { force: a.force })),
+  ),
+  def(
+    "new_art_scene",
+    "Create art/<name>.scene.json (the example scene by default: two gray shapes, a 24-frame sprite with idle/blink labels, exports).",
+    (a) => api.newArtScene(a.mod, a.name, { starter: a.starter }),
+  ),
+  def(
+    "import_svg",
+    "Convert SVG markup (or an .svg inside the mod) into a scene shape: paths with fills quantised to gray:N where possible; gradients, filters, text, use and masks are reported as findings. With into { scene, shapeId } the shape is saved into that scene; otherwise nothing is written and the shape is returned.",
+    (a) => {
+      if (a.into) {
+        if (!a.mod) throw new ToolError("into needs mod");
+        return api.importSvgIntoScene({ mod: a.mod, scenePath: a.into.scene, shapeId: a.into.shapeId, svgText: a.svgText, svgPath: a.path, options: a.options, replace: a.into.replace });
+      }
+      if (!a.svgText && !(a.mod && a.path)) throw new ToolError("pass svgText, or mod + path");
+      return api.importSvgShape({ svgText: a.svgText, mod: a.mod, relPath: a.path, options: a.options });
+    },
+  ),
+  def(
+    "build_swf",
+    "Build a scene into mods/<mod>/swfs/<scene.name>.swf (DefineShape3 / DefineBitsLossless2 / DefineSprite / SymbolClass), re-read it with the verification reader, and add it to swfs/swflist.gon.append. dryRun emits and checks without writing. To see it in the game: an ability icon via _Append_AbilityIcon (npm run test:swfgate) or a character's graphics.movieclip (see mods/_artprobe and npm run test:artprobe).",
+    (a) => api.buildSwf(a.mod, a.path, { abc: a.abc, dryRun: a.dryRun, writeSwflist: a.writeSwflist }),
+  ),
+  def(
+    "inspect_swf",
+    "Read a built SWF inside the mod with the verification reader: header, tag histogram, frame labels, exports, DoABC count.",
+    (a) => api.inspectSwf(a.mod, a.path),
   ),
   def(
     "check_game_build",

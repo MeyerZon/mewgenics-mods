@@ -41,7 +41,13 @@ let skipped = 0;
 const test: TestFn = (name, fn) => {
   if (!filter.matches(name)) { skipped++; return; }
   try {
-    fn();
+    const r = fn() as unknown;
+    // test bodies are synchronous: an async body would "pass" before its awaits ran (and its rejection would be
+    // lost). Await outside test() and assert inside it.
+    if (r && typeof (r as { then?: unknown }).then === "function") {
+      (r as Promise<unknown>).catch(() => undefined);
+      throw new Error("async test body: test() does not await — do the async work before test() and assert synchronously inside it");
+    }
     passed++;
     console.log(`  ok  ${name}`);
   } catch (e) {
@@ -314,6 +320,51 @@ if (BASE_READY) {
     assert(r.ok, `expected ok, got ${r.counts.errors} errors: ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
   });
 }
+// ---- 4d. mods/_golden-merge: the golden-through-dump overlays (TDD target 8; T1 against the real base) ----
+if (BASE_READY) {
+  test("_golden-merge validates with zero errors (test-only overlays: Rat .merge, GoldenRat .append, Pooter .patch, two loc rows)", () => {
+    const r = validateMod("_golden-merge");
+    assert(r.ok, `expected ok, got ${r.counts.errors} errors: ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
+    assert(!r.findings.some((f) => f.code === "mod-missing" || f.code === "mod-empty"), `mod present and non-empty: ${r.findings.map((f) => f.code).join(",")}`);
+  });
+  test("_golden-merge .merge preview: Rat changed (graphics.name -> GOLDEN_RAT_NAME, properties.faction allies), nothing added", () => {
+    const p = previewMerge("_golden-merge", "data/characters/enemies.gon.merge");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
+    eq(p.mode, "merge");
+    eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "Rat:changed");
+    const eff = p.touched[0]!.effective || "";
+    assert(/name\s+"GOLDEN_RAT_NAME"/.test(eff) && /faction\s+allies/.test(eff), `effective Rat: ${eff.slice(0, 500)}`);
+    assert(/ENEMY_LILRAT_NAME/.test(p.touched[0]!.base || "") && /faction\s+enemies/.test(p.touched[0]!.base || ""), "the base Rat is the vanilla one");
+    eq(p.effectiveEntryCount, p.baseEntryCount);
+  });
+  test("_golden-merge .append preview: GoldenRat added as a new entry (variant_of Rat), base count + 1", () => {
+    const p = previewMerge("_golden-merge", "data/characters/enemies.gon.append");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
+    eq(p.mode, "append");
+    eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "GoldenRat:added");
+    eq(p.effectiveEntryCount, p.baseEntryCount + 1);
+  });
+  test("_golden-merge .patch preview: Pooter changed — faction.overwrite allies and stats.speed.add 10 -> 15", () => {
+    const p = previewMerge("_golden-merge", "data/characters/enemies.gon.patch");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
+    eq(p.mode, "patch");
+    eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "Pooter:changed");
+    const eff = p.touched[0]!.effective || "";
+    assert(/faction\s+allies/.test(eff), `faction overwritten: ${eff.slice(0, 500)}`);
+    assert(/speed\s+15\b/.test(eff), `speed 5 + 10 = 15: ${eff.slice(0, 500)}`);
+    eq(p.effectiveEntryCount, p.baseEntryCount);
+  });
+  test("_golden-merge CSV .append preview: two 12-column loc rows added (GOLDEN_RAT_NAME, APPENDED_RAT_NAME)", () => {
+    const p = previewMerge("_golden-merge", "data/text/combined.csv.append");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "csv" || !("addedRows" in p)) throw new Error("csv append preview expected");
+    eq(p.addedRows.map((r) => r[0]).join(","), "GOLDEN_RAT_NAME,APPENDED_RAT_NAME");
+    assert(p.addedRows.every((r) => r.length === 12), JSON.stringify(p.addedRows));
+  });
+} else console.log("  (skipped: base data not extracted; _golden-merge is checked against data/characters/enemies.gon)");
 
 // ---- 4b. Validator fixtures (synthetic base; one mod per finding code; T0) ----
 {
@@ -380,7 +431,21 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 13 editor tools", () => eq(list.tools.length, 13));
+    test("tools/list returns the 23 editor tools", () => eq(list.tools.length, 23));
+    let bres: unknown = null, berr = "";
+    try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
+    test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
+      assert(bres !== null, berr);
+      const p = payloadOf(bres);
+      assert(p.ok === true && p.bytes > 0, JSON.stringify(p).slice(0, 300));
+    });
+    let ires: unknown = null, ierr = "";
+    try { ires = await req("tools/call", { name: "import_svg", arguments: { svgText: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="4" height="4" fill="#888"/></svg>' } }); } catch (e) { ierr = String(e); }
+    test("tools/call import_svg { svgText } -> a shape with one path (nothing written)", () => {
+      assert(ires !== null, ierr);
+      const p = payloadOf(ires);
+      assert(p.ok === true && p.shape && p.shape.paths.length === 1, JSON.stringify(p).slice(0, 300));
+    });
     let pres2: unknown = null;
     let perr2 = "";
     try { pres2 = await req("tools/call", { name: "port_bindings", arguments: { build: "25143593", dryRun: true } }); } catch (e) { perr2 = String(e); }
@@ -478,6 +543,9 @@ await mcpSmoke();
   let pt: typeof import("./probe-tests.ts") | null = null;
   try { pt = await import("./probe-tests.ts"); } catch (e) { test("probe-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (pt) { pt.runProbeTests(test, assert, eq); pt.runProbeFixtureTests(test, assert, eq, (n) => readFileSync(join(HERE, "fixtures", "ingame", n), "utf8")); await pt.runPreviewAgreementTests(test, assert, eq, (n) => readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"), readFileSync(join(HERE, "..", "web", "src", "art", "preview-gl.ts"), "utf8")); }
+  let dt: typeof import("./deps-tests.ts") | null = null;
+  try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (dt) await dt.runDepsTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----

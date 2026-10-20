@@ -1,0 +1,19 @@
+mods: dev-sandbox
+timeout: 90s
+hide: false
+# enter Campaign house: a fresh campaign on the harness-owned slot mewtest01.sav, marked as begun (game_began 1, what
+# the new-game branch writes before its interactive intro) so MewDirector::start resumes into the real House.
+# Pins the campaign director's console command set (a non-test director: the 17 of the test director plus 11 house
+# commands) and that a house command executes (the console echoes only the command name: "Executed: set_day").
+wait frames 120
+enter Campaign house
+wait frames 300
+shot "house"
+cmd listcmds
+expect console "skip_tutorial" within 5
+expect console "set_day arg0" within 5
+expect noconsole "spawn arg0"
+cmd set_day 2
+expect console "Executed: set_day" within 5
+shot "house after set_day"
+quit

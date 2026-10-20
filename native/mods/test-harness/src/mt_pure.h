@@ -39,6 +39,7 @@ typedef struct MtArgs {
     int hide;                    /* -mewtest_hide 0|1, default 1 */
     unsigned timeoutMs;          /* -mewtest_timeout, default MT_DEFAULT_TIMEOUT_MS */
     int clean;                   /* -mewtest_clean 0|1, default 0 */
+    int pipe;                    /* -mewtest_pipe 0|1, default 0: interactive mode (named pipe, idle at end of script) */
     int hasSaveSuffix;           /* -savesuffix <value> seen */
     char err[128];
 } MtArgs;
@@ -64,8 +65,13 @@ typedef enum MtDirKind {
     MT_D_EXPECT_ROUND,  /* expect round <op> N (0 outside combat) */
     MT_D_EXPECT_STACKS, /* expect stacks <Status> on <unit> (<op> N | varied) */
     MT_D_SHOT,          /* shot "<label>": emit a shot event, then hold MT_SHOT_HOLD_MS so the runner can capture the window */
-    MT_D_SEED           /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
+    MT_D_SEED,          /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
+    MT_D_EXPECT_UNIT    /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
 } MtDirKind;
+/* expect unit: which MtUnit field; name|class compare as strings (== !=), the rest as integers (any op) */
+typedef enum MtUnitField { MT_F_NAME, MT_F_CLASS, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND } MtUnitField;
+int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
+const char *mt_unit_field_name(MtUnitField f);
 #define MT_SHOT_HOLD_MS 700
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
 /* scenes `enter` knows; 0 = unknown. The DLL and the Node parser (script.ts KNOWN_SCENES) must agree. */
@@ -74,6 +80,11 @@ typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT }
 /* the disposable campaign slot: created/opened by `enter Campaign`, moved aside by the runner before every such run
  * (editor savecheck.ts CAMPAIGN_SLOT_FILE must agree); no save-select UI lists this name. Under 16 chars (SSO). */
 #define MT_CAMPAIGN_SAVE "mewtest01.sav"
+/* enter modes: default; house = Campaign only: mark the fresh slot as begun (game_began 1, what the new-game branch
+ * 0x3af310 writes before the intro) so MewDirector::start resumes into the House instead of the interactive intro */
+#define MT_ENTER_DEFAULT 0
+#define MT_ENTER_HOUSE   1
+const char *mt_enter_mode_name(int mode);     /* "" for the default */
 int         mt_scene_id(const char *name);    /* 0 if unknown */
 const char *mt_scene_name(int scene);         /* "" if unknown */
 typedef struct MtDirective {
@@ -90,6 +101,8 @@ typedef struct MtDirective {
     long value;         /* expect stacks: N (the unit index lives in n) */
     int varied;         /* expect stacks … varied: >= 2 distinct values recorded for (unit, status) so far */
     unsigned long long seed;   /* seed: the value (full 64-bit) */
+    int enterMode;      /* enter: MT_ENTER_* */
+    MtUnitField field;  /* expect unit: the field; a string value lives in a, an integer one in value */
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
@@ -103,6 +116,33 @@ int mt_script_parse(const char *text, size_t len, MtScript *out, char *err, size
 typedef struct MtConsoleTrack { int seen; int windowStart; } MtConsoleTrack;
 int  mt_console_poll(MtConsoleTrack *t, int count, int *firstNew, int *numNew); /* returns numNew; shrink resets */
 void mt_console_mark_window(MtConsoleTrack *t);
+
+/* ---- mt_queue.c: interactive-mode requests (pipe thread -> frame thread) ---- */
+#define MT_Q_SLOTS 8
+#define MT_Q_TEXT 4096
+#define MT_Q_REPLY 8192
+#define MT_Q_FRAMES_DEFAULT 3
+#define MT_Q_FRAMES_MAX 600
+typedef enum MtQState { MT_Q_FREE = 0, MT_Q_PENDING, MT_Q_ACTIVE, MT_Q_DONE } MtQState;
+typedef enum MtQOp { MT_QOP_EXEC = 0, MT_QOP_DUMP, MT_QOP_QUIT } MtQOp;
+typedef struct MtRequest {
+    MtQState state;
+    unsigned seq;           /* push order (FIFO) */
+    long id;                /* the client's id, echoed in the reply */
+    MtQOp op;
+    int frames;             /* exec: frames to keep collecting console lines after the command ran */
+    char text[MT_Q_TEXT];   /* exec: the console line */
+    char reply[MT_Q_REPLY]; /* the JSON line the runner emitted for it (DONE) */
+} MtRequest;
+typedef struct MtQueue { MtRequest slots[MT_Q_SLOTS]; unsigned nextSeq; } MtQueue;
+void       mt_queue_init(MtQueue *q);
+MtRequest *mt_queue_push(MtQueue *q, long id, MtQOp op, const char *text, int frames);   /* NULL: full or text > MT_MAX_CMD */
+MtRequest *mt_queue_take(MtQueue *q);                                                    /* oldest PENDING -> ACTIVE; NULL when none or one is ACTIVE */
+void       mt_queue_complete(MtRequest *r, const char *replyJson);                       /* ACTIVE -> DONE */
+void       mt_queue_release(MtRequest *r);                                               /* -> FREE */
+/* {"id":N,"op":"exec"|"dump"|"quit","text":"...","frames":K}: 1 ok; 0 with err. frames defaults to MT_Q_FRAMES_DEFAULT, clamped to MT_Q_FRAMES_MAX */
+int        mt_pipe_parse_request(const char *line, long *id, MtQOp *op, char *text, size_t cap, int *frames, char *err, size_t errCap);
+int        mt_pipe_error_reply(char *out, size_t cap, long id, const char *msg);        /* {"ev":"exec","id":N,"ok":false,"error":"..."} (no newline) */
 
 /* ---- mt_runner.c ------------------------------------------------------- */
 #define MT_UNIT_NAME 64
@@ -137,12 +177,15 @@ typedef struct MtHost {
     void     (*request_exit)(void *u, int code);   /* called once, after the end event, on quit/eof */
     /* enter <scene> on the game thread: 1 entered, 0 refused (detail says why), -1 unavailable (symbols missing),
      * 2 not ready yet (the runner retries next frame, for at most MT_CONSOLE_WAIT_MS) */
-    int      (*enter_scene)(void *u, int scene, char *detail, size_t cap);
+    int      (*enter_scene)(void *u, int scene, int mode, char *detail, size_t cap);
     /* seed <N> on the game thread: 1 seeded, 0 refused (detail), -1 unavailable (symbol / TLS missing) */
     int      (*seed_rng)(void *u, unsigned long long seed, char *detail, size_t cap);
+    /* interactive mode: hand a reply to the pipe right now (used for quit, which exits before the pipe thread
+     * would get to it); NULL when there is no pipe */
+    void     (*pipe_reply)(void *u, const char *jsonLine);
 } MtHost;
 
-typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT } MtState;
+typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_IDLE } MtState;
 typedef struct MtRunner {
     const MtScript *s;
     int pc;
@@ -165,8 +208,16 @@ typedef struct MtRunner {
     long waitTargetRound;
     MtStackTrack tracks[MT_STACK_TRACKS];
     uint64_t t0, now;
+    /* interactive mode: at end of script go MT_S_IDLE (emit idle once) and keep serving the queue until a quit request */
+    int interactive;
+    int idleEmitted;
+    MtQueue *queue;         /* NULL: no pipe; requests are served one per frame while idle or inside a wait */
+    MtRequest *active;      /* an exec still collecting console lines */
+    int activeFramesLeft;
 } MtRunner;
 void mt_runner_init(MtRunner *r, const MtScript *s, uint64_t now);
+void mt_runner_set_interactive(MtRunner *r, int on);
+void mt_runner_attach_queue(MtRunner *r, MtQueue *q);
 int  mt_runner_step(MtRunner *r, const MtHost *h);                                 /* 1 running, 0 finished */
 void mt_runner_abort(MtRunner *r, const MtHost *h, int code, const char *reason);  /* emits end once; no request_exit */
 
