@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { rmSync } from "node:fs";
+import { rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { openApp, seedToursSeen, selectMod, readFrame, collectConsole } from "./helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -162,6 +162,26 @@ test.describe("Art mode — explorer & scene authoring", () => {
     const sc = JSON.parse(await page.locator("textarea").first().inputValue());
     const rig = Object.values(sc.sprites).find((s: any) => s.rig === "cat") as any;
     expect(rig && rig.layers.find((l: any) => l.name === "head").keys[0].ref).toBe("eye");
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
+  test("Export SVG writes art/<shape>.svg for an external editor; Replace from SVG brings an edited file back over the same shape", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await page.getByRole("button", { name: "Export SVG of body" }).click();
+    await expect(page.getByText(/art\/body\.svg/)).toBeVisible();
+    const file = join(SANDBOX, "art", "body.svg");
+    await expect.poll(() => existsSync(file)).toBe(true);
+    // "edit" it externally: recolour the first path to gray level 3 (#333333)
+    const edited = readFileSync(file, "utf8").replace(/fill="#[0-9a-f]{6}"/, 'fill="#333333"');
+    writeFileSync(file, edited);
+    await page.locator('input[aria-label="Replace body from SVG"]').setInputFiles(file);
+    await expect(page.getByText(/replaced shape "body"/)).toBeVisible();
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const sc = JSON.parse(await page.locator("textarea").first().inputValue());
+    expect(sc.shapes.body.paths[0].fill).toBe("gray:3");
     const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
@@ -354,6 +374,7 @@ test.afterAll(() => {
   try {
     rmSync(join(SANDBOX, "swfs"), { recursive: true, force: true });
     rmSync(join(SANDBOX, "art", "e2e_import.svg"), { force: true });
+    rmSync(join(SANDBOX, "art", "body.svg"), { force: true });
     rmSync(join(SANDBOX, "art", "e2e_gradient.svg"), { force: true });
   } catch {
     /* non-fatal */
