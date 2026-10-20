@@ -48,7 +48,7 @@ int mt_args_parse(const char *cmdline, MtArgs *a) {
         if (first) { first = 0; continue; }     /* argv[0] */
         const char *flag = NULL;
         if (!strcmp(tok, "-mewtest") || !strcmp(tok, "-mewtest_out") || !strcmp(tok, "-mewtest_hide") ||
-            !strcmp(tok, "-mewtest_timeout") || !strcmp(tok, "-mewtest_clean") || !strcmp(tok, "-savesuffix")) flag = tok;
+            !strcmp(tok, "-mewtest_timeout") || !strcmp(tok, "-mewtest_clean") || !strcmp(tok, "-mewtest_pipe") || !strcmp(tok, "-savesuffix")) flag = tok;
         if (!flag) continue;
         const char *save = p;
         if (!next_token(&p, val, sizeof val) || is_flag(val)) {
@@ -61,9 +61,11 @@ int mt_args_parse(const char *cmdline, MtArgs *a) {
         if (!strcmp(flag, "-mewtest")) snprintf(a->script, sizeof a->script, "%s", val);
         else if (!strcmp(flag, "-mewtest_out")) snprintf(a->out, sizeof a->out, "%s", val);
         else if (!strcmp(flag, "-savesuffix")) a->hasSaveSuffix = 1;
-        else if (!strcmp(flag, "-mewtest_hide") || !strcmp(flag, "-mewtest_clean")) {
+        else if (!strcmp(flag, "-mewtest_hide") || !strcmp(flag, "-mewtest_clean") || !strcmp(flag, "-mewtest_pipe")) {
             if (strcmp(val, "0") && strcmp(val, "1")) { snprintf(a->err, sizeof a->err, "%s must be 0 or 1", flag); return 0; }
-            if (flag[9] == 'h') a->hide = val[0] - '0'; else a->clean = val[0] - '0';
+            if (!strcmp(flag, "-mewtest_hide")) a->hide = val[0] - '0';
+            else if (!strcmp(flag, "-mewtest_clean")) a->clean = val[0] - '0';
+            else a->pipe = val[0] - '0';
         } else { /* -mewtest_timeout */
             char *end = NULL;
             unsigned long v = strtoul(val, &end, 10);

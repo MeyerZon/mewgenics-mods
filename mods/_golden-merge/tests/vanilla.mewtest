@@ -1,0 +1,22 @@
+mods: _autoplay
+timeout: 120s
+# The differential baseline for golden.mewtest: the same seeded fight WITHOUT the _golden-merge overlays.
+# OBSERVED 2026-10-20 (seed 42): the party plus four Coins = 8 units; spawned enemies follow in spawn order.
+# Faction numbers in the dump: allies 1, coins 0, enemies 2.
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+expect units == 8
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+cmd spawn Pooter
+expect console "Spawned Pooter" within 10
+wait frames 10
+dump
+expect units == 10
+expect unit "Lil' Rat" faction == 2
+expect unit 8 name == "Lil' Rat"
+expect unit Pooter faction == 2
+expect unit 9 name == "Pooter"
+quit

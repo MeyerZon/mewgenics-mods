@@ -10,6 +10,7 @@ import { post } from "../api.ts";
 import { A, getScene, bump, build, ensurePreview, getPreview, previewCanvas, pushSceneToPreview, setTarget, setShowGray, setRow, rampColor } from "./art-state.ts";
 import { sx, FindingRow } from "./Bits.tsx";
 import type { ArtRightTab, PrepareGateResponse } from "./types.ts";
+import { RufflePanel } from "./RufflePanel.tsx";
 
 export function ArtRightPanel() {
   const rightTab = useStore(A, (a) => a.rightTab);
@@ -19,10 +20,11 @@ export function ArtRightPanel() {
   let body: React.ReactNode;
   if (rightTab === "findings") body = <FindingsPanel />;
   else if (rightTab === "build") body = <BuildPanel />;
+  else if (rightTab === "ruffle") body = <RufflePanel />;
   else body = <PreviewPanel />;
   return (
     <div className="rightpanel">
-      <div className="tabs">{mk("preview", "Preview")}{mk("findings", "Findings")}{mk("build", "Build")}</div>
+      <div className="tabs">{mk("preview", "Preview")}{mk("findings", "Findings")}{mk("build", "Build")}{mk("ruffle", "Ruffle")}</div>
       <div className="panelbody">{body}</div>
     </div>
   );

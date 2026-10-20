@@ -1,0 +1,10 @@
+// .merge = GON DeepMerge: same-name fields merged recursively, new fields appended, mismatched types overwritten.
+// Observable through the harness dump: name (the loc key) and faction.
+Rat {
+    graphics {
+        name "GOLDEN_RAT_NAME"
+    }
+    properties {
+        faction allies
+    }
+}

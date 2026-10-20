@@ -34,6 +34,7 @@ const MIME: Record<string, string> = {
   ".png": "image/png",
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
+  ".wasm": "application/wasm",
 };
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -164,6 +165,16 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     }
     if (method === "GET" && url.pathname === "/api/art/inspect-swf") {
       return sendJson(res, 200, api.inspectSwf(q.get("mod") || "", q.get("path") || ""));
+    }
+    if (method === "GET" && url.pathname === "/api/art/vanilla-swfs") {
+      return sendJson(res, 200, api.listVanillaSwfs());
+    }
+    if (method === "GET" && url.pathname === "/api/art/vanilla-swf") {
+      const r = api.readVanillaSwf(q.get("name") || "");
+      if (!r.ok) return sendJson(res, 404, r);
+      res.writeHead(200, { "Content-Type": "application/x-shockwave-flash", "Cache-Control": "no-store" });
+      res.end(r.bytes);
+      return;
     }
     if (method === "GET" && url.pathname === "/api/art/palette") {
       return sendJson(res, 200, api.readArtPalette(q.get("which") === "fx_palette" ? "fx_palette" : "palette"));
