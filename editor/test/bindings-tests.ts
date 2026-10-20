@@ -381,20 +381,27 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (15), each with a signature", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (20, incl. the v4 run-entry symbols), each with a signature", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 15);
+    eq(want.length, 20);
+    for (const n of ["FW_SYM_SceneManager_CreateScene", "FW_SYM_Scene_CreateEntity", "FW_SYM_AddComponent_TacticsTest", "FW_SYM_Component_GetGame", "FW_SYM_TacticsTest_init"]) assert(want.includes(n), `${n} in framework_api.h`);
+    eq(entry(m, "AddComponent_TacticsTest")!.rva, "0x31c3e0");
+    eq(entry(m, "SceneManager_CreateScene")!.rva, "0x9d4950");
+    eq(entry(m, "Scene_CreateEntity")!.rva, "0x96b3e0");
+    eq(entry(m, "TacticsTest_init")!.rva, "0x833390");
+    eq(entry(m, "Component_GetGame")!.rva, "0x908e0");
     const got = symbolTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
     for (const e of got) assert(!!(e.signature && e.signature.pattern), `${e.name} needs a signature`);
     eq(entry(m, "TurnControl_NextTurn")!.rva, "0x8e3c60");
     eq(entry(m, "Status_GetCategory")!.signature!.exactLen, 126);
   });
-  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (9); App_global first", () => {
+  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (10, incl. the MewDirector global); App_global first", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_DATA_");
-    eq(want.length, 9);
+    eq(want.length, 10);
+    eq(entry(m, "MewDirector_global")!.rva, "0x13dac30");
     const got = dataTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
     eq(got[0].name, "App_global");
