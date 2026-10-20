@@ -499,6 +499,31 @@
     }
   },
   {
+    "name": "export_svg",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "scene file inside the mod"
+        },
+        "shapeId": {
+          "type": "string",
+          "description": "the shape to export"
+        }
+      },
+      "required": [
+        "mod",
+        "path",
+        "shapeId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "build_swf",
     "inputSchema": {
       "type": "object",

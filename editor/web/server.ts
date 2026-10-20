@@ -159,6 +159,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       const b = await body("/api/art/import-svg", req);
       return sendJson(res, 200, api.importSvgShape({ svgText: b.svgText, mod: b.mod, relPath: b.path, options: b.options }));
     }
+    if (method === "POST" && url.pathname === "/api/art/export-svg") {
+      const b = await body("/api/art/export-svg", req);
+      return sendJson(res, 200, api.exportShapeSvg(b.mod, b.path, b.shapeId));
+    }
     if (method === "POST" && url.pathname === "/api/art/build") {
       const b = await body("/api/art/build", req);
       return sendJson(res, 200, api.buildSwf(b.mod, b.path, { abc: b.abc, overrideScene: b.scene, writeSwflist: b.writeSwflist, dryRun: !!b.dryRun }));

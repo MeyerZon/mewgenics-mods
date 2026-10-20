@@ -12,6 +12,7 @@ import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene
 import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
 import { importSvg } from "./svg-import.ts";
 import { adoptGradients } from "./gradient.ts";
+import { shapeToSvg } from "./svg-export.ts";
 import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
 import type { RgbaImage } from "./png.ts";
@@ -256,6 +257,22 @@ export function importSvgIntoScene(args: ImportSvgIntoSceneArgs): { ok: boolean;
   const w = writeArtScene(args.mod, args.scenePath, next);
   if (!w.ok) return { ok: false, error: w.error || "write failed", findings: [...(imp.findings || []), ...((w as { findings?: Finding[] }).findings || [])] };
   return { ok: true, paths: imp.shape.paths.length, findings: imp.findings || [] };
+}
+
+/**
+ * Export one shape of a scene as art/<shapeId>.svg inside the mod, for an external vector editor (VectorCraft,
+ * Inkscape, …). Import it back with importSvgIntoScene({ …, replace: true, options: { applyViewBox: false } }).
+ */
+export function exportShapeSvg(modName: string, scenePath: string, shapeId: string): { ok: boolean; error?: string; relPath?: string; svg?: string; findings: Finding[] } {
+  const rd = readArtScene(modName, scenePath);
+  if (!rd.ok || !rd.scene) return { ok: false, error: rd.error || "scene does not validate", findings: rd.findings || [] };
+  const shape = rd.scene.shapes[shapeId];
+  if (!shape) return { ok: false, error: `no shape "${shapeId}" in ${scenePath}`, findings: [] };
+  const out = shapeToSvg(shape, rd.scene.gradients || {});
+  const relPath = `art/${shapeId.replace(/[^A-Za-z0-9_.-]/g, "_")}.svg`;
+  const w = writeModBytes(modName, relPath, new TextEncoder().encode(out.svg));
+  if (!w.ok) return { ok: false, error: w.error, findings: out.findings };
+  return { ok: true, relPath, svg: out.svg, findings: out.findings };
 }
 
 /** Decode every bitmap the scene references (PNG files inside the mod). */

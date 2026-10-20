@@ -169,6 +169,13 @@ Rules enforced by `scene.ts`:
 - Character IDs are assigned deterministically at build (shapes, bitmaps, sprites in
   dependency order) so rebuilding the same scene yields identical bytes.
 
+**External editors (2026-10-21).** VectorCraft (github.com/storytold/vectorcraft: Rust, native + WebAssembly, MIT/Apache,
+alpha) is a static vector illustration app — no timeline, no player — so it is used for drawing single shapes, never
+for animation. `svg-export.ts` writes a shape as `art/<shape>.svg` (gray levels as their exact bytes, gradients as
+`<defs>`, path transforms, stroke styles, a viewBox around the shape); "Replace…" (or MCP `import_svg` with
+`options.applyViewBox: false`) brings the edited file back over the same shape with its coordinates. Works the same
+with Inkscape or Illustrator. Animation stays in the Timeline tab; Ruffle plays a built SWF.
+
 Tool-agnostic import (`svg-import.ts`): accepts an SVG document (VectorCraft,
 Inkscape, Illustrator export…) and produces `shapes[<id>].paths[]`: `<path d>`,
 `<rect>`, `<circle>`, `<ellipse>`, `<polygon>`, `<polyline>`, `<line>` and `<g>`

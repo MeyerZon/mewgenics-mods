@@ -139,6 +139,9 @@ export function buildSwf(modName: string, relPath: string, opts?: Parameters<typ
 export function inspectSwf(modName: string, relPath: string) {
   return artio.inspectSwf(modName, relPath);
 }
+export function exportShapeSvg(modName: string, scenePath: string, shapeId: string) {
+  return artio.exportShapeSvg(modName, scenePath, shapeId);
+}
 export function readArtAsset(modName: string, relPath: string) {
   return artio.readModBytes(modName, relPath);
 }

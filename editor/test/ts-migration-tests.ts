@@ -132,7 +132,7 @@ export async function runTsMigrationTests(test: TestFn, assert: AssertFn, eq: Eq
   test("the art tools exist (list/read/write/new scene, import_svg, build_swf, inspect_swf); a write outside mods/<name>/ is refused by the core", () => {
     if (tools.__error) throw new Error("tools.ts did not load");
     const names = (tools.TOOLS as ToolLike[]).map((t) => t.name);
-    for (const n of ["list_art_scenes", "read_art_scene", "write_art_scene", "new_art_scene", "import_svg", "build_swf", "inspect_swf"]) assert(names.includes(n), `${n} listed`);
+    for (const n of ["list_art_scenes", "read_art_scene", "write_art_scene", "new_art_scene", "import_svg", "export_svg", "build_swf", "inspect_swf"]) assert(names.includes(n), `${n} listed`);
     assert(!!artErr || /"ok":\s*false/.test(JSON.stringify(artRes)), `refused: ${artErr} ${JSON.stringify(artRes)}`);
   });
   test("every tool has a zod input schema and its published inputSchema is generated from it", () => {
