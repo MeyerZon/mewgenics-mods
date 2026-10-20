@@ -437,6 +437,8 @@ await mcpSmoke();
   await runArtGradientTests(test, assert, eq);
   const { runArtShape4Tests } = await import("./art-shape4-tests.ts");
   await runArtShape4Tests(test, assert, eq);
+  const { runArtPo3Tests } = await import("./art-po3-tests.ts");
+  runArtPo3Tests(test, assert, eq);
 }
 
 // ---- 7. In-game test harness runner (fake game; never launches Mewgenics) ---
