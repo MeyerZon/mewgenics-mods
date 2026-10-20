@@ -10,10 +10,10 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     type Px = [number, number, number];
     const Y: Px = [255, 255, 0], M: Px = [255, 0, 255], C: Px = [0, 255, 255];
     /** a synthetic shot: background, the probe clip drawn at scale s from (ox, oy), optionally mirrored, with knobs */
-    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round"; blend?: "honoured" | "ignored" }) => {
-      const W = 1600, H = 400, img = new Uint8Array(W * H * 4);
+    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round"; blend?: "honoured" | "ignored"; walker?: number }) => {
+      const W = 1800, H = 400, img = new Uint8Array(W * H * 4);
       for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
-      const s = o.s, ox = o.mirrored ? 1350 : 200, oy = 100;
+      const s = o.s, ox = o.mirrored ? 1550 : 200, oy = 100;
       const put = (cx: number, cy: number, c: Px) => { // clip px -> screen px
         const x = Math.round(o.mirrored ? ox - cx * s : ox + cx * s), y = Math.round(oy + cy * s);
         if (x >= 0 && y >= 0 && x < W && y < H) img.set([c[0], c[1], c[2], 255], (y * W + x) * 4);
@@ -50,6 +50,9 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       line(50, 6);
       // (550,30): #600000 placed with blend add — over the 40,44,40 background add gives 136,44,40, normal 96,0,0
       square(550, 30, o.blend === "ignored" ? [96, 0, 0] : [136, 44, 40]);
+      // the root timeline's walker: a 20 px white square at clip y 30 whose x moves 600..680 over the root's 60 frames
+      const wx = o.walker ?? 640;
+      for (let cy = 20; cy < 40; cy += step) for (let cx = wx - 10; cx < wx + 10; cx += step) put(cx, cy, [255, 255, 255]);
       return { width: W, height: H, rgba: img };
     };
     test("analyzeProbeShot: finds the checker marker, its scale and orientation; reads sampling, edge mode, the blink colour, the control and the cxform square", () => {
@@ -70,6 +73,8 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       eq(a.gradient, "drawn", "black → red in clip x");
       eq(a.caps, "honoured", "butt ends at the endpoint, square reaches past it");
       eq(a.blend, "honoured", "add lets the background through");
+      assert(Math.abs(a.walkerX - 640) <= 2, `walker x ${a.walkerX}`);
+      assert(Math.abs(pc.analyzeProbeShot(shot({ s: 1.5, mirrored: true, walker: 610 })).walkerX - 610) <= 2, "walker read in clip x when mirrored");
       eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", blend: "ignored" })).blend, "ignored");
       eq(m.caps, "honoured", "mirrored too");
       eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", caps: "round" })).caps, "ignored");
@@ -84,9 +89,14 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       eq(s.gradient, "drawn");
       eq(s.caps, "honoured");
       eq(s.blend, "honoured");
+      const moving = pc.summarizeProbe([600, 630, 670].map((w) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, walker: w }))));
+      eq(moving.rootTimeline, "plays");
+      const driven = pc.summarizeProbe([603, 610, 598].map((w) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, walker: w }))));
+      eq(driven.rootTimeline, "game-driven");
       eq(s.childFraming, "free-running"); eq(s.sampling, "smooth"); eq(s.edge, "clamp"); eq(s.cxform, "applied"); eq(s.mirrored, true);
       const held = pc.summarizeProbe([0, 1, 2].map(() => pc.analyzeProbeShot(shot({ s: 2, blink: [255, 32, 32] }))));
       eq(held.childFraming, "held");
+      eq(held.rootTimeline, "held");
       assert(/\| shot \|/.test(pc.renderProbeReport(shots, s)), "a markdown table");
     });
   }
@@ -94,6 +104,10 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
 
 /** OBSERVED in the game (npm run test:artprobe, 2026-10-20): the facts the art preview must follow */
 export function runProbeFixtureTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture: (name: string) => string): void {
+  test("OBSERVED 2026-10-20 fixture: the game drives an enemy's root clip timeline (the walker stays within its first ~8 frames while nested sprites run free): free-running animation belongs in nested sprites", () => {
+    const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { rootTimeline?: string } };
+    eq(j.summary.rootTimeline, "game-driven");
+  });
   test("OBSERVED 2026-10-20 fixture: the game honours a PlaceObject3 blend mode (the add square lets the background through)", () => {
     const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { blend?: string } };
     eq(j.summary.blend, "honoured");
@@ -127,6 +141,7 @@ export async function runPreviewAgreementTests(test: TestFn, assert: AssertFn, e
     eq(eb.ENGINE_DRAWING.bitmapSampling, s.sampling === "smooth" ? "linear" : "nearest");
     eq(eb.ENGINE_DRAWING.bitmapEdge, s.edge);
     eq(eb.ENGINE_DRAWING.enemyClipsMirrored, s.mirrored);
+    eq(eb.ENGINE_DRAWING.rootTimeline, (s as { rootTimeline?: string }).rootTimeline);
   });
   test("nestedFrame(clock, frames): a nested sprite's frame comes from the clock, not from its parent's frame (a one-frame holder does not freeze its child)", () => {
     assert(typeof eb.nestedFrame === "function", "exported");

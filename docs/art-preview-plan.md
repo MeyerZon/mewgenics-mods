@@ -452,7 +452,12 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     applied (the probe's add square shows the arena through, ~162,68,67 for #600000); **any filter list stops the game
     with "ERROR: FILTERS NOT SUPPORTED <swf>"** (gate `filters`, a negative control expecting `crash`), so filters are a
     `filter-unsupported` validation error. The preview draws add / multiply / screen in GL and the Canvas2D composite
-    modes; other blends are an info finding. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+    modes; other blends are an info finding.
+    **Clip authoring done 2026-10-20:** `src/core/art/timeline-edit.ts` (keys from the shown pose, labels, insert /
+    delete frames with shifting, layer order) behind a Timeline tab (ruler + label pills, layer rows with key / hold /
+    tween marks, click to scrub, key inspector). OBSERVED: **the game drives a character's root clip timeline** — a
+    walker tweened over the probe root's 60 frames stays within its first ~8 frames across shots, while nested sprites
+    run free. Put free-running animation in nested sprites; the root's frame labels are what the game selects. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. **Done 2026-10-20:** MCP tools `list_art_scenes`, `read_art_scene`, `write_art_scene` (dryRun validates), `new_art_scene`,
     `import_svg` (with `into { scene, shapeId }` it saves the shape), `build_swf`, `inspect_swf`. Was: MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
