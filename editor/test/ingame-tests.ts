@@ -92,7 +92,8 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("every directive kind parses with its line number", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const d = p.directives;
-      eq(d.length, 18);
+      eq(d.length, 19);
+      eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "expect", what: "unit", unit: "Lil' Rat", field: "faction", op: "!=", value: 1 }));
       eq(JSON.stringify(d[0]), JSON.stringify({ line: 7, kind: "wait", unit: "frames", n: 120 }));
       eq(JSON.stringify(d[1]), JSON.stringify({ line: 8, kind: "cmd", text: "bind JokersGambit # not a comment, part of the command" }));
       eq(JSON.stringify(d[2]), JSON.stringify({ line: 9, kind: "expect", what: "console", substr: 'No command named "bind" found', within: 5 }));
@@ -110,7 +111,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(JSON.stringify(d[14]), JSON.stringify({ line: 21, kind: "expect", what: "round", op: ">=", n: 2 }));
       eq(JSON.stringify(d[15]), JSON.stringify({ line: 22, kind: "expect", what: "stacks", status: "JokersLuck", unit: "0", op: "==", n: 1 }));
       eq(JSON.stringify(d[16]), JSON.stringify({ line: 23, kind: "expect", what: "stacks", status: "LuckUp", unit: "Mr Whiskers", varied: true }));
-      eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "quit", code: 0 }));
+      eq(JSON.stringify(d[18]), JSON.stringify({ line: 25, kind: "quit", code: 0 }));
     });
 
     test("seed directive parses an unsigned 64-bit integer (kept as digits); junk, negatives and extra words are line errors", () => {
@@ -141,6 +142,21 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(ok.what, "stacks"); eq(ok.unit, "Lumee"); eq(ok.op, "!="); eq(ok.n, 0);
     });
 
+    test("expect unit directive parses (index / bare / quoted unit; string fields name|class with == !=; integer fields faction|move|act|turnkind with every op); bad forms are line errors", () => {
+      const a = parseDirective("expect unit 6 faction == 1", 1) as { what: string; unit: string; field: string; op: string; value: number };
+      eq(a.what, "unit"); eq(a.unit, "6"); eq(a.field, "faction"); eq(a.op, "=="); eq(a.value, 1);
+      const b = parseDirective('expect unit "Lil\' Rat" name == "Lil\' Rat"', 1) as { unit: string; field: string; op: string; value: string };
+      eq(b.unit, "Lil' Rat"); eq(b.field, "name"); eq(b.op, "=="); eq(b.value, "Lil' Rat");
+      const c = parseDirective("expect unit Pooter turnkind >= 0", 1) as { unit: string; field: string; op: string; value: number };
+      eq(c.unit, "Pooter"); eq(c.field, "turnkind"); eq(c.op, ">="); eq(c.value, 0);
+      eq((parseDirective('expect unit 0 class != "Mage"', 1) as { value: string }).value, "Mage");
+      for (const bad of ["expect unit 6 faction", "expect unit 6 hp == 1", 'expect unit 6 name >= "x"', "expect unit 6 name == bare", "expect unit faction == 1", "expect unit 6 faction == x", "expect unit 6 move == 1 extra"]) {
+        assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      }
+      const p = parseScript("expect unit 6 faction == 1\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.body.startsWith("expect unit 6 faction == 1\n"), "DLL-side directive");
+    });
+
     test("enter directive parses a known scene; unknown or missing scene, or extra words, are line errors", () => {
       const d = parseDirective("enter TacticsTest", 2) as { kind: string; scene: string };
       eq(d.kind, "enter"); eq(d.scene, "TacticsTest");
@@ -168,12 +184,12 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const lines = p.body.split("\n");
-      eq(lines.length - 1, 18, "one body line per directive (plus the trailing newline)");
+      eq(lines.length - 1, 19, "one body line per directive (plus the trailing newline)");
       assert(!lines.some((l) => l.startsWith("expect log")), "the DLL never sees expect log");
       assert(lines[11]!.startsWith("# runner: expect log"), `placeholder comment at the directive's position, got ${JSON.stringify(lines[11])}`);
       eq(lines[12], "enter TacticsTest", "enter is a DLL-side directive and passes through");
       eq(lines[13], "wait rounds 1"); eq(lines[16], 'expect stacks LuckUp on "Mr Whiskers" varied');
-      eq(lines[17], "quit 0");
+      eq(lines[17], "expect unit \"Lil' Rat\" faction != 1"); eq(lines[18], "quit 0");
       assert(typeof script.isRunnerSide === "function" && script.isRunnerSide(p.directives[11]!) && !script.isRunnerSide(p.directives[0]!), "isRunnerSide marks only expect log");
     });
 
@@ -319,6 +335,27 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(cmds.length, 85, "84 commands + the Executed: line");
       for (const c of ["listcmds", "spawn arg0", "spawntile arg0", "load arg0", "bind arg0", "bind_passive arg0", "status arg0", "passive arg0", "win", "killall", "takeover", "noui", "equip arg0", "weather arg0", "tileset arg0", "skip_tutorial", "set_day arg0"]) assert(cmds.includes(c), `TacticsTest/MewDirector command ${c} listed`);
       eq(cmds[cmds.length - 1], "Executed: listcmds");
+    });
+    test("OBSERVED fixture: golden through dump — the vanilla and _golden-merge dumps of the same seeded fight differ only on the overlaid fields (result-golden-vanilla.jsonl / result-golden-merge.jsonl)", () => {
+      type U = { i: number; name: string; class: string; faction: number };
+      type R = { units: { count: number; list: U[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null };
+      const v = parseResults(fixture("result-golden-vanilla.jsonl")) as unknown as R;
+      const g = parseResults(fixture("result-golden-merge.jsonl")) as unknown as R;
+      assert(!!v.units && !!g.units, "both dumps present");
+      eq(v.units!.count, 10, "vanilla (seed 42): 4 cats + 4 coins + Rat + Pooter");
+      eq(g.units!.count, 11, "golden: + the appended GoldenRat");
+      const rat = v.units!.list[8]!, ratG = g.units!.list[8]!;
+      eq(rat.name, "Lil' Rat"); eq(ratG.name, "Golden Rat", ".merge: graphics.name -> the appended loc row");
+      eq(rat.faction, 2, "enemies dump as faction 2 (allies 1, coins 0)");
+      eq(ratG.faction, 1, ".merge: properties.faction enemies -> allies");
+      const poo = v.units!.list[9]!, pooG = g.units!.list[9]!;
+      eq(poo.name, "Pooter"); eq(pooG.name, "Pooter");
+      assert(poo.faction !== 1 && pooG.faction === 1, `.patch: faction.overwrite allies (${poo.faction} -> ${pooG.faction})`);
+      eq(g.units!.list[10]!.name, "Appended Rat", ".append: a new entry, spawnable, with its own loc row");
+      eq(g.units!.list[10]!.faction, 2, "the appended entry keeps the vanilla faction");
+      for (let i = 0; i < 8; i++) eq(JSON.stringify(v.units!.list[i]), JSON.stringify(g.units!.list[i]), `unit ${i} identical in both runs (seed 42)`);
+      eq(v.expects.failed, 0); eq(g.expects.failed, 0);
+      eq(v.end!.code, 0); eq(g.end!.code, 0);
     });
     test("OBSERVED 2026-10-20 fixture: enter Campaign -> ok, the harness-owned slot named in the detail, no popup, quit after the shots (result-enter-campaign.jsonl)", () => {
       const r = parseResults(fixture("result-enter-campaign.jsonl")) as unknown as { enter: { ok: boolean; name: string; detail: string } | null; shots: unknown[]; end: { code: number; reason: string } | null; popups: unknown[]; turns: number };

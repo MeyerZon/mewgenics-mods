@@ -61,6 +61,15 @@ static int parse_op(const char *p, size_t n, MtOp *out) {
     return 1;
 }
 
+static const char *const UNIT_FIELDS[] = { "name", "class", "faction", "move", "act", "turnkind" };
+int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out) {
+    for (size_t i = 0; i < sizeof UNIT_FIELDS / sizeof UNIT_FIELDS[0]; i++) {
+        if (strlen(UNIT_FIELDS[i]) == n && !strncmp(p, UNIT_FIELDS[i], n)) { *out = (MtUnitField)i; return 1; }
+    }
+    return 0;
+}
+const char *mt_unit_field_name(MtUnitField f) { return (unsigned)f < sizeof UNIT_FIELDS / sizeof UNIT_FIELDS[0] ? UNIT_FIELDS[f] : "?"; }
+
 static int parse_uint(const char *p, size_t n, long *out) {
     if (n == 0 || n > 9) return 0;
     for (size_t i = 0; i < n; i++) if (p[i] < '0' || p[i] > '9') return 0;
@@ -184,8 +193,41 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
                 if (!parse_op(tail, tl, &d.op)) return fail(err, errCap, errLine, lineNo, "expect stacks: bad operator (== != >= <= > <) or `varied`");
                 if (!parse_uint(num, nl, &d.value)) return fail(err, errCap, errLine, lineNo, "expect stacks: N must be an integer");
             }
+        } else if (kl == 4 && !strncmp(rest, "unit", 4)) {
+            /* expect unit <idx|bareword|"name"> <field> <op> <value> */
+            d.kind = MT_D_EXPECT_UNIT;
+            const char *unit = arg, *tail;
+            if (!*unit) return fail(err, errCap, errLine, lineNo, "expect unit needs: <unit> <field> <op> <value>");
+            if (*unit == '"') {
+                tail = parse_quoted(unit, q, sizeof q, &qn);
+                if (!tail) return fail(err, errCap, errLine, lineNo, "expect unit: bad quoted unit name");
+                if (!(d.b = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
+            } else {
+                size_t ul = tok_len(unit);
+                long idx;
+                if (parse_uint(unit, ul, &idx)) { d.unitIsIndex = 1; d.n = idx; }
+                else if (!(d.b = arena_add(s, unit, ul))) return fail(err, errCap, errLine, lineNo, "script too large");
+                tail = unit + ul;
+            }
+            const char *field = skip_ws(tail);
+            size_t fl = tok_len(field);
+            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|faction|move|act|turnkind)");
+            const char *opp = skip_ws(field + fl);
+            size_t ol = tok_len(opp);
+            const char *val = skip_ws(opp + ol);
+            if (!ol || !*val) return fail(err, errCap, errLine, lineNo, "expect unit needs: <unit> <field> <op> <value>");
+            if (!parse_op(opp, ol, &d.op)) return fail(err, errCap, errLine, lineNo, "expect unit: bad operator (== != >= <= > <)");
+            if (d.field == MT_F_NAME || d.field == MT_F_CLASS) {
+                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class take == or != and a quoted value");
+                const char *after = parse_quoted(val, q, sizeof q, &qn);
+                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class take == or != and a quoted value");
+                if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
+            } else {
+                size_t nl = tok_len(val);
+                if (!parse_uint(val, nl, &d.value) || *skip_ws(val + nl)) return fail(err, errCap, errLine, lineNo, "expect unit: faction/move/act/turnkind take one integer");
+            }
         } else {
-            return fail(err, errCap, errLine, lineNo, "expect needs a kind (console|noconsole|status|units|round|stacks)");
+            return fail(err, errCap, errLine, lineNo, "expect needs a kind (console|noconsole|status|units|round|stacks|unit)");
         }
     } else if (wl == 4 && !strncmp(p, "dump", 4)) {
         if (*rest) return fail(err, errCap, errLine, lineNo, "dump takes no arguments");

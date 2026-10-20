@@ -1,0 +1,7 @@
+{
+  "title": "Golden merge (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlays for the in-game harness (TDD target 8, golden through dump): one overlay per policy on spawnable enemies — Rat .merge (name + faction), GoldenRat .append (a new entry), Pooter .patch (faction.overwrite, speed.add), two loc rows .append — so the same seeded fight dumps differently with and without this mod. Load it next to _autoplay: `mods: _golden-merge, _autoplay`. Never for play.",
+  "requirements": []
+}

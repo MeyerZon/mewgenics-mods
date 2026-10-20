@@ -218,10 +218,15 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    (2026-10-20):** no console command reads a live GON value — the full in-run command set (84, pinned in
    `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`) has `spawn`/`load`/`status`/`passive`/`equip`
    but nothing that prints a field, and the decompiled file resolver works on parsed GON trees, so an in-game golden
-   needs the GON object layout (new RE). Owner to accept or reject the weaker sub-item:
-   - [ ] "golden through `dump`": spawn a unit whose character is changed by a `.merge`/`.append` overlay and pin
-     its `move`/`act`/`faction`/`statuses` from the units event against a vanilla dump — pins the merge and append
-     policies differentially, not the `.patch` per-field policies on non-numeric fields.
+   needs the GON object layout (new RE). The weaker sub-item is done:
+   - [x] "golden through `dump`" (2026-10-20): `mods/_golden-merge/` + `expect unit <unit> <field> <op> <value>`;
+     `vanilla.mewtest` / `golden.mewtest` play the same seeded fight and pin `.merge` (Rat → "Golden Rat", faction
+     allies), `.patch` `faction.overwrite` (Pooter → allies) and `.append` (a new spawnable `GoldenRat`) through the
+     units event; fixtures `result-golden-{vanilla,merge}.jsonl`; the editor's previews of the same overlays at T0
+     (`run-tests.ts` 4d, incl. `speed.add 10` → 15). Not observable in-game yet: numeric `.add`/`.multiply` — the
+     units event has no stat/HP field. Follow-up (agent): decompile the `1hp` / `999` console lambdas registered by
+     `TacticsTest::init` (string xref, never the whole init) for `OFF_CH_HP`, add `hp` to `MtUnit`, then pin
+     `properties.health.multiply` the same way.
 9. [x] **`npm test` without `.extracted/`** (done 2026-10-19, leftovers PR 3: round-trip, real-overlay, validator and the two
    base-data MCP calls skip with a logged `(skipped: …)`; a nested run with `MEWGENICS_EXTRACTED_DATA` = empty dir is
    itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged

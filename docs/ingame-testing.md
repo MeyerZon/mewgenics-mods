@@ -77,6 +77,11 @@ expect round <op> <N>                            TurnControl's round (0 outside 
 expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail)
 expect stacks <Status> on <unit> varied          >= 2 distinct stacks values seen for (unit, status) by earlier dump /
                                                  expect stacks directives (and this one)
+expect unit <unit> <field> <op> <value>          one field of one unit as the units event shows it: name|class take a
+                                                 quoted value with == or !=; faction|move|act|turnkind take an integer
+                                                 with any op. Event kind "unit", arg e.g. `8 name == "Lil' Rat"`,
+                                                 detail `unit 8 "Lil' Rat": name "Lil' Rat"`. Faction numbers seen:
+                                                 allies 1, coins 0, enemies 2
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
 dump                                             snapshot the units into a units event
