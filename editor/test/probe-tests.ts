@@ -10,7 +10,7 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     type Px = [number, number, number];
     const Y: Px = [255, 255, 0], M: Px = [255, 0, 255], C: Px = [0, 255, 255];
     /** a synthetic shot: background, the probe clip drawn at scale s from (ox, oy), optionally mirrored, with knobs */
-    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px }) => {
+    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat" }) => {
       const W = 900, H = 400, img = new Uint8Array(W * H * 4);
       for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
       const s = o.s, ox = o.mirrored ? 700 : 200, oy = 100;
@@ -38,6 +38,11 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       square(150, 30, o.blink ?? [255, 32, 32]);
       square(230, 30, o.control ?? [136, 136, 136]);
       square(310, 30, o.cx ?? [136, 0, 0]);
+      // (390,30): a linear gradient black → #ff2020 along clip x ("flat": the game fills it with one colour)
+      for (let cy = 0; cy < 60; cy += step) for (let cx = 360; cx < 420; cx += step) {
+        const t = o.grad === "flat" ? 0.5 : (cx - 360) / 60;
+        put(cx, cy, [Math.round(255 * t), Math.round(32 * t), Math.round(32 * t)]);
+      }
       return { width: W, height: H, rgba: img };
     };
     test("analyzeProbeShot: finds the checker marker, its scale and orientation; reads sampling, edge mode, the blink colour, the control and the cxform square", () => {
@@ -55,12 +60,16 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       for (let y = 5; y < 9; y++) for (let x = 880; x < 884; x++) noisy.rgba.set([255, 255, 0, 255], (y * noisy.width + x) * 4);
       const nz = pc.analyzeProbeShot(noisy);
       assert(nz.found && Math.abs(nz.scale - 2) < 0.1 && nz.blink === "green", `stray yellow ignored: ${JSON.stringify(nz)}`);
+      eq(a.gradient, "drawn", "black → red in clip x");
+      eq(m.gradient, "drawn", "read in clip x when mirrored too");
+      eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", grad: "flat" })).gradient, "flat");
       const none = pc.analyzeProbeShot({ width: 10, height: 10, rgba: new Uint8Array(400) });
       eq(none.found, false);
     });
     test("summarizeProbe: across shots — child framing (free-running when the blink colour changes), sampling, edge, cxform applied, orientation", () => {
       const shots = ([[255, 32, 32], [32, 255, 32], [32, 32, 255]] as Px[]).map((b) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, edge: "clamp", smooth: true, blink: b })));
       const s = pc.summarizeProbe(shots);
+      eq(s.gradient, "drawn");
       eq(s.childFraming, "free-running"); eq(s.sampling, "smooth"); eq(s.edge, "clamp"); eq(s.cxform, "applied"); eq(s.mirrored, true);
       const held = pc.summarizeProbe([0, 1, 2].map(() => pc.analyzeProbeShot(shot({ s: 2, blink: [255, 32, 32] }))));
       eq(held.childFraming, "held");
@@ -71,6 +80,10 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
 
 /** OBSERVED in the game (npm run test:artprobe, 2026-10-20): the facts the art preview must follow */
 export function runProbeFixtureTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture: (name: string) => string): void {
+  test("OBSERVED 2026-10-20 fixture: the game draws a linear gradient fill as a gradient, along the authored axis (the (390,30) square runs black → red in clip x)", () => {
+    const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { gradient?: string } };
+    eq(j.summary.gradient, "drawn");
+  });
   test("OBSERVED 2026-10-20 fixture (artprobe-summary.json): enemy clips are mirrored; a nested sprite runs on its own clock under a one-frame parent; bitmap fills are sampled smoothly and clamped; PlaceObject cxform applies", () => {
     const j = JSON.parse(fixture("artprobe-summary.json")) as { summary: { childFraming: string; sampling: string; edge: string; cxform: string; mirrored: boolean; found: number; shots: number; blinks: string[] } };
     const s = j.summary;
