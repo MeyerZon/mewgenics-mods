@@ -68,6 +68,13 @@ for (const t of tests) {
     if (!opts.json) process.stdout.write(`FAIL  ${label}  (script errors: ${t.plan.errors.map((e) => `line ${e.line}: ${e.message}`).join("; ")})\n`);
     continue;
   }
+  if (t.plan.interactive) {
+    // an interactive script idles for pipe requests at its end; alone it would only time out — sessions drive it
+    skipped++;
+    reports.push({ test: { mod: t.mod, name: t.name }, verdict: "launch-error", reason: "interactive script: drive it through a session (start_ingame_session / ingame.startSession), not test:ingame" });
+    if (!opts.json) process.stdout.write(`      ${label}  (skipped: interactive — drive it through a session)\n`);
+    continue;
+  }
   const r = await api.runIngameTest({ mod: t.mod, test: t.name, timeoutMs: opts.timeoutMs, hide: opts.hide, clean: opts.clean, saveCheck: opts.saveCheck });
   if (!("verdict" in r)) {
     failed++;

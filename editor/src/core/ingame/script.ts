@@ -7,10 +7,13 @@
 
 export const DEFAULT_SAVESUFFIX = "dev";
 export const DEFAULT_TIMEOUT_MS = 120000;
-export const HEADER_KEYS = ["mods", "savesuffix", "timeout", "hide", "clean"];
+export const HEADER_KEYS = ["mods", "savesuffix", "timeout", "hide", "clean", "interactive"];
 export const SAVESUFFIX_RE = /^[A-Za-z0-9_-]{1,32}$/;
 export const MAX_CMD_BYTES = 4078; // the game's std::string small/large allocation boundary
 export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
+/** fields `expect unit` can read (the units event's per-unit fields); must agree with mt_script.c UNIT_FIELDS */
+export const UNIT_FIELDS = ["name", "class", "faction", "move", "act", "turnkind"] as const;
+export type UnitField = (typeof UNIT_FIELDS)[number];
 
 export interface Finding {
   line: number;
@@ -29,13 +32,15 @@ export type Directive =
   | { line: number; kind: "expect"; what: "round"; op: string; n: number }
   | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; op: string; n: number }
   | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; varied: true }
+  /** one field of one unit in the units event: name|class compare as strings (== !=), the rest as integers */
+  | { line: number; kind: "expect"; what: "unit"; unit: string; field: UnitField; op: string; value: string | number }
   /** runner-side: debug.log (after the `[file: …]` prefix) contains substr; evaluated after the run, never sent to the DLL */
   | { line: number; kind: "expect"; what: "log"; substr: string }
   | { line: number; kind: "dump" }
   | { line: number; kind: "log"; text: string }
   | { line: number; kind: "quit"; code: number | null }
   /** replay a dev-menu scene entry inside the game (mewtest.dll: MtHost.enter_scene); once per script */
-  | { line: number; kind: "enter"; scene: string }
+  | { line: number; kind: "enter"; scene: string; mode?: "house" }
   /** the DLL emits a shot event and holds the scene ~700 ms; the runner captures the game window into the run dir */
   | { line: number; kind: "shot"; label: string }
   /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
@@ -55,6 +60,8 @@ export interface Plan {
   hide: boolean;
   /** -mewtest_clean 1: after the end event the harness lets the game shut itself down (complete debug.log); default false */
   clean: boolean;
+  /** -mewtest_pipe 1: the DLL serves a named pipe and idles at the end of the script until a quit request (sessions) */
+  interactive: boolean;
   directives: Directive[];
   /** true when an `enter Campaign` is present: the runner moves the disposable slot aside before launching */
   usesCampaignSlot: boolean;
@@ -167,6 +174,34 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (!UNITS_OPS.includes(op[1]!)) return { error: `expect stacks: bad operator "${op[1]}" (${UNITS_OPS.join(" ")}) or varied` };
         return { line: lineNo, kind: "expect", what: "stacks", status: m[1]!, unit, op: op[1]!, n: Number(op[2]) };
       }
+      if (what === "unit") {
+        let rest2 = arg;
+        let unit: string;
+        if (rest2.startsWith('"')) {
+          const q = parseQuoted(rest2, 0);
+          if (!q) return { error: "expect unit: bad quoted unit name" };
+          unit = q.value;
+          rest2 = rest2.slice(q.end).trim();
+        } else {
+          const sp = rest2.search(/\s/);
+          if (sp < 0) return { error: "expect unit needs: <unit> <field> <op> <value>" };
+          unit = rest2.slice(0, sp);
+          rest2 = rest2.slice(sp).trim();
+        }
+        const m2 = /^(\S+)\s+(\S+)\s+([\s\S]+)$/.exec(rest2);
+        if (!m2) return { error: "expect unit needs: <unit> <field> <op> <value>" };
+        const field = m2[1]!, op = m2[2]!, val = m2[3]!.trim();
+        if (!(UNIT_FIELDS as readonly string[]).includes(field)) return { error: `expect unit: unknown field "${field}" (${UNIT_FIELDS.join("|")})` };
+        if (!UNITS_OPS.includes(op)) return { error: `expect unit: bad operator "${op}" (${UNITS_OPS.join(" ")})` };
+        if (field === "name" || field === "class") {
+          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class take == or != and a quoted value" };
+          const q = parseQuoted(val, 0);
+          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class take == or != and a quoted value" };
+          return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: q.value };
+        }
+        if (!/^\d+$/.test(val)) return { error: "expect unit: faction/move/act/turnkind take one integer" };
+        return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: Number(val) };
+      }
       if (what === "log") {
         const q = parseQuoted(arg, 0);
         if (!q) return { error: arg ? "expect log: unterminated or missing quoted string" : "expect log needs a quoted substring" };
@@ -174,7 +209,7 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (tail) return { error: `expect log: unexpected trailing text "${tail}" (no within: debug.log is read once, after the run)` };
         return { line: lineNo, kind: "expect", what: "log", substr: q.value };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|log)" };
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|log)" };
     }
     case "dump":
       if (rest) return { error: "dump takes no arguments" };
@@ -195,9 +230,15 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
     }
     case "enter": {
       if (!rest) return { error: `enter needs a scene name (${KNOWN_SCENES.join("|")})` };
-      if (/\s/.test(rest)) return { error: "enter takes exactly one scene name" };
-      if (!KNOWN_SCENES.includes(rest)) return { error: `unknown scene "${rest}" (${KNOWN_SCENES.join("|")})` };
-      return { line: lineNo, kind: "enter", scene: rest };
+      const words = rest.split(/\s+/);
+      if (words.length > 2) return { error: "enter takes a scene name and at most one mode word" };
+      const [scene, mode] = words as [string, string | undefined];
+      if (!KNOWN_SCENES.includes(scene)) return { error: `unknown scene "${scene}" (${KNOWN_SCENES.join("|")})` };
+      if (mode !== undefined) {
+        if (scene !== CAMPAIGN_SCENE || mode !== "house") return { error: "enter: the only mode is `enter Campaign house`" };
+        return { line: lineNo, kind: "enter", scene, mode: "house" };
+      }
+      return { line: lineNo, kind: "enter", scene };
     }
     case "quit": {
       if (!rest) return { line: lineNo, kind: "quit", code: null };
@@ -229,6 +270,7 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
   let timeoutMs = DEFAULT_TIMEOUT_MS;
   let hide = true;
   let clean = false;
+  let interactive = false;
   let inHeader = true;
 
   const lines = String(text).split(/\r?\n/);
@@ -260,6 +302,10 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
         if (val === "true" || val === "1") clean = true;
         else if (val === "false" || val === "0") clean = false;
         else errors.push({ line: lineNo, message: `clean must be true or false` });
+      } else if (key === "interactive") {
+        if (val === "true" || val === "1") interactive = true;
+        else if (val === "false" || val === "0") interactive = false;
+        else errors.push({ line: lineNo, message: `interactive must be true or false` });
       } else {
         errors.push({ line: lineNo, message: `unknown header key "${hm[1]}" (${HEADER_KEYS.join(", ")})` });
       }
@@ -277,7 +323,7 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
   if (mods === null) mods = opts.owningMod ? [opts.owningMod] : [];
   if (mods.length === 0) errors.push({ line: 0, message: "no mods: add a `mods:` header or pass the owning mod" });
   if (!directives.some((d) => d.kind === "quit")) {
-    warnings.push({ line: 0, message: "no quit directive; the harness quits at end of script (code 0 if all expects passed, else 1)" });
+    if (!interactive) warnings.push({ line: 0, message: "no quit directive; the harness quits at end of script (code 0 if all expects passed, else 1)" });
   }
 
   return {
@@ -288,6 +334,7 @@ export function parseScript(text: string, opts: ParseScriptOptions = {}): Plan {
     timeoutMs,
     hide,
     clean,
+    interactive,
     directives,
     usesCampaignSlot: directives.some((d) => d.kind === "enter" && d.scene === CAMPAIGN_SCENE),
     body: bodyLines.length ? bodyLines.join("\n") + "\n" : "",

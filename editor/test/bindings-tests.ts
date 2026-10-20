@@ -384,11 +384,12 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (22, incl. the v4 run-entry symbols), each with a signature", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 27);
+    eq(want.length, 28);
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");
     eq(entry(m, "MewDirector_start")!.rva, "0x3aefd0");
+    eq(entry(m, "SaveProps_GetOrCreate")!.rva, "0x61ea0");
     eq(entry(m, "Rng_SeedState")!.rva, "0x94ee40");
     eq(entry(m, "Rng_Reseed")!.rva, "0x94f0a0");
     for (const n of ["FW_SYM_SceneManager_CreateScene", "FW_SYM_Scene_CreateEntity", "FW_SYM_AddComponent_TacticsTest", "FW_SYM_Component_GetGame", "FW_SYM_TacticsTest_init"]) assert(want.includes(n), `${n} in framework_api.h`);

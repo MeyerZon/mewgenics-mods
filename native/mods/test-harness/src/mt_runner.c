@@ -112,11 +112,13 @@ static MtStackTrack *record_stacks(MtRunner *r, int unit, const char *status, in
     return free;
 }
 
-static void do_dump(MtRunner *r, const MtHost *h) {
+/* id >= 0: a dump requested over the pipe (the id is echoed so the reply can be matched) */
+static void do_dump(MtRunner *r, const MtHost *h, long id) {
     int avail = h->units_available(h->user);
     int count = avail ? h->unit_count(h->user) : 0;
     MtJsonW w;
     mt_jw_begin(&w, g_json, sizeof g_json, "units");
+    if (id >= 0) mt_jw_int(&w, "id", id);
     mt_jw_bool(&w, "available", avail);
     mt_jw_int(&w, "round", h->round_number(h->user));
     mt_jw_int(&w, "count", count);
@@ -158,6 +160,8 @@ void mt_runner_init(MtRunner *r, const MtScript *s, uint64_t now) {
     r->t0 = now;
     r->now = now;
 }
+void mt_runner_set_interactive(MtRunner *r, int on) { r->interactive = on ? 1 : 0; }
+void mt_runner_attach_queue(MtRunner *r, MtQueue *q) { r->queue = q; }
 
 void mt_runner_abort(MtRunner *r, const MtHost *h, int code, const char *reason) {
     r->now = h->now_ms(h->user);
@@ -166,8 +170,22 @@ void mt_runner_abort(MtRunner *r, const MtHost *h, int code, const char *reason)
 
 /* run the directive at pc; returns 1 to keep running, 0 when the script finished */
 static int exec_directive(MtRunner *r, const MtHost *h) {
-    char arg[160], detail[200];
-    if (r->pc >= r->s->count) { finish(r, h, r->expectFail ? 1 : 0, "eof"); h->request_exit(h->user, r->exitCode); return 0; }
+    char arg[160], detail[512];   /* enter details name pointers and the house note */
+    if (r->pc >= r->s->count) {
+        if (r->interactive) {
+            /* interactive mode: the script is over but the session is not — idle and serve the pipe until quit */
+            r->state = MT_S_IDLE;
+            if (!r->idleEmitted) {
+                r->idleEmitted = 1;
+                MtJsonW w;
+                mt_jw_begin(&w, g_json, sizeof g_json, "idle");
+                mt_jw_int(&w, "line", r->s->count ? r->s->d[r->s->count - 1].line : 0);
+                stamp_and_emit(r, h, &w);
+            }
+            return 1;
+        }
+        finish(r, h, r->expectFail ? 1 : 0, "eof"); h->request_exit(h->user, r->exitCode); return 0;
+    }
     const MtDirective *d = &r->s->d[r->pc];
     switch (d->kind) {
         case MT_D_CMD: {
@@ -335,8 +353,42 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             r->pc++;
             return 1;
         }
+        case MT_D_EXPECT_UNIT: {
+            int isStr = d->field == MT_F_NAME || d->field == MT_F_CLASS;
+            char unitText[80];
+            if (d->unitIsIndex) snprintf(unitText, sizeof unitText, "%ld", d->n);
+            else if (strchr(d->b, 0x20)) snprintf(unitText, sizeof unitText, "\"%s\"", d->b);
+            else snprintf(unitText, sizeof unitText, "%s", d->b);
+            if (isStr) snprintf(arg, sizeof arg, "%s %s %s \"%s\"", unitText, mt_unit_field_name(d->field), op_text(d->op), d->a);
+            else snprintf(arg, sizeof arg, "%s %s %s %ld", unitText, mt_unit_field_name(d->field), op_text(d->op), d->value);
+            if (!h->units_available(h->user)) { emit_expect(r, h, d, "unit", arg, 0, "no combat (units unavailable)"); r->pc++; return 1; }
+            MtUnit u;
+            memset(&u, 0, sizeof u);
+            int idx = resolve_unit(h, d, &u);
+            if (idx < 0) {
+                if (d->unitIsIndex) snprintf(detail, sizeof detail, "unit not found: index %ld of %d", d->n, h->unit_count(h->user));
+                else snprintf(detail, sizeof detail, "unit not found: \"%s\"", d->b);
+                emit_expect(r, h, d, "unit", arg, 0, detail);
+                r->pc++;
+                return 1;
+            }
+            int ok;
+            if (isStr) {
+                const char *actual = d->field == MT_F_NAME ? u.name : u.cls;
+                int same = strcmp(actual, d->a) == 0;
+                ok = d->op == MT_OP_EQ ? same : !same;
+                snprintf(detail, sizeof detail, "unit %d \"%s\": %s \"%s\"", idx, u.name, mt_unit_field_name(d->field), actual);
+            } else {
+                long actual = d->field == MT_F_FACTION ? u.faction : d->field == MT_F_MOVE ? u.move : d->field == MT_F_ACT ? u.act : u.turnKind;
+                ok = op_apply(d->op, actual, d->value);
+                snprintf(detail, sizeof detail, "unit %d \"%s\": %s %ld", idx, u.name, mt_unit_field_name(d->field), actual);
+            }
+            emit_expect(r, h, d, "unit", arg, ok, detail);
+            r->pc++;
+            return 1;
+        }
         case MT_D_DUMP:
-            do_dump(r, h);
+            do_dump(r, h, -1);
             r->pc++;
             return 1;
         case MT_D_LOG: {
@@ -363,7 +415,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             }
             int rc;
             if (r->entered) { rc = 0; snprintf(detail, sizeof detail, "refused: enter may run only once per script"); }
-            else { detail[0] = 0; rc = h->enter_scene(h->user, d->scene, detail, sizeof detail); }
+            else { detail[0] = 0; rc = h->enter_scene(h->user, d->scene, d->enterMode, detail, sizeof detail); }
             if (rc == 2) {
                 /* not ready yet (the game has not finished its own startup): retry next frame, same budget as the console wait */
                 r->state = MT_S_WAIT_CONSOLE;
@@ -378,6 +430,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             mt_jw_begin(&w, g_json, sizeof g_json, "enter");
             mt_jw_int(&w, "line", d->line);
             mt_jw_str(&w, "name", mt_scene_name(d->scene));
+            if (d->enterMode) mt_jw_str(&w, "mode", mt_enter_mode_name(d->enterMode));
             mt_jw_bool(&w, "ok", rc == 1);
             mt_jw_str(&w, "detail", detail);
             stamp_and_emit(r, h, &w);
@@ -391,17 +444,73 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
     return 1;
 }
 
-int mt_runner_step(MtRunner *r, const MtHost *h) {
-    if (r->finished) return 0;
-    r->frame++;
-    r->now = h->now_ms(h->user);
+/* an exec request finished collecting: emit the exec event (its reply) and hand it back */
+static void complete_exec(MtRunner *r, const MtHost *h) {
+    MtRequest *req = r->active;
+    MtJsonW w;
+    mt_jw_begin(&w, g_json, sizeof g_json, "exec");
+    mt_jw_int(&w, "id", req->id);
+    mt_jw_str(&w, "op", "exec");
+    mt_jw_str(&w, "text", req->text);
+    mt_jw_bool(&w, "ok", 1);
+    mt_jw_arr_begin(&w, "lines");
+    for (int i = r->con.windowStart; i < r->con.seen; i++) if (h->console_line(h->user, i, g_line, sizeof g_line)) mt_jw_arr_str(&w, g_line);
+    mt_jw_arr_end(&w);
+    stamp_and_emit(r, h, &w);
+    mt_queue_complete(req, g_json);
+    r->active = NULL;
+}
 
-    long tc = h->turn_count(h->user);
-    while (r->turnsSeen < tc) { r->turnsSeen++; emit_turn(r, h); }
-    poll_console(r, h);
+/* serve one pipe request when the runner is idle or inside a wait (never between MT_S_RUN directives, never while
+ * a cmd waits for the console, never inside expect console … within, whose console window an exec would move).
+ * Returns 0 when a quit request ended the run. */
+static int serve_request(MtRunner *r, const MtHost *h) {
+    if (!r->queue || r->active || r->finished) return 1;
+    if (!h->console_ready(h->user)) return 1;   /* before the main menu nothing can be executed: requests stay queued */
+    switch (r->state) {
+        case MT_S_IDLE: case MT_S_WAIT_FRAMES: case MT_S_WAIT_TURNS: case MT_S_WAIT_MS: case MT_S_WAIT_ROUNDS: case MT_S_WAIT_SHOT: break;
+        default: return 1;
+    }
+    MtRequest *req = mt_queue_take(r->queue);
+    if (!req) return 1;
+    switch (req->op) {
+        case MT_QOP_EXEC:
+            mt_console_mark_window(&r->con);
+            h->exec_cmd(h->user, req->text);
+            poll_console(r, h);
+            r->active = req;
+            r->activeFramesLeft = req->frames;
+            if (r->activeFramesLeft <= 0) complete_exec(r, h);
+            return 1;
+        case MT_QOP_DUMP:
+            do_dump(r, h, req->id);
+            mt_queue_complete(req, g_json);
+            return 1;
+        case MT_QOP_QUIT: {
+            /* the reply first (it carries the code), then the end record stays the last line of the result file */
+            int code = r->expectFail ? 1 : 0;
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "exec");
+            mt_jw_int(&w, "id", req->id);
+            mt_jw_str(&w, "op", "quit");
+            mt_jw_bool(&w, "ok", 1);
+            mt_jw_int(&w, "code", code);
+            stamp_and_emit(r, h, &w);
+            mt_queue_complete(req, g_json);
+            if (h->pipe_reply) h->pipe_reply(h->user, g_json);   /* before the exit: the pipe thread would be too late */
+            finish(r, h, code, "quit");
+            h->request_exit(h->user, code);
+            return 0;
+        }
+    }
+    return 1;
+}
 
+static int dispatch(MtRunner *r, const MtHost *h) {
     const MtDirective *d = r->pc < r->s->count ? &r->s->d[r->pc] : NULL;
     switch (r->state) {
+        case MT_S_IDLE:
+            return 1;
         case MT_S_RUN:
         case MT_S_WAIT_CONSOLE:
             return exec_directive(r, h);
@@ -436,4 +545,18 @@ int mt_runner_step(MtRunner *r, const MtHost *h) {
         }
     }
     return 1;
+}
+
+int mt_runner_step(MtRunner *r, const MtHost *h) {
+    if (r->finished) return 0;
+    r->frame++;
+    r->now = h->now_ms(h->user);
+
+    long tc = h->turn_count(h->user);
+    while (r->turnsSeen < tc) { r->turnsSeen++; emit_turn(r, h); }
+    poll_console(r, h);
+    if (r->active && --r->activeFramesLeft <= 0) complete_exec(r, h);
+
+    if (!dispatch(r, h)) return 0;
+    return serve_request(r, h);
 }

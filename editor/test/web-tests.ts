@@ -227,6 +227,25 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     test("server: an unknown /api route is a 404 JSON error", () => {
       eq(nf.status, 404, nf.text.slice(0, 200));
     });
+    {
+      const bad: { status: number; type: string; body: string }[] = [];
+      for (const q of ["../../x.swf", "saves/x.swf", "nope.swf"]) {
+        try {
+          const r = await fetch(`${base}/api/art/vanilla-swf?name=${encodeURIComponent(q)}`, { headers: { Connection: "close" } });
+          bad.push({ status: r.status, type: r.headers.get("content-type") || "", body: await r.text() });
+        } catch (e) { bad.push({ status: 0, type: "", body: String(e) }); }
+      }
+      let list = { status: 0, body: "" };
+      try { const r = await fetch(`${base}/api/art/vanilla-swfs`, { headers: { Connection: "close" } }); list = { status: r.status, body: await r.text() }; } catch (e) { list.body = String(e); }
+      test("server: /api/art/vanilla-swfs lists; /api/art/vanilla-swf refuses traversal, saves paths and absent files with a JSON error (never bytes)", () => {
+        eq(list.status, 200, list.body);
+        assert(Array.isArray((JSON.parse(list.body) as { files?: unknown[] }).files), list.body);
+        for (const b of bad) {
+          assert(b.status >= 400 && b.status < 500 && /application\/json/.test(b.type), JSON.stringify(b));
+          assert(/"ok":false/.test(b.body), b.body);
+        }
+      });
+    }
     const dist = join(EDITOR, "web", "dist", "index.html");
     if (existsSync(dist)) {
       let idx: { status: number; text: string } = { status: 0, text: "" };

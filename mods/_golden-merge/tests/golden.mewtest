@@ -1,0 +1,27 @@
+mods: _golden-merge, _autoplay
+timeout: 120s
+# Golden through dump (TDD target 8): the same seeded fight as vanilla.mewtest, WITH the overlays.
+#   .merge  -> Rat's name is the appended loc row ("Golden Rat") and its faction is allies (1)
+#   .patch  -> Pooter's faction.overwrite allies (1); speed.add is not observable here (T0 only)
+#   .append -> GoldenRat exists as a new entry, spawnable, with its own loc row and the vanilla faction (enemies 2)
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+expect units == 8
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+cmd spawn Pooter
+expect console "Spawned Pooter" within 10
+cmd spawn GoldenRat
+expect console "Spawned GoldenRat" within 10
+wait frames 10
+dump
+expect units == 11
+expect unit 8 name == "Golden Rat"
+expect unit "Golden Rat" faction == 1
+expect unit 9 name == "Pooter"
+expect unit Pooter faction == 1
+expect unit 10 name == "Appended Rat"
+expect unit "Appended Rat" faction == 2
+quit

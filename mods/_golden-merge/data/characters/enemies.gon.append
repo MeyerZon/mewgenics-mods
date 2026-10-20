@@ -1,0 +1,41 @@
+// .append = GON Append: children added at the end of the file's object. An append on an existing key would only
+// duplicate it (validator: append-collision), so the honest append golden is a NEW entry, spawnable by name.
+GoldenRat {
+    variant_of Rat
+    graphics {
+        movieclip Rat
+        name "APPENDED_RAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+
+    stats {
+        strength 4
+        dexterity 5
+        constitution 5
+        intelligence 5
+        speed 5
+        charisma 5
+    }
+
+    properties {
+        tag rat
+        faction enemies
+        movement 1
+        health 5
+        base_mana_regen 999
+    }
+
+    abilities {
+        move DefaultMove
+        attack Dash_Enemy
+        spells [
+        ]
+    }
+
+    ai {
+        brain GenericBrain
+        decision_weights semi_simple
+        move_weights keep_distance_always_move
+    }
+}
