@@ -113,6 +113,15 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "quit", code: 0 }));
     });
 
+    test("shot directive parses a quoted label; bare or missing label is a line error; it passes through to the DLL", () => {
+      const d = parseDirective('shot "round one"', 4) as { kind: string; label: string };
+      eq(d.kind, "shot"); eq(d.label, "round one");
+      assert("error" in parseDirective("shot bare", 1), "bare");
+      assert("error" in parseDirective("shot", 1), "missing");
+      const p = parseScript('shot "x"\nquit\n', { owningMod: "m" });
+      assert(p.ok && p.body.startsWith('shot "x"\n'), "DLL-side directive");
+    });
+
     test("combat directives: wait rounds needs N >= 1; expect round needs <op> <N>; expect stacks needs <op> <N> or varied", () => {
       assert("error" in parseDirective("wait rounds 0", 1), "rounds 0");
       assert("error" in parseDirective("expect round 3", 1), "round without op");
@@ -323,6 +332,12 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(!!varied && varied.ok === true, `expect stacks varied ok: ${JSON.stringify(varied)}`);
       assert(r.events.some((e) => e.ev === "expect" && e.kind === "noconsole" && e.ok === true), "bind JokersGambit was accepted (no 'No command named')");
       eq(r.expects.failed, 0); eq(r.end!.code, 0);
+    });
+    test("shot events are collected as result.shots (line, label, frame)", () => {
+      const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"shot","line":3,"label":"round one","hold_ms":700,"t":10,"frame":5}\n{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
+      const r = parseResults(text) as unknown as { shots: { line: number; label: string; frame: number }[] };
+      eq(JSON.stringify(r.shots), JSON.stringify([{ line: 3, label: "round one", frame: 5 }]));
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { shots: unknown[] }).shots.length, 0);
     });
     test("popup events are collected as result.popups (title, text, frame); none -> empty", () => {
       const text = [
@@ -806,6 +821,24 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       // crash beats fail/timeout; safety beats crash
       expectV("crash > fail", { preflight: pre, exit: exit(1), result: res({ crash: { code: "x" }, end: { code: 1 } }), logs: logs({}), safety: safe }, "crash");
       expectV("safety > crash", { preflight: pre, exit: exit(3), result: res({ crash: { code: "x" }, end: { code: 3 } }), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");
+    });
+
+    const shotPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 2s\nhide: false\nshot \"menu\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
+    const captured: { label: string; dir: string }[] = [];
+    const shotRun = await run("shot", {}, { plan: shotPlan, capture: (label: string, dir: string) => { captured.push({ label, dir }); const p = join(dir, `shot-${label}.png`); writeFileSync(p, "png"); return p; } });
+    test("fake shot -> the runner captures while the game holds and lists the file in artifacts.shots; hidden runs are flagged", () => {
+      eq(shotRun.verdict, "pass", shotRun.reason);
+      eq(captured.length, 1, "captured exactly once, during the run");
+      eq(captured[0]!.label, "menu");
+      const shots = (shotRun.artifacts as unknown as { shots?: { label: string; path: string; line: number; hidden: boolean }[] }).shots;
+      assert(Array.isArray(shots) && shots.length === 1 && shots[0]!.label === "menu" && shots[0]!.line === 1 && existsSync(shots[0]!.path) && shots[0]!.hidden === false, `artifacts.shots: ${JSON.stringify(shots)}`);
+    });
+    const hiddenShotPlan = script.parseScript("mods: jokers-luck\ntimeout: 2s\nshot \"menu\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
+    const hiddenShot = await run("shot", {}, { plan: hiddenShotPlan, capture: (label: string, dir: string) => { const p = join(dir, `shot-${label}.png`); writeFileSync(p, "png"); return p; } });
+    test("fake shot with hide: true -> captured anyway but artifacts.shots[].hidden is true and the pass reason says so", () => {
+      const shots = (hiddenShot.artifacts as unknown as { shots?: { hidden: boolean }[] }).shots;
+      assert(Array.isArray(shots) && shots.length === 1 && shots[0]!.hidden === true, JSON.stringify(shots));
+      assert(/hidden/.test(hiddenShot.reason), hiddenShot.reason);
     });
 
     const enterPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 1s\nenter TacticsTest\nwait turns 1\nexpect units >= 2\nquit\n", { owningMod: "jokers-luck", name: "enter-fight" });
