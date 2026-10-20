@@ -82,6 +82,8 @@ export interface WitnessAnchor {
   nth?: number;
   dispAt?: number;
   dispSize?: number;
+  /** divide the displacement by this (a vtable-slot call `call [reg+8*slot]` witnesses the slot index); default 1 */
+  scale?: number;
   ripRefOrdinal?: number;
   kind?: string;
   needsHarvest?: boolean;
@@ -97,6 +99,10 @@ export interface DeriveAnchor {
   imm32At?: number;
   table?: string;
   index?: number;
+  /** the constant is the vtable's slot count: consecutive qwords pointing into an exec section */
+  extent?: boolean;
+  /** the constant is the index of the slot whose body matches `bodyPattern` as a prefix and/or whose bounded body rip-lea's `stringRef` */
+  slotSearch?: { bodyPattern?: string; stringRef?: string; nth?: number; expect?: number };
 }
 export interface AfterAnchor {
   function: string;
@@ -263,6 +269,8 @@ export function validateManifest(input: unknown): { ok: boolean; problems: strin
         else if (kind && t.kind !== kind) bad(`${n}: ${what} ${target} must be a ${kind} entry`);
       };
       if (anchors.witness) ref("witness.function", anchors.witness.function, "function");
+      if (anchors.witness && anchors.witness.scale !== undefined && !(Number.isInteger(anchors.witness.scale) && anchors.witness.scale > 0)) bad(`${n}: witness.scale must be a positive integer`);
+      if (anchors.witness && e.kind === "offset" && anchors.witness.pattern !== undefined && !Number.isInteger(anchors.witness.dispAt)) bad(`${n}: an offset witness with a pattern needs dispAt`);
       if (anchors.witness && anchors.witness.callee !== undefined) ref("witness.callee", anchors.witness.callee, "function");
       if (Array.isArray(anchors.callees)) for (const c of anchors.callees) ref("callee", c && c.name, "function");
       if (anchors.derive) {

@@ -832,7 +832,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   hvText.set([0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x83, 0xc4, 0x20, 0x5b, 0xc3], 0x60);
   //   hvFnD 0x1080: mov r8d,0x4d6; call fnB; ret   (passes the type id as an argument: the call-arg witness)
   hvText.set([0x41, 0xb8, 0xd6, 0x04, 0x00, 0x00, 0xe8, ...le32((TEXT + 0x40) - (TEXT + 0x8b)), 0xc3], 0x80);
-  const hvPdata = [{ section: ".text", begin: 0x10, end: 0x30 }, { section: ".text", begin: 0x40, end: 0x46 }, { section: ".text", begin: 0x60, end: 0x80 }, { section: ".text", begin: 0x80, end: 0x8c }];
+  //   hvFnE 0x1090: mov eax,[rcx+0x5c]; mov eax,[rcx+0xf8] (= -8); call [rax+0x550]; mov edx,[rcx+0x12345678]; ret
+  //   (a displacement witness host: byte disps, a vtable-slot call whose disp/8 is a slot index, a disp32)
+  hvText.set([0x8b, 0x41, 0x5c, 0x8b, 0x41, 0xf8, 0xff, 0x90, 0x50, 0x05, 0x00, 0x00, 0x8b, 0x91, 0x78, 0x56, 0x34, 0x12, 0xc3], 0x90);
+  const hvPdata = [{ section: ".text", begin: 0x10, end: 0x30 }, { section: ".text", begin: 0x40, end: 0x46 }, { section: ".text", begin: 0x60, end: 0x80 }, { section: ".text", begin: 0x80, end: 0x8c }, { section: ".text", begin: 0x90, end: 0xa3 }];
   const hvRdata = Buffer.alloc(0x100);
   hvRdata.write(FUNCSIG + "\0", 0x10, "latin1");
   hvRdata.write("Dup\0", 0x30, "latin1");
@@ -857,6 +860,71 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const hp = parsePe(hvPe.buf);
   eq(hvPe.rva(".hvRdata", 0), RDATA, "fake layout assumption");
   eq(hvPe.rva(".data", 0), DATA, "fake layout assumption");
+
+  test("readOffsetWitness: nth match of a byte pattern in the function body, signed byte / 4-byte displacement at dispAt, optional scale, not-found", () => {
+    const r = hv.readOffsetWitness;
+    assert(typeof r === "function", "exported");
+    const fnE = TEXT + 0x90;
+    const a = r(hp, hvPe.buf, fnE, { pattern: "8B 41 ??", dispAt: 2 });
+    assert(a.found && a.value === 0x5c && a.raw === 0x5c && a.matches === 2 && a.at === 0, JSON.stringify(a));
+    const b = r(hp, hvPe.buf, fnE, { pattern: "8B 41 ??", dispAt: 2, nth: 1, dispSize: 1 });
+    assert(b.found && b.value === -8, `signed byte: ${JSON.stringify(b)}`);
+    const c = r(hp, hvPe.buf, fnE, { pattern: "FF 90 ?? ?? ?? ??", dispAt: 2, dispSize: 4, scale: 8 });
+    assert(c.found && c.raw === 0x550 && c.value === 170, `scaled slot index: ${JSON.stringify(c)}`);
+    const d = r(hp, hvPe.buf, fnE, { pattern: "8B 91 ?? ?? ?? ??", dispAt: 2, dispSize: 4 });
+    assert(d.found && d.value === 0x12345678, `disp32: ${JSON.stringify(d)}`);
+    const e = r(hp, hvPe.buf, fnE, { pattern: "8B 41 ??", dispAt: 2, nth: 2 });
+    assert(!e.found && e.value === null && e.matches === 2, `nth beyond the count: ${JSON.stringify(e)}`);
+    const f = r(hp, hvPe.buf, fnE, { pattern: "90 90 90", dispAt: 0 });
+    assert(!f.found && f.matches === 0, `absent: ${JSON.stringify(f)}`);
+    const g = r(hp, hvPe.buf, fnE, { pattern: "FF 90 ?? ?? ?? ??", dispAt: 2, dispSize: 4, scale: 7 });
+    assert(!g.found, `a non-integral quotient is not a value: ${JSON.stringify(g)}`);
+  });
+
+  test("harvestManifest: an offset witness is verified against the manifest value (mismatch names both values; unresolved when the pattern or the function is missing); a constant may carry a scaled displacement witness", () => {
+    const base = (offValue: string, extra: Record<string, unknown> = {}) => parseManifest({
+      format: 1,
+      build: { steamBuildId: "444", gameVersion: "4.4.4", name: "4.4.4 (steam 444)", timeDateStamp: "0x44444444", sizeOfImage: "0x" + hp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "d".repeat(64), exeSize: hvPe.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        { name: "FnE", kind: "function", rva: "0x1090", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "Foo_stacks", kind: "offset", struct: "Foo", value: offValue, ctype: "int32", anchors: { witness: { function: "FnE", pattern: "8B 41 ??", dispAt: 2, dispSize: 1, nth: 0 } }, consumers: [], exposure: [{ macro: "OFF_FOO_STACKS" }], evidence: [] },
+        { name: "Foo_owner", kind: "offset", struct: "Foo", value: "-0x8", ctype: "void*", anchors: { witness: { function: "FnE", pattern: "8B 41 ??", dispAt: 2, nth: 1 } }, consumers: [], exposure: [{ macro: "OFF_FOO_OWNER" }], evidence: [] },
+        { name: "Foo_gone", kind: "offset", struct: "Foo", value: "0x10", ctype: "int32", anchors: { witness: { function: "FnE", pattern: "90 90 90", dispAt: 0 } }, consumers: [], exposure: [{ macro: "OFF_FOO_GONE" }], evidence: [] },
+        { name: "VT_OnThing", kind: "constant", value: "170", anchors: { witness: { function: "FnE", pattern: "FF 90 ?? ?? ?? ??", dispAt: 2, dispSize: 4, scale: 8 } }, consumers: [], exposure: [{ macro: "VT_ONTHING" }], evidence: [] },
+        ...(extra.entries as unknown[] || []),
+      ],
+    });
+    const ok = harvestManifest(hp, hvPe.buf, base("0x5c")).report;
+    const byName = (name: string) => { const x = ok.find((r) => r.name === name); if (!x) throw new Error(`no row ${name}`); return x; };
+    eq(byName("Foo_stacks").status, "verified", byName("Foo_stacks").detail);
+    eq(byName("Foo_owner").status, "verified", byName("Foo_owner").detail);
+    eq(byName("Foo_gone").status, "unresolved", byName("Foo_gone").detail);
+    eq(byName("VT_OnThing").status, "verified", byName("VT_OnThing").detail);
+    assert(/0x550/.test(byName("VT_OnThing").detail) && /170/.test(byName("VT_OnThing").detail), byName("VT_OnThing").detail);
+    const bad = harvestManifest(hp, hvPe.buf, base("0x60")).report.find((r) => r.name === "Foo_stacks")!;
+    eq(bad.status, "mismatch", bad.detail);
+    assert(/0x5c/.test(bad.detail) && /0x60/.test(bad.detail), `names both values: ${bad.detail}`);
+  });
+
+  test("validateManifest: witness.scale must be a positive integer; an offset witness with a pattern needs dispAt", () => {
+    const mk = (witness: Record<string, unknown>, kind = "offset") => validateManifest({
+      format: 1,
+      build: { steamBuildId: "1", gameVersion: "1", name: "1", timeDateStamp: "0x1", sizeOfImage: "0x1000", imageBase: "0x140000000", exeSha256: "a".repeat(64), exeSize: 1, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        { name: "FnE", kind: "function", rva: "0x1090", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+        kind === "offset"
+          ? { name: "X", kind: "offset", struct: "S", value: "0x8", ctype: "int32", anchors: { witness }, consumers: [], exposure: [{ macro: "OFF_X" }], evidence: [] }
+          : { name: "X", kind: "constant", value: "1", anchors: { witness }, consumers: [], exposure: [{ macro: "X" }], evidence: [] },
+      ],
+    });
+    assert(mk({ function: "FnE", pattern: "8B 41 ??", dispAt: 2 }).ok, "a plain offset witness is fine");
+    assert(!mk({ function: "FnE", pattern: "8B 41 ??" }).ok, "pattern without dispAt is rejected");
+    assert(!mk({ function: "FnE", pattern: "8B 41 ??", dispAt: 2, scale: 0 }).ok, "scale 0 rejected");
+    assert(!mk({ function: "FnE", pattern: "8B 41 ??", dispAt: 2, scale: 1.5 }).ok, "fractional scale rejected");
+    assert(mk({ function: "FnE", pattern: "FF 90 ?? ?? ?? ??", dispAt: 2, dispSize: 4, scale: 8 }, "constant").ok, "a scaled constant witness is fine");
+  });
 
   test("findString: NUL-terminated string -> rva + occurrence count (data sections only)", () => {
     const s = findString(hp, hvPe.buf, FUNCSIG);
@@ -1183,6 +1251,29 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(/0x5c/.test(o.detail ?? "") && /0x60/.test(o.detail ?? ""), o.detail ?? "");
     eq(entry(moved.manifest, "Foo_stacks")!.value, "0x5c", "proposed values are never applied without a green T2");
     eq(!!(entry(moved.manifest, "Foo_stacks")!.port!.note && /0x60/.test(entry(moved.manifest, "Foo_stacks")!.port!.note!)), true, "the proposal is recorded in the port block");
+  });
+  test("port: a constant with a scaled displacement witness -> ported-derived (method call-slot); a disagreeing slot-body source -> needs-human", () => {
+    const base = {
+      format: 1,
+      build: { steamBuildId: "444", gameVersion: "4.4.4", name: "4.4.4 (steam 444)", timeDateStamp: "0x44444444", sizeOfImage: "0x" + hp.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "d".repeat(64), exeSize: hvPe.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        { name: "FnB", kind: "function", rva: "0x1040", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "FnE", kind: "function", rva: "0x1090", signature: null, anchors: {}, consumers: [], exposure: [], evidence: [] },
+        { name: "Foo_vftable", kind: "vtable", rva: "0x2080", slots: 2, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
+        { name: "VT_OnThing", kind: "constant", value: "170", anchors: { witness: { function: "FnE", pattern: "FF 90 ?? ?? ?? ??", dispAt: 2, dispSize: 4, scale: 8 } }, consumers: [], exposure: [{ macro: "VT_ONTHING" }], evidence: [] },
+        { name: "Foo_typeid", kind: "constant", value: "0x4d6", anchors: { derive: { vtable: "Foo_vftable", slot: 1, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 }, witness: { function: "FnE", pattern: "8B 91 ?? ?? ?? ??", dispAt: 2, dispSize: 4 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] },
+      ],
+    };
+    const old = harvestManifest(hp, hvPe.buf, parseManifest(base)).manifest;
+    const resolve = { FnB: "0x1040", FnE: "0x1090" };
+    const r = portManifest(old, hp, hvPe.buf, { steamBuildId: "445", gameVersion: "4.4.5", resolve });
+    const a = row(r, "VT_OnThing");
+    eq(a.status, "ported-derived", a.detail);
+    eq(a.method, "call-slot");
+    const b = row(r, "Foo_typeid");
+    eq(b.status, "needs-human", b.detail);   // slot body says 0x4d6, the displacement witness says 0x12345678
+    assert(/0x4d6/.test(b.detail ?? "") && /0x12345678/.test(b.detail ?? ""), b.detail ?? "");
   });
   test("renderPortReport: summary line, one row per entry, needs-attention sections with candidates and next steps", () => {
     const v2 = link({ fns: [{ name: "FnA", code: bodyA([0x90, 0x90], PRO2) }, { name: "FnA2", code: bodyA([0x90, 0x90, 0x90], PRO2) }, { name: "FnB", code: bodyB() }, { name: "FnC", code: bodyC(0x60) }], strings: { A: SIG_A, B: SIG_B }, globs: ["G"], stamp: 0x58585858 });

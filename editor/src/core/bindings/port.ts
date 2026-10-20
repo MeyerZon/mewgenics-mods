@@ -18,7 +18,7 @@
 import { createHash } from "node:crypto";
 import { parsePattern, scanExec } from "./scan.ts";
 import { makeSignature } from "./siggen.ts";
-import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, decodeFunction, constantSources } from "./harvest.ts";
+import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, decodeFunction, constantSources, constantHasSources, readOffsetWitness } from "./harvest.ts";
 import type { FunctionHarvest, RipRef } from "./harvest.ts";
 import { hex, parseValue, entry } from "./manifest.ts";
 import type { Manifest, Entry, PortCandidate } from "./manifest.ts";
@@ -240,16 +240,16 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
   for (const e of out.entries) {
     if (e.kind !== "constant") continue;
     const a = e.anchors;
-    if ((a.derive && a.derive.vtable) || (a.witness && a.witness.callee)) {
+    if (constantHasSources(a)) {
       // every independent source must agree; a split is a human decision, never a coin toss
       const src = constantSources(out, pe, buf, e);
-      const vals = [src.slot, src.arg].filter((v): v is number => v !== null);
+      const vals = [src.slot, src.arg, src.disp].filter((v): v is number => v !== null);
       const was = e.value || "";
       if (!vals.length) { finish(e, "failed", "derive", src.notes.join("; "), null); continue; }
       if (vals.some((v) => v !== vals[0])) { finish(e, "needs-human", "derive", `sources disagree: ${src.notes.join("; ")}; value ${was} kept`, null); continue; }
       const v = vals[0];
       e.value = hex(v);
-      const method = src.slot !== null && src.arg !== null ? "slot-body+call-arg" : src.slot !== null ? "slot-body" : "call-arg";
+      const method = [src.slot !== null ? "slot-body" : "", src.arg !== null ? "call-arg" : "", src.disp !== null ? "call-slot" : ""].filter(Boolean).join("+");
       finish(e, "ported-derived", method, `${src.notes.join("; ")}${vals.length > 1 ? " (agree)" : ""}${was === hex(v) ? " (unchanged)" : ` (was ${was})`}`, e.value, undefined, was);
       continue;
     }
@@ -298,20 +298,9 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
     if (!w || !w.function || !w.pattern) { finish(e, "needs-human", "none", "unanchored offset carried over unchanged; verify by hand (or add a witness pattern)", e.value || null); continue; }
     const frva = newRva.get(w.function);
     if (frva === undefined) { finish(e, "failed", "witness", `witness function ${w.function} did not port`, null); continue; }
-    const d = decodeFunction(pe, buf, frva);
-    const pat = parsePattern(w.pattern, out.sigCap);
-    let seen = 0, at = -1;
-    for (let i = 0; i + pat.length <= d.bytes.length; i++) {
-      let k = 0;
-      for (; k < pat.length; k++) if (pat.mask[k] && d.bytes[i + k] !== pat.bytes[k]) break;
-      if (k === pat.length && seen++ === (w.nth || 0)) { at = i; break; }
-    }
-    if (at < 0) { finish(e, "failed", "witness", `pattern ${w.pattern} (#${w.nth || 0}) not found in ${w.function}`, null); continue; }
-    const size = w.dispSize || 1;
-    const off = at + (w.dispAt || 0);
-    let disp: number;
-    if (size === 1) { disp = d.bytes[off]; if (disp > 127) disp -= 256; }
-    else { const v = (d.bytes[off] | (d.bytes[off + 1] << 8) | (d.bytes[off + 2] << 16) | (d.bytes[off + 3] << 24)) | 0; disp = v; }
+    const rd = readOffsetWitness(pe, buf, frva, { pattern: w.pattern, nth: w.nth, dispAt: w.dispAt, dispSize: w.dispSize, scale: w.scale }, out.sigCap);
+    if (!rd.found) { finish(e, "failed", "witness", `pattern ${w.pattern} (#${w.nth || 0}) ${rd.matches ? "matched but gave no value" : "not found"} in ${w.function}`, null); continue; }
+    const disp = rd.value!;
     const oldV = parseValue(e.value || "0");
     if (disp === oldV) finish(e, "ported-witness", "witness", `${w.function}: ${w.pattern} #${w.nth || 0} still reads ${hex(disp)}`, e.value || null);
     else finish(e, "proposed", "witness", `proposed ${hex(oldV)} -> ${hex(disp)} (${w.function}: ${w.pattern} #${w.nth || 0}); NOT applied, needs a green T2`, hex(disp));

@@ -13,7 +13,7 @@ import { parsePattern, patternToString } from "./scan.ts";
 import { decodeInstruction } from "./siggen.ts";
 import type { Instruction } from "./siggen.ts";
 import { hex, parseValue, entry } from "./manifest.ts";
-import type { Manifest, Entry, StringAnchor, CalleeAnchor, CfgLite } from "./manifest.ts";
+import type { Manifest, Entry, StringAnchor, CalleeAnchor, CfgLite, Anchors } from "./manifest.ts";
 
 export type { StringAnchor, CalleeAnchor } from "./manifest.ts";
 
@@ -260,9 +260,52 @@ export function deriveFromCallArg(pe: Pe, buf: Buffer, fnRva: number, calleeRva:
   return null;
 }
 
+/**
+ * Read a displacement (or any immediate) out of the `nth` match of a byte pattern inside a function's .pdata body:
+ * what a struct-offset witness is. `dispSize` 1 (default) reads a signed byte, anything else a signed 32-bit value;
+ * `scale` divides it (a `call [rax+8*slot]` witnesses the slot index). Byte-scanning on purpose: the decoder's
+ * instruction boundaries are not needed and a mis-sized instruction cannot shift the match.
+ */
+export interface OffsetWitnessRead {
+  found: boolean;
+  /** byte index of the match inside the function body, or null */
+  at: number | null;
+  /** the raw signed displacement, or null */
+  raw: number | null;
+  /** raw / scale, or null (also when the quotient is not integral) */
+  value: number | null;
+  /** how many times the pattern matched in the body */
+  matches: number;
+}
+export function readOffsetWitness(pe: Pe, buf: Buffer, fnRva: number, w: { pattern: string; nth?: number; dispAt?: number; dispSize?: number; scale?: number }, sigCap?: number): OffsetWitnessRead {
+  const d = decodeFunction(pe, buf, fnRva);
+  const pat = parsePattern(w.pattern, sigCap);
+  const want = w.nth || 0;
+  let matches = 0, at = -1;
+  for (let i = 0; i + pat.length <= d.bytes.length; i++) {
+    let k = 0;
+    for (; k < pat.length; k++) if (pat.mask[k] && d.bytes[i + k] !== pat.bytes[k]) break;
+    if (k !== pat.length) continue;
+    if (matches === want) at = i;
+    matches++;
+  }
+  if (at < 0) return { found: false, at: null, raw: null, value: null, matches };
+  const size = w.dispSize || 1;
+  const off = at + (w.dispAt || 0);
+  if (off + (size === 1 ? 1 : 4) > d.bytes.length) return { found: false, at, raw: null, value: null, matches };
+  let raw: number;
+  if (size === 1) { raw = d.bytes[off]; if (raw > 127) raw -= 256; }
+  else raw = (d.bytes[off] | (d.bytes[off + 1] << 8) | (d.bytes[off + 2] << 16) | (d.bytes[off + 3] << 24)) | 0;
+  const scale = w.scale || 1;
+  if (raw % scale !== 0) return { found: false, at, raw, value: null, matches };
+  return { found: true, at, raw, value: raw / scale, matches };
+}
+
 export interface ConstantSources {
   slot: number | null;
   arg: number | null;
+  /** a displacement witness (pattern + dispAt [+ scale]) without a callee, e.g. the slot index of a vtable call */
+  disp: number | null;
   notes: string[];
 }
 
@@ -275,7 +318,7 @@ export interface ConstantSources {
 export function constantSources(manifest: Manifest, pe: Pe, buf: Buffer, e: Entry): ConstantSources {
   const a = e.anchors;
   const usable = (x: Entry | null | undefined): boolean => !!x && (!x.port || String(x.port.status).startsWith("ported"));
-  const r: ConstantSources = { slot: null, arg: null, notes: [] };
+  const r: ConstantSources = { slot: null, arg: null, disp: null, notes: [] };
   if (a.derive && a.derive.vtable) {
     const vt = entry(manifest, a.derive.vtable);
     r.slot = usable(vt) && vt ? deriveFromVtableSlot(pe, buf, parseInt(vt.rva || "0", 16), a.derive.slot!, a.derive.bodyPattern!, a.derive.imm32At!) : null;
@@ -288,7 +331,21 @@ export function constantSources(manifest: Manifest, pe: Pe, buf: Buffer, e: Entr
     r.arg = usable(f) && usable(c) && f && c ? deriveFromCallArg(pe, buf, parseInt(f.rva || "0", 16), parseInt(c.rva || "0", 16), w.pattern!, w.imm32At!, w.maxBack ?? 8) : null;
     r.notes.push(r.arg === null ? `call-arg witness ${w.pattern} before the call to ${w.callee} in ${w.function} not found` : `call-arg witness in ${w.function} gives ${hex(r.arg)}`);
   }
+  if (a.witness && !a.witness.callee && a.witness.pattern && Number.isInteger(a.witness.dispAt)) {
+    const w = a.witness;
+    const f = entry(manifest, w.function);
+    const rd = usable(f) && f ? readOffsetWitness(pe, buf, parseInt(f.rva || "0", 16), { pattern: w.pattern!, nth: w.nth, dispAt: w.dispAt, dispSize: w.dispSize, scale: w.scale }, manifest.sigCap) : null;
+    r.disp = rd && rd.found ? rd.value : null;
+    r.notes.push(r.disp === null
+      ? `displacement witness ${w.pattern} #${w.nth || 0} in ${w.function} ${rd ? (rd.matches ? "matched but gave no value" : "not found") : "unusable (function did not port)"}`
+      : `displacement witness in ${w.function} gives ${hex(rd!.raw!)}${w.scale && w.scale !== 1 ? ` / ${w.scale} = ${r.disp}` : ""}`);
+  }
   return r;
+}
+
+/** constants with any derivation or witness source (the harvest verifies them, the port re-derives them) */
+export function constantHasSources(a: Anchors): boolean {
+  return !!((a.derive && a.derive.vtable) || (a.witness && a.witness.callee) || (a.witness && !a.witness.callee && a.witness.pattern && Number.isInteger(a.witness.dispAt)));
 }
 
 export type HarvestStatus = "harvested" | "verified" | "mismatch" | "unresolved" | "unanchored" | "skipped";
@@ -351,9 +408,18 @@ export function harvestManifest(pe: Pe, buf: Buffer, manifest: Manifest): { mani
       report.push({ name: e.name, kind: e.kind, status: same ? "verified" : "mismatch", detail: `rtti gives ${hex(r.vftable)} (col ${hex(r.col)}, typedesc ${hex(r.typeDescriptor)}); manifest says ${e.rva}` });
       continue;
     }
-    if (e.kind === "constant" && ((a.derive && a.derive.vtable) || (a.witness && a.witness.callee))) {
+    if (e.kind === "offset" && a.witness && typeof a.witness.function === "string" && a.witness.pattern) {
+      const w = entry(out, a.witness.function);
+      if (!w || w.kind !== "function") { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: `witness ${a.witness.function} is not a function entry` }); continue; }
+      const rd = readOffsetWitness(pe, buf, parseInt(w.rva || "0", 16), { pattern: a.witness.pattern, nth: a.witness.nth, dispAt: a.witness.dispAt, dispSize: a.witness.dispSize, scale: a.witness.scale }, out.sigCap);
+      if (!rd.found) { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: `${w.name}: ${a.witness.pattern} #${a.witness.nth || 0} ${rd.matches ? "matched but gave no value" : "not found"} (${rd.matches} match(es))` }); continue; }
+      const want = parseValue(e.value || "0");
+      report.push({ name: e.name, kind: e.kind, status: rd.value === want ? "verified" : "mismatch", detail: `${w.name}: ${a.witness.pattern} #${a.witness.nth || 0} reads ${hex(rd.value!)} (${rd.matches} match(es)); manifest says ${e.value}` });
+      continue;
+    }
+    if (e.kind === "constant" && constantHasSources(a)) {
       const src = constantSources(out, pe, buf, e);
-      const vals = [src.slot, src.arg].filter((v): v is number => v !== null);
+      const vals = [src.slot, src.arg, src.disp].filter((v): v is number => v !== null);
       if (!vals.length) { report.push({ name: e.name, kind: e.kind, status: "unresolved", detail: src.notes.join("; ") }); continue; }
       const want = parseValue(e.value || "0");
       const same = vals.every((v) => v === want);
