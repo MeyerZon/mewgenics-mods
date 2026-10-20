@@ -11,6 +11,7 @@ import { MODS_DIR, REPO_ROOT, resolveModWritePath, isInside, touchesSaves } from
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
 import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
 import { importSvg } from "./svg-import.ts";
+import { adoptGradients } from "./gradient.ts";
 import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
 import type { RgbaImage } from "./png.ts";
@@ -249,7 +250,9 @@ export function importSvgIntoScene(args: ImportSvgIntoSceneArgs): { ok: boolean;
   if (rd.scene.shapes[args.shapeId] && !args.replace) return { ok: false, error: `shape "${args.shapeId}" exists (pass replace: true to overwrite it)`, findings: [] };
   const imp = importSvgShape({ svgText: args.svgText, mod: args.svgText === undefined ? args.mod : undefined, relPath: args.svgPath, options: args.options });
   if (!imp.ok || !imp.shape) return { ok: false, error: imp.error || "import failed", findings: imp.findings || [] };
-  const next = { ...rd.scene, shapes: { ...rd.scene.shapes, [args.shapeId]: imp.shape } };
+  const next: Scene = { ...rd.scene, shapes: { ...rd.scene.shapes }, gradients: { ...(rd.scene.gradients || {}) } };
+  delete next.shapes[args.shapeId];
+  next.shapes[args.shapeId] = adoptGradients(next, imp.shape, imp.gradients);
   const w = writeArtScene(args.mod, args.scenePath, next);
   if (!w.ok) return { ok: false, error: w.error || "write failed", findings: [...(imp.findings || []), ...((w as { findings?: Finding[] }).findings || [])] };
   return { ok: true, paths: imp.shape.paths.length, findings: imp.findings || [] };
