@@ -15,6 +15,7 @@ import { append, deepMerge, patchMerge } from "../src/core/overlay/merge.ts";
 import { applyGonOverlay } from "../src/core/overlay/overlay.ts";
 import { parsePolicy } from "../src/core/overlay/policy.ts";
 import { validateMod } from "../src/core/validate/validator.ts";
+import { buildSwf } from "../src/core/art/art-io.ts";
 import { previewMerge } from "../src/core/preview-merge.ts";
 import { EXTRACTED_DATA, REPO_ROOT, MODS_DIR } from "../src/core/repo.ts";
 import { makeTestFilter } from "./filter.ts";
@@ -301,6 +302,19 @@ if (BASE_READY) {
   });
 } else console.log("  (skipped: base data not extracted; _autoplay is checked against data/characters/player_cat.gon)");
 
+// ---- 4e. mods/_artprobe: the in-game art probe (test-only enemy + scene) ----
+test("_artprobe: the probe scene validates and builds (dry run): a bitmap, five shapes, three sprites, ArtProbe exported", () => {
+  const r = buildSwf("_artprobe", "art/probe.scene.json", { dryRun: true }) as unknown as { ok: boolean; bytes?: number; exports?: string[]; findings?: { severity: string }[]; error?: string };
+  assert(r.ok, JSON.stringify(r).slice(0, 400));
+  assert((r.findings || []).every((f) => f.severity !== "error"), "no errors");
+});
+if (BASE_READY) {
+  test("_artprobe validates with zero errors (enemies.gon.append: ArtProbe, a Rat variant whose movieclip is our SWF)", () => {
+    const r = validateMod("_artprobe");
+    assert(r.ok, `expected ok, got ${r.counts.errors} errors: ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
+  });
+}
+
 // ---- 4b. Validator fixtures (synthetic base; one mod per finding code; T0) ----
 {
   let vt: typeof import("./validator-tests.ts") | null = null;
@@ -459,6 +473,9 @@ await mcpSmoke();
   let ct: typeof import("./ci-tests.ts") | null = null;
   try { ct = await import("./ci-tests.ts"); } catch (e) { test("ci-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (ct) await ct.runCiTests(test, assert, eq);
+  let pt: typeof import("./probe-tests.ts") | null = null;
+  try { pt = await import("./probe-tests.ts"); } catch (e) { test("probe-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (pt) pt.runProbeTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----

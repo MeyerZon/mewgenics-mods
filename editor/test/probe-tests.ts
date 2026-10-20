@@ -1,0 +1,65 @@
+// The in-game art probe's analysis (editor/src/core/art/probe-compare.ts) on synthetic shots: the _artprobe clip
+// drawn at a known scale/orientation with knobs for sampling, edge mode and colours.
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
+import * as pc from "../src/core/art/probe-compare.ts";
+
+export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
+  console.log("\n# art probe: reading in-game shots of the _artprobe clip");
+  // ---- probe-compare: reading an in-game shot of the _artprobe clip (synthetic shots here) ----
+  {
+    type Px = [number, number, number];
+    const Y: Px = [255, 255, 0], M: Px = [255, 0, 255], C: Px = [0, 255, 255];
+    /** a synthetic shot: background, the probe clip drawn at scale s from (ox, oy), optionally mirrored, with knobs */
+    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px }) => {
+      const W = 900, H = 400, img = new Uint8Array(W * H * 4);
+      for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
+      const s = o.s, ox = o.mirrored ? 700 : 200, oy = 100;
+      const put = (cx: number, cy: number, c: Px) => { // clip px -> screen px
+        const x = Math.round(o.mirrored ? ox - cx * s : ox + cx * s), y = Math.round(oy + cy * s);
+        if (x >= 0 && y >= 0 && x < W && y < H) img.set([c[0], c[1], c[2], 255], (y * W + x) * 4);
+      };
+      const texel = (tx: number, ty: number): Px => {
+        if (tx >= 8) tx = o.edge === "repeat" ? tx - 8 : 7;
+        const border = tx === 0 || ty === 0 || tx === 7 || ty === 7;
+        return border ? Y : (tx < 4) === (ty < 4) ? M : C;
+      };
+      const step = 1 / s;
+      for (let cy = 0; cy < 64; cy += step) for (let cx = 0; cx < 96; cx += step) {
+        const fx = cx / 8, fy = cy / 8;
+        let c = texel(Math.floor(fx), Math.floor(fy));
+        if (o.smooth) { // a bilinear blend toward the right/bottom neighbour
+          const a = fx - Math.floor(fx), b = fy - Math.floor(fy);
+          const r = texel(Math.min(11, Math.floor(fx) + 1), Math.floor(fy)), d = texel(Math.floor(fx), Math.min(7, Math.floor(fy) + 1));
+          c = [0, 1, 2].map((k) => Math.round(c[k]! * (1 - a / 2 - b / 2) + r[k]! * (a / 2) + d[k]! * (b / 2))) as Px;
+        }
+        put(cx, cy, c);
+      }
+      const square = (x0: number, y0: number, c: Px) => { for (let cy = y0 - 30; cy < y0 + 30; cy += step) for (let cx = x0 - 30; cx < x0 + 30; cx += step) put(cx, cy, c); };
+      square(150, 30, o.blink ?? [255, 32, 32]);
+      square(230, 30, o.control ?? [136, 136, 136]);
+      square(310, 30, o.cx ?? [136, 0, 0]);
+      return { width: W, height: H, data: img };
+    };
+    test("analyzeProbeShot: finds the checker marker, its scale and orientation; reads sampling, edge mode, the blink colour, the control and the cxform square", () => {
+      const a = pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", blink: [32, 255, 32] }));
+      assert(a.found, JSON.stringify(a));
+      assert(Math.abs(a.scale - 2) < 0.1, `scale ${a.scale}`);
+      eq(a.mirrored, false); eq(a.sampling, "nearest"); eq(a.edge, "clamp"); eq(a.blink, "green");
+      assert(Math.abs(a.control[0] - 136) < 8 && Math.abs(a.control[1] - 136) < 8, JSON.stringify(a.control));
+      assert(a.cx[0] > 100 && a.cx[1] < 30 && a.cx[2] < 30, JSON.stringify(a.cx));
+      const m = pc.analyzeProbeShot(shot({ s: 1.5, mirrored: true, edge: "repeat", smooth: true, blink: [32, 32, 255] }));
+      assert(m.found && m.mirrored, JSON.stringify(m));
+      eq(m.sampling, "smooth"); eq(m.edge, "repeat"); eq(m.blink, "blue");
+      const none = pc.analyzeProbeShot({ width: 10, height: 10, data: new Uint8Array(400) });
+      eq(none.found, false);
+    });
+    test("summarizeProbe: across shots — child framing (free-running when the blink colour changes), sampling, edge, cxform applied, orientation", () => {
+      const shots = ([[255, 32, 32], [32, 255, 32], [32, 32, 255]] as Px[]).map((b) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, edge: "clamp", smooth: true, blink: b })));
+      const s = pc.summarizeProbe(shots);
+      eq(s.childFraming, "free-running"); eq(s.sampling, "smooth"); eq(s.edge, "clamp"); eq(s.cxform, "applied"); eq(s.mirrored, true);
+      const held = pc.summarizeProbe([0, 1, 2].map(() => pc.analyzeProbeShot(shot({ s: 2, blink: [255, 32, 32] }))));
+      eq(held.childFraming, "held");
+      assert(/\| shot \|/.test(pc.renderProbeReport(shots, s)), "a markdown table");
+    });
+  }
+}
