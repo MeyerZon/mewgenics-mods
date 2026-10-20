@@ -1,0 +1,21 @@
+{
+  "note": "The font classes the base game exports from swfs/fonts.swf (SymbolClass names only) and how vanilla text references them: ability_icons.swf / ui.swf carry ImportAssets2(\"fonts.swf\", 0 assets) and DefineEditText with HasFontClass. Read by test/art-text-tests.ts (T1 against .extracted/swfs when present).",
+  "fonts": [
+    "Edmundm",
+    "NPCFont_BabyJack",
+    "NPCFont_Frank",
+    "NPCFont_OrganGrinder",
+    "NPCFont_Steven",
+    "Peralta",
+    "Swanky",
+    "TikaFont"
+  ],
+  "abilityIcons": {
+    "importUrl": "fonts.swf",
+    "importCount": 0,
+    "editTextFlags": "eca3",
+    "fontClass": "Peralta",
+    "fontHeightTwips": 240,
+    "align": "center"
+  }
+}
