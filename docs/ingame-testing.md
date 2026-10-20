@@ -60,11 +60,16 @@ clean: false                     # default false: ExitProcess right after the en
 cmd <rest of line verbatim, 1..4078 bytes>       run a debug-console command
 enter <SceneName>                                replay a dev-menu scene entry (TacticsTest only); waits for the console
                                                  like cmd; once per script; an unknown name fails before launch
-wait frames|turns|ms <N>                         N >= 1; turns = TurnControl::NextTurn calls
+wait frames|turns|rounds|ms <N>                  N >= 1; turns = TurnControl::NextTurn calls; rounds = TurnControl's
+                                                 round counter advancing by N from the directive
 expect console "<substr>" [within <frames>]      a console line since the last cmd contains substr
 expect noconsole "<substr>"                      no such line since the last cmd
 expect status <Name> on <index|bareword|"name">  a unit carries the status (vanilla or framework-registered)
 expect units <==|!=|>=|<=|>|<> <N>               unit count in the current combat
+expect round <op> <N>                            TurnControl's round (0 outside combat)
+expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail)
+expect stacks <Status> on <unit> varied          >= 2 distinct stacks values seen for (unit, status) by earlier dump /
+                                                 expect stacks directives (and this one)
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
 dump                                             snapshot the units into a units event
@@ -88,7 +93,8 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"turn","n":N,"round":N}
 {"ev":"wait","line":N,"kind":"frames","n":N,"actual":N}
 {"ev":"expect","line":N,"kind":"console","arg":"...","ok":true,"detail":"..."}
-{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"]}]}
+{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"],"stacks":[2]}]}
+                                                stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes)
 {"ev":"log","text":"..."}
 {"ev":"popup","title":"WARNING","text":"..."}   a modal dialog of the game (its own WARNING/ERROR boxes) that the watchdog
                                                 closed — it would otherwise stop the frame loop for good under a hidden

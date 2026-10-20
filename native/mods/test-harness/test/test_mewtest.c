@@ -634,7 +634,7 @@ TEST(runner_dump_with_and_without_units) {
     fk_two_units();
     steps_until_done(5);
     CHECK(has(ev(0), "\"available\":true")); CHECK(has(ev(0), "\"count\":2"));
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"statuses\":[\"LuckUp\",\"JokersLuck\"]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
     CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\""));
 }
 
@@ -648,6 +648,90 @@ TEST(runner_expect_status_by_index_and_name) {
     CHECK(has(ev(3), "\"ok\":false")); CHECK(has(ev(3), "unit not found"));
     CHECK(has(ev(4), "\"ok\":false"));
     CHECK(has(last_ev(), "\"expect_pass\":2")); CHECK(has(last_ev(), "\"expect_fail\":3"));
+}
+
+/* ---- combat assertions: stacks in the units event, wait rounds, expect round, expect stacks (op | varied) ---- */
+static void fk_two_units_with_stacks(void) {
+    fk_two_units();
+    fk.units[0].stacks[0] = 2; fk.units[0].stacks[1] = 7;    /* LuckUp 2, JokersLuck 7 */
+}
+
+TEST(script_wait_rounds_and_expect_round_and_expect_stacks_parse) {
+    char err[256]; int line = 0;
+    const char *s = "wait rounds 2\nexpect round >= 3\nexpect stacks JokersLuck on 0 == 7\nexpect stacks JokersLuck on \"Mr Whiskers\" != 0\nexpect stacks LuckUp on Lumee varied\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 6);
+    CHECK_EQ(g_s.d[0].kind, MT_D_WAIT_ROUNDS); CHECK_EQ(g_s.d[0].n, 2);
+    CHECK_EQ(g_s.d[1].kind, MT_D_EXPECT_ROUND); CHECK_EQ(g_s.d[1].op, MT_OP_GE); CHECK_EQ(g_s.d[1].n, 3);
+    CHECK_EQ(g_s.d[2].kind, MT_D_EXPECT_STACKS); CHECK_STR(g_s.d[2].a, "JokersLuck"); CHECK_EQ(g_s.d[2].unitIsIndex, 1); CHECK_EQ(g_s.d[2].n, 0); CHECK_EQ(g_s.d[2].op, MT_OP_EQ); CHECK_EQ(g_s.d[2].value, 7); CHECK_EQ(g_s.d[2].varied, 0);
+    CHECK_EQ(g_s.d[3].kind, MT_D_EXPECT_STACKS); CHECK_STR(g_s.d[3].b, "Mr Whiskers"); CHECK_EQ(g_s.d[3].op, MT_OP_NE); CHECK_EQ(g_s.d[3].value, 0);
+    CHECK_EQ(g_s.d[4].kind, MT_D_EXPECT_STACKS); CHECK_STR(g_s.d[4].b, "Lumee"); CHECK_EQ(g_s.d[4].varied, 1);
+    const char *bad = "expect stacks LuckUp on 0\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    bad = "expect round 3\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+    bad = "wait rounds 0\n";
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_dump_emits_stacks_parallel_to_statuses) {
+    fk_reset("dump\nquit\n");
+    fk_two_units_with_stacks();
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7]}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"statuses\":[],\"stacks\":[]}"));
+}
+
+TEST(runner_wait_rounds_advances_on_round_counter) {
+    fk_reset("wait rounds 2\nquit\n");
+    fk_two_units(); fk.round = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    fk.round = 2; CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("wait"), 0);
+    fk.round = 3; CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("wait"), 1);
+    CHECK(has(last_ev(), "\"kind\":\"rounds\"")); CHECK(has(last_ev(), "\"n\":2")); CHECK(has(last_ev(), "\"actual\":2"));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+}
+
+TEST(runner_expect_round_ops_and_zero_without_combat) {
+    fk_reset("expect round >= 2\nexpect round == 3\nquit\n");
+    fk_two_units(); fk.round = 2;
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"kind\":\"round\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"detail\":\"round 2\""));
+    CHECK(has(ev(1), "\"ok\":false"));
+    fk_reset("expect round == 0\nquit\n");          /* no combat: round reads as 0 */
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"ok\":true"));
+}
+
+TEST(runner_expect_stacks_op_by_index_and_name_and_missing_status) {
+    fk_reset("expect stacks JokersLuck on 0 == 7\nexpect stacks JokersLuck on Lumee > 5\nexpect stacks LuckUp on 0 == 3\nexpect stacks Poison on 0 == 0\nexpect stacks LuckUp on Rat == 0\nexpect stacks LuckUp on 9 == 0\nquit\n");
+    fk_two_units_with_stacks();
+    steps_until_done(10);
+    CHECK(has(ev(0), "\"kind\":\"stacks\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"JokersLuck on 0 == 7\"")); CHECK(has(ev(0), "JokersLuck 7 on unit 0"));
+    CHECK(has(ev(1), "\"ok\":true"));
+    CHECK(has(ev(2), "\"ok\":false")); CHECK(has(ev(2), "LuckUp 2 on unit 0"));
+    CHECK(has(ev(3), "\"ok\":false")); CHECK(has(ev(3), "absent"));
+    CHECK(has(ev(4), "\"ok\":false")); CHECK(has(ev(4), "absent"));
+    CHECK(has(ev(5), "\"ok\":false")); CHECK(has(ev(5), "unit not found"));
+    CHECK(has(last_ev(), "\"expect_pass\":2")); CHECK(has(last_ev(), "\"expect_fail\":4"));
+}
+
+TEST(runner_expect_stacks_varied_needs_two_distinct_recorded_values) {
+    fk_reset("dump\nexpect stacks LuckUp on 0 varied\ndump\nexpect stacks LuckUp on 0 varied\nexpect stacks LuckUp on 0 == 5\nexpect stacks LuckUp on 0 varied\nquit\n");
+    fk_two_units_with_stacks();
+    mt_runner_step(&rr, &HOST);                 /* dump: records LuckUp 2 */
+    mt_runner_step(&rr, &HOST);                 /* varied: one value so far -> fail */
+    CHECK(has(last_ev(), "\"kind\":\"stacks\"")); CHECK(has(last_ev(), "\"ok\":false")); CHECK(has(last_ev(), "1 distinct"));
+    mt_runner_step(&rr, &HOST);                 /* dump again: still 2 */
+    mt_runner_step(&rr, &HOST);                 /* varied: still one value */
+    CHECK(has(last_ev(), "\"ok\":false"));
+    fk.units[0].stacks[0] = 5;
+    mt_runner_step(&rr, &HOST);                 /* == 5 records 5 (ok) */
+    CHECK(has(last_ev(), "\"ok\":true"));
+    mt_runner_step(&rr, &HOST);                 /* varied: 2 and 5 -> ok */
+    CHECK(has(last_ev(), "\"ok\":true")); CHECK(has(last_ev(), "2 distinct"));
 }
 
 TEST(runner_expect_status_without_combat_fails) {

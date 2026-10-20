@@ -1,0 +1,15 @@
+mods: _autoplay
+timeout: 90s
+# T2 for the overlay itself: with Uncontrollable on the player cats, a test fight reaches round 2 with no input.
+# (A Rat is spawned so there is an opponent on the empty "blank" level; the generated party is the player's.)
+wait frames 120
+enter TacticsTest
+wait turns 1
+expect units >= 2
+cmd spawn Rat
+wait frames 10
+expect units >= 3
+wait rounds 1
+expect round >= 2
+dump
+quit

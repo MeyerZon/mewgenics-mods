@@ -24,6 +24,7 @@ void   mt_jw_hex(MtJsonW *w, const char *key, unsigned long long v);     /* "0x.
 void   mt_jw_bool(MtJsonW *w, const char *key, int v);
 void   mt_jw_arr_begin(MtJsonW *w, const char *key);
 void   mt_jw_arr_str(MtJsonW *w, const char *v);
+void   mt_jw_arr_int(MtJsonW *w, long long v);
 void   mt_jw_arr_end(MtJsonW *w);
 void   mt_jw_obj_begin(MtJsonW *w, const char *key);                      /* key NULL inside an array */
 void   mt_jw_obj_end(MtJsonW *w);
@@ -58,7 +59,10 @@ typedef enum MtDirKind {
     MT_D_CMD, MT_D_WAIT_FRAMES, MT_D_WAIT_TURNS, MT_D_WAIT_MS,
     MT_D_EXPECT_CONSOLE, MT_D_EXPECT_NOCONSOLE, MT_D_EXPECT_STATUS, MT_D_EXPECT_UNITS,
     MT_D_DUMP, MT_D_LOG, MT_D_QUIT,
-    MT_D_ENTER          /* enter <SceneName>: replay a dev-menu scene entry (TacticsTest) through the host */
+    MT_D_ENTER,         /* enter <SceneName>: replay a dev-menu scene entry (TacticsTest) through the host */
+    MT_D_WAIT_ROUNDS,   /* wait rounds N: until TurnControl's round >= round-at-directive + N */
+    MT_D_EXPECT_ROUND,  /* expect round <op> N (0 outside combat) */
+    MT_D_EXPECT_STACKS  /* expect stacks <Status> on <unit> (<op> N | varied) */
 } MtDirKind;
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
 /* scenes `enter` knows; 0 = unknown. The DLL and the Node parser (script.ts KNOWN_SCENES) must agree. */
@@ -76,6 +80,8 @@ typedef struct MtDirective {
     int unitIsIndex;
     int hasCode;        /* quit with an explicit code */
     int scene;          /* enter: MT_SCENE_* */
+    long value;         /* expect stacks: N (the unit index lives in n) */
+    int varied;         /* expect stacks … varied: >= 2 distinct values recorded for (unit, status) so far */
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
@@ -99,7 +105,12 @@ typedef struct MtUnit {
     int faction, move, act, turnKind;
     int statusCount;
     char statuses[MT_UNIT_STATUSES][MT_STATUS_NAME];
+    int stacks[MT_UNIT_STATUSES];          /* parallel to statuses (Status+OFF_STATUS_STACKS) */
 } MtUnit;
+
+/* values of (unit index, status) seen by dump / expect stacks, for `expect stacks … varied` */
+#define MT_STACK_TRACKS 16
+typedef struct MtStackTrack { int unit; char status[MT_STATUS_NAME]; int first; int sawDifferent; int used; } MtStackTrack;
 
 typedef struct MtHost {
     void *user;
@@ -121,7 +132,7 @@ typedef struct MtHost {
     int      (*enter_scene)(void *u, int scene, char *detail, size_t cap);
 } MtHost;
 
-typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN } MtState;
+typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS } MtState;
 typedef struct MtRunner {
     const MtScript *s;
     int pc;
@@ -140,6 +151,9 @@ typedef struct MtRunner {
     int exitCode;
     int finished;
     int entered;            /* enter succeeded once; a second enter is refused */
+    long waitStartRound;    /* rounds */
+    long waitTargetRound;
+    MtStackTrack tracks[MT_STACK_TRACKS];
     uint64_t t0, now;
 } MtRunner;
 void mt_runner_init(MtRunner *r, const MtScript *s, uint64_t now);

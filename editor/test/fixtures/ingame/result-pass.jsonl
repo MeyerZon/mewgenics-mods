@@ -8,5 +8,5 @@
 {"ev":"console","text":"load","t":2050,"frame":123}
 {"ev":"turn","n":1,"round":1,"t":2060,"frame":124}
 {"ev":"expect","line":5,"kind":"console","arg":"listcmds","ok":true,"detail":"matched console line 1","t":2066,"frame":124}
-{"ev":"units","available":true,"round":1,"count":2,"list":[{"i":0,"name":"Lumee","class":"Fighter","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"]},{"i":1,"name":"Rat","class":"Rat","faction":1,"move":2,"act":1,"turnkind":2,"statuses":[]}],"t":2083,"frame":125}
+{"ev":"units","available":true,"round":1,"count":2,"list":[{"i":0,"name":"Lumee","class":"Fighter","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"],"stacks":[1]},{"i":1,"name":"Rat","class":"Rat","faction":1,"move":2,"act":1,"turnkind":2,"statuses":[],"stacks":[]}],"t":2083,"frame":125}
 {"ev":"end","code":0,"reason":"quit","frames":126,"turns":1,"elapsed_ms":2100,"expect_pass":2,"expect_fail":0,"t":2100,"frame":126}

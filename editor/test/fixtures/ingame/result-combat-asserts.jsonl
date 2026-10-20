@@ -1,0 +1,20 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"<run>/script.mewtest","out":"<run>/result.jsonl","pid":34188,"hide":1,"timeout_ms":90000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":1172,"frame":120}
+{"ev":"enter","line":2,"name":"TacticsTest","ok":true,"detail":"scene=0000021380005a98 entity=0000021e6d6101d0 component=0000022030930008 manager=00000213e85ede10 director=0000021ba9a80008 GetGame(console)=0000021ba9a80008 director(after init)=0000021ba9a80008","t":3328,"frame":886}
+{"ev":"turn","n":1,"round":1,"t":4281,"frame":1014}
+{"ev":"wait","line":3,"kind":"turns","n":1,"actual":1,"t":4281,"frame":1014}
+{"ev":"units","available":true,"round":1,"count":6,"list":[{"i":0,"name":"Antonieta","class":"Thief","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":1,"name":"Shadok","class":"Mage","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":2,"name":"Ziva","class":"Medic","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":3,"name":"Mone","class":"Hunter","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[],"stacks":[]}],"t":4297,"frame":1015}
+{"ev":"expect","line":5,"kind":"round","arg":">= 1","ok":true,"detail":"round 1","t":4297,"frame":1016}
+{"ev":"expect","line":6,"kind":"units","arg":">= 2","ok":true,"detail":"6 units","t":4312,"frame":1017}
+{"ev":"cmd","line":7,"text":"spawn Rat","t":4312,"frame":1018}
+{"ev":"expect","line":8,"kind":"console","arg":"Spawned Rat","ok":true,"detail":"matched console line 0","t":4328,"frame":1019}
+{"ev":"expect","line":9,"kind":"units","arg":">= 7","ok":true,"detail":"7 units","t":4328,"frame":1020}
+{"ev":"turn","n":2,"round":1,"t":6750,"frame":1608}
+{"ev":"turn","n":3,"round":1,"t":13562,"frame":3223}
+{"ev":"turn","n":4,"round":1,"t":18266,"frame":4320}
+{"ev":"turn","n":5,"round":1,"t":21516,"frame":5083}
+{"ev":"turn","n":6,"round":2,"t":21578,"frame":5097}
+{"ev":"wait","line":10,"kind":"rounds","n":1,"actual":1,"t":21578,"frame":5097}
+{"ev":"expect","line":11,"kind":"round","arg":">= 2","ok":true,"detail":"round 2","t":21594,"frame":5098}
+{"ev":"units","available":true,"round":2,"count":7,"list":[{"i":0,"name":"Antonieta","class":"Thief","faction":1,"move":0,"act":1,"turnkind":0,"statuses":["ConjureBonusAbility"],"stacks":[1]},{"i":1,"name":"Shadok","class":"Mage","faction":1,"move":0,"act":0,"turnkind":0,"statuses":["CharismaUp"],"stacks":[3]},{"i":2,"name":"Ziva","class":"Medic","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["ConjureBonusAbility","CharismaUp"],"stacks":[1,3]},{"i":3,"name":"Mone","class":"Hunter","faction":1,"move":1,"act":1,"turnkind":0,"statuses":["ConjureBonusAbility","CharismaUp"],"stacks":[1,2]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":6,"statuses":[],"stacks":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":6,"statuses":[],"stacks":[]},{"i":6,"name":"Lil' Rat","class":"","faction":2,"move":0,"act":0,"turnkind":6,"statuses":["CorpseCounter"],"stacks":[1]}],"t":21594,"frame":5099}
+{"ev":"end","code":0,"reason":"quit","frames":5100,"turns":6,"elapsed_ms":21609,"expect_pass":5,"expect_fail":0,"t":21609,"frame":5100}

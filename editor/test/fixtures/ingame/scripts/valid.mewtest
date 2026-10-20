@@ -17,4 +17,8 @@ wait turns 2
 wait ms 500
 expect log "Save File Suffix: dev"
 enter TacticsTest
+wait rounds 1
+expect round >= 2
+expect stacks JokersLuck on 0 == 1
+expect stacks LuckUp on "Mr Whiskers" varied
 quit 0
