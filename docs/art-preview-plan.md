@@ -173,7 +173,7 @@ Tool-agnostic import (`svg-import.ts`): accepts an SVG document (VectorCraft,
 Inkscape, Illustrator export…) and produces `shapes[<id>].paths[]`: `<path d>`,
 `<rect>`, `<circle>`, `<ellipse>`, `<polygon>`, `<polyline>`, `<line>` and `<g>`
 transforms (translate/scale/rotate/skew/matrix), `fill`/`stroke` from attributes or
-inline `style`. Unsupported features (gradients, filters, text, `<use>`, masks) are
+inline `style`, linear/radial gradients (as `scene.gradients`). Unsupported features (patterns, filters, text, `<use>`, masks) are
 reported as findings, never silently dropped.
 
 ---
@@ -433,7 +433,11 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
    is written when the scene sets `curveResolution`.
 
 **Not in this pass**
-10. Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+10. **Gradient fills done 2026-10-20:** `scene.gradients` (linear/radial, focus, spread, transform, 2..8 stops) +
+    `gradient:<id>` fills → DefineShape3 fill types 0x10/0x12/0x13 (`src/core/art/gradient.ts`); SVG gradients import;
+    the preview samples a stop strip with the same t-function. OBSERVED in the game (`npm run test:artprobe`, the
+    (390,30) square): a linear gradient is drawn along its authored axis; whether gray stops are palette-remapped is
+    not observable on an (unpaletted) enemy clip. Gate variant `gradient` boots. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
     contract and `src/mcp/` untouched.

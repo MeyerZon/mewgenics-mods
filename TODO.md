@@ -317,7 +317,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 ### Larger build-out
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
 - [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
-- [ ] Emitter: gradient fills, LineStyle2, fonts/text, PlaceObject3
+- [ ] Emitter: ~~gradient fills~~ (done 2026-10-20, art build-out C: gradient.ts, gate `gradient`, probe square drawn in-game), LineStyle2, fonts/text, PlaceObject3
 - [ ] MCP tools for art (so agents can author art, not just data)
 - [ ] "Draw in VectorCraft →" SVG import handoff
 - [ ] Testing frontier from `automation-feasibility.md`: AI-brain auto-resolve to smoke-test mods in a real fight (tiers B/C) → now TDD targets 1–3 above; an IPC action layer (tier D) → the named-pipe mode in target 12
