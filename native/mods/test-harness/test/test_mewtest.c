@@ -363,7 +363,7 @@ typedef struct Fake {
     int unitsAvailable; MtUnit units[8]; int unitCount;
     char emitted[FK_MAX][1024]; int emitCount;
     int exitCode; int exitCalls;
-    int enterResult; int enterCalls; int enterScene;   /* enter_scene: programmable result (1 ok / 0 refused / -1 unavailable) */
+    int enterResult; int enterCalls; int enterScene; int enterMode;   /* enter_scene: programmable result (1 ok / 0 refused / -1 unavailable) */
     int seedResult; int seedCalls; unsigned long long seedValue;   /* seed_rng: programmable result (1 ok / 0 refused / -1 unavailable) */
     char pipeReply[8192]; int pipeReplies;                          /* pipe_reply: the last reply the runner handed to the glue */
 } Fake;
@@ -393,9 +393,9 @@ static int fk_unit_has_status(void *u, int i, const char *st) {
 }
 static void fk_emit(void *u, const char *json) { (void)u; if (fk.emitCount < FK_MAX) snprintf(fk.emitted[fk.emitCount++], 1024, "%s", json); }
 static void fk_request_exit(void *u, int code) { (void)u; fk.exitCode = code; fk.exitCalls++; }
-static int fk_enter_scene(void *u, int scene, char *detail, size_t cap) {
+static int fk_enter_scene(void *u, int scene, int mode, char *detail, size_t cap) {
     (void)u;
-    fk.enterCalls++; fk.enterScene = scene;
+    fk.enterCalls++; fk.enterScene = scene; fk.enterMode = mode;
     snprintf(detail, cap, "fake enter %d", scene);
     return fk.enterResult;
 }
@@ -470,6 +470,32 @@ TEST(script_enter_directive_parses_known_scene_and_rejects_unknown_or_missing) {
     CHECK(strstr(err, "scene name") != NULL);
     bad = "enter TacticsTest extra\n";
     CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+}
+
+/* ---- enter Campaign house: skip the interactive intro, start the campaign in the House ---- */
+TEST(script_enter_campaign_house_mode_parses_and_other_modes_are_rejected) {
+    char err[256]; int line = 0;
+    const char *s = "enter Campaign house\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.d[0].kind, MT_D_ENTER); CHECK_EQ(g_s.d[0].scene, MT_SCENE_CAMPAIGN); CHECK_EQ(g_s.d[0].enterMode, MT_ENTER_HOUSE);
+    s = "enter Campaign\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.d[0].enterMode, MT_ENTER_DEFAULT);
+    const char *bad[] = { "enter TacticsTest house\n", "enter Campaign tower\n", "enter Campaign house now\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+    CHECK_STR(mt_enter_mode_name(MT_ENTER_HOUSE), "house");
+}
+
+TEST(runner_enter_passes_the_mode_to_the_host_and_reports_it) {
+    fk_reset("enter Campaign house\nquit\n");
+    fk.enterResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.enterScene, MT_SCENE_CAMPAIGN); CHECK_EQ(fk.enterMode, MT_ENTER_HOUSE);
+    CHECK(has(last_ev(), "\"name\":\"Campaign\"")); CHECK(has(last_ev(), "\"mode\":\"house\""));
+    fk_reset("enter TacticsTest\nquit\n");
+    fk.enterResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.enterMode, MT_ENTER_DEFAULT); CHECK(!has(last_ev(), "\"mode\""));   /* the default mode adds no key */
 }
 
 TEST(runner_enter_waits_for_console_then_calls_host_and_emits_enter_event) {

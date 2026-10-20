@@ -170,6 +170,17 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.ok && p.body.startsWith("expect unit 6 faction == 1\n"), "DLL-side directive");
     });
 
+    test("enter Campaign house parses (mode house); a mode on another scene, an unknown mode or more words are line errors; no mode adds no key", () => {
+      eq(JSON.stringify(parseDirective("enter Campaign house", 3)), JSON.stringify({ line: 3, kind: "enter", scene: "Campaign", mode: "house" }));
+      eq(JSON.stringify(parseDirective("enter Campaign", 3)), JSON.stringify({ line: 3, kind: "enter", scene: "Campaign" }));
+      for (const bad of ["enter TacticsTest house", "enter Campaign tower", "enter Campaign house now"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript("enter Campaign house\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.usesCampaignSlot && p.body.startsWith("enter Campaign house\n"), "DLL-side, and it uses the disposable slot");
+      const r = parseResults('{"ev":"start","t":0,"frame":0}\n{"ev":"enter","line":1,"name":"Campaign","mode":"house","ok":true,"detail":"x","t":1,"frame":1}\n') as unknown as { enter: { mode: string } };
+      eq(r.enter.mode, "house");
+      eq((parseResults('{"ev":"enter","line":1,"name":"TacticsTest","ok":true,"detail":"x"}\n') as unknown as { enter: { mode: string } }).enter.mode, "");
+    });
+
     test("enter directive parses a known scene; unknown or missing scene, or extra words, are line errors", () => {
       const d = parseDirective("enter TacticsTest", 2) as { kind: string; scene: string };
       eq(d.kind, "enter"); eq(d.scene, "TacticsTest");
