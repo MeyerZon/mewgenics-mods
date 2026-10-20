@@ -187,6 +187,11 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
     } else if (wl == 4 && !strncmp(p, "dump", 4)) {
         if (*rest) return fail(err, errCap, errLine, lineNo, "dump takes no arguments");
         d.kind = MT_D_DUMP;
+    } else if (wl == 4 && !strncmp(p, "shot", 4)) {
+        const char *after = parse_quoted(rest, q, sizeof q, &qn);
+        if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "shot needs one quoted label");
+        d.kind = MT_D_SHOT;
+        if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
     } else if (wl == 3 && !strncmp(p, "log", 3)) {
         const char *after = parse_quoted(rest, q, sizeof q, &qn);
         if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "log needs one quoted string");
