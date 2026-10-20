@@ -338,7 +338,7 @@ build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4
   +0x20 → +0x1f90` verified on a real fight). Other facts from the attempts: without a director `TacticsTest::init`
   crashes at `+0x835a32`; `Scene+0x4db` is zeroed by `CreateScene` and set by the dev-menu buttons on their own
   scene (not the being-destroyed flag, which is `+0x4b0`).
-- **Other starters, for the record:** the save-slot click is the `std::function` body 0x1c06c0 (`scene->+0x4db = 1`,
+- **The campaign route (wired 2026-10-20 as `enter Campaign`):** the save-slot click is the `std::function` body 0x1c06c0 (`scene->+0x4db = 1`,
   `GetGame`, 0x94eba0, `AddComponent<MewDirector>(mainScene, e, slotName)` (c1), then `MewDirector::start`
   0x3aefd0, which reads `game_began` / `on_adventure` / `house_night` from the save and creates `House` (0x3c3ee0)
   or resumes the adventure (0x3bbff0)); the director's own battle starter 0x3b1830 (`FindScene("House")`, act from
@@ -347,6 +347,17 @@ build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4
   0x2e3720 with `TeamType 1, 4`).
 - **Save safety of the route:** only `test00.sav` is ever named (hard-coded in 0x758650, and now only by the game
   itself); `savecheck.ts` allows that family; every run ended with `1 real save file(s) unchanged`.
+- **`enter Campaign` (OBSERVED 2026-10-20):** the harness replays 0x1c06c0 minus the `+0x4db` flag (no save-select
+  scene exists): `Entity_DestroyOwnerOf` 0x94eba0 on the test director (marks its entity destroyed, destroys each
+  component through vtable+0x38 and bumps the generation at `component-8`, which is exactly what
+  `MewDirector::init`'s "More than one mew director" check compares against `DAT_1413dac38` — so the global may
+  still point at the old director when the new one is created, and does: "global after destroy" = old pointer),
+  `Scene_CreateEntity` on `SceneManager+0x18` (main scene), `AddComponent_MewDirector_named` 0x1be1a0 (copies the
+  `std::string*` it is given; `MewDirector::init` → `MewSaveFile::open_or_create("mewtest01.sav")`), then
+  `MewDirector_start` 0x3aefd0 (`+0x78e = 0`, `game_began` absent → 0x3af310: a `Cutscene` scene with the intro
+  driver 0x3c4130). The global then points at the new director. Bindings: `FW_SYM_Entity_DestroyOwnerOf`,
+  `FW_SYM_AddComponent_MewDirector_named`, `FW_SYM_MewDirector_start`. The slot name is arbitrary (the game uses it
+  as the file name under `<userdata>\saves\`); `mewtest01.sav` was chosen because no slot list produces it.
 
 ## Save safety
 

@@ -41,7 +41,7 @@ Things no test can see: they need a human at the game, a decision, or an account
   (`test00.sav`) / a copied local slot / ask the developer what the suffix is for. Until then: do not enter a Steam slot
   in a dev launch.
 - [ ] **Eyeball the saves dir after one dev run** (T3 of PR #33): `%APPDATA%\Glaiel Games\Mewgenics\<id>\saves\` —
-  only `campaign0N.sav` / `test00.sav` may have moved; `steamcampaign01.sav` keeps its 2026-03-31 mtime.
+  only `campaign0N.sav` / `test00.sav` / the harness's `mewtest01.sav` may have moved; `steamcampaign01.sav` keeps its 2026-03-31 mtime.
 - [ ] **Watch one clean-mode run end** (T3 of PR #31): `cd editor && npm run test:ingame -- dev-sandbox
   console-smoke-clean` should finish ~3 s after "script finished" (the DLL grace), never the old 7-minute hang, and
   leave no stray `Mewgenics.exe` in Task Manager.
@@ -61,6 +61,12 @@ Things no test can see: they need a human at the game, a decision, or an account
 - [ ] **Permission rule for merges** (optional): the harness's auto-mode classifier blocked `gh pr merge` once tonight
   even with your go-ahead in the chat; if you want agents to merge on your word without a retry, add a Bash allow rule
   for `gh pr merge` in `.claude/settings.json` — otherwise keep merging yourself.
+- [ ] **Merge policy for autonomy** (your goal 2026-10-20: out of the loop except for viewing results). Today your
+  global rule is "never merge without my per-PR word"; on 2026-10-20 you merged the whole stack #39–#48 on one word.
+  If you want agents to merge on their own, the rule to put in `~/.claude/CLAUDE.md` is: *agents may merge a PR
+  when the T0 workflow is green, the PR body carries the T2 verdict lines (`in-game: N passed, 0 failed`) and its
+  T3 list is empty or marked "none"; a PR with a human play-check item waits for your tick.* Until you write that,
+  agents keep stopping at "PR open".
 
 ## Owner checklist — what only you can check (binding-port series, merged 2026-10-19)
 
@@ -170,8 +176,10 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    with the `TacticsTest` driver. `mods/dev-sandbox/tests/enter-fight.mewtest`: run commands registered, a turn,
    `dump` with 6 units, `expect units >= 2` — pass, saves untouched. Facts: `docs/engine-map.md` "Dev scenes and
    run entry"; bindings v4 (`FW_SYM_SceneManager_CreateScene`, `Scene_CreateEntity`, `AddComponent_TacticsTest`,
-   `Component_GetGame`, `FW_DATA_MewDirector`, …). Not taken: the Continue-button/campaign route (would open a
-   `campaign0N.sav`; recorded, not wired) and SDL input injection. Bonus: the watchdog now closes the game's modal
+   `Component_GetGame`, `FW_DATA_MewDirector`, …). Same day, second route: `enter Campaign` replays the save-slot click on the harness-owned disposable slot
+   `mewtest01.sav` (the runner moves it aside before each such run; `mods/dev-sandbox/tests/enter-campaign.mewtest`:
+   new-game cutscene reached and seen in a shot, slot created, real saves unchanged). Open on that route: skipping
+   the intro to reach the house from a script. Not taken: SDL input injection. Bonus: the watchdog now closes the game's modal
    WARNING/ERROR boxes and reports them as `popup` events, so a run never hangs on a dialog.
 2. [x] **Joker's Luck real feature test (T2)** (2026-10-20): `mods/jokers-luck/tests/luck-rerolls.mewtest` — `enter
    TacticsTest`, `bind JokersGambit` (accepted), `expect status JokersLuck on 0`, `expect stacks JokersLuck on 0 >= 1`,
@@ -254,7 +262,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [ ] **`-savesuffix` gives no save isolation on this build** (finding of the decode above): a dev launch that enters a
   Steam-cloud slot would write the real `steamcampaign0N.sav`. The hash check catches it after the fact; decide whether
   dev play should go through `test00.sav` only (test director) or a copied slot, and whether to ask the developer what
-  the suffix is meant to do.
+  the suffix is meant to do. Harness side settled 2026-10-20: scripted meta-flow tests use the disposable
+  `mewtest01.sav` (`enter Campaign`, moved aside per run); the human dev-play policy is still yours.
 - [ ] **`FrameBegin` signature on a future build**: 19 generic prologue bytes; fallback is `ApplicationBase_Step`
   (both in the manifest). The port ladder regenerates them; if `FrameBegin` ends up `ambiguous`, switch the harness
   hook to `Step`.

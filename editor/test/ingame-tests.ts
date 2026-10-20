@@ -320,6 +320,13 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       for (const c of ["listcmds", "spawn arg0", "spawntile arg0", "load arg0", "bind arg0", "bind_passive arg0", "status arg0", "passive arg0", "win", "killall", "takeover", "noui", "equip arg0", "weather arg0", "tileset arg0", "skip_tutorial", "set_day arg0"]) assert(cmds.includes(c), `TacticsTest/MewDirector command ${c} listed`);
       eq(cmds[cmds.length - 1], "Executed: listcmds");
     });
+    test("OBSERVED 2026-10-20 fixture: enter Campaign -> ok, the harness-owned slot named in the detail, no popup, quit after the shots (result-enter-campaign.jsonl)", () => {
+      const r = parseResults(fixture("result-enter-campaign.jsonl")) as unknown as { enter: { ok: boolean; name: string; detail: string } | null; shots: unknown[]; end: { code: number; reason: string } | null; popups: unknown[]; turns: number };
+      assert(!!r.enter && r.enter.ok && r.enter.name === "Campaign", `enter ok: ${JSON.stringify(r.enter)}`);
+      assert(r.enter!.detail.includes("save=mewtest01.sav"), "the DLL names the slot the editor allows (savecheck.CAMPAIGN_SLOT_FILE)");
+      eq(r.shots.length, 3); eq(r.popups.length, 0); eq(r.turns, 0, "no fight: the new game starts in the intro cutscene");
+      eq(r.end!.code, 0); eq(r.end!.reason, "quit");
+    });
     test("OBSERVED 2026-10-20 fixture: combat-asserts — stacks in the units snapshot, round 2 after wait rounds, spawn adds a unit (result-combat-asserts.jsonl)", () => {
       const r = parseResults(fixture("result-combat-asserts.jsonl")) as unknown as { turns: number; units: { round: number; count: number; list: { name: string; faction: number; statuses: string[]; stacks: number[] }[] } | null; expects: { passed: number; failed: number }; events: { ev: string; kind?: string; actual?: number; detail?: string }[]; end: { code: number } | null };
       eq(r.turns, 6, "turns 2..6 happened on their own (the player cats are Uncontrollable)");

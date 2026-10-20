@@ -58,8 +58,11 @@ clean: false                     # default false: ExitProcess right after the en
                                  # flag and let the game shut down; the DLL terminates after 3 s, the runner kills after 5 s
 
 cmd <rest of line verbatim, 1..4078 bytes>       run a debug-console command
-enter <SceneName>                                replay a dev-menu scene entry (TacticsTest only); waits for the console
-                                                 like cmd; once per script; an unknown name fails before launch
+enter <SceneName>                                TacticsTest: replay the dev menu's test-fight button (no save opened);
+                                                 Campaign: replay the save-slot click on the harness-owned disposable
+                                                 slot mewtest01.sav (moved aside by the runner before the run, so it is
+                                                 always a new game: the intro cutscene). Waits for the console like cmd;
+                                                 once per script; an unknown name fails before launch
 seed <N>                                         pin the game's RNG (TLS+0x178) to N (0..2^64-1) once the game's own
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every
@@ -202,8 +205,15 @@ under `mods/`.
   2026-10-18 for this purpose; the editor's no-saves rules are not loosened anywhere else.
 - The harness DLL is inert without `-mewtest` and without `-savesuffix` (the framework already refuses vanilla
   launches), and never writes anything but its result file and `mod_logs\mewtest.log`. `enter` is the one directive
-  that can make the game open a save: the test director's `test00.sav`, whose name is hard-coded in the game
-  function the harness calls (never a `steamcampaign` slot); the save-set check allows that family.
+  that can make the game open a save: `enter TacticsTest` uses the test director's `test00.sav`, whose name is
+  hard-coded in the game function the harness calls; `enter Campaign` opens the harness-owned `mewtest01.sav`
+  (`MT_CAMPAIGN_SAVE` in the DLL = `CAMPAIGN_SLOT_FILE` in `savecheck.ts`; no save-select screen lists that name,
+  so nobody plays it). Never a `steamcampaign` slot; the save-set check allows those two families only.
+- The one write the editor makes under `saves/` (owner decision 2026-10-20): before a script with `enter Campaign`
+  the runner moves an existing `mewtest01.sav` into the run dir as `mewtest01.sav.before` (a rename, never a
+  delete, never another name — `savecheck.resetCampaignSlot`), so every such run is a fresh new game and the
+  previous slot is kept with the run's artifacts. `report.safety.campaignSlot` = `{file, reset, backup, after}`
+  (`after`: whether the game wrote a new slot). The game may also keep its own `saves/backups/mewtest01_*.savbackup`.
 
 ## Game-state assumptions (verified 2026-10-18 on build 25143593)
 
@@ -238,7 +248,14 @@ under `mods/`.
   opponents (6 units; `editor/test/fixtures/ingame/result-enter-fight.jsonl`). The unit walk is therefore verified
   on a real fight, and so is the crash path (an access violation inside an earlier attempt produced the `crash`
   event, exit 3 and the game's crash log, with no dialog). Every run left `1 real save file(s) unchanged`.
-- The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
+- **`enter Campaign`** (OBSERVED 2026-10-20, `mods/dev-sandbox/tests/enter-campaign.mewtest`,
+  `editor/test/fixtures/ingame/result-enter-campaign.jsonl`): the DLL replays the save-slot click — destroys the
+  entity of the game's test director (its "More than one mew director" check compares generations, which the
+  destroy bumps), `AddComponent<MewDirector>(mainScene, entity, "mewtest01.sav")` (init creates the slot) and
+  `MewDirector::start` (a fresh slot = the new-game intro cutscene; a kept one would resume). ~900 frames later
+  the game was still running the cutscene (seen in a `shot`), the slot existed (32 KB), no popup, real saves
+  unchanged. A second run moved the first slot into its run dir (`reset: true`). No combat commands exist on this
+  path until the cutscene is over and the house is reached (open: skipping the intro from the harness).- The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
   mode" above: the game does not shut itself down when its running flag is cleared, so nothing flushes). Load-time
   markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.
 - Mewjector loads mods on the first `version.dll` proxy call, which on this machine is after SDL has initialized;
