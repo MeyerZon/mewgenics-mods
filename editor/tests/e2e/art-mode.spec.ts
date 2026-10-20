@@ -24,6 +24,33 @@ test.beforeEach(async ({ page }) => {
   await seedToursSeen(page);
 });
 
+test.describe("Art mode — Ruffle reference player", () => {
+  test("the Ruffle tab plays a built mod SWF from bytes, with no request leaving the editor's origin", async ({ page }) => {
+    const errors = collectConsole(page);
+    const foreign: string[] = [];
+    page.on("request", (r) => { const u = new URL(r.url()); if (u.hostname !== "127.0.0.1" && u.protocol !== "data:" && u.protocol !== "blob:") foreign.push(r.url()); });
+    await openSandboxScene(page);
+    // build my_rat so a mod SWF exists, then load it in the Ruffle tab
+    await page.locator(".artright .tabs button", { hasText: "Build" }).click();
+    await page.locator(".artright button", { hasText: /^Build$/ }).click();
+    await expect(page.locator(".artright")).toContainText("my_rat.swf", { timeout: 15000 });
+    await page.locator(".artright .tabs button", { hasText: "Ruffle" }).click();
+    await expect(page.locator(".ruffle-caption")).toContainText("not glaiel::swf");
+    await page.locator(".ruffle-source").selectOption({ label: "mod: my_rat.swf" });
+    await page.locator(".ruffle-load").click();
+    await expect(page.locator(".ruffle-status")).toContainText("24 frames", { timeout: 30000 });
+    await expect(page.locator("ruffle-player")).toBeVisible();
+    // vanilla files that are not extracted are listed but disabled
+    const opts = await page.locator(".ruffle-source option").allTextContents();
+    assert_ok(opts.some((t) => /vanilla:/.test(t)), `vanilla entries listed: ${opts.join(" | ")}`);
+    expect(foreign, foreign.join(", ")).toEqual([]);
+    const bad = errors.filter((e) => e.type !== "warning" && !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(bad, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+});
+
+function assert_ok(cond: boolean, msg: string) { if (!cond) throw new Error(msg); }
+
 test.describe("Art mode — explorer & scene authoring", () => {
   test("scenes / built-SWFs / assets explorer and scene tabs", async ({ page }) => {
     const errors = collectConsole(page);
