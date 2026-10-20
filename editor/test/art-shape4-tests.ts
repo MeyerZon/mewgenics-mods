@@ -39,7 +39,7 @@ export async function runArtShape4Tests(test: TestFn, assert: AssertFn, eq: EqFn
     assert((validateScene(ok) as any).ok, "valid");
   });
 
-  test("shapeVersion: 3 for plain fills and round strokes; 4 for a butt/square cap, bevel/miter join, non-scaling stroke, gradient stroke, or a gradient with more than 8 stops", () => {
+  test("shapeVersion: 3 for plain fills and round strokes; 4 for a butt/square cap, bevel/miter join, non-scaling stroke, gradient stroke, a gradient with more than 8 stops, a focal radial or a reflect/repeat spread", () => {
     assert(typeof S.shapeVersion === "function", "shape.ts exports shapeVersion");
     const v = (paths: any[], gradients: any = {}) => S.shapeVersion({ paths }, gradients);
     eq(v([{ d: SQ, fill: "gray:8" }]), 3);
@@ -52,6 +52,10 @@ export async function runArtShape4Tests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(v([{ d: SQ, stroke: "gradient:g", strokeWidth: 2 }], g2), 4);
     const many = { g: { ...g2.g, stops: Array.from({ length: 12 }, (_, i) => ({ offset: i / 11, color: `gray:${i}` })) } };
     eq(v([{ d: SQ, fill: "gradient:g" }], many), 4);
+    // SWF defines the focal radial (0x13) and the reflect/repeat spread bits for DefineShape4 only
+    eq(v([{ d: SQ, fill: "gradient:f" }], { f: { kind: "radial", cx: 0, cy: 0, r: 10, fx: 5, fy: 0, stops: g2.g.stops } }), 4);
+    eq(v([{ d: SQ, fill: "gradient:r" }], { r: { ...g2.g, spread: "reflect" } }), 4);
+    eq(v([{ d: SQ, fill: "gradient:g" }], g2), 3);
   });
 
   test("encodeDefineShape (auto) writes DefineShape4 the reader reads back: EdgeBounds = bounds without the stroke, the non-scaling flag, LINESTYLE2 caps/join/miter, a gradient line fill", () => {
@@ -154,7 +158,7 @@ export async function runArtShape4Tests(test: TestFn, assert: AssertFn, eq: EqFn
     const src = readFileSync(join(HERE, "..", "web", "src", "art", "preview-gl.ts"), "utf8");
     assert(/from "..\/..\/..\/src\/core\/art\/stroke\.ts"/.test(src), "imports stroke.ts");
     assert(!/^function strokePolys/m.test(src), "the local copy is gone");
-    assert(/c\.lineJoin = path\.strokeJoin/.test(src) && /c\.lineCap = /.test(src) && /c\.miterLimit = /.test(src), "Canvas2D follows the path");
+    assert(/c\.lineJoin = path\.stroke(Style\.join|Join)/.test(src) && /c\.lineCap = /.test(src) && /c\.miterLimit = /.test(src), "Canvas2D follows the path");
   });
 
   const ai = join(VANILLA_DIR, "ability_icons.swf");

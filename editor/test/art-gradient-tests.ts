@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { encodeDefineShape3 } from "../src/core/art/shape.ts";
+import * as shapeMod from "../src/core/art/shape.ts";
 import { readTags, readSwf } from "../src/core/art/swf-reader.ts";
 import { emitSwf, minimalGateSwf } from "../src/core/art/swf-emitter.ts";
 import { exampleScene, validateScene, parseFill } from "../src/core/art/scene.ts";
@@ -118,7 +119,8 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
       { d: "M0 60 L100 60 L100 110 L0 110 Z", fill: "gradient:rad" },
       { d: "M0 120 L80 120 L80 200 L0 200 Z", fill: "gradient:foc" },
     ] };
-    const enc = encodeDefineShape3(5, shape as any, { gradients: { lin: linear, rad: radial, foc: focal } } as any);
+    // auto version: the focal radial and the reflect spread need DefineShape4 (art-shape4-tests.ts)
+    const enc = ((shapeMod as any).encodeDefineShape || encodeDefineShape3)(5, shape as any, { gradients: { lin: linear, rad: radial, foc: focal } } as any);
     assert(!enc.findings.some((f: any) => f.severity === "error"), JSON.stringify(enc.findings));
     const sh = readTags(enc.bytes, 0, enc.bytes.length)[0]!.shape as any;
     eq(sh.fillStyles.length, 3);

@@ -19,6 +19,12 @@ import type { SceneGradient, GradientStopDef, Scene, SceneShape } from "./scene.
 
 export const GRADIENT_SQUARE = 16384;
 export const MAX_STOPS_SHAPE3 = 8;
+export const MAX_STOPS_SHAPE4 = 15;
+
+/** SWF defines >8 stops, the focal radial (0x13) and the reflect/repeat spread bits for DefineShape4 only. */
+export function gradientNeedsShape4(g: SceneGradient): boolean {
+  return (Array.isArray(g.stops) && g.stops.length > MAX_STOPS_SHAPE3) || gradientFocal(g) !== 0 || (g.spread !== undefined && g.spread !== "pad");
+}
 
 export interface Rgba8 {
   r: number;
@@ -178,7 +184,7 @@ export function gradientProblems(g: SceneGradient | null | undefined): GradientP
   const out: GradientProblem[] = [];
   if (!g || (g.kind !== "linear" && g.kind !== "radial")) return [{ code: "gradient-kind", message: "kind must be linear or radial", at: "kind" }];
   const stops = Array.isArray(g.stops) ? g.stops : [];
-  if (stops.length < 2 || stops.length > MAX_STOPS_SHAPE3) out.push({ code: "gradient-stops", message: `a gradient needs 2..${MAX_STOPS_SHAPE3} stops (has ${stops.length})`, at: "stops" });
+  if (stops.length < 2 || stops.length > MAX_STOPS_SHAPE4) out.push({ code: "gradient-stops", message: `a gradient needs 2..${MAX_STOPS_SHAPE4} stops (has ${stops.length}; more than ${MAX_STOPS_SHAPE3} makes the shape a DefineShape4)`, at: "stops" });
   let prev = -1;
   stops.forEach((s, i) => {
     if (!s || !num(s.offset) || s.offset < 0 || s.offset > 1) out.push({ code: "gradient-stops", message: `stop ${i}: offset must be a number in 0..1`, at: `stops[${i}].offset` });
