@@ -510,6 +510,8 @@ await mcpSmoke();
   await runArtCatRigTests(test, assert, eq);
   const { runArtSvgExportTests } = await import("./art-svg-export-tests.ts");
   await runArtSvgExportTests(test, assert, eq);
+  const { runArtImportTests } = await import("./art-import-tests.ts");
+  runArtImportTests(test, assert, eq);
   const { runArtTextTests } = await import("./art-text-tests.ts");
   await runArtTextTests(test, assert, eq);
 }

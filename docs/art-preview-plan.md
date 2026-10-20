@@ -479,7 +479,12 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     writes exactly that from `scene.texts` (`GAME_FONTS` = fonts.swf's eight classes, pinned in
     `test/fixtures/art/game-fonts.json` against the installed game). OBSERVED: gate `text` boots; the probe's PROBE
     text draws in the game's font and the class is honoured (Swanky draws other glyphs than Peralta). Not done:
-    localized text (the game sets text by code/loc keys; a mod's text is the literal initial text). Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+    localized text (the game sets text by code/loc keys; a mod's text is the literal initial text).
+    **Cat-parts import experiment 2026-10-20: negative.** `scene.imports` writes `ImportAssets2("catparts.swf", [{ id,
+    "CatTail" }])` and places the id; the SWF loads (gate `import`), but spawning a character whose clip places an
+    imported symbol crashes the game — glaiel::swf never links import entries (`Swf_GetCharacter` 0xa4a190 finds no
+    character for the id; engine-map "Imports are not linked"). Imports are therefore a validation error. Real cat
+    parts in a mod rig need copying geometry (H2) or native work. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. **Done 2026-10-20:** MCP tools `list_art_scenes`, `read_art_scene`, `write_art_scene` (dryRun validates), `new_art_scene`,
     `import_svg` (with `into { scene, shapeId }` it saves the shape), `build_swf`, `inspect_swf`. Was: MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool

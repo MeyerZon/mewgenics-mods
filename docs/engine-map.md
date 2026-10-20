@@ -295,6 +295,22 @@ the scale, about 1.72 screen px per clip px at 3440×1440): enemy clips are mirr
 one-frame parent advances on its own clock; bitmap fills are sampled smoothly and clamped at the edge; PlaceObject
 cxform applies; enemies have no palette row (gray stays gray). Fixture: `editor/test/fixtures/ingame/artprobe-summary.json`.
 
+### Imports are not linked (the cat-parts import experiment, 2026-10-20)
+
+`Swf_GetCharacter` RVA `0xa4a190` (113 bytes; `.analysis/decompiled/Swf_GetCharacter_0xa4a190.c`) is the per-file
+character lookup with lazy init: `table = file+0x28` (`Character*[]` by id), `entry = table[id]`, and on first use
+`entry->vtable[2](entry)` initialises it. Callers: `0x9a8f30` (MovieClipAdvance, places characters), `0x9bb6f0`,
+`0x9bc070` (process_animation_merges), `0xa2f900`, `0xa4b740`, `0xb79410`.
+
+- A SWF carrying `ImportAssets2(url, [{ id, name }])` **loads** (gate variant `import`: boot pass).
+- Placing an imported id **crashes**: `table[id]` is null for it, and the read of `entry[4]` faults
+  (`0xc0000005` at `Mewgenics.exe+0xa4a1a9`, on `spawn` of a character whose clip places imported catparts.swf
+  CatTail / CatBody / CatHead; the same clip without those layers runs).
+- So glaiel::swf parses `ImportAssets2` but does not link its entries. Vanilla only ever uses it with **zero** entries
+  (`fonts.swf`), and fonts resolve by class name in `DefineEditText`, not through the import.
+- Pinned: `editor/test/fixtures/ingame/artprobe-cat-summary.json` `importParts`; the validator refuses any
+  `scene.imports` (`import-unsupported`).
+
 ## Dev scenes and run entry (static decode + Ghidra, 2026-10-20)
 
 How the harness enters a fight from the main menu (`enter TacticsTest`, `docs/ingame-testing.md`). Every address is

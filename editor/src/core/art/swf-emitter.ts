@@ -16,7 +16,7 @@ import { BitWriter, TAG, tag, tagName, concat, writeRect, writeMatrix, writeCxfo
 import type { Mat } from "./geometry.ts";
 import type { RgbaImage } from "./png.ts";
 import { BLEND_MODES, hasEffects, writeFilterList } from "./effects.ts";
-import { encodeDefineEditText, encodeImportGameFonts } from "./text.ts";
+import { encodeDefineEditText, encodeImportGameFonts, encodeImportAssets2 } from "./text.ts";
 import type { SceneFilter } from "./effects.ts";
 
 export const SWF_VERSION = 17;
@@ -36,7 +36,7 @@ export interface EmitOptions {
 
 export interface EmitCharacter {
   id: number;
-  kind: "bitmap" | "shape" | "sprite" | "text";
+  kind: "bitmap" | "shape" | "sprite" | "text" | "import";
   name: string;
 }
 export interface EmitExport {
@@ -130,6 +130,20 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
     push(TAG.DefineSceneAndFrameLabelData, w.finish());
   }
 
+  // --- symbols imported from game SWFs: one ImportAssets2 per source, before any definition (ids from buildOrder)
+  const imports = scene.imports || {};
+  const importIds = new Map<string, number>();
+  {
+    const order0 = buildOrder(scene);
+    const bySource = new Map<string, Array<{ id: number; name: string }>>();
+    for (const [local, im] of Object.entries(imports)) {
+      const cid = order0.indexOf(local) + 1;
+      importIds.set(local, cid);
+      bySource.set(im.from, [...(bySource.get(im.from) || []), { id: cid, name: im.name }]);
+    }
+    for (const [url, entries] of bySource) tags.push({ code: TAG.ImportAssets2, bytes: encodeImportAssets2(url, entries) });
+  }
+
   // --- the game's fonts, declared like vanilla does (ImportAssets2 "fonts.swf", 0 assets) when the scene has text
   const texts = scene.texts || {};
   if (Object.keys(texts).length) tags.push({ code: TAG.ImportAssets2, bytes: encodeImportGameFonts() });
@@ -143,7 +157,9 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
   const bitmaps = scene.bitmaps || {};
   for (const id of order) {
     const cid = ids.get(id) as number;
-    if (bitmaps[id]) {
+    if (importIds.has(id)) {
+      characters.push({ id: cid, kind: "import", name: id });
+    } else if (bitmaps[id]) {
       const img = opts.bitmaps ? opts.bitmaps.get(id) : undefined;
       if (!img) {
         findings.push({ severity: "error", code: "bitmap-missing", message: `no decoded image supplied for bitmap "${id}" (${bitmaps[id].file})`, path: `bitmaps.${id}` });
@@ -409,6 +425,8 @@ export interface GateSwfOptions {
   stroke?: "shape4";
   /** PlaceObject3 on the icon: "blend" (blend add only) or "filters" (a red glow only) */
   effects?: "blend" | "filters";
+  /** place an instance of a catparts.swf export (e.g. "CatTail") on the icon frame through ImportAssets2 */
+  importPart?: string;
   /** add a Peralta DefineEditText ("GATE") on the icon frame (text the way vanilla icons carry it) */
   text?: boolean;
 }
@@ -438,8 +456,9 @@ export function minimalGateSwf(o: GateSwfOptions): Uint8Array {
     ...(o.fill === "gradient" ? { gradients: { ramp: { kind: "linear" as const, x1: 0, y1: 0, x2: 64, y2: 0, stops: [{ offset: 0, color: "gray:2" }, { offset: 1, color: "gray:14" }] } } } : {}),
     sprites: {
       ...(nested ? { Icon: { frames: 1, labels: {}, layers: [{ depth: 1, keys: [{ frame: 0, ref: "square", x: 0, y: 0 }] }] } } : {}),
-      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0, ...(o.effects === "blend" ? { blend: "add" } : o.effects === "filters" ? { filters: [{ type: "glow" as const, color: "#ff2020", blurX: 8, blurY: 8, strength: 2 }] } : {}) }] }].concat(o.text ? [{ depth: depth + 1, keys: [{ frame: 0, ref: "gatetext", x: 32, y: 52 }] }] : []) },
+      Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0, ...(o.effects === "blend" ? { blend: "add" } : o.effects === "filters" ? { filters: [{ type: "glow" as const, color: "#ff2020", blurX: 8, blurY: 8, strength: 2 }] } : {}) }] }].concat(o.text ? [{ depth: depth + 1, keys: [{ frame: 0, ref: "gatetext", x: 32, y: 52 }] }] : []).concat(o.importPart ? [{ depth: depth + 2, keys: [{ frame: 0, ref: "vpart", x: 32, y: 32 }] }] : []) },
     },
+    ...(o.importPart ? { imports: { vpart: { from: "catparts.swf", name: o.importPart } } } : {}),
     ...(o.text ? { texts: { gatetext: { text: "GATE", font: "Peralta", size: 12, color: "#000000", align: "center" as const, width: 64, height: 20 } } } : {}),
     exports: { [o.linkage]: "Clip" },
     stage_instances: [],

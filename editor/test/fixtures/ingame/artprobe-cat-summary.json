@@ -39,5 +39,12 @@
       "arm1": 0,
       "head": 14611
     }
-  ]
+  ],
+  "importParts": {
+    "verdict": "crash",
+    "boot": "pass",
+    "control": "pass",
+    "observed": "2026-10-20, build 25143593",
+    "detail": "gate import (icon + ImportAssets2 catparts.swf CatTail) boots; spawn ArtProbeImport (clip placing imported CatTail/CatBody/CatHead) -> crash 0xc0000005 at Mewgenics.exe+0xa4a1a9, frame 237; the same clip without the import layers -> pass"
+  }
 }

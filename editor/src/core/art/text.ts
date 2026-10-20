@@ -88,12 +88,21 @@ export function encodeDefineEditText(id: number, t: SceneText): Uint8Array {
   return tag(TAG.DefineEditText, w.finish());
 }
 
+/** ImportAssets2(url, entries): reserved bytes 1, 0 as in vanilla, then { character id, linkage name } per entry. */
+export function encodeImportAssets2(url: string, entries: Array<{ id: number; name: string }>): Uint8Array {
+  const w = new BitWriter(32 + entries.length * 24);
+  w.string(url);
+  w.u8(1);
+  w.u8(0);
+  w.u16(entries.length);
+  for (const e of entries) {
+    w.u16(e.id);
+    w.string(e.name);
+  }
+  return tag(TAG.ImportAssets2, w.finish());
+}
+
 /** ImportAssets2("fonts.swf", 0 assets): vanilla's declaration that the file uses the game's fonts. */
 export function encodeImportGameFonts(): Uint8Array {
-  const w = new BitWriter(16);
-  w.string("fonts.swf");
-  w.u8(1); // reserved, 1 as in vanilla
-  w.u8(0); // reserved
-  w.u16(0); // count
-  return tag(TAG.ImportAssets2, w.finish());
+  return encodeImportAssets2("fonts.swf", []);
 }

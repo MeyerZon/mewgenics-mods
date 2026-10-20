@@ -14,6 +14,8 @@ import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
 import { rigFindings } from "./cat-rig.ts";
 import { textProblems } from "./text.ts";
 import type { SceneText } from "./text.ts";
+import { VANILLA_EXPORTS } from "./vanilla-exports.ts";
+import type { SceneImport } from "./vanilla-exports.ts";
 import type { SceneFilter } from "./effects.ts";
 
 /**
@@ -157,6 +159,8 @@ export interface Scene {
   gradients?: Record<string, SceneGradient>;
   /** DefineEditText characters in a game font (text.ts); keys place them like shapes */
   texts?: Record<string, SceneText>;
+  /** symbols imported from game SWFs (ImportAssets2), placed by keys like sprites; no game bytes in the mod */
+  imports?: Record<string, SceneImport>;
   sprites: Record<string, SceneSprite>;
   exports: Record<string, string>;
   stage_instances?: Array<SceneKey & { ref: string }>;
@@ -415,6 +419,18 @@ export function validateScene(input: unknown): SceneValidation {
     ids.add(id);
     for (const p of gradientProblems((scene.gradients || {})[id])) err(p.code, `gradient "${id}": ${p.message}`, [`gradients.${id}` + (p.at ? `.${p.at}` : "")]);
   }
+  for (const id of Object.keys(scene.imports || {})) {
+    if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text/import`, [`imports.${id}`]);
+    ids.add(id);
+    const im = (scene.imports || {})[id];
+    if (!im || typeof im.from !== "string" || !/^[A-Za-z0-9_.-]+\.swf$/.test(im.from)) err("import-from", `import "${id}": from must be a game SWF file name (e.g. catparts.swf)`, [`imports.${id}.from`]);
+    else if (typeof im.name !== "string" || !im.name) err("import-unknown", `import "${id}": name is required`, [`imports.${id}.name`]);
+    else if (VANILLA_EXPORTS[im.from] && !VANILLA_EXPORTS[im.from]!.includes(im.name)) err("import-unknown", `import "${id}": ${im.from} does not export "${im.name}"`, [`imports.${id}.name`]);
+    else if (!VANILLA_EXPORTS[im.from]) findings.push({ severity: "warning", code: "import-unpinned", message: `import "${id}": ${im.from}'s exports are not pinned; "${im.name}" is not checked`, path: `imports.${id}` });
+    // OBSERVED 2026-10-20 (the cat-parts import experiment): a SWF with ImportAssets2 entries loads, but spawning a character
+    // whose clip places an imported symbol crashes the game (0xc0000005 at Mewgenics.exe+0xa4a1a9)
+    err("import-unsupported", `import "${id}": the game crashes when a clip places a symbol imported from another SWF (OBSERVED 2026-10-20)`, [`imports.${id}`]);
+  }
   for (const id of Object.keys(scene.texts || {})) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text`, [`texts.${id}`]);
     ids.add(id);
@@ -457,7 +473,7 @@ export function validateScene(input: unknown): SceneValidation {
         if (k.frame <= last) err("key-order", "keys must be sorted by strictly increasing frame", [kat + ".frame"]);
         last = k.frame;
         if (k.ref !== null && k.ref !== undefined) {
-          if (typeof k.ref !== "string" || !(scene.shapes[k.ref] || scene.sprites[k.ref] || (scene.texts || {})[k.ref])) err("ref-missing", `ref "${String(k.ref)}" is not a shape, sprite or text`, [kat + ".ref"]);
+          if (typeof k.ref !== "string" || !(scene.shapes[k.ref] || scene.sprites[k.ref] || (scene.texts || {})[k.ref] || (scene.imports || {})[k.ref])) err("ref-missing", `ref "${String(k.ref)}" is not a shape, sprite, text or import`, [kat + ".ref"]);
           else if (k.ref === id) err("ref-self", `sprite "${id}" cannot contain itself`, [kat + ".ref"]);
         }
         if (k.tween && k.tween !== "hold" && k.tween !== "linear") err("key-tween", "tween must be hold|linear", [kat + ".tween"]);
@@ -494,7 +510,7 @@ export function validateScene(input: unknown): SceneValidation {
     if (typeof ref !== "string" || !(scene.shapes[ref] || scene.sprites[ref])) err("export-ref", `export "${linkage}" points at unknown id "${String(ref)}"`, [`exports.${linkage}`]);
   }
   scene.stage_instances.forEach((si, i) => {
-    if (!si || typeof si.ref !== "string" || !(scene.shapes[si.ref] || scene.sprites[si.ref] || (scene.texts || {})[si.ref])) err("stage-ref", `stage_instances[${i}].ref is not a shape or sprite`, [`stage_instances[${i}]`]);
+    if (!si || typeof si.ref !== "string" || !(scene.shapes[si.ref] || scene.sprites[si.ref] || (scene.texts || {})[si.ref] || (scene.imports || {})[si.ref])) err("stage-ref", `stage_instances[${i}].ref is not a shape or sprite`, [`stage_instances[${i}]`]);
   });
   if (scene.curveResolution !== undefined && !(Number.isInteger(scene.curveResolution) && scene.curveResolution >= 1)) warn("curve-resolution", "curveResolution must be a positive integer; ignored", ["curveResolution"]);
 
@@ -520,7 +536,8 @@ function hasCycle(scene: Scene, id: string, stack: Set<string>): boolean {
  * Shapes and bitmaps first (sorted), then sprites in dependency order.
  */
 export function buildOrder(scene: Scene): string[] {
-  const out = Object.keys(scene.bitmaps || {}).sort();
+  const out = Object.keys(scene.imports || {}).sort();
+  out.push(...Object.keys(scene.bitmaps || {}).sort());
   out.push(...Object.keys(scene.shapes).sort());
   out.push(...Object.keys(scene.texts || {}).sort());
   const seen = new Set(out);
