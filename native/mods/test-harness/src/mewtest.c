@@ -183,6 +183,27 @@ static void hook_NextTurn(void *tc) {
     g_origNextTurn(tc);
 }
 
+/* diagnostic: every MewDirector::init(this, name) with the caller chain as RVAs, so "More than one mew director"
+ * can be attributed (the harness never creates more than one itself) */
+typedef void (*fn_DirectorInit)(void *director, void *nameStr);
+static fn_DirectorInit g_origDirectorInit;
+static void hook_DirectorInit(void *director, void *nameStr) {
+    void *frames[12];
+    USHORT n = RtlCaptureStackBackTrace(1, 12, frames, NULL);
+    char chain[400] = "";
+    for (USHORT i = 0; i < n; i++) {
+        uintptr_t a = (uintptr_t)frames[i];
+        char piece[40];
+        if (a >= g_base && a < g_imageEnd) snprintf(piece, sizeof piece, " exe+0x%llx", (unsigned long long)(a - g_base));
+        else snprintf(piece, sizeof piece, " %p", (void *)a);
+        strncat(chain, piece, sizeof chain - strlen(chain) - 1);
+    }
+    char nm[64] = "?";
+    read_msvc_string(nameStr, nm, sizeof nm);
+    logf_("MewDirector::init(%p, \"%s\") from%s", director, nm, chain);
+    g_origDirectorInit(director, nameStr);
+}
+
 static void maybe_hide(void) {
     if (g_hidden || !g_args.hide) return;
     void *appGlobal = (void *)g_fw.GetData(FW_DATA_App);
@@ -299,25 +320,12 @@ static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
      * right before it); a director made here first trips the game's "More than one mew director" assert, whose
      * handler never returns (the main loop stalls until the watchdog exits 2). So a director that already exists is
      * refused — nothing is created here — and the global is read only for the report. */
-    int directorMade = 0;
-    if (!director) {
-        /* OBSERVED 2026-10-20: a dev launch sits at the main menu with no MewDirector (6 scenes: Shared, Base,
-         * DebugOverlay, ToolTip, PostProcess, PauseMenu; none carries type 0x50c), and TacticsTest::init
-         * dereferences the director it gets from Component::GetGame (crash at +0x835a32 without one). Make the test
-         * director the way the game's own load path does (0x750f90): on the manager's main scene, test00.sav —
-         * a name the save-set check allows; the callee hard-codes it, so no steamcampaign slot can be named here. */
-        void *mainScene = NULL;
-        char mainDestroyed = 1;
-        if (!g_AddDirectorTest) { snprintf(detail, cap, "symbol missing: FW_SYM_AddComponent_MewDirector_test"); return -1; }
-        if (!read_ptr(AT(mgr, OFF_SCENEMANAGER_MAINSCENE), &mainScene) || !mainScene) { snprintf(detail, cap, "no main scene on the scene manager (+0x%x)", OFF_SCENEMANAGER_MAINSCENE); return 0; }
-        if (!safe_read(AT(mainScene, OFF_SCENE_DESTROYED), &mainDestroyed, 1) || mainDestroyed) { snprintf(detail, cap, "main scene %p is being destroyed", mainScene); return 0; }
-        void *de = g_CreateEntity(mainScene);
-        if (!de) { snprintf(detail, cap, "CreateEntity on the main scene %p returned NULL", mainScene); return 0; }
-        director = g_AddDirectorTest(mainScene, de);
-        if (!director) { snprintf(detail, cap, "AddComponent<MewDirector>(test00.sav) returned NULL"); return 0; }
-        directorMade = 1;
-        logf_("enter: created the test director %p on the main scene %p (test00.sav)", director, mainScene);
-    }
+    /* OBSERVED 2026-10-20 (MewDirector::init hook): in dev mode the game's own load-complete path
+     * (exe+0x751886 <- 0x748395) creates the test director (test00.sav) on the main scene a few frames after the
+     * menu is up, and TacticsTest::init dereferences the director Component::GetGame returns (crash at +0x835a32
+     * without one). An entry made before that director exists raced it ("More than one mew director"). So: not
+     * ready until the game has made its director; the runner retries every frame for MT_CONSOLE_WAIT_MS. */
+    if (!director) { snprintf(detail, cap, "no MewDirector yet (the game's dev-mode startup makes the test director after the menu)"); return 2; }
     /* diagnostic for the record: the scenes the manager holds (vector at +0 .. +8), each with its name (+0x4b8),
      * destroyed flag (+0x4b0) and whether it carries a MewGame (type 0x50c list at scene+0x20 -> +0x50c0) */
     {
@@ -341,8 +349,12 @@ static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
     void *flagTarget = game ? game : director;
     char probe = 0;
     if (!safe_read(AT(flagTarget, OFF_DIRECTOR_DEVFIGHT_MODE), &probe, 1)) { snprintf(detail, cap, "director %p unreadable", flagTarget); return 0; }
+    /* DECOMPILED (MewDirector::DebugGenAdventureCats 0x3b24c0): +0x78c = "take the party from a saved winning
+     * team"; when none is saved it warns ("no saved winning teams - win at least one run first!"), clears the
+     * flag and generates a party anyway. The harness leaves it 0 so a fresh test00.sav gets a generated party
+     * without the popup. +0x780 is set by every dev-menu fight button; +0x6dc is the act (the button sets 1). */
     *(volatile char *)((char *)flagTarget + OFF_DIRECTOR_DEVFIGHT_FLAG) = 1;
-    *(volatile char *)((char *)flagTarget + OFF_DIRECTOR_DEVFIGHT_MODE) = 1;
+    *(volatile char *)((char *)flagTarget + OFF_DIRECTOR_DEVFIGHT_MODE) = 0;
     *(volatile int *)((char *)flagTarget + OFF_DIRECTOR_HANDOFF_FLAG) = 1;
     /* the button also copies its party-source widget into the director's settings struct (+0x5a8 -> +0x410/+0x428/
      * +0x440); MewDirector::DebugGenAdventureCats(enum) refuses mode 0 without a saved winning team ("win at least
@@ -371,19 +383,10 @@ static int h_enter_scene(void *u, int scene, char *detail, size_t cap) {
     if (!entity) { snprintf(detail, cap, "CreateEntity returned NULL on scene %p", battle); return 0; }
     void *tt = g_AddTacticsTest(battle, entity);
     if (!tt) { snprintf(detail, cap, "AddComponent<TacticsTest> returned NULL (scene %p being destroyed?)", battle); return 0; }
-    /* the button marks its own scene (where the run's director lives) with +0x4db = 1 — scheduled for destruction —
-     * so the director dies with it and TacticsTest can create its own; replay that on the scene our director is on */
-    if (directorMade) {
-        void *mainScene = NULL;
-        if (read_ptr(AT(mgr, OFF_SCENEMANAGER_MAINSCENE), &mainScene) && mainScene) {
-            *(volatile char *)((char *)mainScene + OFF_SCENE_DESTROY_NEXT) = 1;
-            logf_("enter: main scene %p marked destroy-next (+0x%x) so the test director hands over", mainScene, OFF_SCENE_DESTROY_NEXT);
-        }
-    }
     void *directorAfter = NULL;
     read_ptr(directorGlobal, &directorAfter);
-    snprintf(detail, cap, "scene=%p entity=%p component=%p manager=%p director=%p%s GetGame(console)=%p director(after init)=%p",
-             battle, entity, tt, mgr, director, directorMade ? " (test director created, test00.sav)" : "", game, directorAfter);
+    snprintf(detail, cap, "scene=%p entity=%p component=%p manager=%p director=%p GetGame(console)=%p director(after init)=%p",
+             battle, entity, tt, mgr, director, game, directorAfter);
     logf_("enter TacticsTest: %s", detail);
     return 1;
 }
@@ -806,6 +809,7 @@ static void init(void) {
     if (!install_hook(FW_SYM_DebugConsole_init, (void *)hook_DCInit, (void **)&g_origDCInit, 50, "DebugConsole::init")) return;
     if (!install_hook(FW_SYM_ApplicationBase_FrameBegin, (void *)hook_FrameBegin, (void **)&g_origFrameBegin, 50, "ApplicationBase::FrameBegin")) return;
     if (!install_hook(FW_SYM_TurnControl_NextTurn, (void *)hook_NextTurn, (void **)&g_origNextTurn, 110, "TurnControl::NextTurn")) return;
+    install_hook(FW_SYM_MewDirector_init, (void *)hook_DirectorInit, (void **)&g_origDirectorInit, 120, "MewDirector::init (diagnostic)"); /* optional */
 
     AddVectoredExceptionHandler(1, veh);
     g_prevFilter = SetUnhandledExceptionFilter(top_filter);

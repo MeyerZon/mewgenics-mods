@@ -256,11 +256,19 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
                 if (r->now - r->consoleWaitSince > MT_CONSOLE_WAIT_MS) { finish(r, h, 4, "console_unavailable"); h->request_exit(h->user, 4); return 0; }
                 return 1;
             }
-            r->consoleWaitSince = 0;
-            r->state = MT_S_RUN;
             int rc;
             if (r->entered) { rc = 0; snprintf(detail, sizeof detail, "refused: enter may run only once per script"); }
             else { detail[0] = 0; rc = h->enter_scene(h->user, d->scene, detail, sizeof detail); }
+            if (rc == 2) {
+                /* not ready yet (the game has not finished its own startup): retry next frame, same budget as the console wait */
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince <= MT_CONSOLE_WAIT_MS) return 1;
+                rc = 0;
+                snprintf(detail, sizeof detail, "not ready after %d ms: %s", MT_CONSOLE_WAIT_MS, detail[0] ? detail : "the game never reported ready");
+            }
+            r->consoleWaitSince = 0;
+            r->state = MT_S_RUN;
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "enter");
             mt_jw_int(&w, "line", d->line);

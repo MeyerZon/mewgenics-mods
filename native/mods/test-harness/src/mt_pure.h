@@ -116,7 +116,8 @@ typedef struct MtHost {
     int      (*unit_has_status)(void *u, int i, const char *status);
     void     (*emit)(void *u, const char *jsonLine);
     void     (*request_exit)(void *u, int code);   /* called once, after the end event, on quit/eof */
-    /* enter <scene> on the game thread: 1 entered, 0 refused (detail says why), -1 unavailable (symbols missing) */
+    /* enter <scene> on the game thread: 1 entered, 0 refused (detail says why), -1 unavailable (symbols missing),
+     * 2 not ready yet (the runner retries next frame, for at most MT_CONSOLE_WAIT_MS) */
     int      (*enter_scene)(void *u, int scene, char *detail, size_t cap);
 } MtHost;
 
