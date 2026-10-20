@@ -35,6 +35,7 @@ export function ShapesTab() {
             <span className="meta">{`${np} path${np === 1 ? "" : "s"}${sh.source ? " · " + sh.source : ""}`}</span>
             {use.passthrough ? <span className="pill warn chip" title="non-gray fills are NOT palette-remapped by the engine">{`${use.passthrough} passthrough`}</span> : null}
             {use.bitmaps ? <span className="pill muted chip">{`${use.bitmaps} bitmap`}</span> : null}
+            {use.gradients ? <span className="pill muted chip" title="gradient fills (gray stops are remapped per pixel like any gray)">{`${use.gradients} gradient`}</span> : null}
             <div className="grow" />
             <button className="btn ghost sm" onClick={() => setTarget(id)}>Preview</button>
             <button
@@ -82,12 +83,19 @@ function PathEditor() {
       <div className="artsec"><span className="sec">{`Paths of "${id}" — fill per path`}</span></div>
       {(sh.paths || []).map((pth, i) => {
         const f = parseFill(pth.fill).fill;
-        const selValue = f.kind === "gray" ? `gray:${f.level}` : f.kind === "none" ? "none" : "keep";
+        const selValue = f.kind === "gray" ? `gray:${f.level}` : f.kind === "none" ? "none" : f.kind === "gradient" && (sc.gradients || {})[f.id] ? `gradient:${f.id}` : "keep";
+        const grads = Object.keys(sc.gradients || {});
+        const gradCss = (gid: string): string => {
+          const gd = (sc.gradients || {})[gid];
+          if (!gd || !Array.isArray(gd.stops)) return "transparent";
+          const cols = gd.stops.map((s) => { const sf = parseFill(s.color).fill; return `${sf.kind === "gray" ? rampColor(sf.level) : String(s.color)} ${Math.round(s.offset * 100)}%`; });
+          return `${gd.kind === "radial" ? "radial-gradient(circle" : "linear-gradient(90deg"}, ${cols.join(", ")})`;
+        };
         const d = String(pth.d);
         return (
           <div key={i} className="artrow">
             <span className="id">{`#${i}`}</span>
-            <span style={{ width: "18px", height: "18px", borderRadius: "4px", background: f.kind === "gray" ? rampColor(f.level) : f.kind === "rgba" ? String(pth.fill) : "transparent", border: "1px solid var(--line2)" }} />
+            <span style={{ width: "18px", height: "18px", borderRadius: "4px", background: f.kind === "gray" ? rampColor(f.level) : f.kind === "rgba" ? String(pth.fill) : f.kind === "gradient" ? gradCss(f.id) : "transparent", border: "1px solid var(--line2)" }} />
             <select
               className="artinput mono"
               aria-label={`fill of path ${i}`}
@@ -100,6 +108,7 @@ function PathEditor() {
               }}
             >
               {Array.from({ length: 16 }, (_, n) => <option key={n} value={`gray:${n}`}>{`gray:${n}`}</option>)}
+              {grads.map((gid) => <option key={`g-${gid}`} value={`gradient:${gid}`}>{`gradient:${gid}`}</option>)}
               <option value="keep">{f.kind === "rgba" ? `${pth.fill} (passthrough)` : f.kind === "bitmap" ? String(pth.fill) : "(custom)"}</option>
               <option value="none">none</option>
             </select>

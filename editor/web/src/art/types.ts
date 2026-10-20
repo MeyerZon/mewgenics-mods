@@ -2,9 +2,9 @@
 // src/core/art/scene.ts) and the /api/art/* response shapes (src/core/art/art-io.ts,
 // src/core/art/palette.ts, src/core/api.ts).
 
-import type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, Finding, Fill } from "../../../src/core/art/scene.ts";
+import type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, Finding, Fill, SceneGradient } from "../../../src/core/art/scene.ts";
 
-export type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, Finding, Fill };
+export type { Scene, SceneShape, SceneSprite, SceneLayer, SceneKey, ScenePath, Finding, Fill, SceneGradient };
 
 export type ArtSubtab = "overview" | "shapes" | "sprites" | "exports" | "json";
 export type ArtRightTab = "preview" | "findings" | "build";
@@ -74,6 +74,8 @@ export interface SceneValidateResponse {
 export interface ImportSvgResponse {
   ok: boolean;
   shape: SceneShape;
+  /** gradients the shape's fills reference (adoptGradients puts them into scene.gradients) */
+  gradients?: Record<string, SceneGradient>;
   findings: Finding[];
   error?: string;
   info?: unknown;

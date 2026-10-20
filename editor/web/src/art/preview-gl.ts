@@ -43,6 +43,7 @@ import {
 import { parseFill, fillToRgba, parseColor } from "../../../src/core/art/scene.ts";
 import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline.ts";
 import { nestedFrame } from "../../../src/core/art/engine-behaviour.ts";
+import { gradientUnitMatrix, gradientFocal, rasterizeStops, resolveStops, swfSpread } from "../../../src/core/art/gradient.ts";
 import type { Scene, Fill, SceneShape } from "../../../src/core/art/scene.ts";
 import type { Mat, SubPath } from "../../../src/core/art/geometry.ts";
 import type { BakedSprite, Cxform, Placement } from "../../../src/core/art/timeline.ts";
@@ -182,10 +183,30 @@ uniform vec4 u_cxadd;
 uniform float u_row;
 uniform float u_showGray;
 uniform float u_useBitmap;
+uniform float u_focal;
+uniform float u_spread;
 varying vec2 v_uv;
 void main() {
   vec4 c = u_color;
-  if (u_useBitmap > 0.5) {
+  if (u_useBitmap > 1.5) {
+    // gradient (2 linear, 3 radial): v_uv is the unit gradient space; t as gradientT() + applySpread() in gradient.ts
+    float t;
+    if (u_useBitmap < 2.5) {
+      t = (v_uv.x + 1.0) * 0.5;
+    } else {
+      float dx = v_uv.x - u_focal;
+      float b = 2.0 * u_focal * dx;
+      float cc = dx * dx + v_uv.y * v_uv.y;
+      float a1 = 1.0 - u_focal * u_focal;
+      t = (b + sqrt(b * b + 4.0 * a1 * cc)) / (2.0 * a1);
+    }
+    if (u_spread < 0.5) t = clamp(t, 0.0, 1.0);
+    else if (u_spread < 1.5) t = 1.0 - abs(mod(t, 2.0) - 1.0);
+    else t = fract(t);
+    vec4 gt = texture2D(u_bitmap, vec2((t * 255.0 + 0.5) / 256.0, 0.5));
+    gt.rgb /= max(gt.a, .001);
+    c = gt;
+  } else if (u_useBitmap > 0.5) {
     vec4 t = texture2D(u_bitmap, v_uv);
     t.rgb /= max(t.a, .001);
     c = t;
@@ -453,6 +474,17 @@ interface CoverSpec {
   color: Rgba;
   cx: Cxform | null;
   bitmap: (BitmapTexture & { inv: Mat }) | null;
+  /** with bitmap = the stop strip (width = height = 1, inv → unit gradient space): 2 linear / 3 radial */
+  grad?: { mode: 2 | 3; focal: number; spread: number };
+}
+
+interface GradientTexture {
+  tex: WebGLTexture;
+  /** unit gradient space → path-local px */
+  unit: Mat;
+  mode: 2 | 3;
+  focal: number;
+  spread: number;
 }
 
 /** Visitor-based depth walk shared by the GL, Canvas2D and bounds passes. */
@@ -536,6 +568,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
   let vbo: WebGLBuffer | null = null;
   let palTex: WebGLTexture | null = null;
   const bitmapTex = new Map<string, BitmapTexture>();
+  const gradTex = new Map<string, GradientTexture>();
   let U: Record<string, WebGLUniformLocation | null> = {};
   let UC: Record<string, WebGLUniformLocation | null> = {};
   let aPos = -1;
@@ -571,7 +604,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     prog = link(g, VERT_SRC, FRAG_SRC);
     checkerProg = link(g, CHECKER_VERT_SRC, CHECKER_FRAG_SRC);
     U = {};
-    for (const n of ["u_view", "u_palette", "u_bitmap", "u_color", "u_cxmul", "u_cxadd", "u_row", "u_showGray", "u_useBitmap"]) U[n] = g.getUniformLocation(prog, n);
+    for (const n of ["u_view", "u_palette", "u_bitmap", "u_color", "u_cxmul", "u_cxadd", "u_row", "u_showGray", "u_useBitmap", "u_focal", "u_spread"]) U[n] = g.getUniformLocation(prog, n);
     UC = {};
     for (const n of ["u_cell", "u_c0", "u_c1"]) UC[n] = g.getUniformLocation(checkerProg, n);
     aPos = g.getAttribLocation(prog, "a_pos");
@@ -582,6 +615,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     uploadPalette();
     bitmapTex.clear();
     for (const [id, img] of bitmapSources) uploadBitmap(id, img);
+    gradTex.clear();
+    uploadGradients();
     g.disable(g.CULL_FACE);
     g.disable(g.DEPTH_TEST);
     g.enable(g.BLEND);
@@ -623,6 +658,38 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
     g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
     bitmapTex.set(id, { tex, width: size[0], height: size[1] });
+  }
+
+  /** One 256×1 premultiplied stop strip per scene gradient (rasterizeStops: the emitter's ratios and colours). */
+  function uploadGradients(): void {
+    const g = gl;
+    if (!g) return;
+    for (const t of gradTex.values()) g.deleteTexture(t.tex);
+    gradTex.clear();
+    const all = (scene && scene.gradients) || {};
+    for (const id of Object.keys(all)) {
+      const gd = all[id]!;
+      if (!Array.isArray(gd.stops) || gd.stops.length < 2) continue;
+      const strip = rasterizeStops(resolveStops(gd.stops), 256);
+      for (let i = 0; i < strip.length; i += 4) {
+        const a = strip[i + 3]! / 255;
+        strip[i] = Math.round(strip[i]! * a);
+        strip[i + 1] = Math.round(strip[i + 1]! * a);
+        strip[i + 2] = Math.round(strip[i + 2]! * a);
+      }
+      const tex = g.createTexture();
+      if (!tex) continue;
+      g.activeTexture(g.TEXTURE1);
+      g.bindTexture(g.TEXTURE_2D, tex);
+      g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      g.pixelStorei(g.UNPACK_ALIGNMENT, 1);
+      g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, 256, 1, 0, g.RGBA, g.UNSIGNED_BYTE, new Uint8Array(strip.buffer));
+      g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
+      g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
+      g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
+      g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
+      gradTex.set(id, { tex, unit: gradientUnitMatrix(gd), mode: gd.kind === "radial" ? 3 : 2, focal: gradientFocal(gd), spread: swfSpread(gd.spread) });
+    }
   }
 
   function imageSize(img: TexImageSource): [number, number] {
@@ -928,7 +995,11 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
         if (cover.bitmap) {
           g.activeTexture(g.TEXTURE1);
           g.bindTexture(g.TEXTURE_2D, cover.bitmap.tex);
-          g.uniform1f(U.u_useBitmap!, 1);
+          g.uniform1f(U.u_useBitmap!, cover.grad ? cover.grad.mode : 1);
+          if (cover.grad) {
+            g.uniform1f(U.u_focal!, cover.grad.focal);
+            g.uniform1f(U.u_spread!, cover.grad.spread);
+          }
         } else {
           g.uniform1f(U.u_useBitmap!, 0);
         }
@@ -959,6 +1030,12 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
               } else if (!bm) {
                 missingBitmaps++;
                 glFill(polys, path.fillRule, { color: { r: 255, g: 0, b: 255, a: 128 }, cx, bitmap: null });
+              }
+            } else if (path.fill.kind === "gradient") {
+              const gt = gradTex.get(path.fill.id);
+              const inv = gt ? invert(multiply(multiply(mat, path.transform), gt.unit)) : null;
+              if (gt && inv) {
+                glFill(polys, path.fillRule, { color: { r: 255, g: 255, b: 255, a: 255 }, cx, bitmap: { tex: gt.tex, width: 1, height: 1, inv }, grad: { mode: gt.mode, focal: gt.focal, spread: gt.spread } });
               }
             } else if (path.fillRgba) {
               glFill(polys, path.fillRule, { color: path.fillRgba, cx, bitmap: null });
@@ -1156,6 +1233,22 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
                 drawCalls++;
                 fillsDrawn++;
               }
+            } else if (path.fill.kind === "gradient") {
+              const gd = scene && scene.gradients ? scene.gradients[path.fill.id] : undefined;
+              if (gd && Array.isArray(gd.stops) && gd.stops.length >= 2) {
+                // Canvas2D fallback: stops remapped as colours (the GL path remaps per pixel); spread is pad only
+                const fm = multiply(multiply(mat, path.transform), gradientUnitMatrix(gd));
+                c.save();
+                c.clip(p2, path.fillRule);
+                c.transform(fm[0], fm[1], fm[2], fm[3], fm[4], fm[5]);
+                const grad = gd.kind === "radial" ? c.createRadialGradient(gradientFocal(gd), 0, 0, 0, 0, 1) : c.createLinearGradient(-1, 0, 1, 0);
+                for (const s of resolveStops(gd.stops)) grad.addColorStop(s.ratio / 255, css(remapColor(s.color, cx, palBytes, paletteRow, showGray)));
+                c.fillStyle = grad;
+                c.fillRect(-1e4, -1e4, 2e4, 2e4);
+                c.restore();
+                drawCalls++;
+                fillsDrawn++;
+              }
             } else if (path.fillRgba) {
               c.fillStyle = css(remapColor(path.fillRgba, cx, palBytes, paletteRow, showGray));
               c.fill(p2, path.fillRule);
@@ -1334,6 +1427,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
       boundsCache = new Map();
       remapCache.clear();
       for (const id of Object.keys(s.shapes || {})) prepared.set(id, prepareShape(s.shapes[id]!));
+      uploadGradients();
       if (s.preview && Number.isInteger(s.preview.palette)) paletteRow = Math.max(0, Math.min(255, s.preview.palette as number));
       const exists = targetId !== null && (targetId === STAGE_KEY || !!s.sprites[targetId] || !!s.shapes[targetId]);
       if (!exists) {
@@ -1486,6 +1580,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
         for (const t of bitmapTex.values()) gl.deleteTexture(t.tex);
         bitmapTex.clear();
         if (palTex) gl.deleteTexture(palTex);
+        for (const t of gradTex.values()) gl.deleteTexture(t.tex);
+        gradTex.clear();
         if (vbo) gl.deleteBuffer(vbo);
         if (prog) gl.deleteProgram(prog);
         if (checkerProg) gl.deleteProgram(checkerProg);

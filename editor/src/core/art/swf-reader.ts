@@ -34,6 +34,10 @@ export interface FillStyle {
   matrix?: Mat;
   bitmapId?: number;
   gradient?: GradientStop[];
+  /** gradient SpreadMode: 0 pad, 1 reflect, 2 repeat */
+  spread?: number;
+  /** gradient InterpolationMode: 0 normal RGB, 1 linear RGB */
+  interpolation?: number;
   focalPoint?: number;
 }
 
@@ -510,7 +514,7 @@ function readFillStyle(r: BitReader, version: number, alpha: boolean): FillStyle
     const n = head & 0x0f;
     const gradient: GradientStop[] = [];
     for (let i = 0; i < n; i++) gradient.push({ ratio: r.u8(), color: r.color(alpha) });
-    const fs: FillStyle = { type, matrix, gradient };
+    const fs: FillStyle = { type, matrix, gradient, spread: head >> 6, interpolation: (head >> 4) & 3 };
     if (type === 0x13) fs.focalPoint = r.s16() / 256;
     return fs;
   }

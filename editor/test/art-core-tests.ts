@@ -187,10 +187,13 @@ export function runArtCoreTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     eq(r.paths[1]!.fill, "#ff000080", "colour with fill-opacity passes through with alpha");
     eq(r.paths[2]!.stroke, "gray:3");
     eq(r.paths[2]!.strokeWidth, 2);
-    eq(r.paths[3]!.fill, "gray:8", "gradient replaced");
+    eq(r.paths[3]!.fill, "gray:8", "a gradient with no stops is replaced (gradients with stops import as gradient fills: art-gradient-tests.ts)");
     eq(r.paths[4]!.fill, "gray:8", "near-gray snapped");
     const codes = r.findings.map((f) => f.code);
-    assert(codes.includes("svg-paint-server") && codes.includes("svg-unsupported") && codes.includes("svg-gray-snapped"), codes.join(","));
+    assert(codes.includes("svg-gradient-empty") && codes.includes("svg-unsupported") && codes.includes("svg-gray-snapped"), codes.join(","));
+    const pat = importSvg(`<svg xmlns="http://www.w3.org/2000/svg"><defs><pattern id="p"/></defs><rect width="4" height="4" fill="url(#p)"/></svg>`);
+    eq(pat.paths[0]!.fill, "gray:8", "a pattern is still replaced");
+    assert(pat.findings.some((f) => f.code === "svg-paint-server"), JSON.stringify(pat.findings));
     eq(r.info.skipped.text, 1);
     eq(r.info.skipped["display:none"], 1);
   });

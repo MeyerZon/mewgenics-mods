@@ -144,7 +144,7 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
       bitmapIds.set(id, cid);
       characters.push({ id: cid, kind: "bitmap", name: id });
     } else if (scene.shapes[id]) {
-      const enc = encodeDefineShape3(cid, scene.shapes[id], { bitmapIds, shapeName: id, cubicSplits: scene.curveResolution });
+      const enc = encodeDefineShape3(cid, scene.shapes[id], { bitmapIds, shapeName: id, cubicSplits: scene.curveResolution, gradients: scene.gradients });
       findings.push(...enc.findings);
       tags.push({ code: TAG.DefineShape3, bytes: enc.bytes });
       characters.push({ id: cid, kind: "shape", name: id });
@@ -337,6 +337,8 @@ export interface GateSwfOptions {
   linkage: string;
   label: string;
   layout?: "flat" | "nested" | "legacy";
+  /** the square's fill: gray:8 (default) or a gray:2 → gray:14 linear gradient */
+  fill?: "gray" | "gradient";
 }
 
 /**
@@ -359,8 +361,9 @@ export function minimalGateSwf(o: GateSwfOptions): Uint8Array {
     name: "swf_gate",
     frameRate: 60,
     stage: { width: 1280, height: 720, background: "#ffccff" },
-    shapes: { square: { paths: [{ d: "M0 0 L64 0 L64 64 L0 64 Z", fill: "gray:8", fillRule: "nonzero" }] } },
+    shapes: { square: { paths: [{ d: "M0 0 L64 0 L64 64 L0 64 Z", fill: o.fill === "gradient" ? "gradient:ramp" : "gray:8", fillRule: "nonzero" }] } },
     bitmaps: {},
+    ...(o.fill === "gradient" ? { gradients: { ramp: { kind: "linear" as const, x1: 0, y1: 0, x2: 64, y2: 0, stops: [{ offset: 0, color: "gray:2" }, { offset: 1, color: "gray:14" }] } } } : {}),
     sprites: {
       ...(nested ? { Icon: { frames: 1, labels: {}, layers: [{ depth: 1, keys: [{ frame: 0, ref: "square", x: 0, y: 0 }] }] } } : {}),
       Clip: { frames: 1, labels: { [o.label]: 0 }, layers: [{ depth, keys: [{ frame: 0, ref: nested ? "Icon" : "square", x: 0, y: 0 }] }] },

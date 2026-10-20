@@ -10,6 +10,7 @@ import { readTags, readSwf } from "../src/core/art/swf-reader.ts";
 import { emitSwf, minimalGateSwf } from "../src/core/art/swf-emitter.ts";
 import { exampleScene, validateScene, parseFill } from "../src/core/art/scene.ts";
 import { importSvg } from "../src/core/art/svg-import.ts";
+import { SWF_GATE_VARIANTS } from "../src/core/art/art-io.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -50,9 +51,9 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
     };
     sc2.shapes.body.paths[0].fill = "gradient:one";
     v = validateScene(sc2);
-    const codes = v.findings.filter((f: any) => f.severity === "error").map((f: any) => `${f.code}@${(f.path || [])[0] || ""}`);
-    for (const id of ["one", "many", "order", "colour"]) assert(codes.includes(`gradient-stops@gradients.${id}`), `stops ${id}: ${codes.join(", ")}`);
-    for (const id of ["flat", "dot"]) assert(codes.includes(`gradient-geometry@gradients.${id}`), `geometry ${id}: ${codes.join(", ")}`);
+    const codes = v.findings.filter((f: any) => f.severity === "error").map((f: any) => `${f.code}@${f.path || ""}`);
+    for (const id of ["one", "many", "order", "colour"]) assert(codes.some((c: string) => c.startsWith(`gradient-stops@gradients.${id}`)), `stops ${id}: ${codes.join(", ")}`);
+    for (const id of ["flat", "dot"]) assert(codes.some((c: string) => c.startsWith(`gradient-geometry@gradients.${id}`)), `geometry ${id}: ${codes.join(", ")}`);
     assert(codes.some((c: string) => c.startsWith("dup-id@gradients.body")), `dup id: ${codes.join(", ")}`);
     const ok = exampleScene("g") as any;
     ok.gradients = { sky: linear };
@@ -139,7 +140,7 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
     sc.gradients = { sky: linear };
     sc.shapes.body.paths[0].fill = "gradient:sky";
     const r = emitSwf(sc) as any;
-    assert(r.ok, JSON.stringify(r.findings));
+    assert(!r.findings.some((f: any) => f.severity === "error") && r.bytes.length > 0, JSON.stringify(r.findings));
     const parsed = readSwf(r.bytes) as any;
     const fills = parsed.tags.filter((t: any) => t.shape).flatMap((t: any) => t.shape.fillStyles);
     assert(fills.some((f: any) => f.type === 0x10), "a linear fill in the file");
@@ -174,6 +175,11 @@ export async function runArtGradientTests(test: TestFn, assert: AssertFn, eq: Eq
     assert(tr && Array.isArray(tr.transform) && near(tr.transform[0], 2), JSON.stringify(tr));
   });
 
+  test("the SWF gate has a gradient variant (an _Append_AbilityIcon square with a gray:2 → gray:14 linear gradient, expected to boot)", () => {
+    const v = (SWF_GATE_VARIANTS as Record<string, any>).gradient;
+    assert(!!v, "variant exists");
+    eq(v.linkage, "_Append_AbilityIcon"); eq(v.expect, "pass"); eq(v.fill, "gradient");
+  });
   test("preview-gl.ts draws gradient fills through gradient.ts (unit matrix, focal, spread, a stop texture), never as the missing-fill magenta", () => {
     const src = readFileSync(join(HERE, "..", "web", "src", "art", "preview-gl.ts"), "utf8");
     assert(/from "..\/..\/..\/src\/core\/art\/gradient\.ts"/.test(src), "imports gradient.ts");

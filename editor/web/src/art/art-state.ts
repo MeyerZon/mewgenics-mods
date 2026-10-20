@@ -11,6 +11,7 @@ import { S, toast } from "../state.ts";
 import { getJson, post, url } from "../api.ts";
 import { createPreview, type Preview } from "./preview-gl.ts";
 import { grayLevelToByte } from "../../../src/core/art/scene.ts";
+import { adoptGradients } from "../../../src/core/art/gradient.ts";
 import type {
   AbcMode,
   ArtAssets,
@@ -275,7 +276,7 @@ export async function importSvgFile(file: File): Promise<void> {
     A.set((a) => ({ findings: [...(r.findings || []), ...a.findings] }));
     return toast(`import failed: ${r.error || "see findings"}`);
   }
-  sc.shapes[id] = { ...r.shape, source: rel };
+  sc.shapes[id] = { ...adoptGradients(sc, r.shape, r.gradients), source: rel };
   try {
     const b64 = btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())));
     await post("/api/art/asset", { mod: mod(), path: rel, base64: b64 });
