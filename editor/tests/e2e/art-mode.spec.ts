@@ -55,6 +55,16 @@ test.describe("Art mode — explorer & scene authoring", () => {
     expect(glErrors, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 
+  test("the SVG drop zone is one block box (display:block, spanning its container), not inline fragments", async ({ page }) => {
+    await openSandboxScene(page);
+    const dz = page.locator(".dropzone").first();
+    await expect(dz).toBeVisible();
+    expect(await dz.evaluate((el) => getComputedStyle(el).display)).toBe("block");
+    const box = (await dz.boundingBox())!;
+    const parentWidth = await dz.evaluate((el) => el.parentElement!.getBoundingClientRect().width);
+    expect(box.width).toBeGreaterThan(parentWidth * 0.9);
+  });
+
   test("empty states: no scene (jokers-luck) shows the Art empty hero", async ({ page }) => {
     await openApp(page, "?mode=art");
     await selectMod(page, "jokers-luck");

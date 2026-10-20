@@ -281,15 +281,15 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   headers, harvest/port/check/seed tools, `unknown-build` verdict, `native-build-unknown` validator warning). 2026-10-19.
 - [x] **Cross-build port, for real**: done 2026-10-19, 25143593 → 23372843, clean (see the owner checklist above and
   `docs/binding-port.md` "T1 cross-build result"). Proves anchors survive a relink; a body-changing build is still wanted.
-- [ ] **Port-report `old` column bug** (found by the cross-build run): `portFunction` in `editor/src/core/bindings/port.ts`
-  sets `e.rva` before `finish` reads `oldValue`, so every ported row shows the new value as "old" (the real one only
-  survives in the `was 0x…` detail). TDD: a fake-PE T0 test asserting the column, then capture `oldValue` first.
-- [ ] **Harden rung 3 (caller ordinal)**: `Status_ApplyLuckUp` / `LuckUp_ctor` port only by call ordinal with no fallback.
+- [x] **Port-report `old` column bug** (found by the cross-build run) — fixed in PR #29 (2026-10-19): `finish` now takes
+  the pre-port value from the caller; anchor-ported rows also record `size +N / calls +M vs old`.
+- [~] **Harden rung 3 (caller ordinal)**: `Status_ApplyLuckUp` / `LuckUp_ctor` port only by call ordinal with no fallback.
   Candidates from the cross-build run: a callee-set rung, a tolerant ordinal window, a vftable-store rung for
-  constructors (needs the RTTI phase before the function rungs). Pass `--gameVersion` through `cross-build.ts` and
-  record rung-2 size/call deltas in the report while there.
+  constructors (needs the RTTI phase before the function rungs). Done in PR #29: `--gameVersion` on `cross-build.ts`
+  and the rung-2 size/call drift in the report. The new rungs themselves need a body-changing build to test against.
 - [ ] **Witness patterns for the 38 unanchored entries** (struct offsets, vtable slot constants) so the port stops
-  reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.ts`. Also a
-  second witness for `LuckUp_typeid` (imm32 at call #4 of `Status_ApplyLuckUp`) now that it is known to change.
+  reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.ts`. The
+  second witness for `LuckUp_typeid` (the `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in
+  `Status_ApplyLuckUp`) landed in PR #32; harvest and port now require every source of a constant to agree.
 - [x] **Runtime anchor locator in the DLL** (optional): string → lea xref → `.pdata` so anchored-but-unsigned entries
   survive a relink before anyone runs the port. **Dropped** by owner decision 2026-10-19 (see "Decisions").
