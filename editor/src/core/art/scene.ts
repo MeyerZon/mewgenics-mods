@@ -427,7 +427,9 @@ export function validateScene(input: unknown): SceneValidation {
     else if (typeof im.name !== "string" || !im.name) err("import-unknown", `import "${id}": name is required`, [`imports.${id}.name`]);
     else if (VANILLA_EXPORTS[im.from] && !VANILLA_EXPORTS[im.from]!.includes(im.name)) err("import-unknown", `import "${id}": ${im.from} does not export "${im.name}"`, [`imports.${id}.name`]);
     else if (!VANILLA_EXPORTS[im.from]) findings.push({ severity: "warning", code: "import-unpinned", message: `import "${id}": ${im.from}'s exports are not pinned; "${im.name}" is not checked`, path: `imports.${id}` });
-    findings.push({ severity: "info", code: "import-not-previewed", message: `import "${id}" (${im && im.name}) is drawn by the game, not by the preview`, path: `imports.${id}` });
+    // OBSERVED 2026-10-20 (the cat-parts import experiment): a SWF with ImportAssets2 entries loads, but spawning a character
+    // whose clip places an imported symbol crashes the game (0xc0000005 at Mewgenics.exe+0xa4a1a9)
+    err("import-unsupported", `import "${id}": the game crashes when a clip places a symbol imported from another SWF (OBSERVED 2026-10-20)`, [`imports.${id}`]);
   }
   for (const id of Object.keys(scene.texts || {})) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text`, [`texts.${id}`]);
