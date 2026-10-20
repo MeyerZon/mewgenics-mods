@@ -751,7 +751,7 @@ TEST(runner_expect_unit_by_index_and_name_string_and_int_fields) {
     CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "\"arg\":\"Lumee move >= 3\"")); CHECK(has(ev(1), "move 3"));
     CHECK(has(ev(2), "\"ok\":true")); CHECK(has(ev(2), "\"arg\":\"0 name == \\\"Lumee\\\"\"")); CHECK(has(ev(2), "name \\\"Lumee\\\""));
     CHECK(has(ev(3), "\"ok\":false")); CHECK(has(ev(3), "class \\\"Fighter\\\""));
-    CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(4), "\"arg\":\"\\\"Lumee\\\" act == 1\""));
+    CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(4), "\"arg\":\"Lumee act == 1\""));   /* the unit is quoted in the arg only when its name has a space */
     CHECK(has(ev(5), "\"ok\":false")); CHECK(has(ev(5), "turnkind 2"));
     CHECK(has(ev(6), "\"ok\":false")); CHECK(has(ev(6), "unit not found: index 9 of 2"));
     CHECK(has(ev(7), "\"ok\":false")); CHECK(has(ev(7), "unit not found: \\\"Nope\\\""));

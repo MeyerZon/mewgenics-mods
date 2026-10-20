@@ -335,6 +335,40 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             r->pc++;
             return 1;
         }
+        case MT_D_EXPECT_UNIT: {
+            int isStr = d->field == MT_F_NAME || d->field == MT_F_CLASS;
+            char unitText[80];
+            if (d->unitIsIndex) snprintf(unitText, sizeof unitText, "%ld", d->n);
+            else if (strchr(d->b, 0x20)) snprintf(unitText, sizeof unitText, "\"%s\"", d->b);
+            else snprintf(unitText, sizeof unitText, "%s", d->b);
+            if (isStr) snprintf(arg, sizeof arg, "%s %s %s \"%s\"", unitText, mt_unit_field_name(d->field), op_text(d->op), d->a);
+            else snprintf(arg, sizeof arg, "%s %s %s %ld", unitText, mt_unit_field_name(d->field), op_text(d->op), d->value);
+            if (!h->units_available(h->user)) { emit_expect(r, h, d, "unit", arg, 0, "no combat (units unavailable)"); r->pc++; return 1; }
+            MtUnit u;
+            memset(&u, 0, sizeof u);
+            int idx = resolve_unit(h, d, &u);
+            if (idx < 0) {
+                if (d->unitIsIndex) snprintf(detail, sizeof detail, "unit not found: index %ld of %d", d->n, h->unit_count(h->user));
+                else snprintf(detail, sizeof detail, "unit not found: \"%s\"", d->b);
+                emit_expect(r, h, d, "unit", arg, 0, detail);
+                r->pc++;
+                return 1;
+            }
+            int ok;
+            if (isStr) {
+                const char *actual = d->field == MT_F_NAME ? u.name : u.cls;
+                int same = strcmp(actual, d->a) == 0;
+                ok = d->op == MT_OP_EQ ? same : !same;
+                snprintf(detail, sizeof detail, "unit %d \"%s\": %s \"%s\"", idx, u.name, mt_unit_field_name(d->field), actual);
+            } else {
+                long actual = d->field == MT_F_FACTION ? u.faction : d->field == MT_F_MOVE ? u.move : d->field == MT_F_ACT ? u.act : u.turnKind;
+                ok = op_apply(d->op, actual, d->value);
+                snprintf(detail, sizeof detail, "unit %d \"%s\": %s %ld", idx, u.name, mt_unit_field_name(d->field), actual);
+            }
+            emit_expect(r, h, d, "unit", arg, ok, detail);
+            r->pc++;
+            return 1;
+        }
         case MT_D_DUMP:
             do_dump(r, h);
             r->pc++;

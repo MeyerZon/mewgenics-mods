@@ -11,6 +11,9 @@ export const HEADER_KEYS = ["mods", "savesuffix", "timeout", "hide", "clean"];
 export const SAVESUFFIX_RE = /^[A-Za-z0-9_-]{1,32}$/;
 export const MAX_CMD_BYTES = 4078; // the game's std::string small/large allocation boundary
 export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
+/** fields `expect unit` can read (the units event's per-unit fields); must agree with mt_script.c UNIT_FIELDS */
+export const UNIT_FIELDS = ["name", "class", "faction", "move", "act", "turnkind"] as const;
+export type UnitField = (typeof UNIT_FIELDS)[number];
 
 export interface Finding {
   line: number;
@@ -29,6 +32,8 @@ export type Directive =
   | { line: number; kind: "expect"; what: "round"; op: string; n: number }
   | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; op: string; n: number }
   | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; varied: true }
+  /** one field of one unit in the units event: name|class compare as strings (== !=), the rest as integers */
+  | { line: number; kind: "expect"; what: "unit"; unit: string; field: UnitField; op: string; value: string | number }
   /** runner-side: debug.log (after the `[file: …]` prefix) contains substr; evaluated after the run, never sent to the DLL */
   | { line: number; kind: "expect"; what: "log"; substr: string }
   | { line: number; kind: "dump" }
@@ -167,6 +172,34 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (!UNITS_OPS.includes(op[1]!)) return { error: `expect stacks: bad operator "${op[1]}" (${UNITS_OPS.join(" ")}) or varied` };
         return { line: lineNo, kind: "expect", what: "stacks", status: m[1]!, unit, op: op[1]!, n: Number(op[2]) };
       }
+      if (what === "unit") {
+        let rest2 = arg;
+        let unit: string;
+        if (rest2.startsWith('"')) {
+          const q = parseQuoted(rest2, 0);
+          if (!q) return { error: "expect unit: bad quoted unit name" };
+          unit = q.value;
+          rest2 = rest2.slice(q.end).trim();
+        } else {
+          const sp = rest2.search(/\s/);
+          if (sp < 0) return { error: "expect unit needs: <unit> <field> <op> <value>" };
+          unit = rest2.slice(0, sp);
+          rest2 = rest2.slice(sp).trim();
+        }
+        const m2 = /^(\S+)\s+(\S+)\s+([\s\S]+)$/.exec(rest2);
+        if (!m2) return { error: "expect unit needs: <unit> <field> <op> <value>" };
+        const field = m2[1]!, op = m2[2]!, val = m2[3]!.trim();
+        if (!(UNIT_FIELDS as readonly string[]).includes(field)) return { error: `expect unit: unknown field "${field}" (${UNIT_FIELDS.join("|")})` };
+        if (!UNITS_OPS.includes(op)) return { error: `expect unit: bad operator "${op}" (${UNITS_OPS.join(" ")})` };
+        if (field === "name" || field === "class") {
+          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class take == or != and a quoted value" };
+          const q = parseQuoted(val, 0);
+          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class take == or != and a quoted value" };
+          return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: q.value };
+        }
+        if (!/^\d+$/.test(val)) return { error: "expect unit: faction/move/act/turnkind take one integer" };
+        return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: Number(val) };
+      }
       if (what === "log") {
         const q = parseQuoted(arg, 0);
         if (!q) return { error: arg ? "expect log: unterminated or missing quoted string" : "expect log needs a quoted substring" };
@@ -174,7 +207,7 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (tail) return { error: `expect log: unexpected trailing text "${tail}" (no within: debug.log is read once, after the run)` };
         return { line: lineNo, kind: "expect", what: "log", substr: q.value };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|log)" };
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|log)" };
     }
     case "dump":
       if (rest) return { error: "dump takes no arguments" };

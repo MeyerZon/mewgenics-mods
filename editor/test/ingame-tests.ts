@@ -93,7 +93,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const d = p.directives;
       eq(d.length, 19);
-      eq(JSON.stringify(d[18]), JSON.stringify({ line: 25, kind: "expect", what: "unit", unit: "Lil' Rat", field: "faction", op: "!=", value: 1 }));
+      eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "expect", what: "unit", unit: "Lil' Rat", field: "faction", op: "!=", value: 1 }));
       eq(JSON.stringify(d[0]), JSON.stringify({ line: 7, kind: "wait", unit: "frames", n: 120 }));
       eq(JSON.stringify(d[1]), JSON.stringify({ line: 8, kind: "cmd", text: "bind JokersGambit # not a comment, part of the command" }));
       eq(JSON.stringify(d[2]), JSON.stringify({ line: 9, kind: "expect", what: "console", substr: 'No command named "bind" found', within: 5 }));
@@ -111,7 +111,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(JSON.stringify(d[14]), JSON.stringify({ line: 21, kind: "expect", what: "round", op: ">=", n: 2 }));
       eq(JSON.stringify(d[15]), JSON.stringify({ line: 22, kind: "expect", what: "stacks", status: "JokersLuck", unit: "0", op: "==", n: 1 }));
       eq(JSON.stringify(d[16]), JSON.stringify({ line: 23, kind: "expect", what: "stacks", status: "LuckUp", unit: "Mr Whiskers", varied: true }));
-      eq(JSON.stringify(d[17]), JSON.stringify({ line: 24, kind: "quit", code: 0 }));
+      eq(JSON.stringify(d[18]), JSON.stringify({ line: 25, kind: "quit", code: 0 }));
     });
 
     test("seed directive parses an unsigned 64-bit integer (kept as digits); junk, negatives and extra words are line errors", () => {
@@ -342,17 +342,18 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const v = parseResults(fixture("result-golden-vanilla.jsonl")) as unknown as R;
       const g = parseResults(fixture("result-golden-merge.jsonl")) as unknown as R;
       assert(!!v.units && !!g.units, "both dumps present");
-      eq(v.units!.count, 8, "vanilla: 4 cats + 2 coins + Rat + Pooter");
-      eq(g.units!.count, 9, "golden: + the appended GoldenRat");
-      const rat = v.units!.list[6]!, ratG = g.units!.list[6]!;
+      eq(v.units!.count, 10, "vanilla (seed 42): 4 cats + 4 coins + Rat + Pooter");
+      eq(g.units!.count, 11, "golden: + the appended GoldenRat");
+      const rat = v.units!.list[8]!, ratG = g.units!.list[8]!;
       eq(rat.name, "Lil' Rat"); eq(ratG.name, "Golden Rat", ".merge: graphics.name -> the appended loc row");
-      assert(rat.faction !== 1 && ratG.faction === 1, `.merge: properties.faction enemies(${rat.faction}) -> allies(1)`);
-      const poo = v.units!.list[7]!, pooG = g.units!.list[7]!;
+      eq(rat.faction, 2, "enemies dump as faction 2 (allies 1, coins 0)");
+      eq(ratG.faction, 1, ".merge: properties.faction enemies -> allies");
+      const poo = v.units!.list[9]!, pooG = g.units!.list[9]!;
       eq(poo.name, "Pooter"); eq(pooG.name, "Pooter");
       assert(poo.faction !== 1 && pooG.faction === 1, `.patch: faction.overwrite allies (${poo.faction} -> ${pooG.faction})`);
-      eq(g.units!.list[8]!.name, "Appended Rat", ".append: a new entry, spawnable, with its own loc row");
-      eq(g.units!.list[8]!.faction, rat.faction, "the appended entry keeps the vanilla faction");
-      for (let i = 0; i < 6; i++) eq(JSON.stringify(v.units!.list[i]), JSON.stringify(g.units!.list[i]), `unit ${i} identical in both runs (seed 42)`);
+      eq(g.units!.list[10]!.name, "Appended Rat", ".append: a new entry, spawnable, with its own loc row");
+      eq(g.units!.list[10]!.faction, 2, "the appended entry keeps the vanilla faction");
+      for (let i = 0; i < 8; i++) eq(JSON.stringify(v.units!.list[i]), JSON.stringify(g.units!.list[i]), `unit ${i} identical in both runs (seed 42)`);
       eq(v.expects.failed, 0); eq(g.expects.failed, 0);
       eq(v.end!.code, 0); eq(g.end!.code, 0);
     });

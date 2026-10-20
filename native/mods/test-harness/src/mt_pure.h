@@ -64,8 +64,13 @@ typedef enum MtDirKind {
     MT_D_EXPECT_ROUND,  /* expect round <op> N (0 outside combat) */
     MT_D_EXPECT_STACKS, /* expect stacks <Status> on <unit> (<op> N | varied) */
     MT_D_SHOT,          /* shot "<label>": emit a shot event, then hold MT_SHOT_HOLD_MS so the runner can capture the window */
-    MT_D_SEED           /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
+    MT_D_SEED,          /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
+    MT_D_EXPECT_UNIT    /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
 } MtDirKind;
+/* expect unit: which MtUnit field; name|class compare as strings (== !=), the rest as integers (any op) */
+typedef enum MtUnitField { MT_F_NAME, MT_F_CLASS, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND } MtUnitField;
+int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
+const char *mt_unit_field_name(MtUnitField f);
 #define MT_SHOT_HOLD_MS 700
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
 /* scenes `enter` knows; 0 = unknown. The DLL and the Node parser (script.ts KNOWN_SCENES) must agree. */
@@ -90,6 +95,7 @@ typedef struct MtDirective {
     long value;         /* expect stacks: N (the unit index lives in n) */
     int varied;         /* expect stacks … varied: >= 2 distinct values recorded for (unit, status) so far */
     unsigned long long seed;   /* seed: the value (full 64-bit) */
+    MtUnitField field;  /* expect unit: the field; a string value lives in a, an integer one in value */
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
