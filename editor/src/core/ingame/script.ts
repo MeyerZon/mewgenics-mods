@@ -17,7 +17,7 @@ export interface Finding {
   message: string;
 }
 
-export type WaitUnit = "frames" | "turns" | "ms";
+export type WaitUnit = "frames" | "turns" | "rounds" | "ms";
 
 /** One parsed directive line (docs/ingame-testing.md "Grammar"). */
 export type Directive =
@@ -26,6 +26,9 @@ export type Directive =
   | { line: number; kind: "expect"; what: "console" | "noconsole"; substr: string; within?: number }
   | { line: number; kind: "expect"; what: "status"; status: string; unit: string }
   | { line: number; kind: "expect"; what: "units"; op: string; n: number }
+  | { line: number; kind: "expect"; what: "round"; op: string; n: number }
+  | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; op: string; n: number }
+  | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; varied: true }
   /** runner-side: debug.log (after the `[file: …]` prefix) contains substr; evaluated after the run, never sent to the DLL */
   | { line: number; kind: "expect"; what: "log"; substr: string }
   | { line: number; kind: "dump" }
@@ -98,7 +101,7 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
       const m = /^(\S+)\s+(\S+)$/.exec(rest);
       if (!m) return { error: "wait needs a unit (frames|turns|ms) and a count" };
       const unit = m[1]!;
-      if (unit !== "frames" && unit !== "turns" && unit !== "ms") return { error: `bad wait unit "${unit}" (frames|turns|ms)` };
+      if (unit !== "frames" && unit !== "turns" && unit !== "rounds" && unit !== "ms") return { error: `bad wait unit "${unit}" (frames|turns|rounds|ms)` };
       if (!/^\d+$/.test(m[2]!) || Number(m[2]) < 1) return { error: "wait count must be an integer >= 1" };
       return { line: lineNo, kind: "wait", unit, n: Number(m[2]) };
     }
@@ -127,11 +130,34 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         }
         return { line: lineNo, kind: "expect", what: "status", status: m[1]!, unit };
       }
-      if (what === "units") {
+      if (what === "units" || what === "round") {
         const m = /^(\S+)\s+(\d+)$/.exec(arg);
-        if (!m) return { error: "expect units needs: <op> <N>" };
-        if (!UNITS_OPS.includes(m[1]!)) return { error: `expect units: bad operator "${m[1]}" (${UNITS_OPS.join(" ")})` };
-        return { line: lineNo, kind: "expect", what: "units", op: m[1]!, n: Number(m[2]) };
+        if (!m) return { error: `expect ${what} needs: <op> <N>` };
+        if (!UNITS_OPS.includes(m[1]!)) return { error: `expect ${what}: bad operator "${m[1]}" (${UNITS_OPS.join(" ")})` };
+        return { line: lineNo, kind: "expect", what, op: m[1]!, n: Number(m[2]) };
+      }
+      if (what === "stacks") {
+        const m = /^(\S+)\s+on\s+(.+)$/.exec(arg);
+        if (!m) return { error: "expect stacks needs: <Status> on <unit> (<op> <N> | varied)" };
+        let rest2 = m[2]!.trim();
+        let unit: string;
+        if (rest2.startsWith('"')) {
+          const q = parseQuoted(rest2, 0);
+          if (!q) return { error: "expect stacks: bad quoted unit name" };
+          unit = q.value;
+          rest2 = rest2.slice(q.end).trim();
+        } else {
+          const sp = rest2.search(/\s/);
+          if (sp < 0) return { error: "expect stacks needs: <Status> on <unit> (<op> <N> | varied)" };
+          unit = rest2.slice(0, sp);
+          rest2 = rest2.slice(sp).trim();
+        }
+        if (rest2 === "varied") return { line: lineNo, kind: "expect", what: "stacks", status: m[1]!, unit, varied: true };
+        if (rest2.startsWith("varied")) return { error: "expect stacks: unexpected text after varied" };
+        const op = /^(\S+)\s+(\d+)$/.exec(rest2);
+        if (!op) return { error: "expect stacks needs: <Status> on <unit> (<op> <N> | varied)" };
+        if (!UNITS_OPS.includes(op[1]!)) return { error: `expect stacks: bad operator "${op[1]}" (${UNITS_OPS.join(" ")}) or varied` };
+        return { line: lineNo, kind: "expect", what: "stacks", status: m[1]!, unit, op: op[1]!, n: Number(op[2]) };
       }
       if (what === "log") {
         const q = parseQuoted(arg, 0);
@@ -140,7 +166,7 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (tail) return { error: `expect log: unexpected trailing text "${tail}" (no within: debug.log is read once, after the run)` };
         return { line: lineNo, kind: "expect", what: "log", substr: q.value };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|log)" };
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|log)" };
     }
     case "dump":
       if (rest) return { error: "dump takes no arguments" };
