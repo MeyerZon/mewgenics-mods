@@ -728,6 +728,39 @@ TEST(runner_expect_stacks_op_by_index_and_name_and_missing_status) {
     CHECK(has(last_ev(), "\"expect_pass\":2")); CHECK(has(last_ev(), "\"expect_fail\":4"));
 }
 
+/* ---- expect unit <unit> <field> <op> <value>: name|class (quoted, == !=), faction|move|act|turnkind (int, any op) ---- */
+TEST(script_expect_unit_parses_fields_ops_and_rejects_bad_forms) {
+    char err[256]; int line = 0;
+    const char *s = "expect unit 6 faction == 1\nexpect unit \"Lil' Rat\" name == \"Lil' Rat\"\nexpect unit Pooter turnkind >= 0\nexpect unit 0 class != \"Mage\"\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 5);
+    CHECK_EQ(g_s.d[0].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[0].unitIsIndex, 1); CHECK_EQ(g_s.d[0].n, 6); CHECK_EQ(g_s.d[0].field, MT_F_FACTION); CHECK_EQ(g_s.d[0].op, MT_OP_EQ); CHECK_EQ(g_s.d[0].value, 1);
+    CHECK_EQ(g_s.d[1].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[1].unitIsIndex, 0); CHECK_STR(g_s.d[1].b, "Lil' Rat"); CHECK_EQ(g_s.d[1].field, MT_F_NAME); CHECK_EQ(g_s.d[1].op, MT_OP_EQ); CHECK_STR(g_s.d[1].a, "Lil' Rat");
+    CHECK_EQ(g_s.d[2].kind, MT_D_EXPECT_UNIT); CHECK_STR(g_s.d[2].b, "Pooter"); CHECK_EQ(g_s.d[2].field, MT_F_TURNKIND); CHECK_EQ(g_s.d[2].op, MT_OP_GE); CHECK_EQ(g_s.d[2].value, 0);
+    CHECK_EQ(g_s.d[3].field, MT_F_CLASS); CHECK_EQ(g_s.d[3].op, MT_OP_NE); CHECK_STR(g_s.d[3].a, "Mage");
+    const char *bad[] = { "expect unit 6 faction\n", "expect unit 6 hp == 1\n", "expect unit 6 name >= \"x\"\n", "expect unit 6 name == bare\n",
+                          "expect unit faction == 1\n", "expect unit 6 faction == x\n", "expect unit 6 move == 1 extra\n", "expect unit\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_expect_unit_by_index_and_name_string_and_int_fields) {
+    fk_reset("expect unit 1 faction == 1\nexpect unit Lumee move >= 3\nexpect unit 0 name == \"Lumee\"\nexpect unit 0 class != \"Fighter\"\nexpect unit \"Lumee\" act == 1\nexpect unit 0 turnkind < 2\nexpect unit 9 faction == 1\nexpect unit Nope name == \"x\"\nquit\n");
+    fk_two_units();
+    steps_until_done(12);
+    CHECK(has(ev(0), "\"kind\":\"unit\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"1 faction == 1\"")); CHECK(has(ev(0), "\"detail\":\"unit 1 \\\"Rat\\\": faction 1\""));
+    CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "\"arg\":\"Lumee move >= 3\"")); CHECK(has(ev(1), "move 3"));
+    CHECK(has(ev(2), "\"ok\":true")); CHECK(has(ev(2), "\"arg\":\"0 name == \\\"Lumee\\\"\"")); CHECK(has(ev(2), "name \\\"Lumee\\\""));
+    CHECK(has(ev(3), "\"ok\":false")); CHECK(has(ev(3), "class \\\"Fighter\\\""));
+    CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(4), "\"arg\":\"\\\"Lumee\\\" act == 1\""));
+    CHECK(has(ev(5), "\"ok\":false")); CHECK(has(ev(5), "turnkind 2"));
+    CHECK(has(ev(6), "\"ok\":false")); CHECK(has(ev(6), "unit not found: index 9 of 2"));
+    CHECK(has(ev(7), "\"ok\":false")); CHECK(has(ev(7), "unit not found: \\\"Nope\\\""));
+    CHECK(has(last_ev(), "\"expect_pass\":4")); CHECK(has(last_ev(), "\"expect_fail\":4"));
+    fk_reset("expect unit 0 faction == 0\nquit\n");     /* no combat */
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
+}
+
 TEST(runner_expect_stacks_varied_needs_two_distinct_recorded_values) {
     fk_reset("dump\nexpect stacks LuckUp on 0 varied\ndump\nexpect stacks LuckUp on 0 varied\nexpect stacks LuckUp on 0 == 5\nexpect stacks LuckUp on 0 varied\nquit\n");
     fk_two_units_with_stacks();

@@ -301,6 +301,52 @@ if (BASE_READY) {
   });
 } else console.log("  (skipped: base data not extracted; _autoplay is checked against data/characters/player_cat.gon)");
 
+// ---- 4d. mods/_golden-merge: the golden-through-dump overlays (TDD target 8; T1 against the real base) ----
+if (BASE_READY) {
+  test("_golden-merge validates with zero errors (test-only overlays: Rat .merge, GoldenRat .append, Pooter .patch, two loc rows)", () => {
+    const r = validateMod("_golden-merge");
+    assert(r.ok, `expected ok, got ${r.counts.errors} errors: ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
+    assert(!r.findings.some((f) => f.code === "mod-missing" || f.code === "mod-empty"), `mod present and non-empty: ${r.findings.map((f) => f.code).join(",")}`);
+  });
+  test("_golden-merge .merge preview: Rat changed (graphics.name -> GOLDEN_RAT_NAME, properties.faction allies), nothing added", () => {
+    const p = previewMerge("_golden-merge", "data/characters/enemies.gon.merge");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
+    eq(p.mode, "merge");
+    eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "Rat:changed");
+    const eff = p.touched[0]!.effective || "";
+    assert(/name\s+"GOLDEN_RAT_NAME"/.test(eff) && /faction\s+allies/.test(eff), `effective Rat: ${eff.slice(0, 500)}`);
+    assert(/ENEMY_LILRAT_NAME/.test(p.touched[0]!.base || "") && /faction\s+enemies/.test(p.touched[0]!.base || ""), "the base Rat is the vanilla one");
+    eq(p.effectiveEntryCount, p.baseEntryCount);
+  });
+  test("_golden-merge .append preview: GoldenRat added as a new entry (variant_of Rat), base count + 1", () => {
+    const p = previewMerge("_golden-merge", "data/characters/enemies.gon.append");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
+    eq(p.mode, "append");
+    eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "GoldenRat:added");
+    eq(p.effectiveEntryCount, p.baseEntryCount + 1);
+  });
+  test("_golden-merge .patch preview: Pooter changed — faction.overwrite allies and stats.speed.add 10 -> 15", () => {
+    const p = previewMerge("_golden-merge", "data/characters/enemies.gon.patch");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
+    eq(p.mode, "patch");
+    eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "Pooter:changed");
+    const eff = p.touched[0]!.effective || "";
+    assert(/faction\s+allies/.test(eff), `faction overwritten: ${eff.slice(0, 500)}`);
+    assert(/speed\s+15\b/.test(eff), `speed 5 + 10 = 15: ${eff.slice(0, 500)}`);
+    eq(p.effectiveEntryCount, p.baseEntryCount);
+  });
+  test("_golden-merge CSV .append preview: two 12-column loc rows added (GOLDEN_RAT_NAME, APPENDED_RAT_NAME)", () => {
+    const p = previewMerge("_golden-merge", "data/text/combined.csv.append");
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "csv") throw new Error("csv preview expected");
+    eq(p.addedRows.map((r) => r[0]).join(","), "GOLDEN_RAT_NAME,APPENDED_RAT_NAME");
+    assert(p.addedRows.every((r) => r.length === 12), JSON.stringify(p.addedRows));
+  });
+} else console.log("  (skipped: base data not extracted; _golden-merge is checked against data/characters/enemies.gon)");
+
 // ---- 4b. Validator fixtures (synthetic base; one mod per finding code; T0) ----
 {
   let vt: typeof import("./validator-tests.ts") | null = null;
