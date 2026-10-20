@@ -23,6 +23,7 @@ run_suite() { # name, output, sources...
 mkdir -p "$FW/build" "$HS/build"
 run_suite "mewframework signature scanner" "$FW/build/test_sig" -I"$FW/src" "$FW/test/test_sig.c" "$FW/src/fw_sig.c"
 run_suite "mewframework build gate + generated tables" "$FW/build/test_build" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_build.c" "$FW/src/fw_build.c" "$FW/src/fw_sig.c"
+run_suite "mewframework status rules" "$FW/build/test_status_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_status_rules.c" "$FW/src/fw_status_rules.c"
 run_suite "mewtest harness pure modules" "$HS/build/test_mewtest" -DMT_HOST_TEST -I"$HS/src" "$HS/test/test_mewtest.c" \
   "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c"
 echo "=== all native suites passed"
