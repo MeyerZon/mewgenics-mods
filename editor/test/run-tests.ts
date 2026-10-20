@@ -420,6 +420,13 @@ await mcpSmoke();
   if (mt) await mt.runTsMigrationTests(test, assert, eq);
 }
 
+// ---- 9d. CI policy: the test-change classifier + CLI (editor/scripts/check-test-change.ts) ----
+{
+  let ct: typeof import("./ci-tests.ts") | null = null;
+  try { ct = await import("./ci-tests.ts"); } catch (e) { test("ci-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (ct) await ct.runCiTests(test, assert, eq);
+}
+
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
 if (!process.env.MEWGENICS_EXTRACTED_DATA) {
   console.log("\n# T0 without .extracted/ (nested run with MEWGENICS_EXTRACTED_DATA pointing at an empty dir)");
