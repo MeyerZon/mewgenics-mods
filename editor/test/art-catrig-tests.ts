@@ -86,6 +86,14 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     for (let i = 0; i < W * H; i++) img.set(i < 50 ? [32, 160, 255, 255] : [40, 40, 40, 255], i * 4);
     const n = f({ width: W, height: H, rgba: img }, { body: "#20a0ff", head: "#ffa020" });
     eq(n.body, 50); eq(n.head, 0);
+    // a uniformly darkened slot still counts; with an anchor only the region around the anchor's largest blob counts
+    const W2 = 100, H2 = 10, im2 = new Uint8Array(W2 * H2 * 4);
+    for (let i = 0; i < W2 * H2; i++) im2.set([40, 40, 40, 255], i * 4);
+    for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) im2.set([27, 109, 217, 255], (y * W2 + x) * 4); // #2080ff × 0.85
+    for (let y = 0; y < 10; y++) for (let x = 10; x < 14; x++) im2.set([217, 177, 136, 255], (y * W2 + x) * 4); // #ffd0a0 × 0.85 next to it
+    for (let y = 0; y < 10; y++) for (let x = 90; x < 100; x++) im2.set([255, 208, 160, 255], (y * W2 + x) * 4); // UI peach far away
+    const n2 = f({ width: W2, height: H2, rgba: im2 }, { body: "#2080ff", head: "#ffd0a0" }, { anchor: "body", radius: 20 });
+    eq(n2.body, 100); eq(n2.head, 40);
   });
 
   test("OBSERVED 2026-10-20 fixture (artprobe-cat-summary.json): every slot of a cat rig drawn by our SWF shows up in the game", () => {
