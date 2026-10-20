@@ -226,6 +226,33 @@ export function importSvgShape(args: ImportSvgArgs): ImportSvgResult {
   return { ok: res.ok, shape, findings: res.findings, info: res.info };
 }
 
+export interface ImportSvgIntoSceneArgs {
+  mod: string;
+  /** the scene file inside the mod, e.g. art/my_rat.scene.json */
+  scenePath: string;
+  /** the shape id to add (or replace) */
+  shapeId: string;
+  svgText?: string;
+  /** an .svg inside the mod instead of svgText */
+  svgPath?: string;
+  options?: ImportOptions;
+  /** replace a shape with the same id (default false: refuse) */
+  replace?: boolean;
+}
+/** Import an SVG and save it as a shape of a scene in one step (the agent-facing convenience behind MCP import_svg). */
+export function importSvgIntoScene(args: ImportSvgIntoSceneArgs): { ok: boolean; error?: string; paths?: number; findings: Finding[] } {
+  const rd = readArtScene(args.mod, args.scenePath);
+  if (!rd.ok || !rd.scene) return { ok: false, error: rd.error || "scene does not validate (fix it or write it with force first)", findings: rd.findings || [] };
+  if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(args.shapeId)) return { ok: false, error: `bad shape id ${JSON.stringify(args.shapeId)}`, findings: [] };
+  if (rd.scene.shapes[args.shapeId] && !args.replace) return { ok: false, error: `shape "${args.shapeId}" exists (pass replace: true to overwrite it)`, findings: [] };
+  const imp = importSvgShape({ svgText: args.svgText, mod: args.svgText === undefined ? args.mod : undefined, relPath: args.svgPath, options: args.options });
+  if (!imp.ok || !imp.shape) return { ok: false, error: imp.error || "import failed", findings: imp.findings || [] };
+  const next = { ...rd.scene, shapes: { ...rd.scene.shapes, [args.shapeId]: imp.shape } };
+  const w = writeArtScene(args.mod, args.scenePath, next);
+  if (!w.ok) return { ok: false, error: w.error || "write failed", findings: [...(imp.findings || []), ...((w as { findings?: Finding[] }).findings || [])] };
+  return { ok: true, paths: imp.shape.paths.length, findings: imp.findings || [] };
+}
+
 /** Decode every bitmap the scene references (PNG files inside the mod). */
 export function loadSceneBitmaps(modName: string, scene: Scene): { bitmaps: Map<string, RgbaImage>; findings: Finding[] } {
   const bitmaps = new Map<string, RgbaImage>();

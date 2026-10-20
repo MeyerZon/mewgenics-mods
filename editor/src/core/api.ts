@@ -129,6 +129,9 @@ export function validateArtScene(scene: unknown) {
 export function importSvgShape(args: Parameters<typeof artio.importSvgShape>[0]) {
   return artio.importSvgShape(args);
 }
+export function importSvgIntoScene(args: Parameters<typeof artio.importSvgIntoScene>[0]) {
+  return artio.importSvgIntoScene(args);
+}
 export function buildSwf(modName: string, relPath: string, opts?: Parameters<typeof artio.buildSwf>[2]) {
   return artio.buildSwf(modName, relPath, opts);
 }
