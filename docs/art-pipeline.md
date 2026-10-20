@@ -137,7 +137,7 @@ textures (eyestrips, water, noise) are sampled by their own shaders and are not 
 
 **Modding:**
 - **OBSERVED — replace a PNG via `-modpaths`: YES.** The file manager resolver
-  (`FUN_1409a09f0`, RVA `0x9a09f0`; `.analysis/decompiled/FileManager_resolve_overlays.c`)
+  (`FUN_1409a09f0`, RVA `0x9a09f0`; `.analysis/decompiled/FileManager_ResolveWithOverlays_0x9a09f0.c`)
   resolves *every* requested relative path the same way: it takes the pack copy
   (`GetFileRawPak` `0x9a0670`) as a base, then for each `-modpaths` dir pushes a **plain-file**
   candidate (`GetFileRawLoose` `0x9a0300`) plus `.append`/`.merge`/`.patch` variants. The
@@ -390,7 +390,7 @@ Pseudonym-Tim/ParaboxAPI frameworks; already installed built-from-source in this
 - **Symbols/decompile (OBSERVED):** `.analysis/list_names.tsv` (`glaiel::swf::*` tag/display
   classes with vftable RVAs above; `glaiel::CatParts` `0x140ed6a30`, `OverridePalette`
   `0x14101adb0`, `JesterPaletteCycler` `0x140f00008`; `Renderer*`, `CombatShaders`, `Shader`,
-  `Texture2DArray`); `.analysis/decompiled/FileManager_resolve_overlays.c` (resolver
+  `Texture2DArray`); `.analysis/decompiled/FileManager_ResolveWithOverlays_0x9a09f0.c` (resolver
   `0x9a09f0`, pack `0x9a0670`, loose `0x9a0300`).
 - **Community (COMMUNITY-SOURCED):** URLs inline in §1, §5, §7.
 

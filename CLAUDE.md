@@ -108,7 +108,8 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
-  and generated tables, the status definition rules, the harness's modules; 79 checks, `-Werror`), no game needed.
+  and generated tables, the status definition rules, the harness's modules; 98 checks = 13 + 6 + 14 + 65, `-Werror`),
+  no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
 - `tools/install-mewjector.bat` installs a user-verified Mewjector `version.dll` + `native/chainloader.ini` into the
@@ -156,7 +157,8 @@ is a disabled mod, not a crash. Harvest anchors (`tools/bindings/harvest.ts --wr
 copy first, then applies mod overlays (later paths override earlier) named `X.gon.append` / `.merge` / `.patch` →
 GON's Append / DeepMerge / PatchMerge. The exact behavior (incl. `.patch` per-field policy suffixes
 `.overwrite`/`.append`/`.merge`/`.add`/`.multiply`) is documented in `docs/data-mods.md` and decompiled in
-`.analysis/decompiled/Gon_merge_{a,b,c}.c`. The editor's `editor/src/core/overlay/` re-implements these; changes there
+`.analysis/decompiled/Gon_PatchMerge_a_0x944cc0.c` / `Gon_PatchMerge_b_0x944f50.c` (DeepMerge 0x946680 is not
+on disk yet). The editor's `editor/src/core/overlay/` re-implements these; changes there
 must stay faithful to the decompiled functions.
 
 **The editor's core is the single source of truth.** `editor/src/core/api.ts` is the one app surface; the MCP server

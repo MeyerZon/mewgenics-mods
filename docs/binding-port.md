@@ -17,7 +17,7 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 | Data RVAs: App global, SDL3 DYNAPI jump table + 8 slots, default status source | 11 | `BuildInfo.rva_data`, `FW_GetData` |
 | Vftables (LuckUp, Status) and the LuckUp type id | 3 | vtable cloning, sanity check |
 | Vtable slot indices / count | 6 | `offsets.h` |
-| Struct offsets | 32 | `offsets.h` (`status_engine.c`, `mewtest.c`) |
+| Struct offsets | 40 | `offsets.h` (`status_engine.c`, `mewtest.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG) |
 
 ## The manifest: `bindings/<steamBuildId>.json`
 
@@ -145,7 +145,8 @@ Per status, 98 entries: `ported-rescan` 32 · `ported-anchor` 14 · `ported-witn
   the one value that genuinely differs between the builds, and the derivation caught it. The three data witnesses
   held at their rip-ref ordinals (#44, #6, #0); the 8 DYNAPI slots ported by table index, which proves nothing yet
   because SDL did not change.
-- No non-offset entry fell off the ladder. The 38 `needs-human` rows are the known unanchored set (`LuckUp_vtableSlots`,
+- No non-offset entry fell off the ladder. The 38 `needs-human` rows (46 since 2026-10-20: eight offsets were added
+  for the dev scenes and the RNG) are the known unanchored set (`LuckUp_vtableSlots`,
   the five `VT_*` slot indices, 32 struct offsets) carried over unchanged — this run verifies none of them.
 - Caveat on what was proven: all 14 anchor-ported functions have **byte-identical size and call counts** on both
   builds (e.g. `Status_AttachPassive` 232,096 bytes / 6,438 calls on each), so this update was a layout shift around
@@ -184,7 +185,7 @@ What the run suggests for the ladder (candidates, not implemented):
 - `FW_SIG_MAX_BYTES` / `sigCap` is 128; `Status_GetCategory` needs 126. Raising it means changing `fw_sig.h`
   and the host test together.
 - An SDL upgrade changes the DYNAPI slot order: the 8 slots become `needs-human` until re-verified.
-- 38 entries (struct offsets, vtable slot constants) are still `unanchored`: the port reports them instead of
+- 46 entries (40 struct offsets, 6 vtable slot constants) are still `unanchored`: the port reports them instead of
   guessing. Adding witness patterns is the next improvement.
 - A changed arity of the 13 lookups (shapes A–E), a compiler/CRT change (`MsvcString` layout), or a changed
   vtable layout cannot be ported mechanically.
