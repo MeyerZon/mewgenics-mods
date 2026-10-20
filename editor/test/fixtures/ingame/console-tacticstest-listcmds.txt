@@ -1,0 +1,85 @@
+listcmds
+clear
+clear_history
+record_macro arg0
+end_recording_macro
+save_commands_as_macro arg0 arg1
+macro arg0
+clear_macros arg0
+nofilter
+toggle_filter
+soundevent_debug arg0
+ObtainRandomItems
+ObtainItemSet arg0
+ObtainItem arg0
+ObtainCoins arg0
+ObtainFood arg0
+AddChapterWeather arg0
+UnlockClass arg0
+UnlockAllAdventureContent
+DebugClearCatTempEffects
+TriggerAllProgressionUnlocks
+TriggerProgressionUnlock arg0
+skip_tutorial
+calculate_combat_reward_averages_food
+calculate_combat_reward_averages_coins
+set_day arg0
+debug_deconstruct_item_pools
+trigger_butterfly_effect
+vsync arg0
+debug_output_loaded_bitmap_atlas_pages
+debug_bitmap_atlas_cpu_memory_use
+soft_reset
+toggle_cursor_mode
+debug_memory_tesselate_everything
+crash
+crash_silent
+freeze
+debug_list_loaded_files
+list_steam_friends
+english_word_count
+measure_characters
+debug_sfx_memory_use
+set_language arg0
+test_locale_sort_order
+showdebug
+hidedebug
+refresh_turns
+spawn arg0
+spawntile arg0
+load arg0
+benchmark arg0
+stress_test arg0
+stress_test_fast arg0
+fuzz_test arg0
+fuzz_test_fast arg0
+replay_test
+replay_test_fast
+replay_test_full
+passive arg0
+status arg0
+gen_status_tooltips_placeholder_file
+gen_status_missing_icons_file
+gen_character_tags_list
+global arg0
+weather arg0
+bind arg0
+bind_passive arg0
+win
+999
+wtf
+killall
+1hp
+takeover
+untakeover
+noui
+nohud
+equip arg0
+swagout
+mutate arg0
+voice arg0
+zoomout arg0 arg1
+music arg0
+tileset arg0
+play_sound arg0
+Executed: listcmds

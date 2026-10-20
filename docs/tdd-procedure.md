@@ -37,7 +37,7 @@ layer, which tier of test covers what, where a human still has to look, and what
 | Gap | Closest automated check | Human step |
 |---|---|---|
 | Visual correctness of SWF art, text fit, UI look | SWF loads without a loader fault (`log-errors` / `crash` verdicts), Playwright asserts behaviour, not appearance | look at it; say so in the PR's T3 list |
-| Combat behaviour of a mod (e.g. "luck rerolls every turn") | **blocked until the console can enter a run from the main menu** (`docs/ingame-testing.md`); then `expect status` / `dump` per turn | play it; record the console transcript |
+| Combat behaviour of a mod (e.g. "luck rerolls every turn") | `enter TacticsTest` puts the harness into a test fight (`docs/ingame-testing.md`); then `expect status` / `expect units` / `dump` per turn | feel and balance: play it |
 | Balance, fun | none | play |
 | Reverse-engineering claims | none as claims; they become tests when turned into a signature row, a golden merge case, a log-marker fixture or an offset the harness reads | — |
 

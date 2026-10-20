@@ -269,6 +269,20 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(r.end!.reason, "enter_failed");
       eq((parseResults(fixture("result-pass.jsonl")) as unknown as { enter: unknown }).enter, null, "no enter event -> null");
     });
+    test("OBSERVED 2026-10-20 fixture: enter TacticsTest -> run commands registered, a turn, 6 units (result-enter-fight.jsonl + console-tacticstest-listcmds.txt)", () => {
+      const r = parseResults(fixture("result-enter-fight.jsonl")) as unknown as { enter: { ok: boolean; name: string } | null; turns: number; units: { available: boolean; count: number; round: number; list: { name: string; class: string; faction: number }[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null; popups: unknown[] };
+      assert(!!r.enter && r.enter.ok && r.enter.name === "TacticsTest", `enter ok: ${JSON.stringify(r.enter)}`);
+      eq(r.turns, 1, "TurnControl::NextTurn fired once before the dump");
+      assert(!!r.units && r.units.available && r.units.count === 6 && r.units.round === 1, `units: ${JSON.stringify(r.units && { available: r.units.available, count: r.units.count, round: r.units.round })}`);
+      eq(r.units!.list[0]!.name, "Antonieta"); eq(r.units!.list[0]!.class, "Thief"); eq(r.units!.list[0]!.faction, 1);
+      eq(r.expects.passed, 3); eq(r.expects.failed, 0);
+      eq(r.end!.code, 0); eq(r.end!.reason, "quit");
+      eq(r.popups.length, 0, "no popup once the party is generated instead of read from a saved winning team");
+      const cmds = fixture("console-tacticstest-listcmds.txt").split(/\r?\n/).filter(Boolean);
+      eq(cmds.length, 85, "84 commands + the Executed: line");
+      for (const c of ["listcmds", "spawn arg0", "spawntile arg0", "load arg0", "bind arg0", "bind_passive arg0", "status arg0", "passive arg0", "win", "killall", "takeover", "noui", "equip arg0", "weather arg0", "tileset arg0", "skip_tutorial", "set_day arg0"]) assert(cmds.includes(c), `TacticsTest/MewDirector command ${c} listed`);
+      eq(cmds[cmds.length - 1], "Executed: listcmds");
+    });
     test("popup events are collected as result.popups (title, text, frame); none -> empty", () => {
       const text = [
         '{"ev":"start","harness":"mewtest 0.1.0","t":0,"frame":0}',

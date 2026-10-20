@@ -163,13 +163,16 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 ## Planned (not started)
 
 ### TDD coverage targets — make every layer test-backed (in priority order)
-1. [ ] **Enter a run from the main menu through the harness** — the one blocker for in-combat tests. Options to
-   evaluate, cheapest first: (a) a console command that exists at the main menu and loads a run (`listcmds` shows
-   only the 11 engine built-ins, so probably none); (b) call the game's "continue run" path from the DLL (needs its
-   RVA: hook/decompile what the main-menu Continue button invokes, likely `MewDirector::init` or a scene push); (c)
-   inject SDL input events through the `SDL_PushEvent` slot to click Continue (brittle, last resort). Red test: a
-   `.mewtest` with `cmd load 1` → `wait turns 1` → `expect units >= 2` that currently fails with
-   `No command named "load"`.
+1. [x] **Enter a run from the main menu through the harness** (2026-10-20): the `.mewtest` directive `enter
+   TacticsTest` replays the dev menu's test-fight button inside `mewtest.dll` (owner's hint: the dev menu has
+   "straight into a fight" entries). The game's dev-mode startup makes the test director (`test00.sav`) itself;
+   `enter` waits for it, flags it (party generated, not read from a saved winning team), creates the `Battle` scene
+   with the `TacticsTest` driver. `mods/dev-sandbox/tests/enter-fight.mewtest`: run commands registered, a turn,
+   `dump` with 6 units, `expect units >= 2` — pass, saves untouched. Facts: `docs/engine-map.md` "Dev scenes and
+   run entry"; bindings v4 (`FW_SYM_SceneManager_CreateScene`, `Scene_CreateEntity`, `AddComponent_TacticsTest`,
+   `Component_GetGame`, `FW_DATA_MewDirector`, …). Not taken: the Continue-button/campaign route (would open a
+   `campaign0N.sav`; recorded, not wired) and SDL input injection. Bonus: the watchdog now closes the game's modal
+   WARNING/ERROR boxes and reports them as `popup` events, so a run never hangs on a dialog.
 2. [ ] **Joker's Luck real feature test (T2)** once 1 lands: `bind JokersGambit`, use it, `wait turns 2`,
    `expect status JokersLuck on 0`, `dump` twice and assert the luck stacks differ between turns (needs the stacks
    value in the units event: add `stacks` per status to `MtUnit`/the JSONL, host-tested first).
@@ -209,11 +212,10 @@ Things no test on this machine can decide. Tick them off here; each links to whe
     entered from the menu (target 1).
 
 ### Verification still owed (things built but not yet validated in-game)
-- [ ] **Unit walk** (`dump` with units, `expect status`, `expect units`): only exercised with `available:false`
-  (main menu). Offsets come from the `TurnControl::NextTurn` decompile; confirm name/class/faction decoding on a real
-  fight (blocked by target 1).
-- [ ] **Crash path**: VEH + top-level filter + watchdog never ran against a real fault (`cmd crash` is in-run only).
-  Expect: `crash` event, `end code 3`, Mewjector dump in `mod_logs\crashes\`, no WER dialog, exit 3.
+- [x] **Unit walk** (`dump` with units, `expect status`, `expect units`): verified on a real fight 2026-10-20
+  (`enter TacticsTest`: 6 units with names, classes and factions decoded — `editor/test/fixtures/ingame/result-enter-fight.jsonl`).
+- [x] **Crash path**: ran against a real fault 2026-10-20 (an access violation inside `TacticsTest::init` during an
+  early entry attempt): `crash` event, `end code 3`, the game's own `crash_*.txt`, no WER dialog, exit 3.
 - [x] **`-mewtest_clean 1`** never exited (OBSERVED 2026-10-19: no "grace elapsed" line, killed after 7 min). Fixed in
   leftovers PR 4: the decision is the pure `mt_exit_decide` (no dependence on `g_active`), the watchdog leaves via
   `TerminateProcess`, the runner kills 5 s after the `end` record as a fallback. T2 `dev-sandbox/console-smoke-clean`:
@@ -235,8 +237,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   hook to `Step`.
 - [ ] **Hidden window on other machines**: verified on this PC (NVIDIA, ~180 fps hidden); confirm elsewhere before
   relying on it in CI-like setups.
-- [ ] **In-run console command set**: `listcmds` at the main menu lists 11 commands; capture the in-run list once
-  target 1 lands and pin it in `ingame-testing.md`.
+- [x] **In-run console command set**: captured 2026-10-20 after `enter TacticsTest` — 84 commands, pinned verbatim in
+  `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt` and listed in `ingame-testing.md`.
 
 ### Next, directly queued
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)

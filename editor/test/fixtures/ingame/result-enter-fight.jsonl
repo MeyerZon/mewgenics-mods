@@ -1,0 +1,13 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"<run>/script.mewtest","out":"<run>/result.jsonl","pid":34920,"hide":1,"timeout_ms":40000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":1125,"frame":120}
+{"ev":"enter","line":2,"name":"TacticsTest","ok":true,"detail":"scene=000002b400005a98 entity=000002b62b65d420 component=000002c0ad750008 manager=000002b47556e780 director=000002bc268a0008 GetGame(console)=000002bc268a0008 director(after init)=000002bc268a0008","t":3234,"frame":888}
+{"ev":"wait","line":3,"kind":"frames","n":60,"actual":60,"t":3922,"frame":948}
+{"ev":"cmd","line":4,"text":"listcmds","t":3922,"frame":949}
+{"ev":"expect","line":5,"kind":"console","arg":"bind","ok":true,"detail":"matched console line 65","t":4094,"frame":950}
+{"ev":"expect","line":6,"kind":"console","arg":"Executed: listcmds","ok":true,"detail":"matched console line 84","t":4094,"frame":951}
+{"ev":"log","text":"TacticsTest is up: its init registered the run console commands","t":4094,"frame":952}
+{"ev":"turn","n":1,"round":1,"t":4188,"frame":975}
+{"ev":"wait","line":8,"kind":"turns","n":1,"actual":1,"t":4188,"frame":975}
+{"ev":"units","available":true,"round":1,"count":6,"list":[{"i":0,"name":"Antonieta","class":"Thief","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[]},{"i":1,"name":"Shadok","class":"Mage","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[]},{"i":2,"name":"Ziva","class":"Medic","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[]},{"i":3,"name":"Mone","class":"Hunter","faction":1,"move":0,"act":0,"turnkind":0,"statuses":[]},{"i":4,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[]},{"i":5,"name":"Coin","class":"","faction":0,"move":0,"act":0,"turnkind":0,"statuses":[]}],"t":4203,"frame":976}
+{"ev":"expect","line":10,"kind":"units","arg":">= 2","ok":true,"detail":"6 units","t":4203,"frame":977}
+{"ev":"end","code":0,"reason":"quit","frames":978,"turns":1,"elapsed_ms":4219,"expect_pass":3,"expect_fail":0,"t":4219,"frame":978}

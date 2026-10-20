@@ -195,24 +195,32 @@ under `mods/`.
   `record_macro arg0`, `end_recording_macro`, `save_commands_as_macro arg0 arg1`, `macro arg0`,
   `clear_macros arg0`, `nofilter`, `toggle_filter`, `soundevent_debug arg0`. Game commands (`spawn`, `bind`,
   `load`, `win`, `crash`, ...) are registered by the run's scenes (`MewDirector::init`, `GameBase::init`,
-  `TacticsTest::init`, ...) and answer `No command named "X" found` at the main menu.
+  `TacticsTest::init`, ...) and answer `No command named "X" found` at the main menu. After `enter TacticsTest`
+  the list is 84 lines (the engine's 11, the director's 17 — `ObtainItem arg0`, `UnlockClass arg0`,
+  `skip_tutorial`, `set_day arg0`, … — the app's, and TacticsTest's: `refresh_turns`, `spawn arg0`,
+  `spawntile arg0`, `load arg0`, `benchmark arg0`, `stress_test arg0`, `fuzz_test arg0`, `replay_test`,
+  `passive arg0`, `status arg0`, `global arg0`, `weather arg0`, `bind arg0`, `bind_passive arg0`, `win`, `999`,
+  `wtf`, `killall`, `1hp`, `takeover`, `untakeover`, `noui`, `nohud`, `equip arg0`, `swagout`, `mutate arg0`,
+  `voice arg0`, `zoomout arg0 arg1`, `music arg0`, `tileset arg0`, `play_sound arg0`; pinned verbatim in
+  `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`).
 - `listcmds` pushes one line per command (`<name> arg0 arg1 ...`) followed by `Executed: listcmds`; every
   successful command ends with `Executed: <line>`. An unknown name gives `No command named "X" found`; too few
   arguments gives `command "X" needs at least N arguments`.
 - A hidden window keeps the simulation running: with `hide: true` the harness hides the window at frame 0 and
   sets the swap interval to 0, after which the game ran ~180 frames per second (487 frames in 2.6 s) and every
   expectation behaved as with a visible window.
-- Combat commands need a run in progress. No console command enters one (the menu is mouse-driven); `enter
-  TacticsTest` replays the dev menu's "TacticsTest" button inside the DLL instead (`docs/engine-map.md` "Dev scenes
-  and run entry"): the test director on `test00.sav` is created the way the game's own load path does it, the
-  button's flags are set on it, then a `Battle` scene with the `TacticsTest` driver is created. OBSERVED 2026-10-20:
-  the entry itself works (scene, entity, component, director created; no assert, no crash; every save file
-  unchanged), and `TacticsTest::init` then asks `MewDirector::DebugGenAdventureCats` for the party, which throws
-  `no saved winning teams - win at least one run first!` on a fresh `test00.sav` — the unresolved last step (see
-  `TODO.md` target 1). Until it is, committed scripts assert only main-menu-safe things and the unit walk
-  (`dump`, `expect status`, `expect units`) is exercised only with `available:false` / `0 units`. The crash path
-  **is** verified in-game now: an access violation inside the entry produced the `crash` event, exit 3 and the
-  game's own crash log, with no dialog.
+- Combat commands need a run in progress. No console command enters one (the menu is mouse-driven); **`enter
+  TacticsTest` does** (OBSERVED 2026-10-20, `mods/dev-sandbox/tests/enter-fight.mewtest`): it replays the dev
+  menu's "TacticsTest" button inside the DLL (`docs/engine-map.md` "Dev scenes and run entry"). In dev mode the
+  game itself creates the test director on `test00.sav` a few frames after the menu is up; `enter` waits for it
+  (retrying every frame, same budget as the console wait), sets the button's flags on it (party generated, not read
+  from a saved winning team), then creates a `Battle` scene with the `TacticsTest` driver. ~0.3 s later the console
+  lists the run commands (`editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`: `spawn`, `spawntile`,
+  `load`, `bind`, `bind_passive`, `status`, `passive`, `win`, `killall`, `takeover`, `noui`, `equip`, `mutate`,
+  `weather`, `tileset`, …), `TurnControl::NextTurn` fires (round 1) and `dump` lists the generated party and its
+  opponents (6 units; `editor/test/fixtures/ingame/result-enter-fight.jsonl`). The unit walk is therefore verified
+  on a real fight, and so is the crash path (an access violation inside an earlier attempt produced the `crash`
+  event, exit 3 and the game's crash log, with no dialog). Every run left `1 real save file(s) unchanged`.
 - The game's own `debug.log` is block-buffered and ends mid-line — in immediate **and** in clean mode (see "Clean
   mode" above: the game does not shut itself down when its running flag is cleared, so nothing flushes). Load-time
   markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.

@@ -305,22 +305,37 @@ build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4
   the boot path 0x750f90 ← 0x748200 ← 0x7469b0, which also creates the `DebugOverlay`/`ToolTip`/`PostProcess`/
   `PauseMenu` scenes and then either plays `game_intro` or, in dev mode, calls 0x3af490(director)).
 - **OBSERVED at the main menu of a dev launch (harness, 2026-10-20):** 6 scenes — `Shared` (the manager's main
-  scene), `Base`, `DebugOverlay`, `ToolTip`, `PostProcess`, `PauseMenu` — and **no MewDirector anywhere** (type 0x50c
-  count 0 on every scene; the global is NULL). `MewDirector::init` with `test00.sav` on `Shared` works from the
-  harness and adds a 7th scene, `Tutorial`.
-- **OBSERVED entry attempts (`mods/dev-sandbox/tests/enter-fight.mewtest`):**
-  1. CreateScene + CreateEntity + AddComponent<TacticsTest> with no director: access violation at
-     `Mewgenics.exe+0x835a32` inside `TacticsTest::init` (the harness's crash path reported it: VEH, `crash` event,
-     exit 3, crash log, no dialog).
-  2. The test director created first, no flags: `init` runs (`LOAD LEVEL: levels/blank.lvl`), then a second
-     director is created a few frames later and trips the "More than one mew director" assert, whose handler never
-     returns — the main loop stalls until the watchdog exits 2.
-  3. Test director + the button's flags (`+0x780`, `+0x78c`, `+0x6dc` on the director): no assert, no crash,
-     `LOAD LEVEL: levels/blank.lvl`, then `no saved winning teams - win at least one run first!` (logged by
-     0x3b24c0 → 0x9522c0 → 0xd3e10c) and the main loop stalls inside the entry (frames stop, 0 turns). The test
-     fight takes its party from a saved winning team, which a fresh `test00.sav` lacks.
-- **Save safety of the route:** only `test00.sav` is named (hard-coded in 0x758650); `savecheck.ts` allows that
-  family; every run above ended with `1 real save file(s) unchanged`.
+  scene), `Base`, `DebugOverlay`, `ToolTip`, `PostProcess`, `PauseMenu` — and no MewDirector yet (type 0x50c count 0
+  on every scene; the global is NULL) **until the game's own load-complete path runs a few frames later**: with
+  `dev_mode` set, 0x750f90 (← 0x748200 ← 0x7469b0; caller chain from a hook on `MewDirector::init`:
+  `exe+0x758834 ← exe+0x751886 ← exe+0x748395 ← exe+0x746a73 ← exe+0x9ba2cb`) creates the test director on
+  `test00.sav` (c3) on the main scene, adds the `Tutorial` scene and calls 0x3af490(director) (sets `+0x78d = 1`,
+  creates a `House` scene with its driver 0x3c43a0). Without `dev_mode` it plays `game_intro` instead.
+- **`MewDirector::DebugGenAdventureCats(this, TeamType, int)` 0x3b24c0** (what `TacticsTest::init` uses for the
+  party): if `director->+0x78c` is set it reads the saved winning teams from the save (0x231e20) and returns when
+  there are any; otherwise it warns `no saved winning teams - win at least one run first!` (0x9522c0 = log +
+  modal MessageBox "WARNING" — the frame loop blocks until it is closed) unless `+0x784 != 0`, clears `+0x78c`,
+  and **generates a party** anyway. The dev-menu button sets `+0x78c = 1` (play with the last winning team); the
+  harness leaves it 0 so a fresh `test00.sav` gets a generated party with no popup.
+- **The entry that works (`mods/dev-sandbox/tests/enter-fight.mewtest`, harness `enter TacticsTest`):** wait for
+  the game's director (retry per frame; never create one — an earlier attempt that did raced the game's own
+  creation and hit "More than one mew director", the no-return assert → the harness's crash path), set `+0x780 = 1`,
+  `+0x78c = 0`, `+0x6dc = 1` on it, `CreateScene("Battle")`, `CreateEntity`, `AddComponent<TacticsTest>`. Result:
+  `listcmds` grows from 11 to 84 commands (`editor/test/fixtures/ingame/console-tacticstest-listcmds.txt`),
+  `TurnControl::NextTurn` fires (round 1) ~25 frames later, `dump` lists 6 units (`result-enter-fight.jsonl`:
+  e.g. `Antonieta/Thief`, `Shadok/Mage`, faction 1; the unit walk `TurnControl+0x18 → Scene+0x8 → EntityManager
+  +0x20 → +0x1f90` verified on a real fight). Other facts from the attempts: without a director `TacticsTest::init`
+  crashes at `+0x835a32`; `Scene+0x4db` is zeroed by `CreateScene` and set by the dev-menu buttons on their own
+  scene (not the being-destroyed flag, which is `+0x4b0`).
+- **Other starters, for the record:** the save-slot click is the `std::function` body 0x1c06c0 (`scene->+0x4db = 1`,
+  `GetGame`, 0x94eba0, `AddComponent<MewDirector>(mainScene, e, slotName)` (c1), then `MewDirector::start`
+  0x3aefd0, which reads `game_began` / `on_adventure` / `house_night` from the save and creates `House` (0x3c3ee0)
+  or resumes the adventure (0x3bbff0)); the director's own battle starter 0x3b1830 (`FindScene("House")`, act from
+  a GON node into `+0x6dc`, `CreateScene("Battle")`, `AddComponent<TacticsTest>(battle, e, levelName)` 0x3c4e60 —
+  the variant that takes a level name); `TacticsTest_restart` 0x3c5570 (an `EventScene` + team generation
+  0x2e3720 with `TeamType 1, 4`).
+- **Save safety of the route:** only `test00.sav` is ever named (hard-coded in 0x758650, and now only by the game
+  itself); `savecheck.ts` allows that family; every run ended with `1 real save file(s) unchanged`.
 
 ## Save safety
 
