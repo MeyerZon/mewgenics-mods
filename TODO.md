@@ -23,7 +23,7 @@ done (2026-10-21). Owner's answers of 2026-10-21 are recorded under each item; c
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
       **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly). Not
-      started; scope and install go to the owner before any work (nothing gets installed without his say-so).
+      started; scope and install go to the owner before any work (nothing gets installed without the owner's say-so).
 - [ ] **T3 looks** (owner, 2026-10-21: he will do these later) still unticked from the art PRs — the shots are in `editor/data/ingame-runs/` (`npm run
       test:artprobe`, `npm run test:artprobe -- --cat` rebuild them):
       gradient square red → black (#63); top green line shorter than the bottom one (#64); the add square a lightened
