@@ -11,7 +11,7 @@
 import type { Mat } from "./geometry.ts";
 import { gradientProblems } from "./gradient.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
-import { rigFindings } from "./cat-rig.ts";
+import { rigFindings, catAnimFindings } from "./cat-rig.ts";
 import { textProblems } from "./text.ts";
 import type { SceneText } from "./text.ts";
 import { VANILLA_EXPORTS } from "./vanilla-exports.ts";
@@ -509,6 +509,8 @@ export function validateScene(input: unknown): SceneValidation {
     if (!linkage) err("export-name", "empty linkage name", ["exports"]);
     if (typeof ref !== "string" || !(scene.shapes[ref] || scene.sprites[ref])) err("export-ref", `export "${linkage}" points at unknown id "${String(ref)}"`, [`exports.${linkage}`]);
   }
+  // a cat animation donor (exports._Append_CatTest): facing pairs, a rig per labeled frame, depth 1 (cat-rig.ts)
+  findings.push(...catAnimFindings(scene));
   scene.stage_instances.forEach((si, i) => {
     if (!si || typeof si.ref !== "string" || !(scene.shapes[si.ref] || scene.sprites[si.ref] || (scene.texts || {})[si.ref] || (scene.imports || {})[si.ref])) err("stage-ref", `stage_instances[${i}].ref is not a shape or sprite`, [`stage_instances[${i}]`]);
   });

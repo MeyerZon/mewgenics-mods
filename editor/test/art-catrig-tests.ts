@@ -269,13 +269,15 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
 
   let tools: Record<string, any> = {}, toolsErr = "";
   try { tools = await import("../src/mcp/tools.ts"); } catch (e) { toolsErr = e instanceof Error ? e.message : String(e); }
-  test("MCP: new_art_scene accepts template: \"cat-animation\" (+ animation); write_art_scene dryRun on a cat animation reports cat-anim-untested", async () => {
+  let dry: any = null, dryErr = "";
+  if (!toolsErr) { try { need(); dry = await tools.callTool("write_art_scene", { mod: "dev-sandbox", path: "art/x.scene.json", scene: R.newCatAnimation(exampleScene("anim"), "wave").scene, dryRun: true }); } catch (e) { dryErr = e instanceof Error ? e.message : String(e); } }
+  test("MCP: new_art_scene accepts template: \"cat-animation\" (+ animation); write_art_scene dryRun on a cat animation reports cat-anim-untested", () => {
     if (toolsErr) throw new Error(toolsErr);
+    need();
     const schema = tools.TOOL_INPUT.new_art_scene;
     assert(schema.safeParse({ mod: "m", name: "n", template: "cat-animation", animation: "wave" }).success, "template + animation accepted");
     assert(!schema.safeParse({ mod: "m", name: "n", template: "dog" }).success, "unknown template refused");
-    const scene = R.newCatAnimation(exampleScene("anim"), "wave").scene;
-    const r = (await tools.callTool("write_art_scene", { mod: "dev-sandbox", path: "art/x.scene.json", scene, dryRun: true })) as any;
-    assert(r.ok && r.findings.some((f: any) => f.code === "cat-anim-untested"), JSON.stringify(r).slice(0, 300));
+    assert(!dryErr, dryErr);
+    assert(dry && dry.ok && dry.findings.some((f: any) => f.code === "cat-anim-untested"), JSON.stringify(dry).slice(0, 300));
   });
 }

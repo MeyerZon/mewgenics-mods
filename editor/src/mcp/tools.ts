@@ -83,6 +83,8 @@ export const TOOL_INPUT = {
     mod: str(),
     name: str("scene name, becomes art/<name>.scene.json"),
     starter: bool("start from the example scene (default true)").optional(),
+    template: z.enum(["cat-animation"]).describe("\"cat-animation\": a cat rig <animation>Pose plus an _Append_CatTest donor sprite with the labeled frames <animation>F / <animation>B, each placing the rig as `pawing` at depth 1 (the vanilla CatTest shape)").optional(),
+    animation: str("the animation name for template cat-animation (default: the scene name, which must then be an identifier); GON refers to it bare: alt_animations [[idle <animation>]] or an ability's animation <animation>").optional(),
   }),
   import_svg: z.object({
     svgText: str("SVG markup (or pass mod + path of an .svg inside the mod)").optional(),
@@ -295,8 +297,8 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "new_art_scene",
-    "Create art/<name>.scene.json (the example scene by default: two gray shapes, a 24-frame sprite with idle/blink labels, exports).",
-    (a) => api.newArtScene(a.mod, a.name, { starter: a.starter }),
+    "Create art/<name>.scene.json (the example scene by default: two gray shapes, a 24-frame sprite with idle/blink labels, exports). template \"cat-animation\" instead creates a cat animation: a rig: \"cat\" sprite <animation>Pose with placeholder parts and a donor sprite exported as _Append_CatTest whose labeled frames <animation>F / <animation>B place the rig as `pawing` at depth 1 — the shape of every vanilla CatTest frame (catanis.swf; catanis2.swf appends the same way). Then draw or replace the slot shapes (import_svg into the scene), build_swf, and refer to it from GON as alt_animations [[idle <animation>]] on a character or animation <animation> on an ability. The validator reports cat-anim-* findings; cat-anim-untested notes that in-game slot filling of appended frames is under test.",
+    (a) => api.newArtScene(a.mod, a.name, { starter: a.starter, template: a.template, animation: a.animation }),
   ),
   def(
     "import_svg",

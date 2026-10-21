@@ -5,7 +5,7 @@
 // Scope: this authors *our* character in the vanilla layout (each slot is any shape or sprite of the scene). It does
 // not add parts to the game's catparts.swf or make the game swap its own parts into our slots — that is engine work.
 
-import type { Scene, SceneSprite, SceneShape, Finding } from "./scene.ts";
+import type { Scene, SceneSprite, SceneShape, SceneLayer, Finding } from "./scene.ts";
 
 /** The main vanilla cat animation's slots, back to front. */
 export const CAT_SLOTS: ReadonlyArray<{ name: string; depth: number }> = [
@@ -72,6 +72,159 @@ export function assignSlot(scene: Scene, spriteId: string, slot: string, ref: st
   const out = clone(scene);
   for (const k of out.sprites[spriteId]!.layers[li]!.keys) if (k.ref !== null && k.ref !== undefined) k.ref = ref;
   return { scene: out, findings: [] };
+}
+
+// ---- cat animations: labeled facing frames appended to the game's CatTest clip ---------------------------------------
+//
+// OBSERVED 2026-10-21 (read-only parse of catanis.swf / catanis2.swf; pinned in test/fixtures/art/cat-anim-append.json):
+// the vanilla cat clip is `CatTest` (854 frames, 776 labels). Labels come in facing pairs `<anim>F` / `<anim>B`
+// (`idleF`/`idleB`, `dashF`/`dashB`, …); every labeled frame places at most one character, always at depth 1 — a nested
+// pose sprite carrying the CAT_SLOTS instances, named `pawing` on the idle/walk/hit frames. catanis2.swf extends the
+// clip with an export `_Append_CatTest` of the same shape (296 frames, 239 labels like `crawlingIdleF`). Data refers to
+// an animation by its bare name (`alt_animations [[idle <name>]]`, an ability's `animation <name>`); the engine adds the
+// facing suffix. Whether the game fills the slots of an *appended* frame by name is under test in-game
+// (feat/cat-append-probe); this authors the vanilla shape either way.
+
+export const CAT_ANIM_EXPORT = "_Append_CatTest";
+export const CAT_ANIM_LAYER = "pawing";
+export const CAT_ANIM_DEPTH = 1;
+export const CAT_ANIM_FACINGS: ReadonlyArray<string> = ["F", "B"];
+const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export interface NewCatAnimationOptions extends AddCatRigOptions {
+  /** reuse this rig: "cat" sprite for the pose instead of adding `<name>Pose` */
+  rig?: string;
+}
+
+export interface NewCatAnimationResult {
+  scene: Scene;
+  findings: Finding[];
+  /** the rig sprite the frames place */
+  rig?: string;
+  /** the `_Append_CatTest` donor sprite */
+  donor?: string;
+}
+
+/** The sprite `exports._Append_CatTest` names when it is a usable donor (a non-rig sprite), else null. */
+export function catAnimDonor(scene: Scene): string | null {
+  const id = (scene.exports || {})[CAT_ANIM_EXPORT];
+  if (typeof id !== "string") return null;
+  const sp = scene.sprites[id];
+  return sp && Array.isArray(sp.layers) && sp.rig === undefined ? id : null;
+}
+
+/**
+ * Add a cat animation `name`: a rig `<name>Pose` (or `opts.rig`), and the labeled frames `<name>F` / `<name>B` on the
+ * `_Append_CatTest` donor sprite (`CatAnim_<name>` when the scene has none yet), each placing the rig as the layer
+ * `pawing` at depth 1 — the shape every vanilla CatTest frame has.
+ */
+export function newCatAnimation(scene: Scene, name: string, opts: NewCatAnimationOptions = {}): NewCatAnimationResult {
+  const no = (message: string): NewCatAnimationResult => ({ scene, findings: [{ severity: "error", code: "cat-anim", message }] });
+  if (!NAME_RE.test(name)) return no(`animation name "${name}" must be letters, digits and _ (not starting with a digit)`);
+  const exportRef = (scene.exports || {})[CAT_ANIM_EXPORT];
+  let donorId = catAnimDonor(scene);
+  if (exportRef !== undefined && !donorId) return no(`exports.${CAT_ANIM_EXPORT} points at "${String(exportRef)}", which is not a donor sprite (a plain sprite whose labeled frames place a cat rig)`);
+  const labels = CAT_ANIM_FACINGS.map((f) => `${name}${f}`);
+  if (donorId) {
+    const have = Object.keys(scene.sprites[donorId]!.labels || {});
+    const taken = labels.filter((l) => have.includes(l));
+    if (taken.length) return no(`"${donorId}" already has the label${taken.length > 1 ? "s" : ""} ${taken.join(", ")}`);
+  } else {
+    donorId = `CatAnim_${name}`;
+    if (scene.sprites[donorId] || scene.shapes[donorId]) return no(`"${donorId}" is already a shape or sprite`);
+  }
+  let out: Scene;
+  let rigId: string;
+  if (opts.rig !== undefined) {
+    const rig = scene.sprites[opts.rig];
+    if (!rig || rig.rig !== "cat") return no(`"${opts.rig}" is not a cat rig sprite (rig: "cat")`);
+    rigId = opts.rig;
+    out = clone(scene);
+  } else {
+    rigId = `${name}Pose`;
+    const r = addCatRig(scene, rigId, { frames: opts.frames, colours: opts.colours });
+    if (r.findings.length) return { scene, findings: r.findings };
+    out = r.scene;
+  }
+  let donor = out.sprites[donorId];
+  if (!donor) {
+    donor = { frames: 0, labels: {}, layers: [] };
+    out.sprites[donorId] = donor;
+  }
+  donor.labels = donor.labels || {};
+  let layer = donor.layers.find((l) => l.name === CAT_ANIM_LAYER);
+  if (!layer) {
+    const atDepth = donor.layers.find((l) => l.depth === CAT_ANIM_DEPTH);
+    if (atDepth) return no(`"${donorId}" has a layer "${atDepth.name || ""}" at depth ${CAT_ANIM_DEPTH} that is not the ${CAT_ANIM_LAYER} layer`);
+    layer = { name: CAT_ANIM_LAYER, depth: CAT_ANIM_DEPTH, keys: [] };
+    donor.layers.push(layer);
+  }
+  const first = donor.frames;
+  labels.forEach((label, i) => {
+    const frame = first + i;
+    donor.labels![label] = frame;
+    layer.keys = layer.keys.filter((k) => k.frame !== frame);
+    layer.keys.push({ frame, ref: rigId, x: 0, y: 0 });
+  });
+  layer.keys.sort((a, b) => a.frame - b.frame);
+  donor.frames = first + labels.length;
+  out.exports = { ...(out.exports || {}), [CAT_ANIM_EXPORT]: donorId };
+  return { scene: out, findings: [], rig: rigId, donor: donorId };
+}
+
+/** What a layer places at `frame` (the latest key at or before it; null when nothing is there). */
+function placedAt(layer: SceneLayer, frame: number): string | null {
+  let ref: string | null = null;
+  let best = -1;
+  for (const k of layer.keys || []) if (k.frame <= frame && k.frame > best) { best = k.frame; ref = k.ref ?? null; }
+  return ref;
+}
+
+/**
+ * Checks for the `_Append_CatTest` donor (the validator adds them): facing pairs complete, each labeled frame places a
+ * cat rig, at depth 1; plus the standing note that in-game slot filling of appended frames is under test.
+ */
+export function catAnimFindings(scene: Scene): Finding[] {
+  const out: Finding[] = [];
+  const id = (scene.exports || {})[CAT_ANIM_EXPORT];
+  if (id === undefined) return out;
+  const at = `exports.${CAT_ANIM_EXPORT}`;
+  const sp = typeof id === "string" ? scene.sprites[id] : undefined;
+  if (!sp || !Array.isArray(sp.layers)) {
+    if (typeof id === "string" && (scene.shapes[id] || !scene.sprites[id])) out.push({ severity: "error", code: "cat-anim-donor", message: `${CAT_ANIM_EXPORT} must point at a donor sprite whose labeled frames place a cat rig; "${id}" is ${scene.shapes[id] ? "a shape" : "not a sprite"}`, path: at });
+    return out;
+  }
+  const sat = `sprites.${id}`;
+  if (sp.rig !== undefined) {
+    out.push({ severity: "error", code: "cat-anim-donor", message: `${CAT_ANIM_EXPORT} points at the cat rig "${id}" itself; it must point at a donor sprite whose labeled frames place the rig`, path: at });
+    return out;
+  }
+  const labels = sp.labels || {};
+  const names = Object.keys(labels);
+  for (const label of names) {
+    const facing = CAT_ANIM_FACINGS.find((f) => label.endsWith(f) && label.length > f.length);
+    if (!facing) continue;
+    const base = label.slice(0, -facing.length);
+    const missing = CAT_ANIM_FACINGS.filter((f) => f !== facing).map((f) => `${base}${f}`).filter((l) => !(l in labels));
+    for (const m of missing) out.push({ severity: "error", code: "cat-anim-missing-facing", message: `label "${label}" has no facing partner "${m}" (the engine picks <anim>F / <anim>B by facing)`, path: `${sat}.labels.${label}` });
+  }
+  for (const label of names) {
+    const frame = labels[label]!;
+    if (!Number.isInteger(frame)) continue;
+    const placing = sp.layers.map((l, li) => ({ l, li, ref: placedAt(l, frame) })).filter((p) => p.ref !== null);
+    if (!placing.length) {
+      out.push({ severity: "error", code: "cat-anim-layer-not-rig", message: `labeled frame "${label}" (frame ${frame}) places nothing; a cat animation frame places a rig: "cat" sprite at depth ${CAT_ANIM_DEPTH}`, path: `${sat}.labels.${label}` });
+      continue;
+    }
+    for (const p of placing) {
+      const target = scene.sprites[p.ref!];
+      const lat = `${sat}.layers[${p.li}]`;
+      if (!target || target.rig !== "cat") out.push({ severity: "error", code: "cat-anim-layer-not-rig", message: `labeled frame "${label}" (frame ${frame}) places "${p.ref}" on layer ${p.l.name || p.li}, which is not a rig: "cat" sprite`, path: lat });
+      if (p.l.depth !== CAT_ANIM_DEPTH) out.push({ severity: "warning", code: "cat-anim-depth", message: `labeled frame "${label}" places its pose at depth ${p.l.depth}; every vanilla CatTest frame places it at depth ${CAT_ANIM_DEPTH}`, path: `${lat}.depth` });
+    }
+  }
+  out.push({ severity: "info", code: "cat-anim-untested", message: `${CAT_ANIM_EXPORT} frames are authored in the vanilla shape (labeled F/B frames, a pose sprite at depth ${CAT_ANIM_DEPTH}); whether the game fills an appended frame's slots by name is under test in-game (2026-10-21, feat/cat-append-probe)`, path: at });
+  return out;
 }
 
 /** Rig checks for a sprite marked rig: "cat" (the validator adds them). */
