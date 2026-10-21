@@ -1,0 +1,3 @@
+# 0x946680 type-4 branches push copies (FUN_140028830 / FUN_140947790) without calling 0x944f50, unlike the
+# object branches — items pushed into an array keep any suffixed keys inside them. MATCH already; pinned here.
+arr [ { k 1 } ]

@@ -1,0 +1,4 @@
+# 0x946680 LAB_140947159: `.overwrite` (and every type mismatch) copy-assigns the patch node, then 0x944f50 strips
+# every policy suffix under it — a brand-new subtree never keeps `.add`-style keys.
+o { a 1 }
+arr [1 2]
