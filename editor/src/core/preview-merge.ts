@@ -3,8 +3,8 @@
 // small, with an option to include the whole effective GON text.
 
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { REPO_ROOT, MODS_DIR, resolveReadPath } from "./repo.ts";
+import { join, resolve } from "node:path";
+import { EXTRACTED_DATA, MODS_DIR, resolveReadPath } from "./repo.ts";
 import { parseOverlayName, applyGonOverlay, applyCsvOverlay } from "./overlay/overlay.ts";
 import { parsePolicy } from "./overlay/policy.ts";
 import { pretty, findIndex } from "./gon/value.ts";
@@ -92,7 +92,8 @@ export function previewMerge(modName: string, relPath: string, opts: PreviewMerg
   const fileName = relPath.split("/").pop() || relPath;
   const { baseName: baseLeaf, mode, fileType } = parseOverlayName(fileName);
   const baseRel = relPath.slice(0, relPath.length - fileName.length) + baseLeaf;
-  const baseAbs = resolveReadPath(join(REPO_ROOT, ".extracted", baseRel));
+  // the pack copy next to EXTRACTED_DATA (<…>/.extracted/<data/…>); honours MEWGENICS_EXTRACTED_DATA like every other reader
+  const baseAbs = resolveReadPath(resolve(EXTRACTED_DATA, "..", baseRel));
   const baseText = existsSync(baseAbs) ? readFileSync(baseAbs, "utf8") : null;
 
   if (fileType === "csv") {
