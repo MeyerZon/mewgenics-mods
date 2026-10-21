@@ -13,7 +13,7 @@ import { toValue, prettyRoot } from "../src/core/gon/value.ts";
 import { applyGonOverlay, parseOverlayName } from "../src/core/overlay/overlay.ts";
 import { append } from "../src/core/overlay/merge.ts";
 import { parsePolicy, stripPolicySuffixes } from "../src/core/overlay/policy.ts";
-import * as previewMerge from "../src/core/preview-merge.ts";
+import { touchedEntries } from "../src/core/preview-merge.ts";
 import type { VNode, VObject } from "../src/core/gon/types.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
@@ -98,14 +98,10 @@ export function runOverlayTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
   // the LAST child of that name; a by-name lookup therefore sees the appended one. The preview's touched-entries view
   // must resolve the same way (and say the name now occurs twice), while the effective text still lists both.
   test("preview_merge touched entries: an appended duplicate resolves by name to the last occurrence, with its count", () => {
-    const touchedEntries = (previewMerge as Record<string, unknown>).touchedEntries as
-      | ((base: VObject, overlay: VObject, effective: VObject, mode: "append" | "merge" | "patch" | "replace") => Array<{ key: string; status: string; base: string | null; effective: string | null; occurrences?: number }>)
-      | undefined;
-    assert(typeof touchedEntries === "function", "preview-merge.ts exports touchedEntries(base, overlay, effective, mode)");
     const { base, overlay, effective, text } = applyGonOverlay("Spin { damage 10 }", "Spin { damage 5 }", "append");
     eq(effective.entries.length, 2, "the AST keeps both Spin entries");
     eq(normalize(text), normalize("Spin { damage 10 }\nSpin { damage 5 }"), "the effective text lists both");
-    const t = touchedEntries!(base, overlay, effective, "append");
+    const t = touchedEntries(base, overlay, effective, "append");
     eq(t.length, 1);
     eq(t[0]!.key, "Spin");
     eq(t[0]!.status, "changed");

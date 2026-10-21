@@ -7,13 +7,24 @@ import { join } from "node:path";
 import { REPO_ROOT, MODS_DIR, resolveReadPath } from "./repo.ts";
 import { parseOverlayName, applyGonOverlay, applyCsvOverlay } from "./overlay/overlay.ts";
 import { parsePolicy } from "./overlay/policy.ts";
-import { pretty, findIndex } from "./gon/value.ts";
+import { pretty, findLastIndex } from "./gon/value.ts";
 import type { VObject, VNode } from "./gon/types.ts";
 import type { OverlayMode } from "./overlay/overlay.ts";
 
+/**
+ * By-name lookup the way the game resolves a name: the LAST entry with that key. The name index
+ * (FUN_14012a310 in Gon_Append 0x945410 / Gon_DeepMerge_plain 0x945c30) is repointed at every pushed child, so
+ * after an `.append` that duplicates a name the appended one is what `enemies["Rat"]` finds.
+ */
 function get(obj: VObject, key: string): VNode | null {
-  const i = findIndex(obj, key);
+  const i = findLastIndex(obj, key);
   return i >= 0 ? obj.entries[i]!.value : null;
+}
+
+function countKey(obj: VObject, key: string): number {
+  let n = 0;
+  for (const e of obj.entries) if (e.key === key) n++;
+  return n;
 }
 
 function sameText(a: VNode | null, b: VNode | null): boolean {
@@ -62,6 +73,35 @@ export interface TouchedEntry {
   status: TouchedStatus;
   base: string | null;
   effective: string | null;
+  /** present when the key occurs more than once in the effective file (an `.append` of an existing name): the game keeps every copy, and `effective` is the last one — the one a by-name lookup sees */
+  occurrences?: number;
+}
+
+/**
+ * The top-level entries an overlay touches, as base vs. effective, resolved by name the way the game does
+ * (last occurrence). Pure; `previewMerge` wraps it with the file reads.
+ */
+export function touchedEntries(base: VObject, overlay: VObject, effective: VObject, mode: OverlayMode): TouchedEntry[] {
+  const touched: string[] = [];
+  for (const e of overlay.entries) {
+    const name = mode === "patch" ? parsePolicy(e.key).name : e.key;
+    if (!touched.includes(name)) touched.push(name);
+  }
+  return touched.map((key) => {
+    const baseVal = get(base, key);
+    const effVal = get(effective, key);
+    let status: TouchedStatus = "changed";
+    if (baseVal === null) status = "added";
+    else if (sameText(baseVal, effVal)) status = "unchanged";
+    const n = countKey(effective, key);
+    return {
+      key,
+      status,
+      base: baseVal ? pretty(baseVal) : null,
+      effective: effVal ? pretty(effVal) : null,
+      ...(n > 1 ? { occurrences: n } : {}),
+    };
+  });
 }
 
 export interface GonPreview {
@@ -129,34 +169,13 @@ export function previewMerge(modName: string, relPath: string, opts: PreviewMerg
   // GON
   const { base, overlay, effective, text } = applyGonOverlay(baseText, overlayText, mode);
 
-  // Touched top-level keys.
-  const touched: string[] = [];
-  for (const e of overlay.entries) {
-    const name = mode === "patch" ? parsePolicy(e.key).name : e.key;
-    if (!touched.includes(name)) touched.push(name);
-  }
-
-  const entries: TouchedEntry[] = touched.map((key) => {
-    const baseVal = get(base, key);
-    const effVal = get(effective, key);
-    let status: TouchedStatus = "changed";
-    if (baseVal === null) status = "added";
-    else if (sameText(baseVal, effVal)) status = "unchanged";
-    return {
-      key,
-      status,
-      base: baseVal ? pretty(baseVal) : null,
-      effective: effVal ? pretty(effVal) : null,
-    };
-  });
-
   return {
     ok: true,
     kind: "gon",
     mode,
     baseFile: baseRel,
     baseExists: baseText !== null,
-    touched: entries,
+    touched: touchedEntries(base, overlay, effective, mode),
     baseEntryCount: base.entries.length,
     effectiveEntryCount: effective.entries.length,
     ...(opts.includeFullGon ? { effectiveText: text } : {}),

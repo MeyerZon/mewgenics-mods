@@ -135,7 +135,9 @@ function modLocalNames(overlays: OverlayFile[]): ModLocalNames {
         continue;
       }
       if (root.t !== "obj") continue;
-      const names = root.entries.map((e) => parsePolicy(e.key).name);
+      // Only the `.patch` engine (0x946680) strips a key suffix; `.append` (0x945410) and `.merge` (0x945c30 under
+      // the constant MERGE policy) register the key as written, so "NewCat.overwrite" is the name the game sees.
+      const names = root.entries.map((e) => (o.mode === "patch" ? parsePolicy(e.key).name : e.key));
       if (o.category === "statuses") for (const n of names) statuses.add(n);
       if (o.category) {
         if (!byCategory.has(o.category)) byCategory.set(o.category, new Set());
@@ -377,6 +379,27 @@ function validateGonOverlay(
   };
 
   for (const e of overlay.entries) handleField(e.key, e.value, []);
+
+  // ---- Literal suffixes outside .patch ------------------------------------------
+  // Only the `.patch` engine (0x946680) reads key suffixes. A `.merge` file runs Gon_DeepMerge_plain 0x945c30 under
+  // the constant MERGE policy (Gon_DefaultMergeMode 0x9451c0 returns 2) and `.append` runs Gon_Append 0x945410: in
+  // both, `faction.overwrite` is a child literally named "faction.overwrite", at any depth. Almost always a mistake.
+  if (o.mode === "merge" || o.mode === "append") {
+    const walkSuffixes = (node: VNode, path: string[]): void => {
+      if (node.t === "obj") {
+        for (const e of node.entries) {
+          const here = [...path, e.key];
+          if (parsePolicy(e.key).policy !== "default") {
+            rb.warn("merge-suffix-literal", `.${o.mode} files do not interpret key suffixes: "${here.join(".")}" is a literal child name, not a .${parsePolicy(e.key).policy} policy — use a .patch file for per-field policies, or drop the suffix`, { file, path: here.join(".") });
+          }
+          walkSuffixes(e.value, here);
+        }
+      } else if (node.t === "arr") {
+        node.items.forEach((it, i) => walkSuffixes(it, [...path, `[${i}]`]));
+      }
+    };
+    walkSuffixes(overlay, []);
+  }
 
   // ---- Overlay-target existence --------------------------------------------
   const baseAbs = basePath(dataRoot, o.baseName);
