@@ -1,10 +1,12 @@
 // Overlay engine fidelity against the decompiled merge functions (T0).
 //
 // Each directory under fixtures/overlay/<case>/ is one pair: `base.gon`, exactly one `overlay.gon.<mode>`
-// (append | merge | patch) and `expected.gon` — what the game's merge (Gon_DeepMerge_0x946680.c, i.e. the
-// policy-driven merge; Gon_PatchMerge_a_0x944cc0.c the suffix parser; Gon_PatchMerge_b_0x944f50.c the
-// recursive suffix stripper) produces. The comparison is structural: both sides are parsed and pretty-printed,
-// so whitespace and comments never matter. See docs/data-mods.md "Fidelity to the decompiled merges".
+// (append | merge | patch) and `expected.gon` — what the game's engine for that file kind produces
+// (Gon_overlay_apply_0x9a64a0.c dispatches: .append -> Gon_Append_0x945410.c, .merge -> Gon_DeepMerge_plain_0x945c30.c
+// under the constant MERGE policy of Gon_DefaultMergeMode_0x9451c0.c, .patch -> Gon_DeepMerge_0x946680.c, the
+// policy-driven merge, with Gon_PatchMerge_a_0x944cc0.c the suffix parser and Gon_PatchMerge_b_0x944f50.c the
+// recursive suffix stripper). The comparison is structural: both sides are parsed and pretty-printed, so whitespace
+// and comments never matter. See docs/data-mods.md "Fidelity to the decompiled merges".
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

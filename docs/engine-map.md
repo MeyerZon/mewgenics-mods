@@ -39,8 +39,10 @@ beyond short byte signatures needed to locate functions.
 | `-dev_mode true` | Dev mode. |
 | `-validate_pedigree_tables true` | Repairs family-tree tables (added 1.0.20941 after a save editor broke saves). |
 
-Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map to GON's
-Append / ShallowMerge-DeepMerge / PatchMerge.
+Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map (in `Gon_overlay_apply`
+`0x9a64a0`) to `Gon_Append` `0x945410`, `Gon_DeepMerge_plain` `0x945c30` under the constant MERGE policy
+(`Gon_DefaultMergeMode` `0x9451c0` returns 2, so `.merge` files never read key suffixes) and the policy-driven
+`0x946680`; row by row in `docs/data-mods.md` "Fidelity to the decompiled merges".
 
 ## gpak contents
 
@@ -69,9 +71,15 @@ recombine existing behaviors; new behaviors need native code.
   is the loose-files entry. Each path is logged as "Mod Path: ...".
 - The file manager (RVA `0x9a09f0`) resolves a requested relative path by taking the pack copy first, then walking
   the mod-path list from last to first; for each path it looks for the plain file and for `.append`, `.merge` and
-  `.patch` variants and returns their paths; the GON side that applies them is only partly decompiled: `0x944cc0` is the
-  key-suffix -> policy parser, `0x944f50` the recursive suffix stripper, `0x946680` the policy-driven merge `.patch`
-  needs (`.analysis/decompiled/Gon_*.c`; row-by-row in `docs/data-mods.md` "Fidelity to the decompiled merges").
+  `.patch` variants and returns their paths tagged 1 / 2 / 3; `Gon_overlay_apply` `0x9a64a0` parses each overlay and
+  dispatches on the tag: 1 → `Gon_Append` `0x945410` (push every child; a clashing name keeps both, the name index
+  `FUN_14012a310` points at the appended one; strings concatenate; anything else is `GON ERROR: Append incompatible
+  types`), 2 → `Gon_DeepMerge_plain` `0x945c30` with `Gon_DefaultMergeMode` `0x9451c0` (constant 2 = MERGE: by-name
+  recursion, nth occurrence to nth, arrays element-wise + extras appended, scalars and type mismatches overwritten
+  via `GonObject_assign` `0x30cd0`, no suffix read), 3 → `0x946680`, the policy-driven merge `.patch` needs, with
+  `0x944cc0` the key-suffix -> policy parser and `0x944f50` the recursive suffix stripper; child lookup by
+  `(name, nth)` is `GonObject_has_child_name` `0x942910` / `GonObject_child_by_name` `0x942b50`
+  (`.analysis/decompiled/Gon*.c`; row-by-row in `docs/data-mods.md` "Fidelity to the decompiled merges").
 - Live check: `launch-dev.bat` produced log lines `Save File Suffix: dev` and `Mod Path: <repo>\mods\dev-sandbox`
   with no GON errors; the main save file hash was unchanged; the game added default `debug_*` keys to
   `settings.txt` but did not persist `enable_debugconsole` or `dev_mode`.
