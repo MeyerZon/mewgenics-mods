@@ -3657,7 +3657,8 @@
       },
       "consumers": [
         "native/framework/src/status_engine.c",
-        "native/mods/test-harness/src/mewtest.c"
+        "native/mods/test-harness/src/mewtest.c",
+        "native/framework/src/fw_vtable.c"
       ],
       "exposure": [
         {
@@ -4043,7 +4044,7 @@
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c",
-        "native/framework/src/status_engine.c:char_entity"
+        "native/framework/src/fw_walk.h:fw_walk_char_entity"
       ],
       "exposure": [
         {
@@ -4267,7 +4268,7 @@
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c",
-        "native/framework/src/status_engine.c:entity_count"
+        "native/framework/src/fw_walk.h:fw_walk_entity_count"
       ],
       "exposure": [
         {
@@ -4295,7 +4296,7 @@
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c",
-        "native/framework/src/status_engine.c:entity_components"
+        "native/framework/src/fw_walk.h:fw_walk_entity_components"
       ],
       "exposure": [
         {
@@ -4323,7 +4324,7 @@
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c",
-        "native/framework/src/status_engine.c:status_removing"
+        "native/framework/src/fw_walk.h:fw_walk_status_removing"
       ],
       "exposure": [
         {
@@ -4350,7 +4351,7 @@
         "note": "add [rbx+0x5c],edx: the stacks merge; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:status_stacks"
+        "native/framework/src/fw_walk.h:fw_walk_status_stacks"
       ],
       "exposure": [
         {
@@ -4377,7 +4378,7 @@
         "note": "mov rax,[rcx+0x38]: the status's character; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:status_character"
+        "native/framework/src/fw_walk.h:fw_walk_status_character"
       ],
       "exposure": [
         {
@@ -4405,8 +4406,8 @@
         "note": "cmp byte [rbx+0xe9],0; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:find_status_on",
-        "native/framework/src/status_engine.c:hook_ApplyByName"
+        "native/framework/src/fw_walk.c:fw_walk_find_status",
+        "native/framework/src/fw_walk.c:fw_walk_adopt"
       ],
       "exposure": [
         {
@@ -4435,7 +4436,7 @@
         "note": "mov [rbx+0xc8],rsi: the applier stored on the new status; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:hook_ApplyByName"
+        "native/framework/src/fw_walk.c:fw_walk_merge_stacks"
       ],
       "exposure": [
         {
@@ -4463,7 +4464,7 @@
         "note": "mov [rbx+0xd0],r15: the applier's owner; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:hook_ApplyByName"
+        "native/framework/src/fw_walk.c:fw_walk_merge_stacks"
       ],
       "exposure": [
         {
@@ -4491,7 +4492,7 @@
         "note": "mov rax,[rcx+0x20]; cmp [rax+0x4b0],r15b: ctx->character then its scene's destroyed flag; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:hook_ApplyByName"
+        "native/framework/src/fw_walk.c:fw_walk_apply_resolve"
       ],
       "exposure": [
         {
@@ -4519,7 +4520,7 @@
         "note": "mov rdx,[rdi+0x18]; cmp byte [rdx+0x18],0: ctx->entity then entity->destroyed; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:hook_ApplyByName"
+        "native/framework/src/fw_walk.c:fw_walk_apply_resolve"
       ],
       "exposure": [
         {
@@ -4546,7 +4547,7 @@
         "note": "mov rsi,[rbx+0x10]: p6->applier, spilled right after; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:hook_ApplyByName"
+        "native/framework/src/fw_walk.c:fw_walk_apply_resolve"
       ],
       "exposure": [
         {
@@ -4574,7 +4575,7 @@
         "note": "mov r15,[rsi-0x8]: the applier's owner lives just before the applier object (a signed byte, -8); unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:hook_ApplyByName"
+        "native/framework/src/fw_walk.c:fw_walk_merge_stacks"
       ],
       "exposure": [
         {
@@ -4603,7 +4604,7 @@
         "note": "mov byte [rax+0xe50],1: touched_passives on the character; unique"
       },
       "consumers": [
-        "native/framework/src/status_engine.c:status_engine_set_stacks"
+        "native/framework/src/fw_walk.c:fw_walk_touch_passives"
       ],
       "exposure": [
         {
