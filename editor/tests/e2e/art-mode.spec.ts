@@ -166,7 +166,7 @@ test.describe("Art mode — explorer & scene authoring", () => {
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 
-  test("Rig tab: New cat animation adds <name>F/<name>B frames on an _Append_CatTest donor placing a <name>Pose rig as pawing at depth 1; the findings show the under-test note; the JSON has the export (in memory)", async ({ page }) => {
+  test("Rig tab: New cat animation adds <name>F/<name>B frames on an _Append_CatTest donor placing a <name>Pose rig as `ani` at depth 1; the findings show the crashes-until-native-fix note; the JSON has the export (in memory)", async ({ page }) => {
     const errors = collectConsole(page);
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Rig" }).click();
@@ -174,14 +174,14 @@ test.describe("Art mode — explorer & scene authoring", () => {
     await page.getByRole("button", { name: "New cat animation" }).click();
     await expect(page.locator(".cat-anim-label", { hasText: /^waveF$/ })).toBeVisible();
     await expect(page.locator(".cat-anim-label", { hasText: /^waveB$/ })).toBeVisible();
-    await expect(page.locator(".cat-anim-finding", { hasText: /under test/ })).toBeVisible();
+    await expect(page.locator(".cat-anim-finding", { hasText: /native swap fix/ })).toBeVisible();
     // the rig the frames place is listed among the cat rigs
     await expect(page.locator(".rig-slot .id", { hasText: /^head$/ })).toBeVisible();
     await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
     const sc = JSON.parse(await page.locator("textarea").first().inputValue());
     expect(sc.exports._Append_CatTest).toBe("CatAnim_wave");
     expect(sc.sprites.CatAnim_wave.labels).toEqual({ waveF: 0, waveB: 1 });
-    expect(sc.sprites.CatAnim_wave.layers.map((l: any) => `${l.name}@${l.depth}`)).toEqual(["pawing@1"]);
+    expect(sc.sprites.CatAnim_wave.layers.map((l: any) => `${l.name}@${l.depth}`)).toEqual(["ani@1"]);
     expect(sc.sprites.CatAnim_wave.layers[0].keys.map((k: any) => k.ref)).toEqual(["wavePose", "wavePose"]);
     expect(sc.sprites.wavePose.rig).toBe("cat");
     const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));

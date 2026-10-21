@@ -114,7 +114,7 @@ interface AnimFixture {
   layer: string;
   depth: number;
   facing: string[];
-  catanis: { export: string; id: number; frames: number; labels: number; firstLabels: string[]; depths: number[]; maxPlacesPerLabeledFrame: number; pawingFrames: number; emptyFrames: number; idleF: { frames: number; slots: string[] }; idleB: { frames: number; slots: string[] } };
+  catanis: { export: string; id: number; frames: number; labels: number; firstLabels: string[]; idleLayerName: string; depths: number[]; maxPlacesPerLabeledFrame: number; pawingFrames: number; aniFrames: number; emptyFrames: number; idleF: { frames: number; slots: string[] }; idleB: { frames: number; slots: string[] } };
   catanis2: { export: string; id: number; frames: number; labels: number; labelsAmong: string[] };
 }
 
@@ -124,7 +124,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
   const errors = (fs: any[]) => fs.filter((f) => f.severity === "error").map((f) => f.code + ": " + f.message).join("; ");
   const codes = (scene: any) => (validateScene(scene) as any).findings.map((f: any) => `${f.severity}:${f.code}`) as string[];
 
-  test("CAT_ANIM_EXPORT / CAT_ANIM_LAYER / CAT_ANIM_DEPTH are the vanilla shape (_Append_CatTest, pawing, depth 1; fixture cat-anim-append.json)", () => {
+  test("CAT_ANIM_EXPORT / CAT_ANIM_LAYER / CAT_ANIM_DEPTH are the engine's shape (_Append_CatTest, the child instance `ani` PlayAnimation restarts, depth 1; fixture cat-anim-append.json)", () => {
     need();
     eq(R.CAT_ANIM_EXPORT, fx.append);
     eq(R.CAT_ANIM_LAYER, fx.layer);
@@ -133,7 +133,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
 
   const caPath = join(VANILLA_DIR, "catanis.swf"), ca2Path = join(VANILLA_DIR, "catanis2.swf");
   if (!existsSync(caPath) || !existsSync(ca2Path)) console.log(`  (skipped: vanilla catanis.swf / catanis2.swf not extracted at ${VANILLA_DIR})`);
-  else test("T1: the fixture matches the installed game — CatTest (id, frames, labels, every labeled frame places at most one character and always at depth 1, pawing on 422 frames, idleF/idleB slot layouts) and catanis2's _Append_CatTest", () => {
+  else test("T1: the fixture matches the installed game — CatTest (id, frames, labels, every labeled frame places at most one character and always at depth 1, named pawing on 422 frames and ani on 1, idleF/idleB slot layouts) and catanis2's _Append_CatTest", () => {
     const inspect = (path: string, want: string) => {
       const swf = readSwf(new Uint8Array(readFileSync(path))) as any;
       const sc = swf.tags.find((t: any) => t.name === "SymbolClass");
@@ -156,9 +156,10 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     eq(ca.labeled.length, fx.catanis.labels);
     eq(Math.max(...ca.labeled.map((f) => f.places.length)), fx.catanis.maxPlacesPerLabeledFrame);
     eq([...new Set(ca.labeled.flatMap((f) => f.places.map((p: any) => p.depth)))].join(","), fx.catanis.depths.join(","));
-    eq(ca.labeled.filter((f) => f.places.some((p: any) => p.name === fx.layer)).length, fx.catanis.pawingFrames);
+    eq(ca.labeled.filter((f) => f.places.some((p: any) => p.name === fx.catanis.idleLayerName)).length, fx.catanis.pawingFrames);
+    eq(ca.labeled.filter((f) => f.places.some((p: any) => p.name === fx.layer)).length, fx.catanis.aniFrames);
     eq(ca.labeled.filter((f) => !f.places.length).length, fx.catanis.emptyFrames);
-    eq(ca.labeled[0]!.places[0].name, fx.layer); eq(ca.labeled[0]!.places[0].depth, fx.depth);
+    eq(ca.labeled[0]!.places[0].name, fx.catanis.idleLayerName); eq(ca.labeled[0]!.places[0].depth, fx.depth);
     const idleF = ca.slotsOf(ca.labeled[0]!.places[0].characterId), idleB = ca.slotsOf(ca.labeled[1]!.places[0].characterId);
     eq(idleF.frames, fx.catanis.idleF.frames); eq(idleF.slots.join(" "), fx.catanis.idleF.slots.join(" "));
     eq(idleB.frames, fx.catanis.idleB.frames); eq(idleB.slots.join(" "), fx.catanis.idleB.slots.join(" "));
@@ -167,7 +168,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     for (const l of fx.catanis2.labelsAmong) assert(ca2.labels.includes(l), `${l} among the appended labels`);
   });
 
-  test("newCatAnimation: a rig <name>Pose, a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing the rig as layer pawing at depth 1, exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
+  test("newCatAnimation: a rig <name>Pose, a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing the rig as the layer `ani` at depth 1, exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
     need();
     const base = exampleScene("anim");
     const before = JSON.stringify(base);
@@ -188,7 +189,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     eq(JSON.stringify(R.newCatAnimation(base, "wave").scene), JSON.stringify(r.scene));
   });
 
-  test("newCatAnimation extends an existing donor (next frames, same pawing layer), reuses a rig with opts.rig, and refuses a bad name, a taken F/B label, a non-rig opts.rig, or an _Append_CatTest export that is not a donor sprite", () => {
+  test("newCatAnimation extends an existing donor (next frames, same `ani` layer), reuses a rig with opts.rig, and refuses a bad name, a taken F/B label, a non-rig opts.rig, or an _Append_CatTest export that is not a donor sprite", () => {
     need();
     const one = R.newCatAnimation(exampleScene("anim"), "wave").scene;
     const two = R.newCatAnimation(one, "pounce", { rig: "wavePose" });
@@ -217,12 +218,18 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(R.newCatAnimation(rigExport, "x").findings.some((f: any) => f.severity === "error"), "export at a rig refused");
   });
 
-  test("validateScene on the _Append_CatTest donor: cat-anim-missing-facing (error), cat-anim-layer-not-rig (error), cat-anim-depth (warning), cat-anim-donor (error) and cat-anim-untested (info, always)", () => {
+  test("validateScene on the _Append_CatTest donor: cat-anim-missing-facing (error), cat-anim-layer-not-rig (error), cat-anim-layer-name (error: the engine restarts the child `ani`), cat-anim-depth (warning), cat-anim-donor (error) and cat-anim-untested (info, always: appended frames crash in-game until the native swap fix)", () => {
     need();
     const good = R.newCatAnimation(exampleScene("anim"), "wave").scene;
     const c0 = codes(good);
     assert(c0.includes("info:cat-anim-untested"), c0.join(","));
     assert(!c0.some((c) => /^(error|warning):cat-anim/.test(c)), c0.join(","));
+    const note = (validateScene(good) as any).findings.find((f: any) => f.code === "cat-anim-untested");
+    assert(/crashes in-game until the native swap fix/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
+    const pawing = JSON.parse(JSON.stringify(good)); pawing.sprites.CatAnim_wave.layers[0].name = "pawing";
+    assert(codes(pawing).includes("error:cat-anim-layer-name"), codes(pawing).join(","));
+    const unnamed = JSON.parse(JSON.stringify(good)); delete unnamed.sprites.CatAnim_wave.layers[0].name;
+    assert(codes(unnamed).includes("error:cat-anim-layer-name"), codes(unnamed).join(","));
     const noB = JSON.parse(JSON.stringify(good)); delete noB.sprites.CatAnim_wave.labels.waveB;
     assert(codes(noB).includes("error:cat-anim-missing-facing"), codes(noB).join(","));
     const noF = JSON.parse(JSON.stringify(good)); delete noF.sprites.CatAnim_wave.labels.waveF;
@@ -238,6 +245,14 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(codes(shapeExport).includes("error:cat-anim-donor"), codes(shapeExport).join(","));
     const plain = exampleScene("anim");
     assert(!codes(plain).some((c) => /cat-anim/.test(c)), "no cat-anim findings without the export");
+  });
+
+  test("validateScene refuses an export literally named CatTest (cat-clip-override, error): the engine resolves clips through a global last-loaded-first registry, so it would replace the cat clip for every cat", () => {
+    const s = exampleScene("anim");
+    s.exports = { CatTest: "Starter" };
+    const f = (validateScene(s) as any).findings.find((x: any) => x.code === "cat-clip-override");
+    assert(f && f.severity === "error" && /every cat/.test(f.message), JSON.stringify(f));
+    assert(!codes(exampleScene("anim")).includes("error:cat-clip-override"), "other exports are fine");
   });
 
   let api: Record<string, any> = {}, apiErr = "";
