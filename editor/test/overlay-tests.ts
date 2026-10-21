@@ -11,8 +11,10 @@ import { fileURLToPath } from "node:url";
 import { parse } from "../src/core/gon/parser.ts";
 import { toValue, prettyRoot } from "../src/core/gon/value.ts";
 import { applyGonOverlay, parseOverlayName } from "../src/core/overlay/overlay.ts";
+import { append } from "../src/core/overlay/merge.ts";
 import { parsePolicy, stripPolicySuffixes } from "../src/core/overlay/policy.ts";
-import type { VObject } from "../src/core/gon/types.ts";
+import * as previewMerge from "../src/core/preview-merge.ts";
+import type { VNode, VObject } from "../src/core/gon/types.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -63,5 +65,52 @@ export function runOverlayTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     stripPolicySuffixes(v);
     if (v.t !== "obj") throw new Error("object expected");
     eq(v.entries.map((e) => e.key).join(","), "a,b");
+  });
+
+  // Gon_Append 0x945410 below the object/array branches: string+string is std::string::append (FUN_140051920); every
+  // other pair (number+number, object+array, ...) logs "GON ERROR: Append incompatible types" and leaves `this` alone.
+  const scalarOf = (text: string): VNode => {
+    const v = toValue(parse(text));
+    if (v.t !== "obj" || v.entries.length !== 1) throw new Error("one entry expected");
+    return v.entries[0]!.value;
+  };
+  test("append: string + string concatenates (0x945410 string branch = FUN_140051920 append)", () => {
+    const r = append(scalarOf('s "ab"'), scalarOf('s "cd"'));
+    eq(r.t, "str");
+    if (r.t !== "str") throw new Error("scalar expected");
+    eq(r.raw, "abcd");
+  });
+  test("append: number + number is 'Append incompatible types' — the base is left unchanged", () => {
+    const r = append(scalarOf("n 1"), scalarOf("n 2"));
+    eq(r.t, "str");
+    if (r.t !== "str") throw new Error("scalar expected");
+    eq(r.num, 1);
+  });
+  test("append: object + array is 'Append incompatible types' — the base is left unchanged", () => {
+    const r = append(scalarOf("o { a 1 }"), scalarOf("o [1 2]"));
+    eq(r.t, "obj");
+    if (r.t !== "obj") throw new Error("object expected");
+    eq(r.entries.length, 1);
+    eq(r.entries[0]!.key, "a");
+  });
+
+  // After `.append` keeps a duplicate name, the game's name index (FUN_14012a310 in 0x945410 and 0x945c30) points at
+  // the LAST child of that name; a by-name lookup therefore sees the appended one. The preview's touched-entries view
+  // must resolve the same way (and say the name now occurs twice), while the effective text still lists both.
+  test("preview_merge touched entries: an appended duplicate resolves by name to the last occurrence, with its count", () => {
+    const touchedEntries = (previewMerge as Record<string, unknown>).touchedEntries as
+      | ((base: VObject, overlay: VObject, effective: VObject, mode: "append" | "merge" | "patch" | "replace") => Array<{ key: string; status: string; base: string | null; effective: string | null; occurrences?: number }>)
+      | undefined;
+    assert(typeof touchedEntries === "function", "preview-merge.ts exports touchedEntries(base, overlay, effective, mode)");
+    const { base, overlay, effective, text } = applyGonOverlay("Spin { damage 10 }", "Spin { damage 5 }", "append");
+    eq(effective.entries.length, 2, "the AST keeps both Spin entries");
+    eq(normalize(text), normalize("Spin { damage 10 }\nSpin { damage 5 }"), "the effective text lists both");
+    const t = touchedEntries!(base, overlay, effective, "append");
+    eq(t.length, 1);
+    eq(t[0]!.key, "Spin");
+    eq(t[0]!.status, "changed");
+    eq(t[0]!.occurrences, 2);
+    assert(/damage 5/.test(t[0]!.effective ?? ""), `effective resolves to the appended Spin, got ${t[0]!.effective}`);
+    assert(/damage 10/.test(t[0]!.base ?? ""), `base is the base's Spin, got ${t[0]!.base}`);
   });
 }

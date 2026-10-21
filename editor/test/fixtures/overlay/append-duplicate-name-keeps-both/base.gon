@@ -1,0 +1,5 @@
+# Gon_Append 0x945410 (the `.append` engine), object+object: every overlay child is pushed as a copy
+# (FUN_140028830 / FUN_140947a30) and the name index repointed at it (FUN_14012a310(this, name) = newIndex) — a name
+# the base already has is NOT merged or replaced: both children stay in the array, and a by-name lookup sees the
+# appended (last) one. Nothing recurses.
+Spin { damage 10 meta { name A } }

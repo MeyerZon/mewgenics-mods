@@ -137,6 +137,20 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     const f = expectCode(v("merge-target-missing"), "merge-target-missing", "warning");
     eq(f.location?.path, "999");
   });
+  // A `.merge` file goes through Gon_DeepMerge_plain 0x945c30 with the constant policy 2 (Gon_DefaultMergeMode
+  // 0x9451c0): no key suffix is ever read, so `brain.overwrite` is a literal child name — almost always a mistake.
+  test("validator fixture: merge-suffix-literal warns for every suffixed key in a .merge file, at any depth", () => {
+    const r = v("merge-suffix-literal");
+    const hits = only(r, "merge-suffix-literal");
+    eq(hits.map((f) => f.location?.path).sort().join(","), "NewCat.overwrite,PlayerCat.ai.brain.overwrite", codes(r));
+    for (const h of hits) eq(h.severity, "warning", "merge-suffix-literal severity");
+    assert(/\.patch/.test(hits[0]!.message), `message points at .patch: ${hits[0]!.message}`);
+  });
+  test("validator fixture: merge-suffix-literal — the mod-local name is the literal key (NewCat.overwrite), so variant_of NewCat is unknown-parent", () => {
+    const r = v("merge-suffix-literal");
+    const f = expectCode(r, "unknown-parent", "error");
+    eq(f.location?.file, "mods/merge-suffix-literal/data/characters/player_cat.gon.append");
+  });
   test("validator fixture: patch-target-missing warns at 0.nope", () => {
     const f = expectCode(v("patch-target-missing"), "patch-target-missing", "warning");
     eq(f.location?.path, "0.nope");
