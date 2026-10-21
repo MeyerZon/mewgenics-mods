@@ -311,6 +311,19 @@ character lookup with lazy init: `table = file+0x28` (`Character*[]` by id), `en
 - Pinned: `editor/test/fixtures/ingame/artprobe-cat-summary.json` `importParts`; the validator refuses any
   `scene.imports` (`import-unsupported`).
 
+### The cat clip and its append donor (OBSERVED 2026-10-21, read-only parse of catanis.swf / catanis2.swf)
+
+Pinned in `editor/test/fixtures/art/cat-anim-append.json` (T1 in `editor/test/art-catrig-tests.ts` re-reads the files).
+`CatTest` (catanis.swf id 1614, 854 frames, 776 labels) is the vanilla cat clip: labels are facing pairs `<anim>F` /
+`<anim>B`; every labeled frame places at most one character, always at depth 1 — a nested pose sprite (named `pawing`
+on 422 frames, unnamed on the class idles, 4 empty frames). `idleF` places a 180-frame sprite with `tail@1 leg2@3 arm2@5
+body@7 leg1@9 arm1@11 head@13` (= `CAT_SLOTS`); `idleB` one with `head_back@1 arm2@3 leg2@5 body@7 arm1@9 leg1@11 tail@13`.
+`catanis2.swf` extends the clip with `_Append_CatTest` (id 590, 296 frames, 239 labels) in the same shape — the stock
+append mechanism (`process_animation_merges`) applied to the cat clip. GON names an animation bare
+(`alt_animations [[idle <name>]]`, `animation <name>`); the engine adds the facing. Whether the engine fills an
+*appended* frame's slots by instance name is under test (`feat/cat-append-probe`); the editor's
+`newCatAnimation` authors this shape either way.
+
 ## Dev scenes and run entry (static decode + Ghidra, 2026-10-20)
 
 How the harness enters a fight from the main menu (`enter TacticsTest`, `docs/ingame-testing.md`). Every address is

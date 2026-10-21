@@ -484,7 +484,29 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     "CatTail" }])` and places the id; the SWF loads (gate `import`), but spawning a character whose clip places an
     imported symbol crashes the game — glaiel::swf never links import entries (`Swf_GetCharacter` 0xa4a190 finds no
     character for the id; engine-map "Imports are not linked"). Imports are therefore a validation error. Real cat
-    parts in a mod rig need copying geometry (H2) or native work. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+    parts in a mod rig need copying geometry (H2) or native work.
+    **Cat animations (append) 2026-10-21:** the editor authors new cat animations in the exact shape vanilla uses.
+    OBSERVED 2026-10-21 (read-only parse of `.extracted/swfs/catanis.swf` / `catanis2.swf`, pinned in
+    `test/fixtures/art/cat-anim-append.json` and re-checked against the installed game by `art-catrig-tests.ts`): the
+    vanilla cat clip is `CatTest` (catanis.swf id 1614, 854 frames, 776 labels); labels come in facing pairs `<anim>F` /
+    `<anim>B` (`idleF/idleB`, `FighterIdleF/B`, `dashF/B`, …); every labeled frame places at most one character, always
+    at depth 1 — a nested pose sprite, named `pawing` on 422 frames (idle / walk / hit …), unnamed on the class idles,
+    4 frames empty; `idleF`'s pose sprite (180 frames) carries `tail@1 leg2@3 arm2@5 body@7 leg1@9 arm1@11 head@13` =
+    `CAT_SLOTS`, while `idleB`'s uses `head_back@1 arm2@3 leg2@5 body@7 arm1@9 leg1@11 tail@13` (a back-facing layout
+    with a `head_back` slot — the editor does not author it yet; both facings place the same front rig for now).
+    `catanis2.swf` extends the clip with an export `_Append_CatTest` (id 590, 296 frames, 239 labels such as
+    `crawlingIdleF`, `robotWalkF`) of the same shape. GON refers to an animation bare and the engine adds the facing:
+    `alt_animations [[idle <name>]]` on a character (cat_enemies.gon `CatCaller`), `animation <name>` on an ability.
+    Built: `cat-rig.ts` `newCatAnimation(scene, name, { rig?, frames?, colours? })` → a rig `<name>Pose` (or the given
+    rig), the donor sprite `CatAnim_<name>` (or the scene's existing `_Append_CatTest` donor, extended on its next two
+    frames) with `<name>F` / `<name>B` each placing the rig as the layer `pawing` at depth 1, and
+    `exports._Append_CatTest`; refusals for bad names, taken labels, a non-rig `opts.rig`, an export that is not a donor.
+    Validator (`catAnimFindings`, on the `_Append_CatTest` donor): `cat-anim-missing-facing` (error), `cat-anim-layer-not-rig`
+    (error), `cat-anim-depth` (warning), `cat-anim-donor` (error), `cat-anim-untested` (info). `api.newCatAnimation`,
+    `new_art_scene { template: "cat-animation", animation }`, the Rig tab's "New cat animation" control (name input,
+    facing pills, findings, "Animate pose"), an e2e check. **Not verified in-game:** whether the game fills the slots of
+    an *appended* frame by name is being tested on `feat/cat-append-probe`; the info finding's text is the switch to
+    flip once that lands. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. **Done 2026-10-20:** MCP tools `list_art_scenes`, `read_art_scene`, `write_art_scene` (dryRun validates), `new_art_scene`,
     `import_svg` (with `into { scene, shapeId }` it saves the shape), `build_swf`, `inspect_swf`. Was: MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool
