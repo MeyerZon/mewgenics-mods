@@ -102,4 +102,61 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     const j = JSON.parse(readFileSync(p, "utf8")) as { slots: Record<string, number> };
     for (const s of fixture.catanisMain.slots) assert((j.slots[s.name] || 0) > 50, `${s.name}: ${j.slots[s.name]}`);
   });
+
+  // ---- experiment A0 (2026-10-21): an _Append_CatTest frame placing our rig — does the game fill its slots by name? ----
+  const MODS = resolve(HERE, "../../mods");
+  test("cat append probe: probe.scene.json exports _Append_CatTest -> CatAppendRoot (labels probeIdleF 0 / probeIdleB 1, a `pawing` layer at depth 1 placing CatProbe) and CatProbe carries the checker marker at depth 15", () => {
+    const scene = JSON.parse(readFileSync(join(MODS, "_artprobe", "art", "probe.scene.json"), "utf8")) as any;
+    eq(scene.exports["_Append_CatTest"], "CatAppendRoot");
+    const root = scene.sprites.CatAppendRoot;
+    assert(!!root, "sprite CatAppendRoot");
+    eq(root.frames, 2);
+    eq(root.labels.probeIdleF, 0); eq(root.labels.probeIdleB, 1);
+    const pawing = root.layers.find((l: any) => l.name === "pawing");
+    assert(!!pawing && pawing.depth === 1, "pawing at depth 1");
+    assert(pawing.keys.every((k: any) => k.ref === "CatProbe"), "pawing places CatProbe");
+    const marker = scene.sprites.CatProbe.layers.find((l: any) => l.depth === 15);
+    assert(!!marker && marker.keys[0].ref === "checker", "CatProbe: checker marker at depth 15");
+    assert(!fixture.catanisMain.slots.some((s) => s.depth === 15), "15 is not a slot depth");
+    const v = validateScene(scene) as any;
+    assert(v.ok, JSON.stringify(v.findings.filter((f: any) => f.severity === "error")));
+    const gon = readFileSync(join(MODS, "_artprobe", "data", "characters", "enemies.gon.append"), "utf8");
+    assert(/ArtProbeCatReal\s*\{[\s\S]*variant_of TomTom[\s\S]*alt_animations \[\[idle probeIdle\]\]/.test(gon), "enemies.gon.append: ArtProbeCatReal, a TomTom variant with alt_animations [[idle probeIdle]]");
+  });
+
+  test("largestChangedRegion / changedPixelsNear (probe-compare): the biggest 8-connected blob of pixels that differ from a reference shot; the changed pixels within a radius split into the excluded (slot / marker) colours and the rest", () => {
+    const f = (pc as Record<string, any>).largestChangedRegion, g = (pc as Record<string, any>).changedPixelsNear;
+    assert(typeof f === "function" && typeof g === "function", "probe-compare exports largestChangedRegion and changedPixelsNear");
+    const W = 40, H = 20, ref = new Uint8Array(W * H * 4), img = new Uint8Array(W * H * 4);
+    for (let i = 0; i < W * H; i++) { ref.set([90, 90, 90, 255], i * 4); img.set([92, 88, 90, 255], i * 4); } // a 6-level wobble is not a change
+    for (let y = 4; y <= 9; y++) for (let x = 10; x <= 15; x++) img.set([32, 128, 255, 255], (y * W + x) * 4); // a 6x6 #2080ff blob
+    for (let y = 4; y <= 5; y++) for (let x = 14; x <= 15; x++) img.set([255, 255, 255, 255], (y * W + x) * 4); // 4 white px in its corner
+    for (let y = 2; y <= 3; y++) for (let x = 30; x <= 31; x++) img.set([255, 255, 255, 255], (y * W + x) * 4); // a far 2x2 white blob
+    const A = { width: W, height: H, rgba: img }, R = { width: W, height: H, rgba: ref };
+    const reg = f(A, R);
+    eq(JSON.stringify(reg), JSON.stringify({ n: 36, x0: 10, y0: 4, x1: 15, y1: 9, cx: 12.5, cy: 6.5 }));
+    eq(f(R, R), null);
+    eq(JSON.stringify(g(A, R, { x: 12.5, y: 6.5 }, 100, { exclude: { body: "#2080ff" } })), JSON.stringify({ changed: 40, excluded: 32, other: 8 }));
+    eq(JSON.stringify(g(A, R, { x: 12.5, y: 6.5 }, 10, { exclude: { body: "#2080ff" } })), JSON.stringify({ changed: 36, excluded: 32, other: 4 }));
+    eq(g(A, R, { x: 12.5, y: 6.5 }, 10, {}).other, 36);
+  });
+
+  test("slotColoursPresent with a `centre` + radius window counts only around that point (the marker's centre when the slots may be gone)", () => {
+    const W = 100, H = 10, im = new Uint8Array(W * H * 4);
+    for (let i = 0; i < W * H; i++) im.set([40, 40, 40, 255], i * 4);
+    for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) im.set([32, 128, 255, 255], (y * W + x) * 4);
+    for (let y = 0; y < 10; y++) for (let x = 90; x < 100; x++) im.set([32, 128, 255, 255], (y * W + x) * 4);
+    const n = pc.slotColoursPresent({ width: W, height: H, rgba: im }, { body: "#2080ff" }, { centre: { x: 5, y: 5 }, radius: 20 } as any);
+    eq(n.body, 100);
+  });
+
+  test("OBSERVED 2026-10-21 fixture (artprobe-cat-append-summary.json): the appended CatTest frame — the run passed, the marker was found in every rig shot, and the outcome is pinned", () => {
+    const p = join(HERE, "fixtures", "ingame", "artprobe-cat-append-summary.json");
+    assert(existsSync(p), "written by npm run test:artprobe -- --cat-append");
+    const j = JSON.parse(readFileSync(p, "utf8")) as { verdict: string; outcome: string; vanilla: { near: { other: number } }; rig: { label: string; marker: { found: boolean } | null; slots: Record<string, number>; near: { other: number } }[] };
+    eq(j.verdict, "pass");
+    eq(j.rig.length, 3);
+    assert(j.rig.every((r) => r.marker && r.marker.found), "marker found in every rig shot");
+    assert(["filled-by-name", "not-filled", "no-marker"].includes(j.outcome), `outcome ${j.outcome}`);
+  });
 }

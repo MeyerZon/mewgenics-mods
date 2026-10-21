@@ -1,0 +1,28 @@
+mods: _artprobe, _autoplay
+timeout: 120s
+hide: false
+# Experiment A0 (2026-10-21): does the game fill the slots of an appended cat animation frame by name?
+# probe.swf exports _Append_CatTest (CatAppendRoot: labels probeIdleF / probeIdleB, each placing the CatProbe rig as
+# the nested sprite `pawing` at depth 1, like every vanilla CatTest frame). ArtProbeCatReal is TomTom (a real cat:
+# movieclip _CAT + custom_cat_data) with alt_animations [[idle probeIdle]], so its idle is our appended frame.
+# Shots: baseline (no spawn), vanilla (TomTom: real parts, the control), then the rig cat three times.
+# editor/scripts/art-probe.ts --cat-append reads them (probe-compare.ts): slot colours left, the marker, and what
+# changed near the marker vs the previous shot.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+shot "baseline"
+cmd spawn TomTom
+expect console "Spawned TomTom" within 10
+wait frames 120
+shot "vanilla"
+cmd spawn ArtProbeCatReal
+expect console "Spawned ArtProbeCatReal" within 10
+wait frames 120
+shot "rig 1"
+wait frames 40
+shot "rig 2"
+wait frames 40
+shot "rig 3"
+quit
