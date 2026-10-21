@@ -460,6 +460,14 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     with "ERROR: FILTERS NOT SUPPORTED <swf>"** (gate `filters`, a negative control expecting `crash`), so filters are a
     `filter-unsupported` validation error. The preview draws add / multiply / screen in GL and the Canvas2D composite
     modes; other blends are an info finding.
+    **Baked glows done 2026-10-21:** since the loader has no filter renderer (`PlaceObject::decode3` 0xb78210 stops on
+    the flag bit; engine-map "Glow and outline passes"), `src/core/art/glow.ts` bakes a glow / drop shadow as the halo
+    shape `<id>_glow` — N concentric, non-overlapping bands of the source outline pushed out by `blur·k/N` (per-vertex
+    miter offset, holes kept, fill on the right after `assignFillSides`) with alpha `colour.a · min(1, strength ·
+    (N−k+1)/N)` — placed under the source on every layer that places it (keys mirrored). `bake_glow` (MCP), the shape
+    row's "Bake glow…", `glow-baked` / `glow-orphan` findings; the preview draws it as ordinary shapes. Limitation: a
+    blur above half the shape's smallest feature folds a ring onto itself (no true Minkowski sum); stroke-only paths
+    contribute nothing; inner glows are not bakeable.
     **Clip authoring done 2026-10-20:** `src/core/art/timeline-edit.ts` (keys from the shown pose, labels, insert /
     delete frames with shifting, layer order) behind a Timeline tab (ruler + label pills, layer rows with key / hold /
     tween marks, click to scrub, key inspector). OBSERVED: **the game drives a character's root clip timeline** — a

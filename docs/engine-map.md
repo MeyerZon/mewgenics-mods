@@ -403,6 +403,127 @@ build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4
   `FW_SYM_AddComponent_MewDirector_named`, `FW_SYM_MewDirector_start`. The slot name is arbitrary (the game uses it
   as the file name under `<userdata>\saves\`); `mewtest01.sav` was chosen because no slot list produces it.
 
+## Glow and outline passes (2026-10-21)
+
+Ghidra session `glow` (container `rea_ghidra_glow`, build 25143593; notes in `.analysis/notes-glow.md`, decompiles
+named below in `.analysis/decompiled/`). Addresses are RVAs (image base 0x140000000). The question was "how does the
+game draw a glow, and can a mod get one?" The answer: the SWF player has no filter rendering at all, the combat
+outline is a hover effect with a compile-time white colour, and the only data-level knobs are a ground light and a
+colour transform. Hence the editor's **baked halo** (`editor/src/core/art/glow.ts`, MCP `bake_glow`): an ordinary
+shape under the source, which every one of these facts allows.
+
+- **PlaceObject3 filters are fatal (OBSERVED).** `glaiel::swf::PlaceObject::decode3` `0xb78210`
+  (`PlaceObject_decode3_0xb78210.c`) reads the 16 PlaceObject3 flag bits; when `HasFilterList` is set it does not
+  parse the list — it formats `"ERROR: FILTERS NOT SUPPORTED " + <swf path>` (string `0x113dbc8`, single xref
+  `0xb7875d`) on the `SWF_Loading` channel and calls the no-return fatal `0x951ee0` with `{ ControlTags.cpp line
+  0x7e, "void __cdecl glaiel::swf::PlaceObject::decode3(void)" }`. Any filter id, any options, the flag bit alone;
+  no filter renderer exists in the player, so patching the check out would only skip the error. Pinned at T0 by the
+  validator's `filter-unsupported` (`editor/test/art-po3-tests.ts`, `art-glow-tests.ts`) and at T2 by the SWF gate
+  variant `filters` (expects `crash`).
+- **Post-process pass system (OBSERVED; shared by Battle, House and Lighting).** `ShaderManager::GetOrCreateMaterial`
+  `0x9bb5d0` `(mgr, std::string name, std::string shaderFile) → Material*` (FNV-1a map at `mgr+0x278`; an existing
+  name is returned as-is, the shader file then ignored; the manager is the global `DAT_1413c4a30`, witness
+  `mov rcx,[rip+…]` at `0x834f20`). `Material::SetUniform` `0x9bdbf0` `(mat, name, data, bytes)` with typed wrappers
+  vec4 `0x9bde70`, float `0x9bddc0`, vec2 `0x9bdf90`, int `0x9bdd40`, texture `0x9bdcd0 (mat, name, Texture*, slot)`.
+  `RendererBase::AddPostProcessPass` `0x979880` `(renderer, Material*, passIndex) → Pass*` (0xa0-byte pass: `+0x10`
+  enabled, `+0x0c` `std::function<bool()>` enable predicate, `+0x18..0x58` two rect doubles, `+0x58` blend/flags;
+  pushed into `(renderer+0xb0)[passIndex]`); list form `0x979a00`. Pass indices seen: 9 ground lighting, 0x18 mask
+  stage, 0x1a composite stage, 0x22 full-screen effect. Files `ShaderManager_GetOrCreateMaterial_0x9bb5d0.c`,
+  `Material_SetUniform_0x9bdbf0.c`, `Material_SetTexture_0x9bdcd0.c`, `Renderer_AddPostProcessPass_0x979880.c`.
+- **Combat outline pass (OBSERVED in `TacticsTest::init` `0x833390`, inline `0x834e00–0x8359a0`, read as asm).**
+  Materials: `ol_blur_x` / `ol_blur_y` = `variable_piecewise_glow.shader` (`axis` (1,0)/(0,1), `radius` 20.0f
+  `0x113ff98`, `alpha_cutoff` 0.75f `0x113f75c`, `framebuf` slot 4), one chain at pass 0x18 (`0x83531c`);
+  `composite_outlines` = `composite_glow.shader` (`framebuf` slot 6, **`glow_color = (1,1,1,1)`** — four loads of
+  1.0f `0x113f83c` at `0x8354d4..0x8354f8`, set at `0x835510`; **`glow_strength = 100.0f`** `0x1140020` at `0x83555a`)
+  at pass 0x1a (`0x83558a`). **The string `glow_color` has exactly one xref (`0x8354b8`): the colour is a
+  compile-time constant, white, nothing writes it at runtime**; with strength 100 the blurred mask saturates, i.e.
+  the pass draws a hard white rim, not a soft coloured halo. A second route: `jumpflood_init`
+  (`jump_flood_init.shader`, `alpha_cutoff` 0.75, pass 0x18 at `0x835712`) + `jumpflood_composite`
+  (`jump_flood_composite.shader`, `framebuf` slot 6, pass 0x1a at `0x8358c8`). All four passes get enable
+  predicates (init lambdas 6–9, helpers `0x8939a0/0x893a00/0x893a60/0x893ac0`, shared `_Do_call` `0x8967b0`
+  returning `TacticsTest->+0x58->+0x9c`; INFERRED: one "outline effects enabled" flag).
+- **Who gets outlined (OBSERVED driver, INFERRED mask draw).** Right after the passes, init adds a
+  `glaiel::ImmediateModeGameUI` component (`0x893b20` → AddComponent `0x896be0`, vftable `0x140f0f4b8`). Its slot 19
+  `0x88d780` (`ImmediateModeGameUI_init_0x88d780.c`) is the outline driver: it fetches the scene's `StatusMenu` (type
+  id 0x75d via `0x8163b0`), takes the menu's tracked entry (`StatusMenu+0xf8` vector, `entry+0x38` → doubles
+  `+0x68/+0xb0` tweened by `this+0x28->+0x30`), transforms that rect through the camera (`0x9b4c90` / `0xa07c70`),
+  writes it (±4.0 / 3.5 in 1280×720 units, scaled by the screen size from `DAT_1413c4a30+0xde0`) into the pass rects
+  of the passes it holds (`this+0x80` jump_flood_loop passes, one per `offset` 1<<n; `+0x88` composite with `radius`
+  and `outline_color`; `+0x90` blur chain; `+0x98` composite_outlines) and flips their `+0x10` enable bytes by mode
+  `this+0xa0` (1 = jump-flood on, else blur + composite on). `outline_color` is `DAT_1412f7da0` (white) or, on one
+  branch, (0.796, 0.439, 1.0): a hard-coded pair. So the outlined object is the **hovered / inspected unit** (the
+  status-menu target), the colour is a constant, and **no per-Character glow/outline field exists**. INFERRED (not
+  located): the draw that puts that unit's clip into the mask renderer the blur reads. `CombatShaders::init`
+  `0x891300` only creates the named combat materials (water, toxic, ice, godray, fog, ground_lighting_mul/add,
+  meatpulse, vignettes, shadow_occluded_spelldissolve) and has nothing to do with glows (`CombatShaders_init_0x891300.c`).
+- **House outline + palette colours (OBSERVED, `HouseTest::init` `0x332d40`, `HouseTest_init_0x332d40.c`).**
+  Renderers `this[0xb]` depth 1..1, `this[0xc]` depth 2..2 (the outline mask renderer), `this[7]` main (0x20..0x30);
+  `0x979c30(renderer, depthMin, depthMax)` sets a renderer's depth range, `renderer+0x50` is its texture. Passes:
+  `postprocess_blur` (0x22, main), `dropshadow` = `transparent_texture.shader` over a blurred texture (INFERRED: the
+  furniture/cat layer drawn offset = soft drop shadow), two `variable_piecewise_blur` materials, `jumpflood_init`
+  (pass 0x18 on the depth-2 renderer) and `jumpflood_composite` (`framebuf` = `this[0xc]+0x50`, pass 0x1a on main).
+  `HouseTest_outline_update_0x3363f0.c` builds the `jump_flood_loop` materials per offset and sets `radius` (× screen
+  size × 0.002734375) and `outline_color = HouseTest+0xd8`, a vec4 fed from the UI SWF: `0x1a6e40`
+  (`HouseBuilder_PaletteColors_0x1a6e40.c`) reads the `BuilderUI_Palette` clip's frames `solid`, `hole`,
+  `screw_out`, `screw_in`, `screw_linked`, `poop`, `blocked`, `outline_room`, `outline_valid`, `outline_invalid` and
+  stores each frame's colour transform (× white `DAT_1412f7da0`) into `DAT_1412f77a4..`. The house outline colours
+  are therefore **data (ui.swf palette frames)**; the outlined object is whatever is drawn at depth 2 (INFERRED: the
+  hovered cat / the furniture being placed). The pass machinery is identical to combat's; only the mask draw differs.
+- **`CharacterLightSource { color glow size }` → `Lighting` (OBSERVED).** Types: `glaiel::Lighting :
+  Instantiatable_InCombat` 0x4c5 (vftable `0x140f238d0`), `LightSource : Component` 0x4c4, `CharacterLightSource :
+  Passive` 0x1fa. `CharacterLightSource_init_0x8fbc70.c`: GON `color [r g b]` → `light+0x90..0x9c` (a = 1), `glow [r g
+  b a]` (only when the key exists) → `light+0xa0..0xac`, `size N` (double, default 1.0) → `light+0x88`; the light is
+  `AddComponent<LightSource>` `0x792e80` on the character's entity (`+0x48` Position, `+0x38` the scene's Lighting via
+  get-or-create `0x793670`; defaults white colour / zero glow `DAT_1413c6290`). The only other creator of a LightSource
+  is the SWF script hook `SetLightSource(clip, bool)` (`AnimatedLightSourceHooks` `0x792520` → `0x7926a0`).
+  `Lighting::init` `0x78f820` (tileset `global_objects { Lighting { ambient N [glow_strength N] … } }`, glow_strength ×
+  0.3 → `+0xd8`; materials `ground_lighting_mul` (texture `this+0x40`, blend 0x300) and `ground_lighting_add` (texture
+  `this+0x60`, blend 0xb00, `offsetmax` (0,256)), both `lightmap_padding 1.0`, both at pass 9). `Lighting::update`
+  `0x790510` (slot 11) lerps the ambient (the `LowerAmbientLight` GlobalModifier route) and calls
+  `LightSource_Accumulate` `0x791850` per light: tile position from Position `+0x80/+0x90` (+ light offset
+  `+0x50/+0x60` when `+0x81`), radius = `size·0.5` with a one-tile soft edge `d = 1 − clamp(dist − size/2, 0, 1)`;
+  the **mul table** (`Lighting+0xf4`, 10×10 vec4) screen-blends `color.rgb·d` (the light pool, visible only where
+  ambient < 1); the **add table** (`+0x734`) does `rgb += glow.rgb·d`, `a = screen(glow.a·d·glow_strength)`. Upload
+  `0x7907b0` (slot 19) normalises the add rgb to max 1 and writes both tables as 12×12 padded RGBA32F textures that
+  `ground_lighting.shader` samples bicubically in world-tile space. Visual meaning of `glow`: **an additive,
+  bicubic-smoothed disc of colour on the ground tiles around the unit** (radius ≈ size/2 tiles + 1 soft tile,
+  per-tile resolution), composited full-screen at pass 9 — it brightens whatever is drawn over those tiles (so it
+  bleeds onto the unit's own sprite and its neighbours) but it is not sprite-shaped and has no rim. Combat-visible:
+  vanilla gives it to enemies (`characters/enemies.gon` ~1729, `small_enemies.gon` ~437, `cat_enemies.gon`,
+  `minibosses.gon`) and `Lighting` is `Instantiatable_InCombat`.
+- **Sprite colour routes that are not halos (OBSERVED class names + GON use).** `graphics { tint [r g b a] }` = colour
+  transform multiply (art-pipeline §5). **`AdvancedTint [ mul r g b a  add r g b a ]`** Passive (`finalboss.gon:115`): a
+  full cxform including the **additive** term — the only data-level way to add brightness to a sprite's own pixels;
+  per pixel, no rim. `EliteTint [r g b a]` / `EliteFlatTint [r g b]` (elite_buffs.gon), `IllusionTint 1`, `TintItem {
+  mul [r g b] add [r g b] ignore_if_str_aux_equals … }` (type 0x818, `items/weapons.gon:1506`, applied through the
+  item passive path `0x73e3c0`). `AddPostProcessEffect { shader X requires_framebuffer … }` GlobalModifier
+  (`weather.gon:753`, type 0xac) and the tileset key `battlefield_postprocess_effect` (resolved by `0x7bdbb0`, default
+  `"auto"`, pass 0x22; vanilla has it commented out) are whole-screen, not per unit. No status or passive references
+  `composite_outlines`, `glow_color` or the jump-flood materials: there is no per-status aura.
+- **What a native glow would need (assessment).** Recolouring the hover rim is calls only: `GetOrCreateMaterial(g,
+  "composite_outlines", "")` + `SetUniformVec4(mat, "glow_color", rgba)` (and `jumpflood_composite` / `outline_color`),
+  but it stays hover-driven and white-or-this-colour. A per-unit, always-on glow needs (a) a mask — the unit's clip
+  drawn into a side renderer (the draw site was not located) or a new renderer with a depth range the mod moves the
+  clip into — and (b) `AddPostProcessPass` with the blur/composite materials under new names and a per-unit colour.
+  Everything but the mask draw is reachable through the functions above; being pursued as session `rim`. Until then
+  the data-level answers are the baked halo (sprite-shaped, static colour, no engine cost), `CharacterLightSource.glow`
+  (ground disc) and `AdvancedTint` (brightness lift).
+
+Manifest-ready rows (for `bindings/25143593.json` when the native route lands): `ShaderManager_GetOrCreateMaterial`
+0x9bb5d0 (pin by the FNV-1a constants `0xcbf29ce484222325`/`0x100000001b3` + the `+0x278/+0x280` map offsets; callees
+#1 0x4c340 map find, #3 0x9bb220 LoadShader, #5 0x9bcfc0 Material ctor), `Material_SetUniform` 0x9bdbf0 (`+0x40` map,
+0x50 slot stride, `+0x48`/`+0x80` dirty), `Material_SetUniformVec4` 0x9bde70, `_Float` 0x9bddc0, `_Vec2` 0x9bdf90,
+`_Int` 0x9bdd40, `Material_SetTexture` 0x9bdcd0, `RendererBase_AddPostProcessPass` 0x979880 (pass `+0x10 = 1`,
+`+0x14 = -1`, doubles 1.0 at `+0x24/+0x34/+0x44/+0x54`), `LightSource_AddComponent` 0x792e80, `CharacterLightSource_init`
+0x8fbc70 (inline immediates `"color"` 0x726f6c6f63, `"glow"` 0x776f6c67, `"size"` 0x657a6973), `LightSource_Accumulate`
+0x791850, `Lighting_init` 0x78f820 (`"ground_lighting_mul"` 0x1119c08, `"glow_strength"` 0x1119be0),
+`ImmediateModeGameUI_init` 0x88d780 (`"outline_color"` 0xf073b0), `PlaceObject_decode3` 0xb78210; data `g_ShaderManager`
+= `DAT_1413c4a30`; `LightSource` `+0x88` size, `+0x90` color, `+0xa0` glow, `+0x48` Position*, `+0x38` Lighting*;
+`Lighting` `+0x90..0xa0` ambient, `+0xd8` glow_strength×0.3, `+0xf4` mul table, `+0x734` add table; `Material` `+0x28`
+uniform slots (0x50 each), `+0x38` texture slots, `+0x40` name map, `+0x80/+0x81` dirty; `Pass` (0xa0) `+0x0c`
+predicate, `+0x10` enabled, `+0x18..0x50` rects, `+0x58` flags; type ids LightSource 0x4c4, Lighting 0x4c5,
+CharacterLightSource 0x1fa, CombatShaders 0x224, StatusMenu 0x75d, AddPostProcessEffect 0xac, TintItem 0x818.
+
 ## Save safety
 
 Backups: `%USERPROFILE%\Documents\Mewgenics-save-backups\<timestamp>\` (first: 2026-10-17_1911, 24 files, hashes verified;

@@ -1,10 +1,10 @@
 // The Shapes / Sprites / Exports / JSON sub-tabs of the Art panel. They edit the scene in
 // place and call scheduleValidate() + bump() exactly like art-ui.mjs did.
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { useStore } from "../store.ts";
 import { toast } from "../state.ts";
-import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, rampColor, exportShapeSvgFile, replaceShapeFromSvg } from "./art-state.ts";
+import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, rampColor, exportShapeSvgFile, replaceShapeFromSvg, bakeGlowInScene } from "./art-state.ts";
 import { sx, Ramp, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
 import { shapeGrayUsage, parseFill } from "../../../src/core/art/scene.ts";
@@ -15,6 +15,7 @@ import type { Scene, SceneSprite } from "./types.ts";
 
 export function ShapesTab() {
   const showGray = useStore(A, (a) => a.showGray);
+  const [glowFor, setGlowFor] = useState<string | null>(null);
   const sc = getScene() as Scene;
   const ids = Object.keys(sc.shapes || {});
   return (
@@ -31,10 +32,12 @@ export function ShapesTab() {
         const use = shapeGrayUsage(sh);
         const np = (sh.paths || []).length;
         return (
-          <div key={id} className="artrow">
+          <React.Fragment key={id}>
+          <div className="artrow">
             <span className="id">{id}</span>
             <Ramp used={use.levels} />
             <span className="meta">{`${np} path${np === 1 ? "" : "s"}${sh.source ? " · " + sh.source : ""}`}</span>
+            {sh.baked ? <span className="pill muted chip" title={`baked ${sh.baked.kind} of ${sh.baked.of}: ${sh.baked.color}, blur ${sh.baked.blur} px`}>{`${sh.baked.kind} of ${sh.baked.of}`}</span> : null}
             {use.passthrough ? <span className="pill warn chip" title="non-gray fills are NOT palette-remapped by the engine">{`${use.passthrough} passthrough`}</span> : null}
             {use.bitmaps ? <span className="pill muted chip">{`${use.bitmaps} bitmap`}</span> : null}
             {use.gradients ? <span className="pill muted chip" title="gradient fills (gray stops are remapped per pixel like any gray)">{`${use.gradients} gradient`}</span> : null}
@@ -57,12 +60,19 @@ export function ShapesTab() {
               → Sprite
             </button>
             <button className="btn ghost sm" aria-label={`Export SVG of ${id}`} title="Write art/<shape>.svg for VectorCraft, Inkscape or any vector editor" onClick={() => void exportShapeSvgFile(id)}>Export SVG</button>
+            {sh.baked ? null : (
+              <button className="btn ghost sm" aria-label={`Bake glow of ${id}`} title="The game refuses SWF filters; this bakes a halo shape <id>_glow under this shape (bakeGlow)" onClick={() => setGlowFor(glowFor === id ? null : id)}>
+                Bake glow…
+              </button>
+            )}
             <label className="btn ghost sm" title="Bring an edited SVG back over this shape (same coordinates)">
               Replace…
               <input type="file" accept=".svg,image/svg+xml" aria-label={`Replace ${id} from SVG`} style={sx("display:none")} onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) void replaceShapeFromSvg(id, f); e.target.value = ""; }} />
             </label>
             <button className="btn ghost sm" style={sx("color:var(--err)")} aria-label={`Delete shape ${id}`} onClick={() => { delete sc.shapes[id]; scheduleValidate(); bump(); }}>Delete</button>
           </div>
+          {glowFor === id ? <BakeGlowPanel id={id} hasGlow={!!sc.shapes[`${id}_glow`]} onDone={() => setGlowFor(null)} /> : null}
+          </React.Fragment>
         );
       })}
       {ids.length ? null : (
@@ -74,6 +84,51 @@ export function ShapesTab() {
       <div style={sx("margin-top:12px")}><DropZone text="Drop an SVG to add a shape. Each SVG becomes one shape (many paths)." /></div>
       <TextsSection />
       {ids.length ? <PathEditor /> : null}
+    </div>
+  );
+}
+
+/**
+ * The inline "Bake glow…" form of a shape row: colour, blur, glow or drop shadow (with its offset). The game stops on
+ * any SWF filter, so the halo is baked as the shape <id>_glow placed under the source (src/core/art/glow.ts).
+ */
+function BakeGlowPanel({ id, hasGlow, onDone }: { id: string; hasGlow: boolean; onDone: () => void }) {
+  const [color, setColor] = useState("#ffcc00");
+  const [blur, setBlur] = useState(8);
+  const [kind, setKind] = useState<"glow" | "dropShadow">("glow");
+  const [dx, setDx] = useState(4);
+  const [dy, setDy] = useState(4);
+  return (
+    <div className="artrow" style={sx("gap:8px;flex-wrap:wrap;padding-left:24px")} data-glow-panel={id}>
+      <span className="muted" style={sx("font-size:12px")}>{`halo under ${id}:`}</span>
+      <select aria-label={`glow kind of ${id}`} value={kind} onChange={(e) => setKind(e.target.value as "glow" | "dropShadow")}>
+        <option value="glow">glow</option>
+        <option value="dropShadow">drop shadow</option>
+      </select>
+      <input aria-label={`glow colour of ${id}`} value={color} size={9} title="#rrggbb[aa] or gray:N (the alpha is the halo's ceiling)" onChange={(e) => setColor(e.target.value)} />
+      <label className="muted" style={sx("font-size:12px;display:inline-flex;gap:4px;align-items:center")}>
+        blur
+        <input aria-label={`glow blur of ${id}`} type="number" min={0.5} max={255} step={1} value={blur} style={sx("width:56px")} onChange={(e) => setBlur(Number(e.target.value))} />
+        px
+      </label>
+      {kind === "dropShadow" ? (
+        <label className="muted" style={sx("font-size:12px;display:inline-flex;gap:4px;align-items:center")}>
+          offset
+          <input aria-label={`shadow dx of ${id}`} type="number" value={dx} style={sx("width:48px")} onChange={(e) => setDx(Number(e.target.value))} />
+          <input aria-label={`shadow dy of ${id}`} type="number" value={dy} style={sx("width:48px")} onChange={(e) => setDy(Number(e.target.value))} />
+        </label>
+      ) : null}
+      <button
+        className="btn sm"
+        aria-label={`Bake glow now for ${id}`}
+        onClick={() => {
+          bakeGlowInScene(id, { color, blur, kind, dx, dy, replace: hasGlow });
+          onDone();
+        }}
+      >
+        {hasGlow ? "Re-bake" : "Bake"}
+      </button>
+      <button className="btn ghost sm" onClick={onDone}>Cancel</button>
     </div>
   );
 }
