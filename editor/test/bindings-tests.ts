@@ -382,7 +382,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (22, incl. the v4 run-entry symbols), each with a signature", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (28, incl. the v4 run-entry symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
     eq(want.length, 28);
@@ -401,9 +401,14 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Component_GetGame")!.rva, "0x908e0");
     const got = symbolTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
-    for (const e of got) assert(!!(e.signature && e.signature.pattern), `${e.name} needs a signature`);
+    // 2026-10-21 (notes-bind): LuckUp_ctor is a byte-twin of two sibling ctors modulo relocations, Status_GetCategory and
+    // Status_ApplyLuckUp are unique only through a __LINE__ immediate / the type id -> null + anchors, raw RVA in the DLL
+    const NULL_SIGNED = ["LuckUp_ctor", "Status_GetCategory", "Status_ApplyLuckUp"];
+    for (const e of got) if (!NULL_SIGNED.includes(e.name)) assert(!!(e.signature && e.signature.pattern), `${e.name} needs a signature`);
+    for (const n of NULL_SIGNED) eq(entry(m, n)!.signature, null, `${n}: no relocation-free unique window on this build`);
     eq(entry(m, "TurnControl_NextTurn")!.rva, "0x8e3c60");
-    eq(entry(m, "Status_GetCategory")!.signature!.exactLen, 126);
+    const sp = entry(m, "SaveProps_GetOrCreate")!.signature!;
+    assert(sp.offset < 0 && sp.wildcards.length >= 5, `SaveProps_GetOrCreate regenerated on an instruction boundary with its relocations masked: ${JSON.stringify(sp)}`);
   });
   test("25143593.json: FwData table == framework_api.h FW_DATA_* order (10, incl. the MewDirector global); App_global first", () => {
     const m = loadManifest(realPath);
@@ -509,8 +514,9 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(first > 0 && second > first && last > second, "FwSymbol order");
     const nt = entry(m25, "TurnControl_NextTurn")!;
     assert(h.includes(`"TurnControl_NextTurn", "${nt.signature!.pattern}", ${nt.signature!.offset}, 0x8e3c60u`), "pattern, offset, expectedRva from the manifest");
-    const lc = entry(m25, "LuckUp_ctor")!;
-    assert(h.includes(`"LuckUp_ctor", "${lc.signature!.pattern}", ${lc.signature!.offset}, 0x711c90u`) && lc.signature!.offset < 0, "negative SymbolSig.offset carried through");
+    const sp = entry(m25, "SaveProps_GetOrCreate")!;
+    assert(h.includes(`"SaveProps_GetOrCreate", "${sp.signature!.pattern}", ${sp.signature!.offset}, 0x61ea0u`) && sp.signature!.offset < 0, "negative SymbolSig.offset carried through");
+    assert(h.includes(`{ "LuckUp_ctor", NULL, 0, 0x711c90u },`), "a null-signature FwSymbol ships as NULL + raw RVA");
     assert(h.includes("#define FW_LK_COUNT 13"), "lk count");
     assert(h.includes("static const uint32_t FW_LK_RVAS_25143593[FW_LK_COUNT]"), "lk table");
     assert(/FW_LK_RVAS_25143593\[FW_LK_COUNT\] = \{\s*0x4929c0u,[^\n]*\n\s*0x492c20u,[\s\S]*0x502b40u,[^\n]*\n\s*\}/.test(h), "lk order");
@@ -551,13 +557,13 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   test("genSignaturesH: an FwSymbol entry with signature: null is emitted with a NULL pattern and its raw RVA (the DLL falls back to expectedRva on the identified build)", () => {
     // 2026-10-21: LuckUp_ctor has no relocation-free unique window (notes-bind §1.2), so a null signature must be a
     // first-class state for a symbol the DLL resolves, not a GenError.
-    const m = parseManifest(mini());
-    const b = entry(m, "FnB")!;
-    b.exposure = [{ enum: "FW_SYM_FnB", index: 1 }];
-    b.signature = null;
+    const m = cloneBuild();
+    const nt = entry(m, "TurnControl_NextTurn")!;
+    nt.signature = null;
     const h = genSignaturesH([m]);
-    assert(h.includes(`{ "FnB", NULL, 0, 0x1040u },  /* FW_SYM_FnB (raw RVA: no signature on this build) */`), h.split("\n").filter((l) => l.includes("FnB")).join("\n"));
-    assert(h.includes(`{ "FnA", "48 8B C4 55", 0, 0x1010u },  /* FW_SYM_FnA */`), "signed entries unchanged");
+    assert(h.includes(`{ "TurnControl_NextTurn", NULL, 0, 0x8e3c60u },  /* FW_SYM_TurnControl_NextTurn (raw RVA: no signature on this build) */`), h.split("\n").filter((l) => l.includes("TurnControl_NextTurn")).join("\n"));
+    const cb = entry(m, "Character_BeginTurn")!;
+    assert(h.includes(`{ "Character_BeginTurn", "${cb.signature!.pattern}", 0, 0x`), "signed entries unchanged");
   });
   test("generateHeaders returns both files keyed by repo-relative path", () => {
     const out = generateHeaders([m25]);
@@ -703,6 +709,20 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(decodeRelocs(callCut).map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "3+1");
     const opcodeOnly = u8([0x40, 0x53, 0x48, 0x8d]); // the lea's ModRM is outside the window: nothing to clamp
     eq(decodeRelocs(opcodeOnly).length, 0);
+  });
+  test("decodeRelocs: the 66 operand-size prefix shrinks imm32 to imm16 (mov word [reg+disp32], imm16 must not swallow the next instruction)", () => {
+    // LuckUp_ctor +131: `66 C7 83 E8 00 00 00 01 00` (mov word [rbx+0xe8],1) is followed by the vftable lea; decoding the
+    // immediate as 4 bytes desynced the decoder and the lea's disp32 was never masked (found 2026-10-21 by the clamp test)
+    const code = u8([
+      0x66, 0xc7, 0x83, 0xe8, 0x00, 0x00, 0x00, 0x01, 0x00,   // mov word [rbx+0xe8], 1   (9 bytes)
+      0x48, 0x8d, 0x05, 0x11, 0x22, 0x33, 0x44,               // lea rax,[rip+disp32]     -> [12..15]
+      0x66, 0x81, 0x7b, 0x0c, 0x02, 0x00,                     // cmp word [rbx+0xc], 2    (6 bytes)
+      0x66, 0xb8, 0x01, 0x00,                                 // mov ax, 1                (4 bytes)
+      0x66, 0x3d, 0x02, 0x00,                                 // cmp ax, 2                (4 bytes)
+      0xe8, 0x01, 0x02, 0x03, 0x04,                           // call rel32               -> [31..34]
+      0xc3,
+    ]);
+    eq(decodeRelocs(code).map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "12+4 31+4");
   });
   test("makeSignature: a clamped tail reloc is masked, so the window must extend to the next fixed byte (or move on)", () => {
     // two functions identical up to a lea whose disp32 differs, then one differing byte; a 24-byte cap cuts the first

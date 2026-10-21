@@ -12,5 +12,5 @@ if not exist "%OUT%" mkdir "%OUT%"
   -o "%OUT%\test_mewtest.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mewtest.exe"
-if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal

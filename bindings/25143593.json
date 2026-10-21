@@ -37,7 +37,7 @@
           "bytes": 4474,
           "calls": 93,
           "ripRefs": 43,
-          "resyncs": 1
+          "resyncs": 0
         },
         "callees": [
           {
@@ -232,7 +232,7 @@
           "bytes": 7831,
           "calls": 186,
           "ripRefs": 62,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -639,23 +639,7 @@
       "name": "Status_GetCategory",
       "kind": "function",
       "rva": "0x4929c0",
-      "signature": {
-        "pattern": "48 89 5C 24 20 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC D0 00 00 00 48 8B F9 45 33 E4 48 8B 71 10 48 8B D1 4C 8B 79 18 49 83 FF 0F 76 03 48 8B 11 49 B9 ?? ?? ?? ?? ?? ?? ?? ?? 49 8B CC 48 85 F6 74 26 49 B8 ?? ?? ?? ?? ?? ?? ?? ?? 66 0F 1F 84 00 00 00 00 00 0F B6 04 0A 4C 33 C8 4D 0F AF C8 48 FF C1 48 3B CE 72 ED 4C 8B C7 48 8D 55 F7 48 8D 0D 6F",
-        "exactLen": 126,
-        "offset": 0,
-        "wildcards": [
-          {
-            "at": 61,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 79,
-            "len": 8,
-            "why": "movabs imm64"
-          }
-        ]
-      },
+      "signature": null,
       "anchors": {
         "strings": [
           {
@@ -793,44 +777,13 @@
       "name": "LuckUp_ctor",
       "kind": "function",
       "rva": "0x711c90",
-      "signature": {
-        "pattern": "4D 8B F1 4D 8B F8 48 8B F2 48 8B F9 33 ED 40 38 A9 B0 04 00 00 74 07 33 C0 E9 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B D8 48 89 44 24 40 48 85 C0 74 49 33 D2 41 B8 F0 00 00 00 48 8B C8 E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 89 AB C8 00 00 00 48 89 AB D0 00 00 00 48 89 AB D8 00 00 00 48 89 AB E0 00 00 00 66 C7 83 E8 00 00 00 01 00 48 8D 05 95 5D",
-        "exactLen": 121,
-        "offset": -24,
-        "wildcards": [
-          {
-            "at": 26,
-            "len": 4,
-            "why": "E9 rel32"
-          },
-          {
-            "at": 33,
-            "len": 4,
-            "why": "rip-relative disp32"
-          },
-          {
-            "at": 38,
-            "len": 4,
-            "why": "E8 rel32"
-          },
-          {
-            "at": 67,
-            "len": 4,
-            "why": "E8 rel32"
-          },
-          {
-            "at": 75,
-            "len": 4,
-            "why": "E8 rel32"
-          }
-        ]
-      },
+      "signature": null,
       "anchors": {
         "strings": [],
         "cfgLite": {
           "bytes": 292,
           "calls": 6,
-          "ripRefs": 2,
+          "ripRefs": 3,
           "resyncs": 0
         },
         "callees": [],
@@ -2365,7 +2318,7 @@
           "bytes": 1323,
           "calls": 34,
           "ripRefs": 31,
-          "resyncs": 4
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2440,7 +2393,7 @@
           "bytes": 1808,
           "calls": 38,
           "ripRefs": 40,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2659,7 +2612,7 @@
           "bytes": 1568,
           "calls": 31,
           "ripRefs": 8,
-          "resyncs": 1
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2703,7 +2656,7 @@
           "bytes": 2633,
           "calls": 42,
           "ripRefs": 33,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -3019,12 +2972,7 @@
       "name": "Status_ApplyLuckUp",
       "kind": "function",
       "rva": "0x5f9760",
-      "signature": {
-        "pattern": "F1 89 55 AF 48 8B F9 45 33 FF 48 8B 41 20 44 38 B8 B0 04 00 00 74 07 33 C0 E9 67 02 00 00 4C 8D 2D 83 B5",
-        "exactLen": 35,
-        "offset": -40,
-        "wildcards": []
-      },
+      "signature": null,
       "anchors": {
         "strings": [],
         "cfgLite": {
@@ -4674,7 +4622,7 @@
           "bytes": 193,
           "calls": 6,
           "ripRefs": 1,
-          "resyncs": 1
+          "resyncs": 0
         },
         "prologue": "48 89 5C 24 18 48 89 74 24 20 48 89"
       },
@@ -5607,34 +5555,39 @@
       "kind": "function",
       "rva": "0x61ea0",
       "signature": {
-        "pattern": "78 18 0F 76 03 49 8B 10 48 BB ?? ?? ?? ?? ?? ?? ?? ?? 45 33 C0 4D 85 C9 74 2A 48 B9 ?? ?? ?? ?? ?? ?? ?? ?? 0F 1F 40 00 0F 1F 84 00 00 00 00 00 42 0F B6 04 02 48 33 D8 48 0F AF D9 49 FF C0 4D 3B C1 72 EC 4C 8B CB 4D 8B C6 48 8D 54 24 20 48 8B CD E8 ?? ?? ?? ?? 48 8B 44 24 28 48 85 C0 74 0C 48 89 06 C6 46 08 00 E9 ?? ?? ?? ?? 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 39 45 10 0F 84 C6",
-        "exactLen": 126,
-        "offset": -48,
+        "pattern": "48 0F AF D9 49 FF C0 4D 3B C1 72 EC 4C 8B CB 4D 8B C6 48 8D 54 24 20 48 8B CD E8 ?? ?? ?? ?? 48 8B 44 24 28 48 85 C0 74 0C 48 89 06 C6 46 08 00 E9 ?? ?? ?? ?? 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 39 45 10 0F 84 ?? ?? ?? ?? 4C 8D 65 08 4C 89 64 24 30 48 C7 44 24 38 00 00 00 00 B9 38 00 00 00 E8 ?? ?? ?? ?? 48 8B F8 48 89 44 24 38 49 8B D6 48 8D 48 10 E8 ?? ?? ?? ?? 48",
+        "exactLen": 122,
+        "offset": -104,
         "wildcards": [
           {
-            "at": 10,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 28,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 83,
+            "at": 27,
             "len": 4,
             "why": "E8 rel32"
           },
           {
-            "at": 105,
+            "at": 49,
             "len": 4,
             "why": "E9 rel32"
           },
           {
-            "at": 111,
+            "at": 55,
             "len": 8,
             "why": "movabs imm64"
+          },
+          {
+            "at": 69,
+            "len": 4,
+            "why": "Jcc rel32"
+          },
+          {
+            "at": 97,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 117,
+            "len": 4,
+            "why": "E8 rel32"
           }
         ]
       },

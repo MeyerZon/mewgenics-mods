@@ -99,6 +99,14 @@ static int resolve_symbols(void) {
     for (size_t i = 0; i < FW_SYMBOL_COUNT; i++) {
         const SymbolSig *s = &g_build->symbols[i];
         int matches = 0;
+        if (!s->pattern) {
+            /* no relocation-free unique window on this build (bindings manifest signature: null): the
+             * identity gate already proved the image, so the manifest's RVA is taken as-is, like FW_LK */
+            if (!s->expectedRva) { fw_log("symbol %s: no signature and no RVA; framework disabled", s->name); ok = 0; continue; }
+            g_sym[i] = g_base + s->expectedRva;
+            fw_log("symbol %s: no signature on this build; using RVA 0x%llx", s->name, (unsigned long long)s->expectedRva);
+            continue;
+        }
         uintptr_t hit = scan_unique(g_base, s->pattern, &matches);
         if (matches != 1) {
             fw_log("signature %s: %d matches (need exactly 1); framework disabled", s->name, matches);

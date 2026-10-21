@@ -36,10 +36,11 @@ TEST(generated_tables_are_internally_consistent) {
             uint8_t bytes[FW_SIG_MAX_BYTES], mask[FW_SIG_MAX_BYTES];
             const SymbolSig *s = &bi->symbols[i];
             CHECK(s->name != NULL);
+            CHECK(s->expectedRva != 0);
+            if (!s->pattern) continue;   /* signature: null in the manifest -> the DLL takes expectedRva on the identified build */
             int n = fw_parse_pattern(s->pattern, bytes, mask, sizeof bytes);
             if (n <= 0) MT_FAIL("symbol %s: pattern does not parse under FW_SIG_MAX_BYTES (%d)", s->name, n);
             else if (!mask[n - 1]) MT_FAIL("symbol %s: pattern ends in a wildcard", s->name);
-            CHECK(s->expectedRva != 0);
         }
         for (size_t i = 0; i < FW_LK_COUNT; i++) CHECK(bi->lkRvas[i] != 0);
         for (size_t i = 0; i < FW_DATA_COUNT_; i++) CHECK(bi->rva_data[i] != 0);
@@ -55,6 +56,12 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_STR(b->name, "1.1.21239 (steam 25143593)");
     CHECK_EQ(b->symbols[FW_SYM_TurnControl_NextTurn].expectedRva, 0x8e3c60);
     CHECK_STR(b->symbols[FW_SYM_string_Allocate].name, "string_Allocate");
+    /* 2026-10-21: no relocation-free unique window exists for these (notes-bind); raw RVA + anchors instead */
+    CHECK(b->symbols[FW_SYM_LuckUp_ctor].pattern == NULL);
+    CHECK_EQ(b->symbols[FW_SYM_LuckUp_ctor].expectedRva, 0x711c90);
+    CHECK(b->symbols[FW_SYM_Status_GetCategory].pattern == NULL);
+    CHECK_EQ(b->symbols[FW_SYM_Status_GetCategory].expectedRva, 0x4929c0);
+    CHECK(b->symbols[FW_SYM_SaveProps_GetOrCreate].pattern != NULL);
     CHECK_EQ(b->lkRvas[0], 0x4929c0);
     CHECK_EQ(b->lkRvas[4], 0x493190);
     CHECK_EQ(b->lkRvas[12], 0x502b40);
