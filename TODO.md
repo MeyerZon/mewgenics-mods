@@ -226,11 +226,18 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 4. [x] **Bindings regression test (T1)** — `editor/test/bindings-tests.ts`: every manifest signature matches exactly
    once at its RVA in the installed exe, every function RVA begins a `.pdata` entry, anchors re-verify, self-port
    changes nothing; `check_game_build` reports it live. (2026-10-19, binding-port series)
-5. [~] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
+5. [x] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
    the status definition table / name rules / alias rewrite / hierarchy rewrite are `fw_status_rules.c` since
    2026-10-20 (`test_status_rules.c`, 14 checks; one cap of 8 shared by `framework.c` and `status_engine.c`, which
-   had disagreed 16 vs 8). Still game-bound and only T2-verified: the vtable clone + thunks, the `ApplyByName` hook
-   and the entity/component walks in `status_engine.c`, and everything in `framework.c` but the build gate.
+   had disagreed 16 vs 8). Since 2026-10-21 the rest is pure too: the vtable clone + thunk bodies are `fw_vtable.c`
+   (`test_vtable.c`, 12 checks incl. a golden-bytes clone and a T1 clone of the real dump
+   `.analysis/luckup-vtable.hex`), the entity/component walks and the apply/merge/set-stacks writes are `fw_walk.c`
+   (`test_walk.c`, 11 checks over fake objects shaped by `offsets.h`), symbol resolution over the executable
+   sections, the `-savesuffix` gate, the `FW_GetSymbol`/`FW_GetData` bounds and the hook plan (order, priorities,
+   failure policy) are `fw_resolve.c` (`test_resolve.c`, 14 checks). Still game-bound by nature: the PE header
+   read, the Mewjector calls, the per-definition C thunks and lookup wrappers (fixed game ABI), the calls into the
+   template constructor / vtable slots / `Status_Remove` / the string destructor, and logging — `status_engine.c`
+   and `framework.c` are the thin glue around the pure modules.
 6. [x] **Tools tests (T0)**: `tools/bindings/make-signature.ts` is covered by the siggen section of
    `bindings-tests.ts` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` by
    `editor/test/gpak-tests.ts` on a synthetic archive (2026-10-19; list/cat/extract/stats, truncation, path escapes).
