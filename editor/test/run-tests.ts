@@ -278,6 +278,19 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
     assert(r.ok, `expected ok, got ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
     assert(!r.findings.some((f) => f.code === "unknown-status" || f.code === "unknown-component"), r.findings.map((f) => f.code).join(","));
   });
+  // The check above needs the git-ignored component-names cache. A fresh worktree has none: the test must then
+  // say so with a '(skipped: …)' line, not FAIL (nested run with MEWGENICS_EDITOR_DATA pointing at an empty dir).
+  test("component cache absent: the JokersLuck validation check logs '(skipped: … component-names.json …)' and the run stays green", () => {
+    const empty = mkdtempSync(join(tmpdir(), "mewged-nocache-"));
+    const r = spawnSync(process.argv[0]!, [join(HERE, "run-tests.ts"), "--only", "_jokersluck-test"], {
+      env: { ...process.env, MEWGENICS_EDITOR_DATA: empty, MEWGENICS_EXTRACTED_DATA: EXTRACTED_DATA },
+      encoding: "utf8", timeout: 600000, maxBuffer: 64 << 20,
+    });
+    const out = (r.stdout || "") + (r.stderr || "");
+    const fails = out.split("\n").filter((l) => l.startsWith("FAIL")).slice(0, 6);
+    assert(/\(skipped: [^\n]*component-names\.json[^\n]*build:index/.test(out), `inner run: expected a '(skipped: … component-names.json … build:index …)' line, got: ${fails.join(" | ") || out.slice(-400)}`);
+    assert(r.status === 0 && /, 0 failed/.test(out), `inner run exit ${r.status}: ${fails.join(" | ") || out.slice(-300)}`);
+  });
   test("native-build-unknown: nothing when the build is known, when no exe is installed, or when the mod uses no native names", () => {
     const codes = (r: { findings: { code: string }[] }) => r.findings.map((f) => f.code);
     assert(!codes(validateMod("jokers-luck", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } })).includes("native-build-unknown"), "known");
@@ -560,6 +573,13 @@ await mcpSmoke();
   let dt: typeof import("./deps-tests.ts") | null = null;
   try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (dt) await dt.runDepsTests(test, assert, eq);
+  // repo.ts path constants + the merge preview against an injected base root (a fresh git worktree's needs)
+  let rt: typeof import("./repo-tests.ts") | null = null;
+  try { rt = await import("./repo-tests.ts"); } catch (e) { test("repo-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (rt) rt.runRepoTests(test, assert, eq);
+  let pm: typeof import("./preview-merge-tests.ts") | null = null;
+  try { pm = await import("./preview-merge-tests.ts"); } catch (e) { test("preview-merge-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (pm) pm.runPreviewMergeTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
