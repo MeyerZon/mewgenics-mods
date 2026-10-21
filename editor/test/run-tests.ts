@@ -17,6 +17,7 @@ import { parsePolicy } from "../src/core/overlay/policy.ts";
 import { validateMod } from "../src/core/validate/validator.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { previewMerge } from "../src/core/preview-merge.ts";
+import { componentCacheStatus } from "../src/core/components.ts";
 import { EXTRACTED_DATA, REPO_ROOT, MODS_DIR } from "../src/core/repo.ts";
 import { makeTestFilter } from "./filter.ts";
 import { runGonRoundTripTests } from "./gon-roundtrip-tests.ts";
@@ -273,11 +274,13 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
     assert(r.ok, "a warning keeps the mod valid for the data layer");
     eq(new Set(w.map((f) => f.message)).size, w.length, "one warning per name per file");
   });
-  test("_jokersluck-test (test-only overlay) validates: JokersLuck resolves as a registered name under StatusOnBattleStart", () => {
+  const cache = componentCacheStatus();
+  if (cache.ok) test("_jokersluck-test (test-only overlay) validates: JokersLuck resolves as a registered name under StatusOnBattleStart", () => {
     const r = validateMod("_jokersluck-test", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } });
     assert(r.ok, `expected ok, got ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
     assert(!r.findings.some((f) => f.code === "unknown-status" || f.code === "unknown-component"), r.findings.map((f) => f.code).join(","));
   });
+  else console.log(`  (skipped: ${cache.hint}; StatusOnBattleStart cannot be checked as a component)`);
   // The check above needs the git-ignored component-names cache. A fresh worktree has none: the test must then
   // say so with a '(skipped: …)' line, not FAIL (nested run with MEWGENICS_EDITOR_DATA pointing at an empty dir).
   test("component cache absent: the JokersLuck validation check logs '(skipped: … component-names.json …)' and the run stays green", () => {
