@@ -57,6 +57,27 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     assert(R.addCatRig(r.scene, "CatRig").findings.some((f: any) => f.severity === "error"), "refused");
   });
 
+  test("addCatRig parts: \"game\": the rig carries parts \"game\" and every slot references an EMPTY 1-frame sprite (no placeholder art); it validates; pointing a slot at a shape is rig-slot-not-empty (error)", () => {
+    need();
+    const r = R.addCatRig(exampleScene("rig"), "GameRig", { parts: "game" });
+    assert(!r.findings.some((f: any) => f.severity === "error"), JSON.stringify(r.findings));
+    const sp = r.scene.sprites.GameRig;
+    eq(sp.rig, "cat"); eq(sp.parts, "game");
+    eq(sp.layers.map((l: any) => `${l.name}:${l.depth}`).join(","), fixture.catanisMain.slots.map((s) => `${s.name}:${s.depth}`).join(","));
+    for (const l of sp.layers) {
+      const slot = r.scene.sprites[l.keys[0].ref];
+      assert(!!slot && slot.frames === 1 && Array.isArray(slot.layers) && slot.layers.length === 0, `${l.name} references an empty 1-frame sprite: ${JSON.stringify(slot)}`);
+    }
+    assert(!Object.keys(r.scene.shapes).some((id) => id.startsWith("GameRig_")), "no placeholder shapes");
+    const v = validateScene(r.scene) as any;
+    assert(v.ok && !v.findings.some((f: any) => f.code === "rig-slot-not-empty"), JSON.stringify(v.findings));
+    const bad = R.assignSlot(r.scene, "GameRig", "head", "eye").scene;
+    const codesBad = (validateScene(bad) as any).findings.map((f: any) => `${f.severity}:${f.code}`);
+    assert(codesBad.includes("error:rig-slot-not-empty"), codesBad.join(","));
+    const plain = R.addCatRig(exampleScene("rig"), "CatRig").scene;
+    assert(!(validateScene(plain) as any).findings.some((f: any) => f.code === "rig-slot-not-empty"), "a preview-only placeholder rig (no parts) is not flagged");
+  });
+
   test("assignSlot points every key of a slot at a shape or sprite; an unknown slot or ref is refused", () => {
     need();
     const r = R.addCatRig(exampleScene("rig"), "CatRig");
@@ -168,7 +189,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     for (const l of fx.catanis2.labelsAmong) assert(ca2.labels.includes(l), `${l} among the appended labels`);
   });
 
-  test("newCatAnimation: a rig <name>Pose, a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing the rig as the layer `ani` at depth 1, exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
+  test("newCatAnimation: a rig <name>Pose (parts \"game\": empty slot sprites the game fills with the cat's own parts), a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing the rig as the layer `ani` at depth 1, exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
     need();
     const base = exampleScene("anim");
     const before = JSON.stringify(base);
@@ -177,6 +198,8 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     eq(JSON.stringify(base), before);
     eq(r.rig, "wavePose"); eq(r.donor, "CatAnim_wave");
     eq(r.scene.sprites.wavePose.rig, "cat");
+    eq(r.scene.sprites.wavePose.parts, "game");
+    for (const l of r.scene.sprites.wavePose.layers) { const slot = r.scene.sprites[l.keys[0].ref]; assert(!!slot && slot.frames === 1 && slot.layers.length === 0, `${l.name} slot is an empty sprite`); }
     const d = r.scene.sprites.CatAnim_wave;
     eq(d.frames, 2);
     eq(JSON.stringify(d.labels), JSON.stringify({ waveF: 0, waveB: 1 }));
@@ -189,7 +212,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     eq(JSON.stringify(R.newCatAnimation(base, "wave").scene), JSON.stringify(r.scene));
   });
 
-  test("newCatAnimation extends an existing donor (next frames, same `ani` layer), reuses a rig with opts.rig, and refuses a bad name, a taken F/B label, a non-rig opts.rig, or an _Append_CatTest export that is not a donor sprite", () => {
+  test("newCatAnimation extends an existing donor (next frames, same `ani` layer), reuses a rig with opts.rig, and refuses a bad name, a taken F/B label, a non-rig or non-empty opts.rig, or an _Append_CatTest export that is not a donor sprite", () => {
     need();
     const one = R.newCatAnimation(exampleScene("anim"), "wave").scene;
     const two = R.newCatAnimation(one, "pounce", { rig: "wavePose" });
@@ -210,6 +233,9 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(R.newCatAnimation(one, "9lives").findings.some((f: any) => f.severity === "error"), "bad name refused");
     assert(R.newCatAnimation(one, "a-b").findings.some((f: any) => f.severity === "error"), "bad name refused");
     assert(R.newCatAnimation(one, "x", { rig: "Starter" }).findings.some((f: any) => f.severity === "error"), "non-rig opts.rig refused");
+    const withPlaceholders = R.addCatRig(one, "Drawn").scene;
+    const ph = R.newCatAnimation(withPlaceholders, "x", { rig: "Drawn" });
+    assert(ph.findings.some((f: any) => f.severity === "error" && /empty/.test(f.message)), `a rig whose slots hold placeholder art is refused: ${JSON.stringify(ph.findings)}`);
     assert(R.newCatAnimation(one, "x", { rig: "nope" }).findings.some((f: any) => f.severity === "error"), "unknown opts.rig refused");
     const shapeExport = { ...exampleScene("anim"), exports: { [fx.append]: "body" } };
     assert(R.newCatAnimation(shapeExport, "x").findings.some((f: any) => f.severity === "error"), "export at a shape refused");
@@ -218,14 +244,17 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(R.newCatAnimation(rigExport, "x").findings.some((f: any) => f.severity === "error"), "export at a rig refused");
   });
 
-  test("validateScene on the _Append_CatTest donor: cat-anim-missing-facing (error), cat-anim-layer-not-rig (error), cat-anim-layer-name (error: the engine restarts the child `ani`), cat-anim-depth (warning), cat-anim-donor (error) and cat-anim-untested (info, always: appended frames crash in-game until the native swap fix)", () => {
+  test("validateScene on the _Append_CatTest donor: cat-anim-missing-facing (error), cat-anim-layer-not-rig (error), cat-anim-layer-name (error: the engine restarts the child `ani`), cat-anim-slot-not-empty (error: a visible non-empty slot crashes CatParts::prerender), cat-anim-depth (warning), cat-anim-donor (error) and cat-anim-untested (info, always: the game draws its own parts into the empty slots)", () => {
     need();
     const good = R.newCatAnimation(exampleScene("anim"), "wave").scene;
     const c0 = codes(good);
     assert(c0.includes("info:cat-anim-untested"), c0.join(","));
     assert(!c0.some((c) => /^(error|warning):cat-anim/.test(c)), c0.join(","));
     const note = (validateScene(good) as any).findings.find((f: any) => f.code === "cat-anim-untested");
-    assert(/crashes in-game until the native swap fix/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
+    assert(note.severity === "info" && /draws the cat's own parts/.test(note.message) && /OBSERVED in PR #74/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
+    const filled = R.assignSlot(good, "wavePose", "head", "body").scene;
+    const cf = codes(filled);
+    assert(cf.includes("error:cat-anim-slot-not-empty"), cf.join(","));
     const pawing = JSON.parse(JSON.stringify(good)); pawing.sprites.CatAnim_wave.layers[0].name = "pawing";
     assert(codes(pawing).includes("error:cat-anim-layer-name"), codes(pawing).join(","));
     const unnamed = JSON.parse(JSON.stringify(good)); delete unnamed.sprites.CatAnim_wave.layers[0].name;
