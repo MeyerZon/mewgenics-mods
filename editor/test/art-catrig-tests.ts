@@ -2,9 +2,10 @@
 // instances tail / leg2 / arm2 / body / leg1 / arm1 / head the game's cat animations use). Pinned against the vanilla
 // files (T1, names and depths only), authored by the pure cat-rig.ts, checked by the validator, drawn in the game (T2).
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { MODS_DIR } from "../src/core/repo.ts";
 import { exampleScene, validateScene } from "../src/core/art/scene.ts";
 import { readSwf } from "../src/core/art/swf-reader.ts";
 import * as pc from "../src/core/art/probe-compare.ts";
@@ -101,5 +102,180 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     assert(existsSync(p), "written by npm run test:artprobe -- --cat");
     const j = JSON.parse(readFileSync(p, "utf8")) as { slots: Record<string, number> };
     for (const s of fixture.catanisMain.slots) assert((j.slots[s.name] || 0) > 50, `${s.name}: ${j.slots[s.name]}`);
+  });
+
+  await runCatAnimationTests(test, assert, eq, need, R);
+}
+
+// ---- cat animations: labeled facing frames appended to the vanilla CatTest clip ---------------------------------------
+
+interface AnimFixture {
+  append: string;
+  layer: string;
+  depth: number;
+  facing: string[];
+  catanis: { export: string; id: number; frames: number; labels: number; firstLabels: string[]; depths: number[]; maxPlacesPerLabeledFrame: number; pawingFrames: number; emptyFrames: number; idleF: { frames: number; slots: string[] }; idleB: { frames: number; slots: string[] } };
+  catanis2: { export: string; id: number; frames: number; labels: number; labelsAmong: string[] };
+}
+
+async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, need: () => void, R: Record<string, any>): Promise<void> {
+  console.log("\n# Art: cat animations (labeled F/B frames appended to CatTest, cat-rig.ts newCatAnimation, validator, api, MCP)");
+  const fx = JSON.parse(readFileSync(join(HERE, "fixtures", "art", "cat-anim-append.json"), "utf8")) as AnimFixture;
+  const errors = (fs: any[]) => fs.filter((f) => f.severity === "error").map((f) => f.code + ": " + f.message).join("; ");
+  const codes = (scene: any) => (validateScene(scene) as any).findings.map((f: any) => `${f.severity}:${f.code}`) as string[];
+
+  test("CAT_ANIM_EXPORT / CAT_ANIM_LAYER / CAT_ANIM_DEPTH are the vanilla shape (_Append_CatTest, pawing, depth 1; fixture cat-anim-append.json)", () => {
+    need();
+    eq(R.CAT_ANIM_EXPORT, fx.append);
+    eq(R.CAT_ANIM_LAYER, fx.layer);
+    eq(R.CAT_ANIM_DEPTH, fx.depth);
+  });
+
+  const caPath = join(VANILLA_DIR, "catanis.swf"), ca2Path = join(VANILLA_DIR, "catanis2.swf");
+  if (!existsSync(caPath) || !existsSync(ca2Path)) console.log(`  (skipped: vanilla catanis.swf / catanis2.swf not extracted at ${VANILLA_DIR})`);
+  else test("T1: the fixture matches the installed game — CatTest (id, frames, labels, every labeled frame places at most one character and always at depth 1, pawing on 422 frames, idleF/idleB slot layouts) and catanis2's _Append_CatTest", () => {
+    const inspect = (path: string, want: string) => {
+      const swf = readSwf(new Uint8Array(readFileSync(path))) as any;
+      const sc = swf.tags.find((t: any) => t.name === "SymbolClass");
+      const id = (sc.entries || sc.symbols).find((s: any) => s.name === want).id;
+      const sp = swf.tags.find((t: any) => t.name === "DefineSprite" && t.id === id);
+      const labels: string[] = sp.tags.filter((t: any) => t.name === "FrameLabel").map((t: any) => t.label);
+      const frames: { labels: string[]; places: any[] }[] = [];
+      let pending: string[] = [], places: any[] = [];
+      for (const t of sp.tags) {
+        if (t.name === "FrameLabel") pending.push(t.label);
+        else if (t.place) places.push(t.place);
+        else if (t.name === "ShowFrame") { if (pending.length) frames.push({ labels: pending, places }); pending = []; places = []; }
+      }
+      const slotsOf = (cid: number) => { const n = swf.tags.find((x: any) => x.name === "DefineSprite" && x.id === cid); const out: string[] = []; if (n) for (const u of n.tags) { if (u.name === "ShowFrame") break; if (u.place && u.place.name) out.push(`${u.place.name}@${u.place.depth}`); } return { frames: n ? n.frameCount : 0, slots: out }; };
+      return { id, frames: sp.frameCount, labels, labeled: frames, slotsOf };
+    };
+    const ca = inspect(caPath, fx.catanis.export);
+    eq(ca.id, fx.catanis.id); eq(ca.frames, fx.catanis.frames); eq(ca.labels.length, fx.catanis.labels);
+    eq(ca.labels.slice(0, fx.catanis.firstLabels.length).join(","), fx.catanis.firstLabels.join(","));
+    eq(ca.labeled.length, fx.catanis.labels);
+    eq(Math.max(...ca.labeled.map((f) => f.places.length)), fx.catanis.maxPlacesPerLabeledFrame);
+    eq([...new Set(ca.labeled.flatMap((f) => f.places.map((p: any) => p.depth)))].join(","), fx.catanis.depths.join(","));
+    eq(ca.labeled.filter((f) => f.places.some((p: any) => p.name === fx.layer)).length, fx.catanis.pawingFrames);
+    eq(ca.labeled.filter((f) => !f.places.length).length, fx.catanis.emptyFrames);
+    eq(ca.labeled[0]!.places[0].name, fx.layer); eq(ca.labeled[0]!.places[0].depth, fx.depth);
+    const idleF = ca.slotsOf(ca.labeled[0]!.places[0].characterId), idleB = ca.slotsOf(ca.labeled[1]!.places[0].characterId);
+    eq(idleF.frames, fx.catanis.idleF.frames); eq(idleF.slots.join(" "), fx.catanis.idleF.slots.join(" "));
+    eq(idleB.frames, fx.catanis.idleB.frames); eq(idleB.slots.join(" "), fx.catanis.idleB.slots.join(" "));
+    const ca2 = inspect(ca2Path, fx.catanis2.export);
+    eq(ca2.id, fx.catanis2.id); eq(ca2.frames, fx.catanis2.frames); eq(ca2.labels.length, fx.catanis2.labels);
+    for (const l of fx.catanis2.labelsAmong) assert(ca2.labels.includes(l), `${l} among the appended labels`);
+  });
+
+  test("newCatAnimation: a rig <name>Pose, a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing the rig as layer pawing at depth 1, exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
+    need();
+    const base = exampleScene("anim");
+    const before = JSON.stringify(base);
+    const r = R.newCatAnimation(base, "wave");
+    eq(errors(r.findings), "");
+    eq(JSON.stringify(base), before);
+    eq(r.rig, "wavePose"); eq(r.donor, "CatAnim_wave");
+    eq(r.scene.sprites.wavePose.rig, "cat");
+    const d = r.scene.sprites.CatAnim_wave;
+    eq(d.frames, 2);
+    eq(JSON.stringify(d.labels), JSON.stringify({ waveF: 0, waveB: 1 }));
+    eq(d.layers.length, 1);
+    eq(d.layers[0].name, fx.layer); eq(d.layers[0].depth, fx.depth);
+    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePose");
+    eq(r.scene.exports[fx.append], "CatAnim_wave");
+    const v = validateScene(r.scene) as any;
+    assert(v.ok, errors(v.findings));
+    eq(JSON.stringify(R.newCatAnimation(base, "wave").scene), JSON.stringify(r.scene));
+  });
+
+  test("newCatAnimation extends an existing donor (next frames, same pawing layer), reuses a rig with opts.rig, and refuses a bad name, a taken F/B label, a non-rig opts.rig, or an _Append_CatTest export that is not a donor sprite", () => {
+    need();
+    const one = R.newCatAnimation(exampleScene("anim"), "wave").scene;
+    const two = R.newCatAnimation(one, "pounce", { rig: "wavePose" });
+    eq(errors(two.findings), "");
+    const d = two.scene.sprites.CatAnim_wave;
+    eq(d.frames, 4);
+    eq(JSON.stringify(d.labels), JSON.stringify({ waveF: 0, waveB: 1, pounceF: 2, pounceB: 3 }));
+    eq(d.layers.length, 1);
+    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePose,2:wavePose,3:wavePose");
+    assert(!two.scene.sprites.pouncePose, "no new rig when opts.rig is given");
+    eq(two.scene.exports[fx.append], "CatAnim_wave");
+    assert((validateScene(two.scene) as any).ok, "validates");
+    const three = R.newCatAnimation(two.scene, "sit");
+    eq(errors(three.findings), "");
+    eq(three.scene.sprites.sitPose.rig, "cat");
+    eq(three.scene.sprites.CatAnim_wave.labels.sitB, 5);
+    assert(R.newCatAnimation(one, "wave").findings.some((f: any) => f.severity === "error"), "taken label refused");
+    assert(R.newCatAnimation(one, "9lives").findings.some((f: any) => f.severity === "error"), "bad name refused");
+    assert(R.newCatAnimation(one, "a-b").findings.some((f: any) => f.severity === "error"), "bad name refused");
+    assert(R.newCatAnimation(one, "x", { rig: "Starter" }).findings.some((f: any) => f.severity === "error"), "non-rig opts.rig refused");
+    assert(R.newCatAnimation(one, "x", { rig: "nope" }).findings.some((f: any) => f.severity === "error"), "unknown opts.rig refused");
+    const shapeExport = { ...exampleScene("anim"), exports: { [fx.append]: "body" } };
+    assert(R.newCatAnimation(shapeExport, "x").findings.some((f: any) => f.severity === "error"), "export at a shape refused");
+    const rigExport = R.addCatRig(exampleScene("anim"), "Rig").scene;
+    rigExport.exports[fx.append] = "Rig";
+    assert(R.newCatAnimation(rigExport, "x").findings.some((f: any) => f.severity === "error"), "export at a rig refused");
+  });
+
+  test("validateScene on the _Append_CatTest donor: cat-anim-missing-facing (error), cat-anim-layer-not-rig (error), cat-anim-depth (warning), cat-anim-donor (error) and cat-anim-untested (info, always)", () => {
+    need();
+    const good = R.newCatAnimation(exampleScene("anim"), "wave").scene;
+    const c0 = codes(good);
+    assert(c0.includes("info:cat-anim-untested"), c0.join(","));
+    assert(!c0.some((c) => /^(error|warning):cat-anim/.test(c)), c0.join(","));
+    const noB = JSON.parse(JSON.stringify(good)); delete noB.sprites.CatAnim_wave.labels.waveB;
+    assert(codes(noB).includes("error:cat-anim-missing-facing"), codes(noB).join(","));
+    const noF = JSON.parse(JSON.stringify(good)); delete noF.sprites.CatAnim_wave.labels.waveF;
+    assert(codes(noF).includes("error:cat-anim-missing-facing"), codes(noF).join(","));
+    const shapeLayer = JSON.parse(JSON.stringify(good)); shapeLayer.sprites.CatAnim_wave.layers[0].keys[1].ref = "body";
+    assert(codes(shapeLayer).includes("error:cat-anim-layer-not-rig"), codes(shapeLayer).join(","));
+    const plainSprite = JSON.parse(JSON.stringify(good)); plainSprite.sprites.CatAnim_wave.layers[0].keys[0].ref = "Starter";
+    assert(codes(plainSprite).includes("error:cat-anim-layer-not-rig"), codes(plainSprite).join(","));
+    const deep = JSON.parse(JSON.stringify(good)); deep.sprites.CatAnim_wave.layers[0].depth = 3;
+    const cd = codes(deep);
+    assert(cd.includes("warning:cat-anim-depth") && !cd.some((c) => /^error:cat-anim/.test(c)), cd.join(","));
+    const shapeExport = { ...exampleScene("anim"), exports: { [fx.append]: "body" } };
+    assert(codes(shapeExport).includes("error:cat-anim-donor"), codes(shapeExport).join(","));
+    const plain = exampleScene("anim");
+    assert(!codes(plain).some((c) => /cat-anim/.test(c)), "no cat-anim findings without the export");
+  });
+
+  let api: Record<string, any> = {}, apiErr = "";
+  try { api = await import("../src/core/api.ts"); } catch (e) { apiErr = e instanceof Error ? e.message : String(e); }
+  test("api.newCatAnimation(scene, name, opts) returns { ok, scene, findings } over the validated scene; api.newArtScene(mod, name, { template: \"cat-animation\", animation }) writes a scene with the animation", () => {
+    if (apiErr) throw new Error(apiErr);
+    assert(typeof api.newCatAnimation === "function", "api.newCatAnimation");
+    const r = api.newCatAnimation(exampleScene("anim"), "wave");
+    assert(r.ok, JSON.stringify(r.findings));
+    eq(r.scene.exports[fx.append], "CatAnim_wave");
+    assert(!api.newCatAnimation(exampleScene("anim"), "9").ok, "bad name refused through the api");
+    const tmpMod = "__art_catanim_tmp";
+    const tmpDir = join(MODS_DIR, tmpMod);
+    rmSync(tmpDir, { recursive: true, force: true });
+    try {
+      const w = api.newArtScene(tmpMod, "catwave", { template: "cat-animation", animation: "wave" });
+      assert(w.ok, w.error || JSON.stringify(w.findings));
+      const back = api.readArtScene(tmpMod, "art/catwave.scene.json");
+      assert(back.ok, JSON.stringify(back.findings));
+      eq(back.scene.exports[fx.append], "CatAnim_wave");
+      eq(back.scene.sprites.wavePose.rig, "cat");
+      assert(back.findings.some((f: any) => f.code === "cat-anim-untested"), "read reports cat-anim-untested");
+      const dflt = api.newArtScene(tmpMod, "pounce", { template: "cat-animation" });
+      assert(dflt.ok && dflt.scene.sprites.CatAnim_pounce, "animation defaults to the scene name");
+      const bad = api.newArtScene(tmpMod, "my-cat", { template: "cat-animation" });
+      assert(!bad.ok, "a scene name that is not an identifier needs `animation`");
+    } finally { rmSync(tmpDir, { recursive: true, force: true }); }
+  });
+
+  let tools: Record<string, any> = {}, toolsErr = "";
+  try { tools = await import("../src/mcp/tools.ts"); } catch (e) { toolsErr = e instanceof Error ? e.message : String(e); }
+  test("MCP: new_art_scene accepts template: \"cat-animation\" (+ animation); write_art_scene dryRun on a cat animation reports cat-anim-untested", async () => {
+    if (toolsErr) throw new Error(toolsErr);
+    const schema = tools.TOOL_INPUT.new_art_scene;
+    assert(schema.safeParse({ mod: "m", name: "n", template: "cat-animation", animation: "wave" }).success, "template + animation accepted");
+    assert(!schema.safeParse({ mod: "m", name: "n", template: "dog" }).success, "unknown template refused");
+    const scene = R.newCatAnimation(exampleScene("anim"), "wave").scene;
+    const r = (await tools.callTool("write_art_scene", { mod: "dev-sandbox", path: "art/x.scene.json", scene, dryRun: true })) as any;
+    assert(r.ok && r.findings.some((f: any) => f.code === "cat-anim-untested"), JSON.stringify(r).slice(0, 300));
   });
 }

@@ -1,0 +1,27 @@
+{
+  "note": "OBSERVED 2026-10-21, read-only parse of .extracted/swfs/catanis.swf and catanis2.swf (test/art-catrig-tests.ts re-checks it against the installed game when present). The vanilla cat clip is CatTest; every labeled frame places at most ONE character, always at depth 1 (a nested pose sprite; named `pawing` on 422 of the 776 labeled frames such as idle/walk/hit, unnamed on the class idles, 4 frames place nothing); labels come in facing pairs <anim>F / <anim>B; catanis2.swf extends it with an _Append_CatTest export of the same shape. The front pose sprite carries the CAT_SLOTS layout; the back pose uses head_back and a reversed stacking (not authored by the editor yet).",
+  "append": "_Append_CatTest",
+  "layer": "pawing",
+  "depth": 1,
+  "facing": ["F", "B"],
+  "catanis": {
+    "export": "CatTest",
+    "id": 1614,
+    "frames": 854,
+    "labels": 776,
+    "firstLabels": ["idleF", "idleB", "weakF", "weakB"],
+    "depths": [1],
+    "maxPlacesPerLabeledFrame": 1,
+    "pawingFrames": 422,
+    "emptyFrames": 4,
+    "idleF": { "frames": 180, "slots": ["tail@1", "leg2@3", "arm2@5", "body@7", "leg1@9", "arm1@11", "head@13"] },
+    "idleB": { "frames": 180, "slots": ["head_back@1", "arm2@3", "leg2@5", "body@7", "arm1@9", "leg1@11", "tail@13"] }
+  },
+  "catanis2": {
+    "export": "_Append_CatTest",
+    "id": 590,
+    "frames": 296,
+    "labels": 239,
+    "labelsAmong": ["crawlingIdleF", "crawlingIdleB", "robotWalkF", "robotWalkB"]
+  }
+}
