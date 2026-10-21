@@ -10,6 +10,7 @@ import { locateGameDir } from "../src/core/ingame/launch.ts";
 import { REPO_ROOT, SafetyError } from "../src/core/repo.ts";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 import type { Entry, EnumExposure, TableExposure, MacroExposure } from "../src/core/bindings/manifest.ts";
 import type { PortRow, PortResult } from "../src/core/bindings/port.ts";
@@ -547,6 +548,17 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(/Status_stacks/.test(String(err)) && /25143593/.test(String(err)) && /99/.test(String(err)), String(err));
     eq(typeof genOffsetsH([m25, cloneBuild()]), "string", "agreeing manifests are fine");
   });
+  test("genSignaturesH: an FwSymbol entry with signature: null is emitted with a NULL pattern and its raw RVA (the DLL falls back to expectedRva on the identified build)", () => {
+    // 2026-10-21: LuckUp_ctor has no relocation-free unique window (notes-bind §1.2), so a null signature must be a
+    // first-class state for a symbol the DLL resolves, not a GenError.
+    const m = parseManifest(mini());
+    const b = entry(m, "FnB")!;
+    b.exposure = [{ enum: "FW_SYM_FnB", index: 1 }];
+    b.signature = null;
+    const h = genSignaturesH([m]);
+    assert(h.includes(`{ "FnB", NULL, 0, 0x1040u },  /* FW_SYM_FnB (raw RVA: no signature on this build) */`), h.split("\n").filter((l) => l.includes("FnB")).join("\n"));
+    assert(h.includes(`{ "FnA", "48 8B C4 55", 0, 0x1010u },  /* FW_SYM_FnA */`), "signed entries unchanged");
+  });
   test("generateHeaders returns both files keyed by repo-relative path", () => {
     const out = generateHeaders([m25]);
     eq(Object.keys(out).sort().join(","), [HEADER_PATHS.offsets, HEADER_PATHS.signatures].sort().join(","));
@@ -678,6 +690,53 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(hit.count, 1);
     eq(hit.hits[0] + r.signature!.offset, f.rva(".text", 0x10), "hit + offset == function start");
   });
+  test("decodeRelocs: a relocation that straddles the window end is clamped, never dropped (the first bytes of a cut disp32 are not exact bytes)", () => {
+    // 2026-10-21 (notes-bind §2.1): LuckUp_ctor's committed pattern ended in `48 8D 05 95 5D` and Status_GetCategory's in
+    // `48 8D 0D 6F` because a reloc whose 4 bytes ran past the window was discarded, so the window's last bytes stayed exact.
+    const cut = u8([
+      0x40, 0x53,                                     // push rbx
+      0x48, 0x83, 0xec, 0x20,                         // sub rsp,0x20
+      0x48, 0x8d, 0x05, 0x95, 0x5d,                   // lea rax,[rip+disp32] cut after 2 of its 4 disp bytes -> [9..10]
+    ]);
+    eq(decodeRelocs(cut).map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "9+2");
+    const callCut = u8([0x40, 0x53, 0xe8, 0x11]);    // call rel32 cut after 1 byte -> [3..3]
+    eq(decodeRelocs(callCut).map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "3+1");
+    const opcodeOnly = u8([0x40, 0x53, 0x48, 0x8d]); // the lea's ModRM is outside the window: nothing to clamp
+    eq(decodeRelocs(opcodeOnly).length, 0);
+  });
+  test("makeSignature: a clamped tail reloc is masked, so the window must extend to the next fixed byte (or move on)", () => {
+    // two functions identical up to a lea whose disp32 differs, then one differing byte; a 24-byte cap cuts the first
+    // window inside the disp32: the old generator returned those two disp bytes as exact (unique only through a relocation)
+    const head = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x8b, 0xfa, 0x48, 0x8b, 0xf1, 0x90, 0x90, 0x90, 0x90];
+    const a = [...head, 0x48, 0x8d, 0x05, 0x11, 0x22, 0x33, 0x44, 0x48, 0x8b, 0xd8, 0xc3];
+    const b = [...head, 0x48, 0x8d, 0x05, 0x55, 0x66, 0x77, 0x88, 0x48, 0x8b, 0xf8, 0xc3];
+    const f = twoFns(a, b);
+    const p = parsePe(f.buf);
+    const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 24, maxOffset: 0 });
+    assert(!r.ok, `a 24-byte window ends inside the disp32 and the bytes before it are shared: must fail, got ${r.ok ? r.signature.pattern : ""}`);
+    const r2 = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 32, maxOffset: 0 });
+    assert(r2.ok, r2.ok ? "" : r2.reason);
+    if (!r2.ok) return;
+    eq(r2.signature.pattern, "40 53 48 83 EC 20 48 8B D9 48 8B FA 48 8B F1 90 90 90 90 48 8D 05 ?? ?? ?? ?? 48 8B D8");
+  });
+  test("makeSignature: every tried window starts on an instruction boundary of the function (never inside an instruction)", () => {
+    // Status_ApplyLuckUp's committed signature started at +40, inside `49 8B F1` (+38): the lite decoder stopped at once and
+    // nothing in the 35-byte pattern was masked (a raw jmp rel32 and two disp32 bytes). Starts are instruction boundaries now.
+    const shared = Array.from({ length: 36 }, (_, i) => [0x48, 0x8b, 0xc1][i % 3]);   // 36 bytes: 12 x mov rax,rcx (3-byte instructions)
+    const a = [...shared, 0x90, 0x90, 0x48, 0x8d, 0x05, 0x11, 0x22, 0x33, 0x44, 0x48, 0x8b, 0xd8, 0xc3];
+    const b = [...shared, 0x90, 0x90, 0x48, 0x8d, 0x05, 0x55, 0x66, 0x77, 0x88, 0x48, 0x8b, 0xf8, 0xc3];
+    const f = twoFns(a, b);
+    const p = parsePe(f.buf);
+    const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 32, maxOffset: 64 });
+    assert(r.ok, r.ok ? "" : r.reason);
+    if (!r.ok) return;
+    const start = -r.signature.offset;
+    assert(start % 3 === 0 && start <= 36, `window start +${start} is inside a 3-byte mov (the step-8 generator picked +16)`);
+    assert(r.signature.pattern.includes("48 8D 05 ?? ?? ?? ??"), `the lea's disp32 is masked: ${r.signature.pattern}`);
+    const hit = scanExec(p, f.buf, parsePattern(r.signature.pattern));
+    eq(hit.count, 1);
+    eq(hit.hits[0] + r.signature.offset, f.rva(".text", 0x10));
+  });
   if (exe) {
     test("T1 real exe: every manifest function signature regenerates unique at its rva; >= 5 carry wildcards; Status_GetCategory fits the cap or is reported", () => {
       const m = loadManifest(realPath);
@@ -779,6 +838,19 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       eq(r.exePath, join(tmp, "Mewgenics.exe"));
       eq(typeof r.sha256, "string");
       eq(r.sha256.length, 64);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
+  test("make-signature.ts --manifest: a signature-less entry is listed as `skipped (null)` instead of vanishing from the report", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "mewsig-"));
+    try {
+      writeFileSync(join(tmp, "fake.exe"), fakeKnownPe.buf);
+      writeFileSync(join(tmp, "m.json"), JSON.stringify(fakeManifest));
+      const r = spawnSync(process.execPath, [join(REPO_ROOT, "tools", "bindings", "make-signature.ts"), join(tmp, "fake.exe"), "--manifest", join(tmp, "m.json")], { encoding: "utf8" });
+      const out = (r.stdout || "") + (r.stderr || "");
+      eq(r.status, 0, out.slice(-400));
+      assert(/skipped \(null\)\s+FnRaw/.test(out), `expected a "skipped (null)  FnRaw" line, got:\n${out}`);
+      assert(/unchanged\s+FnA/.test(out) && /unchanged\s+FnB/.test(out), out);
+      assert(/0 changed, 2 unchanged, 0 failed, 1 skipped \(null\)/.test(out), `summary counts the skipped entries: ${out.split("\n").slice(-3).join(" | ")}`);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
   test("api.checkGameBuild forwards env/manifests and never throws on a missing exe", () => {
