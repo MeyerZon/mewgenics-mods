@@ -60,10 +60,12 @@ export function RigTab() {
         </button>
       </div>
       <p className="muted" style={sx("font-size:12.5px;line-height:1.6;margin:4px 0 10px")}>
-        One named instance per body part, at the depths the game's main cat animation uses. Point each slot at a shape or
-        a sprite (a sprite runs on its own clock — the game drives a character's root timeline, so free animation lives in
-        nested sprites). Animate poses in the Timeline tab; export the rig in the Exports tab and give a character
-        <span className="mono"> graphics.movieclip</span> its name.
+        One named instance per body part, at the depths the game's main cat animation uses. A drawn rig (New cat rig)
+        points each slot at a shape or a sprite (a sprite runs on its own clock — the game drives a character's root
+        timeline, so free animation lives in nested sprites); its placeholder art is preview-only on a cat. A
+        <span className="mono"> parts: game</span> rig (what New cat animation makes) keeps every slot an empty sprite: on a cat the game draws the
+        cat's own part — palette, texture, face — into it, and a visible non-empty slot crashes the game. Animate poses in the
+        Timeline tab; export a drawn rig in the Exports tab and give a character <span className="mono">graphics.movieclip</span> its name.
       </p>
       {rigs.map((id) => {
         const sp = sc.sprites[id]!;
@@ -85,13 +87,13 @@ export function RigTab() {
                 return (
                   <div key={slot.name} className="artrow rig-slot">
                     <span className="id mono">{slot.name}</span>
-                    <span className="meta mono">{layer ? `depth ${layer.depth}${layer.depth !== slot.depth ? ` (vanilla ${slot.depth})` : ""}` : "missing"}</span>
+                    <span className="meta mono">{layer ? `depth ${layer.depth}${layer.depth !== slot.depth ? ` (vanilla ${slot.depth})` : ""}${sp.parts === "game" ? " · empty: the game draws the cat's own part" : ""}` : "missing"}</span>
                     <div className="grow" />
                     <select
                       className="artinput"
                       aria-label={`slot ${slot.name}`}
                       value={ref || ""}
-                      disabled={!layer}
+                      disabled={!layer || sp.parts === "game"}
                       onChange={(e) => e.target.value && apply(assignSlot(sc, id, slot.name, e.target.value))}
                     >
                       <option value="">{ref ? "" : "(none)"}</option>
@@ -125,10 +127,10 @@ export function RigTab() {
         A cat animation is a facing pair of labeled frames, <span className="mono">{"<name>F"}</span> / <span className="mono">{"<name>B"}</span>,
         on a donor sprite exported as <span className="mono">{CAT_ANIM_EXPORT}</span>; each frame places a cat rig (<span className="mono">{"<name>Pose"}</span>)
         as the layer <span className="mono">ani</span> at depth 1 — the shape of every vanilla CatTest frame; the engine restarts the child
-        <span className="mono"> ani</span> on every play. Draw the pose's parts in its slots above, build the SWF, then refer to it bare from GON:
+        <span className="mono"> ani</span> on every play. The pose's seven slots stay empty — the game draws the cat's own parts into them
+        (OBSERVED in PR #74 once its empty-slot run lands). Pose the slots in the Timeline tab, build the SWF, then refer to it bare from GON:
         <span className="mono"> alt_animations [[idle {animName.trim() || "<name>"}]]</span> on a character or
         <span className="mono"> animation {animName.trim() || "<name>"}</span> on an ability (a missing F or B label is a silent no-op in-game).
-        A mod-appended frame still crashes in-game until the native swap fix lands (experiment A0, PR #74).
       </p>
       {donorRef !== undefined && !donor ? (
         <div className="pill chip err" style={sx("margin-bottom:8px")}>{`${CAT_ANIM_EXPORT} points at "${String(donorRef)}", which is not a donor sprite — fix the export before adding animations`}</div>

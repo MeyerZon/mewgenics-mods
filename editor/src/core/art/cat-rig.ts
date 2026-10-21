@@ -2,8 +2,12 @@
 // instance per body part (tail, leg2, arm2, body, leg1, arm1, head) at the depths the main cat animation in
 // catanis.swf uses (pinned in test/fixtures/art/cat-rig-slots.json against the installed game). Pure.
 //
-// Scope: this authors *our* character in the vanilla layout (each slot is any shape or sprite of the scene). It does
-// not add parts to the game's catparts.swf or make the game swap its own parts into our slots — that is engine work.
+// Two kinds of rig: a drawn one (each slot is any shape or sprite of the scene; placeholder shapes by default, which the
+// game draws as-is on a non-cat character) and a `parts: "game"` one whose slots are EMPTY 1-frame sprites — on a cat,
+// CatParts::prerender (0x742350, .analysis/notes-catB.md) fills every named slot with the cat's own part (palette,
+// texture, face included) on the slot's first prerender, but only when the slot sprite is hidden or has no children; a
+// visible, non-empty slot is taken for an already-converted one and the game crashes (+0x741f5d). Vanilla hides its
+// placeholders with an ActionScript setInvisible() the emitter cannot express, so a mod's slots stay empty.
 
 import type { Scene, SceneSprite, SceneShape, SceneLayer, Finding } from "./scene.ts";
 
@@ -37,9 +41,29 @@ export interface AddCatRigOptions {
   frames?: number;
   /** fill per slot instead of the gray placeholder levels (e.g. passthrough colours for an in-game check) */
   colours?: Partial<Record<string, string>>;
+  /** "game": every slot is an EMPTY 1-frame sprite the game fills with the cat's own part (no placeholder art) */
+  parts?: "game";
 }
 
-/** Add a cat rig sprite `name` (rig: "cat") with one placeholder shape per slot, named `<name>_<slot>`. */
+/** An empty sprite (no layer places anything): the only slot content CatParts accepts from a mod. */
+export function isEmptySprite(scene: Scene, ref: string | null | undefined): boolean {
+  if (typeof ref !== "string") return false;
+  const sp = scene.sprites[ref];
+  if (!sp || !Array.isArray(sp.layers)) return false;
+  return sp.layers.every((l) => (l.keys || []).every((k) => k.ref === null || k.ref === undefined));
+}
+
+/** The slot layers of a cat rig whose placed content is not an empty sprite. */
+export function nonEmptySlots(scene: Scene, rigId: string): string[] {
+  const sp = scene.sprites[rigId];
+  if (!sp || !Array.isArray(sp.layers)) return [];
+  return sp.layers.filter((l) => CAT_SLOT_NAMES.includes(l.name || "") && (l.keys || []).some((k) => k.ref !== null && k.ref !== undefined && !isEmptySprite(scene, k.ref))).map((l) => l.name!);
+}
+
+/**
+ * Add a cat rig sprite `name` (rig: "cat") with one layer per slot, named `<name>_<slot>`: placeholder shapes (a drawn
+ * rig, preview-only art) or, with `parts: "game"`, empty 1-frame sprites the game fills with the cat's own parts.
+ */
 export function addCatRig(scene: Scene, name: string, opts: AddCatRigOptions = {}): { scene: Scene; findings: Finding[] } {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return refuse(scene, `rig name "${name}" must be letters, digits and _`);
   if (scene.sprites[name] || scene.shapes[name]) return refuse(scene, `"${name}" is already a shape or sprite`);
@@ -47,6 +71,10 @@ export function addCatRig(scene: Scene, name: string, opts: AddCatRigOptions = {
   for (const s of CAT_SLOTS) {
     const id = `${name}_${s.name}`;
     if (out.shapes[id] || out.sprites[id]) return refuse(scene, `placeholder id "${id}" is taken`);
+    if (opts.parts === "game") {
+      out.sprites[id] = { frames: 1, labels: {}, layers: [] };
+      continue;
+    }
     const ph = PLACEHOLDER[s.name]!;
     const shape: SceneShape = { paths: [{ d: ph.d, fill: (opts.colours && opts.colours[s.name]) || `gray:${ph.gray}`, fillRule: "nonzero" }] };
     out.shapes[id] = shape;
@@ -55,6 +83,7 @@ export function addCatRig(scene: Scene, name: string, opts: AddCatRigOptions = {
     frames: Math.max(1, opts.frames ?? 24),
     labels: { idle: 0 },
     rig: "cat",
+    ...(opts.parts === "game" ? { parts: "game" as const } : {}),
     layers: CAT_SLOTS.map((s) => ({ name: s.name, depth: s.depth, keys: [{ frame: 0, ref: `${name}_${s.name}`, x: 0, y: 0 }] })),
   };
   out.sprites[name] = sprite;
@@ -98,9 +127,11 @@ export const CAT_ANIM_DEPTH = 1;
 export const CAT_ANIM_FACINGS: ReadonlyArray<string> = ["F", "B"];
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-export interface NewCatAnimationOptions extends AddCatRigOptions {
-  /** reuse this rig: "cat" sprite for the pose instead of adding `<name>Pose` */
+export interface NewCatAnimationOptions {
+  /** reuse this rig: "cat" sprite for the pose instead of adding `<name>Pose`; its slots must be empty sprites */
   rig?: string;
+  /** frames of the new `<name>Pose` rig */
+  frames?: number;
 }
 
 export interface NewCatAnimationResult {
@@ -121,8 +152,9 @@ export function catAnimDonor(scene: Scene): string | null {
 }
 
 /**
- * Add a cat animation `name`: a rig `<name>Pose` (or `opts.rig`), and the labeled frames `<name>F` / `<name>B` on the
- * `_Append_CatTest` donor sprite (`CatAnim_<name>` when the scene has none yet), each placing the rig as the layer
+ * Add a cat animation `name`: a rig `<name>Pose` with `parts: "game"` (empty slot sprites the game fills with the
+ * cat's own parts) or `opts.rig` (a cat rig whose slots are empty), and the labeled frames `<name>F` / `<name>B` on
+ * the `_Append_CatTest` donor sprite (`CatAnim_<name>` when the scene has none yet), each placing the rig as the layer
  * `ani` at depth 1 — the shape every vanilla CatTest frame has and the child PlayAnimation restarts.
  */
 export function newCatAnimation(scene: Scene, name: string, opts: NewCatAnimationOptions = {}): NewCatAnimationResult {
@@ -145,11 +177,13 @@ export function newCatAnimation(scene: Scene, name: string, opts: NewCatAnimatio
   if (opts.rig !== undefined) {
     const rig = scene.sprites[opts.rig];
     if (!rig || rig.rig !== "cat") return no(`"${opts.rig}" is not a cat rig sprite (rig: "cat")`);
+    const held = nonEmptySlots(scene, opts.rig);
+    if (held.length) return no(`rig "${opts.rig}" slot${held.length > 1 ? "s" : ""} ${held.join(", ")} hold art; a cat animation's slots must be empty sprites the game fills with the cat's own parts (add the rig with parts: "game")`);
     rigId = opts.rig;
     out = clone(scene);
   } else {
     rigId = `${name}Pose`;
-    const r = addCatRig(scene, rigId, { frames: opts.frames, colours: opts.colours });
+    const r = addCatRig(scene, rigId, { frames: opts.frames, parts: "game" });
     if (r.findings.length) return { scene, findings: r.findings };
     out = r.scene;
   }
@@ -189,8 +223,8 @@ function placedAt(layer: SceneLayer, frame: number): string | null {
 
 /**
  * Checks for the `_Append_CatTest` donor (the validator adds them): facing pairs complete (a missing label is a silent
- * no-op in the engine), each labeled frame places a cat rig as the child `ani` at depth 1; plus the standing note that
- * appended frames crash in-game until the native swap fix.
+ * no-op in the engine), each labeled frame places a cat rig as the child `ani` at depth 1, the rig's slots are empty
+ * sprites (CatParts fills them; a visible non-empty slot crashes); plus the note on what the game draws.
  */
 export function catAnimFindings(scene: Scene): Finding[] {
   const out: Finding[] = [];
@@ -209,6 +243,7 @@ export function catAnimFindings(scene: Scene): Finding[] {
   }
   const labels = sp.labels || {};
   const names = Object.keys(labels);
+  const rigsChecked = new Set<string>();
   for (const label of names) {
     const facing = CAT_ANIM_FACINGS.find((f) => label.endsWith(f) && label.length > f.length);
     if (!facing) continue;
@@ -228,18 +263,30 @@ export function catAnimFindings(scene: Scene): Finding[] {
       const target = scene.sprites[p.ref!];
       const lat = `${sat}.layers[${p.li}]`;
       if (!target || target.rig !== "cat") out.push({ severity: "error", code: "cat-anim-layer-not-rig", message: `labeled frame "${label}" (frame ${frame}) places "${p.ref}" on layer ${p.l.name || p.li}, which is not a rig: "cat" sprite`, path: lat });
+      else if (!rigsChecked.has(p.ref!)) {
+        rigsChecked.add(p.ref!);
+        const held = nonEmptySlots(scene, p.ref!);
+        if (held.length) out.push({ severity: "error", code: "cat-anim-slot-not-empty", message: `cat animation rig "${p.ref}" slot${held.length > 1 ? "s" : ""} ${held.join(", ")} hold art; the game draws the cat's own parts into EMPTY slot sprites, and a visible non-empty slot crashes CatParts::prerender (+0x741f5d) — point the slot at an empty sprite or add the rig with parts: "game"`, path: `sprites.${p.ref}` });
+      }
       if (p.l.name !== CAT_ANIM_LAYER) out.push({ severity: "error", code: "cat-anim-layer-name", message: `labeled frame "${label}" places its pose on a layer named "${p.l.name || ""}"; the engine restarts the child instance named "${CAT_ANIM_LAYER}" on every play and reads no other name`, path: `${lat}.name` });
       if (p.l.name !== CAT_ANIM_LAYER) out.push({ severity: "error", code: "cat-anim-layer-name", message: `labeled frame "${label}" places its pose on a layer named "${p.l.name || ""}"; the engine restarts the child instance named "${CAT_ANIM_LAYER}" on every play and reads no other name`, path: `${lat}.name` });
       if (p.l.depth !== CAT_ANIM_DEPTH) out.push({ severity: "warning", code: "cat-anim-depth", message: `labeled frame "${label}" places its pose at depth ${p.l.depth}; every vanilla CatTest frame places it at depth ${CAT_ANIM_DEPTH}`, path: `${lat}.depth` });
     }
   }
-  out.push({ severity: "info", code: "cat-anim-untested", message: `${CAT_ANIM_EXPORT} frames are authored in the engine's shape (labeled F/B frames on the root, the pose as the child "${CAT_ANIM_LAYER}" at depth ${CAT_ANIM_DEPTH}), but a mod-appended frame crashes in-game until the native swap fix (experiment A0, PR #74; docs/engine-map.md "CatTest and the cat animation clips")`, path: at });
+  out.push({ severity: "info", code: "cat-anim-untested", message: `${CAT_ANIM_EXPORT} frames are in the engine's shape (labeled F/B frames on the root, the pose as the child "${CAT_ANIM_LAYER}" at depth ${CAT_ANIM_DEPTH}, empty slot sprites): the game draws the cat's own parts — palette, texture, face — into the empty slots; placeholder art is preview-only (OBSERVED in PR #74 once its empty-slot run lands; docs/engine-map.md "CatTest and the cat animation clips")`, path: at });
   return out;
 }
 
-/** Rig checks for a sprite marked rig: "cat" (the validator adds them). */
-export function rigFindings(sp: SceneSprite, at: string): Finding[] {
+/** Rig checks for a sprite marked rig: "cat" (the validator adds them); with `scene`, a parts: "game" rig's slots must be empty. */
+export function rigFindings(sp: SceneSprite, at: string, scene?: Scene): Finding[] {
   const out: Finding[] = [];
+  if (sp.parts === "game" && scene) {
+    for (const l of sp.layers || []) {
+      if (!CAT_SLOT_NAMES.includes(l.name || "")) continue;
+      const held = (l.keys || []).filter((k) => k.ref !== null && k.ref !== undefined && !isEmptySprite(scene, k.ref)).map((k) => String(k.ref));
+      if (held.length) out.push({ severity: "error", code: "rig-slot-not-empty", message: `parts: "game" rig slot "${l.name}" places ${[...new Set(held)].join(", ")}; the game fills a slot with the cat's own part only when the slot sprite is empty (a visible non-empty slot crashes +0x741f5d)`, path: at });
+    }
+  }
   const names = (sp.layers || []).map((l) => l.name || "");
   for (const s of CAT_SLOT_NAMES) {
     const n = names.filter((x) => x === s).length;

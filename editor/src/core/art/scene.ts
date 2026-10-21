@@ -139,6 +139,8 @@ export interface SceneSprite {
   layers: SceneLayer[];
   /** "cat": a cat rig (layers named after the vanilla slots; cat-rig.ts checks it) */
   rig?: "cat";
+  /** "game" (cat rigs): the slots are empty sprites the game fills with the cat's own parts (cat-rig.ts) */
+  parts?: "game";
 }
 
 export interface SceneStage {
@@ -443,8 +445,10 @@ export function validateScene(input: unknown): SceneValidation {
       err("sprite-layers", `sprite "${id}" needs layers[]`, [at]);
       continue;
     }
-    if (sp.rig === "cat") findings.push(...rigFindings(sp, at));
+    if (sp.rig === "cat") findings.push(...rigFindings(sp, at, scene));
     else if (sp.rig !== undefined) err("sprite-rig", `rig must be "cat"`, [at + ".rig"]);
+    if (sp.parts !== undefined && sp.parts !== "game") err("sprite-parts", `parts must be "game"`, [at + ".parts"]);
+    else if (sp.parts === "game" && sp.rig !== "cat") err("sprite-parts", `parts: "game" needs rig: "cat"`, [at + ".parts"]);
     if (!(Number.isInteger(sp.frames) && sp.frames >= 1)) {
       err("sprite-frames", `sprite "${id}" frames must be an integer >= 1`, [at + ".frames"]);
       sp.frames = Math.max(1, sp.frames | 0);
