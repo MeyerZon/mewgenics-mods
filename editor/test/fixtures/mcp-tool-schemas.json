@@ -443,7 +443,7 @@
           "enum": [
             "cat-animation"
           ],
-          "description": "\"cat-animation\": a cat rig <animation>Pose plus an _Append_CatTest donor sprite with the labeled frames <animation>F / <animation>B, each placing the rig as `pawing` at depth 1 (the vanilla CatTest shape)"
+          "description": "\"cat-animation\": a cat rig <animation>Pose plus an _Append_CatTest donor sprite with the labeled frames <animation>F / <animation>B, each placing the rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)"
         },
         "animation": {
           "type": "string",

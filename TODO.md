@@ -14,10 +14,11 @@ docs sweep at the end of this list.
       (b) native swap (the game puts its own per-cat parts into our rig's slots) — several RE sessions, 3–6 PRs,
       uncertain;
       (c) neither — keep drawing our own parts (Rig tab + SVG round trip).
-      Either way the editor now authors cat *animations* in the vanilla shape (`_Append_CatTest` frames `<name>F`/`<name>B`
-      placing a rig as `pawing` at depth 1: `newCatAnimation`, `new_art_scene template cat-animation`, the Rig tab);
-      pending the `feat/cat-append-probe` verdict on whether the game fills an appended frame's slots by name
-      (`cat-anim-untested`), and the back facing's `head_back` layout is not authored yet.
+      Either way the editor now authors cat *animations* in the engine's shape (`_Append_CatTest` frames `<name>F`/`<name>B`
+      placing a rig as the child `ani` at depth 1: `newCatAnimation`, `new_art_scene template cat-animation`, the Rig
+      tab); a mod-appended frame still crashes in-game (A0, #74) until the native swap fix, `cat-anim-untested` says so;
+      the back facing's `head_back` layout and the four-way `LF/RF/LB/RB` quartet are not authored yet; an opt-in for a
+      deliberate `CatTest` export (now refused: `cat-clip-override`) is not built.
 - [ ] **Localized text?** Texts (#69) are the literal initial string in a game font. Should mods get localized text
       (loc keys / per-language strings), and is Peralta the right default font?
 - [ ] **Filters / glows:** the game refuses any PlaceObject3 filter ("FILTERS NOT SUPPORTED", #65), so the validator

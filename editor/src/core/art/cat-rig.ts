@@ -76,17 +76,24 @@ export function assignSlot(scene: Scene, spriteId: string, slot: string, ref: st
 
 // ---- cat animations: labeled facing frames appended to the game's CatTest clip ---------------------------------------
 //
-// OBSERVED 2026-10-21 (read-only parse of catanis.swf / catanis2.swf; pinned in test/fixtures/art/cat-anim-append.json):
+// OBSERVED 2026-10-21 (read-only parse of catanis.swf / catanis2.swf, pinned in test/fixtures/art/cat-anim-append.json;
+// the driver decompiled in .analysis/notes-catA.md, docs/engine-map.md "CatTest and the cat animation clips"):
 // the vanilla cat clip is `CatTest` (854 frames, 776 labels). Labels come in facing pairs `<anim>F` / `<anim>B`
-// (`idleF`/`idleB`, `dashF`/`dashB`, …); every labeled frame places at most one character, always at depth 1 — a nested
-// pose sprite carrying the CAT_SLOTS instances, named `pawing` on the idle/walk/hit frames. catanis2.swf extends the
-// clip with an export `_Append_CatTest` of the same shape (296 frames, 239 labels like `crawlingIdleF`). Data refers to
-// an animation by its bare name (`alt_animations [[idle <name>]]`, an ability's `animation <name>`); the engine adds the
-// facing suffix. Whether the game fills the slots of an *appended* frame by name is under test in-game
-// (feat/cat-append-probe); this authors the vanilla shape either way.
+// (`idleF`/`idleB`, `dashF`/`dashB`, …; `LF`/`RF`/`LB`/`RB` for `four_way_animations`); every labeled frame places at
+// most one character, always at depth 1 — a nested pose sprite carrying the CAT_SLOTS instances. Character::PlayAnimation
+// (0x9abda0 → 0x9ac790) looks up name + facing suffix on the ROOT clip's label map, GotoLabel on the root, then restarts
+// the child instance named `ani` (GetClip2 0x9aabb0) — so the placed layer must be named `ani`; vanilla's `pawing` name
+// on the early frames is an authoring leftover the engine never reads. `alt_animations [[from to]]` registers
+// from+"F" → to+"F" and from+"B" → to+"B" (0x103da0), and a missing label is a silent no-op (no log), so the validator's
+// facing check is the only guard. catanis2.swf extends the clip with an export `_Append_CatTest` of the same shape (296
+// frames, 239 labels like `crawlingIdleF`). Experiment A0 (PR #74): a mod-appended frame currently crashes a _CAT unit
+// on spawn — this authoring is ahead of the engine until the native swap fix lands.
 
 export const CAT_ANIM_EXPORT = "_Append_CatTest";
-export const CAT_ANIM_LAYER = "pawing";
+/** the child instance PlayAnimation restarts after GotoLabel on the root (the engine reads no other name) */
+export const CAT_ANIM_LAYER = "ani";
+/** the vanilla cat clip's SymbolClass name; a mod export of that name would shadow it for every cat (global registry) */
+export const CAT_CLIP_NAME = "CatTest";
 export const CAT_ANIM_DEPTH = 1;
 export const CAT_ANIM_FACINGS: ReadonlyArray<string> = ["F", "B"];
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -116,7 +123,7 @@ export function catAnimDonor(scene: Scene): string | null {
 /**
  * Add a cat animation `name`: a rig `<name>Pose` (or `opts.rig`), and the labeled frames `<name>F` / `<name>B` on the
  * `_Append_CatTest` donor sprite (`CatAnim_<name>` when the scene has none yet), each placing the rig as the layer
- * `pawing` at depth 1 — the shape every vanilla CatTest frame has.
+ * `ani` at depth 1 — the shape every vanilla CatTest frame has and the child PlayAnimation restarts.
  */
 export function newCatAnimation(scene: Scene, name: string, opts: NewCatAnimationOptions = {}): NewCatAnimationResult {
   const no = (message: string): NewCatAnimationResult => ({ scene, findings: [{ severity: "error", code: "cat-anim", message }] });
@@ -181,8 +188,9 @@ function placedAt(layer: SceneLayer, frame: number): string | null {
 }
 
 /**
- * Checks for the `_Append_CatTest` donor (the validator adds them): facing pairs complete, each labeled frame places a
- * cat rig, at depth 1; plus the standing note that in-game slot filling of appended frames is under test.
+ * Checks for the `_Append_CatTest` donor (the validator adds them): facing pairs complete (a missing label is a silent
+ * no-op in the engine), each labeled frame places a cat rig as the child `ani` at depth 1; plus the standing note that
+ * appended frames crash in-game until the native swap fix.
  */
 export function catAnimFindings(scene: Scene): Finding[] {
   const out: Finding[] = [];
@@ -206,7 +214,7 @@ export function catAnimFindings(scene: Scene): Finding[] {
     if (!facing) continue;
     const base = label.slice(0, -facing.length);
     const missing = CAT_ANIM_FACINGS.filter((f) => f !== facing).map((f) => `${base}${f}`).filter((l) => !(l in labels));
-    for (const m of missing) out.push({ severity: "error", code: "cat-anim-missing-facing", message: `label "${label}" has no facing partner "${m}" (the engine picks <anim>F / <anim>B by facing)`, path: `${sat}.labels.${label}` });
+    for (const m of missing) out.push({ severity: "error", code: "cat-anim-missing-facing", message: `label "${label}" has no facing partner "${m}" (the engine looks up <anim>F / <anim>B by facing and a missing label is a silent no-op)`, path: `${sat}.labels.${label}` });
   }
   for (const label of names) {
     const frame = labels[label]!;
@@ -220,10 +228,12 @@ export function catAnimFindings(scene: Scene): Finding[] {
       const target = scene.sprites[p.ref!];
       const lat = `${sat}.layers[${p.li}]`;
       if (!target || target.rig !== "cat") out.push({ severity: "error", code: "cat-anim-layer-not-rig", message: `labeled frame "${label}" (frame ${frame}) places "${p.ref}" on layer ${p.l.name || p.li}, which is not a rig: "cat" sprite`, path: lat });
+      if (p.l.name !== CAT_ANIM_LAYER) out.push({ severity: "error", code: "cat-anim-layer-name", message: `labeled frame "${label}" places its pose on a layer named "${p.l.name || ""}"; the engine restarts the child instance named "${CAT_ANIM_LAYER}" on every play and reads no other name`, path: `${lat}.name` });
+      if (p.l.name !== CAT_ANIM_LAYER) out.push({ severity: "error", code: "cat-anim-layer-name", message: `labeled frame "${label}" places its pose on a layer named "${p.l.name || ""}"; the engine restarts the child instance named "${CAT_ANIM_LAYER}" on every play and reads no other name`, path: `${lat}.name` });
       if (p.l.depth !== CAT_ANIM_DEPTH) out.push({ severity: "warning", code: "cat-anim-depth", message: `labeled frame "${label}" places its pose at depth ${p.l.depth}; every vanilla CatTest frame places it at depth ${CAT_ANIM_DEPTH}`, path: `${lat}.depth` });
     }
   }
-  out.push({ severity: "info", code: "cat-anim-untested", message: `${CAT_ANIM_EXPORT} frames are authored in the vanilla shape (labeled F/B frames, a pose sprite at depth ${CAT_ANIM_DEPTH}); whether the game fills an appended frame's slots by name is under test in-game (2026-10-21, feat/cat-append-probe)`, path: at });
+  out.push({ severity: "info", code: "cat-anim-untested", message: `${CAT_ANIM_EXPORT} frames are authored in the engine's shape (labeled F/B frames on the root, the pose as the child "${CAT_ANIM_LAYER}" at depth ${CAT_ANIM_DEPTH}), but a mod-appended frame crashes in-game until the native swap fix (experiment A0, PR #74; docs/engine-map.md "CatTest and the cat animation clips")`, path: at });
   return out;
 }
 

@@ -11,7 +11,7 @@
 import type { Mat } from "./geometry.ts";
 import { gradientProblems } from "./gradient.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
-import { rigFindings, catAnimFindings } from "./cat-rig.ts";
+import { rigFindings, catAnimFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
 import { textProblems } from "./text.ts";
 import type { SceneText } from "./text.ts";
 import { VANILLA_EXPORTS } from "./vanilla-exports.ts";
@@ -508,6 +508,8 @@ export function validateScene(input: unknown): SceneValidation {
   for (const [linkage, ref] of Object.entries(scene.exports)) {
     if (!linkage) err("export-name", "empty linkage name", ["exports"]);
     if (typeof ref !== "string" || !(scene.shapes[ref] || scene.sprites[ref])) err("export-ref", `export "${linkage}" points at unknown id "${String(ref)}"`, [`exports.${linkage}`]);
+    // OBSERVED 2026-10-21 (0x9bb6f0): clips resolve by name through a global registry of every loaded SWF, last-loaded first
+    if (linkage === CAT_CLIP_NAME) err("cat-clip-override", `export "${CAT_CLIP_NAME}" would replace the game's cat clip for every cat (clips resolve through a global last-loaded-first registry); append frames with "_Append_${CAT_CLIP_NAME}" instead`, [`exports.${linkage}`]);
   }
   // a cat animation donor (exports._Append_CatTest): facing pairs, a rig per labeled frame, depth 1 (cat-rig.ts)
   findings.push(...catAnimFindings(scene));

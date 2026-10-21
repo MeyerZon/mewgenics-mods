@@ -124,9 +124,11 @@ export function RigTab() {
       <p className="muted" style={sx("font-size:12.5px;line-height:1.6;margin:4px 0 10px")}>
         A cat animation is a facing pair of labeled frames, <span className="mono">{"<name>F"}</span> / <span className="mono">{"<name>B"}</span>,
         on a donor sprite exported as <span className="mono">{CAT_ANIM_EXPORT}</span>; each frame places a cat rig (<span className="mono">{"<name>Pose"}</span>)
-        as the layer <span className="mono">pawing</span> at depth 1 — the shape of every vanilla CatTest frame. Draw the pose's parts in its slots above,
-        build the SWF, then refer to it bare from GON: <span className="mono">alt_animations [[idle {animName.trim() || "<name>"}]]</span> on a character or
-        <span className="mono"> animation {animName.trim() || "<name>"}</span> on an ability. Whether the game fills an appended frame's slots by name is under test in-game.
+        as the layer <span className="mono">ani</span> at depth 1 — the shape of every vanilla CatTest frame; the engine restarts the child
+        <span className="mono"> ani</span> on every play. Draw the pose's parts in its slots above, build the SWF, then refer to it bare from GON:
+        <span className="mono"> alt_animations [[idle {animName.trim() || "<name>"}]]</span> on a character or
+        <span className="mono"> animation {animName.trim() || "<name>"}</span> on an ability (a missing F or B label is a silent no-op in-game).
+        A mod-appended frame still crashes in-game until the native swap fix lands (experiment A0, PR #74).
       </p>
       {donorRef !== undefined && !donor ? (
         <div className="pill chip err" style={sx("margin-bottom:8px")}>{`${CAT_ANIM_EXPORT} points at "${String(donorRef)}", which is not a donor sprite — fix the export before adding animations`}</div>

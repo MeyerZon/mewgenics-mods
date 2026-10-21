@@ -110,12 +110,14 @@ The MCP art tools cover the whole loop: `new_art_scene` → `import_svg { svgTex
 palette-remapped by the game for cats; enemy clips are not paletted and are drawn mirrored; bitmaps are smoothed and
 clamped (`npm run test:artprobe` shows the game drawing a probe; `docs/art-preview-plan.md` §8).
 
-New cat animation (the vanilla shape: `_Append_CatTest` frames `<name>F` / `<name>B`, each placing a cat rig as
-`pawing` at depth 1): `new_art_scene { mod, name, template: "cat-animation", animation: "<name>" }` → draw or replace
+New cat animation (the engine's shape: `_Append_CatTest` frames `<name>F` / `<name>B` on the root, each placing a cat
+rig as the child `ani` at depth 1 — the instance the engine restarts on every play): `new_art_scene { mod, name, template: "cat-animation", animation: "<name>" }` → draw or replace
 the pose's slot shapes (`import_svg` into the scene's `<name>Pose_<slot>` shapes; or keep the gray placeholders) →
 `build_swf` → refer to it bare from GON: `alt_animations [[idle <name>]]` on a character or `animation <name>` on an
-ability (the engine adds the facing suffix). `write_art_scene { dryRun: true }` reports the `cat-anim-*` findings;
-`cat-anim-untested` says in-game slot filling of appended frames is still under test.
+ability (the engine adds the facing suffix; a missing F or B label is a silent no-op, so keep both). `write_art_scene
+{ dryRun: true }` reports the `cat-anim-*` findings; `cat-anim-untested` says a mod-appended frame still crashes
+in-game until the native swap fix (experiment A0, PR #74). Never export a clip named `CatTest` itself: clips resolve
+through a global last-loaded-first registry and it would replace the cat for every cat (`cat-clip-override`).
 
 ## The mod-development loop (agent alone until the last step)
 
