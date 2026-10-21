@@ -1,0 +1,77 @@
+{
+  "observed": "2026-10-21, build 25143593",
+  "verdict": "crash",
+  "reason": "crash 0xc0000005 at Mewgenics.exe+0x741f5d; 3 shot(s)",
+  "crashRva": "0x741f5d",
+  "controls": {
+    "crawlingIdle": {
+      "test": "render-cat-append-ctl",
+      "verdict": "pass",
+      "reason": "all 1 expectation(s) passed; 1 shot(s)",
+      "crashRva": null
+    },
+    "missingLabel": {
+      "test": "render-cat-append-missing",
+      "verdict": "pass",
+      "reason": "all 1 expectation(s) passed; 1 shot(s)",
+      "crashRva": null
+    }
+  },
+  "radius": 350,
+  "slotColours": {
+    "tail": "#ff8000",
+    "leg2": "#8000ff",
+    "arm2": "#00a080",
+    "body": "#2080ff",
+    "leg1": "#ff60a0",
+    "arm1": "#a0ff40",
+    "head": "#ffd0a0"
+  },
+  "outcome": "crash",
+  "shots": [
+    "baseline",
+    "vanilla",
+    "primer"
+  ],
+  "vanilla": {
+    "label": "vanilla",
+    "region": {
+      "n": 573498,
+      "x0": 959,
+      "y0": 248,
+      "x1": 2418,
+      "y1": 1255,
+      "cx": 1688.5,
+      "cy": 751.5
+    },
+    "near": {
+      "changed": 261097,
+      "excluded": 2058,
+      "other": 259039
+    }
+  },
+  "primer": {
+    "label": "primer",
+    "marker": {
+      "found": true,
+      "box": {
+        "x0": 2490,
+        "y0": 461,
+        "x1": 2653,
+        "y1": 569
+      },
+      "scale": 1.7083333333333333,
+      "mirrored": true
+    },
+    "slots": {
+      "tail": 2331,
+      "leg2": 562,
+      "arm2": 692,
+      "body": 6609,
+      "leg1": 1204,
+      "arm1": 1171,
+      "head": 4999
+    }
+  },
+  "rig": []
+}

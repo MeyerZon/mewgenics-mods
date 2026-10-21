@@ -105,7 +105,7 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
 
   // ---- experiment A0 (2026-10-21): an _Append_CatTest frame placing our rig — does the game fill its slots by name? ----
   const MODS = resolve(HERE, "../../mods");
-  test("cat append probe: probe.scene.json exports _Append_CatTest -> CatAppendRoot (labels probeIdleF 0 / probeIdleB 1, a `pawing` layer at depth 1 placing CatProbe) and CatProbe carries the checker marker at depth 15", () => {
+  test("cat append probe: probe.scene.json exports _Append_CatTest -> CatAppendRoot (labels probeIdleF 0 / probeIdleB 1, a `pawing` layer at depth 1 placing CatProbe); CatProbe's slots are 1-frame wrapper sprites like the vanilla slots and it carries the checker marker (wrapped too) at depth 15", () => {
     const scene = JSON.parse(readFileSync(join(MODS, "_artprobe", "art", "probe.scene.json"), "utf8")) as any;
     eq(scene.exports["_Append_CatTest"], "CatAppendRoot");
     const root = scene.sprites.CatAppendRoot;
@@ -115,8 +115,15 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     const pawing = root.layers.find((l: any) => l.name === "pawing");
     assert(!!pawing && pawing.depth === 1, "pawing at depth 1");
     assert(pawing.keys.every((k: any) => k.ref === "CatProbe"), "pawing places CatProbe");
+    // OBSERVED (vanilla catanis.swf / catanis2.swf): every slot instance is a 1-frame DefineSprite around one shape
+    const wrapsShape = (ref: string, shape: string) => { const w = scene.sprites[ref]; return !!w && w.frames === 1 && w.layers.length === 1 && w.layers[0].keys.length === 1 && w.layers[0].keys[0].ref === shape && !!scene.shapes[shape]; };
+    for (const s of fixture.catanisMain.slots) {
+      const layer = scene.sprites.CatProbe.layers.find((l: any) => l.name === s.name);
+      assert(!!layer && layer.depth === s.depth, `slot ${s.name} at depth ${s.depth}`);
+      assert(wrapsShape(layer.keys[0].ref, `CatProbe_${s.name}`), `slot ${s.name} is a 1-frame sprite around CatProbe_${s.name}`);
+    }
     const marker = scene.sprites.CatProbe.layers.find((l: any) => l.depth === 15);
-    assert(!!marker && marker.keys[0].ref === "checker", "CatProbe: checker marker at depth 15");
+    assert(!!marker && wrapsShape(marker.keys[0].ref, "checker"), "CatProbe: the checker marker (a 1-frame sprite) at depth 15");
     assert(!fixture.catanisMain.slots.some((s) => s.depth === 15), "15 is not a slot depth");
     const v = validateScene(scene) as any;
     assert(v.ok, JSON.stringify(v.findings.filter((f: any) => f.severity === "error")));
@@ -150,13 +157,21 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(n.body, 100);
   });
 
-  test("OBSERVED 2026-10-21 fixture (artprobe-cat-append-summary.json): the appended CatTest frame — the run passed, the marker was found in every rig shot, and the outcome is pinned", () => {
+  test("OBSERVED 2026-10-21 fixture (artprobe-cat-append-summary.json): a _CAT unit whose idle is our appended CatTest frame crashes on spawn at Mewgenics.exe+0x741f5d; both controls (a vanilla appended label, a missing label) pass; the non-appended rig (the primer) still draws every slot and the marker", () => {
     const p = join(HERE, "fixtures", "ingame", "artprobe-cat-append-summary.json");
     assert(existsSync(p), "written by npm run test:artprobe -- --cat-append");
-    const j = JSON.parse(readFileSync(p, "utf8")) as { verdict: string; outcome: string; vanilla: { near: { other: number } }; rig: { label: string; marker: { found: boolean } | null; slots: Record<string, number>; near: { other: number } }[] };
-    eq(j.verdict, "pass");
-    eq(j.rig.length, 3);
-    assert(j.rig.every((r) => r.marker && r.marker.found), "marker found in every rig shot");
-    assert(["filled-by-name", "not-filled", "no-marker"].includes(j.outcome), `outcome ${j.outcome}`);
+    const j = JSON.parse(readFileSync(p, "utf8")) as { verdict: string; crashRva: string | null; outcome: string; controls: Record<string, { verdict: string; crashRva: string | null }>; shots: string[]; vanilla: { region: { n: number } | null }; primer: { marker: { found: boolean } | null; slots: Record<string, number> | null } | null; rig: unknown[] };
+    eq(j.verdict, "crash");
+    eq(j.crashRva, "0x741f5d");
+    eq(j.outcome, "crash");
+    eq(j.rig.length, 0);
+    eq(j.shots.join(","), "baseline,vanilla,primer");
+    eq(j.controls.crawlingIdle!.verdict, "pass"); eq(j.controls.crawlingIdle!.crashRva, null);
+    eq(j.controls.missingLabel!.verdict, "pass"); eq(j.controls.missingLabel!.crashRva, null);
+    // the crude diff measure is noise here: a spawn re-lights the whole floor, so the "largest changed region" of the
+    // vanilla shot vs the baseline is the arena (OBSERVED 573k px), not the cat — kept for the record, not as a count
+    assert(!!j.vanilla.region && j.vanilla.region.n > 1000, "the vanilla shot differs from the baseline");
+    assert(!!j.primer && !!j.primer.marker && j.primer.marker.found, "primer: marker found");
+    for (const s of fixture.catanisMain.slots) assert(((j.primer!.slots || {})[s.name] || 0) > 50, `primer slot ${s.name}: ${(j.primer!.slots || {})[s.name]}`);
   });
 }

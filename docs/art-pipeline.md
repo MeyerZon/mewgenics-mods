@@ -241,6 +241,11 @@ layering detail; the naming/trigger wiring is **OBSERVED**.
 - **Authoring + native:** new part art or new animation clips are SWF (Flash) work; because raw
   parts are **Frame Reliance** (§3), adding *new, non-conflicting* parts needs
   **MewCatPartFramework** (native) to register them (§6).
+- **Appending cat animation frames (OBSERVED 2026-10-21, experiment A0):** the vanilla cat clip is
+  `CatTest` (catanis.swf) and vanilla itself extends it with catanis2.swf's `_Append_CatTest`; a mod
+  SWF's `_Append_CatTest` merges at boot too, but a `_CAT` unit whose `alt_animations` picks the
+  appended label crashes on spawn (`Mewgenics.exe+0x741f5d`), while a vanilla appended label and a
+  missing label both spawn fine — see `docs/engine-map.md` "CatTest and the cat animation clips".
 
 ---
 

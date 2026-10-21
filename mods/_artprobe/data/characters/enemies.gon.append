@@ -19,3 +19,48 @@ ArtProbeCat {
         tooltip "ENEMY_LILRAT_DESC"
     }
 }
+
+// test-only (experiment A0, 2026-10-21): a real cat — TomTom's parts (movieclip _CAT + custom_cat_data) — whose idle is
+// the frame probe.swf appends to the vanilla cat clip (_Append_CatTest: probeIdleF / probeIdleB place the CatProbe rig
+// as `pawing`); npm run test:artprobe -- --cat-append asks whether the game fills the rig's slots by name
+ArtProbeCatReal {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeIdle]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (experiment A0 control): TomTom whose idle is a *vanilla* appended label — crawlingIdle lives in
+// catanis2.swf's _Append_CatTest — so a crash on ArtProbeCatReal but not here is about our frame's content
+ArtProbeCatCtl {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle crawlingIdle]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (experiment A0 control 2): TomTom whose idle names a label no clip has — what does a missing label do?
+ArtProbeCatMissing {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle noSuchLabelXYZ]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}

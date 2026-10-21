@@ -17,6 +17,10 @@ cmd spawn TomTom
 expect console "Spawned TomTom" within 10
 wait frames 120
 shot "vanilla"
+cmd spawn ArtProbeCat
+expect console "Spawned ArtProbeCat" within 10
+wait frames 120
+shot "primer"
 cmd spawn ArtProbeCatReal
 expect console "Spawned ArtProbeCatReal" within 10
 wait frames 120

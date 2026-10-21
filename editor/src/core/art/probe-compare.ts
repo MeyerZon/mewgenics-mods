@@ -221,24 +221,111 @@ export interface ProbeSummary {
   walkerXs: number[];
 }
 
+const parseColours = (colours: Record<string, string>) => Object.entries(colours).map(([k, hex]) => [k, [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)] as Rgb] as const);
+
+/** pixel i of img is colour c up to a uniform tint factor 0.55..1.15 (units are tinted by where they stand) and ±24 per channel */
+function matchTinted(img: RgbaImageLike, i: number, c: Rgb): boolean {
+  const r = img.rgba[i * 4]!, g = img.rgba[i * 4 + 1]!, b = img.rgba[i * 4 + 2]!;
+  const cc = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
+  if (!cc) return r < 24 && g < 24 && b < 24;
+  const k = (r * c[0] + g * c[1] + b * c[2]) / cc;
+  if (k < 0.55 || k > 1.15) return false;
+  return Math.abs(r - k * c[0]) <= 24 && Math.abs(g - k * c[1]) <= 24 && Math.abs(b - k * c[2]) <= 24;
+}
+
+/** pixel i differs between two same-sized images by more than tol (|dr| + |dg| + |db|) */
+function changedAt(img: RgbaImageLike, ref: RgbaImageLike, i: number, tol: number): boolean {
+  const j = i * 4;
+  return Math.abs(img.rgba[j]! - ref.rgba[j]!) + Math.abs(img.rgba[j + 1]! - ref.rgba[j + 1]!) + Math.abs(img.rgba[j + 2]! - ref.rgba[j + 2]!) > tol;
+}
+
+export interface ChangedRegion { n: number; x0: number; y0: number; x1: number; y1: number; cx: number; cy: number }
+
+/**
+ * The largest 8-connected region of pixels that differ from `ref` (a shot of the same scene taken before something
+ * was spawned) by more than `tol`; its bbox centre is where the new thing is. null when nothing changed. Crude by
+ * design: idle bobbing of other units and UI changes also differ, but the spawned unit is the biggest blob.
+ */
+export function largestChangedRegion(img: RgbaImageLike, ref: RgbaImageLike, tol = 60): ChangedRegion | null {
+  const W = img.width, H = img.height;
+  if (ref.width !== W || ref.height !== H) return null;
+  const mask = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) if (changedAt(img, ref, i, tol)) mask[i] = 1;
+  let best: ChangedRegion | null = null;
+  const stack: number[] = [];
+  for (let start = 0; start < mask.length; start++) {
+    if (mask[start] !== 1) continue;
+    const reg = { n: 0, x0: W, y0: H, x1: -1, y1: -1 };
+    mask[start] = 2;
+    stack.push(start);
+    while (stack.length) {
+      const k = stack.pop()!;
+      const x = k % W, y = (k - x) / W;
+      reg.n++;
+      if (x < reg.x0) reg.x0 = x; if (y < reg.y0) reg.y0 = y; if (x > reg.x1) reg.x1 = x; if (y > reg.y1) reg.y1 = y;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const nk = ny * W + nx;
+        if (mask[nk] === 1) { mask[nk] = 2; stack.push(nk); }
+      }
+    }
+    if (!best || reg.n > best.n) best = { ...reg, cx: (reg.x0 + reg.x1) / 2, cy: (reg.y0 + reg.y1) / 2 };
+  }
+  return best;
+}
+
+export interface ChangedNear {
+  /** pixels within the radius that differ from the reference shot */
+  changed: number;
+  /** of those, the ones in an `exclude` colour (the rig's slot colours, the marker's) */
+  excluded: number;
+  /** the rest: what was drawn here that is neither our slot colours nor our marker — real cat parts, or nothing */
+  other: number;
+}
+
+/**
+ * The pixels within `radius` of `centre` (Euclidean, screen px) that differ from `ref` by more than `tol`, split into
+ * the `exclude` colours (matched like slotColoursPresent, tint-tolerant) and the rest. The "cat parts near the
+ * marker" measure of the cat append probe: run on the rig shot against the shot before the rig cat spawned, centred
+ * on the marker, excluding the seven slot colours and the marker's own yellow / magenta / cyan.
+ */
+export function changedPixelsNear(img: RgbaImageLike, ref: RgbaImageLike, centre: { x: number; y: number }, radius: number, opts: { tol?: number; exclude?: Record<string, string> } = {}): ChangedNear {
+  const out: ChangedNear = { changed: 0, excluded: 0, other: 0 };
+  const W = img.width, H = img.height;
+  if (ref.width !== W || ref.height !== H) return out;
+  const tol = opts.tol ?? 60;
+  const excl = parseColours(opts.exclude || {});
+  const x0 = Math.max(0, Math.floor(centre.x - radius)), x1 = Math.min(W - 1, Math.ceil(centre.x + radius));
+  const y0 = Math.max(0, Math.floor(centre.y - radius)), y1 = Math.min(H - 1, Math.ceil(centre.y + radius));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if ((x - centre.x) ** 2 + (y - centre.y) ** 2 > radius * radius) continue;
+    const i = y * W + x;
+    if (!changedAt(img, ref, i, tol)) continue;
+    out.changed++;
+    if (excl.some(([, c]) => matchTinted(img, i, c))) out.excluded++; else out.other++;
+  }
+  return out;
+}
+
+/** The marker's yellow border and magenta / cyan cells (probe.scene.json `checker`), as exclude colours. */
+export const MARKER_COLOURS: Record<string, string> = { markerYellow: "#ffff00", markerMagenta: "#ff00ff", markerCyan: "#00ffff" };
+
 /**
  * Pixels of each named #rrggbb colour, allowing a uniform darkening / brightening (the game tints units by where they
  * stand: OBSERVED 2026-10-20 the cat rig's colours came back at ~0.8–0.86). With `anchor`, only pixels within
- * `radius` px of the anchor colour's largest connected region count (UI elsewhere on screen is ignored).
+ * `radius` px of the anchor colour's largest connected region count (UI elsewhere on screen is ignored); with
+ * `centre`, the window is `radius` around that point instead (the marker's centre when the slots may be gone).
  */
-export function slotColoursPresent(img: RgbaImageLike, colours: Record<string, string>, opts: { anchor?: string; radius?: number } = {}): Record<string, number> {
-  const want = Object.entries(colours).map(([k, hex]) => [k, [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)] as Rgb] as const);
-  const match = (i: number, c: Rgb): boolean => {
-    const r = img.rgba[i * 4]!, g = img.rgba[i * 4 + 1]!, b = img.rgba[i * 4 + 2]!;
-    const cc = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
-    if (!cc) return r < 24 && g < 24 && b < 24;
-    const k = (r * c[0] + g * c[1] + b * c[2]) / cc;
-    if (k < 0.55 || k > 1.15) return false;
-    return Math.abs(r - k * c[0]) <= 24 && Math.abs(g - k * c[1]) <= 24 && Math.abs(b - k * c[2]) <= 24;
-  };
+export function slotColoursPresent(img: RgbaImageLike, colours: Record<string, string>, opts: { anchor?: string; radius?: number; centre?: { x: number; y: number } } = {}): Record<string, number> {
+  const want = parseColours(colours);
+  const match = (i: number, c: Rgb): boolean => matchTinted(img, i, c);
   const W = img.width, H = img.height;
   let win = { x0: 0, y0: 0, x1: W - 1, y1: H - 1 };
-  if (opts.anchor && colours[opts.anchor]) {
+  if (opts.centre) {
+    const r = opts.radius ?? 400;
+    win = { x0: Math.max(0, Math.round(opts.centre.x - r)), y0: Math.max(0, Math.round(opts.centre.y - r)), x1: Math.min(W - 1, Math.round(opts.centre.x + r)), y1: Math.min(H - 1, Math.round(opts.centre.y + r)) };
+  } else if (opts.anchor && colours[opts.anchor]) {
     const c = want.find(([k]) => k === opts.anchor)![1];
     const seen = new Uint8Array(W * H);
     let best: { n: number; x0: number; y0: number; x1: number; y1: number } | null = null;

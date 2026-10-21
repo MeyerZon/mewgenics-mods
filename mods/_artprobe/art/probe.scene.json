@@ -43,19 +43,33 @@
       "frames": 1,
       "layers": [ { "name": "blink", "depth": 1, "keys": [ { "frame": 0, "ref": "Blink", "x": 0, "y": 0 } ] } ]
     },
+    "CatProbeMc_tail": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_tail", "x": 0, "y": 0 } ] } ] },
+    "CatProbeMc_leg2": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_leg2", "x": 0, "y": 0 } ] } ] },
+    "CatProbeMc_arm2": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_arm2", "x": 0, "y": 0 } ] } ] },
+    "CatProbeMc_body": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_body", "x": 0, "y": 0 } ] } ] },
+    "CatProbeMc_leg1": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_leg1", "x": 0, "y": 0 } ] } ] },
+    "CatProbeMc_arm1": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_arm1", "x": 0, "y": 0 } ] } ] },
+    "CatProbeMc_marker": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "checker", "x": 0, "y": 0 } ] } ] },
+    "CatProbeMc_head": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_head", "x": 0, "y": 0 } ] } ] },
     "CatProbe": {
       "frames": 24,
       "labels": { "idle": 0 },
       "rig": "cat",
       "layers": [
-        { "name": "tail", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe_tail", "x": 0, "y": 0 } ] },
-        { "name": "leg2", "depth": 3, "keys": [ { "frame": 0, "ref": "CatProbe_leg2", "x": 0, "y": 0 } ] },
-        { "name": "arm2", "depth": 5, "keys": [ { "frame": 0, "ref": "CatProbe_arm2", "x": 0, "y": 0 } ] },
-        { "name": "body", "depth": 7, "keys": [ { "frame": 0, "ref": "CatProbe_body", "x": 0, "y": 0 } ] },
-        { "name": "leg1", "depth": 9, "keys": [ { "frame": 0, "ref": "CatProbe_leg1", "x": 0, "y": 0 } ] },
-        { "name": "arm1", "depth": 11, "keys": [ { "frame": 0, "ref": "CatProbe_arm1", "x": 0, "y": 0 } ] },
-        { "name": "head", "depth": 13, "keys": [ { "frame": 0, "ref": "CatProbe_head", "x": 0, "y": 0 } ] }
+        { "name": "tail", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbeMc_tail", "x": 0, "y": 0 } ] },
+        { "name": "leg2", "depth": 3, "keys": [ { "frame": 0, "ref": "CatProbeMc_leg2", "x": 0, "y": 0 } ] },
+        { "name": "arm2", "depth": 5, "keys": [ { "frame": 0, "ref": "CatProbeMc_arm2", "x": 0, "y": 0 } ] },
+        { "name": "body", "depth": 7, "keys": [ { "frame": 0, "ref": "CatProbeMc_body", "x": 0, "y": 0 } ] },
+        { "name": "leg1", "depth": 9, "keys": [ { "frame": 0, "ref": "CatProbeMc_leg1", "x": 0, "y": 0 } ] },
+        { "name": "arm1", "depth": 11, "keys": [ { "frame": 0, "ref": "CatProbeMc_arm1", "x": 0, "y": 0 } ] },
+        { "name": "head", "depth": 13, "keys": [ { "frame": 0, "ref": "CatProbeMc_head", "x": 0, "y": 0 } ] },
+        { "name": "marker", "depth": 15, "keys": [ { "frame": 0, "ref": "CatProbeMc_marker", "x": -48, "y": -220 } ] }
       ]
+    },
+    "CatAppendRoot": {
+      "frames": 2,
+      "labels": { "probeIdleF": 0, "probeIdleB": 1 },
+      "layers": [ { "name": "pawing", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe", "x": 0, "y": 0 }, { "frame": 1, "ref": "CatProbe", "x": 0, "y": 0 } ] } ]
     },
     "ArtProbe": {
       "frames": 60,
@@ -73,5 +87,5 @@
       ]
     }
   },
-  "exports": { "ArtProbe": "ArtProbe", "CatProbe": "CatProbe" }
+  "exports": { "ArtProbe": "ArtProbe", "CatProbe": "CatProbe", "_Append_CatTest": "CatAppendRoot" }
 }
