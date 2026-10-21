@@ -95,7 +95,7 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (23 tools, incl. the art tools,
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (24 tools, incl. the art tools,
   `check_game_build` and `port_bindings`).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
 
