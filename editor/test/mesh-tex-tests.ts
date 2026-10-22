@@ -121,4 +121,45 @@ export function runMeshTexTests(test: TestFn, assert: AssertFn, eq: EqFn, fixtur
     eq(mm.judgeColourPatch([], obj, targets, opts).verdict, "no-shots");
   });
 
+  // ---- OBSERVED (T2) ----
+  const observed = (name: string): string | null => (fixture ? fixture(name) : null);
+  test("OBSERVED (T2 2026-10-22, mesh-tex-crate-summary.json + log): the textured crate — crate.png found by the convention, App_GetTexture's GL name read at replay, both checker colours shaded on the crate's top face around its anchor", () => {
+    const log = observed("mesh-tex-crate-log.txt"), sum = observed("mesh-tex-crate-summary.json");
+    assert(!!log && !!sum, "fixtures present");
+    if (!log || !sum) return;
+    assert(/mesh: texture models\/crate\.png for models\/crate\.obj: loaded 16x16/.test(log), "the texture load line");
+    assert(/mesh: texture models\/crate\.png gl name [1-9]\d*/.test(log), "a non-zero GL name at Texture2D+8, read in the functor");
+    const p = mm.parseMeshProbeLog(log);
+    eq(p.glErrors.length, 0);
+    assert(p.objects.some((o) => o.model === "models/crate.obj" && o.tex === "models/crate.png" && o.palette === -1), "the object drew with its texture, palette off");
+    const j = JSON.parse(sum);
+    eq(j.judgement.verdict, "match"); eq(j.judgement.staleChecked, true);
+    eq(j.run.verdict, "pass");
+    assert(/1 real save file\(s\) unchanged/.test(j.run.save), "save guard");
+  });
+  test("OBSERVED (T2 2026-10-22, mesh-tex-palette-summary.json + log): MEWFW_MESH_PROBE_PALETTE=63 — the grey checker cells drawn as palette.png's texels of row 63 (column 5 on the top face), the orange cells passed through", () => {
+    const log = observed("mesh-tex-palette-log.txt"), sum = observed("mesh-tex-palette-summary.json");
+    assert(!!log && !!sum, "fixtures present");
+    if (!log || !sum) return;
+    assert(/mesh: palette\.png 16x256/.test(log), "palette.png through App_GetTexture, existence-checked");
+    assert(mm.parseMeshProbeLog(log).objects.some((o) => o.palette === 63), "row 63 on the object");
+    const j = JSON.parse(sum);
+    eq(j.judgement.verdict, "match");
+    eq(j.paletteTexel.join(","), j.targets.find((t: mm.ColourTarget) => t.name === "palette-top").rgb.join(","), "the target IS palette.png's texel (5, 63)");
+    eq(j.run.verdict, "pass");
+    assert(/1 real save file\(s\) unchanged/.test(j.run.save), "save guard");
+  });
+  test("OBSERVED (T2 2026-10-22, mesh-tex-glb-log.txt + summary): models/pillar.glb loaded from the mod path and drawn teal; MEWFW_MESH_PROBE_TEXTURE=models/missing.png logged model-texture-missing once and drew the base colour", () => {
+    const log = observed("mesh-tex-glb-log.txt"), sum = observed("mesh-tex-glb-summary.json");
+    assert(!!log && !!sum, "fixtures present");
+    if (!log || !sum) return;
+    assert(/mesh: model models\/pillar\.glb loaded: 24 verts, 36 indices, bounds \(-0\.25 0\.00 -0\.25\)-\(0\.25 1\.20 0\.25\)/.test(log), "the glb model line");
+    const p = mm.parseMeshProbeLog(log);
+    eq(p.textureMissing.length, 1, "one line, not one per frame");
+    eq(p.glErrors.length, 0);
+    const j = JSON.parse(sum);
+    eq(j.judgement.verdict, "match");
+    eq(j.run.verdict, "pass");
+    assert(/1 real save file\(s\) unchanged/.test(j.run.save), "save guard");
+  });
 }
