@@ -104,6 +104,17 @@ these without a decision (status per bullet below; the PR map follows).
       Remaining: T3 — the owner's look at the tab and at a `vectorcraft_exec` drawing in game.
 - [ ] **T3 looks** (owner, 2026-10-21: he will do these later) — moved to **"Requires a human (T3 looks)"** at the
       top of this file (the gallery: `cd editor && npm run t3`; the list: `editor/t3-looks.json`).
+- [ ] **Game speed — what to use it for?** (2026-10-22, PR "feat: game speed") The vanilla Combat Speed dropdown
+      offers 1..4, but the game reads `combat_speed` as an unclamped float (engine-map "Frame timing and game speed").
+      Decisions: (1) **for your own play**: try `combat_speed 8` in `settings.txt` (close the game first; it rewrites
+      the file on exit) — untested in-game by an agent; it speeds combat only, keeps `bypass_combatspeed` animations
+      at 1x, and opening the Settings menu may show a blank/odd dropdown entry for 8 (unknown). Steam launch options
+      stay empty per the repo rules, so `-combat_speed 8` is for dev launches only. Is the feel acceptable, and what
+      factor breaks readability? (2) **for T2**: `speed 8` in a script cut the seeded fight from ~12 s to ~2 s with
+      identical results (`luck-seeded-speed8.mewtest`); should agents add `speed 8` to the existing fight scripts
+      (≤ 12x keeps `wait turns|rounds` sampling exact), or should the runner grow a `speed:` header / default?
+      (3) the dev fast mode (`App+0xe1d`, CPU-bound, used by the dev menu's fuzz/stress tests) is decoded but not
+      exposed — worth a `speed max` later?
 - [x] **Agent, next session (no decision needed):** the deferred docs sweep — done 2026-10-21 in PR #73 (the modding
       skill's art section, binding-port.md "Known limits", KNOWLEDGE-BASE's Ruffle line, CLAUDE.md's tool count; also
       ticked the stale "46 unanchored entries" items, closed by #53–#56). The RE notes of 2026-10-21/22 are folded by

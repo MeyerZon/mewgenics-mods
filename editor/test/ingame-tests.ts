@@ -411,6 +411,22 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       for (const c of ["listcmds", "spawn arg0", "spawntile arg0", "load arg0", "bind arg0", "bind_passive arg0", "status arg0", "passive arg0", "win", "killall", "takeover", "noui", "equip arg0", "weather arg0", "tileset arg0", "skip_tutorial", "set_day arg0"]) assert(cmds.includes(c), `TacticsTest/MewDirector command ${c} listed`);
       eq(cmds[cmds.length - 1], "Executed: listcmds");
     });
+    test("OBSERVED 2026-10-22 fixture, game speed (result-speed-1x.jsonl = luck-seeded, result-speed-8x.jsonl = luck-seeded-speed8): at `speed 8` the seeded fight is the same fight — the same expectations pass, the same 11 turns, and every unit dump (hp, stats, statuses, stacks of all 8 units, rounds 1-3) is identical — while enter -> end takes under a quarter of the 1x wall time", () => {
+      const ev = (f: string) => fixture(f).split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l) as { ev: string; t: number; [k: string]: unknown });
+      const a = ev("result-speed-1x.jsonl"), b = ev("result-speed-8x.jsonl");
+      const sp = b.filter((e) => e.ev === "speed");
+      eq(JSON.stringify(sp.map((e) => [e.arg, e.applied, e.ok])), JSON.stringify([["8", "8", true], ["off", "1", true]]), "speed 8, then off, both applied");
+      eq(a.filter((e) => e.ev === "speed").length, 0, "the 1x run has no speed directive");
+      const expects = (x: typeof a) => x.filter((e) => e.ev === "expect").map((e) => `${e.ok}:${e.detail}`);
+      eq(JSON.stringify(expects(b)), JSON.stringify(expects(a)), "the same expectation results");
+      assert(expects(a).length === 3 && expects(a).every((s) => s.startsWith("true:")), expects(a).join("; "));
+      const units = (x: typeof a) => x.filter((e) => e.ev === "units").map((e) => JSON.stringify(e.list));
+      eq(units(a).length, 3); eq(JSON.stringify(units(b)), JSON.stringify(units(a)), "identical unit dumps");
+      const end = (x: typeof a) => x.find((e) => e.ev === "end")!, enter = (x: typeof a) => x.find((e) => e.ev === "enter")!;
+      eq(end(a).turns, 11); eq(end(b).turns, 11); eq(end(a).code, 0); eq(end(b).code, 0);
+      const fightA = end(a).t - enter(a).t, fightB = end(b).t - enter(b).t;
+      assert(fightB * 4 < fightA, `8x fight ${fightB} ms vs 1x ${fightA} ms`);
+    });
     test("OBSERVED fixture: golden through dump — the vanilla and _golden-merge dumps of the same seeded fight differ only on the overlaid fields (result-golden-vanilla.jsonl / result-golden-merge.jsonl)", () => {
       type U = { i: number; name: string; class: string; faction: number };
       type R = { units: { count: number; list: U[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null };

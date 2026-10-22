@@ -118,8 +118,8 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
-  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the harness's modules;
-  196 checks = 14 + 6 + 16 + 15 + 13 + 15 + 27 + 90, `-Werror`),
+  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the game-speed rules, the harness's modules;
+  209 checks = 14 + 6 + 16 + 15 + 13 + 15 + 27 + 10 + 93, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
@@ -201,7 +201,9 @@ launches, scans the logs, hashes the real save and decides the verdict. Contract
 verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with that file. Only the engine's 11 console
 commands exist at the main menu; `enter TacticsTest` (2026-10-20) replays the dev menu's test-fight button inside the
 DLL, after which the run commands (`spawn`, `bind`, `load`, `win`, …) exist, turns fire and `dump` / `expect units` /
-`expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry").
+`expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry"). `speed <factor>` (API v5,
+`FW_SetTimeScale`) runs the game's fixed-step loop factor x faster with identical updates (a seeded fight is the same
+fight); keep it at <= 12x when a script samples after `wait turns|rounds` ("Frame timing and game speed").
 
 Read `docs/engine-map.md` (binary facts, build identity, function RVAs, status model), `docs/data-mods.md` (overlay
 semantics and content shapes), `docs/ingame-testing.md` (the harness), `docs/binding-port.md` (the bindings manifest and

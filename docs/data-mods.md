@@ -283,6 +283,14 @@ MyGlowingRat {
   --data`; fixture `editor/test/fixtures/ingame/data-glow-summary.json`: a 5620 px magenta rim around the spawned
   FwGlowRat, none before the spawn).
 
+## Combat speed knobs (2026-10-22, static decode)
+
+Game speed is not a GON knob: it is the `combat_speed` **setting** (settings.txt, menu values 1..4, read as an
+unclamped float every update in combat; docs/engine-map.md "Frame timing and game speed"). Two data-side touches:
+an ability's `graphics { bypass_combatspeed true }` makes its animation play at 1x whatever the setting (vanilla:
+`ChaosSwitchForms`), and `particles.gon` entries carry `movieclip_timescale` (a per-effect clip rate). A mod that
+wants faster simulation for tests uses the harness's `speed <factor>` (framework API v5), not data.
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses
