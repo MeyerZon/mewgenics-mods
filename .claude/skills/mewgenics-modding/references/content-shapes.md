@@ -7,13 +7,18 @@ authoring an overlay.
 
 ## GON syntax notes
 
-- `Key { ... }` objects, `[ ... ]` arrays.
+- `Key { ... }` objects, `[ ... ]` arrays (the braces are tokens on their own; `a{b 1}` is fine).
 - Bare tokens, including numeric expressions like
   `3+bonus_melee_ability_damage` and leading-dot decimals like `.25`.
-- Quoted strings `"..."`; integer keys (`0`, `1`, `2`, ...).
-- `//` line comments.
-- Commas are optional — they are treated as whitespace.
+- Quoted strings `"..."`; integer keys (`0`, `1`, `2`, ...). Inside quotes only `\n` is an escape
+  (`\t` is a plain `t`).
+- `//` line comments, `/* */` blocks and `#` to end of line.
+- `,` `:` `=` are whitespace — commas are optional, `a=5` is `a 5`.
 - Whitespace-insignificant layout.
+- Typing is by text, never by quoting (the game drops the quotes): `"5"` and `5` are both numbers
+  (`.add` / `.multiply` work on either), `""` is the number 0, `0x10` is 16, exactly `true` / `false` are bools,
+  `null` is null, and `5%`, `yes`, `True` are strings. A string that must stay a string needs non-numeric text.
+  Details: `docs/data-mods.md` "GON typing fidelity".
 
 ## Abilities (`data/abilities/*.gon`)
 

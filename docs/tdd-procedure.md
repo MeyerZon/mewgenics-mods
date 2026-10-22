@@ -82,6 +82,35 @@ Fixtures are hand-written excerpts shaped like the real thing (log lines, JSONL,
 Never commit game assets, saves or exe bytes; the only game-derived data in git is the short byte signatures in
 `bindings/`. T1 tests read the real files in place and skip when they are absent.
 
+## Running the editor from a git worktree
+
+Several agents work in this repo at once, each in its own `git worktree` under `.claude/worktrees/<tag>`. A fresh
+worktree has none of the git-ignored inputs the main checkout accumulated — `editor/node_modules/`, `.extracted/`,
+`editor/data/` (the `build:index` caches) — so point it at the main checkout's copies instead of rebuilding them:
+
+1. **One junction, for the dependencies only** (PowerShell):
+   `New-Item -ItemType Junction -Path "<worktree>\editor\node_modules" -Target "<main>\editor\node_modules"`.
+   Do not junction `.extracted`, `.analysis` or `editor/data`: the variables below replace those, and every junction
+   is a removal hazard (`CLAUDE.md` "Worktrees with junctions are a data-loss trap").
+2. **Env vars, for every `npm` command run in the worktree:**
+   - `MEWGENICS_EXTRACTED_DATA=<main>\.extracted\data` — the base data (T1 tests, the validator, the merge preview).
+   - `MEWGENICS_EDITOR_DATA=<main>\editor\data` — the caches: `component-names.json` (the component class list;
+     `build:index` can only rebuild it from `.analysis/list_names.tsv`, which is not on disk since the 2026-10-19
+     wipe) and `base-index.json`. Without it the component-dependent check logs
+     `(skipped: editor/data/component-names.json missing …)`, the validator reports one `component-list-missing`
+     info instead of an `unknown-component` warning per passive, and `npm run build:index` writes a fresh
+     `base-index.json` into the worktree's own `editor/data/` (and says why it kept or skipped the component list).
+     An override under any `saves/` path is refused at load.
+   - `MEWGENICS_VANILLA_SWF_DIR=<main>\.extracted\swfs` — the vanilla SWF reads (art T1 tests; they skip without
+     it). The palette textures (`.extracted/textures/`) still resolve against the worktree root and skip there.
+3. **Before removing the worktree:** `cmd /c rmdir "<worktree>\editor\node_modules"` (unlinks the junction without
+   following it), confirm `<main>\editor\node_modules` still has contents, then `git worktree remove`. The full rule
+   and the incident behind it: `CLAUDE.md` "Worktrees with junctions are a data-loss trap".
+
+With the variables set, `npm test` and `npm run typecheck` in a worktree match the main checkout; without them the
+suite still exits 0 with `(skipped: …)` lines (the nested runs in `run-tests.ts` sections 4 and 10 check both
+variables on every run).
+
 ## Enforcement (mechanical since 2026-10-20, plus convention)
 
 - **CI runs T0** (`.github/workflows/t0.yml`) on every PR and push to `main` that touches `editor/`, `native/`,
