@@ -10,6 +10,7 @@ Crate {
 			tint [1 0.9 0.8 1]
 			palette true
 			double_sided false
+			hide_sprite true
 		}
 	}
 }

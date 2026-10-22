@@ -1,0 +1,14 @@
+// _unitface (test-only, 3D phase M3 `face`): the vanilla Rat gets models/face-box.obj, a box with a cyan FRONT face
+// and a yellow BACK face (textures/models/face-box.png), so tests/unit-face.mewtest can see the model turn when
+// Character::Face turns the Rat (the harness's `face <unit> front|back|<dx> <dy>`). yaw 0: no GON offset, the turn is
+// the facing alone.
+Rat {
+	graphics {
+		model {
+			file "models/face-box.obj"
+			scale 1
+			yaw 0
+			offset [0 0 0]
+		}
+	}
+}

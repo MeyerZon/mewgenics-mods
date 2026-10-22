@@ -743,4 +743,45 @@ TEST(gltf_success_leaves_code_null_and_lists_warnings) {
     fw_mesh_free(&m);
 }
 
+/* ---------------- M3: the embedded image's bytes ride on the mesh (fw_mesh_embtex.c decodes them) ---------------- */
+#define IMG_MAT ",\"material\":0"
+#define IMG_EXTRA(images) "\"materials\":[{\"pbrMetallicRoughness\":{\"baseColorTexture\":{\"index\":0}}}],\"textures\":[{\"source\":0}],\"images\":[" images "],"
+TEST(gltf_embedded_image_bytes_are_kept_on_the_mesh) {
+    FwMesh m; FwMeshError e;
+    TRI_OK(TRI_MESH ONE_NODE, .primx = IMG_MAT, .extra = IMG_EXTRA("{\"bufferView\":1,\"mimeType\":\"image/png\"}"));
+    CHECK_STR(m.texture, "embedded:1");
+    CHECK(m.image != NULL); CHECK_EQ(m.image_len, 6);                      /* bufferView 1 = the 6 index bytes */
+    if (m.image) { uint16_t i1; memcpy(&i1, m.image + 2, 2); CHECK_EQ(i1, 1); }
+    CHECK_EQ(e.nwarnings, 0); CHECK(e.code == NULL);
+    fw_mesh_free(&m);
+    CHECK(m.image == NULL && m.image_len == 0);
+    TRI_OK(TRI_MESH ONE_NODE, .primx = IMG_MAT, .extra = IMG_EXTRA("{\"uri\":\"data:image/png;base64,iVBORw0KGgo=\"}"));
+    CHECK_STR(m.texture, "embedded:data-uri");
+    CHECK_EQ(m.image_len, 8);
+    static const uint8_t sig[8] = { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a };
+    CHECK(m.image && memcmp(m.image, sig, 8) == 0);
+    fw_mesh_free(&m);
+}
+TEST(gltf_embedded_image_problems_are_warnings_not_refusals) {
+    FwMesh m; FwMeshError e;
+    TRI_OK(TRI_MESH ONE_NODE, .primx = IMG_MAT, .extra = IMG_EXTRA("{\"bufferView\":1,\"mimeType\":\"image/jpeg\"}"));
+    CHECK(m.image == NULL); CHECK_EQ(fw_mesh_has_warning(&e, FW_MC_IMAGE_FORMAT), 1);
+    CHECK_STR(m.texture, "embedded:1"); CHECK(e.code == NULL);
+    fw_mesh_free(&m);
+    TRI_OK(TRI_MESH ONE_NODE, .primx = IMG_MAT, .extra = IMG_EXTRA("{\"bufferView\":1}"));            /* no mimeType: required by the spec */
+    CHECK(m.image == NULL); CHECK_EQ(fw_mesh_has_warning(&e, FW_MC_IMAGE_FORMAT), 1);
+    fw_mesh_free(&m);
+    TRI_OK(TRI_MESH ONE_NODE, .primx = IMG_MAT, .extra = IMG_EXTRA("{\"bufferView\":9,\"mimeType\":\"image/png\"}"));   /* dangling */
+    CHECK(m.image == NULL); CHECK_EQ(fw_mesh_has_warning(&e, FW_MC_IMAGE_EMBEDDED_INVALID), 1);
+    CHECK(e.code == NULL); CHECK_STR(e.text, "");                      /* the view() error text was put back: still a success */
+    CHECK_EQ(m.nindices, 3);
+    fw_mesh_free(&m);
+    TRI_OK(TRI_MESH ONE_NODE, .primx = IMG_MAT, .extra = IMG_EXTRA("{\"uri\":\"data:image/png;base64,@@@\"}"));
+    CHECK(m.image == NULL); CHECK_EQ(fw_mesh_has_warning(&e, FW_MC_IMAGE_EMBEDDED_INVALID), 1);
+    fw_mesh_free(&m);
+    TRI_OK(TRI_MESH ONE_NODE, .primx = IMG_MAT, .extra = IMG_EXTRA("{\"uri\":\"data:image/jpeg;base64,/9j/\"}"));
+    CHECK(m.image == NULL); CHECK_EQ(fw_mesh_has_warning(&e, FW_MC_IMAGE_FORMAT), 1);
+    fw_mesh_free(&m);
+}
+
 int main(void) { return MT_RUN_ALL(); }

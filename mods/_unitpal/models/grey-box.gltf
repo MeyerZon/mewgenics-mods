@@ -1,0 +1,103 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "hand-built for mods/_unitpal (test-only, not game data): mods/_unitmodel/models/unit-box.gltf with a grey 0.6 base colour"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "GreyBox",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1
+     },
+     "indices": 2,
+     "material": 0
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "palette-grey-0.6",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.6,
+     0.6,
+     0.6,
+     1
+    ]
+   }
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 648,
+   "uri": "data:application/octet-stream;base64,mpmZPgAAAACamZm+mpmZPpqZGT+amZm+mpmZPpqZGT+amZk+mpmZPgAAAACamZk+mpmZvgAAAACamZk+mpmZvpqZGT+amZk+mpmZvpqZGT+amZm+mpmZvgAAAACamZm+mpmZvpqZGT+amZm+mpmZvpqZGT+amZk+mpmZPpqZGT+amZk+mpmZPpqZGT+amZm+mpmZvgAAAACamZk+mpmZvgAAAACamZm+mpmZPgAAAACamZm+mpmZPgAAAACamZk+mpmZPgAAAACamZk+mpmZPpqZGT+amZk+mpmZvpqZGT+amZk+mpmZvgAAAACamZk+mpmZvgAAAACamZm+mpmZvpqZGT+amZm+mpmZPpqZGT+amZm+mpmZPgAAAACamZm+AACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA"
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 288,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 576,
+   "byteLength": 72,
+   "target": 34963
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -0.3,
+    0,
+    -0.3
+   ],
+   "max": [
+    0.3,
+    0.6,
+    0.3
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  }
+ ]
+}

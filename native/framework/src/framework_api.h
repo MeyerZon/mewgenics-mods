@@ -80,6 +80,8 @@ typedef enum FwSymbol {
     FW_SYM_ResourceManager_GetBinaryResource, /* BinaryResource* (unused, std::string path by value) — bytes via -modpaths then the gpak; data +0x28, int32 size +0x30; NULL when missing */
     FW_SYM_App_GetTexture,              /* Texture2D* (unused, std::string name by value) — cached "textures/"+name; a missing file is dereferenced */
     FW_SYM_Material_Bind,               /* void (Material*) — program, uniforms, textures through the engine caches */
+    /* M3 named models ("@Name"): data/models.gon through the game loader, overlays of every mod merged */
+    FW_SYM_Gon_LoadFile,                /* GonResource* (ResourceMap* = FW_DATA_ResourceMap, std::string* path by value (callee destroys), bool reload, bool) — merged root GonObject at +OFF_GONRES_OBJECT; NULL when absent */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -106,6 +108,7 @@ typedef enum FwData {
     FW_DATA_MatStackTop,                       /* int: matrix stack top index */
     FW_DATA_CurrentCamera,                     /* Camera*: the camera rendering right now */
     FW_DATA_MatStackData,                      /* float*: matrix stack data (top = data + MatStackTop * 16 floats) */
+    FW_DATA_ResourceMap,                       /* the resource manager Gon_LoadFile caches in (M3 named models) */
     FW_DATA_COUNT_
 } FwData;
 

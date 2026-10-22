@@ -21,8 +21,13 @@
 #include "fw_gon.h"
 #include <stdio.h>
 #include "fw_unit_model.h"
+#include "fw_unit_face.h"     /* M3: the model turns with Character::Face */
+#include "fw_unit_palette.h"  /* M3 pal: a cat's palette row for `palette true` */
 #include "fw_glow_rules.h"    /* fw_glow_renderer */
 #include "fw_obs3d_rules.h"   /* fw_obs3d_renderer_position / _position_xz / _is_masked_renderer_iso */
+#include "fw_model_names.h"   /* M3 "@Name": data/models.gon */
+#include "fw_resolve.h"       /* fw_resolve_data_addr */
+#include "fw_vtable.h"        /* fw_msvc_init: the by-value std::string Gon_LoadFile destroys */
 
 static Fw3dRegistry g_reg;
 static int g_init;
@@ -108,7 +113,8 @@ int obj3d_engine_unit_model(const void *character, char *out, size_t cap) {
  * or the block form, fw_gon_model_block) gets that model registered on it, once per (Character, pool generation).
  * The units come from the harness's walk (TurnControl -> Scene -> EntityManager -> +0x1f90, fw_unit_walk) on the
  * TurnControl framework.c's NextTurn hook hands over (obj3d_engine_on_turn_control); every read before registration
- * is guarded. Each combat frame the registered GON objects get their facing (Renderer_GetScreenMatrix m0 sign) and a
+ * is guarded. Each combat frame the registered GON objects get their facing (Renderer_GetScreenMatrix m0 sign), their
+ * face yaw (M3: Character::Face's stored direction, fw_unit_face.h; a "unit model face:" line when it changes) and a
  * position line when they moved (fw_unit_fmt_at). The mesh engine draws them like any API object.
  * ---------------------------------------------------------------------------------------------------------------- */
 typedef float *(*fn_GetScreenMatrix)(void *renderer, float out[16]);
@@ -117,17 +123,52 @@ static void *volatile g_unitTc;   /* the fight's TurnControl (NextTurn); NULL un
 static FwUnitSeen g_seen;
 #define UNIT_LOG_AT_MAX 64        /* position lines per process (a long fight must not flood the log) */
 static int g_atLogged;
-typedef struct UnitTrack { int handle; int logged; double last[2]; char entry[48]; } UnitTrack;
+#define UNIT_LOG_FACE_MAX 64      /* face lines per process */
+static int g_faceLogged;
+typedef struct UnitTrack { int handle; int logged; double last[2]; char entry[48]; int faceLogged; double faceYaw; int palLogged, palRow; } UnitTrack;
 static UnitTrack g_track[FW_OBJ3D_MAX];
 static int g_ntrack;
 
 void obj3d_engine_on_turn_control(void *turnControl) { g_unitTc = turnControl; }
 
 /* obj3d_engine_on_fight's new-scene branch: a TurnControl of the old fight must never be walked again */
+/* ---- named models (3D phase M3 "@Name", fw_model_names.c): data/models.gon through the game's own GON loader ----
+ * Gon_LoadFile(ResourceMap, "data/models.gon", 0, 1) is what SpawnDatabase / appmain / MewsicController call for their
+ * data files: the pack copy or a mod path's plain file, then every mod's .append / .merge / .patch applied in mod-path
+ * order (FileManager_ResolveWithOverlays 0x9a09f0 -> GonResource::combined_decode 0x9a64a0); NULL when no mod ships
+ * the base (mods/fw-3d does). The resource is cached by the game; we read it lazily, on the first "@" reference of a
+ * fight, and copy the entries out (fw_model_names_load through the guarded reader). */
+typedef void *(*fn_GonLoadFile)(void *resourceMap, MsvcString *path, char reload, char flag);
+static FwModelNames g_names;
+static int g_namesLoaded;            /* 0 not yet this fight */
+static FwModelNamesLogged g_namesLogged;   /* one error line per reference per process */
+
+static const FwModelNames *model_names(void) {
+    if (g_namesLoaded) return &g_names;
+    g_namesLoaded = 1;
+    fw_model_names_clear(&g_names);
+    void *map = (void *)fw_resolve_data_addr(1, g_build, g_base, FW_DATA_ResourceMap);
+    fn_GonLoadFile load = (fn_GonLoadFile)g_sym[FW_SYM_Gon_LoadFile];
+    MsvcString s;
+    if (!map || !load || !g_sym[FW_SYM_string_Allocate] || !fw_msvc_init(&s, FW_MODEL_REGISTRY_FILE, (FwStringAlloc)g_sym[FW_SYM_string_Allocate])) {
+        fw_log("model names: Gon_LoadFile / ResourceMap not resolved on this build: no \"@Name\" model resolves");
+        g_names.loaded = 1;
+        return &g_names;
+    }
+    void *res = load(map, &s, 0, 1);   /* destroys s */
+    const void *root = res ? (const char *)res + OFF_GONRES_OBJECT : NULL;
+    fw_model_names_load(guarded_read, NULL, root, &g_names);
+    char line[1024];
+    fw_model_names_fmt_loaded(line, sizeof line, &g_names, root == NULL);
+    fw_log("%s (GonResource %p)", line, res);
+    return &g_names;
+}
+
 static void units_new_fight(void) {
     g_unitTc = NULL;
     fw_unit_seen_clear(&g_seen);
     g_ntrack = 0;
+    g_namesLoaded = 0;   /* a new fight reads the (cached) registry again */
 }
 
 static uint64_t epoch_ms(void) {
@@ -156,6 +197,20 @@ static void discover(void *tc) {
         char name[48];
         if (fw_gon_node_name(guarded_read, NULL, entry, name, sizeof name) != 1) snprintf(name, sizeof name, "?");
         char line[512];
+        if (m.file[0] == '@') {   /* M3: a named model of data/models.gon; the unit's keys override the entry's */
+            FwGonModel unit = m;
+            const FwModelName *hit = NULL;
+            const FwModelNames *names = model_names();
+            int rc = fw_model_names_resolve(names, &unit, &m, &hit);
+            if (rc != FW_MODEL_REF_OK) {   /* model-name-unknown / model-registry-entry: the unit keeps its 2D clip */
+                if (fw_model_names_log_first(&g_namesLogged, unit.file)) {
+                    fw_model_names_fmt_error(line, sizeof line, unit.file, rc, name, names, hit);
+                    fw_log("%s", line);
+                }
+                continue;
+            }
+            fw_log("unit model: %s: %s -> %s entry %s", name, unit.file, FW_MODEL_REGISTRY_FILE, hit ? hit->name : "?");
+        }
         fw_unit_fmt_model(line, sizeof line, name, ch, &m);
         fw_log("%s", line);
         if (m.file[0] != '@' && !fw_obj3d_model_path_ok(m.file)) {
@@ -169,6 +224,9 @@ static void discover(void *tc) {
         fw_obj3d_mark_gon(reg(), h);
         if (!fw_obj3d_set_look(reg(), h, m.texture, m.tint, m.palette, m.doubleSided))
             fw_log("unit model: %s: texture \"%s\" refused (not printable ASCII / too long); drawn without it", name, m.texture);
+        fw_obj3d_set_hide(reg(), h, m.hideSprite);   /* M3: only `hide_sprite true` hides (fw_mesh_hide.h) */
+        if (m.hideSprite == 1) fw_log("unit model: %s: hide_sprite: the 2D sprite is not drawn while the model draws", name);
+        else if (m.invalid & FW_GON_MODEL_BAD_HIDE_SPRITE) fw_log("unit model: %s: model-flag hide_sprite is not true/false; the sprite is drawn", name);
         int k = 0;
         while (k < g_ntrack && g_track[k].handle != h) k++;
         if (k == g_ntrack) { if (g_ntrack >= FW_OBJ3D_MAX) continue; g_ntrack++; }
@@ -178,12 +236,38 @@ static void discover(void *tc) {
     }
 }
 
+/* M3 pal: a GON `palette true` object takes its unit's palette row every frame (a cat's CatParts row; OverridePalette /
+ * the Jester cycle change it live), logged when it changes (fw_unit_palette.h) */
+static void unit_palette(const Fw3dObject *o) {
+    FwUnitPalette p;
+    fw_unit_palette_read(guarded_read, NULL, o->character, &p);
+    int row = fw_unit_model_palette(o->usePalette, o->palette, &p);
+    if (row != o->palette) {
+        char tex[FW_OBJ3D_MODEL_MAX];
+        memcpy(tex, o->texture, sizeof tex);
+        fw_obj3d_set_material(reg(), o->handle, tex, row);
+    }
+    for (int k = 0; k < g_ntrack; k++) {
+        UnitTrack *t = &g_track[k];
+        if (t->handle != o->handle) continue;
+        if (!t->palLogged || t->palRow != row) {
+            char line[256];
+            fw_unit_fmt_palette(line, sizeof line, t->entry, o->handle, &p);
+            fw_log("%s", line);
+            t->palLogged = 1;
+            t->palRow = row;
+        }
+        break;
+    }
+}
+
 static void follow(void) {
     void *getScreen = (void *)g_sym[FW_SYM_Renderer_GetScreenMatrix];
     uintptr_t vft = g_base + g_build->rva_MaskedRendererIso_vftable;
     for (int i = 0; i < fw_obj3d_count(reg()); i++) {
         const Fw3dObject *o = fw_obj3d_at(reg(), i);
         if (!o || o->byTile || !o->fromGon || !o->character) continue;
+        if (o->usePalette == 1) unit_palette(o);
         void *rnd = fw_glow_renderer(o->character);
         void *pos = rnd ? fw_obs3d_renderer_position(rnd) : NULL;
         if (!pos) continue;
@@ -192,11 +276,24 @@ static void follow(void) {
         if (haveScreen) ((fn_GetScreenMatrix)getScreen)(rnd, screen);
         int facing = haveScreen ? fw_unit_facing(screen) : 1;
         fw_obj3d_set_facing(reg(), o->handle, facing);
+        /* M3 face: the yaw from the direction Character::Face stored (+OFF_CH_ORIENTATION), else the sprite's mirror */
+        int dir[2], src = 0;
+        int dirOk = fw_face_read_dir(guarded_read, NULL, o->character, dir);
+        double faceYaw = fw_face_yaw(dirOk, dir, facing, &src);
+        fw_obj3d_set_face_yaw(reg(), o->handle, faceYaw);
         double xz[2];
         fw_obs3d_position_xz(pos, xz);
         for (int k = 0; k < g_ntrack; k++) {
             UnitTrack *t = &g_track[k];
             if (t->handle != o->handle) continue;
+            if ((!t->faceLogged || t->faceYaw != faceYaw) && g_faceLogged < UNIT_LOG_FACE_MAX) {
+                char fl[160];
+                fw_face_fmt(fl, sizeof fl, t->entry, o->handle, dir, faceYaw, src, epoch_ms());
+                fw_log("%s", fl);
+                g_faceLogged++;
+                t->faceLogged = 1;
+                t->faceYaw = faceYaw;
+            }
             if (fw_unit_moved(t->logged ? t->last : NULL, xz) && g_atLogged < UNIT_LOG_AT_MAX) {
                 char line[256];
                 fw_unit_fmt_at(line, sizeof line, t->entry, o->handle, xz, haveScreen ? screen : NULL, facing, epoch_ms());

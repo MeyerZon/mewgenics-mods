@@ -1,0 +1,60 @@
+mesh: probe cube on tile (3,3) (MEWFW_MESH_PROBE); probe model models/totem.glb
+hook installed: Camera::RenderOneLayer (observe3d) rva 0x979210 (observe3d: 0 window(s) of 60 world frames; meshes: on)
+Place3DObjectOnTile(4, 3, models/totem.glb): ok handle 1 (1 object(s))
+mesh: shaders/fw_mesh.shader found on the mod path
+mesh occ f=1 tile=(3,3) key=7.000 hull=(-0.0761 -0.3213 0.0761 -0.0348) area=0.033305
+mesh probe f=1 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.08)
+mesh: models/totem.glb: loaded 24 vertices, 12 triangles, bounds x -0.25..0.25 h 0.00..1.20 z -0.25..0.25; model-texture-embedded
+mesh: texture embedded:models/totem.glb for models/totem.glb: decoded 16x16 (source embedded: the model file's own image, decoded in the DLL, uploaded at replay)
+mesh object f=1 handle=1 model=models/totem.glb tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0557 0.046) tex=embedded:models/totem.glb palette=-1
+mesh order: world camera filter before ours = 0000000000000000 (units layer sorted=1 mode=0: interleaving)
+mesh order f=1 items=10 meshes=2 groups=2 unsorted=0 | d0 key=7.000 before item 7 key=6.000 | d1 key=8.000 before item 5 key=7.030
+mesh order keys f=1 18.030 11.643 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.000
+mesh order item f=1 i=0 key=18.030 at=(8.50 9.50)
+mesh order item f=1 i=2 key=11.030 at=(3.50 7.50)
+mesh order item f=1 i=3 key=9.000 at=(2.50 6.50)
+mesh order item f=1 i=4 key=8.000 at=(2.50 5.50)
+mesh order item f=1 i=5 key=7.030 at=(5.50 1.50)
+mesh order item f=1 i=6 key=7.000 at=(1.50 5.50)
+mesh order item f=1 i=7 key=6.000 at=(1.50 4.50)
+mesh order item f=1 i=8 key=5.030 at=(3.50 1.50)
+mesh: program 102 ready (mods/fw-3d/shaders/fw_mesh.shader; fw_mvp 9, fw_base_color 2, fw_light_dir 7)
+mesh: uploaded models/totem.glb: 24 verts / 36 indices (vao 76)
+mesh: texture embedded:models/totem.glb gl name 40 (our glTexImage2D of the decoded image, at replay; unit 0, fw_has_tex 1)
+mesh draw f=1 n=1 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh: uploaded the unit cube: 24 verts / 36 indices (vao 77)
+mesh draw f=1 n=2 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh: texture embedded:models/totem.glb gl name 40 (our glTexImage2D of the decoded image, at replay; unit 0, fw_has_tex 1)
+mesh draw f=2 n=3 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=2 n=4 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh: texture embedded:models/totem.glb gl name 40 (our glTexImage2D of the decoded image, at replay; unit 0, fw_has_tex 1)
+mesh: texture embedded:models/totem.glb gl name 40 (our glTexImage2D of the decoded image, at replay; unit 0, fw_has_tex 1)
+mesh: texture embedded:models/totem.glb gl name 40 (our glTexImage2D of the decoded image, at replay; unit 0, fw_has_tex 1)
+mesh: texture embedded:models/totem.glb gl name 40 (our glTexImage2D of the decoded image, at replay; unit 0, fw_has_tex 1)
+mesh occ f=61 tile=(3,3) key=7.000 hull=(-0.0761 -0.3444 0.0761 -0.0579) area=0.033305
+mesh probe f=61 tile=(3,3) ndc=(1.49e-08 -0.201 0.0409) canvas=(640.00 432.42)
+mesh object f=61 handle=1 model=models/totem.glb tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0788 0.046) tex=embedded:models/totem.glb palette=-1
+mesh order f=61 items=10 meshes=2 groups=2 unsorted=0 | d0 key=7.000 before item 7 key=6.000 | d1 key=8.000 before item 5 key=7.030
+mesh order keys f=61 18.030 12.910 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=121 tile=(3,3) key=7.000 hull=(-0.0761 -0.3214 0.0761 -0.0349) area=0.033305
+mesh probe f=121 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh object f=121 handle=1 model=models/totem.glb tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0558 0.046) tex=embedded:models/totem.glb palette=-1
+mesh order f=121 items=11 meshes=2 groups=2 unsorted=0 | d0 key=7.000 before item 8 key=6.000 | d1 key=8.000 before item 6 key=7.030
+mesh order keys f=121 18.030 13.427 11.030 9.000 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=181 tile=(3,3) key=7.000 hull=(-0.0761 -0.3214 0.0761 -0.0349) area=0.033305
+mesh probe f=181 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh object f=181 handle=1 model=models/totem.glb tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0558 0.046) tex=embedded:models/totem.glb palette=-1
+mesh order f=181 items=11 meshes=2 groups=2 unsorted=0 | d0 key=7.000 before item 7 key=7.000 | d1 key=8.000 before item 6 key=7.030
+mesh order keys f=181 18.030 12.885 11.030 9.000 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=241 tile=(3,3) key=7.000 hull=(-0.0761 -0.3214 0.0761 -0.0349) area=0.033305
+mesh probe f=241 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh object f=241 handle=1 model=models/totem.glb tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0558 0.046) tex=embedded:models/totem.glb palette=-1
+mesh order f=241 items=11 meshes=2 groups=2 unsorted=0 | d0 key=7.000 before item 8 key=6.000 | d1 key=8.000 before item 6 key=7.030
+mesh order keys f=241 18.030 13.364 11.030 9.000 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=301 tile=(3,3) key=7.000 hull=(-0.0761 -0.3214 0.0761 -0.0349) area=0.033305
+mesh probe f=301 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh object f=301 handle=1 model=models/totem.glb tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0558 0.046) tex=embedded:models/totem.glb palette=-1
+mesh order f=301 items=11 meshes=2 groups=2 unsorted=0 | d0 key=7.000 before item 8 key=6.000 | d1 key=8.000 before item 6 key=7.030
+mesh order keys f=301 18.030 13.218 11.030 9.000 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh object f=361 handle=1 model=models/totem.glb tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0558 0.046) tex=embedded:models/totem.glb palette=-1
+mesh object f=421 handle=1 model=models/totem.glb tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0558 0.046) tex=embedded:models/totem.glb palette=-1

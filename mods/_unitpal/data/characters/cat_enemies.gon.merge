@@ -1,0 +1,21 @@
+// _unitpal (test-only): two vanilla enemy cats wear a grey glTF box with `palette true`, so the in-game proof
+// (tests/unit-palette.mewtest) can compare the box's colours with each cat's palette.png row. TomTom's custom_cats
+// palette is 9, Mangy's 16 (data/custom_cats.gon): two different rows.
+TomTom {
+	graphics {
+		model {
+			file "models/grey-box.gltf"
+			yaw 45
+			palette true
+		}
+	}
+}
+Mangy {
+	graphics {
+		model {
+			file "models/grey-box.gltf"
+			yaw 45
+			palette true
+		}
+	}
+}

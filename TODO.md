@@ -22,13 +22,13 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr86-glow-width` (#86) — Is glow_radius 12 the band width you want for the per-unit rim (and is the white hover rim being off while a unit glows acceptable)?
 - [ ] `pr99-glow-colours` (#99) — In shot-two, does the cat carry a cyan rim and the Rat a magenta one, each hugging its own sprite (no cross-colour bleed), and is the cat's rim whole among the other cats (no straight scissor edge)?
 - [ ] `pr104-data-glow` (#104) — In shot-glow, does FwGlowRat (glowing from DATA: the status FwGlow_ff00ff, no DLL) carry the same magenta band hugging its sprite as the native-API Rat, with nothing over its body (and none in shot-noglow)?
-- [ ] `pr104-glow-icon` (#104) — The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip "Glowing"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?
-- [ ] `glow-decide-icon` (glow v3) — **Decide:** a FwGlow_ status shows LuckUp's four-leaf clover on the unit's status bar (see shot-glow of `*-fw-glow-data-glow`). Keep the clover, or ask for a follow-up that hides the icon (or gives the glow status its own)?
-- [ ] `glow-decide-hover` (glow v3) — **Decide:** while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?
+- [x] `pr104-glow-icon` (#104) — **Owner, 2026-10-22:** hide the icon (follow-up under "Planned" → "Owner decisions 2026-10-22"). Was: The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip "Glowing"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?
+- [x] `glow-decide-icon` (glow v3) — **Owner, 2026-10-22:** hide it (follow-up planned). Was: **Decide:** a FwGlow_ status shows LuckUp's four-leaf clover on the unit's status bar (see shot-glow of `*-fw-glow-data-glow`). Keep the clover, or ask for a follow-up that hides the icon (or gives the glow status its own)?
+- [x] `glow-decide-hover` (glow v3) — **Owner, 2026-10-22:** redraw the hover rim on top of the glow (follow-up planned). Was: **Decide:** while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?
 - [ ] `pr109-rig-cat` (#109) — In shot-rig-1, does the cat under the yellow marker (our _CatRig_ clip) look like a real cat with Mangy's parts in the idle pose, the same cat as the marker-less control in shot-vanilla?
-- [ ] `pr109-rig-labels` (#109) — A swap rig without a label for an animation (hits, attack) keeps the cat on its frame: acceptable, or should a swap rig fall back to the vanilla labels it lacks?
+- [x] `pr109-rig-labels` (#109) — **Owner, 2026-10-22:** a swap rig falls back to the vanilla cat's labels it lacks (native follow-up planned). Was: A swap rig without a label for an animation (hits, attack) keeps the cat on its frame: acceptable, or should a swap rig fall back to the vanilla labels it lacks?
 - [ ] `pr118-rig-sample` (#118) — In shot-rig-1 (rig-dll), is the cat beside the small yellow marker (bound only by catrig_sample.dll) a real cat with Mangy's parts, the same as the marker-less control?
-- [ ] `pr118-rig-dead` (#118) — A killed swap-rig cat with no death label stays STANDING (rig-labels shot-l20) where the vanilla cat lies dead (rig-labels-ctl shot-l20): acceptable, or should a swap rig fall back to the vanilla labels it lacks?
+- [x] `pr118-rig-dead` (#118) — **Owner, 2026-10-22:** fall back to the vanilla cat's labels, so a killed rig cat dies normally (native follow-up planned). Was: A killed swap-rig cat with no death label stays STANDING (rig-labels shot-l20) where the vanilla cat lies dead (rig-labels-ctl shot-l20): acceptable, or should a swap rig fall back to the vanilla labels it lacks?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
@@ -89,28 +89,49 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `3d-m2-palette` (#135) — Palette row 63 on the crate: grey cells become mint/teal along the row (darker on shaded faces, never black), orange cells unchanged? Then: side by side with a cat of the same palette row — same family of colours?
 - [ ] `3d-m2-glb-pillar` (#135) — `models/pillar.glb` (generated): a teal pillar standing upright on (4,3), 1.2 tiles tall, lit top-left like the cube?
 - [ ] `3d-m2-unit-model` (#135) — `mods/_unitmodel`: the Rat's magenta box stands on the Rat in every shot and slides with it; drawn just in front of the Rat's own sprite; mirrored when the Rat turns (not seen in T2)?
+- [ ] `3d-m3-hide-sprite` (#138) — mods/_unithide: the vanilla Rat wears a small magenta box with hide_sprite true. Is the Rat's 2D body gone (only the box, its shadow under it) in shot-hide, while shot-control (hide_sprite false) shows the Rat around the box? Anything else of the Rat (outline, HUD) left over?
+- [ ] `3d-m3-unit-palette` (#138) — mods/_unitpal gives the enemy cats TomTom (row 9) and Mangy (row 16) and the Rat a grey box with `palette true`: does TomTom's box read as TomTom's colours (cream) and Mangy's as Mangy's (light grey), next to their 2D bodies, while the Rat's box stays plain grey? Note the boxes look brighter than the sprites (the fight's dark lighting/vignette does not reach mesh draws) — is that acceptable?
+- [ ] `3d-m3-named-model` (#138) — mods/_modelnames: the Rat's graphics.model is "@NameBox" from data/models.gon (scale 1.25 over the entry's). Is there a magenta box standing on the Rat's tile, and do the two Pooters (unknown @NoSuchModel) still show their 2D sprites with no box?
+- [ ] `3d-m3-glb-embedded-texture` (#138) — models/totem.glb carries its texture inside the file (no textures/models/totem.png): is the box on (4,3) a purple / lime 2 x 2 checker on every face, top face brightest, with no magenta and no grey crate texture? (shot-mesh-a is covered by the Battle Start! banner; look at shot-mesh-b)
+- [ ] `3d-m3-unit-face` (#138) — mods/_unitface: the Rat's box has a cyan front, yellow back, magenta sides. Facing (0,-1) and (-1,0) show the cyan front, (1,0) and (0,1) the yellow back (the mesh turns with Character::Face, not a mirror). Does each shot read that way, and does the snap at a turn look acceptable?
+- [ ] `3d-m3-slices` (#138) — mods/dev-sandbox/tests/mesh-slices.mewtest: the 2x1 slab (blue/cyan/magenta bands) on (0,6)+(1,6) — is the grey cat on (1,5) drawn over the cyan band (M3) while the M2 control has the slab over that cat? The 3x3 slab: six bands, no gaps or seams at band edges? The blue post on the back quarter of (2,6): behind the white cat on that tile (M3), over it in the M2 control?
 - [ ] Provide a test glTF per docs/data-mods.md "3D models" spec ("glTF models": glTF 2.0 .glb, triangulated, Y up, 1 unit = 1 tile, origin at the feet, ≤ a few thousand vertices, one material, no Draco/meshopt/KHR_texture_transform, external PNG ≤ 512²) — drop it in `mods/fw-3d/models/` and an agent wires it.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
-- **Track `editor/component-schema.json`?** (component-schema PR, 2026-10-22) It is RE-derived (1741 `glaiel::` class
+- **Track `editor/component-schema.json`?** **Owner, 2026-10-22:** it stays tracked; CLAUDE.md's "Never commit game bytes" rule now says it holds RE-derived names and format facts, not game bytes. (component-schema PR, 2026-10-22) It is RE-derived (1741 `glaiel::` class
   names, ~1.3k key names, `.analysis/` evidence paths; ~0.9 MB) and tracked so CI and fresh clones get the
   validator checks. CLAUDE.md says the only tracked game-derived data is byte signatures in `bindings/`; this is names
   and format facts, not game bytes, but it is your call: keep it tracked, or git-ignore it and build it in
   `npm run build:index` from `.analysis/` (then CI skips the checks).
 - **Vanilla typos the game ignores** (component-schema PR): `LowHealthAllyDodgeChanceAura { theshold }`,
   `AbilityOnRoundEndOnce { even_of_stunned }`, `TourettesMeows { cooldown }`, `DamageReductionAura { allies_only }`,
-  `MoveTowardsDamageSource { ability }`. A mod could fix them with a .patch; worth a sample mod?
+  `MoveTowardsDamageSource { ability }` (+ `SpawnThingOnDamage { number }`, `AbilityHealthThreshold { aux }`; now
+  `unread` keys, reported as `ignored-key` infos). A mod could fix them with a .patch; worth a sample mod?
+  **Owner, 2026-10-22:** document only, no mod — `docs/data-mods.md` "Component keys" → "Vanilla typos: documented, not fixed".
 
 Owner: "we will decide on it later". Everything through PR #72 is merged; the 2026-10-21/22 run answered most of
 these without a decision (status per bullet below; the PR map follows).
 
-- [ ] **Campaign-walk save backups (2026-10-22, branch `feat/harness-campaign-walk`).** Starting an adventure
+- [x] **Campaign-walk save backups (2026-10-22, branch `feat/harness-campaign-walk`).** **Owner, 2026-10-22:** approved — the runner
+      moves only `saves/backups/mewtest01_*.savbackup` into the run dir, by rename, never a delete (the slot exception
+      in CLAUDE.md's safety rules is extended; implementation is a follow-up under "Planned"). Starting an adventure
       (`run start`) makes the game back the disposable slot up as `saves/backups/mewtest01_<date>_<time>.savbackup`
       (one per minute of runs; two exist from the T2 runs of 2026-10-22). The real save is never touched. Options:
       leave them (they are the harness slot's own backups), or extend the owner-approved slot exception so the runner
       also moves `backups/mewtest01_*.savbackup` into the run dir (a rename, never a delete). Agents may not touch
       `saves/` beyond the existing exception, so this needs your say-so.
+
+- [x] **Developers' stance on mods — contact them? remove anything?** **Owner, 2026-10-22:** no outreach for now; the repo is
+      already public. New planned item: a community adoption strategy ("Planned" → "Owner decisions 2026-10-22"). (added 2026-10-22) Research and repo audit in
+      [`docs/legal-and-community.md`](docs/legal-and-community.md): no Mewgenics policy exists yet (Workshop/launcher
+      "eventually"); the same developer's TEIN terms are non-commercial, require the game, no exe or unmodified assets;
+      Edmund made the Antibirth EXE mod canon; REPENTOGON publishes the same kind of signatures for Isaac; takedowns
+      elsewhere hit decompiled source and assets, which this repo has none of. Decide: (1) send Tyler Glaiel the
+      drafted heads-up (§5) or not; (2) which optional clean-ups to do — paraphrase the 6-line vanilla shader excerpt in
+      `docs/art-pipeline.md`, regenerate the `_roomprobe` `.lvl` files from a blank template, drop "sanctioned" from
+      README/CLAUDE.md, pack-time "no game files" note, a "no decompiler output in tracked files" rule; (3) adopt the
+      suggested README section "Relationship to the game and its developers" (§6).
 
 - [x] **Cat parts in a rig — which route, if any?** **Resolved 2026-10-22 as data-only for cat animations** (PR #74:
       experiment A0 — a `_Append_CatTest` frame placing a rig whose seven slots are EMPTY 1-frame sprites is filled by
@@ -154,7 +175,8 @@ these without a decision (status per bullet below; the PR map follows).
       (brightness) — engine-map "Glow and outline passes", `data-mods` "Lighting and tint knobs". A **native per-unit
       rim** (a mask + the game's blur/composite passes with a per-unit colour) is in PR (branch
       `feat/native-unit-glow`, session rim).
-- [ ] **Native per-unit glow — what next?** The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
+- [x] **Native per-unit glow — what next?** **Owner, 2026-10-22:** (b) redraw the hover rim on top of the glow, and hide the
+      glow status's icon (both follow-ups planned). The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
       draws a rim through the game's outline mask (combat only, the rim shader shipped by `mods/fw-glow`). Decide: (a)
       a data-level way to ask for it — **done (glow v3, `feat/glow-data-seam`)**: a status named `FwGlow_<rrggbb[aa]>`
       granted by any vanilla mechanism (StatusOnSpawnIn, an ability's effects, …) glows its carrier while it lasts, no DLL;
@@ -184,7 +206,9 @@ these without a decision (status per bullet below; the PR map follows).
       Remaining: T3 — the owner's look at the tab and at a `vectorcraft_exec` drawing in game.
 - [x] **T3 looks** (owner, 2026-10-21: he will do these later) — moved to **"Requires a human (T3 looks)"** at the
       top of this file (the gallery: `cd editor && npm run t3`; the list: `editor/t3-looks.json`).
-- [ ] **Game speed — what to use it for?** (2026-10-22, PR "feat: game speed") The vanilla Combat Speed dropdown
+- [x] **Game speed — what to use it for?** **Owner, 2026-10-22:** automated tests run as fast as possible without changing
+      results; target 16x. Follow-up planned: a runner default + a `speed:` header, results verified identical at 16x;
+      where `wait turns|rounds` sampling breaks above 12x, fix the sampling rather than lower the speed. (2026-10-22, PR "feat: game speed") The vanilla Combat Speed dropdown
       offers 1..4, but the game reads `combat_speed` as an unclamped float (engine-map "Frame timing and game speed").
       Decisions: (1) **for your own play**: try `combat_speed 8` in `settings.txt` (close the game first; it rewrites
       the file on exit) — untested in-game by an agent; it speeds combat only, keeps `bypass_combatspeed` animations
@@ -289,7 +313,8 @@ Things no test can see: they need a human at the game, a decision, or an account
   `node tools/bindings/cross-build.ts --old <installed exe> --new .analysis/exe/23372843/Mewgenics.exe --build 23372843
   --gameVersion 1.1.21039` and confirm the `old` column shows 25143593's values, the 14 anchor rows read `size +0 /
   calls +0 vs old`, and `LuckUp_typeid` is `ported-derived … (agree)` with `0x4d5` from both sources (T3 of #29, #32).
-- [ ] **Remove the leftover agent worktree safely**: `.claude/worktrees/agent-ac7ac5f970624f89d` (PR #27's branch) still
+- [x] **Remove the leftover agent worktree safely** **Owner, 2026-10-22:** worktree cleanup approved after the merges
+  (junctions unlinked first; follow-up planned). Was: `.claude/worktrees/agent-ac7ac5f970624f89d` (PR #27's branch) still
   holds junctions to `.analysis` and `.extracted`. Only after #27 is merged: `cmd /c rmdir` each junction, confirm the
   targets still have contents, then `git worktree remove` (`CLAUDE.md` "Worktrees with junctions"). Never before.
 - [x] **Delete the merged local/remote branches** — pruned 2026-10-20 (29 remote branches, every one 0 commits
@@ -301,7 +326,7 @@ Things no test can see: they need a human at the game, a decision, or an account
 - [ ] **Permission rule for merges** (optional): the harness's auto-mode classifier blocked `gh pr merge` once tonight
   even with your go-ahead in the chat; if you want agents to merge on your word without a retry, add a Bash allow rule
   for `gh pr merge` in `.claude/settings.json` — otherwise keep merging yourself.
-- [ ] **Merge policy for autonomy** (your goal 2026-10-20: out of the loop except for viewing results). Today your
+- [x] **Merge policy for autonomy** **Owner, 2026-10-22:** unchanged — agents need the owner's word for each merge. (your goal 2026-10-20: out of the loop except for viewing results). Today your
   global rule is "never merge without my per-PR word"; on 2026-10-20 you merged the whole stack #39–#48 on one word.
   If you want agents to merge on their own, the rule to put in `~/.claude/CLAUDE.md` is: *agents may merge a PR
   when the T0 workflow is green, the PR body carries the T2 verdict lines (`in-game: N passed, 0 failed`) and its
@@ -338,7 +363,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **Optional PR 15 — runtime anchor locator in the DLL**: **skipped** (owner, 2026-10-19). The offline port tool
   plus the fail-closed build gate already give "broken binding = disabled mod, not a crash"; a game update needs a
   rebuild and a T2 pass anyway, so in-process string→xref resolution is not worth the native surface.
-- [ ] **`FW_API_VERSION` bump policy** when the manifest exposes new `FW_SYM_*`/`FW_DATA_*` entries (append-only enums).
+- [x] **`FW_API_VERSION` bump policy** when the manifest exposes new `FW_SYM_*`/`FW_DATA_*` entries (append-only enums).
+  **Owner, 2026-10-22:** `FW_API_VERSION` goes up on every API addition (policy).
 
 ### Verify by eye / by playing
 - [x] **Joker's Luck still rerolls luck every turn** on the `dev` save after the rebuilt DLLs (owner play-check
@@ -412,9 +438,18 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **Component key schema** (2026-10-22, branch `feat/component-schema`): `editor/component-schema.json` maps the GON keys
   each of 1741 component classes reads (RE runs compA..compE; `docs/data-mods.md` "Component keys"); validator
   `unknown-key` / `missing-required-key`, MCP `search_components` keys, web key hints, `npm run build:component-schema`.
-  Follow-ups: the 39 vanilla-used components still `open` (their `vanillaMissed` keys are mostly in unlocated lambdas;
-  `FinalBossHitCountdown` base has no vftable row), `AddAdvantageToEvent` unresolved, 369 tier-3 classes carry
-  only objdump seed keys.
+  Follow-ups closed by `feat/component-schema-close` (2026-10-22): all 393 vanilla-used components closed (was 38
+  open), `AddAdvantageToEvent` resolved (its block is read by nothing), the 110 seed-only Passive / Status /
+  GlobalModifier classes verified by decompile; `ignored-key` info for vanilla keys no code reads. Left: 250 seed-only
+  engine / UI / ability-hierarchy classes (never a `passives` block; the Ability* ones read the ability entry at
+  `this+0x28`, which the schema cannot express yet).
+- [x] **Component key defaults from the disassembly** (2026-10-22, branch `fix/component-schema-defaults`): 328 key
+  defaults + 20 scalar defaults re-read from the instruction that produces them (`.analysis/component-schema-defaults.json`,
+  `defaultEvidence: disasm|pseudo`, builder `keyPatches` + `@shared` amends): 42 corrected, 31 `null` filled,
+  SizeScale scalar 0 → 1, phantom `@DamageInstance.incident_ally_collects_pickups` deleted. Left (`defaultEvidence:
+  pseudo`): `InfiniteRebirth.playercat_health`, `@DamageInstance.knockback` (no getter at the key site: read through an
+  evaluator); MovementReaction `enemies_only` (two reads in slot42 disagree: absent = false in the first, true in the
+  second — which one gates what is not decoded) and AddTilesetObjects `*.count` (a second `count` read defaults to 376).
 - [x] **Shipping a mod** (PR feat/mod-packaging, 2026-10-22; `docs/data-mods.md` "Shipping a mod"): `mods/<name>/mod.json`
   (+ validator `manifest-missing` / `manifest-invalid` / `manifest-build-mismatch`), `npm run pack -- <mod>` / MCP
   `pack_mod` / web *Export…* (SWF build, validate-or-refuse, zip minus `tests/` + `art/`, `README-INSTALL.txt`,
@@ -455,6 +490,22 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **SWF-loader crash RE** → `docs/swf-emitter-fix-spec.md` (final; 6 decompiles in `.analysis/decompiled/`). Crash is NOT a malformed SWF — it parses fine. Our clip merges into the live `AbilityIcon` sprite (`process_animation_merges` 0x9bc070); a **structurally-naive appended frame** triggers a post-load scripted call into the adventure-cutscene handler with no active run → null double-deref. `_Append_AbilityIcon` name CORRECT; **char-ID collision ruled out**. Method: static PE decoding + Ghidra (2nd attempt; 1st lost to memory contention from an orphaned container).
 
 ## Planned (not started)
+
+### Owner decisions 2026-10-22 — follow-ups (agent-doable)
+- [ ] **Campaign-walk save backups:** after a campaign-walk run the runner moves `saves/backups/mewtest01_*.savbackup`
+      (only those names) into the run dir by rename, never a delete; test-first against the fake game
+      (`savecheck`); the whole-saves-dir hash still guards the real save.
+- [ ] **Glow status icon:** hide the `FwGlow_` status's icon on the unit's status bar (no LuckUp clover).
+- [ ] **Hover rim while a unit glows:** redraw the game's white hover rim on top of the glow.
+- [ ] **Swap rig label fallback (native):** a swap rig that lacks an animation label falls back to the vanilla cat's
+      labels, so a killed rig cat dies normally (`pr118-rig-dead`, `pr109-rig-labels`).
+- [ ] **Game speed for automated tests (target 16x):** a runner default and a `speed:` header; verify results are
+      identical at 16x; where `wait turns|rounds` sampling breaks above 12x, fix the sampling, do not lower the speed.
+- [ ] **Community adoption strategy:** make the toolkit the standard for Mewgenics mods, e.g. build showcase mods and
+      share them with content creators (no developer outreach for now; the repo is public).
+- [ ] **Worktree cleanup** after the merges: unlink every junction first (`cmd /c rmdir`), confirm the targets still
+      have contents, then `git worktree remove` (`CLAUDE.md` "Worktrees with junctions").
+
 
 ### TDD coverage targets — make every layer test-backed (in priority order)
 1. [x] **Enter a run from the main menu through the harness** (2026-10-20): the `.mewtest` directive `enter
@@ -708,6 +759,21 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
       Next: phase **P** (perspective). M-follow-ups: `hide_sprite` (replace the 2D clip, not only accompany it); an
       exported `FW_Set3DObjectMaterial` and a cat's palette row (`CatParts+0x1b4`) for GON units; `@Name` models; a
       .glb's embedded image; per-row splitting of multi-tile meshes; the editor's full model reader when #128 merges.
+      **Same night (branch `feat/3d-meshes-m3`, stacked on #135): M5 done in-game** — `hide_sprite`, the cat palette
+      row for `palette true`, `@Name` models (`data/models.gon`), a .glb's embedded PNG as the texture (+ MCP
+      `extract_model_texture`), the model turning with Character::Face, multi-tile meshes per sort band + the unit
+      winning same-tile ties (docs/possible_3d_work.md M5). Open (agents): the hit flash on a hide_sprite mesh and its
+      outline / glow (still the hidden sprite's mask); `FW_Register3DObject` with `"@Name"`, hide_sprite and the facing
+      for API objects; the validator seeing other mods' `@Name`s and checking that fw-3d is listed first on the mod path
+      (`launch-dev.bat` too); the validator decoding a .glb's embedded image (`model-image-embedded-*` before launch);
+      JPEG embedded images; rainbow-cat per-material rows and an explicit `palette <n>` for non-cats; smooth model
+      turning over the sprite's turn animations; slicing unit-attached multi-tile models; a T2 re-run of
+      `_unitface/unit-face` on the integrated tree (integration 2026-10-22b enabled the script and folded the duplicate
+      `Character_Face` / `Character_orientation` entries into the facing block). Planned UI items
+      (NOT built — the owner's rule for this batch: no `editor/web/` changes): a `hide_sprite` checkbox in the model
+      block editor; an `@Name` picker on graphics.model listing the mod's + fw-3d's named models; an "Extract texture"
+      button next to a .glb model; a 4-facing model preview; showing a model's sort bands / footprint in the preview.
+      Next after M5: phase **P** (the PR body of feat/3d-meshes-m3 carries a design proposal).
 - [x] Clip authoring (Timeline tab, timeline-edit.ts) and the cat rig (Rig tab, cat-rig.ts) — 2026-10-20, art build-out G + H; the game drives a character's root timeline, units are tinted by position
 - [x] Emitter (all four done: #63, #64, #69, #65): ~~gradient fills~~ (done 2026-10-20, art build-out C: gradient.ts, gate `gradient`, probe square drawn in-game), ~~LineStyle2~~ (done 2026-10-20, art build-out E: DefineShape4, stroke.ts, gate `shape4`, caps honoured in-game), ~~fonts/text~~ (done 2026-10-21: DefineEditText in a game font class + ImportAssets2 fonts.swf, like vanilla; drawn in-game), ~~PlaceObject3~~ (done 2026-10-20, art build-out F: blends load and apply in-game; filters crash the game and are a validation error)
 - [x] MCP tools for art (so agents can author art, not just data) — done in #62 (16 → 23 tools, 2026-10-20), then
@@ -781,6 +847,9 @@ Every unticked box below "Requires a human (T3 looks)" is open; this is the shor
 leftovers that live inside ticked items. The boxes stay where they are (history kept); tick them there.
 
 ### Still open (agent-doable)
+- The owner-decision follow-ups of 2026-10-22 ("Planned" → "Owner decisions 2026-10-22"): campaign-walk backup
+  moves, hide the glow status icon, hover rim over a glow, swap-rig label fallback, 16x test speed, community
+  adoption strategy, worktree cleanup after the merges.
 - Cat animations not authored yet: the back facing's `head_back` layout and the four-way `LF/RF/LB/RB` quartet
   ("Open decisions" → "Cat parts in a rig").
 - `.append` on an existing key (duplicate children) in-game (TDD target 8's last gap).
@@ -792,12 +861,10 @@ leftovers that live inside ticked items. The boxes stay where they are (history 
 - Watch for the one-off early exit ("Verification still owed").
 
 ### Still open (owner)
-- Native per-unit glow — what next? (a data-level way to ask for it; the hover rim while units glow) — "Open decisions".
 - Hidden window on a non-NVIDIA machine; dev-play policy after the save-suffix decode; eyeball the saves dir after a
-  dev run; watch one clean-mode run end; a fuller `debug.log`; the optional `gh pr merge` permission rule; the merge
-  policy for autonomy — "Owner checks".
+  dev run; watch one clean-mode run end; a fuller `debug.log`; the optional `gh pr merge` permission rule — "Owner
+  checks" (the merge policy stays: the owner's word per merge, 2026-10-22).
 - Re-fetch build 23372843 (and optionally rerun the cross-build); a body-changing second build to exercise the port
   rungs on a real recompile.
-- Remove the leftover agent worktree `agent-ac7ac5f970624f89d` safely (junctions first).
-- `FW_API_VERSION` bump policy for new `FW_SYM_*` / `FW_DATA_*` entries; does the `port-bindings` skill trigger on
+- Does the `port-bindings` skill trigger on
   "the game updated"; read `docs/binding-port.md` once as the next porter — "Owner checklist".

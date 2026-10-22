@@ -1,0 +1,22 @@
+mods: dev-sandbox, fw-3d, _unitpal
+timeout: 150s
+hide: false
+# 3D phase M3 "pal": a GON model with `palette true` on a cat draws its grey pixels through the cat's own palette row
+# (CatParts+0x1b4 / +0x1b8, the row of the cat's 2D doll). _unitpal gives the enemy cats TomTom (row 9) and Mangy
+# (row 16) and the Rat a grey 0.6 box; mewframework logs "unit palette: <entry> handle=<h> row=<r> base=<b>
+# override=<o>" per unit and "mesh object ... palette=<row>" per draw; the runner compares the boxes' pixels with
+# palette.png's texels of each row (and the Rat's box with the plain shaded grey).
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+cmd spawn TomTom
+expect console "Spawned TomTom" within 10
+cmd spawn Mangy
+expect console "Spawned Mangy" within 10
+cmd spawn Rat
+wait frames 150
+shot "pal-a"
+wait frames 60
+shot "pal-b"
+quit

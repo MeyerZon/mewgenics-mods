@@ -44,9 +44,10 @@ static int plan_all(FwMeshOrder *o, const double *keys, void *const *rnds, int n
     return fw_mesh_order_rest(o, out, FW_MESH_ORDER_MAX);
 }
 
-TEST(plan_puts_each_mesh_before_the_first_item_not_farther) {
+TEST(plan_m2_mode_puts_each_mesh_before_the_first_item_not_farther) {
     FwMeshOrder o;
     fw_mesh_order_reset(&o);
+    fw_mesh_order_set_m2(&o, 1);   /* MEWFW_MESH_ORDER=m2: the M2 rule, meshes win ties (the T2 control runs) */
     /* items in draw order (descending keys): a wall at 10, a cat on (2,6) at 9, a crate at 8.5, the cat R on (2,5) at 8,
      * a cat at 7, a far-front tile half at 3 */
     static int R;
@@ -70,6 +71,39 @@ TEST(plan_puts_each_mesh_before_the_first_item_not_farther) {
     CHECK_EQ(o.e[0].item, 2); CHECK(o.e[0].itemKey == 8.5);
     CHECK_EQ(o.e[2].item, 4);
     CHECK_EQ(o.e[0].state, FW_MESH_ORDER_DONE);
+}
+
+TEST(plan_ties_go_to_the_unit_and_attached_meshes_still_follow_their_unit) {
+    /* M3 item 7: the same items as the m2-mode test; a mesh whose key equals an item's goes in BEFORE that item (the
+     * unit is drawn over it), whatever the add order; the mesh attached to R still goes right after R */
+    static int R;
+    const double keys[] = { 10, 9, 8.5, 8, 7, 3 };
+    void *const rnds[] = { NULL, NULL, NULL, &R, NULL, NULL };
+    for (int pass = 0; pass < 2; pass++) {
+        FwMeshOrder o;
+        fw_mesh_order_reset(&o);
+        CHECK_EQ(o.m2, 0);
+        if (pass == 0) {
+            fw_mesh_order_add(&o, fw_mesh_order_tile_key(2.5, 6.5), NULL, 0);   /* key 9 */
+            fw_mesh_order_add(&o, fw_mesh_order_tile_key(2.5, 4.5), NULL, 1);   /* key 7 */
+            fw_mesh_order_add(&o, fw_mesh_order_unit_key(2.5, 5.5), &R, 2);     /* on R */
+        } else {   /* reversed add order: same plan */
+            fw_mesh_order_add(&o, fw_mesh_order_unit_key(2.5, 5.5), &R, 2);
+            fw_mesh_order_add(&o, fw_mesh_order_tile_key(2.5, 4.5), NULL, 1);
+            fw_mesh_order_add(&o, fw_mesh_order_tile_key(2.5, 6.5), NULL, 0);
+        }
+        int got[6][8] = { { 0 } }, gotn[6] = { 0 };
+        int rest = plan_all(&o, keys, rnds, 6, got, gotn);
+        CHECK_EQ(gotn[0], 0);
+        CHECK_EQ(gotn[1], 1); CHECK_EQ(got[1][0], 0);   /* the tie 9 vs 9: before the unit at 9 */
+        CHECK_EQ(gotn[2], 0);
+        CHECK_EQ(gotn[3], 0);                           /* R: its mesh armed */
+        CHECK_EQ(gotn[4], 2);                           /* before the cat at 7: R's mesh (key 8 - eps) first, then the key-7 tie */
+        CHECK_EQ(got[4][0], 2); CHECK_EQ(got[4][1], 1);
+        CHECK_EQ(gotn[5], 0);
+        CHECK_EQ(rest, 0);
+        CHECK_EQ(o.groups, 2);
+    }
 }
 
 TEST(plan_rest_and_front_and_grouping) {
