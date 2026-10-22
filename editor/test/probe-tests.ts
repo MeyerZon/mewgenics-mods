@@ -100,6 +100,15 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       eq(bottom.found, false); eq(bottom.clipped, "bottom");
       eq(pc.analyzeProbeShot({ width: 10, height: 10, rgba: new Uint8Array(400) }).clipped, null);
     });
+    // OBSERVED 2026-10-22 (run 20261022-124301, shot-shown-2): the back-facing cat's checker came back at ~0.78 of its
+    // colours (yellow 199,197,0; magenta ~200,0,200) — the game tints units by where they stand — and the near-#ffff00
+    // test (tolerance 50) dropped every border pixel. A uniformly darkened marker is still the marker.
+    test("analyzeProbeShot: a marker darkened to 0.75 (the game's per-tile unit tint) is still found, at the same scale", () => {
+      const img = shot({ s: 2, edge: "clamp" });
+      for (let i = 0; i < img.rgba.length; i += 4) for (let k = 0; k < 3; k++) img.rgba[i + k] = Math.round(img.rgba[i + k]! * 0.75);
+      const a = pc.analyzeProbeShot(img);
+      assert(a.found && Math.abs(a.scale - 2) < 0.1, JSON.stringify({ found: a.found, scale: a.scale, box: a.box }));
+    });
     test("summarizeProbe: across shots — child framing (free-running when the blink colour changes), sampling, edge, cxform applied, orientation", () => {
       const shots = ([[255, 32, 32], [32, 255, 32], [32, 32, 255]] as Px[]).map((b) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, edge: "clamp", smooth: true, blink: b })));
       const s = pc.summarizeProbe(shots);
