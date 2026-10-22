@@ -445,4 +445,14 @@ TEST(v2_camera_view_accessors_position_zoom_zoomY_and_the_scene_managers_interpo
     CHECK(fw_glow_camera_interp(c) == 0.25);
 }
 
+TEST(v2_the_canvas_comes_from_the_generated_offsets_h_not_a_literal) {
+#if defined(CONST_GLOW_CANVAS_W) && defined(CONST_GLOW_CANVAS_H)
+    CHECK_EQ(CONST_GLOW_CANVAS_W, 1280);
+    CHECK_EQ(CONST_GLOW_CANVAS_H, 720);
+    CHECK(FW_GLOW_CANVAS_W == (double)CONST_GLOW_CANVAS_W && FW_GLOW_CANVAS_H == (double)CONST_GLOW_CANVAS_H);
+#else
+    CHECK(!"CONST_GLOW_CANVAS_W / CONST_GLOW_CANVAS_H are missing from the generated offsets.h");
+#endif
+}
+
 int main(void) { return MT_RUN_ALL(); }

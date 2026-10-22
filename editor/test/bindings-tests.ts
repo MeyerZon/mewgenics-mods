@@ -948,6 +948,17 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     return;
   }
   const { findString, findStringXrefs, harvestFunction, findRtti, vtableSlotTarget, deriveFromVtableSlot, harvestManifest } = hv;
+  test("rdataWitnessValue: f32 reads the float as an integer constant, f32-recip its rounded reciprocal (1/1280 -> 1280, the float 1/720 -> 720), anything not integral within 1e-3 is null", () => {
+    const bits = (f: number) => { const b = Buffer.alloc(4); b.writeFloatLE(f, 0); return b.readUInt32LE(0); };
+    eq(hv.rdataWitnessValue(0x3a4ccccd, "f32-recip"), 1280);
+    eq(hv.rdataWitnessValue(0x3ab60b61, "f32-recip"), 720);
+    eq(hv.rdataWitnessValue(bits(640), "f32"), 640);
+    eq(hv.rdataWitnessValue(bits(0.3), "f32-recip"), null);
+    eq(hv.rdataWitnessValue(bits(2.5), "f32"), null);
+    eq(hv.rdataWitnessValue(0, "f32-recip"), null);
+    eq(hv.rdataWitnessValue(bits(640), "other"), null);
+    assert(hv.constantHasSources({ witness: { function: "F", pattern: "F3 0F 59 0D", ripAt: 4, rdata: "f32-recip" } } as never), "an rdata witness is a source");
+  });
 
   /**
    * A fake image: .text at 0x1000, .hvRdata at 0x2000, .hvData at 0x3000 (builder layout, each section < 1 page).
@@ -1866,7 +1877,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["Camera_zoom", "OFF_CAM_ZOOM", "0x168", "TacticsTest_LateRender"],
     ["Camera_zoomY", "OFF_CAM_ZOOM_Y", "0x170", "TacticsTest_LateRender"],
   ];
-  const GLOW2_CONSTANTS: [string, string, string][] = [["VT_Clip_Bounds", "VT_CLIP_BOUNDS", "16"], ["ClipKind_A", "CONST_CLIP_KIND_A", "1"], ["ClipKind_B", "CONST_CLIP_KIND_B", "2"]];
+  const GLOW2_CONSTANTS: [string, string, string][] = [["VT_Clip_Bounds", "VT_CLIP_BOUNDS", "16"], ["ClipKind_A", "CONST_CLIP_KIND_A", "1"], ["ClipKind_B", "CONST_CLIP_KIND_B", "2"],
+    // the 1280x720 virtual canvas: LateRender multiplies by the .rdata floats 1/1280 (0x14113f47c) and 1/720 (0x14113f488);
+    // an rdata witness (rip-relative operand -> float -> reciprocal) reads them back from the exe
+    ["GlowCanvasWidth", "CONST_GLOW_CANVAS_W", "1280"], ["GlowCanvasHeight", "CONST_GLOW_CANVAS_H", "720"]];
   const GLOW2_NAMES = new Set([...GLOW2_SYMBOLS.map((x) => x[0]), ...GLOW2_OFFSETS.map((x) => x[0]), ...GLOW2_CONSTANTS.map((x) => x[0])]);
   const GLOW_NAMES = new Set([...GLOW_SYMBOLS.map((x) => x[0]), ...GLOW_REFERENCE.map((x) => x[0]), "ShaderManager_global", "TacticsTest_vftable", ...GLOW_OFFSETS.map((x) => x[0]), ...GLOW_CONSTANTS.map((x) => x[0])]);
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
