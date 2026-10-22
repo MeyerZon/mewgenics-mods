@@ -121,9 +121,10 @@ FW_EXPORT int FW_CharacterHasStatus(void *character, const char *statusName);
 /* --- API v3: data addresses --- */
 FW_EXPORT uintptr_t FW_GetData(int dataId);   /* absolute address of a FwData entry, 0 if inactive/unknown */
 /* --- API v4: per-unit glow (combat scenes only; call on the game's main thread, e.g. from a turn callback or the
- * harness). Draws a coloured rim around the unit through the game's own outline-mask pipeline. v1 keeps ONE shared
- * colour (the first registered unit's); up to 16 units; registrations belong to the current fight scene and a unit
- * whose pool slot is reused is dropped. 1 on success. */
+ * harness). Draws a coloured rim around the unit through the game's own outline-mask pipeline, in the unit's own
+ * colour (glow v2: one material per distinct colour; with several colours each rim is scissored to its unit's screen
+ * rect, so units whose rects overlap share both colours there); up to 16 units; registrations belong to the current
+ * fight scene and a unit whose pool slot is reused is dropped. Same ABI as v4's first release. 1 on success. */
 FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a);
 FW_EXPORT int FW_ClearUnitGlow(void *character);   /* 1 when it was registered */
 

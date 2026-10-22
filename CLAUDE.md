@@ -119,7 +119,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
   walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules, the harness's modules;
-  171 checks = 14 + 6 + 14 + 13 + 11 + 15 + 8 + 90, `-Werror`),
+  184 checks = 14 + 6 + 14 + 13 + 11 + 15 + 21 + 90, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.

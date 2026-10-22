@@ -78,8 +78,8 @@ seed <N>                                         pin the game's RNG (TLS+0x178) 
                                                  director exists). Put it right before `enter`: the party and every
                                                  roll after it are then identical run to run, so assertions can be exact
 glow <unit> <r> <g> <b> <a>                      FW_SetUnitGlow (framework API v4) on a unit of the walk (index, bareword or
-glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; v1
-                                                 keeps one shared colour); `off` = FW_ClearUnitGlow. Needs the fight and
+glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; each
+                                                 unit its own colour since glow v2); `off` = FW_ClearUnitGlow. Needs the fight and
                                                  `mods: …, fw-glow` (the rim shader). A missing unit or a refusal ends the
                                                  script with code 1 (glow_failed); a framework without API v4 with code 4
 wait frames|turns|rounds|ms <N>                  N >= 1; turns = TurnControl::NextTurn calls; rounds = TurnControl's

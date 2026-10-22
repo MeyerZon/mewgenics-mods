@@ -12,13 +12,13 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 | Pinned fact | Count on 25143593 | Where it is used |
 |---|---|---|
 | PE identity (TimeDateStamp + SizeOfImage) | 1 | `fw_identify_build` |
-| Byte signatures of hooked/called functions | 66 signed function entries (33 of the 35 FwSymbol — 15 + 13 v4 run-entry/RNG + 7 glow — and 33 reference functions, 11 of them, since 2026-10-22, only as witness hosts: 7 for the Character/GonObject offsets, 4 for the glow offsets); `LuckUp_ctor`, `Status_GetCategory` (FwSymbol) and `Status_ApplyLuckUp` ship as `NULL` pattern + raw RVA, the 11 `FW_LK` lookups likewise | `resolve_symbols` |
+| Byte signatures of hooked/called functions | 68 signed function entries (35 of the 37 FwSymbol — 15 + 13 v4 run-entry/RNG + 7 glow + 2 glow v2 — and 33 reference functions, 11 of them, since 2026-10-22, only as witness hosts: 7 for the Character/GonObject offsets, 4 for the glow offsets); `LuckUp_ctor`, `Status_GetCategory` (FwSymbol) and `Status_ApplyLuckUp` ship as `NULL` pattern + raw RVA, the 11 `FW_LK` lookups likewise | `resolve_symbols` |
 | Raw RVAs of the 13 status-name lookups (`FW_LK`) | 13 (none has a signature worth having: twins differ only in `__LINE__` immediates) | `status_engine.c` |
 | Data RVAs: App global (also exposed as the ShaderManager), MewDirector global, SDL3 DYNAPI jump table + 8 slots, default status source | 13 | `BuildInfo.rva_data`, `FW_GetData` |
 | Vftables (LuckUp, Status, TacticsTest) and the LuckUp type id | 4 | vtable cloning, sanity check, the glow hook's slot check |
-| Vtable slot indices / count | 7 (+`VT_TT_LATERENDER` 2026-10-22, by slot search) | `offsets.h` |
-| Struct offsets | 72 (+ `GON_NODE_SIZE`) | `offsets.h` (`status_engine.c`, `mewtest.c`, `mt_gon.c`, `glow_engine.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG), +17 on 2026-10-22 (per-unit glow: TacticsTest cameras/passes, Camera, renderer extra layers, Pass fields, Character renderer/generation) |
-| Layer / slot constants | 3 (`CONST_MASK_LAYER`, `CONST_COMPOSITE_LAYER`, `CONST_GLOW_FRAMEBUF_SLOT`; call-arg / displacement witnesses) | `glow_engine.c` |
+| Vtable slot indices / count | 7 (+`VT_TT_LATERENDER` 2026-10-22, by slot search; +`VT_CLIP_BOUNDS` glow v2, displacement witness) | `offsets.h` |
+| Struct offsets | 78 (+ `GON_NODE_SIZE`) | `offsets.h` (`status_engine.c`, `mewtest.c`, `mt_gon.c`, `glow_engine.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG), +17 on 2026-10-22 (per-unit glow: TacticsTest cameras/passes, Camera, renderer extra layers, Pass fields, Character renderer/generation), +6 glow v2 (renderer clip, clip matrix, camera position/zoom/zoomY, scene-manager interpolation) |
+| Layer / slot constants | 5 (`CONST_MASK_LAYER`, `CONST_COMPOSITE_LAYER`, `CONST_GLOW_FRAMEBUF_SLOT`, glow v2 `CONST_CLIP_KIND_A/B`; call-arg / displacement witnesses) | `glow_engine.c` |
 
 ## The manifest: `bindings/<steamBuildId>.json`
 

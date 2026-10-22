@@ -43,7 +43,11 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] **Redirected Rat** (`npm run test:artprobe -- --tileset`, run `20261022-090748-_tileprobe-render-tileset-redirect`,
       `shot-rat-2.png`): any wrong offset or mirroring of the ArtProbe clip drawn for a plain Rat, against the ArtProbe
       enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
-- [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
+- [ ] **Look at the unit-glow shots** — produced 2026-10-22 by the glow v2 agent (`cd editor && npm run test:unitglow`,
+      run `20261022-102435-dev-sandbox-unit-glow`: shot-glow, shot-noglow and the v2 shot-two); `npm run t3` fills the
+      gallery's `pr86-unit-glow` / `pr86-glow-width` / glow-v2 cards. In shot-two, does the cat carry a cyan rim and the
+      Rat a magenta one, each hugging its own sprite (no cyan on the Rat, no magenta on the cat), and is the cat's rim
+      whole where it stands among the other cats (a scissor cut would show as a straight edge)?
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
@@ -77,9 +81,10 @@ these without a decision (status per bullet below; the PR map follows).
       rim** (a mask + the game's blur/composite passes with a per-unit colour) is in PR (branch
       `feat/native-unit-glow`, session rim).
 - [ ] **Native per-unit glow — what next?** The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
-      draws a rim through the game's outline mask (one shared colour, combat only, the rim shader shipped by
-      `mods/fw-glow`). Decide: (a) a data-level way to ask for it (a `registered-names.json` kind `glow` a
-      status/passive names?) and per-unit colours (v2: one material + pass per unit, or a camera per colour); (b)
+      draws a rim through the game's outline mask (combat only, the rim shader shipped by `mods/fw-glow`). Decide: (a)
+      a data-level way to ask for it (a `registered-names.json` kind `glow` a status/passive names?) — still open — and
+      per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
+      scissored to its screen rect (LateRender's hovered-unit math), proven in-game (magenta Rat + cyan cat); (b)
       whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?

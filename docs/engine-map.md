@@ -1464,9 +1464,38 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   (launch 4, 3440x1440): `glow "Lil' Rat" 1 0 1 1` -> one connected magenta patch of **5653 px**, bbox (2628,692)-(2759,825)
   around the sprite 2646..2741 x 724..808, fading over ~16 px, outline and body untouched; after `FW_ClearUnitGlow` the
   noglow shot holds **0** magenta px; the run passed with the real save unchanged.
-- **v1 limits.** One composite, hence one shared colour (the first registered unit's rgba; per-unit colours need one
-  material + pass per unit with rects, or one spare layer + camera per colour — both additive to this); combat scenes
-  only (`TacticsTest`); up to 16 units; registrations belong to the current fight scene (register during the fight);
+- **v2: per-unit colours (2026-10-22, OBSERVED in-game).** The mask is one texture holding every glowing unit with no
+  identity (draw mode 3 writes the sprite's luminance and coverage, nothing per unit), and a `Material` holds ONE value
+  per uniform when the main camera later runs its passes — so one material cannot draw two colours, and one pass cannot
+  tell units apart. v2 therefore (a) groups the registry by exact rgba (stable, first appearance; `fw_glow_groups`)
+  and creates one material per colour group (`fw_unit_glow`, `fw_unit_glow_1`, …, same shader); (b) with ONE colour
+  draws one full-screen pass (exactly v1); with several, one composite pass per unit carrying its group's material
+  (the pass's first `{Material*, int}` entry is rewritten in place each frame), **scissored with pass rect B** to the
+  unit's screen rect. The rect is computed exactly as `TacticsTest::LateRender` computes the hovered unit's
+  (disassembly 0x88e24e..0x88e4a0, the second of two identical blocks; the first, 0x88de1d.., does the StatusMenu's own
+  renderer): `clip = renderer+0x80` only when the clip's vtable slot 0 returns 1 or 2; bounds `{x0,x1,y0,y1}` = clip
+  vtable slot **16** (`call [rax+0x80]`); mapped by the leaf **0x9d46d0** with the clip matrix at **clip+0x60**
+  (`x' = m0 x + m3 y + m4`, `y' = m2 x + m1 y + m5`, as a box; replicated in C); then by `Renderer_GetScreenMatrix`
+  **0x78d600** (`x` from M0/M4/M12, `y` from M1/M5/M13); then `C = inverse(Position_GetViewMatrix` **0x9b4c90**
+  `(maskCamera+0x38, out, interp))` (the inverse is the leaf **0xa07c70**, replaced by a C cofactor inverse; `interp`
+  = `maskCamera+0x28` (scene manager) `+0x30`, a double passed in xmm2), `P = C x K` with
+  `K = {zoom,0,0,0 / 0,zoom*zi,0,0 / 0,0,1,0 / 640,360,0,1}` (`zoom` = camera `+0x168` double, `zi` = the int at
+  `+0x170`; `K`'s rows 2/3 are the .rdata vectors 0x141140520 / 0x141140960), and the canvas `x/1280`, `1 - y/720`
+  (0x14113f47c, 0x14113f488). A 20-canvas-px margin covers the band. A unit whose rect cannot be computed (no clip of
+  those kinds, a singular view) has its pass disabled — never a full-screen pass that would paint its colour on every
+  unit. Host-tested in `test_glow_rules.c` (groups, plan, the rect stages, pass writes); proven in-game by the "two"
+  shot of `unit-glow.mewtest`: the Rat magenta + unit 0 (a cat) cyan gave a 5515 px magenta patch around the Rat and a
+  9961 px cyan patch around the cat, apart (`unit-glow-summary.json` `two`). **Rejected:** one RTT camera + spare layer
+  per colour (`Component_AddCamera`, layer bitset and draw-mode writes on layers the rim notes only INFERRED free, a
+  full-window RGBA texture per colour, and a one-frame lag because a camera created after the main camera renders
+  after it) — the rect route reuses only what LateRender already does every hovered frame. Bindings (glow v2 block,
+  harvest-verified): `Renderer_GetScreenMatrix` 0x78d600, `Position_GetViewMatrix` 0x9b4c90 (FwSymbol 35/36),
+  `OFF_RND_CLIP` 0x80, `OFF_CLIP_MATRIX` 0x60, `OFF_CAM_POSITION` 0x38, `OFF_SCENEMANAGER_INTERP` 0x30, `OFF_CAM_ZOOM`
+  0x168, `OFF_CAM_ZOOM_Y` 0x170, `VT_CLIP_BOUNDS` 16, `CONST_CLIP_KIND_A/B` 1/2, every witness in
+  `TacticsTest_LateRender`'s first `.pdata` chunk.
+- **Limits.** Several colours: units whose rects overlap share both colours inside the overlap (the scissor is a
+  rectangle, the mask has no identity); combat scenes only (`TacticsTest`); up to 16 units (and up to 16 colour
+  materials, which live for the process); registrations belong to the current fight scene (register during the fight);
   main thread only; while any unit glows the game's white hover rim (blur mode) is off — the jump-flood passes
   (`+0x80/+0x88`) are not touched, so a jump-flood hover still works; the API is native-only (no data-level way to ask
   for a glow yet, see `docs/data-mods.md`).
