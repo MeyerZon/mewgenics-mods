@@ -11,6 +11,9 @@ mods/*/swfs/
 *.dll
 *.o
 *.obj
+# ...except hand-written Wavefront OBJ text models (3D meshes): test fixtures and a mod's models/
+!native/framework/test/fixtures/mesh/*.obj
+!mods/*/models/*.obj
 build/
 # local launcher output
 launch-*.local.bat
