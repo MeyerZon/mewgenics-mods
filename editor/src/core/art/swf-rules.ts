@@ -28,7 +28,7 @@ export const SWF_RULE_CODES: Readonly<Record<string, RuleCode>> = {
   "abc-count": { severity: "error", where: ["swf"], why: "DoABC::decode 0xa4a740 is FATAL 'Multiple DoABC tags in one SWF' on a second DoABC" },
   "bitmap-too-large": { severity: "error", where: ["scene", "swf"], why: "fit_texture 0xa24540 is FATAL 'Bitmap Fill could not fit into atlas' when width or height >= texture_atlas_size (4096)" },
   "bitmap-unsupported-format": { severity: "error", where: ["scene", "swf"], why: "DefineBitsLossless_init 0xb7a4e0 converts formats 3 (palette), 4 (RGB555) and 5 (ARGB) only; the editor PNG decoder takes 8-bit non-interlaced PNGs (png.ts)" },
-  "font-class-unknown": { severity: "warning", where: ["swf"], why: "DynamicTextBox_init_from_DefineEditText 0x98d910 takes the font from Swf_FindCharacterByClassName 0x9bb910 (the export registry, font tags only); a class no loaded SWF exports finds nothing" },
+  "font-class-unknown": { severity: "error", where: ["swf"], why: "DynamicTextBox_init_from_DefineEditText 0x98d910 takes the font from Swf_FindCharacterByClassName 0x9bb910 (the export registry, font tags only); a class no loaded SWF exports finds nothing and the game crashes when the text is shown (0xc0000005 at Mewgenics.exe+0xa2addf, OBSERVED 2026-10-22)" },
   "filter-unsupported": { severity: "error", where: ["scene", "swf"], why: "PlaceObject3::decode 0xb78210 is FATAL 'ERROR: FILTERS NOT SUPPORTED' on a filter list" },
   "import-unsupported": { severity: "error", where: ["scene", "swf"], why: "ImportAssets / ImportAssets2 are skipped by createTag 0xa2e990, so an imported id has no character and placing it crashes (Swf_GetCharacter 0xa4a190)" },
   "scaling-grid-ignored": { severity: "warning", where: ["swf"], why: "DefineScalingGrid (78) is not in createTag's switch: no 9-slice" },
@@ -135,7 +135,7 @@ export function swfFindings(tags: Tag[]): Finding[] {
           break;
         case TAG.DefineEditText: {
           const fc = t.editText && t.editText.fontClass;
-          if (fc && !GAME_FONTS.includes(fc) && !ownFonts.has(fc)) push("warning", "font-class-unknown", `DefineEditText id ${t.editText!.id} names font class "${fc}", which is neither a game font (${GAME_FONTS.join(", ")}) nor a DefineFont3 this file exports; unless another loaded mod SWF exports it the lookup (Swf_FindCharacterByClassName 0x9bb910) finds nothing — what the game then draws: docs/art-pipeline.md "Fonts"`);
+          if (fc && !GAME_FONTS.includes(fc) && !ownFonts.has(fc)) push("error", "font-class-unknown", `DefineEditText id ${t.editText!.id} names font class "${fc}", which is neither a game font (${GAME_FONTS.join(", ")}) nor a DefineFont3 this file exports: unless another loaded SWF exports it, the lookup (Swf_FindCharacterByClassName 0x9bb910) finds nothing and the game crashes when the text is shown (0xc0000005 at Mewgenics.exe+0xa2addf, OBSERVED 2026-10-22); export the font from this SWF (scene.fonts) or use a game font`);
           break;
         }
         default:
