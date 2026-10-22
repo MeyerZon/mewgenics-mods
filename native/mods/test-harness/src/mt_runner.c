@@ -635,6 +635,8 @@ static int dispatch(MtRunner *r, const MtHost *h) {
         case MT_S_WAIT_SHOT:
             if (r->now >= r->waitDeadline) { r->state = MT_S_RUN; r->pc++; }
             return 1;
+        case MT_S_WAIT_SHOT_GL:
+            return 1;
         case MT_S_WAIT_ROUNDS: {
             long round = h->units_available(h->user) ? h->round_number(h->user) : 0;
             if (round >= r->waitTargetRound) { emit_wait(r, h, d, "rounds", round - r->waitStartRound); r->state = MT_S_RUN; r->pc++; }

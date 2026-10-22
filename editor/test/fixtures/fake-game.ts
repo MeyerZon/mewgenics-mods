@@ -7,7 +7,7 @@
 // harness would. Behaviour is selected with FAKE_GAME_MODE.
 
 import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 
 const argv = process.argv.slice(2);
 const argAfter = (flag: string): string | undefined => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
@@ -85,6 +85,23 @@ switch (mode) {
   case "shot":
     // a shot event mid-run: the runner must capture while the game holds (we hold 500 ms, then end)
     if (outPath) writeFileSync(outPath, [start, { ev: "shot", line: 1, label: "menu", hold_ms: 700, t: 1, frame: 1 }].map((e) => JSON.stringify(e)).join("\n") + "\n");
+    setTimeout(() => { if (outPath) appendFileSync(outPath, JSON.stringify(end(0, "quit", 0, 0)) + "\n"); process.exit(0); }, 500);
+    break;
+  case "shot-gl": {
+    // the in-process capture (2026-10-22): shot 1 read from the GL back buffer into a raw file (2x2, bottom row first:
+    // red green / blue white on screen), shot 2 failed in-process so the runner must capture the window for it
+    const raw = outPath ? join(dirname(outPath), "shot-1.mtraw") : "";
+    if (raw) {
+      const head = Buffer.alloc(16); head.write("MTSHOT01", 0, "latin1"); head.writeUInt32LE(2, 8); head.writeUInt32LE(2, 12);
+      writeFileSync(raw, Buffer.concat([head, Buffer.from([0, 0, 255, 255, 255, 255, /* bottom row: blue white */ 255, 0, 0, 0, 255, 0 /* top row: red green */])]));
+    }
+    writeResult([start, { ev: "shot", line: 1, label: "gl one", hold_ms: 700, source: "gl", file: raw, w: 2, h: 2, t: 1, frame: 1 }, { ev: "shot", line: 2, label: "fallback", hold_ms: 700, source: "window", gl: "glReadPixels error 0x502", t: 2, frame: 2 }]);
+    setTimeout(() => { if (outPath) appendFileSync(outPath, JSON.stringify(end(0, "quit", 0, 0)) + "\n"); process.exit(0); }, 500);
+    break;
+  }
+  case "shot3":
+    // three window-captured shots at different moments (the runner's capture decides what the files hold)
+    writeResult([start, ...[1, 2, 3].map((n) => ({ ev: "shot", line: n, label: `s${n}`, hold_ms: 700, t: n, frame: n }))]);
     setTimeout(() => { if (outPath) appendFileSync(outPath, JSON.stringify(end(0, "quit", 0, 0)) + "\n"); process.exit(0); }, 500);
     break;
   case "enter-pass":
