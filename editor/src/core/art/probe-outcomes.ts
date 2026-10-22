@@ -134,3 +134,29 @@ export function tilesetOutcome(redirect: TilesetRun, control: TilesetRun): Tiles
   if ((redirect.baseline && redirect.baseline.found) || (control.baseline && control.baseline.found) || control.after.some((s) => s.found)) return "inconclusive";
   return redirect.after.some((s) => s.found) ? "redirected" : "not-redirected";
 }
+
+export interface LocTextSummary {
+  /** per question: the readable shots' unanimous outcome, "mixed" when they disagree, "unreadable" when none is readable */
+  outcomes: Record<string, LocOutcome | "mixed">;
+  /** per question: how many shots voted */
+  votes: Record<string, number>;
+  /** some shot drew the plain look-alike */
+  plainRenders: boolean;
+}
+
+/** a box with less than this share of its best ink across the shots is covered (OBSERVED: the "Battle Start!" banner, the unit) */
+export const OCCLUDED_BELOW = 0.6;
+
+/** Combine per-shot measures: a shot votes on a question only when its key, look-alike and value boxes are all uncovered. */
+export function summarizeLocText(shots: LocTextMeasure[]): LocTextSummary {
+  const best: Record<string, number> = {};
+  for (const s of shots) for (const [id, b] of Object.entries(s.boxes)) best[id] = Math.max(best[id] || 0, b.ink);
+  const ok = (s: LocTextMeasure, id: string) => { const b = s.boxes[id]; return !!b && b.ink >= MIN_INK && b.ink >= OCCLUDED_BELOW * (best[id] || 0); };
+  const outcomes: LocTextSummary["outcomes"] = {}, votes: LocTextSummary["votes"] = {};
+  for (const [q, p] of Object.entries(LOC_PAIRS)) {
+    const v = shots.filter((s) => ok(s, p.key) && ok(s, p.lit) && ok(s, p.value)).map((s) => s.outcomes[q]!).filter((o) => o !== "unreadable");
+    votes[q] = v.length;
+    outcomes[q] = !v.length ? "unreadable" : v.every((o) => o === v[0]) ? v[0]! : "mixed";
+  }
+  return { outcomes, votes, plainRenders: shots.some((s) => s.plainRenders) };
+}

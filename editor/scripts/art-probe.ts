@@ -19,7 +19,8 @@
 // (vanilla / mod key × HTML / plain) whether the key box reads like its English value (substituted) or like its
 // look-alike literal. --tileset: run _tileprobe's render-tileset-redirect.mewtest (`alley { Rat ArtProbe }`) and the
 // control _artprobe/render-tileset-control.mewtest (no overlay) and write tileset-summary.json: the marker per shot
-// (baseline before `spawn Rat`, two after) and the outcome (probe-outcomes.ts tilesetOutcome).
+// (baseline before `spawn Rat`, two after) and the outcome (probe-outcomes.ts tilesetOutcome). `--loctext --from <runDir>`
+// re-reads an earlier run's report.json and shots instead of launching the game.
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
@@ -28,7 +29,7 @@ import { join } from "node:path";
 import * as api from "../src/core/api.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { decodePng } from "../src/core/art/png.ts";
-import { measureLocText, tilesetOutcome } from "../src/core/art/probe-outcomes.ts";
+import { measureLocText, summarizeLocText, tilesetOutcome } from "../src/core/art/probe-outcomes.ts";
 import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
 
 /** the CatProbe rig's slot colours (mods/_artprobe/art/probe.scene.json) */
@@ -39,38 +40,41 @@ const b = buildSwf("_artprobe", "art/probe.scene.json", {});
 if (!b.ok) { console.error(`build failed: ${JSON.stringify(b).slice(0, 400)}`); process.exit(1); }
 const cat = process.argv.includes("--cat");
 const catAppend = process.argv.includes("--cat-append");
+/** the harness's save guard line ("1 real save file(s) unchanged (…)") */
+const saveOf = (r: { safety?: { saveSet?: { detail?: string } | null } }) => (r.safety && r.safety.saveSet && r.safety.saveSet.detail) || null;
 const geomOf = (a: ReturnType<typeof analyzeProbeShot>) => (a.box ? { found: a.found, box: a.box, scale: a.scale, mirrored: a.mirrored } : null);
 if (process.argv.includes("--tileset")) {
-  const runs: Record<string, { mod: string; test: string; verdict: string; reason: string; runDir: string | null; baseline: { found: boolean; box: unknown } | null; after: Array<{ label: string; found: boolean; box: unknown; scale: number; mirrored: boolean }> }> = {};
+  const runs: Record<string, { mod: string; test: string; verdict: string; reason: string; save: string | null; runDir: string | null; baseline: { found: boolean; box: unknown } | null; after: Array<{ label: string; found: boolean; box: unknown; scale: number; mirrored: boolean }> }> = {};
   for (const [key, mod, test] of [["redirect", "_tileprobe", "render-tileset-redirect"], ["control", "_artprobe", "render-tileset-control"]] as const) {
     const r = await api.runIngameTest({ mod, test, hide: false });
     if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
     if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
     const shots = r.artifacts.shots.filter((s) => s.path).map((s) => ({ label: s.label, a: analyzeProbeShot(decodePng(readFileSync(s.path!))) }));
     const base = shots.find((s) => s.label === "baseline");
-    runs[key] = { mod, test, verdict: r.verdict, reason: r.reason, runDir: r.artifacts.runDir || null, baseline: base ? { found: base.a.found, box: base.a.box } : null, after: shots.filter((s) => s.label !== "baseline").map((s) => ({ label: s.label, found: s.a.found, box: s.a.box, scale: s.a.scale, mirrored: s.a.mirrored })) };
+    runs[key] = { mod, test, verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, baseline: base ? { found: base.a.found, box: base.a.box } : null, after: shots.filter((s) => s.label !== "baseline").map((s) => ({ label: s.label, found: s.a.found, box: s.a.box, scale: s.a.scale, mirrored: s.a.mirrored })) };
   }
   const outcome = tilesetOutcome(runs.redirect!, runs.control!);
   const out = { observed: "2026-10-22, build 25143593", overlay: "alley { Rat ArtProbe }", outcome, redirect: runs.redirect, control: runs.control };
   writeFileSync(join(runs.redirect!.runDir || ".", "tileset-summary.json"), JSON.stringify(out, null, 2) + "\n");
-  const line = (k: string) => { const r = runs[k]!; return `${k} (${r.mod}/${r.test}): ${r.verdict} — ${r.reason}\n  baseline marker ${r.baseline ? (r.baseline.found ? "FOUND" : "none") : "no shot"}; after spawn: ${r.after.map((s) => `${s.label} ${s.found ? `FOUND (scale ${s.scale.toFixed(2)}, ${s.mirrored ? "mirrored" : "as authored"})` : "none"}`).join(", ")}\n  artifacts: ${r.runDir}`; };
+  const line = (k: string) => { const r = runs[k]!; return `${k} (${r.mod}/${r.test}): ${r.verdict} — ${r.reason}; ${r.save}\n  baseline marker ${r.baseline ? (r.baseline.found ? "FOUND" : "none") : "no shot"}; after spawn: ${r.after.map((s) => `${s.label} ${s.found ? `FOUND (scale ${s.scale.toFixed(2)}, ${s.mirrored ? "mirrored" : "as authored"})` : "none"}`).join(", ")}\n  artifacts: ${r.runDir}`; };
   console.log([line("redirect"), line("control"), `outcome: ${outcome}`].join("\n"));
   process.exit(outcome === "redirected" ? 0 : 1);
 }
 if (process.argv.includes("--loctext")) {
-  const r = await api.runIngameTest({ mod: "_artprobe", test: "render-loctext", hide: false });
+  const fromAt = process.argv.indexOf("--from");
+  const r = fromAt > 0 ? (JSON.parse(readFileSync(join(process.argv[fromAt + 1]!, "report.json"), "utf8")) as Awaited<ReturnType<typeof api.runIngameTest>>) : await api.runIngameTest({ mod: "_artprobe", test: "render-loctext", hide: false });
   if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
   if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
   const shots = r.artifacts.shots.filter((s) => s.path).map((s) => { const img = decodePng(readFileSync(s.path!)); const a = analyzeProbeShot(img); const g = geomOf(a); return { label: s.label, marker: g, measure: g && g.found ? measureLocText(img, g) : null }; });
-  // the decision is the first shot with the marker; the others are kept to show it is stable
+  // every shot with the marker votes on the questions whose three boxes it shows uncovered (summarizeLocText)
   const first = shots.find((s) => s.measure);
-  const stable = !!first && shots.filter((s) => s.measure).every((s) => JSON.stringify(s.measure!.outcomes) === JSON.stringify(first.measure!.outcomes));
-  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, runDir: r.artifacts.runDir || null, marker: first ? first.marker : null, outcomes: first ? first.measure!.outcomes : null, plainRenders: first ? first.measure!.plainRenders : null, stable, shots };
+  const sum = summarizeLocText(shots.filter((s) => s.measure).map((s) => s.measure!));
+  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, marker: first ? first.marker : null, outcomes: sum.outcomes, votes: sum.votes, plainRenders: sum.plainRenders, shots };
   writeFileSync(join(r.artifacts.runDir || ".", "loctext-summary.json"), JSON.stringify(out, null, 2) + "\n");
   console.log([
     ...shots.map((s) => `${s.label}: marker ${s.marker && s.marker.found ? `found (scale ${s.marker.scale.toFixed(2)}, ${s.marker.mirrored ? "mirrored" : "as authored"})` : "not found"}${s.measure ? `; ${Object.entries(s.measure.outcomes).map(([k, v]) => `${k} ${v} (value ${s.measure!.pairs[k]!.toValue} / literal ${s.measure!.pairs[k]!.toLiteral})`).join(", ")}; ink ${Object.entries(s.measure.boxes).map(([k, b]) => `${k} ${b.ink}/${b.inkWidth.toFixed(0)}w`).join(" ")}` : ""}`),
-    `outcomes: ${out.outcomes ? JSON.stringify(out.outcomes) : "-"} (plain text drawn: ${out.plainRenders}; same in every shot: ${stable})`,
-    `run: ${r.verdict} — ${r.reason}`,
+    `outcomes: ${JSON.stringify(out.outcomes)} (votes ${JSON.stringify(out.votes)}; plain text drawn: ${out.plainRenders})`,
+    `run: ${r.verdict} — ${r.reason}; ${out.save}`,
     `artifacts: ${r.artifacts.runDir}`,
   ].join("\n"));
   process.exit(r.verdict === "pass" && first ? 0 : 1);

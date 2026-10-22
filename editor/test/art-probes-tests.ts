@@ -213,7 +213,7 @@ export async function runArtProbesTests(test: TestFn, assert: AssertFn, eq: EqFn
     assert(existsSync(p), "written by npm run test:artprobe -- --loctext");
     const j = JSON.parse(readFileSync(p, "utf8")) as any;
     eq(j.verdict, "pass");
-    assert(/real save file\(s\) unchanged/.test(j.reason), j.reason);
+    assert(/real save file\(s\) unchanged/.test(j.save), String(j.save));
     assert(j.marker && j.marker.found, "marker found");
     for (const k of ["vanillaHtml", "vanillaPlain", "modHtml", "modPlain"]) assert(["substituted", "literal", "unreadable"].includes(j.outcomes[k]), `${k}: ${j.outcomes[k]}`);
     // the hypothesis was "an initial text that is exactly a key is localized"; OBSERVED: only without the HTML wrapper
@@ -230,7 +230,7 @@ export async function runArtProbesTests(test: TestFn, assert: AssertFn, eq: EqFn
     assert(existsSync(p), "written by npm run test:artprobe -- --tileset");
     const j = JSON.parse(readFileSync(p, "utf8")) as any;
     eq(j.redirect.verdict, "pass"); eq(j.control.verdict, "pass");
-    assert(/real save file\(s\) unchanged/.test(j.redirect.reason) && /real save file\(s\) unchanged/.test(j.control.reason), "saves unchanged");
+    assert(/real save file\(s\) unchanged/.test(j.redirect.save) && /real save file\(s\) unchanged/.test(j.control.save), "saves unchanged");
     eq(j.outcome, "redirected");
   });
 }
