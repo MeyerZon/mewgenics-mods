@@ -176,6 +176,35 @@ for animation. `svg-export.ts` writes a shape as `art/<shape>.svg` (gray levels 
 `options.applyViewBox: false`) brings the edited file back over the same shape with its coordinates. Works the same
 with Inkscape or Illustrator. Animation stays in the Timeline tab; Ruffle plays a built SWF.
 
+**VectorCraft in-editor (2026-10-22).** The Art panel's **VectorCraft** sub-tab embeds the vendored web build
+(`scripts/vendor-vectorcraft.ts`, §8 item 2) as a same-origin `<iframe src="./vectorcraft/index.html">`
+(`web/src/art/vectorcraft-host.ts`, `VectorcraftPanel.tsx`): upstream's supported embedding, since the app installs
+capture-phase pointer/paste listeners on its own window and draws everything into one canvas. Being same-origin,
+`iframe.contentWindow.vectorcraft` is the app's promise API — the same JSON protocol as its desktop control port and
+MCP server (`execute`, `request`, `inspect`, `openFile`, `screenshot`; ~1,090 engine commands such as
+`shape.rectangle { x, y, width, height }` and `path.create { d }`). **VectorCraft** on a Shapes row (or the tab's
+Open) hands the shape over as the SVG `svg-export.ts` writes (`openFile("<shape>.svg", bytes)`); the tab polls
+`ui.inspect` once a second (the app has no change events) and enables **Apply to shape** when
+`documents[].dirty` is set; Apply calls `app.export { format: "svg", svg: { styling: "presentation", outlineText:
+true } }` (no path → `{ dataBase64 }`, no download), undoes the artboard re-origin and replaces the shape through
+`/api/art/import-svg { applyViewBox: false }` like Replace… (in memory; Save scene writes it). The panel stays
+mounted, parked off-screen, while another sub-tab shows, so the document and undo history survive tab switches;
+"not vendored" shows a hint; a start timeout offers **Retry with WebGL2** (`?webgl`).
+
+*The re-origin, measured on the vendored v0.14.0 (fixtures in `editor/test/fixtures/vectorcraft/`):* opening our
+`viewBox="x y w h"` makes "Artboard 1" w × h at 0,0 and translates every coordinate by **(−x, −y)**; `app.export`
+always writes `viewBox="0 0 w h"`, art outside the artboard keeps its (negative or larger) coordinates. So
+`src/core/art/svg-reorigin.ts` `reoriginSvg(svg, originalViewBox)` wraps the export in `<g
+transform="translate(x y)">` and restores the viewBox origin; the importer puts that on each path's `transform`
+(d verbatim, gradients path-local) and the shape lands where it was — e.g. `body` (viewBox −44 −34 88 68) comes
+back as `d="M4 4 L84 4 …"` + `transform [1,0,0,1,-44,-34]`. Maps: paths, solid fills (gray bytes survive when left
+exact), strokes (cap/join/miter), linear/radial `userSpaceOnUse` gradients, plain groups; a new VectorCraft shape
+carries `fill #ffffff` + `stroke #000000` (→ `gray:15` / `gray:0`, width 1) until recoloured. Not mapped: text (unless
+outlined), filters/effects, blend modes, masks/clips, patterns, meshes, images — the importer reports them.
+Verified by Playwright (`tests/e2e/art-mode.spec.ts` "VectorCraft panel", skips when not vendored): boot in headless
+Chromium under SwiftShader WebGL2 takes ~0.5–4 s, `shape.rectangle` through the API, Apply → 3 paths with the
+transform above, no request leaves the editor's origin.
+
 Tool-agnostic import (`svg-import.ts`): accepts an SVG document (VectorCraft,
 Inkscape, Illustrator export…) and produces `shapes[<id>].paths[]`: `<path d>`,
 `<rect>`, `<circle>`, `<ellipse>`, `<polygon>`, `<polyline>`, `<line>` and `<g>`

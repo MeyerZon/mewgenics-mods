@@ -22,8 +22,13 @@ done (2026-10-21). Owner's answers of 2026-10-21 are recorded under each item; c
       2026-10-21).
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
-      **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly). Not
-      started; scope and install go to the owner before any work (nothing gets installed without the owner's say-so).
+      **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly).
+      **2026-10-22, owner's YES to a build-time download (nothing installed):** the pinned web build is vendored at
+      `npm run build` (hash-verified, `scripts/vendor-vectorcraft.ts`) and Art mode's **VectorCraft** sub-tab draws on
+      a shape in place — VectorCraft on a Shapes row → draw → Apply to shape, the artboard re-origin undone by
+      `svg-reorigin.ts` (`docs/art-preview-plan.md` "VectorCraft in-editor"). Remaining: the agent channel itself, a
+      `vectorcraft_exec` MCP tool driving the same `window.vectorcraft` API in headless Chromium (next PR); the native
+      `vectorcraft-cli mcp --headless` route needs an install and stays unasked. T3: the owner's look at the tab.
 - [ ] **T3 looks** (owner, 2026-10-21: he will do these later) still unticked from the art PRs — the shots are in `editor/data/ingame-runs/` (`npm run
       test:artprobe`, `npm run test:artprobe -- --cat` rebuild them):
       gradient square red → black (#63); top green line shorter than the bottom one (#64); the add square a lightened

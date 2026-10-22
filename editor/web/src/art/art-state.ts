@@ -13,6 +13,7 @@ import { createPreview, type Preview } from "./preview-gl.ts";
 import { grayLevelToByte } from "../../../src/core/art/scene.ts";
 import { adoptGradients } from "../../../src/core/art/gradient.ts";
 import { shapeToSvg } from "../../../src/core/art/svg-export.ts";
+import { parseViewBox, reoriginSvg } from "../../../src/core/art/svg-reorigin.ts";
 import type {
   AbcMode,
   ArtAssets,
@@ -63,6 +64,9 @@ export interface ArtState {
   jsonText: string;
   jsonError: string;
   dropOver: boolean;
+  // VectorCraft tab: the shape it targets and a counter bumped by every "Open in VectorCraft" request
+  vcShape: string;
+  vcRequest: number;
 }
 
 export const A = createStore<ArtState>({
@@ -94,6 +98,8 @@ export const A = createStore<ArtState>({
   jsonText: "",
   jsonError: "",
   dropOver: false,
+  vcShape: "",
+  vcRequest: 0,
 });
 
 /** The open scene, edited in place; read `A.rev` from a component to track edits. */
@@ -326,6 +332,40 @@ export async function replaceShapeFromSvg(id: string, file: File): Promise<void>
   scheduleValidate();
   bump();
   toast(`replaced shape "${id}" from ${file.name} (${r.shape.paths.length} paths)`);
+}
+
+// ---- VectorCraft tab (web/src/art/VectorcraftPanel.tsx) -----------------------------------------------------
+/** A shape as the SVG the exporter writes plus its viewBox (what the re-origin undo needs later). */
+export function shapeSvgFor(id: string): { svg: string; viewBox: number[] } | null {
+  const sc = scene;
+  if (!sc || !sc.shapes[id]) return null;
+  const out = shapeToSvg(sc.shapes[id]!, sc.gradients || {});
+  const viewBox = parseViewBox(out.svg);
+  return viewBox ? { svg: out.svg, viewBox } : null;
+}
+
+/** "Open in VectorCraft" (a Shapes row or the tab's Open button): switch to the tab and ask it to open the shape. */
+export function openShapeInVectorcraft(id: string): void {
+  if (!scene || !scene.shapes[id]) return toast(`no shape "${id}"`);
+  A.set((a) => ({ subtab: "vectorcraft", vcShape: id, vcRequest: a.vcRequest + 1 }));
+}
+
+/** VectorCraft's exported SVG replaces shape `id` in place after the artboard re-origin is undone (in memory; Save scene writes it). */
+export async function applyVectorcraftSvg(id: string, exportedSvg: string, originalViewBox: number[]): Promise<void> {
+  const sc = scene;
+  if (!sc || !sc.shapes[id]) return toast(`no shape "${id}"`);
+  const re = reoriginSvg(exportedSvg, originalViewBox);
+  const r = await post<"/api/art/import-svg", ImportSvgResponse>("/api/art/import-svg", { svgText: re.svg, options: { applyViewBox: false } });
+  if (!r.ok) {
+    A.set((a) => ({ findings: [...(r.findings || []), ...a.findings] }));
+    return toast(`apply failed: ${r.error || "see findings"}`);
+  }
+  const prev = sc.shapes[id]!;
+  sc.shapes[id] = { ...adoptGradients(sc, r.shape, r.gradients), ...(prev.source ? { source: prev.source } : {}) };
+  if (r.findings && r.findings.length) A.set((a) => ({ findings: [...r.findings.map((f) => ({ ...f, path: `shapes.${id}` })), ...a.findings] }));
+  scheduleValidate();
+  bump();
+  toast(`applied VectorCraft's drawing to shape "${id}" (${r.shape.paths.length} paths${re.dx || re.dy ? `, re-origined by ${re.dx},${re.dy}` : ""})`);
 }
 
 /** Drop / file-picker entry: an SVG becomes a shape of the open scene, or of a new scene if none is open. */

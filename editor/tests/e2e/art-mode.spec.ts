@@ -91,7 +91,7 @@ test.describe("Art mode — VectorCraft panel", () => {
     await expect(apply).toBeEnabled({ timeout: 15_000 });
     await expect(status).toContainText("edited");
     await apply.click();
-    await expect(page.getByText(/applied VectorCraft's drawing to shape "body" \(3 paths\)/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/applied VectorCraft's drawing to shape "body" \(3 paths, re-origined by -44,-34\)/)).toBeVisible({ timeout: 20_000 });
     await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
     const sc = JSON.parse(await page.locator("textarea").first().inputValue());
     const paths = sc.shapes.body.paths as { d: string; transform?: number[]; fill: string }[];

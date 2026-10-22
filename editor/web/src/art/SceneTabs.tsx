@@ -4,7 +4,7 @@
 import React, { useRef } from "react";
 import { useStore } from "../store.ts";
 import { toast } from "../state.ts";
-import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, rampColor, exportShapeSvgFile, replaceShapeFromSvg } from "./art-state.ts";
+import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, rampColor, exportShapeSvgFile, replaceShapeFromSvg, openShapeInVectorcraft } from "./art-state.ts";
 import { sx, Ramp, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
 import { shapeGrayUsage, parseFill } from "../../../src/core/art/scene.ts";
@@ -56,6 +56,7 @@ export function ShapesTab() {
             >
               → Sprite
             </button>
+            <button className="btn ghost sm" aria-label={`Open ${id} in VectorCraft`} title="Draw on this shape in the VectorCraft tab (in-editor); Apply there brings it back" onClick={() => openShapeInVectorcraft(id)}>VectorCraft</button>
             <button className="btn ghost sm" aria-label={`Export SVG of ${id}`} title="Write art/<shape>.svg for VectorCraft, Inkscape or any vector editor" onClick={() => void exportShapeSvgFile(id)}>Export SVG</button>
             <label className="btn ghost sm" title="Bring an edited SVG back over this shape (same coordinates)">
               Replace…
