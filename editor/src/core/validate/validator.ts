@@ -32,6 +32,7 @@ import type { Report, SourceLocation } from "./result.ts";
 import type { OverlayMode, FileType } from "../overlay/overlay.ts";
 import type { ResolutionSets } from "../names.ts";
 import type { LocTable } from "../base-data.ts";
+import { decodeLvl, lvlIds } from "../level/lvl.ts";
 
 const LOC_FIELDS = new Set([
   "name", "desc", "description", "tooltip", "tooltip_stackless",
@@ -224,9 +225,13 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
 
   const fragments = includeFragments(overlays, root, modDir);
+  let palettes: LvlPalettes | null = null;
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
-    if (o.fileType === "gon") {
+    if (/\.lvl$/i.test(o.relPath)) {
+      palettes ??= lvlPalettes(overlays, root);
+      validateLvl(o, rb, palettes, modName, modDir, root);
+    } else if (o.fileType === "gon") {
       validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, modDir, fragments);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
@@ -235,6 +240,80 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     }
   }
   return rb.build();
+}
+
+/** The numeric ids of the two palettes every level names (data/spawns.gon objects, data/tiles.gon tiles). */
+interface LvlPalettes {
+  spawns: Set<number>;
+  tiles: Set<number>;
+  /** spawn ids whose entry is `utility PlayerSpawn` (vanilla: 1) */
+  playerSpawns: Set<number>;
+}
+
+/** Top-level numeric ids of a palette file: the base copy plus every overlay this mod ships on it (any mode). */
+function lvlPalettes(overlays: OverlayFile[], dataRoot: string): LvlPalettes {
+  const read = (pack: string, onEntry: (id: number, v: VNode) => void): void => {
+    const texts: string[] = [];
+    const abs = packPath(pack, dataRoot);
+    if (existsSync(abs)) { try { texts.push(readFileSync(abs, "utf8")); } catch { /* unreadable */ } }
+    for (const o of overlays) if (o.baseName === pack && o.fileType === "gon") texts.push(o.text);
+    for (const t of texts) {
+      let root: VNode;
+      try { root = toValue(parse(t)); } catch { continue; }
+      if (root.t !== "obj") continue;
+      for (const e of root.entries) {
+        const name = parsePolicy(e.key).name;
+        if (/^\d+$/.test(name)) onEntry(Number(name), e.value);
+      }
+    }
+  };
+  const spawns = new Set<number>();
+  const tiles = new Set<number>();
+  const playerSpawns = new Set<number>();
+  read("data/spawns.gon", (id, v) => {
+    spawns.add(id);
+    if (v.t === "obj" && v.entries.some((e) => e.key === "utility" && e.value.t === "str" && e.value.raw === "PlayerSpawn")) playerSpawns.add(id);
+  });
+  read("data/tiles.gon", (id) => tiles.add(id));
+  return { spawns, tiles, playerSpawns };
+}
+
+/**
+ * A level file the mod ships (`levels/<path>.lvl`, read by the game as `"levels/" + name + ".lvl"` through the file
+ * manager, so a new file is loadable by name — OBSERVED in-game 2026-10-22, mods/_roomprobe). Decodes it
+ * (src/core/level/lvl.ts) and checks every object id against data/spawns.gon and every tile id against
+ * data/tiles.gon (base + this mod's overlays on them); id 0 is the reserved empty entry.
+ */
+function validateLvl(o: OverlayFile, rb: ReportBuilder, pal: LvlPalettes, modName: string, modDir: string, dataRoot: string): void {
+  const file = `mods/${modName}/${o.relPath}`;
+  if (!o.relPath.startsWith("levels/")) {
+    rb.warn("lvl-outside-levels", `${o.relPath} is a level file outside levels/: the game reads levels only as "levels/<name>.lvl", so it never sees this one`, { file });
+  }
+  if (existsSync(packPath(o.relPath, dataRoot))) {
+    rb.warn("whole-file-replace", `${o.relPath} replaces the vanilla level of the same path (whole file); give a new room its own name`, { file });
+  }
+  let bytes: Uint8Array;
+  try { bytes = readFileSync(join(modDir, o.relPath)); } catch (e) { rb.error("lvl-bad-format", `cannot read ${o.relPath}: ${String(e)}`, { file }); return; }
+  let lvl;
+  try { lvl = decodeLvl(bytes); } catch (e) {
+    rb.error("lvl-bad-format", `${o.relPath} is not a level file the game can read: ${e instanceof Error ? e.message : String(e)}`, { file });
+    return;
+  }
+  if (lvl.objectPalette !== "spawns.gon" || (lvl.tilePalette !== "" && lvl.tilePalette !== "tiles.gon")) {
+    rb.warn("lvl-palette-unusual", `${o.relPath} names palettes "${lvl.objectPalette}" / "${lvl.tilePalette}"; every vanilla level names "spawns.gon" / "tiles.gon"`, { file });
+  }
+  const ids = lvlIds(lvl);
+  const badObjects = ids.objects.filter((id) => id !== 0 && !pal.spawns.has(id));
+  if (badObjects.length) {
+    rb.error("lvl-unknown-spawn-id", `${o.relPath} places object id(s) ${badObjects.join(", ")}, not defined in data/spawns.gon (base or this mod's spawns.gon overlay): add them with a data/spawns.gon.append entry \`<id> { object <Character> }\``, { file });
+  }
+  const badTiles = ids.tiles.filter((id) => id !== 0 && !pal.tiles.has(id));
+  if (badTiles.length) {
+    rb.error("lvl-unknown-tile-id", `${o.relPath} uses tile id(s) ${badTiles.join(", ")}, not defined in data/tiles.gon (base or this mod's tiles.gon overlay)`, { file });
+  }
+  if (!ids.objects.some((id) => pal.playerSpawns.has(id))) {
+    rb.warn("lvl-no-player-spawn", `${o.relPath} has no player spawn (an object whose spawns.gon entry is \`utility PlayerSpawn\`, vanilla id 1): the party has nowhere to stand`, { file });
+  }
 }
 
 /**

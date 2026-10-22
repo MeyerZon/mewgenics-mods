@@ -18,7 +18,7 @@ function bytes(parts: Array<["u32" | "u16", number] | ["str", string]>): Uint8Ar
   for (const p of parts) {
     if (p[0] === "u32") { const v = p[1]; out.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255); }
     else if (p[0] === "u16") { const v = p[1]; out.push(v & 255, (v >>> 8) & 255); }
-    else { const s = p[1]; const n = s.length; out.push(n & 255, (n >>> 8) & 255, 0, 0); for (const c of s) out.push(c.charCodeAt(0)); }
+    else { const s = String(p[1]); const n = s.length; out.push(n & 255, (n >>> 8) & 255, 0, 0); for (const c of s) out.push(c.charCodeAt(0)); }
   }
   return Uint8Array.from(out);
 }
@@ -39,56 +39,58 @@ function sample(): Uint8Array {
 }
 
 export function runLevelTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
+  /** the harness eq is strict (===): compare structure through JSON */
+  const same = (a: unknown, b: unknown, msg?: string): void => eq(JSON.stringify(a), JSON.stringify(b), msg);
   test("lvl: decodes the header, both palettes, the grid and the objects", () => {
     const f = decodeLvl(sample());
-    eq(f.version, 2);
-    eq([f.width, f.height], [3, 2]);
-    eq(f.objectPalette, "spawns.gon");
-    eq(f.tilePalette, "tiles.gon");
-    eq(f.tiles.length, 6);
-    eq(f.tiles[1], 1);
-    eq(f.tiles[5], [{ id: 2, weight: 3 }, { id: 3, weight: 1 }], "0xffff cell = weighted random tile list");
-    eq(f.objects.length, 3);
-    eq(f.objects[0], { x: 0, y: 0, id: 1 });
-    eq(f.objects[1], { x: 2, y: 1, id: 11 });
-    eq(f.objects[2], { x: 1, y: 1, id: [{ id: 5010, weight: 1 }, { id: 0, weight: 1 }] }, "0xffff object = weighted random spawn list (0 = nothing)");
+    same(f.version, 2);
+    same([f.width, f.height], [3, 2]);
+    same(f.objectPalette, "spawns.gon");
+    same(f.tilePalette, "tiles.gon");
+    same(f.tiles.length, 6);
+    same(f.tiles[1], 1);
+    same(f.tiles[5], [{ id: 2, weight: 3 }, { id: 3, weight: 1 }], "0xffff cell = weighted random tile list");
+    same(f.objects.length, 3);
+    same(f.objects[0], { x: 0, y: 0, id: 1 });
+    same(f.objects[1], { x: 2, y: 1, id: 11 });
+    same(f.objects[2], { x: 1, y: 1, id: [{ id: 5010, weight: 1 }, { id: 0, weight: 1 }] }, "0xffff object = weighted random spawn list (0 = nothing)");
   });
 
   test("lvl: encode(decode(x)) is byte-identical", () => {
     const b = sample();
-    eq(Buffer.from(encodeLvl(decodeLvl(b))).toString("hex"), Buffer.from(b).toString("hex"));
+    same(Buffer.from(encodeLvl(decodeLvl(b))).toString("hex"), Buffer.from(b).toString("hex"));
   });
 
-  test("lvl: version 1 has no tile palette string", () => {
+  test("lvl: version 1 has an empty tile palette string", () => {
     const b = bytes([
       ["u32", 1], ["u32", 1], ["u32", 1], ["u32", 1], ["u32", 1], ["u32", 0], ["u32", 0], ["u32", 1], ["u32", 1],
-      ["str", "spawns.gon"], ["u32", 0], ["u32", 0], ["u16", 2], ["u16", 0], ["u16", 0], ["u32", 1], ["u32", 0],
+      ["str", "spawns.gon"], ["str", ""], ["u32", 0], ["u32", 0], ["u16", 2], ["u16", 0], ["u16", 0], ["u32", 1], ["u32", 0],
     ]);
     const f = decodeLvl(b);
-    eq(f.version, 1);
-    eq(f.tilePalette, null);
-    eq(f.tiles, [2]);
-    eq(f.objects, [{ x: 0, y: 0, id: 1 }]);
-    eq(Buffer.from(encodeLvl(f)).toString("hex"), Buffer.from(b).toString("hex"));
+    same(f.version, 1);
+    same(f.tilePalette, "");
+    same(f.tiles, [2]);
+    same(f.objects, [{ x: 0, y: 0, id: 1 }]);
+    same(Buffer.from(encodeLvl(f)).toString("hex"), Buffer.from(b).toString("hex"));
   });
 
   test("lvl: truncated or trailing bytes are a format error", () => {
     const b = sample();
     let threw = "";
     try { decodeLvl(b.slice(0, b.length - 3)); } catch (e) { threw = e instanceof LvlFormatError ? "fmt" : String(e); }
-    eq(threw, "fmt", "truncated");
+    same(threw, "fmt", "truncated");
     threw = "";
     try { decodeLvl(Uint8Array.from([...b, 0])); } catch (e) { threw = e instanceof LvlFormatError ? "fmt" : String(e); }
-    eq(threw, "fmt", "trailing byte");
+    same(threw, "fmt", "trailing byte");
   });
 
   test("lvl: buildRoom writes the vanilla v2 shape (10x10 default) and round-trips", () => {
     const f = buildRoom({ objects: [{ x: 1, y: 0, id: 1 }, { x: 5, y: 8, id: 9001 }], tiles: [{ x: 0, y: 5, id: 1 }] });
-    eq([f.version, f.width, f.height, f.objectPalette, f.tilePalette], [2, 10, 10, "spawns.gon", "tiles.gon"]);
-    eq(f.tiles[5 * 10 + 0], 1, "row-major: index = y * width + x");
+    same([f.version, f.width, f.height, f.objectPalette, f.tilePalette], [2, 10, 10, "spawns.gon", "tiles.gon"]);
+    same(f.tiles[5 * 10 + 0], 1, "row-major: index = y * width + x");
     const again = decodeLvl(encodeLvl(f));
-    eq(again, f);
-    eq(lvlIds(f), { objects: [1, 9001], tiles: [0, 1] });
+    same(again, f);
+    same(lvlIds(f), { objects: [1, 9001], tiles: [0, 1] });
   });
 
   test("lvl: buildRoom rejects out-of-grid positions and ids above 0xfffe", () => {
@@ -157,6 +159,6 @@ export function runLevelTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       const b = readFileSync(p);
       try { if (!Buffer.from(encodeLvl(decodeLvl(b))).equals(b)) bad.push(p); } catch (e) { bad.push(`${p}: ${String(e)}`); }
     }
-    eq(bad.slice(0, 5), [], `${bad.length} of ${files.length} did not round-trip`);
+    same(bad.slice(0, 5), [], `${bad.length} of ${files.length} did not round-trip`);
   });
 }
