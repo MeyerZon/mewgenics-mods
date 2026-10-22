@@ -43,9 +43,17 @@ through the same pre-pass before parsing, so a mod file may use all of these:
   content belongs (vanilla: `nodes { #include "standard_nodes.gon" … }` in the 19 `maps/*.gon`).
 - **Where it resolves:** `<directory of the file being loaded>/<name>`, by the pack path. For an overlay that is the
   directory of its **base** file: in `mods/m/data/maps/alley.gon.append`, `#include "x.gon"` means `data/maps/x.gon`,
-  looked up in the mod folders first and then the pack — so a mod can ship `mods/m/data/maps/x.gon` and include it.
-  A nested include resolves against the **top-level** file's directory, not the included file's. Avoid `..`
-  (passed to the file manager as written; unverified) — the editor refuses names that leave `data/`.
+  looked up in the mod folders first and then the pack — so a mod can ship `mods/m/data/maps/x.gon` and include it
+  (**OBSERVED in-game 2026-10-22**: `mods/_incprobe` — `IncProbe { variant_of Rat  #include "incprobe_props.gon" }`
+  in `data/characters/enemies.gon.append`, the included file only in the mod's `data/characters/`; the spawned unit
+  has the included `health 77`). A helper the mod ships only to be included is an include fragment: the validator
+  does not call it a `whole-file-replace` when the base has no file of that name.
+  A nested include resolves against the **top-level** file's directory, not the included file's.
+- **Write the name as a plain relative path** (`x.gon`, `sub/x.gon`). The game joins `directory + name` and never
+  normalises it (OBSERVED, `.analysis/notes-inc2.md`): the pack is searched for that exact string (lower-cased), a
+  mod folder through the OS. So `../maps/x.gon`, `./x.gon`, `a//b.gon`, a leading `/`, a drive letter or a
+  backslash never find a pack file (fatal, see below) and, for loose files, let the OS resolve the path — a `..` can
+  reach outside the mod folder. The validator reports these as `include-path-unsafe` (error) and never reads them.
 - **A missing include is fatal:** the game shows an error message box `Could not locate include file: <name>` and
   exits. The validator
   reports it as `include-missing` (error) at the directive's line.
@@ -54,8 +62,31 @@ through the same pre-pass before parsing, so a mod file may use all of these:
   is picked up, but included files are read as plain text, so its text is just **pasted after** the base text —
   `.append` behaves as expected inside the including object, while `.merge` / `.patch` do **not** merge (their keys
   arrive as extra children, `.patch` suffixes literally). To change shared nodes, overlay each including file.
-- `#define NAME … #end` macros exist in the pre-pass (unused by vanilla); the editor does not expand them and warns
-  `gon-define-unmodelled`.
+- **`#define` macros** (unused by vanilla — 0 of 210 files —; derived from `Gon_Pre_CollectDefines` 0xa4f4a0,
+  `Gon_Pre_ExpandMacros` 0xa501c0, `Gon_Pre_SubstituteArgs` 0xa4e0b0; **OBSERVED in-game 2026-10-22** for a
+  two-argument macro, `mods/_incprobe` `IncProbeMacro`). Only in the file being loaded and what it includes (each
+  file — the base and each overlay — has its own macro table; a base file's macros are invisible to its overlays).
+
+  ```
+  #define NODE(name, kind)          // parameters: tokens in ( ), separated by blanks or , (a space before ( is fine)
+      name { type kind }           // the body: from right after ) up to #end, newlines included
+  #end
+  nodes {
+      #NODE shop1 shop             // use: #NAME, then one token per parameter (blanks or , between them)
+      #NODE camp1, camp
+  }
+  ```
+  becomes `nodes { shop1 { type shop } camp1 { type camp } }`. The rules: the whole `#define … #end` is removed
+  (definitions anywhere in the file count, later ones replace earlier ones); a use is a `#`-word exactly equal to
+  `#NAME` — **`#NODE(shop1, shop)` is not a use** (no blank after the name: the tokenizer then reads it as a `#`
+  comment), and `#NODE (shop1, shop)` works but leaves the `)` in the text; arguments and parameter names are
+  tokens delimited by blanks and `( ) , : = [ ] { }` (no quotes, no spaces inside an argument); in the body only
+  whole tokens equal to a parameter are replaced (`name_x`, `"name"`, `#name` are not), and the body's last
+  token is replaced only when a blank or delimiter follows it (end the body with a newline before `#end`). Macro
+  names and calls are not looked for inside `"…"`. Without parameters the body starts at its first non-blank
+  character. Expansion repeats over the whole text until nothing changes, at most 256 rounds (a macro may use another;
+  a self-using one stops there — the validator warns `gon-macro-runaway`). An unknown `#NAME` stays and is a `#`
+  comment to the tokenizer. The editor expands macros exactly this way before validating and previewing.
 
 The editor mirrors this in `editor/src/core/gon/preprocess.ts` + `editor/src/core/gon-includes.ts`; the validator and
 the merge preview check the text the game would actually parse, while the GON editor keeps comments and `#include`
@@ -107,7 +138,7 @@ string; `.add` / `.multiply` (Gon_DeepMerge 0x946680) add / multiply the **doubl
 | `#` line comment, also mid-token (`5#c` → `5`) | yes | yes | MATCH |
 | `//` line and `/* */` block comments | stripped by the pre-pass `Gon_Pre_StripComments` 0xa4eb80 (OBSERVED): `//` keeps its newline, `/* */` drops its newlines, no nesting, `/*/` closes at once, never inside `"…"` | comments (trivia); `/*/` ran to the next `*/` | **`/*/` DIVERGED → fixed**; otherwise MATCH. The semantic readers (validator, merge preview) parse `preprocess()` output, which is the exact port — the trivia tokenizer still differs where the pre-pass ignores `#` comments (a `/*` or `"` inside a `#` comment counts to the game; none in vanilla) |
 | `#include "standard_nodes.gon"` (19 `maps/*.gon`, inside `nodes { … }`; the only vanilla `#` directive) | inlined by `Gon_Pre_ExpandIncludes` 0xa4edf0 from `<dir of the resource>/<name>` as a TextResource (OBSERVED; missing = fatal) | a `#` comment; the included nodes were invisible | **DIVERGED → fixed**: `preprocess()` + `gon-includes.ts` inline it for the validator and the merge preview (mod copy first, the mod's overlays on the included name concatenated as text); `include-missing` when it resolves nowhere; the editing AST keeps the line as trivia |
-| `#define NAME … #end` / `#NAME` macros | expanded by the pre-pass, top level only (OBSERVED in outline; none in vanilla) | not modelled | gap, reported as `gon-define-unmodelled` |
+| `#define NAME … #end` / `#NAME` macros | expanded by the pre-pass, top level only (OBSERVED: decompiles + one in-game 2-argument macro; none in vanilla) | not modelled | **DIVERGED → fixed** (2026-10-22): `preprocess()` expands them (passes 3/4, synthetic tests in `gon-tests.ts` "gon macros"); `gon-macro-runaway` past 256 rounds |
 | `\n` in quotes | newline (5 vanilla uses) | newline | MATCH |
 | `\t`, `\r` in quotes | plain `t`, `r` | tab, CR | **DIVERGED → fixed**; the pretty-printer emits raw tabs / CRs and escapes only `\` `"` `\n` |
 | `\"`, `\\`, `\/`, `\z` | `"`, `\`, `/`, `z` | same | MATCH |

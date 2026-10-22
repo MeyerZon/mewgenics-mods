@@ -550,6 +550,16 @@ export function runGonPreprocessTests(test: TestFn, assert: AssertFn, eq: EqFn):
     const frag = r.findings.filter((f) => f.location?.file === "mods/_incprobe/data/characters/incprobe_props.gon");
     eq(frag.map((f) => f.code).join(","), "", "no finding on the fragment");
   });
+  test("OBSERVED 2026-10-22 fixture (result-include-probe.jsonl): in the game IncProbe holds the included health 77 and IncProbeMacro the macro's 55 / 2; every expect passed, exit 0", () => {
+    const evs = readFileSync(join(HERE, "fixtures", "ingame", "result-include-probe.jsonl"), "utf8").split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l) as { ev: string; kind?: string; arg?: string; ok?: boolean; code?: number });
+    const expects = evs.filter((e) => e.ev === "expect");
+    eq(expects.length, 9);
+    assert(expects.every((e) => e.ok === true), JSON.stringify(expects.filter((e) => !e.ok)));
+    for (const arg of ["8 properties.health == 77", "8 hp == 77", "9 properties.health == 55", "9 properties.movement == 2", "9 hp == 55"]) {
+      assert(expects.some((e) => e.arg === arg), `expect ${arg}`);
+    }
+    eq(evs.find((e) => e.ev === "end")?.code, 0);
+  });
   test("_incprobe: include-probe.mewtest seeds 42, enters TacticsTest, spawns IncProbe + IncProbeMacro and checks the merged GON", () => {
     const plan = parseScript(readFileSync(join(PROBE, "tests", "include-probe.mewtest"), "utf8"), { owningMod: "_incprobe", name: "include-probe" });
     assert(plan.ok, JSON.stringify(plan.errors));

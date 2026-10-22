@@ -511,9 +511,13 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
   `Gon_Preprocess` 0xa50bd0 (comments 0xa4eb80, includes 0xa4edf0, `#define` macros 0xa4f4a0/0xa501c0), includes resolve
   against the loaded resource's directory as a `TextResource` (overlays on the included name concatenated as text),
   a miss is fatal. Editor port: `gon/preprocess.ts` + `gon-includes.ts`, validator `include-missing` /
-  `gon-define-unmodelled`, merge preview inlines includes (`docs/data-mods.md` "Comments and `#include`").
-  Still open: a T2 check that a mod overlay can `#include` a mod-only file (INFERRED from the `-modpaths` lookup) and
-  what the file manager does with `..` in an include name; the `#define` argument syntax (not modelled).
+  `comment-unclosed`, merge preview inlines includes (`docs/data-mods.md` "Comments and `#include`").
+  Follow-ups closed 2026-10-22 (RE session `inc2`, `.analysis/notes-inc2.md`; `feat/gon-include-followups`): a mod
+  `#include`s a file it ships — OBSERVED in-game (`mods/_incprobe`, T2 pass); include names are never normalised
+  (pack = exact lower-cased string, loose = `<modpath> + name` through the OS) → validator `include-path-unsafe` for
+  `..` / `.` / empty segments / leading `/` / drive letters / backslashes; `#define NAME(a, b) … #end` / `#NAME x y`
+  derived from 0xa4f4a0 / 0xa501c0 / 0xa4e0b0 and ported (`gon-define-unmodelled` replaced by real expansion and
+  `gon-macro-runaway`), in-game check for a two-argument macro.
 - [x] Exact SWF-format + `_Append_`/SymbolClass convention the loader requires — binding needs no DoABC; `_Append_<Target>` merges at boot; an unknown target stalls the boot (OBSERVED 2026-10-19). **Display path closed 2026-10-21** (RE session `disp`; `docs/engine-map.md` "SWF loader and display path"): the complete tag switch of `createTag` 0xa2e990 (DefineFont 1/2, a second DoABC, PlaceObject3 filters, an over-page bitmap are FATAL; scaling grids, morph shapes, PlaceObject1 cxforms, imports are skipped), even-odd per fill style, cxform after the palette remap, pad-only gradients, by-name lookup last-loaded-first, the `tilesets.gon` clip-name remap. Editor rules: `swf-rules.ts` + `scene.ts` codes `font-tag-unsupported`, `abc-count`, `bitmap-too-large`, `scaling-grid-ignored`, `gradient-spread-ignored`, `morph-shape-skipped`, `place-cxform-ignored`, `fill-rule-ignored`, `export-shadows-vanilla`, `jpeg-bitmap`, `tag-ignored`. Still open: LineStyle2 joins / miter / hairline in the outline builder, the font-class → font lookup RVA, the `tilesets.gon` redirect in-game (INFERRED).
 - [x] RNG seeding for deterministic test runs — done 2026-10-20 (target 12, PR #48): `seed <N>` pins `TLS+0x178`
   through `Rng_SeedState` once the game's startup is over; `luck-seeded.mewtest` asserts exact values run to run.
