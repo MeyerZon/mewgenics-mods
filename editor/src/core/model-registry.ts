@@ -57,6 +57,24 @@ export interface ModelNamesLog {
   /** "mesh: @Ref: model-name-unknown|model-registry-entry: ... (unit <Unit>...) — drawing the 2D clip" */
   errors: Array<{ ref: string; code: string; unit: string | null; line: string }>;
 }
-export function parseModelNamesLog(_text: string): ModelNamesLog {
-  return { registry: null, resolved: [], errors: [] };   // RED STUB
+const LOAD_RE = /model names: data\/models\.gon: (?:(\d+) entr(?:y|ies)(?:: ([^(]*?))?(?: \(\d+ dropped\))?|(absent)(?: \([^)]*\))?|(unreadable))(?: \(GonResource [0-9a-fA-Fx]+\))?\s*$/;
+const RESOLVED_RE = /unit model: (\S+): (@\S+) -> data\/models\.gon entry (\S+)\s*$/;
+const ERROR_RE = /mesh: (@\S*): (model-name-unknown|model-registry-entry): .*?(?:\(unit ([^;)]+)[;)].*)?\s— drawing the 2D clip\s*$/;
+
+/** The named-model lines of a mewframework.log (any line prefix: the chainloader's timestamp, the window log's none). */
+export function parseModelNamesLog(text: string): ModelNamesLog {
+  const out: ModelNamesLog = { registry: null, resolved: [], errors: [] };
+  for (const line of text.split(/\r?\n/)) {
+    let m = LOAD_RE.exec(line);
+    if (m) {
+      const entries = m[1] !== undefined && m[2] ? m[2].split(",").map((s) => s.trim()).filter(Boolean) : [];
+      out.registry = { entries, absent: m[3] !== undefined, unreadable: m[4] !== undefined };
+      continue;
+    }
+    m = RESOLVED_RE.exec(line);
+    if (m) { out.resolved.push({ unit: m[1]!, ref: m[2]!, entry: m[3]! }); continue; }
+    m = ERROR_RE.exec(line);
+    if (m) out.errors.push({ ref: m[1]!, code: m[2]!, unit: m[3] ?? null, line: line.slice(line.indexOf("mesh: @")) });
+  }
+  return out;
 }
