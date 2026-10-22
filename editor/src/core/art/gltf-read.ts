@@ -161,8 +161,12 @@ export function readGltf(bytes: Uint8Array, opts: GltfReadOptions = {}): ModelRe
       if (!ncomp) throw new ModelStop("model-accessor-invalid", `glTF: accessor ${String(ai)} has type ${String(type)}`);
       if (!isInt(count) || count < 1) throw new ModelStop("model-accessor-invalid", `glTF: accessor ${String(ai)} needs a count >= 1`);
       const normalized = a.normalized === true;
-      const values = new Float64Array(count * ncomp);
-      if (a.bufferView === undefined) return { values, count, ncomp, comp, type, normalized }; // spec: all zeros
+      // nothing is allocated from a file-supplied count before it is bounded: by the view's bytes below, or (no view)
+      // by the index/vertex caps — a hostile count must be a finding, never an allocation (the C reader's rule too)
+      if (a.bufferView === undefined) {
+        if (count > MODEL_LIMITS.maxIndices) throw new ModelStop("model-limit", `glTF: accessor ${String(ai)} count ${count} is more than the ${MODEL_LIMITS.maxIndices} limit`);
+        return { values: new Float64Array(count * ncomp), count, ncomp, comp, type, normalized }; // spec: all zeros
+      }
       const off = a.byteOffset ?? 0;
       if (!isInt(off) || off < 0) throw new ModelStop("model-accessor-invalid", `glTF: accessor ${String(ai)} byteOffset ${String(off)}`);
       const vi = a.bufferView as number;
@@ -181,6 +185,7 @@ export function readGltf(bytes: Uint8Array, opts: GltfReadOptions = {}): ModelRe
       if (need > data.length) {
         throw new ModelStop("model-buffer-range", `glTF import: The buffer view size was smaller than the minimum required size for the accessor (accessor ${String(ai)} needs ${need} bytes, bufferView ${vi} has ${data.length})`);
       }
+      const values = new Float64Array(count * ncomp);
       const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
       for (let i = 0; i < count; i++) {
         for (let k = 0; k < ncomp; k++) {
