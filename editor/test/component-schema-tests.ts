@@ -323,7 +323,8 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     const files: string[] = [];
     const rec = (d: string) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) rec(p); else if (n.endsWith(".gon")) files.push(p); } };
     rec(EXTRACTED_DATA);
-    let blocks = 0, checked = 0; const bad: string[] = [];
+    let blocks = 0, checked = 0, ignored = 0; const bad: string[] = [];
+    const isMap = (n: string) => resolveComponent(schema, n)?.children === "any";
     for (const f of files) {
       const v = toValue(parse(readFileSync(f, "utf8")));
       forEachComponentBlock(v, (n) => names.has(n), (name, value, path) => {
@@ -334,9 +335,10 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
         const c = checkComponentBlock(r, value, { patch: false, requireComplete: true, isDynamicChild: (n) => names.has(n) || effect.has(n) });
         for (const k of c.unknown) bad.push(`unknown-key ${relative(EXTRACTED_DATA, f)} ${path.join(".")}.${k}`);
         for (const k of c.missing) bad.push(`missing-required-key ${relative(EXTRACTED_DATA, f)} ${path.join(".")} ${k}`);
-      });
+        ignored += c.ignored.length;
+      }, isMap);
     }
-    console.log(`      vanilla: ${files.length} files, ${blocks} component blocks, ${checked} object blocks checked, ${bad.length} findings`);
+    console.log(`      vanilla: ${files.length} files, ${blocks} component blocks, ${checked} object blocks checked, ${bad.length} findings (${ignored} ignored-key infos: vanilla keys no code reads)`);
     eq(bad.length, 0, `vanilla findings: ${bad.slice(0, 8).join(" | ")}`);
   });
   test("api.searchComponents (MCP search_components) returns the keys of the top matches", () => {

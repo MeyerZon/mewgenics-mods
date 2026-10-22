@@ -2,7 +2,7 @@ Zip {
 	1 {
 		passives {
 			SpawnThing { object Rat numbr 2 }
-			FormChanger { Rain { ai { brain x } } }
+			FormChanger { Rain { animation_suffix _rain } }
 		}
 	}
 }

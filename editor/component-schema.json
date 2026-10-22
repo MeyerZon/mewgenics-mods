@@ -14907,8 +14907,8 @@
    "keys": {},
    "includes": [],
    "vanillaMissed": [
-    "exit_animations",
-    "partial_animation_suffix"
+    "partial_animation_suffix",
+    "exit_animations"
    ],
    "notes": "own slot functions decompiled; no GON reads on this+0x68. Scalar form = Passive stacks. vanillaMissed: partial_animation_suffix / exit_animations literals are read only by the FormChange component init 0x199010 and the form-switch routine 0x19a210 on form nodes; how Grappling's node reaches them is not established.",
    "agent": "compC"
@@ -34113,9 +34113,12 @@
   "keys": 1314,
   "keysObserved": 767,
   "keysInferred": 547,
-  "vanillaComponents": 397,
-  "vanillaKeys": 635,
+  "vanillaComponents": 394,
+  "vanillaKeys": 631,
   "vanillaKeysFound": 589,
+  "vanillaKeysUnread": 0,
+  "vanillaOpen": 38,
+  "vanillaClosed": 356,
   "vanillaMapKeys": 188
  }
 }

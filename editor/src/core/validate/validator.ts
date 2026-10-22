@@ -404,22 +404,27 @@ function validateGonOverlay(
     const isDyn = (n: string): boolean => sets.components.has(n) || statusSet.has(n) || effect.has(n);
     const tree = o.mode === "patch" ? stripSuffixes(overlay) : overlay;
     const complete = o.mode === "append" || o.mode === "replace";
+    const isMap = (n: string): boolean => resolveComponent(componentSchema, n)?.children === "any";
     forEachComponentBlock(tree, (n) => sets.components.has(n), (name, value, path) => {
       if (value.t !== "obj") return;
       const r = resolveComponent(componentSchema, name);
       if (!r) return;
       const res = checkComponentBlock(r, value, { patch: false, requireComplete: complete, isDynamicChild: isDyn });
-      const reads = Object.keys(r.keys).sort();
+      const reads = Object.keys(r.keys).filter((k) => !r.keys[k]!.unread).sort();
       const readsText = reads.length ? `it reads: ${reads.join(", ")}` : "it reads no keys of its own (the scalar form sets its stacks)";
       const kids = r.children ? `; children: ${r.children} names` : "";
       for (const k of res.unknown) {
         rb.warn("unknown-key", `${name} never reads "${k}", so the game ignores it (${readsText}${kids})`, { file, path: [...path, k].join(".") });
       }
+      for (const k of res.ignored) {
+        const ks = r.keys[k];
+        rb.info("ignored-key", `${name} never reads "${k}" — vanilla writes it too, but the game ignores it${ks?.note ? ` (${ks.note})` : ""}`, { file, path: [...path, k].join(".") });
+      }
       for (const k of res.missing) {
         const ks = r.keys[k]!;
         rb.error("missing-required-key", `${name} requires "${k}" (${ks.type}, read by ${ks.from} with ${ks.accessor ?? "a logging getter"}, no default)`, { file, path: path.join(".") });
       }
-    });
+    }, isMap);
   }
 
   // ---- Literal suffixes outside .patch ------------------------------------------
