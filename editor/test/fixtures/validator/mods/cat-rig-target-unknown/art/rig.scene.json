@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "rig",
+  "frameRate": 60,
+  "stage": { "width": 200, "height": 200, "background": "#ffffff" },
+  "shapes": {},
+  "sprites": { "Root": { "frames": 1, "labels": {}, "layers": [] } },
+  "exports": { "_CatRig_PlayerCat": "Root", "_CatRig_ModCat": "Root", "_CatRig_NoSuchCat": "Root" }
+}

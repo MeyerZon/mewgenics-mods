@@ -125,6 +125,16 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(OFF_GON_NAME, 0x88);
     CHECK_EQ(OFF_GON_TYPE, 0xa8);
     CHECK_EQ(GON_NODE_SIZE, 0xb0);
+    /* cat rig redirect (API v5, 2026-10-22): Character::init(name,bool,bool) scopes the clip lookup to the entry, the
+     * by-name instance lookup is where "CatTest" becomes the entry's _CatRig_ clip, the SWF post-load pass is where
+     * the _CatRig_<Entry> SymbolClass exports are found (docs/engine-map.md "Cat rig redirect") */
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Character_init].expectedRva, 0xf70f0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Swf_GetCharacterByName].expectedRva, 0x9bb890u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_ApplicationBase_ProcessAnimationMerges].expectedRva, 0x9bc070u);
+    CHECK(FW_SYMBOLS_25143593[FW_SYM_Swf_GetCharacterByName].pattern != NULL);
+    CHECK_EQ(OFF_SWF_SYMBOL_LIST, 0x78);
+    CHECK_EQ(OFF_SYMNODE_NAME, 0x10);
+    CHECK_EQ(OFF_SYMNODE_ID_FROM_NAME, 0x20);
 }
 
 int main(void) { return MT_RUN_ALL(); }

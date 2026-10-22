@@ -384,10 +384,15 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (37, incl. the v4 run-entry symbols, the 7 glow symbols and the 2 glow-v2 screen-matrix symbols); each has a signature except the three with no relocation-free unique window", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, the 2 glow-v2 screen-matrix symbols and the 3 v5 cat-rig hook targets); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 37);
+    eq(want.length, 40);
+    // API v5 (2026-10-22): the cat rig redirect hooks the entry scope, the by-name clip lookup and the SWF post-load pass
+    eq(want.slice(37).join(","), "FW_SYM_Character_init,FW_SYM_Swf_GetCharacterByName,FW_SYM_ApplicationBase_ProcessAnimationMerges");
+    eq(entry(m, "Character_init")!.rva, "0xf70f0");
+    eq(entry(m, "Swf_GetCharacterByName")!.rva, "0x9bb890");
+    eq(entry(m, "ApplicationBase_ProcessAnimationMerges")!.rva, "0x9bc070");
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");

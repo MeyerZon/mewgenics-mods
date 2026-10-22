@@ -145,7 +145,7 @@ TEST(symbol_and_data_bounds_return_zero_when_inactive_or_out_of_range) {
 
 /* ---- the hook plan ---- */
 TEST(hook_plan_pins_order_priorities_and_failure_policy) {
-    CHECK_EQ(FW_HOOK_PLAN_COUNT, (size_t)(1 + 1 + 1 + FW_LK_COUNT + 1 + 1 + 1));
+    CHECK_EQ(FW_HOOK_PLAN_COUNT, (size_t)(1 + 1 + 1 + FW_LK_COUNT + 1 + 1 + 1 + 3));
     const FwHookSpec *p = FW_HOOK_PLAN;
     size_t i = 0;
     CHECK_EQ(p[i].step, FW_HOOK_SYMBOL); CHECK_EQ(p[i].index, FW_SYM_Character_BeginTurn); CHECK_EQ(p[i].priority, 20); CHECK_EQ(p[i].onFail, FW_HOOK_ABORT); i++;
@@ -158,6 +158,11 @@ TEST(hook_plan_pins_order_priorities_and_failure_policy) {
     CHECK_EQ(p[i].step, FW_HOOK_SYMBOL); CHECK_EQ(p[i].index, FW_SYM_TurnControl_NextTurn); CHECK_EQ(p[i].priority, 100); CHECK_EQ(p[i].onFail, FW_HOOK_ABORT); i++;
     /* the glow engine's render hook comes last: an observer like NextTurn, after the status hooks are in */
     CHECK_EQ(p[i].step, FW_HOOK_SYMBOL); CHECK_EQ(p[i].index, FW_SYM_TacticsTest_LateRender); CHECK_EQ(p[i].priority, 100); CHECK_EQ(p[i].onFail, FW_HOOK_ABORT); i++;
+    /* the cat rig redirect (API v5): the SWF post-load scan, then the entry scope, then the by-name lookup it redirects —
+     * all installed at DLL load, long before the game loads a SWF or builds a Character */
+    CHECK_EQ(p[i].step, FW_HOOK_SYMBOL); CHECK_EQ(p[i].index, FW_SYM_ApplicationBase_ProcessAnimationMerges); CHECK_EQ(p[i].priority, 100); CHECK_EQ(p[i].onFail, FW_HOOK_ABORT); i++;
+    CHECK_EQ(p[i].step, FW_HOOK_SYMBOL); CHECK_EQ(p[i].index, FW_SYM_Character_init); CHECK_EQ(p[i].priority, 100); CHECK_EQ(p[i].onFail, FW_HOOK_ABORT); i++;
+    CHECK_EQ(p[i].step, FW_HOOK_SYMBOL); CHECK_EQ(p[i].index, FW_SYM_Swf_GetCharacterByName); CHECK_EQ(p[i].priority, 100); CHECK_EQ(p[i].onFail, FW_HOOK_ABORT); i++;
     CHECK_EQ(i, FW_HOOK_PLAN_COUNT);
     for (size_t k = 0; k < FW_HOOK_PLAN_COUNT; k++) CHECK(p[k].label != NULL);
 }
