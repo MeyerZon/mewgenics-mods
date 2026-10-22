@@ -252,6 +252,70 @@ TEST(model_matrix_anchors_at_the_tile_centre_or_the_unit_position_times_the_own_
     CHECK(mat_eq(out, tileId));
 }
 
+/* ---- 3D phase M2 item 4: the look fields of a GON model block, the facing mirror ---- */
+TEST(new_objects_have_the_default_look_and_facing) {
+    Fw3dRegistry r; fw_obj3d_init(&r);
+    FakeCharacter a; void *ca = make_character(&a, 1);
+    fw_obj3d_add_character(&r, ca, "models/crate.obj", NULL);
+    fw_obj3d_add_tile(&r, 1, 1, "models/crate.obj", NULL);
+    for (int i = 0; i < 2; i++) {
+        const Fw3dObject *o = fw_obj3d_at(&r, i);
+        CHECK(o != NULL);
+        if (!o) return;
+        CHECK_STR(o->texture, "");
+        CHECK(o->tint[0] == 1.0f && o->tint[1] == 1.0f && o->tint[2] == 1.0f && o->tint[3] == 1.0f);
+        CHECK_EQ(o->palette, -1);
+        CHECK_EQ(o->usePalette, -1);
+        CHECK_EQ(o->doubleSided, -1);
+        CHECK_EQ(o->facing, 1);
+        CHECK_EQ(o->fromGon, 0);
+    }
+}
+
+TEST(set_look_set_facing_mark_gon_by_handle) {
+    Fw3dRegistry r; fw_obj3d_init(&r);
+    FakeCharacter a; void *ca = make_character(&a, 1);
+    int h = fw_obj3d_add_character(&r, ca, "models/crate.obj", NULL);
+    const float tint[4] = { 1.0f, 0.5f, 0.25f, 0.75f };
+    CHECK_EQ(fw_obj3d_set_look(&r, h, "models/crate.png", tint, 0, 1), 1);
+    const Fw3dObject *o = fw_obj3d_at(&r, 0);
+    CHECK_STR(o->texture, "models/crate.png");
+    CHECK(o->tint[1] == 0.5f && o->tint[3] == 0.75f);
+    CHECK_EQ(o->usePalette, 0);
+    CHECK_EQ(o->doubleSided, 1);
+    CHECK_EQ(fw_obj3d_set_look(&r, h, NULL, NULL, -1, -1), 1);   /* NULLs: back to "" and 1 1 1 1 */
+    CHECK_STR(o->texture, "");
+    CHECK(o->tint[1] == 1.0f && o->tint[3] == 1.0f);
+    CHECK_EQ(fw_obj3d_set_look(&r, h + 99, NULL, NULL, 1, 1), 0);
+    CHECK_EQ(fw_obj3d_set_look(&r, h, "bad\\name.png", NULL, 1, 1), 0);   /* refused: nothing changed */
+    CHECK_EQ(o->usePalette, -1);
+    CHECK_EQ(fw_obj3d_set_facing(&r, h, -7), 1);
+    CHECK_EQ(o->facing, -1);
+    CHECK_EQ(fw_obj3d_set_facing(&r, h, 0), 1);
+    CHECK_EQ(o->facing, 1);
+    CHECK_EQ(fw_obj3d_set_facing(&r, 0, -1), 0);
+    CHECK_EQ(fw_obj3d_mark_gon(&r, h), 1);
+    CHECK_EQ(o->fromGon, 1);
+    CHECK_EQ(fw_obj3d_mark_gon(&r, -1), 0);
+    /* registering the same Character again keeps the look (a model change from the API does not reset the block) */
+    fw_obj3d_set_look(&r, h, "models/t.png", NULL, 1, 0);
+    CHECK_EQ(fw_obj3d_add_character(&r, ca, "models/other.obj", NULL), h);
+    CHECK_STR(o->texture, "models/t.png");
+}
+
+TEST(facing_minus_one_mirrors_x_and_z_about_the_anchor) {
+    Fw3dRegistry r; fw_obj3d_init(&r);
+    FakeCharacter a; void *ca = make_character(&a, 1);
+    int h = fw_obj3d_add_character(&r, ca, "models/crate.obj", S2T);
+    fw_obj3d_set_facing(&r, h, -1);
+    const double xz[2] = { 1.25, -2.0 };
+    float out[16];
+    fw_obj3d_model_matrix(fw_obj3d_at(&r, 0), xz, out);
+    /* T(anchor) x Swap(x<->z) x S2T: columns x -> 2*e_z, z -> 2*e_x, translation (1.25, 1, -2) (S2T's own (0,1,0) has no x/z) */
+    const float want[16] = { 0,0,2,0, 0,2,0,0, 2,0,0,0, 1.25f,1,-2.0f,1 };
+    CHECK(mat_eq(out, want));
+}
+
 TEST(api_v6_version_and_fwapi_layout) {
     CHECK_EQ(FW_API_VERSION, 6);
     CHECK_EQ(FW_VERSION_MINOR, 6);

@@ -34,6 +34,15 @@ typedef struct Fw3dObject {
      * fw_mesh_tex.h), palette = the palette.png row grey colours are remapped through (-1 = off) */
     char texture[FW_OBJ3D_MODEL_MAX];
     int palette;
+    /* the look of a GON `model { ... }` block (fw_gon_model_block; 3D phase M2 item 4). Stored here by the per-unit
+     * discovery (obj3d_engine.c), DRAWN by the mesh engine's texture/tint/palette side; defaults = draw as before */
+    float tint[4];                      /* multiplies the base colour; default 1 1 1 1 */
+    int usePalette;                     /* GON `palette`: -1 not given, 0 false, 1 true (the row itself is `palette` above) */
+    int doubleSided;                    /* -1 not given, 0 false, 1 true */
+    /* the unit's facing (+1, or -1 = its sprite is mirrored; fw_unit_facing), refreshed every combat frame by
+     * obj3d_engine.c for objects attached to a Character; -1 mirrors the model x <-> z about its anchor */
+    int facing;
+    int fromGon;                        /* 1 = registered from the unit's GON graphics.model (not by a mod's API call) */
 } Fw3dObject;
 
 typedef struct Fw3dRegistry { Fw3dObject objs[FW_OBJ3D_MAX]; int count; int nextHandle; } Fw3dRegistry;
@@ -53,6 +62,12 @@ int  fw_obj3d_remove_handle(Fw3dRegistry *r, int handle);                       
 /* drop every Character object whose pool generation moved (tile objects stay); returns the number dropped */
 int  fw_obj3d_prune(Fw3dRegistry *r);
 int  fw_obj3d_count(const Fw3dRegistry *r);
+/* the look fields of object `handle` (see Fw3dObject): texture NULL = "", tint NULL = 1 1 1 1; 1 set, 0 unknown handle
+ * or a texture name fw_obj3d_model_ok refuses (nothing changed then) */
+int  fw_obj3d_set_look(Fw3dRegistry *r, int handle, const char *texture, const float tint[4], int usePalette, int doubleSided);
+/* facing of object `handle`: < 0 -> -1, else +1; 1 set, 0 unknown handle */
+int  fw_obj3d_set_facing(Fw3dRegistry *r, int handle, int facing);
+int  fw_obj3d_mark_gon(Fw3dRegistry *r, int handle);   /* fromGon = 1; 1 set, 0 unknown handle */
 const Fw3dObject *fw_obj3d_at(const Fw3dRegistry *r, int i);                     /* NULL out of range */
 
 /* the object's texture (NULL / "" = the convention) and palette row (< 0 = off); 1 ok, 0 unknown handle or a texture
@@ -69,7 +84,7 @@ void fw_obj3d_identity(float out[16]);
 void fw_obj3d_mat4_mul(const float a[16], const float b[16], float out[16]);   /* out = a x b (column-major); out may alias neither */
 /* the tile centre in world (x, height, z): (col + 0.5, 0, row + 0.5) */
 void fw_obj3d_tile_centre(int col, int row, float out[3]);
-/* the object's model matrix in world space: translation to its anchor x its own transform. The anchor is the tile
+/* the object's model matrix in world space: translation to its anchor x [the x <-> z mirror when facing < 0] x its own transform. The anchor is the tile
  * centre for a tile object, (unitXZ[0], 0, unitXZ[1]) for a Character object (the unit's world position, read by the
  * caller this frame); a Character object with unitXZ NULL is anchored at the origin. */
 void fw_obj3d_model_matrix(const Fw3dObject *o, const double unitXZ[2], float out[16]);

@@ -84,3 +84,9 @@ const char *fw_gon_entry_model(const void *gonEntry) {
     static char buf[FW_GON_TEXT];
     return fw_gon_model(fw_gon_direct_read, NULL, gonEntry, buf, sizeof buf) == 1 ? buf : NULL;
 }
+
+/* ---- the GON model value, both forms (red: stubs) ---- */
+void fw_gon_model_defaults(FwGonModel *m) { memset(m, 0, sizeof *m); }
+int fw_gon_model_block(FwMemRead rd, void *u, const void *gonEntry, FwGonModel *out) { (void)rd; (void)u; (void)gonEntry; fw_gon_model_defaults(out); return -2; }
+int fw_gon_get_number(FwMemRead rd, void *u, const void *node, const char *path, double *out) { (void)rd; (void)u; (void)node; (void)path; *out = 0; return -2; }
+int fw_gon_node_name(FwMemRead rd, void *u, const void *node, char *out, size_t cap) { (void)rd; (void)u; (void)node; if (cap) out[0] = 0; return -2; }

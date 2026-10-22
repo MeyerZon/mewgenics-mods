@@ -162,3 +162,7 @@ int fw_obj3d_set_material(Fw3dRegistry *r, int handle, const char *texture, int 
     o->palette = palette < 0 ? -1 : palette;
     return 1;
 }
+/* ---- look + facing (red: stubs) ---- */
+int fw_obj3d_set_look(Fw3dRegistry *r, int handle, const char *texture, const float tint[4], int palette, int doubleSided) { (void)r; (void)handle; (void)texture; (void)tint; (void)palette; (void)doubleSided; return 0; }
+int fw_obj3d_set_facing(Fw3dRegistry *r, int handle, int facing) { (void)r; (void)handle; (void)facing; return 0; }
+int fw_obj3d_mark_gon(Fw3dRegistry *r, int handle) { (void)r; (void)handle; return 0; }
