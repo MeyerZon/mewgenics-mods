@@ -39,7 +39,7 @@ beyond short byte signatures needed to locate functions.
 | `-dev_mode true` | Dev mode. |
 | `-validate_pedigree_tables true` | Repairs family-tree tables (added 1.0.20941 after a save editor broke saves). |
 
-Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map (in `Gon_overlay_apply`
+Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map (in `Gon_overlay_apply` = `GonResource::combined_decode`
 `0x9a64a0`) to `Gon_Append` `0x945410`, `Gon_DeepMerge_plain` `0x945c30` under the constant MERGE policy
 (`Gon_DefaultMergeMode` `0x9451c0` returns 2, so `.merge` files never read key suffixes) and the policy-driven
 `0x946680`; row by row in `docs/data-mods.md` "Fidelity to the decompiled merges".
@@ -61,15 +61,55 @@ tables (`catgen`, `spawns`, `particles`, `furniture_effects`, `weather`, `diffic
 **GON parser (OBSERVED 2026-10-21/22, `.analysis/decompiled/Gon_{LoadText_0x940840,Tokenize_0x93f090,ParseTokens_0x93fcf0}.c`).**
 `Gon_LoadText` wraps the text in `{ }`, tokenizes, parses the root as an object and logs `GON ERROR: More symbols
 exists after file completed parsing` if tokens remain. Tokenizer: `{ } [ ]` single-char tokens; `,` `:` `=` are
-whitespace (char mask `0x2400100000000000` over chars `< 0x3e`); `#` comments to end of line; `"` opens a quoted
-token, `\` escapes the next char (only `\n` → newline), the quotes are dropped and no flag survives; no `//` /
-`/* */` / `#include` handling, so a pre-pass must supply them (INFERRED, vanilla relies on all three; candidate
-`0xa50bd0`). Parser: `{` → type 3 object, `[` → type 4 array, a scalar is typed from its text: string (1) unless
-`strtol(tok, &end, 0)` or `strtod` consumes it entirely → number (2) with int view `+0x50` and double view
-`+0x58` both stored, exact `null` → 0, `true`/`false` → bool (5, `+0x60`); text kept at `+0x68`, type at `+0xa8`.
-`.add` / `.multiply` in `Gon_DeepMerge` 0x946680 use the double view and re-render the text. The editor reproduces
-the typing in `editor/src/core/gon/typing.ts` (pinned by `editor/test/gon-tests.ts`); the full rule-by-rule
-comparison is `docs/data-mods.md` "GON typing fidelity".
+whitespace (char mask `0x2400100000000000` over chars `< 0x3e`); `#` comments to end of line (one still open at the
+end logs `GON ERROR: didn't close a comment somewhere`); `"` opens a quoted token, `\` escapes the next char (only
+`\n` → newline), the quotes are dropped and no flag survives. Parser: `{` → type 3 object, `[` → type 4 array, a
+scalar is typed from its text: string (1) unless `strtol(tok, &end, 0)` or `strtod` consumes it entirely → number (2)
+with int view `+0x50` and double view `+0x58` both stored, exact `null` → 0, `true`/`false` → bool (5, `+0x60`); text
+kept at `+0x68`, type at `+0xa8`. `.add` / `.multiply` in `Gon_DeepMerge` 0x946680 use the double view and re-render
+the text. The editor reproduces the typing in `editor/src/core/gon/typing.ts` (pinned by `editor/test/gon-tests.ts`);
+the full rule-by-rule comparison is `docs/data-mods.md` "GON typing fidelity".
+
+**GON text pre-pass: `//`, `/* */`, `#include`, `#define` (OBSERVED 2026-10-22, RE session inc,
+`.analysis/notes-inc.md`, `.analysis/decompiled/Gon_Pre*_0x*.c`, `GonResource_decode_real_0x9a6100.c`).** The tokenizer
+never sees comments or includes: `GonResource::decode(File*)` **0x9a6100** (no overlays) and
+`GonResource::combined_decode(vector<CombineFile>)` **0x9a64a0** (the function called `Gon_overlay_apply` elsewhere
+here; once **per CombineFile — the base file and every `.append/.merge/.patch` overlay**) call
+**`Gon_Preprocess` 0xa50bd0**`(text, includeResolver, 0x100, 1)` and hand its output to `Gon_LoadText`. Its passes:
+(1) **`Gon_Pre_StripComments` 0xa4eb80** — `//` up to the newline, which is kept; `/* … */` removed together with any
+newlines inside; no nesting (the first `*/` closes); a `/` whose previous char is `*` closes, so `/*/` closes at once;
+an unterminated `/*` silently drops the rest; neither applies inside `"…"`, where a `"` not preceded by `\` toggles
+the string state; `#` is not a comment to this pass (a `"` or `/*` inside a `#` comment still counts). (2)
+**`Gon_Pre_ExpandIncludes` 0xa4edf0** — outside strings, at any `#` (`CMP byte ptr [RAX+RDX*1],0x23` at 0x140a4ef23)
+whose blank-delimited word is exactly `#include` (`CMP RCX,0x8` 0x140a4f124 + `memcmp` with the literal 0x141134cf8),
+`Gon_Pre_ReadWord` 0xa4e650 reads the name: blanks (space/TAB/CR/LF/NUL) skipped first — newlines included —, then
+up to the next blank; a `"` toggles a quoted part that is not copied and a closing `"` ends the name; no escapes.
+`#include <name>` is replaced by `Gon_Preprocess(resolve(name), resolve, 0x100, 0)` (`MOV byte ptr [RSP+0x20],0x0`
+0x140a4f32b, `CALL 0x140a50bd0` 0x140a4f340): the included text gets passes 1–2 with the **same** resolver; text
+after the name on the line stays; no separator is added; **no depth limit and no cycle guard** (a self-include
+recurses until the stack overflows — INFERRED crash). (3/4, top level only) **`Gon_Pre_CollectDefines` 0xa4f4a0 /
+`Gon_Pre_ExpandMacros` 0xa501c0** — `#define NAME(a, b) … #end` macros (strings 0x141134ce8 `#end` / `#define` /
+`#include`), uses expanded up to 256 (`0x100`) passes (argument syntax INFERRED); unused by vanilla (0 of 210 files);
+each `Gon_Preprocess` call has its own macro table, so a base file's macros are invisible to its overlays. Nothing
+else is rewritten: no BOM, `\r\n` or TAB handling (vanilla has no BOM / CRLF file).
+**Where an include resolves:** the resolver is a lambda (`GonResource::decode::<lambda_1>` 0x9a7610,
+`combined_decode::<lambda_1>` 0x9a7490 — the files `.analysis/decompiled/GonResource_{decode_0x9a7610,
+combined_decode_0x9a7490}.c` are these lambdas) capturing **the directory of the resource being loaded** (`this->path`
+cut after its last `/`, e.g. `data/maps/` for `data/maps/alley.gon`; for an overlay file the BASE resource's
+directory): `path = dir + name` by plain concatenation (`0x6bd40`, no `..` / `./` normalisation), fetched with
+**`ResourceManager_GetTextResource` 0x7c10e0** (cache key `"txt"` + path). Missing → the no-return
+`Fatal_Error` 0x951ee0: category `GonResource`, **`Could not locate include file: <name>`** (0x14112d8d8, the name as
+written), `BasicResourceTypes.cpp` line 89 / 106, an SDL `ERROR` message box, then exit — **fatal, not a log line**.
+**Includes vs `-modpaths` overlays:** `GetTextResource` uses the same file manager as every data file — when the
+path exists, `0x9a1790` (path or `path.append/.merge/.patch` exists) → `FileManager_ResolveWithOverlays` 0x9a09f0 →
+**`TextResource::combined_decode` 0x9a5a20, which concatenates the raw text of every CombineFile and ignores the
+mode**; otherwise `FileManager_GetFile` 0x99ff50 → `TextResource::decode` 0x9a59b0. So a mod's full copy of an
+included file replaces it, and an overlay **on the included name** is pasted after the base text (never merged; a
+`.patch` suffix arrives literally); the includer's own overlays apply normally after inlining (they see the included
+entries as base); a mod can include a file it ships at the mirrored path (INFERRED for a mod-only path — the loose
+`-modpaths` lookup every data file uses). The editor ports passes 1–2 in `editor/src/core/gon/preprocess.ts` and the
+resolver in `editor/src/core/gon-includes.ts` (pinned by `editor/test/gon-tests.ts` "gon pre-pass" / "gon include",
+fixtures `editor/test/fixtures/gon-include/`); the validator and the merge preview parse the pre-passed text.
 
 GON objects reference C++ behavior components by class name. 1,750 RTTI classes live in `glaiel::`;
 hundreds are small composable behaviors (`AddStatusToBasicAttack`, `AbilityEnabledIfHasStatus`,
@@ -919,9 +959,8 @@ base formula (INFERRED for the runtime value, the getter with stat bonuses and s
 exists after file completed parsing` if tokens remain. The tokenizer splits on whitespace where **`,` `:` `=` count
 as whitespace**; `{ } [ ]` are single-char tokens; `#` starts a comment to end of line; `"` opens a quoted token
 (`\` escapes the next char, the closing `"` flushes it) and **the quotes are dropped with no "was quoted" flag**;
-unclosed quote / comment → the two `GON ERROR: didn't close …` messages. `//` comments (the pack's `.gon` files use
-them) are not handled by the tokenizer — INFERRED stripped by an earlier pass (the overlay text goes through
-`0xa50bd0(&gon, &text, …, 0x100, 1)` first). The parser: `{` → type 3 (`name value` pairs), `[` → type 4 (values),
+unclosed quote / comment → the two `GON ERROR: didn't close …` messages. `//`, `/* */` and `#include` never reach
+the tokenizer: `Gon_Preprocess` 0xa50bd0 handles them first ("GON text pre-pass" in "Data model" above). The parser: `{` → type 3 (`name value` pairs), `[` → type 4 (values),
 anything else is a scalar that starts as type 1 with the token in `+0x68`, then `strtol(tok, &end, 0)` consuming the
 whole token → type 2 with `+0x50`, `strtod` consuming it → type 2 with `+0x58` (both are always stored: `1.5` → int
 1, double 1.5), then exact `null` → 0, `true` / `false` → 5. Consequences: bare `5` and `"5"` are identical number

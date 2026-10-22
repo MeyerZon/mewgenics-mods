@@ -97,6 +97,15 @@ index, and `.overwrite` replaces the whole array.
 - Scaling or offsetting numbers, or mixing policies in one change → `.patch`.
 - Replacing a whole file → avoid unless you must; prefer the three above.
 
+### Comments and `#include` in a mod file
+
+Every mod `.gon` / `.gon.append` / `.merge` / `.patch` goes through the game's pre-pass: `#`, `//` and
+`/* */` comments work (no nesting), and `#include "x.gon"` pastes `<directory of the BASE file>/x.gon` (mod
+folder first, then the pack) in place. A missing include is **fatal** in the game (`include-missing` in the
+validator). An overlay on an included file's own name is pasted as text, not merged — overlay the including files
+instead. `#define` macros are not modelled by the editor (`gon-define-unmodelled`). Details:
+`docs/data-mods.md` "Comments and `#include`".
+
 ## CSV overlays (`data/text/combined.csv`)
 
 The localization table has **12 columns**:
