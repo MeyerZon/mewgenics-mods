@@ -215,7 +215,7 @@ test.describe("Art mode — explorer & scene authoring", () => {
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 
-  test("Rig tab: New cat animation adds <name>F/<name>B frames on an _Append_CatTest donor placing a <name>Pose rig as `ani` at depth 1; the findings show the game-draws-its-own-parts note; the JSON has the export and the rig's slots are empty sprites (in memory)", async ({ page }) => {
+  test("Rig tab: New cat animation adds <name>F/<name>B frames on an _Append_CatTest donor placing the front rig <name>Pose and the back rig <name>PoseBack as `ani` at depth 1; the findings show the game-draws-its-own-parts note; the JSON has the export and the rig's slots are empty sprites (in memory)", async ({ page }) => {
     const errors = collectConsole(page);
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Rig" }).click();
@@ -226,15 +226,36 @@ test.describe("Art mode — explorer & scene authoring", () => {
     await expect(page.locator(".cat-anim-finding", { hasText: /own parts/ })).toBeVisible();
     // the rig the frames place is listed among the cat rigs
     await expect(page.locator(".rig-slot .id", { hasText: /^head$/ })).toBeVisible();
+    // the back rig lists its own layout: head_back, no head
+    await expect(page.locator(".rig-slot .id", { hasText: /^head_back$/ })).toBeVisible();
     await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
     const sc = JSON.parse(await page.locator("textarea").first().inputValue());
     expect(sc.exports._Append_CatTest).toBe("CatAnim_wave");
     expect(sc.sprites.CatAnim_wave.labels).toEqual({ waveF: 0, waveB: 1 });
     expect(sc.sprites.CatAnim_wave.layers.map((l: any) => `${l.name}@${l.depth}`)).toEqual(["ani@1"]);
-    expect(sc.sprites.CatAnim_wave.layers[0].keys.map((k: any) => k.ref)).toEqual(["wavePose", "wavePose"]);
+    expect(sc.sprites.CatAnim_wave.layers[0].keys.map((k: any) => k.ref)).toEqual(["wavePose", "wavePoseBack"]);
+    expect(sc.sprites.wavePoseBack.facing).toBe("back");
+    expect(sc.sprites.wavePoseBack.layers.map((l: any) => `${l.name}@${l.depth}`)).toEqual(["head_back@1", "arm2@3", "leg2@5", "body@7", "arm1@9", "leg1@11", "tail@13"]);
     expect(sc.sprites.wavePose.rig).toBe("cat");
     expect(sc.sprites.wavePose.parts).toBe("game");
     for (const l of sc.sprites.wavePose.layers) expect(sc.sprites[l.keys[0].ref].layers).toEqual([]);
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
+  test("Rig tab: with Four-way checked, New cat animation adds the quartet <name>LF / RF / LB / RB (the L frames mirrored, the B frames on the back rig) and the four-way note", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Rig" }).click();
+    await page.locator('input[aria-label="new cat animation name"]').fill("creep");
+    await page.getByRole("checkbox", { name: "Four-way" }).check();
+    await page.getByRole("button", { name: "New cat animation" }).click();
+    for (const l of ["creepLF", "creepRF", "creepLB", "creepRB"]) await expect(page.locator(".cat-anim-label", { hasText: new RegExp(`^${l}$`) })).toBeVisible();
+    await expect(page.locator(".cat-anim-finding", { hasText: /four_way_animations true/ })).toBeVisible();
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const sc = JSON.parse(await page.locator("textarea").first().inputValue());
+    expect(sc.sprites.CatAnim_creep.labels).toEqual({ creepLF: 0, creepRF: 1, creepLB: 2, creepRB: 3 });
+    expect(sc.sprites.CatAnim_creep.layers[0].keys.map((k: any) => `${k.ref}:${k.sx ?? 1}`)).toEqual(["creepPose:-1", "creepPose:1", "creepPoseBack:-1", "creepPoseBack:1"]);
     const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
