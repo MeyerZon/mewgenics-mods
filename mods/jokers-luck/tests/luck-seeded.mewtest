@@ -7,8 +7,8 @@ timeout: 120s
 # rerolls stopped repeating. Since framework API v5 the rerolls come from FW_Random, which `seed 42` also pins:
 # OBSERVED 2026-10-22 (twice, identical): round 2 Wengar 5, Webster -7, Flint -5, Christine -4; round 3 Wengar -10,
 # Webster 8, Flint -6, Christine 7 -- draws 0..7 of the seed-42 stream in turn order Wengar, Webster, Flint,
-# Christine (fw_rng.c + jl_roll.c on the host give +5 -7 -5 -4 -10 +8 -6 +7). The script grammar has no negative
-# literals, so round 3 pins Wengar's sign and the two positive values exactly.
+# Christine (fw_rng.c + jl_roll.c on the host give +5 -7 -5 -4 -10 +8 -6 +7). Operands are signed (since
+# 2026-10-22, `fix/harness-negative-numbers`), so round 3 pins the negative values exactly too.
 wait frames 120
 seed 42
 enter TacticsTest
@@ -19,7 +19,8 @@ wait rounds 1
 expect stacks JokersLuck on 0 == 5
 dump
 wait rounds 1
-expect stacks JokersLuck on 0 < 0
+expect stacks JokersLuck on 0 == -10
+expect stacks JokersLuck on "Flint" == -6
 expect stacks JokersLuck on "Webster" == 8
 expect stacks JokersLuck on "Christine" == 7
 dump
