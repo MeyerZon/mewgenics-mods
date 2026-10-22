@@ -38,6 +38,11 @@ done (2026-10-21). Owner's answers of 2026-10-21 are recorded under each item; c
       outline passes", `art-pipeline` §6, `data-mods` "Lighting and tint knobs". Engine-side, data has only
       `CharacterLightSource.glow` (ground disc) and `AdvancedTint` (brightness). A native per-unit rim (the combat
       outline pass with a per-unit colour and an always-on mask) is being pursued in session `rim`.
+- [ ] **Native per-unit glow — what next?** The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
+      draws a rim through the game's outline mask (one shared colour, combat only, the rim shader shipped by
+      `mods/fw-glow`). Decide: (a) a data-level way to ask for it (a `registered-names.json` kind `glow` a
+      status/passive names?) and per-unit colours (v2: one material + pass per unit, or a camera per colour); (b)
+      whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
       **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly). Not
