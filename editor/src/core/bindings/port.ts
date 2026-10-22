@@ -209,7 +209,7 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
       if (!ready.length) return null;
       const outc: Candidate[] = [];
       for (const c of ready) {
-        const sites = findCallsAfterStringLea(pe, buf, ported(c.function) as number, c.afterStringLea as string);
+        const sites = findCallsAfterStringLea(pe, buf, ported(c.function) as number, c.afterStringLea as string, c.maxForward ?? 24);
         if (!sites.length) { why.push(`no lea of "${c.afterStringLea}" in ${c.function}`); continue; }
         for (const s of sites) {
           const t = s.targets.find((x) => withinTolerance(e, x));

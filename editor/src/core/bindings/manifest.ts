@@ -128,6 +128,8 @@ export interface CallerAnchor {
   function: string;
   ordinal?: number;
   afterStringLea?: string;
+  /** instructions to look at after the lea (default 24) */
+  maxForward?: number;
   unique?: boolean;
   note?: string;
 }
@@ -335,6 +337,7 @@ export function validateManifest(input: unknown): { ok: boolean; problems: strin
           ref("callers[].function", c && c.function, "function");
           if (c && c.ordinal !== undefined && !(Number.isInteger(c.ordinal) && c.ordinal >= 0)) bad(`${n}: callers[].ordinal must be a non-negative integer`);
           if (c && c.afterStringLea !== undefined && (typeof c.afterStringLea !== "string" || !c.afterStringLea)) bad(`${n}: callers[].afterStringLea must be a non-empty string`);
+          if (c && c.maxForward !== undefined && !(Number.isInteger(c.maxForward) && c.maxForward > 0)) bad(`${n}: callers[].maxForward must be a positive integer`);
         }
       }
       if (anchors.after) ref("after.function", anchors.after.function, "function");

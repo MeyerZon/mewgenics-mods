@@ -1671,7 +1671,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const chain: [string, string][] = [["Status_GetCategory", "Status_ApplyByName"], ["Status_GetStackMode", "Status_GetCategory"], ["Status_NameExists", "Status_GetStackMode"], ["Status_GetValue", "Status_NameExists"], ["Status_GetFlags", "Status_GetValue"], ["Status_GetIcon", "Status_GetFlags"], ["Status_OnAppliedToDamageInstance", "Status_GetIcon"], ["Status_OnAppliedToTile", "Status_OnAppliedToDamageInstance"], ["Status_OnKilledCharacter", "Status_OnAppliedToTile"], ["Status_OnDamageReport", "Status_OnKilledCharacter"], ["Status_AttachPassive", "Status_OnDamageReport"], ["Status_SpawnTile", "Status_IsHitEffect"], ["ApplicationBase_FrameEnd", "ApplicationBase_FrameBegin"]];
     for (const [n, prev] of chain) eq(entry(m, n)!.anchors.after?.function, prev, `${n}.after`);
     eq(entry(m, "Status_NameExists")!.anchors.before?.function, "Status_GetValue");
-    eq(JSON.stringify(entry(m, "Status_NameExists")!.anchors.sharedDataRef), JSON.stringify({ with: "Status_GetValue", ripRefOrdinal: 0 }));
+    eq(JSON.stringify({ ...entry(m, "Status_NameExists")!.anchors.sharedDataRef, note: undefined }), JSON.stringify({ with: "Status_GetValue", ripRefOrdinal: 0 }));
     eq(entry(m, "ApplicationBase_FrameBegin")!.anchors.before?.function, "ApplicationBase_FrameEnd");
     for (const n of ["Status_GetStackMode", "Status_IsHitEffect", "Status_OnKilledCharacter"]) eq(entry(m, n)!.signature, null, `${n}: a __LINE__-anchored body signature would port a twin silently when the line shifts; stays null`);
   });
@@ -1682,8 +1682,8 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       const byName = (n: string) => rep.find((r) => r.name === n)!;
       for (const n of ["Status_ApplyLuckUp", "LuckUp_ctor", "Status_NameExists", "Status_GetCategory", "Status_SpawnTile", "ApplicationBase_FrameBegin", "ApplicationBase_FrameEnd"]) eq(byName(n).status, "verified", `${n}: ${byName(n).detail}`);
       assert(/vtable-store ok/.test(byName("LuckUp_ctor").detail), byName("LuckUp_ctor").detail);
-      assert(/imm32-witness ok/.test(byName("Status_ApplyLuckUp").detail) && /caller-after-lea ok/.test(byName("Status_ApplyLuckUp").detail), byName("Status_ApplyLuckUp").detail);
-      assert(/shared-data-ref ok/.test(byName("Status_NameExists").detail) && /pdata-predecessor ok/.test(byName("Status_NameExists").detail), byName("Status_NameExists").detail);
+      assert(/imm32-witness 0x4d6 ok/.test(byName("Status_ApplyLuckUp").detail) && /caller-after-lea ok \(Status_ApplyByName\)/.test(byName("Status_ApplyLuckUp").detail) && /caller-after-lea ok \(Status_AttachPassive\)/.test(byName("Status_ApplyLuckUp").detail), byName("Status_ApplyLuckUp").detail);
+      assert(/shared-data-ref ok/.test(byName("Status_NameExists").detail) && /pdata-predecessor of Status_GetValue ok/.test(byName("Status_NameExists").detail), byName("Status_NameExists").detail);
       eq(rep.filter((r) => r.status === "mismatch").map((r) => `${r.name}: ${r.detail}`).join("; "), "");
     });
     test("T1 real exe: with the signature rung disabled, the three null-signature functions port by their new anchors onto the installed exe (vtable-store, imm32-witness, funcsig-xref) with their known RVAs", () => {

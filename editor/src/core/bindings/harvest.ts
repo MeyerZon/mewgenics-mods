@@ -224,9 +224,10 @@ export function findImm32WitnessFunctions(pe: Pe, buf: Buffer, pattern: string, 
  * caller-after-lea rung: inside the caller's .pdata body, every rip-relative lea of the unique whole string `literal`
  * and, per lea site, the E8 targets (that begin a .pdata function) within the next `maxForward` instructions, in order.
  * apply_status compares the name (`lea rdx,["LuckUp"]; call string==cstr; test al,al; jz`) and then calls the
- * per-status apply function: the caller picks the first target inside its size/call tolerance.
+ * per-status apply function: the caller picks the first target inside its size/call tolerance. The default window of
+ * 24 instructions covers attach_passive, whose call sits 17 instructions after the lea on 25143593.
  */
-export function findCallsAfterStringLea(pe: Pe, buf: Buffer, callerRva: number, literal: string, maxForward = 16): { leaAt: number; targets: number[] }[] {
+export function findCallsAfterStringLea(pe: Pe, buf: Buffer, callerRva: number, literal: string, maxForward = 24): { leaAt: number; targets: number[] }[] {
   const s = findString(pe, buf, literal);
   if (s.rva === null || s.count !== 1) return [];
   const fn = pe.pdata.find(callerRva);
@@ -637,7 +638,7 @@ export function verifyFunctionAnchors(manifest: Manifest, pe: Pe, buf: Buffer, e
     if (!caller || !caller.rva) { r.checks.push(`callers: ${c.function} missing`); r.failed = true; continue; }
     const crva = parseInt(caller.rva, 16);
     if (c.afterStringLea) {
-      const sites = findCallsAfterStringLea(pe, buf, crva, c.afterStringLea);
+      const sites = findCallsAfterStringLea(pe, buf, crva, c.afterStringLea, c.maxForward ?? 24);
       const hit = sites.some((s) => s.targets.includes(rva));
       r.checks.push(hit ? `caller-after-lea ok (${c.function})` : `caller-after-lea: no call to ${e.rva} after lea "${c.afterStringLea}" in ${c.function} (${sites.length} lea site(s))`);
       if (!hit) r.failed = true;
