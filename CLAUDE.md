@@ -93,7 +93,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
-- `npm run test:e2e` — `vite build && playwright test`: the 42-check browser suite in `editor/tests/e2e/` that pins
+- `npm run test:e2e` — `vite build && playwright test`: the 44-check browser suite in `editor/tests/e2e/` that pins
   the UI's DOM and flows (Data mode, Art mode, preview, onboarding). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs

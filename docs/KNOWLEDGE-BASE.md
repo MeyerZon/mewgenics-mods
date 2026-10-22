@@ -114,7 +114,7 @@ PR; everything else is on `main`.
   25 with `bake_glow` after PR #80, 26 with `vectorcraft_exec` after PR #89 — data, art, in-game testing, bindings, the VectorCraft agent channel), and a React + TypeScript **web UI** built
   by Vite (Data + Art modes, IDE-style, with onboarding; zod at the `/api` boundary — `editor-ts-react-plan.md`).
   **Art mode** has a hand-written SWF emitter, SVG import/export, a WebGL in-game-faithful preview and a Ruffle
-  reference tab. Validated: ~290 unit + 42 Playwright e2e tests, typecheck clean, T0 in CI. Overview:
+  reference tab. Validated: ~630 unit + 44 Playwright e2e tests, typecheck clean, T0 in CI. Overview:
   **[../README.md](../README.md)**; art design/plan: **[art-preview-plan.md](art-preview-plan.md)**.
 
 ### The SWF-emitter crash — closed
