@@ -17,8 +17,10 @@ function jsFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name === "data") continue;
     const p = join(dir, name);
-    // vendored third-party runtime (git-ignored; scripts/vendor-ruffle.ts copies it from node_modules)
-    if (relative(REPO, p).split(sep).join("/") === "editor/web/public/ruffle") continue;
+    // vendored third-party runtimes (git-ignored; scripts/vendor-ruffle.ts copies Ruffle from node_modules,
+    // scripts/vendor-vectorcraft.ts unpacks the pinned VectorCraft release zip)
+    const rel = relative(REPO, p).split(sep).join("/");
+    if (rel === "editor/web/public/ruffle" || rel === "editor/web/public/vectorcraft") continue;
     if (statSync(p).isDirectory()) jsFiles(p, out);
     else if (/\.(mjs|cjs|js)$/.test(name)) out.push(relative(REPO, p).split(sep).join("/"));
   }

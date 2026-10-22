@@ -23,6 +23,10 @@ editor/node_modules/
 editor/web/dist/
 # editor: Ruffle's runtime files, vendored from node_modules by scripts/vendor-ruffle.ts (npm run build / dev)
 editor/web/public/ruffle/
+# editor: VectorCraft's prebuilt web build (73 MB wasm + glue + licences), downloaded hash-pinned from GitHub Releases
+# by scripts/vendor-vectorcraft.ts (npm run build / dev); the zip itself is cached under the ignored editor/data/vendor/
+editor/web/public/vectorcraft/
+editor/web/public/vectorcraft.tmp/
 # editor: Playwright (dev-only) run output
 editor/test-results/
 editor/playwright-report/

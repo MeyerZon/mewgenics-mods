@@ -46,7 +46,10 @@ npx playwright show-report              # open the last HTML report
   the preview (canvas + transport + scrubber, frame counter advancing, suspend on
   tab/mode switch + resume, the truthful play/pause label incl. auto-stop on the
   last frame with loop OFF, resize re-fit, palette row + "show raw grayscale"),
-  and the Build tab (no-DoABC/stub radios, dry run, build + inspect).
+  the Build tab (no-DoABC/stub radios, dry run, build + inspect), the Ruffle tab,
+  and the VectorCraft tab (the vendored app boots in a same-origin iframe, a
+  `shape.rectangle` through `window.vectorcraft`, Apply brings it back onto the
+  shape with the artboard re-origin undone; skips when not vendored).
 - **onboarding** — the first-run data tour, the Art tour (auto-open on first Art
   entry, persistence of seen / "don't show again" across reload, re-open from the
   Help menu), the concepts drawer (Art section + 16-swatch ramp, mode-aware

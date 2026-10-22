@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="88" height="68" viewBox="0 0 88 68">
+  <title>body.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path d="M4 4 L84 4 L84 64 L4 64 Z" fill="#888888"/>
+    <path d="M4 4 L84 4 L84 16 L4 16 Z" fill="#cccccc"/>
+  </g>
+</svg>

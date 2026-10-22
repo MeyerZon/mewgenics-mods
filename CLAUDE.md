@@ -70,7 +70,10 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 
 **Editor** (run from `editor/`; runtime deps `react`, `react-dom`, `zod`, `@ruffle-rs/ruffle` (browser-only, vendored into the git-ignored
 `web/public/ruffle/` by `npm run build` / `dev`); dev-only `vite`, `typescript@7.0.2`,
-`@playwright/test`; see `docs/editor-ts-react-plan.md`):
+`@playwright/test`; see `docs/editor-ts-react-plan.md`). `npm run build` / `dev` also vendor VectorCraft's prebuilt
+web build (`scripts/vendor-vectorcraft.ts`: the ONE pinned release zip, size + SHA-256 verified before extraction,
+Node built-ins only, nothing installed; owner decision 2026-10-22) into the git-ignored `web/public/vectorcraft/`,
+skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hashes it:
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates). In a secondary git
   worktree, point at the main checkout instead: one `node_modules` junction plus `MEWGENICS_EXTRACTED_DATA` /
@@ -97,8 +100,9 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (25 tools, incl. the art tools
-  with `bake_glow`, `check_game_build` and `port_bindings`).
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (26 tools, incl. the art tools
+  with `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
+  Chromium), `check_game_build` and `port_bindings`).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
 
 **Data access / tooling** (repo root):
