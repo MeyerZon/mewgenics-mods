@@ -40,9 +40,12 @@ typedef struct FwMeshOrder {
     int groups;           /* insertion points used (one draw functor each) */
     double lastKey;
     double keys[FW_MESH_ORDER_LOG_ITEMS];
+    int m2;               /* 1 = the M2 tie rule (a mesh whose key equals an item's goes AFTER it); 0 (default) = M3: before */
 } FwMeshOrder;
 
 void fw_mesh_order_reset(FwMeshOrder *o);
+/* MEWFW_MESH_ORDER=m2 (the T2 control runs): meshes win ties again; call after fw_mesh_order_reset */
+void fw_mesh_order_set_m2(FwMeshOrder *o, int on);
 /* a mesh to place this frame; returns its entry index or -1 when full */
 int fw_mesh_order_add(FwMeshOrder *o, double key, const void *anchor, int draw);
 /* the key of an object standing at world (x, z) (a tile object: its origin; TacticsObject puts a tile's origin on the

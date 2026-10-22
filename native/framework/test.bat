@@ -16,6 +16,8 @@ REM and the M3 unit model facing: Character::Face direction -> model yaw (test_u
 REM M3: the PNG decoder for a .glb's embedded image (test_png) and the embedded model texture: precedence, decode, upload (test_mesh_embtex).
 REM JSON tokenizer (test_json), the glTF 2.0 loader (test_mesh_gltf) and the M2 sprite/mesh painter order + camera filter (test_mesh_order)
 REM and the M3 unit palette row: a cat's CatParts row for a GON `palette true` model (test_unit_palette).
+REM JSON tokenizer (test_json), the glTF 2.0 loader (test_mesh_gltf) and the M2 sprite/mesh painter order + camera filter (test_mesh_order),
+REM the M3 per-band mesh slices: depth range, band plan, visible area, tints, probe tile, log line (test_mesh_slice).
 REM Builds build\test_*.exe with w64devkit GCC and runs them; exit code = failures.
 setlocal
 if not defined GCC set "GCC=C:\raylib\w64devkit\bin\gcc.exe"
@@ -159,5 +161,11 @@ if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
   -o "%OUT%\test_unit_palette.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_unit_palette.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_mesh_slice.c" "%HERE%src\fw_mesh_slice.c" "%HERE%src\fw_mesh_order.c" "%HERE%src\fw_functor.c" ^
+  -o "%OUT%\test_mesh_slice.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_mesh_slice.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal

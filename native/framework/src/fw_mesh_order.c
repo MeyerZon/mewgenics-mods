@@ -12,6 +12,10 @@ void fw_mesh_order_reset(FwMeshOrder *o) {
     if (o) memset(o, 0, sizeof *o);
 }
 
+void fw_mesh_order_set_m2(FwMeshOrder *o, int on) {
+    if (o) o->m2 = on ? 1 : 0;
+}
+
 int fw_mesh_order_add(FwMeshOrder *o, double key, const void *anchor, int draw) {
     if (!o || o->n >= FW_MESH_ORDER_MAX) return -1;
     FwMeshOrderEntry *e = &o->e[o->n];
