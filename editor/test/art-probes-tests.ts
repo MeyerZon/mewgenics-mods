@@ -102,6 +102,26 @@ export async function runArtProbesTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(P.inkDifference(a, a), 0); eq(P.inkDifference(a, b), 1); eq(P.inkDifference({ w: 1, h: 1, mask: new Uint8Array([0]) }, { w: 1, h: 1, mask: new Uint8Array([0]) }), 0);
   });
 
+  test("summarizeLocText: a shot where a box has under 60 % of that box's best ink (OBSERVED 2026-10-22: the \"Battle Start!\" banner, the unit itself) does not vote on the questions that use the box; the outcome is the readable shots' unanimous answer, `mixed` when they disagree, `unreadable` when none is readable", () => {
+    need();
+    const full = (o: Record<string, string>, low: string[] = []) => {
+      const boxes: Record<string, { ink: number; inkWidth: number; inkHeight: number }> = {};
+      for (const b of P.LOC_PROBE_BOXES as Array<{ id: string }>) boxes[b.id] = { ink: low.includes(b.id) ? 300 : 1000, inkWidth: 100, inkHeight: 20 };
+      const pairs: Record<string, { toValue: number; toLiteral: number }> = {};
+      for (const k of Object.keys(o)) pairs[k] = { toValue: 0.5, toLiteral: 0.5 };
+      return { boxes, pairs, outcomes: o, plainRenders: !low.includes("litVanillaPlain") };
+    };
+    const A = { vanillaHtml: "literal", vanillaPlain: "substituted", modHtml: "literal", modPlain: "substituted" };
+    const banner = full({ vanillaHtml: "substituted", vanillaPlain: "literal", modHtml: "substituted", modPlain: "substituted" }, ["litVanillaHtml", "keyVanillaPlain", "keyModHtml"]);
+    const s = P.summarizeLocText([banner, full(A), full(A, ["keyModPlain"])]);
+    eq(JSON.stringify(s.outcomes), JSON.stringify(A));
+    eq(s.votes.vanillaHtml, 2); eq(s.votes.modPlain, 2); eq(s.votes.modHtml, 2);
+    eq(s.plainRenders, true);
+    const m = P.summarizeLocText([full(A), full({ ...A, modHtml: "substituted" })]);
+    eq(m.outcomes.modHtml, "mixed"); eq(m.outcomes.vanillaHtml, "literal");
+    eq(P.summarizeLocText([]).outcomes.vanillaHtml, "unreadable");
+  });
+
   // ---- B. the tileset redirect: the verdict ----
   test("tilesetOutcome: our marker on screen after `spawn Rat` with the overlay and not in its pre-spawn shot, none in the control → redirected; no marker with the overlay → not-redirected; a marker before the spawn or in the control → inconclusive; a failed run → its verdict", () => {
     need();
@@ -196,8 +216,13 @@ export async function runArtProbesTests(test: TestFn, assert: AssertFn, eq: EqFn
     assert(/real save file\(s\) unchanged/.test(j.reason), j.reason);
     assert(j.marker && j.marker.found, "marker found");
     for (const k of ["vanillaHtml", "vanillaPlain", "modHtml", "modPlain"]) assert(["substituted", "literal", "unreadable"].includes(j.outcomes[k]), `${k}: ${j.outcomes[k]}`);
-    eq(j.outcomes.vanillaHtml, "substituted", "a vanilla key in vanilla's HTML wrapper is localized");
-    eq(j.outcomes.modHtml, "substituted", "a key added by combined.csv.append is localized too");
+    // the hypothesis was "an initial text that is exactly a key is localized"; OBSERVED: only without the HTML wrapper
+    eq(j.outcomes.vanillaPlain, "substituted", "a plain DefineEditText whose text is a vanilla key shows the English value");
+    eq(j.outcomes.modPlain, "substituted", "a key added by combined.csv.append is localized too");
+    eq(j.outcomes.vanillaHtml, "literal", "in vanilla's <p><font> wrapper the key is drawn as written");
+    eq(j.outcomes.modHtml, "literal", "same for the mod key");
+    eq(j.plainRenders, true, "a DefineEditText without the HTML flag is drawn");
+    assert(j.votes.vanillaHtml >= 2 && j.votes.vanillaPlain >= 2 && j.votes.modHtml >= 2 && j.votes.modPlain >= 1, JSON.stringify(j.votes));
   });
 
   test("OBSERVED 2026-10-22 fixture (artprobe-tileset-summary.json): with `alley { Rat ArtProbe }` a spawned plain Rat draws our ArtProbe clip (marker after the spawn, not before); the control without the overlay shows no marker; both runs passed with the real save unchanged", () => {
