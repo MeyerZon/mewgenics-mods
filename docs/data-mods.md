@@ -20,8 +20,8 @@ For structured text files (`.gon`, `.csv`, `.txt`) a mod file is named `<origina
 | File | Semantics (from GON's `gon.h`) |
 |---|---|
 | `X.gon` (no suffix) | Replaces the whole file. Avoid; conflicts with every other mod touching it. |
-| `X.gon.append` | `Append`: objects and arrays get the mod's children added at the end. Use for new entries. |
-| `X.gon.merge` | `DeepMerge`: fields with matching names are merged recursively, new fields appended, mismatched types overwritten. Use for value changes. |
+| `X.gon.append` | `Append` (0x945410): every mod child is added at the end of the base object (arrays concatenate). A name the base already has is **kept twice** — nothing is merged or replaced, and the game's by-name lookup then sees the appended copy. Key suffixes are not read. Use for new entries. |
+| `X.gon.merge` | `DeepMerge` (0x945c30 under the constant MERGE policy): fields with matching names are merged recursively (the nth mod field named X into the nth base field named X), new fields appended, **arrays merged element-wise by index with the extra mod items appended**, strings/numbers and mismatched types overwritten. Key suffixes are **not** read (`foo.overwrite` is a field literally named `foo.overwrite`; the validator warns `merge-suffix-literal`). Use for value changes. |
 | `X.gon.patch` | `PatchMerge`: like merge, but each field in the patch chooses its policy with a suffix: `field.overwrite`, `field.append`, `field.merge` (default), `field.add`, `field.multiply` (numbers). |
 
 Examples in this repo: `mods/dev-sandbox/data/difficulties.gon.merge` (changes `wallet_size` on difficulty 0)
@@ -32,27 +32,43 @@ fragile when the base game adds rows. Prefer `.append` with new localization key
 
 ## Fidelity to the decompiled merges (2026-10-21)
 
-The three GON decompiles on disk (`.analysis/decompiled/`, build 25143593) are not "Append / DeepMerge / PatchMerge":
-`Gon_PatchMerge_a_0x944cc0.c` is the **key-suffix → policy parser** (returns 3 `.overwrite`, 1 `.append`, 2 `.merge`,
+The GON decompiles on disk (`.analysis/decompiled/`, build 25143593) are, for the `.patch` side:
+`Gon_PatchMerge_a_0x944cc0.c`, the **key-suffix → policy parser** (returns 3 `.overwrite`, 1 `.append`, 2 `.merge`,
 4 `.add`, 5 `.multiply`, 0 none — checked in that order, and a key whose length *equals* the suffix length counts),
-`Gon_PatchMerge_b_0x944f50.c` is the **recursive suffix stripper** (removes each of the five once, in that order, on
+`Gon_PatchMerge_b_0x944f50.c`, the **recursive suffix stripper** (removes each of the five once, in that order, on
 a node's own name and, for objects, all descendants; for arrays it recurses into the items), and
-`Gon_DeepMerge_0x946680.c` is the **policy-driven merge** `(this, other)` that reads `other`'s suffix and is what a
-`.patch` file needs. A GON node is 0xb0 bytes: children vector at `+0x38/+0x40`, `int` at `+0x50`, `double` at
-`+0x58`, `bool` at `+0x60`, string value at `+0x68`, name at `+0x88`, type at `+0xa8` (0 null, 1 string, 2 number,
-3 object, 4 array, 5 bool). The functions behind `.append` and `.merge` files (GON's `Append` and the suffix-blind
-`DeepMerge`) and the GON loader that picks one per file kind are **not on disk**: the file manager
-(`FileManager_ResolveWithOverlays_0x9a09f0.c`) only collects the `.append` / `.merge` / `.patch` paths.
+`Gon_DeepMerge_0x946680.c`, the **policy-driven merge** `(this, other)` that reads `other`'s suffix. A GON node is
+0xb0 bytes: children vector at `+0x38/+0x40`, `int` at `+0x50`, `double` at `+0x58`, `bool` at `+0x60`, string
+value at `+0x68`, name at `+0x88`, type at `+0xa8` (0 null, 1 string, 2 number, 3 object, 4 array, 5 bool).
+
+The second pass (Ghidra session `loc`, `.analysis/notes-loc.md` "GON overlay functions") added the dispatch and the
+other two engines. The file manager (`FileManager_ResolveWithOverlays_0x9a09f0.c`) tags each overlay path by
+file-name suffix (`.append` → 1, `.merge` → 2, `.patch` → 3; `Gon_overlay_suffix_dispatch_0x9a1790.c` is only the
+"has one of the three suffixes" predicate), and **`Gon_overlay_apply` 0x9a64a0** (`Gon_overlay_apply_0x9a64a0.c`)
+parses each overlay and applies it to the resource's root: mode 0 swaps the whole object in, **mode 1 →
+`Gon_Append` 0x945410**, **mode 2 → `Gon_DeepMerge_plain` 0x945c30** with the `MergeMode` callback
+**`Gon_DefaultMergeMode` 0x9451c0, which returns the constant 2 (MERGE) for every node**, and **mode 3 →
+0x946680**. The helpers both engines share are `GonObject_assign` 0x30cd0 (copy-assign: children, int, double,
+bool, string, name, type), `GonObject_has_child_name` 0x942910 and `GonObject_child_by_name` 0x942b50 (`(this,
+name, nth)` — an occurrence counter; with `nth == 0` they defer to the undecompiled 0x942880 / 0x942da0, presumably
+the name index) and `FUN_14012a310(this, name) = index` (the name index write, repointed at every pushed child).
 
 The editor's engine is `editor/src/core/overlay/merge.ts` (+ `policy.ts`); the table is pinned by
 `editor/test/overlay-tests.ts` over `editor/test/fixtures/overlay/<case>/` (base + overlay → expected, compared
-structurally). Rows marked *fixed* diverged before this audit and were brought in line test-first.
+structurally). Rows marked *fixed* diverged before an audit and were brought in line test-first.
 
 | Aspect | Decompiled behaviour (0x946680 unless noted) | Editor | Verdict |
 |---|---|---|---|
-| Which function serves which file kind | Only 0x946680 interprets suffixes, so `.patch` goes through it. Whether `.merge` shares it (then suffixes inside a `.merge` file would act) or uses a separate suffix-blind `DeepMerge`, and what `Append` does, is not decompiled. | `.patch` → `patchMerge`; `.merge` → `deepMerge` (suffix-blind, first-occurrence keys, arrays element-wise); `.append` → `append`. | **UNKNOWN** for `.merge`/`.append`. Settle: decompile the callers of 0x946680 (xrefs) or probe — a `.merge` file with `Pooter { properties { faction.overwrite allies } }` and `dump`: faction 1 means `.merge` honours suffixes. |
-| `.append` file: objects / arrays / mismatch | Not decompiled. T2 observation (`mods/_golden-merge`): a new top-level entry appended to `enemies.gon` spawns. | Object children concatenated (duplicates kept), array items concatenated, mismatched roots → overlay wins. | **MATCH by observation** (object append); **UNKNOWN** for arrays-at-root and mismatch (public GON throws on a mismatch). |
-| `.merge` file: arrays, suffixes, duplicate keys | Not decompiled. T2 observation: nested scalar overwrite (`Rat { graphics { name … } properties { faction allies } }`) works. | Arrays element-wise by index; suffixes are literal key text; first occurrence wins. | **MATCH by observation** (nested scalars); **UNKNOWN** for arrays (public GON's `DeepMerge(other, OVERWRITE, APPEND)` would *concatenate* arrays), suffixes and duplicates. Probe: a `.merge` on an array the dump can see, or decompile `DeepMerge`. |
+| Which function serves which file kind | 0x9a64a0: `.append` → 0x945410, `.merge` → 0x945c30 with the constant policy 2, `.patch` → 0x946680. | `.append` → `append`; `.merge` → `deepMerge`; `.patch` → `patchMerge` (`overlay.ts`). | **MATCH** (was UNKNOWN). |
+| `.append` file, object + object (0x945410) | Every overlay child is pushed as a copy (`FUN_140028830` / `FUN_140947a30`) and the name index repointed at it. A name the base has is **kept twice**: nothing recurses, merges or overwrites; a by-name lookup resolves to the appended (last) child. No suffix is read. | `append` pushes every entry; the value model keeps both; `preview_merge` / `touchedEntries` resolve a name to its last occurrence and report `occurrences`. | **MATCH** (pinned by `append-duplicate-name-keeps-both`); the by-name resolution of the preview was *fixed* (first occurrence). |
+| `.append` file, array + array | Push a copy of every overlay item (concatenate). | Concatenate. | **MATCH** |
+| `.append` file, string + string | `std::string::append` (`FUN_140051920`) — concatenation. | Concatenate. | **MATCH** (*fixed*: overlay won). Only reachable below a file root, i.e. never through a file, since a root is an object. |
+| `.append` file, any other pair (number + number, object + array, …) | Logs `GON ERROR: Append incompatible types`, `this` unchanged. (A null `this` is first copy-assigned from `other` — INFERRED, Ghidra dropped the call's arguments — and would then append `other` onto itself; a parsed file root is never null.) | Base returned unchanged. | **MATCH** (*fixed*: overlay won). |
+| `.merge` file, policy | `Gon_DefaultMergeMode` 0x9451c0 returns 2 for every node, so 0x945c30 never runs the suffix parser: `foo.overwrite` is a child literally named `foo.overwrite` (pushed if absent), at any depth. | `deepMerge` never parses suffixes; the validator warns `merge-suffix-literal` on any suffixed key in a `.merge`/`.append` file and registers the literal key as the mod-local name. | **MATCH** (pinned by `merge-suffix-is-literal`; was UNKNOWN). The validator's mod-local name was *fixed* (it stripped suffixes for every mode). |
+| `.merge` file, object + object (0x945c30, mode 2 = mask `0x25` branch) | Per-call map name → count (`FUN_140123a00`); `has_child_name(this, name, nth)` → recurse `0x945c30(child_by_name(this, name, nth), other child, policy, policy)`; absent → push a copy + name index; the count bumps either way. | `mergeValue` with the same counter (`findNthIndex`). | **MATCH** (*fixed*: first occurrence always; pinned by `merge-duplicate-keys-nth-occurrence`). Same caveat as the `.patch` row: the `nth == 0` helpers are not decompiled. |
+| `.merge` file, array + array | Mode 2: for each overlay index `i`, `i < this.size` → recurse into `this[i]`; else push a copy. Neither replace nor concatenate (public GON's `DeepMerge(other, OVERWRITE, APPEND)` would concatenate — the game does not). | Element-wise by index, extras appended. | **MATCH** (pinned by `merge-array-elementwise-appends-extras`; was UNKNOWN). |
+| `.merge` file, string + string / number + number | Mode 2 is neither 4 nor 5: string assign; number copies double, int, string and bool views. | Overwrite. | **MATCH** |
+| `.merge` file, type mismatch (object vs array/scalar, bool, null) | Falls to `GonObject_assign` 0x30cd0: `this = other` whole (children, scalars, name, type). | `clone(overlay)`. | **MATCH** |
 | Suffix parser (`.patch`) | Order `.overwrite`, `.append`, `.merge`, `.add`, `.multiply`; first hit wins; `len >= suffix` (so a key that is exactly `.add` has the add policy and an empty name). | `policyOf` — same order, `>=`. | **MATCH** (*fixed*: was `>`). |
 | Stacked suffixes | Policy from the parser (first hit on the full key); lookup name from the sequential strip (0x944f50 order, each once): `x.add.overwrite` → overwrite, `x`; `x.overwrite.add` → add, `x.overwrite`. | `parsePolicy` = `policyOf` + `stripName`. | **MATCH** (*fixed*: one suffix was stripped). |
 | Key matching | Exact `std::string` compare on the stripped name; case-sensitive (the suffix compare is byte-exact; the lookup `FUN_140942910` is not decompiled but is keyed by the string). | `===` on the decoded key. | **MATCH** |
@@ -76,9 +92,10 @@ structurally). Rows marked *fixed* diverged before this audit and were brought i
 | Root policy | The file root has an empty name → default. | `patchMerge` starts at `default`. | **MATCH** |
 | Null type (0) | Counted as having no children; null vs anything → overwrite. | No null node exists in the value model. | n/a |
 
-Probe recipe for the UNKNOWN rows: a test-only mod under `mods/_golden-merge/` (see "Test-only overlays") with the
-overlay in question, `seed 42`, `enter TacticsTest`, `spawn`, `dump`, and `expect unit` on `faction` / `move`;
-compare with MCP `preview_merge` for the same file. Keep this section in sync with `merge.ts` and the fixtures.
+Probe recipe for the remaining UNKNOWN row (scalar typing) and for the inferred `nth == 0` lookup: a test-only mod
+under `mods/_golden-merge/` (see "Test-only overlays") with the overlay in question, `seed 42`, `enter TacticsTest`,
+`spawn`, `dump`, and `expect unit` on `faction` / `move`; compare with MCP `preview_merge` for the same file. Keep
+this section in sync with `merge.ts` and the fixtures.
 
 ## Content shapes seen in the pack
 

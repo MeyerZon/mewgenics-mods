@@ -32,7 +32,11 @@ to that file. Use it only when you genuinely intend to own the whole file.
 
 The mod's children are added at the **end** of the matching object/array. Use
 this for **new** entries (a new ability, a new item, a new row), because it does
-not touch existing keys and composes cleanly with other mods.
+not touch existing keys and composes cleanly with other mods. A name the base
+already has is **not** merged or replaced: both copies stay in the file and the
+game's by-name lookup sees the appended one (the validator warns
+`append-collision`). Key suffixes such as `.overwrite` are not read in an
+`.append` file (`merge-suffix-literal`).
 
 ```gon
 // data/abilities/offense.gon.append
@@ -46,9 +50,14 @@ MyNewStrike {
 
 ### `X.gon.merge` — DeepMerge
 
-Fields with matching names are merged recursively; new fields are appended;
-mismatched types are overwritten. Use this for **value changes** to existing
-entries.
+Fields with matching names are merged recursively (the nth mod field named X
+into the nth base field named X); new fields are appended; arrays are merged
+element-wise by index with the extra mod items appended (not replaced, not
+concatenated); strings, numbers and mismatched types are overwritten. Use this
+for **value changes** to existing entries. Key suffixes are **not** interpreted
+in a `.merge` file: `faction.overwrite allies` adds a field literally named
+`faction.overwrite` (the validator warns `merge-suffix-literal`) — use `.patch`
+for per-field policies.
 
 ```gon
 // data/abilities/offense.gon.merge

@@ -1,12 +1,24 @@
 // The GON overlay engine: Append, DeepMerge, and PatchMerge.
 //
 // Semantics are taken from docs/data-mods.md ("Fidelity to the decompiled merges") and cross-checked against the
-// decompiled functions in .analysis/decompiled/:
-//   - Gon_PatchMerge_a_0x944cc0.c — the key-suffix -> policy parser (policy.ts).
-//   - Gon_PatchMerge_b_0x944f50.c — the recursive suffix stripper (policy.ts).
-//   - Gon_DeepMerge_0x946680.c    — the policy-driven merge the `.patch` engine below reproduces step by step.
-//   The functions behind `.append` and `.merge` files (GON's Append and the suffix-blind DeepMerge) are NOT on
-//   disk; `append` / `deepMerge` here follow docs/data-mods.md and the in-game observations of mods/_golden-merge.
+// decompiled functions in .analysis/decompiled/. The overlay applier Gon_overlay_apply_0x9a64a0.c dispatches on the
+// file-name suffix: `.append` (1) -> Gon_Append 0x945410, `.merge` (2) -> Gon_DeepMerge_plain 0x945c30 with the
+// MergeMode callback Gon_DefaultMergeMode 0x9451c0 (the constant 2 = MERGE for every node), `.patch` (3) ->
+// Gon_DeepMerge 0x946680 (the policy-driven one).
+//   - Gon_PatchMerge_a_0x944cc0.c    — the key-suffix -> policy parser (policy.ts).
+//   - Gon_PatchMerge_b_0x944f50.c    — the recursive suffix stripper (policy.ts).
+//   - Gon_DeepMerge_0x946680.c       — the policy-driven merge the `.patch` engine below reproduces step by step.
+//   - Gon_Append_0x945410.c          — `append` below.
+//   - Gon_DeepMerge_plain_0x945c30.c — `deepMerge` below (mode 2 throughout; no suffix is ever read).
+//
+// Append (0x945410): object+object pushes a copy of every overlay child (FUN_140028830 / FUN_140947a30) and points
+//   the name index at it (FUN_14012a310) — a clashing name keeps BOTH children, nothing recurses or overwrites;
+//   array+array concatenates; string+string concatenates (FUN_140051920); any other pair logs
+//   "GON ERROR: Append incompatible types" and leaves `this` unchanged.
+// DeepMerge_plain (0x945c30) under the constant policy 2: object+object recurses by name, the nth overlay child
+//   named X into the nth base child named X (per-call count map + GonObject_has_child_name 0x942910 /
+//   child_by_name 0x942b50), new names pushed; array+array element-wise for the indices the base has, extra
+//   items pushed; strings and numbers overwrite; any type mismatch is `this = other` (GonObject_assign 0x30cd0).
 //
 // PatchMerge (0x946680), with `policy` = the suffix of the patch node's own key:
 //   Numbers:  .add => base + patch,  .multiply => base * patch, else overwrite.
@@ -23,7 +35,7 @@
 //
 // Every operation works on deep clones and never mutates its inputs.
 
-import { clone, findIndex, numberNode } from "../gon/value.ts";
+import { clone, numberNode } from "../gon/value.ts";
 import { parsePolicy, stripPolicySuffixes } from "./policy.ts";
 import type { VNode, VObject, VScalar } from "../gon/types.ts";
 import type { Policy } from "./policy.ts";
@@ -46,7 +58,11 @@ function findNthIndex(obj: VObject, key: string, nth: number): number {
   return -1;
 }
 
-/** Append: concatenate the overlay's children onto a clone of the base. */
+/**
+ * Append (Gon_Append 0x945410): push the overlay's children onto a clone of the base — a name the base already has
+ * is kept twice (the game's name index then resolves to the appended one). Strings concatenate; any other pair is
+ * "GON ERROR: Append incompatible types" in the game and leaves the base as it was.
+ */
 export function append(base: VNode, overlay: VNode): VNode {
   const b = clone(base);
   if (b.t === "obj" && overlay.t === "obj") {
@@ -57,11 +73,14 @@ export function append(base: VNode, overlay: VNode): VNode {
     for (const it of overlay.items) b.items.push(clone(it));
     return b;
   }
-  // Nothing sensible to append onto a mismatch; overlay wins.
-  return clone(overlay);
+  if (isGonString(b) && isGonString(overlay)) {
+    return { t: "str", raw: b.raw + overlay.raw, quoted: b.quoted || overlay.quoted, num: null };
+  }
+  // Numbers, bools and every container/scalar mix: incompatible — the game logs and does nothing.
+  return b;
 }
 
-/** DeepMerge into a clone of the base. */
+/** DeepMerge into a clone of the base (Gon_DeepMerge_plain 0x945c30 under the constant MERGE policy). */
 export function deepMerge(base: VNode, overlay: VNode): VNode {
   return mergeValue(clone(base), overlay);
 }
@@ -69,10 +88,16 @@ export function deepMerge(base: VNode, overlay: VNode): VNode {
 /** @param b already a private clone; mutated in place */
 function mergeValue(b: VNode, o: VNode): VNode {
   if (b.t === "obj" && o.t === "obj") {
+    // Per-call occurrence counter (FUN_140123a00 operator[] on a name -> count map, ++ after each child): the nth
+    // overlay child named X lands on the nth base child named X (0x942910 / 0x942b50 take that count); past the
+    // base's count it is pushed, and the pushed copy counts from then on. No suffix is read: keys are literal.
+    const seen = new Map<string, number>();
     for (const oe of o.entries) {
-      const i = findIndex(b, oe.key);
+      const nth = seen.get(oe.key) ?? 0;
+      const i = findNthIndex(b, oe.key, nth);
       if (i >= 0) b.entries[i]!.value = mergeValue(b.entries[i]!.value, oe.value);
       else b.entries.push({ key: oe.key, value: clone(oe.value) });
+      seen.set(oe.key, nth + 1);
     }
     return b;
   }
