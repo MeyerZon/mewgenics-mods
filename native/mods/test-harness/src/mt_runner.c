@@ -351,6 +351,9 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, 1);
             return 0;
         }
+        case MT_D_FACE:   /* red stub */
+            r->pc++;
+            return 1;
         case MT_D_SHOT: {
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "shot");

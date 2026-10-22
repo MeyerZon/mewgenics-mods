@@ -490,7 +490,7 @@ static int fk_set_unit_glow(void *u, int i, const float *rgba, char *detail, siz
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
-    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon,
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, NULL,   /* face_unit: the facing tests use FACE_HOST */
 };
 
 static MtRunner rr;
@@ -752,7 +752,7 @@ TEST(runner_dump_with_and_without_units) {
     fk_two_units();
     steps_until_done(5);
     CHECK(has(ev(0), "\"available\":true")); CHECK(has(ev(0), "\"count\":2"));
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
     CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\""));
 }
 
@@ -796,8 +796,8 @@ TEST(runner_dump_emits_stacks_parallel_to_statuses) {
     fk_reset("dump\nquit\n");
     fk_two_units_with_stacks();
     steps_until_done(5);
-    CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7]}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[],\"stacks\":[]}"));
+    CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[],\"stacks\":[],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
 }
 
 TEST(runner_wait_rounds_advances_on_round_counter) {
@@ -1441,8 +1441,8 @@ TEST(runner_dump_emits_namekey_hp_shield_divineshield_and_the_seven_stats) {
     fk_reset("dump\nquit\n");
     fk_units_with_numbers();
     steps_until_done(5);
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"statuses\":[],\"stacks\":[]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"statuses\":[],\"stacks\":[],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
 }
 
 TEST(runner_expect_unit_hp_shield_stats_and_namekey) {
@@ -1491,6 +1491,157 @@ TEST(runner_expect_gon_number_string_bool_exists_missing_no_entry_unreadable_and
     fk_reset("expect gon 0 stats exists\nquit\n");      /* no combat */
     steps_until_done(5);
     CHECK(has(ev(0), "\"kind\":\"gon\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
+}
+
+/* ---- facing (2026-10-22): Character::Face 0x10ce50 as a pure rule, the `face` directive, the facing fields ---- */
+static MtFaceOut face_of(int dx, int dy, int sign, int fourWay, int noHFlip, int alwaysFront, int lockX, int lockY, int *ret) {
+    MtFaceIn in = { dx, dy, lockX, lockY, sign, fourWay, noHFlip, alwaysFront };
+    MtFaceOut o;
+    *ret = mt_face_predict(&in, &o);
+    return o;
+}
+TEST(face_predict_two_way_suffix_and_flip_follow_the_signed_direction) {
+    int r; MtFaceOut o;
+    o = face_of(0, -1, 1, 0, 0, 0, 0, 0, &r); CHECK_EQ(r, 1); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, 1);  CHECK_EQ(o.dx, 0); CHECK_EQ(o.dy, -1);
+    o = face_of(-1, 0, 1, 0, 0, 0, 0, 0, &r); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, -1);               /* front, mirrored */
+    o = face_of(1, 0, 1, 0, 0, 0, 0, 0, &r);  CHECK_STR(o.suffix, "B"); CHECK_EQ(o.flipMul, 1);                /* back */
+    o = face_of(0, 1, 1, 0, 0, 0, 0, 0, &r);  CHECK_STR(o.suffix, "B"); CHECK_EQ(o.flipMul, -1);               /* back, mirrored */
+    o = face_of(1, 0, -1, 0, 0, 0, 0, 0, &r); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, -1);               /* sign -1 turns the axis around */
+    o = face_of(0, -1, -1, 0, 0, 0, 0, 0, &r); CHECK_STR(o.suffix, "B"); CHECK_EQ(o.flipMul, -1);
+    o = face_of(-1, 0, 1, 0, 1, 0, 0, 0, &r); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, 0);                /* no_horizontal_flip */
+    o = face_of(0, 0, 1, 0, 0, 0, 0, 0, &r);  CHECK_EQ(r, 0); CHECK_STR(o.suffix, ""); CHECK_EQ(o.flipMul, 0);  /* (0,0) changes nothing */
+}
+TEST(face_predict_lock_always_front_and_four_way) {
+    int r; MtFaceOut o;
+    o = face_of(-1, 0, 1, 0, 0, 0, 1, 0, &r);  CHECK_EQ(o.dx, 1); CHECK_EQ(o.dy, 0); CHECK_STR(o.suffix, "B");  /* lock_orientation replaces the direction */
+    o = face_of(1, 0, 1, 0, 0, 1, 0, 0, &r);   CHECK_EQ(o.dx, 0); CHECK_EQ(o.dy, -1); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, 1);   /* always_face_forward */
+    o = face_of(0, 1, 1, 0, 0, 1, 0, 0, &r);   CHECK_EQ(o.dx, -1); CHECK_EQ(o.dy, 0); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, -1);
+    o = face_of(0, -1, 1, 1, 0, 0, 0, 0, &r);  CHECK_STR(o.suffix, "RF"); CHECK_EQ(o.flipMul, 0);              /* four-way: no flip, no sign */
+    o = face_of(-1, 0, -1, 1, 0, 0, 0, 0, &r); CHECK_STR(o.suffix, "LF");
+    o = face_of(1, 0, 1, 1, 0, 0, 0, 0, &r);   CHECK_STR(o.suffix, "RB");
+    o = face_of(0, 1, 1, 1, 0, 0, 0, 0, &r);   CHECK_STR(o.suffix, "LB");
+}
+TEST(face_named_dir_front_and_back_per_sign) {
+    int dx = 9, dy = 9;
+    mt_face_named_dir(MT_FACE_FRONT, 1, &dx, &dy);  CHECK_EQ(dx, 0); CHECK_EQ(dy, -1);
+    mt_face_named_dir(MT_FACE_BACK, 1, &dx, &dy);   CHECK_EQ(dx, 1); CHECK_EQ(dy, 0);
+    mt_face_named_dir(MT_FACE_FRONT, -1, &dx, &dy); CHECK_EQ(dx, 0); CHECK_EQ(dy, 1);
+    mt_face_named_dir(MT_FACE_BACK, -1, &dx, &dy);  CHECK_EQ(dx, -1); CHECK_EQ(dy, 0);
+    mt_face_named_dir(MT_FACE_BACK, 0, &dx, &dy);   CHECK_EQ(dx, 1); CHECK_EQ(dy, 0);  /* an unread sign counts as 1 */
+    CHECK_STR(mt_face_name(MT_FACE_FRONT), "front"); CHECK_STR(mt_face_name(MT_FACE_BACK), "back"); CHECK_STR(mt_face_name(MT_FACE_RAW), "");
+    for (int named = MT_FACE_FRONT; named <= MT_FACE_BACK; named++)
+        for (int sign = -1; sign <= 1; sign += 2) {   /* the named direction really produces that facing, unmirrored */
+            int r; mt_face_named_dir(named, sign, &dx, &dy);
+            MtFaceOut o = face_of(dx, dy, sign, 0, 0, 0, 0, 0, &r);
+            CHECK_STR(o.suffix, named == MT_FACE_FRONT ? "F" : "B"); CHECK_EQ(o.flipMul, 1);
+        }
+}
+TEST(script_face_parses_raw_and_named_directions_and_rejects_bad_forms) {
+    char err[256]; int line = 0;
+    const char *s = "face 3 1 0\nface \"Lil' Rat\" 0 -1\nface Rat back\nface 0 front\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 5);
+    CHECK_EQ(g_s.d[0].kind, MT_D_FACE); CHECK_EQ(g_s.d[0].unitIsIndex, 1); CHECK_EQ(g_s.d[0].n, 3); CHECK_EQ(g_s.d[0].faceNamed, MT_FACE_RAW);
+    CHECK_EQ(g_s.d[0].faceDx, 1); CHECK_EQ(g_s.d[0].faceDy, 0); CHECK_STR(g_s.d[0].a, "3 1 0");
+    CHECK_EQ(g_s.d[1].unitIsIndex, 0); CHECK_STR(g_s.d[1].b, "Lil' Rat"); CHECK_EQ(g_s.d[1].faceDx, 0); CHECK_EQ(g_s.d[1].faceDy, -1);
+    CHECK_STR(g_s.d[2].b, "Rat"); CHECK_EQ(g_s.d[2].faceNamed, MT_FACE_BACK);
+    CHECK_EQ(g_s.d[3].faceNamed, MT_FACE_FRONT);
+    const char *bad[] = { "face\n", "face 3\n", "face 3 1\n", "face 3 1 1\n", "face 3 0 0\n", "face 3 2 0\n", "face 3 x 0\n", "face 3 left\n", "face 3 back now\n", "face 3 1 0 9\n", "face \"Lil Rat 1 0\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+        CHECK(strstr(err, "face") != NULL);
+    }
+}
+
+static int fk_faceResult, fk_faceCalls, fk_faceUnit, fk_faceDx, fk_faceDy;
+static int fk_face_unit(void *u, int i, int dx, int dy, char *detail, size_t cap) {
+    (void)u;
+    fk_faceCalls++; fk_faceUnit = i; fk_faceDx = dx; fk_faceDy = dy;
+    if (fk_faceResult == 1 && i >= 0 && i < fk.unitCount) {   /* the fake game applies the rule, like Character::Face */
+        MtUnit *x = &fk.units[i];
+        MtFaceIn in = { dx, dy, x->lockX, x->lockY, x->faceSign, x->fourWay, x->noHFlip, x->alwaysFront };
+        MtFaceOut o;
+        if (mt_face_predict(&in, &o)) {
+            x->dirX = o.dx; x->dirY = o.dy;
+            snprintf(x->facing, sizeof x->facing, "%s", o.suffix);
+            if (o.flipMul) x->flip = o.flipMul * x->artFlip;
+        }
+    }
+    snprintf(detail, cap, "fake face %d", i);
+    return fk_faceResult;
+}
+static const MtHost FACE_HOST = {
+    NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
+    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, fk_face_unit,
+};
+static int face_steps(int max) { int n = 0; while (n < max && mt_runner_step(&rr, &FACE_HOST)) n++; return n; }
+static void fk_two_facing_units(void) {
+    fk_two_units();
+    for (int k = 0; k < 2; k++) { MtUnit *x = &fk.units[k]; snprintf(x->facing, sizeof x->facing, "F"); x->dirX = -1; x->dirY = 0; x->faceSign = 1; x->artFlip = 1; x->flip = -1; }
+    fk.units[1].faceSign = -1;
+    fk_faceResult = 1; fk_faceCalls = 0; fk_faceUnit = -9; fk_faceDx = fk_faceDy = 9;
+}
+TEST(runner_face_turns_the_unit_and_emits_a_face_event_with_the_result) {
+    fk_reset("face 0 back\nface Rat back\nface 0 0 -1\nquit\n");
+    fk_two_facing_units();
+    face_steps(10);
+    CHECK_EQ(fk_faceCalls, 3);
+    CHECK(has(ev(0), "{\"ev\":\"face\"")); CHECK(has(ev(0), "\"line\":1")); CHECK(has(ev(0), "\"unit\":0")); CHECK(has(ev(0), "\"name\":\"Lumee\""));
+    CHECK(has(ev(0), "\"arg\":\"0 back\"")); CHECK(has(ev(0), "\"dir\":[1,0]")); CHECK(has(ev(0), "\"expect\":\"B\"")); CHECK(has(ev(0), "\"facing\":\"B\""));
+    CHECK(has(ev(0), "\"flip\":1")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"detail\":\"fake face 0\""));
+    CHECK(has(ev(1), "\"unit\":1")); CHECK(has(ev(1), "\"dir\":[-1,0]")); CHECK(has(ev(1), "\"facing\":\"B\""));   /* sign -1: back is (-1,0) */
+    CHECK(has(ev(2), "\"dir\":[0,-1]")); CHECK(has(ev(2), "\"expect\":\"F\"")); CHECK(has(ev(2), "\"facing\":\"F\"")); CHECK(has(ev(2), "\"ok\":true"));
+    CHECK(has(last_ev(), "{\"ev\":\"end\"")); CHECK(has(last_ev(), "\"code\":0"));
+}
+TEST(runner_face_reports_a_facing_that_differs_from_the_rule_and_a_lock) {
+    fk_reset("face 0 back\nquit\n");
+    fk_two_facing_units();
+    fk.units[0].lockX = 0; fk.units[0].lockY = -1;   /* lock_orientation [0 -1]: Face keeps the unit facing front */
+    face_steps(6);
+    CHECK(has(ev(0), "\"dir\":[1,0]")); CHECK(has(ev(0), "\"effective\":[0,-1]")); CHECK(has(ev(0), "\"expect\":\"F\"")); CHECK(has(ev(0), "\"facing\":\"F\""));
+    CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "lock_orientation"));
+}
+TEST(runner_face_unknown_unit_refused_or_unavailable) {
+    fk_reset("face 5 back\nquit\n");                               /* no such unit: the host is never called */
+    fk_two_facing_units();
+    face_steps(6);
+    CHECK_EQ(fk_faceCalls, 0);
+    CHECK(has(ev(0), "{\"ev\":\"face\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "\"unit\":-1"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"face_failed\""));
+    fk_reset("face 0 back\nquit\n");                               /* the host refused */
+    fk_two_facing_units(); fk_faceResult = 0;
+    face_steps(6);
+    CHECK_EQ(fk_faceCalls, 1);
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"face_failed\""));
+    fk_reset("face 0 back\nquit\n");                               /* a framework without FW_SYM_Character_Face */
+    fk_two_facing_units(); fk_faceResult = -1;
+    face_steps(6);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"face_unavailable\""));
+    fk_reset("face 0 back\nquit\n");                               /* no combat */
+    fk_two_facing_units(); fk.unitsAvailable = 0; fk.unitCount = 0;
+    face_steps(6);
+    CHECK_EQ(fk_faceCalls, 0); CHECK(has(last_ev(), "\"reason\":\"face_failed\""));
+}
+TEST(runner_dump_emits_the_facing_fields_and_expect_unit_reads_them) {
+    fk_reset("dump\nexpect unit 0 facing == \"F\"\nexpect unit 1 sign == -1\nexpect unit 0 dirx == -1\nexpect unit 0 diry == 0\nexpect unit 0 flip < 0\nface 0 back\nexpect unit 0 facing == \"B\"\nexpect unit Lumee facing != \"B\"\nquit\n");
+    fk_two_facing_units();
+    fk.units[1].fourWay = 1;
+    face_steps(14);
+    CHECK(has(ev(0), "\"stacks\":[0,0],\"facing\":\"F\",\"dir\":[-1,0],\"lock\":[0,0],\"sign\":1,\"flip\":-1,\"fourway\":0}"));
+    CHECK(has(ev(0), "\"facing\":\"F\",\"dir\":[-1,0],\"lock\":[0,0],\"sign\":-1,\"flip\":-1,\"fourway\":1}"));
+    CHECK(has(ev(1), "\"kind\":\"unit\"")); CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "\"arg\":\"0 facing == \\\"F\\\"\"")); CHECK(has(ev(1), "facing \\\"F\\\""));
+    CHECK(has(ev(2), "\"ok\":true")); CHECK(has(ev(2), "sign -1"));
+    CHECK(has(ev(3), "\"ok\":true")); CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(5), "\"ok\":true")); CHECK(has(ev(5), "flip -1"));
+    CHECK(has(ev(7), "\"ok\":true")); CHECK(has(ev(7), "facing \\\"B\\\""));
+    CHECK(has(ev(8), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"expect_pass\":6")); CHECK(has(last_ev(), "\"expect_fail\":1"));
+    MtUnitField f = MT_F_NAME;
+    CHECK(mt_unit_field_parse("facing", 6, &f)); CHECK_EQ(f, MT_F_FACING);
+    CHECK(mt_unit_field_parse("sign", 4, &f)); CHECK_EQ(f, MT_F_SIGN); CHECK_STR(mt_unit_field_name(MT_F_DIRX), "dirx"); CHECK_STR(mt_unit_field_name(MT_F_FLIP), "flip");
+    char err[256]; int line = 0;
+    const char *bad = "expect unit 0 facing > \"F\"\n";   /* facing is a string field: == / != only */
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
 }
 
 int main(void) { return MT_RUN_ALL(); }
