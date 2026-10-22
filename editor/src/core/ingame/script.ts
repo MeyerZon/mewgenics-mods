@@ -15,10 +15,12 @@ export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
 export const UNIT_FIELDS = [
   "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
   "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck",
+  // facing (2026-10-22, Character::Face): the animation suffix, the stored direction, the flip and the facing sign
+  "facing", "dirx", "diry", "flip", "sign",
 ] as const;
 export type UnitField = (typeof UNIT_FIELDS)[number];
 /** the `expect unit` fields that take a quoted value with == / != (the rest are integers with any op) */
-export const UNIT_STRING_FIELDS: readonly UnitField[] = ["name", "class", "namekey"];
+export const UNIT_STRING_FIELDS: readonly UnitField[] = ["name", "class", "namekey", "facing"];
 
 export interface Finding {
   line: number;
@@ -56,7 +58,11 @@ export type Directive =
   /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
   | { line: number; kind: "seed"; seed: string }
   /** per-unit glow (framework API v4): FW_SetUnitGlow(unit, rgba) or, with `off`, FW_ClearUnitGlow on a unit of the walk */
-  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null };
+  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null }
+  /** turn a unit of the walk (mewtest.dll: Character::Face(dir, instant)): a grid direction, or the named unmirrored
+   *  facing the DLL resolves from the unit's facing sign (front = (0, -sign), back = (sign, 0)) */
+  | { line: number; kind: "face"; unit: string; dir: [number, number] }
+  | { line: number; kind: "face"; unit: string; named: "front" | "back" };
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
 export const KNOWN_SCENES = ["TacticsTest", "Campaign"];
@@ -206,9 +212,9 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (!(UNIT_FIELDS as readonly string[]).includes(field)) return { error: `expect unit: unknown field "${field}" (${UNIT_FIELDS.join("|")})` };
         if (!UNITS_OPS.includes(op)) return { error: `expect unit: bad operator "${op}" (${UNITS_OPS.join(" ")})` };
         if ((UNIT_STRING_FIELDS as readonly string[]).includes(field)) {
-          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class/namekey take == or != and a quoted value" };
+          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class/namekey/facing take == or != and a quoted value" };
           const q = parseQuoted(val, 0);
-          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class/namekey take == or != and a quoted value" };
+          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class/namekey/facing take == or != and a quoted value" };
           return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: q.value };
         }
         if (!/^-?\d+$/.test(val)) return { error: "expect unit: the integer fields take one integer" };
@@ -300,6 +306,29 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
       const parts = tail.split(/\s+/);
       if (parts.length !== 4 || !parts.every((p) => /^\d+(\.\d+)?$/.test(p) && Number(p) <= 1)) return { error: "glow needs four colour values 0..1 (r g b a) or off" };
       return { line: lineNo, kind: "glow", unit, rgba: parts.map(Number) as [number, number, number, number] };
+    }
+    case "face": {
+      const usage = "face needs: <unit> <dx> <dy> (one of 1 0 | -1 0 | 0 1 | 0 -1) or <unit> front|back";
+      if (!rest) return { error: usage };
+      let unit: string, tail: string;
+      if (rest.startsWith('"')) {
+        const q = parseQuoted(rest, 0);
+        if (!q) return { error: "face: bad quoted unit name" };
+        unit = q.value;
+        tail = rest.slice(q.end).trim();
+      } else {
+        const sp = rest.search(/\s/);
+        if (sp < 0) return { error: usage };
+        unit = rest.slice(0, sp);
+        tail = rest.slice(sp).trim();
+      }
+      if (tail === "front" || tail === "back") return { line: lineNo, kind: "face", unit, named: tail };
+      if (/^(front|back)\s/.test(tail)) return { error: "face: unexpected text after front/back" };
+      const parts = tail.split(/\s+/);
+      if (parts.length !== 2 || !parts.every((p) => /^-?[01]$/.test(p))) return { error: usage };
+      const [dx, dy] = parts.map(Number) as [number, number];
+      if ((dx === 0) === (dy === 0)) return { error: usage };
+      return { line: lineNo, kind: "face", unit, dir: [dx, dy] };
     }
     case "enter": {
       if (!rest) return { error: `enter needs a scene name (${KNOWN_SCENES.join("|")})` };

@@ -82,6 +82,7 @@ typedef enum MtUnitField {
     MT_F_SIGN           /* Character+OFF_CH_FACE_SIGN: the facing sign Face multiplies the direction by */
 } MtUnitField;
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
+int mt_unit_field_is_string(MtUnitField f);                           /* name|class|namekey|facing: a quoted value, == / != */
 /* expect gon: how the value is compared (decided by the literal's shape at parse time) */
 typedef enum MtGonCheck { MT_G_NUM, MT_G_STR, MT_G_BOOL, MT_G_EXISTS, MT_G_MISSING } MtGonCheck;
 const char *mt_unit_field_name(MtUnitField f);

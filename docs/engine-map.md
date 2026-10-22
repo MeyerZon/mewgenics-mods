@@ -1308,6 +1308,53 @@ Manifest-ready rows (prologue bytes and callee ordinals in `notes-catA.md` / `no
 `SpawnDatabase_{init_0x7a74b0,LoadGonDir_0x7c0cb0}.c`, `CatData_GetPalette_0xbdc70.c`, `OverridePalette_OnInit_0x8068d0.c`
 (catC; the full lists are at the end of each notes file).
 
+### Facing: Character::Face (2026-10-22)
+
+RE session `facing` (Ghidra 12.1.4 + objdump of the installed exe; decompiles in `.analysis/decompiled/`, the T2 run
+below). Pinned in `bindings/25143593.json` (the facing block: `Character_Face` = `FW_SYM_Character_Face`, and 10 offsets
+witnessed inside it) and host-tested as a pure rule in `native/mods/test-harness/src/mt_face.c`.
+
+- OBSERVED (the 12 lambda vftable names inside it): **0x10ce50 is `glaiel::Character::Face(iVec2D, bool, bool)`** —
+  what catA/catC called `Character_SetOrientation` / `Character_UpdateFacing`. rcx `Character*`, rdx the `iVec2D` by
+  value (x in the low dword, y in the high), r8b `instant`, r9b force the turn animation. `instant` only counts when the
+  byte `Character+0x11` is set; otherwise every call is instant.
+- OBSERVED (0x10ce95..0x10cf03): a non-zero `lock_orientation` (`+0x3ac/+0x3b0`) **replaces** the argument; a
+  non-instant call parks it at `+0x390` (the pending facing); `Facing_Candidates` 0x352aa0 turns it into its cardinal
+  candidates (a diagonal gives both axes, (0,0) all four) and the current facing (`+0x388/+0x38c`) is kept when it is one
+  of them, else the dominant axis wins.
+- OBSERVED: `two_fronts_switch` (`+0xc86`, read by `Character::init` next to `two_fronts` `+0xc85`) negates the
+  **facing sign `+0x3a4`** on a 180-degree turn; `always_face_forward` (`+0x3b4`) maps (1,0) → (0,−1) and (0,1) →
+  (−1,0). Not instant + (`use_turn_animations` `+0x4cc` or force) + a changed direction → `turnFlip` / `turnRev` /
+  `turn180` through `AnimStateMachine::Play` 0x9aaab0 with a lambda that finishes the turn, and return.
+- OBSERVED (0x10dafb..0x10dcdb, two-way, `+0x4cd == 0`): `d' = sign · d`. Flip: unless `no_horizontal_flip` (`+0x3a8`),
+  `d'x < 0 || d'y > 0` → `AnimSM+0x14c = −art_flip` (`+0x3a0`), `d'x > 0 || d'y < 0` → `+art_flip`; when instant also
+  the root node's x-scale (`*(AnimSM+0x70)+0xb8`). **Suffix** (`AnimSM+0xb8`): `d'x > 0 || d'y > 0` → prefix + `"B"`,
+  else (one negative) prefix + `"F"` (the literal at 0x140ed46bc), where the prefix is the `std::string` at
+  `Character+0x3e0` — **empty by default**, so the suffix is plain `"F"` / `"B"` (catC read the prefix as `"F"`; the `F`
+  is appended). Four-way: no sign, no flip, prefix + (`L` when `dx < 0 || dy > 0`, else `R`) + `F`/`B`.
+- OBSERVED (0x10da7f..0x10dad6): a non-zero result is stored at `+0x388`; when instant, `AnimStateMachine::SetState`
+  0x9aa360 replays the current state (`sm+0x148`) with `_DEFAULT`, so the new `<anim>F` / `<anim>B` label is drawn on
+  the next frame.
+- So, for a unit with sign +1: **(0,−1) and (−1,0) face the camera** (F; (−1,0) mirrored), **(1,0) and (0,1) face away**
+  (B; (0,1) mirrored). PR #105's `lock_orientation [0 -1]` and `start_orientation [0 -1]` therefore asked for a front
+  facing, and a lock overrides every later turn.
+- OBSERVED (0xf92b6..0xf93c8, `Character::init`): `start_orientation [x y]` defaults to the lock (`IntOr(…, +0x3ac)`),
+  is stored at `+0x388`, and a non-zero one is applied with `Face(+0x388, instant = 1, 0)` — the one `Character_init`
+  call the manifest's `callers` anchor pins.
+- What turns a unit in play (OBSERVED call sites of 0x10ce50: 112 calls in 89 functions plus 4 tail jumps from chunks without a `.pdata` entry, by an E8/E9 scan):
+  `Character::DoAction(TurnAction, bool)` 0x10e550 faces the action's direction (`TurnAction+0x18`) for an ability
+  unless the ability's `graphics.dont_orient`; `Character_FaceTowards` 0x10deb0 = `Face(Character_DirectionTo(tile)
+  0x10e1e0, 0, force)` (`DirectionTo`: the doubled grid delta from `Character+0x60`, current facing kept when it is a
+  candidate); the per-turn update 0x108490 faces the next tile of the move in progress (`+0x118`, INFERRED from the
+  path-tile read) and applies the pending `+0x390` once the animation state machine is idle; the targeting UI
+  0x778da0 (`target_empty_requires_doubleclick`, `move_hastargets` …) turns the selected unit toward the hovered tile;
+  the health-gain sync 0x117410 turns a unit facing away ((1,0)/(0,1)) to the front before its floater; 0x7f4990
+  clears the lock, faces a target and locks the new direction; about 40 ability-effect helpers 0x7c4680..0x7d46a0 face
+  once each (INFERRED role).
+- Harness: `face <unit> <dx> <dy> | front | back` calls `Face(dir, instant 1, 0)`; front / back = the unmirrored
+  facing for the unit's sign (front `(0, −s)`, back `(s, 0)`); `dump` reports `facing` / `dir` / `lock` / `sign` /
+  `flip` / `fourway` and `expect unit` reads them (docs/ingame-testing.md).
+
 ## Localization and text fields (2026-10-21)
 
 Ghidra session `loc` (`.analysis/notes-loc.md`; decompiles `StringsDatabase_*.c`, `DynamicTextBox_*.c`,
