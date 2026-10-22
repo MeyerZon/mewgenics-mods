@@ -1,0 +1,8 @@
+Foo {
+	variant_of Spin
+	damage_instance {
+		effects {
+			FwGlow_ff00f 1
+		}
+	}
+}

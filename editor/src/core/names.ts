@@ -11,6 +11,24 @@ export interface RegisteredName {
   name: string;
   kind?: string;
   mod?: string;
+  /** a pattern entry (kind "glow"): names matching this regular expression are valid; `name` is only a label */
+  pattern?: string;
+  /** with `pattern`: a name starting with this prefix that does not match is reported as malformed */
+  prefix?: string;
+}
+
+/** A compiled pattern entry of registered-names.json. */
+export interface RegisteredPattern {
+  re: RegExp;
+  prefix: string;
+  label: string;
+  kind?: string;
+  mod?: string;
+}
+
+/** The pattern entries (red stub). */
+export function registeredPatterns(_entries: RegisteredName[] = loadRegisteredNames()): RegisteredPattern[] {
+  return [];
 }
 
 let registeredCache: RegisteredName[] | null = null;

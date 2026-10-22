@@ -61,3 +61,5 @@ int fw_walk_touch_passives(void *status) {
     *((char *)ch + OFF_CH_TOUCHED_PASSIVES) = 1;
     return 1;
 }
+
+void *fw_walk_find_live(void *character, const void *vt) { (void)character; (void)vt; return NULL; }   /* red stub */

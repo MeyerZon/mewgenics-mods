@@ -24,6 +24,10 @@ static inline char    fw_walk_status_temporary(const void *status) { return *((c
  * (also when character or its entity is NULL). */
 void *fw_walk_find_status(void *character, const void *vt);
 
+/* The first component of `character` whose vtable is `vt` and that is not removing, temporary ones included (a
+ * glow status granted as a Temporary still glows until it expires); NULL if none or NULL character/entity. */
+void *fw_walk_find_live(void *character, const void *vt);
+
 /* Index of `vt` in vts[0..count), -1 if absent (a NULL vt never matches). */
 int fw_walk_vt_index(void *const *vts, int count, const void *vt);
 

@@ -217,4 +217,40 @@ TEST(t1_real_luckup_vtable_clones_with_only_the_identity_slots_changed) {
     CHECK_MEM(dst + FW_VTABLE_PATCHED_SLOTS, real + FW_VTABLE_PATCHED_SLOTS, (VT_SLOTS - FW_VTABLE_PATCHED_SLOTS) * sizeof(void *));
 }
 
+/* ---- the glow status (data seam): LuckUp's vtable with the identity slots AND ApplyStatModifiers replaced ---- */
+#ifdef VT_APPLYSTATMODIFIERS
+static void *const NO_LUCK = (void *)0xD00D;
+#endif
+
+TEST(glow_clone_also_replaces_apply_stat_modifiers_the_slot_the_manifest_names) {
+#ifdef VT_APPLYSTATMODIFIERS
+    CHECK_EQ(VT_APPLYSTATMODIFIERS, 82);                          /* bindings/25143593.json VT_ApplyStatModifiers */
+    void *tmpl[VT_SLOTS], *dst[VT_SLOTS];
+    for (size_t i = 0; i < VT_SLOTS; i++) tmpl[i] = (void *)(uintptr_t)(0x1000 + i);
+    CHECK_EQ(fw_vtable_clone_glow(dst, tmpl, VT_SLOTS, THUNKS, NO_LUCK), VT_SLOTS);
+    for (size_t i = 0; i < VT_SLOTS; i++) {
+        void *want = i < FW_VTABLE_PATCHED_SLOTS ? THUNKS[i] : i == VT_APPLYSTATMODIFIERS ? NO_LUCK : tmpl[i];
+        if (dst[i] != want) { CHECK(dst[i] == want); printf("      slot %zu\n", i); break; }
+    }
+    CHECK_EQ(fw_vtable_clone_glow(dst, tmpl, VT_APPLYSTATMODIFIERS, THUNKS, NO_LUCK), 0);   /* too few slots for the override */
+    CHECK_EQ(fw_vtable_clone_glow(dst, tmpl, VT_SLOTS, THUNKS, NULL), 0);
+#else
+    CHECK(!"VT_APPLYSTATMODIFIERS is missing from the generated offsets.h");
+#endif
+}
+
+TEST(t1_real_luckup_apply_stat_modifiers_slot_is_the_luck_adder_not_the_shared_stub) {
+#ifdef VT_APPLYSTATMODIFIERS
+    void *real[VT_SLOTS];
+    int r = load_dump(real);
+    if (r == 0) { printf("      (skipped: .analysis/luckup-vtable.hex absent)\n"); return; }
+    /* 0x1408a8f80: mov rdx,[rcx+0x38]; mov eax,[rcx+0x5c]; add [rdx+0x5d4],eax; cmp dword [rcx+0x5c],0; je Status_Remove; ret
+     * (objdump of the saved exe, docs/engine-map.md "Status effects"); slot 33 & co. are the shared `ret 0` stub 0x140035bd0 */
+    CHECK_EQ((uintptr_t)real[VT_APPLYSTATMODIFIERS], (uintptr_t)0x1408a8f80u);
+    CHECK((uintptr_t)real[VT_APPLYSTATMODIFIERS + 1] == (uintptr_t)0x140035bd0u);
+#else
+    CHECK(!"VT_APPLYSTATMODIFIERS is missing from the generated offsets.h");
+#endif
+}
+
 int main(void) { return MT_RUN_ALL(); }

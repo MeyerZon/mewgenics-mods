@@ -289,6 +289,14 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
     assert(!r.findings.some((f) => f.code === "unknown-status" || f.code === "unknown-component"), r.findings.map((f) => f.code).join(","));
   });
   else console.log(`  (skipped: ${cache.hint}; StatusOnBattleStart cannot be checked as a component)`);
+  if (cache.ok) test("fw-glow (the data glow sample) validates: FwGlowRat's StatusOnSpawnIn { FwGlow_ff00ff 1 } resolves through the registered glow pattern, its keyword tooltip and text rows are complete", () => {
+    const r = validateMod("fw-glow", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } });
+    assert(r.ok, `expected ok, got ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
+    const bad = r.findings.filter((f) => ["unknown-status", "invalid-glow-name", "unknown-component", "unknown-parent", "missing-loc-key", "missing-translation", "incomplete-loc-row"].includes(f.code));
+    eq(bad.length, 0, bad.map((f) => `${f.code} ${f.location?.path ?? ""}`).join(", "));
+    assert(existsSync(join(REPO_ROOT, "mods", "fw-glow", "data", "characters", "enemies.gon.append")), "the FwGlowRat sample");
+  });
+  else console.log(`  (skipped: ${cache.hint}; StatusOnSpawnIn cannot be checked as a component)`);
   // The check above needs the git-ignored component-names cache. A fresh worktree has none: the test must then
   // say so with a '(skipped: …)' line, not FAIL (nested run with MEWGENICS_EDITOR_DATA pointing at an empty dir).
   // MEWGENICS_ANALYSIS_DIR -> an empty dir too, so the on-demand distill from list_names.tsv cannot fill the list on

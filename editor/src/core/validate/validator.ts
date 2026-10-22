@@ -29,7 +29,7 @@ import { locateGameDir } from "../ingame/launch.ts";
 import type { VObject, VNode } from "../gon/types.ts";
 import type { Report, SourceLocation } from "./result.ts";
 import type { OverlayMode, FileType } from "../overlay/overlay.ts";
-import type { ResolutionSets } from "../names.ts";
+import type { ResolutionSets, RegisteredName } from "../names.ts";
 import type { LocTable } from "../base-data.ts";
 
 const LOC_FIELDS = new Set([
@@ -185,6 +185,8 @@ export interface ValidateOptions {
   components?: Iterable<string>;
   /** native-registered names (tests/fixtures); default editor/registered-names.json */
   registeredNames?: Iterable<string>;
+  /** native-registered name PATTERNS (tests/fixtures; entries with `pattern`); default the pattern entries of editor/registered-names.json */
+  registeredPatterns?: RegisteredName[];
 }
 
 /**

@@ -309,3 +309,14 @@ void fw_glow_pass_set_rect(void *pass, const FwGlowRect *r) {
     if (r) { b[0] = r->x0; b[1] = r->x1; b[2] = r->y0; b[3] = r->y1; }
     else { b[0] = 0; b[1] = 1; b[2] = 0; b[3] = 1; }
 }
+
+/* ----------------------------------------------------------------------- */
+/* the data seam (red stubs)                                                */
+/* ----------------------------------------------------------------------- */
+int fw_glow_parse_status_name(const char *bytes, size_t len, float rgba[4]) { (void)bytes; (void)len; (void)rgba; return 0; }
+int fw_glow_status_prefixed(const char *bytes, size_t len) { (void)bytes; (void)len; return 0; }
+int fw_glow_set_from_status(FwGlowRegistry *r, void *character, const float rgba[4]) { (void)r; (void)character; (void)rgba; return 0; }
+void fw_glow_reset_scene(FwGlowRegistry *r) { (void)r; }
+int fw_glow_sweep(FwGlowRegistry *r, FwGlowStatusProbe probe, void *user, void **cleared, int max) { (void)r; (void)probe; (void)user; (void)cleared; (void)max; return 0; }
+int fw_glow_status_put(FwGlowStatusObjs *t, void *obj, const char *name, size_t len) { (void)t; (void)obj; (void)name; (void)len; return 0; }
+const FwGlowStatusObj *fw_glow_status_get(const FwGlowStatusObjs *t, const void *obj) { (void)t; (void)obj; return NULL; }

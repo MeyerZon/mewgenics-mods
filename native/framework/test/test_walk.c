@@ -86,6 +86,22 @@ TEST(find_status_skips_null_components_and_tolerates_a_missing_entity) {
     CHECK(fw_walk_find_status(NULL, VT_A) == NULL);
 }
 
+TEST(find_live_takes_temporary_statuses_too_but_never_a_removing_one) {
+    Fakes f; make_character(&f, 3);
+    make_status(f.status[0], VT_A, 1, 1, 0, f.character);      /* ours, being removed: never */
+    make_status(f.status[1], VT_A, 1, 0, 1, f.character);      /* ours, temporary (a Temporary glow): yes */
+    make_status(f.status[2], VT_A, 1, 0, 0, f.character);
+    f.comps[0] = f.status[0]; f.comps[1] = f.status[1]; f.comps[2] = f.status[2];
+    CHECK(fw_walk_find_live(f.character, VT_A) == f.status[1]);
+    CHECK(fw_walk_find_status(f.character, VT_A) == f.status[2]);  /* the merge target stays non-temporary */
+    f.status[1][OFF_STATUS_REMOVING] = 1; f.status[2][OFF_STATUS_REMOVING] = 1;
+    CHECK(fw_walk_find_live(f.character, VT_A) == NULL);
+    CHECK(fw_walk_find_live(f.character, VT_B) == NULL);
+    *(void **)(f.character + OFF_CH_ENTITY) = NULL;
+    CHECK(fw_walk_find_live(f.character, VT_A) == NULL);
+    CHECK(fw_walk_find_live(NULL, VT_A) == NULL);
+}
+
 TEST(vt_index_finds_a_registered_vtable) {
     void *vts[3] = { VT_A, VT_B, NULL };
     CHECK_EQ(fw_walk_vt_index(vts, 2, VT_A), 0);

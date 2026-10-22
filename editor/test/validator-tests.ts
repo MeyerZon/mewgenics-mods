@@ -9,6 +9,9 @@ import { validateMod } from "../src/core/validate/validator.ts";
 import type { ValidateOptions } from "../src/core/validate/validator.ts";
 import type { Finding, Report } from "../src/core/validate/result.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
+import { readFileSync } from "node:fs";
+import { loadRegisteredNames, registeredNameSet, registeredPatterns } from "../src/core/names.ts";
+import type { RegisteredName } from "../src/core/names.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, "fixtures", "validator");
@@ -18,6 +21,8 @@ const MODS = join(FIX, "mods");
 /** The synthetic component list the fixtures resolve against (the real one is the git-ignored editor/data cache). */
 const COMPONENTS = ["PlayerBrain", "Uncontrollable", "Metal"];
 const REGISTERED = ["JokersLuck"];
+/** the glow pattern entry as editor/registered-names.json holds it (the real file is cross-checked below) */
+const GLOW_PATTERNS: RegisteredName[] = [{ name: "FwGlow_<rrggbb[aa]>", kind: "glow", mod: "fw-glow", prefix: "FwGlow_", pattern: "^FwGlow_(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$" }];
 
 export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   const v = (code: string, opts: ValidateOptions = {}): Report =>
@@ -107,6 +112,44 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     eq(only(v("native-build-unknown", { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } }), "native-build-unknown").length, 0, "known build");
     eq(only(v("native-build-unknown", { nativeBuild: null }), "native-build-unknown").length, 0, "no exe");
     eq(only(v("native-build-unknown", { nativeBuild: unknown }), "unknown-status").length, 0, "a registered name is a valid status");
+  });
+  // The data-level glow seam (glow v3): a status named FwGlow_<rrggbb> / FwGlow_<rrggbbaa> is recognised by the
+  // framework by its NAME, so registered-names.json carries a pattern entry (kind "glow") instead of a name.
+  test("validator fixture: glow-status — FwGlow_<rrggbb[aa]> names resolve through the registered glow pattern, not as unknown-status; without the pattern they are unknown", () => {
+    const r = v("glow-status", { registeredPatterns: GLOW_PATTERNS });
+    assert(r.ok && r.findings.length === 0, `expected no findings, got ${codes(r)}`);
+    eq(only(v("glow-status", { registeredPatterns: [] }), "unknown-status").length, 2, "no pattern: both names are unknown statuses");
+  });
+  test("validator fixture: glow-status — native-build-unknown warns for a glow name when the exe build is unknown (the framework does the drawing)", () => {
+    const unknown = { known: false, identity: { timeDateStamp: "0x6b000000", sizeOfImage: "0x01580000" }, matched: null };
+    const r = v("glow-status", { registeredPatterns: GLOW_PATTERNS, nativeBuild: unknown });
+    const hits = only(r, "native-build-unknown");
+    eq(hits.length, 2, `one per name (all: ${codes(r)})`);
+    eq(hits[0]!.location?.path, "Foo.damage_instance.effects.FwGlow_ff00ff");
+  });
+  test("validator fixture: invalid-glow-name is an error naming the expected shape (FwGlow_ + 6 or 8 hex digits)", () => {
+    const r = v("invalid-glow-name", { registeredPatterns: GLOW_PATTERNS });
+    const f = expectCode(r, "invalid-glow-name", "error");
+    eq(f.location?.path, "Foo.damage_instance.effects.FwGlow_ff00f");
+    assert(/FwGlow_/.test(f.message) && /6 or 8 hex/.test(f.message), f.message);
+    eq(only(r, "unknown-status").length, 0, "reported once, as the specific code");
+    assert(!r.ok, "error");
+  });
+  test("registered-names.json: the glow pattern entry's prefix is native fw_glow_rules.h FW_GLOW_STATUS_PREFIX and it accepts exactly the names the native parser accepts", () => {
+    const entries = loadRegisteredNames();
+    const glow = entries.filter((e) => e.kind === "glow");
+    eq(glow.length, 1, "one glow pattern entry");
+    const g = glow[0]!;
+    const header = readFileSync(join(HERE, "..", "..", "native", "framework", "src", "fw_glow_rules.h"), "utf8");
+    const m = /#define FW_GLOW_STATUS_PREFIX\s+"([^"]+)"/.exec(header);
+    assert(!!m, "FW_GLOW_STATUS_PREFIX in fw_glow_rules.h");
+    eq(g.prefix, m![1]);
+    assert(!registeredNameSet().has(g.name), "a pattern entry is not a literal name");
+    const p = registeredPatterns(entries);
+    eq(p.length, 1);
+    // the native host test's lists (test_glow_rules.c data_parse_status_name_*)
+    for (const ok of ["FwGlow_ff00ff", "FwGlow_00FFFF80", "FwGlow_336699", "FwGlow_ffffffff"]) assert(p[0]!.re.test(ok), `accepts ${ok}`);
+    for (const bad of ["FwGlow_", "FwGlow_ff00f", "FwGlow_ff00ff0", "FwGlow_ff00ff00f", "FwGlow_gg00ff", "FwGlow_ff 0ff", "fwglow_ff00ff", "FwGlowff00ff", "XFwGlow_ff00ff", "FwGlow_-f00ff", "FwGlow_0xff00", "LuckUp", ""]) assert(!p[0]!.re.test(bad), `refuses ${JSON.stringify(bad)}`);
   });
   test("validator fixture: unknown-status is an error at Foo.damage_instance.effects.NotAStatus", () => {
     const r = v("unknown-status");

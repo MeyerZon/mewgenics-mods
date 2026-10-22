@@ -455,4 +455,114 @@ TEST(v2_the_canvas_comes_from_the_generated_offsets_h_not_a_literal) {
 #endif
 }
 
+/* ---- the data seam: FwGlow_<rrggbb[aa]> status names ---- */
+
+static int near(float a, float b) { return a - b < 1e-6f && b - a < 1e-6f; }
+
+TEST(data_parse_status_name_takes_the_prefix_and_6_or_8_hex_digits_either_case_alpha_ff_when_omitted) {
+    float c[4] = { -1, -1, -1, -1 };
+    CHECK_STR(FW_GLOW_STATUS_PREFIX, "FwGlow_");
+    CHECK_EQ(FW_GLOW_STATUS_PREFIX_LEN, 7);
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_ff00ff", 13, c), 1);
+    CHECK(near(c[0], 1) && near(c[1], 0) && near(c[2], 1) && near(c[3], 1));
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_00FFFF80", 15, c), 1);
+    CHECK(near(c[0], 0) && near(c[1], 1) && near(c[2], 1) && near(c[3], 128.0f / 255.0f));
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_336699", 13, c), 1);
+    CHECK(near(c[0], 0x33 / 255.0f) && near(c[1], 0x66 / 255.0f) && near(c[2], 0x99 / 255.0f));
+    CHECK_EQ(fw_glow_parse_status_name(FW_GLOW_STATUS_FALLBACK, strlen(FW_GLOW_STATUS_FALLBACK), c), 1);
+}
+
+TEST(data_parse_status_name_refuses_anything_else_and_leaves_rgba_alone) {
+    float c[4] = { 7, 7, 7, 7 };
+    const char *bad[] = { "FwGlow_", "FwGlow_ff00f", "FwGlow_ff00ff0", "FwGlow_ff00ff00f", "FwGlow_gg00ff", "FwGlow_ff 0ff",
+                          "fwglow_ff00ff", "FwGlowff00ff", "XFwGlow_ff00ff", "FwGlow_-f00ff", "FwGlow_0xff00", "LuckUp", "" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK_EQ(fw_glow_parse_status_name(bad[i], strlen(bad[i]), c), 0);
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_ff00ff", 12, c), 0);          /* exact length: a prefix of a valid name */
+    CHECK_EQ(fw_glow_parse_status_name(NULL, 13, c), 0);
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_ff00ff", 13, NULL), 0);
+    CHECK(c[0] == 7 && c[1] == 7 && c[2] == 7 && c[3] == 7);
+    CHECK_EQ(fw_glow_status_prefixed("FwGlow_zz", 9), 1);                   /* the namespace, valid or not */
+    CHECK_EQ(fw_glow_status_prefixed("FwGlow", 6), 0);
+    CHECK_EQ(fw_glow_status_prefixed("JokersLuck", 10), 0);
+    CHECK_EQ(fw_glow_status_prefixed(NULL, 9), 0);
+}
+
+TEST(data_set_from_status_marks_the_entry_a_native_set_takes_it_over_reset_scene_keeps_only_status_entries) {
+    FwGlowRegistry r; fw_glow_reset(&r);
+    FakeCharacter a, b, c; void *ca = make_character(&a, 1, NULL), *cb = make_character(&b, 2, NULL), *cc = make_character(&c, 3, NULL);
+    CHECK_EQ(fw_glow_set_from_status(&r, ca, RED), 1);
+    CHECK_EQ(fw_glow_set(&r, cb, BLUE), 1);
+    CHECK_EQ(fw_glow_set_from_status(&r, cc, BLUE), 1);
+    CHECK_EQ(r.units[0].fromStatus, 1);
+    CHECK_EQ(r.units[1].fromStatus, 0);
+    CHECK(r.units[0].generation == 1);
+    CHECK_EQ(fw_glow_set_from_status(&r, NULL, RED), 0);
+    CHECK_EQ(fw_glow_set_from_status(&r, ca, NULL), 0);
+    CHECK_EQ(fw_glow_set(&r, cc, RED), 1);                                 /* the last call owns the entry */
+    CHECK_EQ(r.units[2].fromStatus, 0);
+    CHECK_EQ(fw_glow_set_from_status(&r, cb, RED), 1);
+    CHECK_EQ(r.units[1].fromStatus, 1);
+    CHECK_EQ(r.count, 3);
+    fw_glow_reset_scene(&r);                                               /* a new fight: native cc goes, ca and cb stay */
+    CHECK_EQ(r.count, 2);
+    CHECK_EQ(fw_glow_find(&r, ca), 0);
+    CHECK_EQ(fw_glow_find(&r, cb), 1);
+    CHECK_EQ(fw_glow_find(&r, cc), -1);
+}
+
+/* the probe stands in for status_engine.c's walk: units listed in `live` carry a glow status of colour `col` */
+typedef struct ProbeState { void *live[4]; int nlive; float col[4]; int calls; } ProbeState;
+static int fake_probe(void *character, float rgba[4], void *user) {
+    ProbeState *p = (ProbeState *)user;
+    p->calls++;
+    for (int i = 0; i < p->nlive; i++) if (p->live[i] == character) { memcpy(rgba, p->col, sizeof p->col); return 1; }
+    return 0;
+}
+
+TEST(data_sweep_probes_only_status_entries_drops_those_without_a_live_status_and_recolours_the_rest) {
+    FwGlowRegistry r; fw_glow_reset(&r);
+    FakeCharacter a, b, c; void *ca = make_character(&a, 1, NULL), *cb = make_character(&b, 2, NULL), *cc = make_character(&c, 3, NULL);
+    fw_glow_set_from_status(&r, ca, RED);
+    fw_glow_set(&r, cb, RED);                                               /* native: never probed, never swept */
+    fw_glow_set_from_status(&r, cc, RED);
+    ProbeState p; memset(&p, 0, sizeof p);
+    p.live[0] = cc; p.nlive = 1; memcpy(p.col, BLUE, sizeof p.col);
+    void *cleared[4] = { 0 };
+    CHECK_EQ(fw_glow_sweep(&r, fake_probe, &p, cleared, 4), 1);
+    CHECK_EQ(p.calls, 2);
+    CHECK(cleared[0] == ca);
+    CHECK_EQ(r.count, 2);
+    CHECK_EQ(fw_glow_find(&r, cb), 0);
+    CHECK_EQ(fw_glow_find(&r, cc), 1);
+    CHECK(r.units[1].rgba[2] == 1.0f && r.units[1].rgba[3] == 0.5f);       /* re-coloured to what the status now says */
+    CHECK(r.units[0].rgba[0] == 1.0f);
+    p.nlive = 0;
+    CHECK_EQ(fw_glow_sweep(&r, fake_probe, &p, NULL, 0), 1);               /* no room to report: still removed */
+    CHECK_EQ(r.count, 1);
+    CHECK_EQ(fw_glow_sweep(&r, NULL, &p, cleared, 4), 0);                  /* no probe: nothing touched */
+    CHECK_EQ(r.count, 1);
+}
+
+TEST(data_status_objs_name_each_object_recolour_in_place_and_ring_when_full) {
+    static FwGlowStatusObjs t; memset(&t, 0, sizeof t);
+    int objs[FW_GLOW_STATUS_OBJS + 1] = { 0 };
+    CHECK(fw_glow_status_get(&t, &objs[0]) == NULL);
+    CHECK_EQ(fw_glow_status_put(&t, &objs[0], "FwGlow_ff00ff", 13), 1);
+    const FwGlowStatusObj *o = fw_glow_status_get(&t, &objs[0]);
+    CHECK(o != NULL);
+    if (o) { CHECK_STR(o->name, "FwGlow_ff00ff"); CHECK(near(o->rgba[0], 1) && near(o->rgba[1], 0) && near(o->rgba[3], 1)); }
+    CHECK_EQ(fw_glow_status_put(&t, &objs[0], "FwGlow_00ffff80", 15), 1);  /* the same object re-coloured: one entry */
+    o = fw_glow_status_get(&t, &objs[0]);
+    if (o) { CHECK_STR(o->name, "FwGlow_00ffff80"); CHECK(near(o->rgba[3], 128.0f / 255.0f)); }
+    CHECK_EQ(t.next, 1);
+    CHECK_EQ(fw_glow_status_put(&t, &objs[1], "FwGlow_nothex", 13), 0);    /* an invalid name is never recorded */
+    CHECK_EQ(fw_glow_status_put(&t, NULL, "FwGlow_ff00ff", 13), 0);
+    CHECK(fw_glow_status_get(&t, &objs[1]) == NULL);
+    for (int i = 1; i <= FW_GLOW_STATUS_OBJS; i++) CHECK_EQ(fw_glow_status_put(&t, &objs[i], "FwGlow_123456", 13), 1);
+    CHECK(fw_glow_status_get(&t, &objs[0]) == NULL);                       /* the oldest went */
+    CHECK(fw_glow_status_get(&t, &objs[FW_GLOW_STATUS_OBJS]) != NULL);
+    CHECK(fw_glow_status_get(&t, &objs[1]) != NULL);
+    CHECK(fw_glow_status_get(&t, NULL) == NULL);
+}
+
 int main(void) { return MT_RUN_ALL(); }
