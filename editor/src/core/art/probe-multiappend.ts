@@ -47,9 +47,9 @@ function rig(scene: Scene, id: string, colour: string): void {
   scene.sprites[id] = { frames: 24, labels: { idle: 0 }, rig: "cat", parts: "game", layers } as SceneSprite;
 }
 
-/** The probe scene of mod A or B: one `_Append_CatTest` donor with the mod's own label pair and the shared probeC pair. */
-export function multiAppendScene(which: MultiAppendMod): Scene {
-  const name = `catappend${which}`;
+/** The probe scene of mod A or B (`opts.name`: the scene / SWF file name — _catappendSame ships B's scene as catappendA): one `_Append_CatTest` donor with the mod's own label pair and the shared probeC pair. */
+export function multiAppendScene(which: MultiAppendMod, opts: { name?: string } = {}): Scene {
+  const name = opts.name ?? `catappend${which}`;
   const scene = {
     version: 1,
     name,
@@ -62,6 +62,7 @@ export function multiAppendScene(which: MultiAppendMod): Scene {
     gradients: {},
     sprites: {},
     exports: {},
+    stage_instances: [],
   } as unknown as Scene;
   const own = `Probe${which}Rig`;
   const col = `Probe${which}CollRig`;
@@ -114,4 +115,19 @@ export function measureMultiAppendShot(label: string, img: RgbaImageLike): Multi
   };
   const present = { A: counts.A >= MARKER_MIN_PIXELS, B: counts.B >= MARKER_MIN_PIXELS, AC: counts.AC >= MARKER_MIN_PIXELS, BC: counts.BC >= MARKER_MIN_PIXELS };
   return { label, counts, present };
+}
+
+export interface MultiAppendOutcome {
+  /** each mod's own label drew its marker in at least one shot */
+  own: { A: boolean; B: boolean };
+  /** whose probeC frame the shared label resolved to ("both" would mean two cats drew different frames) */
+  collision: "A" | "B" | "both" | "none";
+}
+
+/** What a run's shots say: did each mod's own appended frame draw, and which mod's frame does the shared label show. */
+export function multiAppendOutcome(shots: Array<Pick<MultiAppendShot, "present">>): MultiAppendOutcome {
+  const any = (k: keyof MultiAppendShot["present"]) => shots.some((s) => s.present[k]);
+  const ac = any("AC");
+  const bc = any("BC");
+  return { own: { A: any("A"), B: any("B") }, collision: ac && bc ? "both" : ac ? "A" : bc ? "B" : "none" };
 }

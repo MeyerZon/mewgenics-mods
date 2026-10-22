@@ -35,6 +35,7 @@ import { decodePng, encodePng } from "../src/core/art/png.ts";
 import { writeModBytes } from "../src/core/art/art-io.ts";
 import { MODS_DIR, extractedPath } from "../src/core/repo.ts";
 import { RASTER_PROBE, rasterProbeImages, patchMissingFontClass, measureRasterShot, measureCatRamp, backdropShare } from "../src/core/art/probe-raster.ts";
+import { MULTI_APPEND_MOD, measureMultiAppendShot, multiAppendOutcome } from "../src/core/art/probe-multiappend.ts";
 import { measureLocText, summarizeLocText, tilesetOutcome } from "../src/core/art/probe-outcomes.ts";
 import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
 
@@ -65,6 +66,32 @@ if (process.argv.includes("--tileset")) {
   const line = (k: string) => { const r = runs[k]!; return `${k} (${r.mod}/${r.test}): ${r.verdict} — ${r.reason}; ${r.save}\n  baseline marker ${r.baseline ? (r.baseline.found ? "FOUND" : "none") : "no shot"}; after spawn: ${r.after.map((s) => `${s.label} ${s.found ? `FOUND (scale ${s.scale.toFixed(2)}, ${s.mirrored ? "mirrored" : "as authored"})` : "none"}`).join(", ")}\n  artifacts: ${r.runDir}`; };
   console.log([line("redirect"), line("control"), `outcome: ${outcome}`].join("\n"));
   process.exit(outcome === "redirected" ? 0 : 1);
+}
+if (process.argv.includes("--multi-append")) {
+  // two mods appending to CatTest (2026-10-22): build the three probe SWFs, run A alone, B alone, A+B, B+A and
+  // A+Same (Same ships B's content under A's file name), count each marker colour per shot and write
+  // multi-append-summary.json (pinned as test/fixtures/ingame/multi-append-summary.json)
+  for (const [mod, scene] of [[MULTI_APPEND_MOD.A, "catappendA"], [MULTI_APPEND_MOD.B, "catappendB"], ["_catappendSame", "catappendA"]] as const) {
+    const r = buildSwf(mod, `art/${scene}.scene.json`, {});
+    if (!r.ok) { console.error(`${mod} build failed: ${r.error}`); process.exit(1); }
+  }
+  const plan = [["aloneA", "_catappendA", "alone-a"], ["aloneB", "_catappendB", "alone-b"], ["ab", "_catappendA", "multi-append-ab"], ["ba", "_catappendA", "multi-append-ba"], ["sameName", "_catappendSame", "same-name"]] as const;
+  const runs: Record<string, unknown> = {};
+  let first: string | null = null;
+  for (const [key, mod, test] of plan) {
+    const r = await api.runIngameTest({ mod, test });
+    if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
+    if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
+    first = first || r.artifacts.runDir || null;
+    const shots = r.artifacts.shots.filter((x) => x.path && x.label !== "baseline").map((x) => measureMultiAppendShot(x.label, decodePng(readFileSync(x.path!))));
+    const outcome = multiAppendOutcome(shots);
+    runs[key] = { mod, test, verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, shots, outcome };
+    console.log(`${key} (${mod}/${test}): ${r.verdict}; own A ${outcome.own.A}, own B ${outcome.own.B}, probeC -> ${outcome.collision}; ${saveOf(r)}`);
+  }
+  const out = { observed: "2026-10-22, build 25143593", note: "own A/B = the mod's own appended frame drew its marker; collision = whose probeC frame the shared label showed", runs };
+  writeFileSync(join(first || ".", "multi-append-summary.json"), JSON.stringify(out, null, 2) + "\n");
+  console.log(`summary: ${join(first || ".", "multi-append-summary.json")}`);
+  process.exit(0);
 }
 if (process.argv.includes("--raster")) {
   // 1. the big generated PNGs (git-ignored art/generated/), 2. build raster.scene.json, 3. patch the missing-font text

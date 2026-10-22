@@ -476,5 +476,6 @@
   },
   "exports": {
     "_Append_CatTest": "CatAppendB"
-  }
+  },
+  "stage_instances": []
 }

@@ -1,0 +1,14 @@
+// test-only (multi-append probe, 2026-10-22): TomTom whose idle is _catappendSame's appended CatTest frame probeB (B's content in a SWF named catappendA.swf)
+// (art/catappendA.scene.json: the empty-slot cat rig plus a CYAN marker box)
+ProbeCatB {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeB]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}

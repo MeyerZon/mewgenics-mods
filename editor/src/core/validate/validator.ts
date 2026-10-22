@@ -12,7 +12,9 @@
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, packPath } from "../repo.ts";
+import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, packPath, vanillaSwfDir } from "../repo.ts";
+import { appendsOfSwf, appendsOfScene, crossModAppendFindings, vanillaAppendLabels, type ModAppends, type ModAppendFile } from "../art/append-conflicts.ts";
+import type { Scene } from "../art/scene.ts";
 import { COMPONENT_CACHE_HINT } from "../components.ts";
 import { parse, GonParseError } from "../gon/parser.ts";
 import { toValue } from "../gon/value.ts";
@@ -185,6 +187,65 @@ export interface ValidateOptions {
   components?: Iterable<string>;
   /** native-registered names (tests/fixtures); default editor/registered-names.json */
   registeredNames?: Iterable<string>;
+  /**
+   * The mods loaded together, in -modpaths order (this mod is added last when absent): adds the cross-mod findings
+   * of art/append-conflicts.ts — swf-file-conflict, cat-append-conflict, cat-append-shadows-vanilla, … — from each
+   * mod's built swfs/*.swf, or its art/*.scene.json when nothing is built.
+   */
+  modpaths?: string[];
+  /** the vanilla SWF folder for the cross-mod checks (tests); default vanillaSwfDir() */
+  vanillaSwfs?: string;
+}
+
+/** A mod's SWFs as the game would load them: the built swfs/*.swf, else the scenes the editor would build. */
+export function modAppendFiles(modDir: string): ModAppendFile[] {
+  const swfs = join(modDir, "swfs");
+  const built = existsSync(swfs) ? readdirSync(swfs).filter((f) => f.toLowerCase().endsWith(".swf")) : [];
+  if (built.length) {
+    return built.map((file) => {
+      try {
+        return { file, appends: appendsOfSwf(new Uint8Array(readFileSync(join(swfs, file)))) };
+      } catch {
+        return { file, appends: [] };
+      }
+    });
+  }
+  const art = join(modDir, "art");
+  if (!existsSync(art)) return [];
+  const out: ModAppendFile[] = [];
+  for (const f of readdirSync(art).filter((n) => n.endsWith(".scene.json"))) {
+    try {
+      const sc = JSON.parse(readFileSync(join(art, f), "utf8")) as Scene;
+      if (sc && typeof sc.name === "string") out.push({ file: `${sc.name}.swf`, appends: appendsOfScene(sc) });
+    } catch {
+      /* a broken scene is the art validator's to report */
+    }
+  }
+  return out;
+}
+
+/** The cross-mod append / SWF-name findings that involve `modName`, for the mods of `opts.modpaths`. */
+function crossModFindings(modName: string, opts: ValidateOptions, rb: ReportBuilder): void {
+  const order = [...(opts.modpaths || [])];
+  if (!order.includes(modName)) order.push(modName);
+  const mods: ModAppends[] = [];
+  for (const m of order) {
+    const dir = m === modName && opts.modDir ? opts.modDir : join(MODS_DIR, m);
+    if (!existsSync(dir)) {
+      rb.warn("modpath-missing", `modpaths names mods/${m}, which does not exist`);
+      continue;
+    }
+    mods.push({ mod: m, files: modAppendFiles(dir) });
+  }
+  const vdir = opts.vanillaSwfs ?? vanillaSwfDir();
+  const targets = new Set(mods.flatMap((m) => m.files.flatMap((f) => f.appends.map((a) => a.target))));
+  const vanilla = existsSync(vdir)
+    ? { files: readdirSync(vdir).filter((f) => f.toLowerCase().endsWith(".swf")), labels: Object.fromEntries([...targets].filter((t) => t === "CatTest").map((t) => [t, vanillaAppendLabels(t, vdir)])) }
+    : undefined;
+  for (const f of crossModAppendFindings(mods, vanilla)) {
+    if (!f.mods.includes(modName)) continue;
+    rb.add({ severity: f.severity, code: f.code, message: f.message, ...(f.path ? { location: { path: f.path } } : {}) });
+  }
 }
 
 /**
@@ -232,6 +293,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
       rb.warn("whole-file-replace", `${o.relPath} replaces the whole base file; prefer .append/.merge/.patch`, fileLoc);
     }
   }
+  if (opts.modpaths) crossModFindings(modName, opts, rb);
   return rb.build();
 }
 

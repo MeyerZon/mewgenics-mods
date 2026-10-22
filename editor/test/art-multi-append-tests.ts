@@ -71,7 +71,7 @@ export async function runArtMultiAppendTests(test: TestFn, assert: AssertFn, eq:
     eq(P.countColour(im, "#ff00ff"), 200);
     eq(P.countColour(im, "#00ffff"), 100);
     eq(P.countColour(img(10, 10, () => [40, 0, 40]), "#ff00ff"), 0, "too dark to call");
-    const m = P.measureMultiAppendShot("x", img(60, 60, (x, y) => (y < 30 ? [255, 0, 255] : x < 30 ? [0, 0, 255] : [60, 60, 60])));
+    const m = P.measureMultiAppendShot("x", img(100, 100, (x, y) => (y < 50 ? [255, 0, 255] : x < 50 ? [0, 0, 255] : [60, 60, 60])));
     eq(JSON.stringify(m.present), JSON.stringify({ A: true, B: false, AC: true, BC: false }));
   });
 
@@ -85,7 +85,7 @@ export async function runArtMultiAppendTests(test: TestFn, assert: AssertFn, eq:
   });
 
   test("the probe mods: ProbeCatA/C in _catappendA, ProbeCatB in _catappendB and _catappendSame, each TomTom with alt_animations [[idle probe<X>]]; SWFs named by the scenes", () => {
-    for (const [mod, cats] of [["_catappendA", ["A", "C"]], ["_catappendB", ["B", "C"]], ["_catappendSame", ["B", "C"]]] as const) {
+    for (const [mod, cats] of [["_catappendA", ["A", "C"]], ["_catappendB", ["B"]], ["_catappendSame", ["B"]]] as const) {
       const t = readFileSync(join(MODS_DIR, mod, "data", "characters", "enemies.gon.append"), "utf8");
       for (const c of ["A", "B", "C"]) eq(new RegExp(`ProbeCat${c} \\{[\\s\\S]*?alt_animations \\[\\[idle probe${c}\\]\\]`).test(t), (cats as readonly string[]).includes(c), `${mod} ProbeCat${c}`);
     }
@@ -109,11 +109,11 @@ export async function runArtMultiAppendTests(test: TestFn, assert: AssertFn, eq:
     const conflict = f.filter((x: any) => x.code === "cat-append-conflict");
     eq(conflict.length, 1, JSON.stringify(f));
     eq(conflict[0].severity, "warning");
-    assert(/probeCF, probeCB/.test(conflict[0].message) && /_catappendB.*wins/.test(conflict[0].message), conflict[0].message);
+    assert(/probeCF, probeCB/.test(conflict[0].message) && /\(_catappendB wins/.test(conflict[0].message), conflict[0].message);
     eq(f.filter((x: any) => x.code === "cat-append-shared").length, 1);
     eq(f.filter((x: any) => x.code === "cat-append-shared")[0].severity, "info");
     const rev = C.crossModAppendFindings([B, A]).find((x: any) => x.code === "cat-append-conflict");
-    assert(/_catappendA.*wins/.test(rev.message), rev.message);
+    assert(/\(_catappendA wins/.test(rev.message), rev.message);
     eq(C.crossModAppendFindings([A]).length, 0);
   });
 
@@ -169,7 +169,7 @@ export async function runArtMultiAppendTests(test: TestFn, assert: AssertFn, eq:
       const v = C.vanillaAppendLabels("CatTest", vdir);
       assert(v.includes("idleF") && v.includes("crawlingIdleF"), String(v.length));
       eq(v.length, 776 + 239);
-      assert(readdirSync(vdir).includes("catanis2.swf"));
+      assert(readdirSync(vdir).includes("catanis2.swf"), "catanis2.swf listed");
     });
   } else console.log("  (skipped: T1 vanilla CatTest labels — no extracted catanis.swf / catanis2.swf)");
 }
