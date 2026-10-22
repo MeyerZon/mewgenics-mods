@@ -269,7 +269,6 @@ export function catAnimFindings(scene: Scene): Finding[] {
         if (held.length) out.push({ severity: "error", code: "cat-anim-slot-not-empty", message: `cat animation rig "${p.ref}" slot${held.length > 1 ? "s" : ""} ${held.join(", ")} hold art; the game draws the cat's own parts into EMPTY slot sprites, and a visible non-empty slot crashes CatParts::prerender (+0x741f5d) — point the slot at an empty sprite or add the rig with parts: "game"`, path: `sprites.${p.ref}` });
       }
       if (p.l.name !== CAT_ANIM_LAYER) out.push({ severity: "error", code: "cat-anim-layer-name", message: `labeled frame "${label}" places its pose on a layer named "${p.l.name || ""}"; the engine restarts the child instance named "${CAT_ANIM_LAYER}" on every play and reads no other name`, path: `${lat}.name` });
-      if (p.l.name !== CAT_ANIM_LAYER) out.push({ severity: "error", code: "cat-anim-layer-name", message: `labeled frame "${label}" places its pose on a layer named "${p.l.name || ""}"; the engine restarts the child instance named "${CAT_ANIM_LAYER}" on every play and reads no other name`, path: `${lat}.name` });
       if (p.l.depth !== CAT_ANIM_DEPTH) out.push({ severity: "warning", code: "cat-anim-depth", message: `labeled frame "${label}" places its pose at depth ${p.l.depth}; every vanilla CatTest frame places it at depth ${CAT_ANIM_DEPTH}`, path: `${lat}.depth` });
     }
   }

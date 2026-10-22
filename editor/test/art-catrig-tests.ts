@@ -484,6 +484,17 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(!codes(plain).some((c) => /cat-anim/.test(c)), "no cat-anim findings without the export");
   });
 
+  test("validateScene: cat-anim-layer-name is reported once per labeled frame per offending layer (no duplicate findings)", () => {
+    need();
+    const good = R.newCatAnimation(exampleScene("anim"), "wave").scene;
+    const pawing = JSON.parse(JSON.stringify(good)); pawing.sprites.CatAnim_wave.layers[0].name = "pawing";
+    const hits = (validateScene(pawing) as any).findings.filter((f: any) => f.code === "cat-anim-layer-name");
+    const labels = Object.keys(pawing.sprites.CatAnim_wave.labels);
+    eq(hits.length, labels.length, `one per labeled frame (${labels.join(",")}): ${JSON.stringify(hits)}`);
+    const keys = hits.map((f: any) => `${f.path}|${f.message}`);
+    eq(new Set(keys).size, keys.length, `no duplicates: ${keys.join(" ; ")}`);
+  });
+
   test("validateScene refuses an export literally named CatTest (cat-clip-override, error): the engine resolves clips through a global last-loaded-first registry, so it would replace the cat clip for every cat", () => {
     const s = exampleScene("anim");
     s.exports = { CatTest: "Starter" };
