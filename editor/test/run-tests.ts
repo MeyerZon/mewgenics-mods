@@ -644,6 +644,10 @@ await mcpSmoke();
   let le: typeof import("./level-editor-tests.ts") | null = null;
   try { le = await import("./level-editor-tests.ts"); } catch (e) { test("level-editor-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (le) await le.runLevelEditorTests(test, assert, eq);
+  // the Room editor's tileset art: tile/object → clip resolver, the SWF rasteriser, /api/level-tile-art (+ T1 alley)
+  let la: typeof import("./level-art-tests.ts") | null = null;
+  try { la = await import("./level-art-tests.ts"); } catch (e) { test("level-art-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (la) await la.runLevelArtTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
