@@ -85,5 +85,25 @@ export function runUnitModelTests(test: TestFn, assert: AssertFn, eq: EqFn, fixt
       assert(distinct.size >= 2, `the Rat at ${[...distinct].join(" | ")}`);
       assert(p.objects.some((o) => o.kind === "unit"), "a mesh object line for a unit object");
     });
+    test("unit-model-log.txt (T2): the position is interpolated along the move (the Rat slides 8.5,0.5 -> 8.5,1.5 in steps); the mirrored Rat has m0 -1, the Crate +1", () => {
+      const p = mm.parseUnitModelLog(fx).positions;
+      const rat = p.filter((q) => q.entry === "Rat");
+      assert(rat.length >= 5, `${rat.length} Rat lines`);
+      assert(rat.some((q) => q.world[1] > 0.5 && q.world[1] < 1.5), "an intermediate z between the tiles");
+      assert(rat.every((q) => q.facing === -1 && q.m0 === -1), "the Rat's sprite is mirrored (an enemy faces left)");
+      assert(p.filter((q) => q.entry === "Crate").every((q) => q.facing === 1), "the Crate is not");
+    });
   } else console.log("  (skipped: fixtures/ingame/unit-model-log.txt not pinned yet)");
+  const sm = fixture?.("unit-model-summary.json");
+  if (sm) {
+    test("unit-model-summary.json (T2, 2026-10-22): run pass, the real save unchanged, the magenta patch follows the Rat (shot unit-a -> unit-m, ~0 degrees off the iso projection)", () => {
+      const s = JSON.parse(sm) as { run: { verdict: string; save: string }; pairs: Array<{ a: string; b: string; verdict: string; angleDeg: number | null; deltaPx: [number, number] }> };
+      eq(s.run.verdict, "pass");
+      assert(/1 real save file\(s\) unchanged/.test(s.run.save), s.run.save);
+      const am = s.pairs.find((q) => q.a === "unit-a" && q.b === "unit-m")!;
+      eq(am.verdict, "follows");
+      assert(am.angleDeg !== null && am.angleDeg < 5, `angle ${am.angleDeg}`);
+      assert(Math.hypot(am.deltaPx[0], am.deltaPx[1]) > 100, `moved ${am.deltaPx.join(",")} px (one tile at 3440x1440)`);
+    });
+  } else console.log("  (skipped: fixtures/ingame/unit-model-summary.json not pinned yet)");
 }
