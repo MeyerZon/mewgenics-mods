@@ -15,7 +15,7 @@ import { join, relative } from "node:path";
 import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, packPath } from "../repo.ts";
 import { COMPONENT_CACHE_HINT } from "../components.ts";
 import { parse, GonParseError } from "../gon/parser.ts";
-import { preprocessFile, locateInclude } from "../gon-includes.ts";
+import { preprocessFile, locateInclude, includeDir } from "../gon-includes.ts";
 import { toValue } from "../gon/value.ts";
 import { parseOverlayName } from "../overlay/overlay.ts";
 import { parseCsv } from "../overlay/csv.ts";
@@ -444,8 +444,10 @@ function validateGonOverlay(
  * The GON the game actually parses for an overlay: the text after its pre-pass (Gon_Preprocess 0xa50bd0: comments
  * stripped, `#include` inlined against the base resource's directory with this mod's files taking part). Reports
  * includes that resolve nowhere (`include-missing`: the game shows an error box "Could not locate include file" and
- * exits), a `/*` that is never closed (`comment-unclosed`: the game drops the rest of the file)
- * and `#define` macros (`gon-define-unmodelled`: the game expands them, the editor does not).
+ * exits), names that are not literal pack paths (`include-path-unsafe`: `..`, `./`, a leading `/`, a drive letter or a
+ * backslash; the game never normalises them), a `/*` that is never closed (`comment-unclosed`: the game drops the
+ * rest of the file) and a macro still expanding after the game's 256 rounds (`gon-macro-runaway`). `#define`
+ * macros are expanded exactly as the game does (Gon_Pre_CollectDefines 0xa4f4a0 / Gon_Pre_ExpandMacros 0xa501c0).
  * @returns the parsed root, or null after a `gon-parse-error` the pre-pass introduced
  */
 function semanticParse(o: OverlayFile, rb: ReportBuilder, file: string, dataRoot: string, modDir: string) {
@@ -459,13 +461,17 @@ function semanticParse(o: OverlayFile, rb: ReportBuilder, file: string, dataRoot
       ? `resolves to ${t.packPath}, outside data/: the editor does not read it and the game would not find it in the pack`
       : `resolves to ${t.packPath}, which exists neither in this mod nor in the base data: when the game loads this file it shows an error message box "Could not locate include file: ${inc.name}" and exits`;
     const at = inc.depth === 0 ? { file, line: inc.line, col: inc.col } : { file };
+    if (t.unsafe) {
+      rb.error("include-path-unsafe", `#include "${inc.name}"${via} is not a literal pack path: the game joins it to ${includeDir(o.baseName)} without normalising "..", "./", a leading "/", a drive letter or a backslash, so it never matches a file in the pack (the game then shows "Could not locate include file" and exits) and a loose mod file is looked up by the OS, which may leave the mod folder. Write the path relative to ${includeDir(o.baseName)} with plain "/"-separated names (the editor does not read it)`, at);
+      continue;
+    }
     rb.error("include-missing", `#include "${inc.name}"${via} ${why}`, at);
   }
   if (pre.unclosedComment) {
     rb.warn("comment-unclosed", `a /* block comment is never closed: the game silently drops everything after it to the end of the file (add the missing */)`, { file, line: pre.unclosedComment.line, col: pre.unclosedComment.col });
   }
-  if (pre.defines.length > 0) {
-    rb.warn("gon-define-unmodelled", `${o.relPath} uses #define (${pre.defines.join(", ")}): the game expands these macros before parsing, the editor does not — checks and previews of this file see the unexpanded text`, { file });
+  if (pre.macroRunaway) {
+    rb.warn("gon-macro-runaway", `${o.relPath}: a #define macro (${pre.defines.join(", ")}) still expands after the game's 256 expansion rounds (it uses itself): the game stops there and parses what is left, with the remaining #NAME read as a # comment`, { file });
   }
   try {
     return parse(pre.text);

@@ -10,8 +10,17 @@
 //           read a name (blanks incl. newlines skipped first; `"` toggles a quoted part that is not copied, a closing
 //           `"` ends the name, no escapes) and replace `#include <name>` by the pass-1+2 text of resolve(name), with
 //           the SAME resolver (so nested names resolve against the top-level resource). Text after the name stays.
-//   passes 3/4 (top-level only) `#define NAME(args) … #end` macros, `#NAME` expansion — NOT modelled here; reported
-//           in `defines` so callers can say so.
+//   pass 3  Gon_Pre_CollectDefines 0xa4f4a0 (top-level text only, after includes are inlined): outside "…", a #-word
+//           exactly `#define`, a name (Gon_Pre_ReadBraced 0xa4e880: delimiters skipped, read to a delimiter), blanks,
+//           an optional `( p1, p2 … )` (the `(` may follow blanks; parameters are delimiter-separated tokens), then
+//           the body up to the #-word `#end` — from right after `)` with parameters, else from the first non-blank.
+//           The definition leaves the text; the map key is `#NAME`; a later definition wins.
+//   pass 4  Gon_Pre_ExpandMacros 0xa501c0, repeated while a round changed something, at most 256 (0x100) rounds:
+//           outside "…", a #-word (`#` to a blank) equal to a key is replaced by the body after reading one
+//           delimiter-separated token per parameter; every body token equal to a parameter becomes its argument
+//           (Gon_Pre_SubstituteArgs 0xa4e0b0; the body's last token is flushed unsubstituted when no delimiter
+//           follows it). Delimiters: blanks and ( ) , : = [ ] { }. Text after the arguments stays (so
+//           `#NAME (a, b)` leaves its `)`); `#NAME(a,b)` is no call (the #-word must equal the key exactly).
 //
 // The game has no include depth limit or cycle guard (a cycle recurses until the stack overflows) and a missing
 // include is fatal (`Could not locate include file: <name>`). Here a miss contributes no text and is recorded; a
@@ -40,8 +49,12 @@ export interface PreprocessResult {
   /** the text the game's tokenizer would see (comments stripped, includes inlined) */
   text: string;
   includes: IncludeUse[];
-  /** names of `#define` macros in the top-level text (the game expands them; the editor does not) */
+  /** names of the `#define` macros collected from the top-level text (after includes), in definition order */
   defines: string[];
+  /** how many pass-4 rounds changed the text (0 = no macro used) */
+  macroPasses: number;
+  /** all 256 rounds changed the text: a macro still expands (it names itself); the game parses what is left */
+  macroRunaway?: boolean;
   /** 1-based position of a `/*` in the top-level text that is never closed (the game drops everything after it) */
   unclosedComment?: { line: number; col: number };
 }
@@ -190,38 +203,171 @@ function expandIncludes(
   return out;
 }
 
-/** Names of `#define` directives outside strings (the detection half of Gon_Pre_CollectDefines 0xa4f4a0). */
-function findDefines(text: string): string[] {
+/** Blanks plus ( ) , : = [ ] { } — the delimiter set of ReadBraced 0xa4e880, the parameter/argument readers and
+ * SubstituteArgs 0xa4e0b0 (masks 0x100002601 + 0x28000000240013 over c-0x28 + `{` `}`; 0x2400130100002601 +
+ * 0x500000005 over c-0x5b). */
+function isDelim(c: string | undefined): boolean {
+  return isBlank(c) || c === "(" || c === ")" || c === "," || c === ":" || c === "=" || c === "[" || c === "]" || c === "{" || c === "}";
+}
+
+/** Skip delimiters, then read a token up to the next delimiter (ReadBraced / the inline argument readers). */
+function readToken(text: string, at: number): { token: string; end: number } {
+  let i = at;
+  while (i < text.length && isDelim(text[i])) i++;
+  let token = "";
+  while (i < text.length && !isDelim(text[i])) token += text[i++];
+  return { token, end: i };
+}
+
+interface Macro {
+  params: string[];
+  body: string;
+}
+
+/** Pass 3 (Gon_Pre_CollectDefines 0xa4f4a0): remove every definition; @returns the remaining text and the macros */
+function collectDefines(text: string): { text: string; macros: Map<string, Macro>; names: string[] } {
+  const macros = new Map<string, Macro>();
   const names: string[] = [];
+  const n = text.length;
+  let out = "";
   let inString = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
+  let i = 0;
+  while (i < n) {
+    const c = text[i]!;
     if (inString) {
       if (c === '"' && !(i > 0 && text[i - 1] === "\\")) inString = false;
+      out += c;
+      i++;
       continue;
     }
     if (c === '"') {
       inString = true;
+      out += c;
+      i++;
       continue;
     }
-    if (c === "#" && hashWord(text, i) === "#define") {
-      const { word, end } = readWord(text, i + "#define".length);
-      names.push(word.replace(/\(.*$/, ""));
-      i = end - 1;
+    if (c !== "#" || hashWord(text, i) !== "#define") {
+      out += c;
+      i++;
+      continue;
     }
+    i = readWord(text, i).end; // consumes `#define`
+    const name = readToken(text, i);
+    i = name.end;
+    while (i < n && isBlank(text[i])) i++;
+    const params: string[] = [];
+    if (text[i] === "(") {
+      i++;
+      // The game's loop: `)` ends the list; else blanks, delimiters (a `)` there too), a token, blanks, an optional
+      // `,` + blanks. An unterminated list reads past the end of the text in the game (undefined); here it stops.
+      while (i < n && text[i] !== ")") {
+        const p = readToken(text, i);
+        params.push(p.token);
+        i = p.end;
+        while (i < n && isBlank(text[i])) i++;
+        if (text[i] === ",") {
+          i++;
+          while (i < n && isBlank(text[i])) i++;
+        }
+      }
+      if (i < n) i++; // the `)`
+    }
+    let body = "";
+    while (i < n) {
+      if (text[i] === "#" && hashWord(text, i) === "#end") {
+        i = readWord(text, i).end;
+        break;
+      }
+      body += text[i++];
+    }
+    macros.set(`#${name.token}`, { params, body });
+    names.push(name.token);
   }
-  return names;
+  return { text: out, macros, names };
 }
 
+/** Gon_Pre_SubstituteArgs 0xa4e0b0: each delimiter-terminated body token equal to a parameter -> its argument. */
+function substituteArgs(m: Macro, args: string[]): string {
+  let out = "";
+  let cur = "";
+  for (const c of m.body) {
+    if (!isDelim(c)) {
+      cur += c;
+      continue;
+    }
+    const k = m.params.indexOf(cur);
+    if (k >= 0) cur = args[k] ?? "";
+    out += cur + c;
+    cur = "";
+  }
+  return out + cur; // the trailing token is flushed as written
+}
+
+/** One pass-4 round (Gon_Pre_ExpandMacros 0xa501c0). @returns the new text and whether any macro was expanded */
+function expandMacrosOnce(text: string, macros: Map<string, Macro>): { text: string; changed: boolean } {
+  const n = text.length;
+  let out = "";
+  let inString = false;
+  let changed = false;
+  let i = 0;
+  while (i < n) {
+    const c = text[i]!;
+    if (inString) {
+      if (c === '"' && !(i > 0 && text[i - 1] === "\\")) inString = false;
+      out += c;
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+      i++;
+      continue;
+    }
+    const m = c === "#" ? macros.get(hashWord(text, i)) : undefined;
+    if (!m) {
+      out += c;
+      i++;
+      continue;
+    }
+    i = readWord(text, i).end;
+    const args: string[] = [];
+    for (let k = 0; k < m.params.length; k++) {
+      const a = readToken(text, i);
+      args.push(a.token);
+      i = a.end;
+    }
+    out += substituteArgs(m, args);
+    changed = true;
+  }
+  return { text: out, changed };
+}
+
+/** The game's cap on pass-4 rounds (Gon_Preprocess's 4th argument: 0x100 from every GonResource caller). */
+export const MACRO_PASSES = 256;
+
 /**
- * The game's pre-pass (passes 1 and 2; macros are only detected) over one top-level GON text.
+ * The game's pre-pass (all four passes: `full` = 1, as GonResource::decode / combined_decode call it) over one
+ * top-level GON text.
  * @param resolve include-name -> text; default: no file resolves
  */
 export function preprocess(src: string, resolve: IncludeResolver = () => null): PreprocessResult {
   const includes: IncludeUse[] = [];
   const stripped = stripComments(src);
   const text = expandIncludes(src, stripped, resolve, 0, [], includes);
-  const result: PreprocessResult = { text, includes, defines: findDefines(text) };
+  const defs = collectDefines(text);
+  let out = defs.text;
+  let macroPasses = 0;
+  if (defs.macros.size > 0) {
+    while (macroPasses < MACRO_PASSES) {
+      const r = expandMacrosOnce(out, defs.macros);
+      if (!r.changed) break;
+      out = r.text;
+      macroPasses++;
+    }
+  }
+  const result: PreprocessResult = { text: out, includes, defines: defs.names, macroPasses };
+  if (macroPasses === MACRO_PASSES) result.macroRunaway = true;
   if (stripped.unclosedBlockAt !== undefined) result.unclosedComment = lineCol(src, stripped.unclosedBlockAt);
   return result;
 }

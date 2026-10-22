@@ -12,6 +12,12 @@
 // - Overlay files are resolved against the BASE resource's directory (the lambda captures `this->path`), which in a
 //   mod folder mirroring the pack is the same relative directory.
 //
+// - The joined path is NOT normalised anywhere: the pack index is looked up by that exact string and a loose
+//   (`-modpaths`) file as `<modpath> + string` through std::filesystem (FileManager_FileExists 0x9a14c0; the open,
+//   FileManager_GetFile 0x99ff50, walks the same mod paths first). A name with a `.` / `..` / empty segment, a
+//   leading `/`, a drive letter or a backslash therefore never matches a pack file (fatal) and is handed to the OS for
+//   loose files (where `..` can leave the mod folder). Such a name is `unsafe` here and never read.
+//
 // Safety: only `<dataRoot>/…` (`.extracted/data` by default) and `<modDir>/data/…` are ever read; a name that
 // normalises outside `data/` is refused (`outside`), never read.
 
@@ -35,6 +41,9 @@ export interface IncludeTarget {
   packPath: string;
   /** the name escapes `data/`: refused, nothing read */
   outside: boolean;
+  /** the name is not a literal relative pack path (`.`/`..`/empty segment, leading `/`, drive letter, backslash): the game
+   * never finds it in the pack and passes it to the OS for loose files; refused, nothing read */
+  unsafe?: boolean;
   /** where the file was found: the mod's own copy, the base data, or nowhere */
   source: "mod" | "base" | null;
   /** the mod's overlays on the included name (pack paths), concatenated after the file's text */
@@ -58,12 +67,19 @@ function isFile(p: string): boolean {
   }
 }
 
+/** True when `name` is not a literal relative pack path (see the header): the game would not normalise it. */
+export function isUnsafeIncludeName(name: string): boolean {
+  if (name.includes("\\") || /^[A-Za-z]:/.test(name)) return true;
+  return name.split("/").some((seg) => seg === "" || seg === "." || seg === "..");
+}
+
 /** Resolve one `#include` name the way the game does (see the header). */
 export function locateInclude(ctx: IncludeContext, name: string): IncludeTarget {
   const joined = (includeDir(ctx.resource) + name).replace(/\\/g, "/");
   const norm = posix.normalize(joined);
   const none = (outside: boolean): IncludeTarget => ({ packPath: norm, outside, source: null, overlays: [], text: null });
-  if (!norm.startsWith("data/") || posix.isAbsolute(norm)) return none(true);
+  if (!norm.startsWith("data/") || posix.isAbsolute(norm)) return { ...none(true), ...(isUnsafeIncludeName(name) ? { unsafe: true } : {}) };
+  if (isUnsafeIncludeName(name)) return { ...none(false), unsafe: true };
   const dataRoot = ctx.dataRoot ?? EXTRACTED_DATA;
   const baseAbs = packPath(norm, dataRoot);
   if (!isInside(dataRoot, baseAbs)) return none(true);
