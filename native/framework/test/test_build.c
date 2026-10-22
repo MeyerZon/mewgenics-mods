@@ -82,6 +82,23 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(OFF_APPLIER_OWNER, -8);
     CHECK_EQ(VT_SLOTS, 172);
     CHECK_EQ(VT_ONSTACKSCHANGED, 170);
+    /* GON at runtime (2026-10-22): the harness's hp / stats fields and its GonObject walker read these */
+    CHECK_EQ(OFF_CH_HP, 0x4b0);
+    CHECK_EQ(OFF_CH_SHIELD, 0x4b4);
+    CHECK_EQ(OFF_CH_DIVINE_SHIELD, 0x4b8);
+    CHECK_EQ(OFF_CH_STATS, 0x5a0);
+    CHECK_EQ(OFF_CH_BASE_HEALTH, 0x5e8);
+    CHECK_EQ(OFF_CH_GON_ENTRY, 0x240);
+    CHECK_EQ(OFF_CH_GON_NAME, 0x248);
+    CHECK_EQ(OFF_GON_CHILDREN, 0x38);
+    CHECK_EQ(OFF_GON_CHILDREN_END, 0x40);
+    CHECK_EQ(OFF_GON_INT, 0x50);
+    CHECK_EQ(OFF_GON_DOUBLE, 0x58);
+    CHECK_EQ(OFF_GON_BOOL, 0x60);
+    CHECK_EQ(OFF_GON_TEXT, 0x68);
+    CHECK_EQ(OFF_GON_NAME, 0x88);
+    CHECK_EQ(OFF_GON_TYPE, 0xa8);
+    CHECK_EQ(GON_NODE_SIZE, 0xb0);
 }
 
 int main(void) { return MT_RUN_ALL(); }
