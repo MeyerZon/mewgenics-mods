@@ -7,6 +7,7 @@
 #include <string.h>
 #include "../../../test/minitest.h"
 #include "mt_pure.h"
+#include "offsets.h"   /* OFF_GON_* / GON_NODE_SIZE / OFF_CH_*: the fake GON nodes are shaped only by the generated macros */
 
 /* ====================================================================== */
 /* mt_jsonl                                                               */
@@ -353,6 +354,69 @@ TEST(console_track_diff_shrink_window) {
 /* ====================================================================== */
 /* mt_runner with a fake host                                             */
 /* ====================================================================== */
+/* ---- a fake GonObject tree for the walker and `expect gon` (2026-10-22) ----
+ * Nodes live in one arena laid out by the generated macros; the reader refuses any address outside it, the way the
+ * DLL's guarded read refuses an unmapped page, so a bad children vector is "unreadable", never a crash. */
+#define FG_NODES 16
+static unsigned char fg_arena[FG_NODES * GON_NODE_SIZE];
+static char fg_heap[4][64];   /* heap buffers for the std::strings longer than the 15-byte SSO */
+static int fg_heapUsed;
+static int fg_mem_read(void *u, const void *addr, void *out, size_t n) {
+    (void)u;
+    const unsigned char *a = (const unsigned char *)addr;
+    if (a < fg_arena || a + n > fg_arena + sizeof fg_arena) return 0;
+    memcpy(out, a, n);
+    return 1;
+}
+static unsigned char *fg_node(int i) { return fg_arena + (size_t)i * GON_NODE_SIZE; }
+/* an MSVC std::string (buf/ptr, size, cap) at p */
+static void fg_set_str(unsigned char *p, const char *s) {
+    size_t len = strlen(s);
+    memset(p, 0, 32);
+    if (len <= 15) { memcpy(p, s, len); *(size_t *)(p + 16) = len; *(size_t *)(p + 24) = 15; }
+    else { char *h = fg_heap[fg_heapUsed++ % 4]; snprintf(h, 64, "%s", s); *(char **)p = h; *(size_t *)(p + 16) = len; *(size_t *)(p + 24) = len < 31 ? 31 : len; }
+}
+static void fg_scalar(int i, const char *name, int type, const char *text, int iv, double dv, int bv) {
+    unsigned char *n = fg_node(i);
+    memset(n, 0, GON_NODE_SIZE);
+    *(int *)(n + OFF_GON_TYPE) = type;
+    fg_set_str(n + OFF_GON_NAME, name);
+    fg_set_str(n + OFF_GON_TEXT, text);
+    *(int *)(n + OFF_GON_INT) = iv;
+    *(double *)(n + OFF_GON_DOUBLE) = dv;
+    n[OFF_GON_BOOL] = (unsigned char)bv;
+}
+static void fg_container(int i, const char *name, int type, int firstChild, int count) {
+    unsigned char *n = fg_node(i);
+    memset(n, 0, GON_NODE_SIZE);
+    *(int *)(n + OFF_GON_TYPE) = type;
+    fg_set_str(n + OFF_GON_NAME, name);
+    *(unsigned char **)(n + OFF_GON_CHILDREN) = fg_node(firstChild);
+    *(unsigned char **)(n + OFF_GON_CHILDREN_END) = fg_node(firstChild + count);
+}
+/* Pooter-like entry: root { graphics { name } stats { strength speed } properties { health flying faction a_rather_long_key_name } spells [ Fireball 2 ] broken {...} } */
+static void fg_tree(void) {
+    memset(fg_arena, 0, sizeof fg_arena);
+    fg_heapUsed = 0;
+    fg_container(0, "Pooter", 3, 1, 5);
+    fg_container(1, "graphics", 3, 6, 1);
+    fg_container(2, "stats", 3, 7, 2);
+    fg_container(3, "properties", 3, 9, 4);
+    fg_container(4, "spells", 4, 13, 2);
+    fg_container(5, "broken", 3, 0, 0);
+    *(void **)(fg_node(5) + OFF_GON_CHILDREN) = (void *)0x10;                    /* a children vector outside readable memory */
+    *(void **)(fg_node(5) + OFF_GON_CHILDREN_END) = (void *)(0x10 + GON_NODE_SIZE);
+    fg_scalar(6, "name", 1, "ENEMY_POOTER_NAME", 0, 0.0, 0);                     /* heap text (17 chars) */
+    fg_scalar(7, "strength", 2, "5", 5, 5.0, 0);
+    fg_scalar(8, "speed", 2, "15", 15, 15.0, 0);
+    fg_scalar(9, "health", 2, "12", 12, 12.0, 0);
+    fg_scalar(10, "flying", 5, "true", 0, 0.0, 1);
+    fg_scalar(11, "faction", 1, "allies", 0, 0.0, 0);
+    fg_scalar(12, "a_rather_long_key_name", 2, "1.5", 1, 1.5, 0);               /* heap name (22 chars); 1.5 -> int 1, double 1.5 */
+    fg_scalar(13, "", 1, "Fireball", 0, 0.0, 0);                                 /* array children are unnamed */
+    fg_scalar(14, "", 2, "2", 2, 2.0, 0);
+}
+
 #define FK_MAX 64
 typedef struct Fake {
     int ready;
@@ -366,6 +430,7 @@ typedef struct Fake {
     int enterResult; int enterCalls; int enterScene; int enterMode;   /* enter_scene: programmable result (1 ok / 0 refused / -1 unavailable) */
     int seedResult; int seedCalls; unsigned long long seedValue;   /* seed_rng: programmable result (1 ok / 0 refused / -1 unavailable) */
     char pipeReply[8192]; int pipeReplies;                          /* pipe_reply: the last reply the runner handed to the glue */
+    const void *gon[8];                                             /* unit_gon: the unit's entry node (NULL = unreadable) */
 } Fake;
 static Fake fk;
 
@@ -408,11 +473,12 @@ static int fk_seed_rng(void *u, unsigned long long seed, char *detail, size_t ca
 }
 
 static void fk_pipe_reply(void *u, const char *json) { (void)u; fk.pipeReplies++; snprintf(fk.pipeReply, sizeof fk.pipeReply, "%s", json); }
+static const void *fk_unit_gon(void *u, int i) { (void)u; return i >= 0 && i < fk.unitCount ? fk.gon[i] : NULL; }
 
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
-    fk_pipe_reply,
+    fk_pipe_reply, fg_mem_read, fk_unit_gon,
 };
 
 static MtRunner rr;
@@ -674,7 +740,7 @@ TEST(runner_dump_with_and_without_units) {
     fk_two_units();
     steps_until_done(5);
     CHECK(has(ev(0), "\"available\":true")); CHECK(has(ev(0), "\"count\":2"));
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"entry\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
     CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\""));
 }
 
@@ -719,7 +785,7 @@ TEST(runner_dump_emits_stacks_parallel_to_statuses) {
     fk_two_units_with_stacks();
     steps_until_done(5);
     CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7]}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"statuses\":[],\"stacks\":[]}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"entry\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[],\"stacks\":[]}"));
 }
 
 TEST(runner_wait_rounds_advances_on_round_counter) {
@@ -768,7 +834,7 @@ TEST(script_expect_unit_parses_fields_ops_and_rejects_bad_forms) {
     CHECK_EQ(g_s.d[1].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[1].unitIsIndex, 0); CHECK_STR(g_s.d[1].b, "Lil' Rat"); CHECK_EQ(g_s.d[1].field, MT_F_NAME); CHECK_EQ(g_s.d[1].op, MT_OP_EQ); CHECK_STR(g_s.d[1].a, "Lil' Rat");
     CHECK_EQ(g_s.d[2].kind, MT_D_EXPECT_UNIT); CHECK_STR(g_s.d[2].b, "Pooter"); CHECK_EQ(g_s.d[2].field, MT_F_TURNKIND); CHECK_EQ(g_s.d[2].op, MT_OP_GE); CHECK_EQ(g_s.d[2].value, 0);
     CHECK_EQ(g_s.d[3].field, MT_F_CLASS); CHECK_EQ(g_s.d[3].op, MT_OP_NE); CHECK_STR(g_s.d[3].a, "Mage");
-    const char *bad[] = { "expect unit 6 faction\n", "expect unit 6 hp == 1\n", "expect unit 6 name >= \"x\"\n", "expect unit 6 name == bare\n",
+    const char *bad[] = { "expect unit 6 faction\n", "expect unit 6 mana == 1\n", "expect unit 6 name >= \"x\"\n", "expect unit 6 name == bare\n",
                           "expect unit faction == 1\n", "expect unit 6 faction == x\n", "expect unit 6 move == 1 extra\n", "expect unit\n" };
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
 }
@@ -1195,6 +1261,158 @@ TEST(exit_tick_wraparound) {
     int code = -1;
     CHECK_EQ(mt_exit_decide(&s, 0x00000BB9u, &code), MT_X_EXIT_CLEAN);                /* 7097 ms later, across the wrap */
     CHECK_EQ(code, 0);
+}
+
+/* ====================================================================== */
+/* GON at runtime (2026-10-22): the walker, entry/hp/stats in the units    */
+/* event, expect gon, expect unit hp|shield|divineshield|<stat>|entry      */
+/* ====================================================================== */
+static void fk_units_with_numbers(void) {
+    fk_two_units();
+    snprintf(fk.units[0].entry, MT_UNIT_NAME, "PlayerCat");
+    fk.units[0].hp = 23; fk.units[0].shield = 2; fk.units[0].divineShield = 1;
+    for (int k = 0; k < MT_STAT_COUNT; k++) fk.units[0].stats[k] = 4 + k;       /* 4 5 6 7 8 9 10 */
+    snprintf(fk.units[1].entry, MT_UNIT_NAME, "Pooter");
+    fk.units[1].hp = 12;
+    for (int k = 0; k < MT_STAT_COUNT; k++) fk.units[1].stats[k] = 5;
+    fk.units[1].stats[MT_STAT_SPEED] = 15;
+    fg_tree();
+    fk.gon[1] = fg_node(0);    /* unit 1 carries the fake entry; unit 0 has none (an unreadable +0x240) */
+}
+
+TEST(gon_stat_names_are_the_seven_data_characters_keys_in_order) {
+    CHECK_EQ(MT_STAT_COUNT, 7);
+    CHECK_STR(mt_stat_name(0), "strength"); CHECK_STR(mt_stat_name(1), "dexterity"); CHECK_STR(mt_stat_name(2), "constitution");
+    CHECK_STR(mt_stat_name(3), "intelligence"); CHECK_STR(mt_stat_name(MT_STAT_SPEED), "speed"); CHECK_STR(mt_stat_name(5), "charisma"); CHECK_STR(mt_stat_name(6), "luck");
+    CHECK_STR(mt_gon_type_name(0), "null"); CHECK_STR(mt_gon_type_name(1), "string"); CHECK_STR(mt_gon_type_name(2), "number");
+    CHECK_STR(mt_gon_type_name(3), "object"); CHECK_STR(mt_gon_type_name(4), "array"); CHECK_STR(mt_gon_type_name(5), "bool"); CHECK_STR(mt_gon_type_name(9), "type 9");
+}
+
+TEST(gon_walker_by_name_and_index_scalars_containers_missing_and_unreadable) {
+    fg_tree();
+    MtGonValue v; char why[200];
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "properties.health", &v, why, sizeof why), 1);
+    CHECK_EQ(v.type, 2); CHECK_EQ(v.i, 12); CHECK(v.d == 12.0); CHECK_STR(v.text, "12"); CHECK_EQ(v.childCount, 0);
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "properties.flying", &v, why, sizeof why), 1);
+    CHECK_EQ(v.type, 5); CHECK_EQ(v.b, 1); CHECK_STR(v.text, "true");
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "properties.faction", &v, why, sizeof why), 1);
+    CHECK_EQ(v.type, 1); CHECK_STR(v.text, "allies");
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "properties.a_rather_long_key_name", &v, why, sizeof why), 1);   /* heap name */
+    CHECK_EQ(v.type, 2); CHECK_EQ(v.i, 1); CHECK(v.d == 1.5); CHECK_STR(v.text, "1.5");
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "graphics.name", &v, why, sizeof why), 1);                        /* heap text */
+    CHECK_EQ(v.type, 1); CHECK_STR(v.text, "ENEMY_POOTER_NAME");
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "spells.0", &v, why, sizeof why), 1);                             /* numeric segment = index */
+    CHECK_EQ(v.type, 1); CHECK_STR(v.text, "Fireball");
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "spells.1", &v, why, sizeof why), 1);
+    CHECK_EQ(v.type, 2); CHECK_EQ(v.i, 2);
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "4.1", &v, why, sizeof why), 1);                                  /* indices work on objects too */
+    CHECK_EQ(v.type, 2); CHECK_EQ(v.i, 2);
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "stats", &v, why, sizeof why), 1);
+    CHECK_EQ(v.type, 3); CHECK_EQ(v.childCount, 2);
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "", &v, why, sizeof why), 1);                                     /* empty path = the node itself */
+    CHECK_EQ(v.type, 3); CHECK_EQ(v.childCount, 5);
+    /* missing: a name, an index, a scalar used as a container */
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "properties.nope", &v, why, sizeof why), 0);
+    CHECK(has(why, "no child named \"nope\"")); CHECK(has(why, "among 4"));
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "spells.2", &v, why, sizeof why), 0);
+    CHECK(has(why, "index 2")); CHECK(has(why, "2 children"));
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "properties.health.x", &v, why, sizeof why), 0);
+    CHECK(has(why, "number")); CHECK(has(why, "not a container"));
+    /* unreadable: a children vector outside readable memory, a root outside it, no root */
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "broken.x", &v, why, sizeof why), -1);
+    CHECK(has(why, "unreadable"));
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, (const void *)0x40, "stats", &v, why, sizeof why), -1);
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, NULL, "stats", &v, why, sizeof why), -1);
+}
+
+TEST(script_expect_gon_parses_number_string_bool_exists_missing_and_rejects_bad_forms) {
+    char err[256]; int line = 0;
+    const char *s = "expect gon 8 properties.health == 12\nexpect gon \"Lil' Rat\" stats.speed >= 1.5\nexpect gon Pooter properties.faction == \"allies\"\n"
+                    "expect gon 8 properties.flying != true\nexpect gon 8 abilities.spells.0 exists\nexpect gon 8 properties.nope missing\nexpect gon 8 x == -3\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 8);
+    CHECK_EQ(g_s.d[0].kind, MT_D_EXPECT_GON); CHECK_EQ(g_s.d[0].unitIsIndex, 1); CHECK_EQ(g_s.d[0].n, 8); CHECK_STR(g_s.d[0].a, "properties.health"); CHECK_EQ(g_s.d[0].gonCheck, MT_G_NUM); CHECK_EQ(g_s.d[0].op, MT_OP_EQ); CHECK(g_s.d[0].dvalue == 12.0);
+    CHECK_EQ(g_s.d[1].unitIsIndex, 0); CHECK_STR(g_s.d[1].b, "Lil' Rat"); CHECK_STR(g_s.d[1].a, "stats.speed"); CHECK_EQ(g_s.d[1].op, MT_OP_GE); CHECK(g_s.d[1].dvalue == 1.5);
+    CHECK_STR(g_s.d[2].b, "Pooter"); CHECK_EQ(g_s.d[2].gonCheck, MT_G_STR); CHECK_STR(g_s.d[2].c, "allies"); CHECK_EQ(g_s.d[2].op, MT_OP_EQ);
+    CHECK_EQ(g_s.d[3].gonCheck, MT_G_BOOL); CHECK_EQ(g_s.d[3].op, MT_OP_NE); CHECK_EQ(g_s.d[3].value, 1);
+    CHECK_EQ(g_s.d[4].gonCheck, MT_G_EXISTS); CHECK_STR(g_s.d[4].a, "abilities.spells.0");
+    CHECK_EQ(g_s.d[5].gonCheck, MT_G_MISSING);
+    CHECK_EQ(g_s.d[6].gonCheck, MT_G_NUM); CHECK(g_s.d[6].dvalue == -3.0);
+    const char *bad[] = { "expect gon 8 properties.health\n", "expect gon 8 properties.health ==\n", "expect gon 8 properties.health == abc\n", "expect gon 8 properties.health exists now\n",
+                          "expect gon 8 properties.flying > true\n", "expect gon 8 properties.faction >= \"x\"\n", "expect gon 8 == 1\n", "expect gon 8 .a == 1\n", "expect gon 8 a..b == 1\n",
+                          "expect gon 8 a. == 1\n", "expect gon\n", "expect gon 8\n", "expect gon 8 a == 1 extra\n", "expect gon 8 a == \"x\" extra\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+}
+
+TEST(script_expect_unit_accepts_hp_shield_divineshield_stats_entry_and_negative_ints) {
+    char err[256]; int line = 0;
+    const char *s = "expect unit 1 hp == 12\nexpect unit Rat speed >= 15\nexpect unit 0 entry == \"PlayerCat\"\nexpect unit 0 luck != -1\nexpect unit 0 shield == 0\nexpect unit 0 divineshield == 0\nexpect unit 0 constitution > 0\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 8);
+    CHECK_EQ(g_s.d[0].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[0].field, MT_F_HP); CHECK_EQ(g_s.d[0].value, 12);
+    CHECK_EQ(g_s.d[1].field, MT_F_SPEED); CHECK_EQ(g_s.d[1].op, MT_OP_GE); CHECK_EQ(g_s.d[1].value, 15);
+    CHECK_EQ(g_s.d[2].field, MT_F_ENTRY); CHECK_STR(g_s.d[2].a, "PlayerCat");
+    CHECK_EQ(g_s.d[3].field, MT_F_LUCK); CHECK_EQ(g_s.d[3].value, -1);
+    CHECK_EQ(g_s.d[4].field, MT_F_SHIELD); CHECK_EQ(g_s.d[5].field, MT_F_DIVINESHIELD); CHECK_EQ(g_s.d[6].field, MT_F_CONSTITUTION);
+    CHECK_STR(mt_unit_field_name(MT_F_HP), "hp"); CHECK_STR(mt_unit_field_name(MT_F_ENTRY), "entry"); CHECK_STR(mt_unit_field_name(MT_F_LUCK), "luck");
+    const char *bad[] = { "expect unit 1 hp == \"x\"\n", "expect unit 1 entry == bare\n", "expect unit 1 entry > \"x\"\n", "expect unit 1 divine_shield == 0\n", "expect unit 1 hp == -\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_dump_emits_entry_hp_shield_divineshield_and_the_seven_stats) {
+    fk_reset("dump\nquit\n");
+    fk_units_with_numbers();
+    steps_until_done(5);
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"entry\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"entry\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"statuses\":[],\"stacks\":[]}"));
+}
+
+TEST(runner_expect_unit_hp_shield_stats_and_entry) {
+    fk_reset("expect unit 1 hp == 12\nexpect unit Lumee hp > 20\nexpect unit 0 shield == 2\nexpect unit 1 speed == 15\nexpect unit 0 luck == 10\nexpect unit 0 constitution == 5\nexpect unit 1 entry == \"Pooter\"\nexpect unit 0 entry != \"Pooter\"\nexpect unit 0 divineshield == 1\nquit\n");
+    fk_units_with_numbers();
+    steps_until_done(12);
+    CHECK(has(ev(0), "\"kind\":\"unit\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"1 hp == 12\"")); CHECK(has(ev(0), "\"detail\":\"unit 1 \\\"Rat\\\": hp 12\""));
+    CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "hp 23"));
+    CHECK(has(ev(2), "\"ok\":true")); CHECK(has(ev(2), "shield 2"));
+    CHECK(has(ev(3), "\"ok\":true")); CHECK(has(ev(3), "speed 15"));
+    CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(4), "luck 10"));
+    CHECK(has(ev(5), "\"ok\":false")); CHECK(has(ev(5), "constitution 6"));
+    CHECK(has(ev(6), "\"ok\":true")); CHECK(has(ev(6), "\"arg\":\"1 entry == \\\"Pooter\\\"\"")); CHECK(has(ev(6), "entry \\\"Pooter\\\""));
+    CHECK(has(ev(7), "\"ok\":true")); CHECK(has(ev(7), "entry \\\"PlayerCat\\\""));
+    CHECK(has(ev(8), "\"ok\":true")); CHECK(has(ev(8), "divineshield 1"));
+    CHECK(has(last_ev(), "\"expect_pass\":8")); CHECK(has(last_ev(), "\"expect_fail\":1"));
+}
+
+TEST(runner_expect_gon_number_string_bool_exists_missing_no_entry_unreadable_and_no_combat) {
+    fk_reset("expect gon 1 properties.health == 12\nexpect gon Rat stats.speed >= 10\nexpect gon 1 properties.health < 12\nexpect gon 1 properties.faction == \"allies\"\nexpect gon 1 properties.faction != \"allies\"\n"
+             "expect gon 1 properties.flying == true\nexpect gon 1 properties.flying == false\nexpect gon 1 abilities exists\nexpect gon 1 stats exists\nexpect gon 1 properties.nope missing\n"
+             "expect gon 1 properties.health missing\nexpect gon 1 properties.health == \"12\"\nexpect gon 1 properties.faction == 1\nexpect gon 0 properties.health == 12\nexpect gon 1 broken.x exists\nexpect gon 9 stats exists\n"
+             "expect gon 1 properties.a_rather_long_key_name == 1.5\nexpect gon 1 spells.0 == \"Fireball\"\nexpect gon 1 spells.1 == 2\nquit\n");
+    fk_units_with_numbers();
+    steps_until_done(25);
+    CHECK(has(ev(0), "\"kind\":\"gon\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"1 properties.health == 12\"")); CHECK(has(ev(0), "\"detail\":\"unit 1 \\\"Rat\\\" (Pooter): properties.health = number 12 (int 12, double 12, text \\\"12\\\")\""));
+    CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "\"arg\":\"Rat stats.speed >= 10\"")); CHECK(has(ev(1), "number 15"));
+    CHECK(has(ev(2), "\"ok\":false")); CHECK(has(ev(2), "number 12"));
+    CHECK(has(ev(3), "\"ok\":true")); CHECK(has(ev(3), "\"arg\":\"1 properties.faction == \\\"allies\\\"\"")); CHECK(has(ev(3), "string \\\"allies\\\""));
+    CHECK(has(ev(4), "\"ok\":false"));
+    CHECK(has(ev(5), "\"ok\":true")); CHECK(has(ev(5), "\"arg\":\"1 properties.flying == true\"")); CHECK(has(ev(5), "bool true"));
+    CHECK(has(ev(6), "\"ok\":false"));
+    CHECK(has(ev(7), "\"ok\":false")); CHECK(has(ev(7), "\"arg\":\"1 abilities exists\"")); CHECK(has(ev(7), "missing: no child named \\\"abilities\\\" among 5"));
+    CHECK(has(ev(8), "\"ok\":true")); CHECK(has(ev(8), "object with 2 children"));
+    CHECK(has(ev(9), "\"ok\":true")); CHECK(has(ev(9), "\"arg\":\"1 properties.nope missing\"")); CHECK(has(ev(9), "missing: no child named \\\"nope\\\" among 4"));
+    CHECK(has(ev(10), "\"ok\":false")); CHECK(has(ev(10), "number 12"));
+    CHECK(has(ev(11), "\"ok\":false")); CHECK(has(ev(11), "number 12"));         /* a quoted value only matches a string node */
+    CHECK(has(ev(12), "\"ok\":false")); CHECK(has(ev(12), "string \\\"allies\\\""));  /* a number only matches a number node */
+    CHECK(has(ev(13), "\"ok\":false")); CHECK(has(ev(13), "unit 0 \\\"Lumee\\\" (PlayerCat): no GON entry"));
+    CHECK(has(ev(14), "\"ok\":false")); CHECK(has(ev(14), "unreadable"));
+    CHECK(has(ev(15), "\"ok\":false")); CHECK(has(ev(15), "unit not found: index 9 of 2"));
+    CHECK(has(ev(16), "\"ok\":true")); CHECK(has(ev(16), "number 1.5 (int 1, double 1.5, text \\\"1.5\\\")"));
+    CHECK(has(ev(17), "\"ok\":true")); CHECK(has(ev(17), "string \\\"Fireball\\\""));
+    CHECK(has(ev(18), "\"ok\":true"));
+    CHECK(has(last_ev(), "\"expect_pass\":9")); CHECK(has(last_ev(), "\"expect_fail\":10"));
+    fk_reset("expect gon 0 stats exists\nquit\n");      /* no combat */
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"kind\":\"gon\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
 }
 
 int main(void) { return MT_RUN_ALL(); }
