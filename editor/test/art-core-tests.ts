@@ -5,7 +5,7 @@
 import { existsSync, rmSync, readFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { MODS_DIR, REPO_ROOT } from "../src/core/repo.ts";
+import { MODS_DIR, extractedPath } from "../src/core/repo.ts";
 import { parsePathData, normalizePath, flattenSubpath, signedArea, subpathBounds, matrixFromTransform, parseSvgTransform, multiply, apply, invert } from "../src/core/art/geometry.ts";
 import { validateScene, exampleScene, parseFill, grayLevelToByte, byteToGrayLevel, buildOrder, shapeGrayUsage, DEFAULT_ABC_MODE } from "../src/core/art/scene.ts";
 import { bakeSprite, bakeStage, diffFrames, labelList } from "../src/core/art/timeline.ts";
@@ -244,7 +244,7 @@ export function runArtCoreTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     eq(JSON.stringify(rows[0]![15]), "[255,255,255]");
     eq(JSON.stringify(remapGray(rows, 99, 8)), "[136,136,136]");
   });
-  const palAbs = join(REPO_ROOT, ".extracted", "textures", "palette.png");
+  const palAbs = extractedPath("textures", "palette.png");
   if (existsSync(palAbs)) {
     test("reads the extracted palette.png as 16×256 RGB rows (not committed; read-only)", () => {
       const p = readPalette("palette", { noCache: true });

@@ -2,7 +2,7 @@
 // Test harness for the Mewgenics mod editor core (+ an MCP smoke test).
 // Node built-ins only; plain assertions. Exits non-zero on any failure.
 
-import { readFileSync, existsSync, mkdtempSync } from "node:fs";
+import { readFileSync, existsSync, mkdtempSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -611,7 +611,9 @@ await mcpSmoke();
 if (!process.env.MEWGENICS_EXTRACTED_DATA) {
   console.log("\n# T0 without .extracted/ (nested run with MEWGENICS_EXTRACTED_DATA pointing at an empty dir)");
   test("npm test skips, not fails, when no base data is extracted (CI shape)", () => {
-    const empty = mkdtempSync(join(tmpdir(), "mewged-noextracted-"));
+    // an empty extracted ROOT (…/data inside a fresh temp dir), so swfs/ and textures/ resolve empty too
+    const empty = join(mkdtempSync(join(tmpdir(), "mewged-noextracted-")), "data");
+    mkdirSync(empty);
     const r = spawnSync(process.argv[0]!, [join(HERE, "run-tests.ts")], { env: { ...process.env, MEWGENICS_EXTRACTED_DATA: empty }, encoding: "utf8", timeout: 600000, maxBuffer: 64 << 20 });
     const out = (r.stdout || "") + (r.stderr || "");
     const fails = out.split("\n").filter((l) => l.startsWith("FAIL")).slice(0, 6);

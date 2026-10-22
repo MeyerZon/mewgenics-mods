@@ -19,9 +19,24 @@ export const EDITOR_DIR = join(REPO_ROOT, "editor");
 //                             points it at an empty dir for the T0-without-game-data nested run.
 //   MEWGENICS_EDITOR_DATA     the editor's cache dir (component-names.json, base-index.json, ingame-runs/);
 //                             default <repo>/editor/data. Refused under any `saves/` path (the editor writes here).
+//   MEWGENICS_VANILLA_SWF_DIR the extracted vanilla SWFs; default extractedPath("swfs"), read on every call (tests
+//                             point it at a temp dir).
+// Every other read of the extracted tree (textures/, swfs/) goes through EXTRACTED_ROOT / extractedPath, so setting
+// MEWGENICS_EXTRACTED_DATA alone is enough for a worktree; never join REPO_ROOT with ".extracted" elsewhere.
 export const EXTRACTED_DATA = process.env.MEWGENICS_EXTRACTED_DATA
   ? resolve(process.env.MEWGENICS_EXTRACTED_DATA)
   : join(REPO_ROOT, ".extracted", "data");
+/** The extracted pack's root (the `.extracted/` layout: data/, swfs/, textures/, shaders/): the parent of
+ * MEWGENICS_EXTRACTED_DATA when it is set, else <repo>/.extracted. */
+export const EXTRACTED_ROOT = process.env.MEWGENICS_EXTRACTED_DATA ? dirname(EXTRACTED_DATA) : join(REPO_ROOT, ".extracted");
+/** A path inside the extracted pack root, e.g. extractedPath("textures", "palette.png"). */
+export function extractedPath(...segments: string[]): string {
+  return join(EXTRACTED_ROOT, ...segments);
+}
+/** Where the extracted vanilla SWFs live: MEWGENICS_VANILLA_SWF_DIR when set (read per call), else extractedPath("swfs"). */
+export function vanillaSwfDir(): string {
+  return process.env.MEWGENICS_VANILLA_SWF_DIR ? resolve(process.env.MEWGENICS_VANILLA_SWF_DIR) : extractedPath("swfs");
+}
 export const MODS_DIR = join(REPO_ROOT, "mods");
 export const DATA_CACHE_DIR = process.env.MEWGENICS_EDITOR_DATA
   ? resolve(process.env.MEWGENICS_EDITOR_DATA)

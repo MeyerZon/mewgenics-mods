@@ -1,11 +1,12 @@
 // Reads the engine's shared palette table (`textures/palette.png`, 16×256) from the
-// git-ignored `.extracted/` copy and exposes it as rows for the preview. Never bundles
+// git-ignored extracted copy (repo.ts extractedPath("textures", …), so MEWGENICS_EXTRACTED_DATA
+// redirects it in a worktree) and exposes it as rows for the preview. Never bundles
 // or copies the game asset anywhere else. Falls back to an identity gray ramp when the
 // file is not extracted, with a hint on how to extract it (read-only gpak access).
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { REPO_ROOT, resolveReadPath } from "../repo.ts";
+import { extractedPath, resolveReadPath } from "../repo.ts";
 import { decodePng } from "./png.ts";
 
 export const PALETTE_REL = join(".extracted", "textures", "palette.png");
@@ -47,7 +48,7 @@ export function readPalette(which: PaletteKind = "palette", opts: { noCache?: bo
   const key = which;
   if (!opts.noCache && cache.has(key)) return cache.get(key) as PaletteResult;
   const rel = which === "fx_palette" ? FX_PALETTE_REL : PALETTE_REL;
-  const abs = resolveReadPath(join(REPO_ROOT, rel));
+  const abs = resolveReadPath(extractedPath("textures", which + ".png"));
   const height = which === "fx_palette" ? 128 : 256;
   let result: PaletteResult;
   if (!existsSync(abs)) {

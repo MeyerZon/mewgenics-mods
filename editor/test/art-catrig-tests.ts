@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODS_DIR } from "../src/core/repo.ts";
+import { MODS_DIR, vanillaSwfDir } from "../src/core/repo.ts";
 import { exampleScene, validateScene } from "../src/core/art/scene.ts";
 import { readSwf } from "../src/core/art/swf-reader.ts";
 import { emitSwf } from "../src/core/art/swf-emitter.ts";
@@ -13,7 +13,7 @@ import * as pc from "../src/core/art/probe-compare.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VANILLA_DIR = process.env.MEWGENICS_VANILLA_SWF_DIR || resolve(HERE, "../../.extracted/swfs");
+const VANILLA_DIR = vanillaSwfDir(); // repo.ts: MEWGENICS_VANILLA_SWF_DIR, else <extracted root>/swfs
 
 export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
   console.log("\n# Art: cat rig (vanilla slot layout, cat-rig.ts, validator, in-game)");
