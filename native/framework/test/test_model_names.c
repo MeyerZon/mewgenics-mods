@@ -207,6 +207,24 @@ TEST(resolve_a_reference_the_unit_keys_override_the_entry) {
     CHECK_STR(out.texture, "");
 }
 
+/* integration of M3 hide + name: the unit's hide_sprite (-1 = not given) overrides the named entry's, like palette */
+TEST(resolve_the_unit_hide_sprite_overrides_the_entry) {
+    tree();
+    static FwModelNames r;
+    fw_model_names_load(mem_read, NULL, node(0), &r);
+    FwGonModel unit, out;
+    fw_gon_model_defaults(&unit);
+    snprintf(unit.file, sizeof unit.file, "@Pillar");
+    CHECK_EQ(fw_model_names_resolve(&r, &unit, &out, NULL), FW_MODEL_REF_OK);
+    CHECK_EQ(out.hideSprite, -1);                        /* neither says: not given */
+    unit.hideSprite = 1;
+    CHECK_EQ(fw_model_names_resolve(&r, &unit, &out, NULL), FW_MODEL_REF_OK);
+    CHECK_EQ(out.hideSprite, 1);                         /* the unit's true wins */
+    unit.hideSprite = 0;
+    CHECK_EQ(fw_model_names_resolve(&r, &unit, &out, NULL), FW_MODEL_REF_OK);
+    CHECK_EQ(out.hideSprite, 0);
+}
+
 TEST(resolve_an_unknown_name_and_a_refused_entry_keep_the_unit_value) {
     tree();
     static FwModelNames r;
