@@ -305,5 +305,53 @@
     ],
     "regenerate": "npm run test:ingame -- _unitmodel unit-model (native/dist/mewframework.dll from feat/3d-meshes-m2)",
     "status": "open"
+  },
+  {
+    "id": "3d-m3-hide-sprite",
+    "pr": 138,
+    "question": "mods/_unithide: the vanilla Rat wears a small magenta box with hide_sprite true. Is the Rat's 2D body gone (only the box, its shadow under it) in shot-hide, while shot-control (hide_sprite false) shows the Rat around the box? Anything else of the Rat (outline, HUD) left over?",
+    "shots": ["ingame-runs/*-_unithide-unit-hide/shot-hide.png","ingame-runs/*-_unithide-unit-hide-control/shot-control.png"],
+    "regenerate": "npm run test:ingame -- _unithide (native/dist/mewframework.dll from feat/3d-meshes-m3)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-unit-palette",
+    "pr": 138,
+    "question": "mods/_unitpal gives the enemy cats TomTom (row 9) and Mangy (row 16) and the Rat a grey box with `palette true`: does TomTom's box read as TomTom's colours (cream) and Mangy's as Mangy's (light grey), next to their 2D bodies, while the Rat's box stays plain grey? Note the boxes look brighter than the sprites (the fight's dark lighting/vignette does not reach mesh draws) — is that acceptable?",
+    "shots": ["ingame-runs/*-_unitpal-unit-palette/shot-pal-a.png","ingame-runs/*-_unitpal-unit-palette/shot-pal-b.png"],
+    "regenerate": "npm run test:ingame -- _unitpal unit-palette (native/dist/mewframework.dll from feat/3d-meshes-m3)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-named-model",
+    "pr": 138,
+    "question": "mods/_modelnames: the Rat's graphics.model is \"@NameBox\" from data/models.gon (scale 1.25 over the entry's). Is there a magenta box standing on the Rat's tile, and do the two Pooters (unknown @NoSuchModel) still show their 2D sprites with no box?",
+    "shots": ["ingame-runs/*-_modelnames-model-names/shot-names-a.png","ingame-runs/*-_modelnames-model-names/shot-names-b.png"],
+    "regenerate": "npm run test:ingame -- _modelnames model-names (mods: fw-3d first; native/dist/mewframework.dll from feat/3d-meshes-m3)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-glb-embedded-texture",
+    "pr": 138,
+    "question": "models/totem.glb carries its texture inside the file (no textures/models/totem.png): is the box on (4,3) a purple / lime 2 x 2 checker on every face, top face brightest, with no magenta and no grey crate texture? (shot-mesh-a is covered by the Battle Start! banner; look at shot-mesh-b)",
+    "shots": ["ingame-runs/*-dev-sandbox-mesh3-glb-embedded/shot-mesh-b.png"],
+    "regenerate": "MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/totem.glb npm run test:ingame -- dev-sandbox (the glb probe script; native/dist/mewframework.dll from feat/3d-meshes-m3)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-unit-face",
+    "pr": 138,
+    "question": "mods/_unitface: the Rat's box has a cyan front, yellow back, magenta sides. Facing (0,-1) and (-1,0) show the cyan front, (1,0) and (0,1) the yellow back (the mesh turns with Character::Face, not a mirror). Does each shot read that way, and does the snap at a turn look acceptable?",
+    "shots": ["ingame-runs/*-_unitface-unit-face/shot-front.png","ingame-runs/*-_unitface-unit-face/shot-front-mirrored.png","ingame-runs/*-_unitface-unit-face/shot-back.png","ingame-runs/*-_unitface-unit-face/shot-back-mirrored.png"],
+    "regenerate": "after PR #114: git mv mods/_unitface/tests/unit-face.mewtest.after-114 mods/_unitface/tests/unit-face.mewtest; npm run test:ingame -- _unitface unit-face",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-slices",
+    "pr": 138,
+    "question": "mods/dev-sandbox/tests/mesh-slices.mewtest: the 2x1 slab (blue/cyan/magenta bands) on (0,6)+(1,6) — is the grey cat on (1,5) drawn over the cyan band (M3) while the M2 control has the slab over that cat? The 3x3 slab: six bands, no gaps or seams at band edges? The blue post on the back quarter of (2,6): behind the white cat on that tile (M3), over it in the M2 control?",
+    "shots": ["ingame-runs/20261022-160819-dev-sandbox-mesh-slices/shot-slices-b.png","ingame-runs/20261022-160902-dev-sandbox-mesh-slices/shot-slices-b.png","ingame-runs/20261022-160912-dev-sandbox-mesh-slices/shot-slices-b.png","ingame-runs/20261022-161058-dev-sandbox-mesh-slices/shot-slices-b.png","ingame-runs/20261022-161108-dev-sandbox-mesh-slices/shot-slices-b.png"],
+    "regenerate": "MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/slab2x1.obj@0,6 MEWFW_MESH_PROBE_TINT=1 npm run test:ingame -- dev-sandbox mesh-slices (also slab3x3.obj@3,3 / backpost.obj@2,6; MEWFW_MESH_ORDER=m2 for the controls)",
+    "status": "open"
   }
 ]

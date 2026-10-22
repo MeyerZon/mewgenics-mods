@@ -102,7 +102,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (26 tools, incl. the art tools
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (27 tools, incl. `extract_model_texture` (a .glb's embedded PNG into the mod), the art tools
   with `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
   Chromium), `check_game_build` and `port_bindings`).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
@@ -121,8 +121,9 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules, the 3D observer's rules, the
   mesh draw (4x4 maths, the C std::function, GL save/restore, shader dialect), the OBJ / glTF loaders + JSON tokenizer,
   the 3D-object registry, per-unit models, the GON walker, the glTF loader, mesh textures + palette, the sprite/mesh
-  painter order, the harness's modules; 362 checks = 14 + 6 + 14 + 13 + 11 + 15 + 22 + 11 + 30 + 41 + 16 + 8 + 10 + 8
-  + 31 + 10 + 12 + 90, `-Werror`),
+  painter order, the M3 named models, hide_sprite, unit facing, PNG decoder + embedded model textures, unit palette
+  row and per-band mesh slices, the harness's modules; 423 checks = 14 + 7 + 14 + 13 + 11 + 15 + 22 + 11 + 30 + 41 + 16
+  + 8 + 11 + 8 + 33 + 10 + 10 + 13 + 6 + 7 + 15 + 4 + 6 + 8 + 90, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.

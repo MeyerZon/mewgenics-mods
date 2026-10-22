@@ -57,6 +57,12 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `3d-m2-palette` (#135) — Palette row 63 on the crate: grey cells become mint/teal along the row (darker on shaded faces, never black), orange cells unchanged? Then: side by side with a cat of the same palette row — same family of colours?
 - [ ] `3d-m2-glb-pillar` (#135) — `models/pillar.glb` (generated): a teal pillar standing upright on (4,3), 1.2 tiles tall, lit top-left like the cube?
 - [ ] `3d-m2-unit-model` (#135) — `mods/_unitmodel`: the Rat's magenta box stands on the Rat in every shot and slides with it; drawn just in front of the Rat's own sprite; mirrored when the Rat turns (not seen in T2)?
+- [ ] `3d-m3-hide-sprite` (#138) — mods/_unithide: the vanilla Rat wears a small magenta box with hide_sprite true. Is the Rat's 2D body gone (only the box, its shadow under it) in shot-hide, while shot-control (hide_sprite false) shows the Rat around the box? Anything else of the Rat (outline, HUD) left over?
+- [ ] `3d-m3-unit-palette` (#138) — mods/_unitpal gives the enemy cats TomTom (row 9) and Mangy (row 16) and the Rat a grey box with `palette true`: does TomTom's box read as TomTom's colours (cream) and Mangy's as Mangy's (light grey), next to their 2D bodies, while the Rat's box stays plain grey? Note the boxes look brighter than the sprites (the fight's dark lighting/vignette does not reach mesh draws) — is that acceptable?
+- [ ] `3d-m3-named-model` (#138) — mods/_modelnames: the Rat's graphics.model is "@NameBox" from data/models.gon (scale 1.25 over the entry's). Is there a magenta box standing on the Rat's tile, and do the two Pooters (unknown @NoSuchModel) still show their 2D sprites with no box?
+- [ ] `3d-m3-glb-embedded-texture` (#138) — models/totem.glb carries its texture inside the file (no textures/models/totem.png): is the box on (4,3) a purple / lime 2 x 2 checker on every face, top face brightest, with no magenta and no grey crate texture? (shot-mesh-a is covered by the Battle Start! banner; look at shot-mesh-b)
+- [ ] `3d-m3-unit-face` (#138) — mods/_unitface: the Rat's box has a cyan front, yellow back, magenta sides. Facing (0,-1) and (-1,0) show the cyan front, (1,0) and (0,1) the yellow back (the mesh turns with Character::Face, not a mirror). Does each shot read that way, and does the snap at a turn look acceptable?
+- [ ] `3d-m3-slices` (#138) — mods/dev-sandbox/tests/mesh-slices.mewtest: the 2x1 slab (blue/cyan/magenta bands) on (0,6)+(1,6) — is the grey cat on (1,5) drawn over the cyan band (M3) while the M2 control has the slab over that cat? The 3x3 slab: six bands, no gaps or seams at band edges? The blue post on the back quarter of (2,6): behind the white cat on that tile (M3), over it in the M2 control?
 - [ ] Provide a test glTF per docs/data-mods.md "3D models" spec ("glTF models": glTF 2.0 .glb, triangulated, Y up, 1 unit = 1 tile, origin at the feet, ≤ a few thousand vertices, one material, no Draco/meshopt/KHR_texture_transform, external PNG ≤ 512²) — drop it in `mods/fw-3d/models/` and an agent wires it.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
@@ -529,6 +535,21 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
       Next: phase **P** (perspective). M-follow-ups: `hide_sprite` (replace the 2D clip, not only accompany it); an
       exported `FW_Set3DObjectMaterial` and a cat's palette row (`CatParts+0x1b4`) for GON units; `@Name` models; a
       .glb's embedded image; per-row splitting of multi-tile meshes; the editor's full model reader when #128 merges.
+      **Same night (branch `feat/3d-meshes-m3`, stacked on #135): M5 done in-game** — `hide_sprite`, the cat palette
+      row for `palette true`, `@Name` models (`data/models.gon`), a .glb's embedded PNG as the texture (+ MCP
+      `extract_model_texture`), the model turning with Character::Face, multi-tile meshes per sort band + the unit
+      winning same-tile ties (docs/possible_3d_work.md M5). Open (agents): the hit flash on a hide_sprite mesh and its
+      outline / glow (still the hidden sprite's mask); `FW_Register3DObject` with `"@Name"`, hide_sprite and the facing
+      for API objects; the validator seeing other mods' `@Name`s and checking that fw-3d is listed first on the mod path
+      (`launch-dev.bat` too); the validator decoding a .glb's embedded image (`model-image-embedded-*` before launch);
+      JPEG embedded images; rainbow-cat per-material rows and an explicit `palette <n>` for non-cats; smooth model
+      turning over the sprite's turn animations; slicing unit-attached multi-tile models; after PR #114 merges:
+      `git mv mods/_unitface/tests/unit-face.mewtest.after-114 mods/_unitface/tests/unit-face.mewtest` and fold the
+      duplicate `Character_Face` / `Character_orientation` manifest entries into #114's FACING block. Planned UI items
+      (NOT built — the owner's rule for this batch: no `editor/web/` changes): a `hide_sprite` checkbox in the model
+      block editor; an `@Name` picker on graphics.model listing the mod's + fw-3d's named models; an "Extract texture"
+      button next to a .glb model; a 4-facing model preview; showing a model's sort bands / footprint in the preview.
+      Next after M5: phase **P** (the PR body of feat/3d-meshes-m3 carries a design proposal).
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
 - [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
 - [ ] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-22: the append route (`_Append_CatTest` frame placing a rig with EMPTY slot sprites, experiment A0) works — the game draws the cat's own parts into our frame; the 2026-10-21 crash was the visible non-empty placeholder (engine-map "CatTest and the cat animation clips").
