@@ -59,15 +59,17 @@ test.describe("a11y — dialogs, menus, toasts, shortcuts", () => {
     await expect(help).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("toasts live in a role=status region and two fired close together both show", async ({ page }) => {
+  test("toasts live in a role=status region and two fired close together both show", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await openApp(page);
-    await page.getByRole("button", { name: /Launch dev/ }).click();
+    await page.locator(".topbar button", { hasText: "Launch…" }).click();
+    await page.locator(".launchpop").getByRole("button", { name: "Copy" }).click();
     await modSwitcher(page).click();
     await page.locator('.menu input[type="file"]').setInputFiles({ name: "not-a-mod.zip", mimeType: "application/zip", buffer: Buffer.from("just text") });
     const region = page.locator('[role="status"][aria-live="polite"]');
     await expect(region).toHaveCount(1);
     await expect(region).toContainText("import refused (not-a-zip)");
-    await expect(region).toContainText("Launch dev is illustrative");
+    await expect(region).toContainText(/copied/i);
   });
 
   test("Ctrl+S never opens the browser's save dialog: the keydown is default-prevented and the page stays responsive", async ({ page }) => {
