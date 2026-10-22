@@ -214,6 +214,22 @@ FW_EXPORT int FW_ClearUnitGlow(void *character) {
     return glow_engine_clear(character);
 }
 
+/* --- API v6: 3D objects (obj3d_engine.c records them; the mesh engine draws) --- */
+FW_EXPORT int FW_Register3DObject(void *character, const char *model, const float transform[16]) {
+    if (!g_active) return 0;
+    return obj3d_engine_register(character, model, transform);
+}
+
+FW_EXPORT int FW_Place3DObjectOnTile(int col, int row, const char *model, const float transform[16]) {
+    if (!g_active) return 0;
+    return obj3d_engine_place(col, row, model, transform);
+}
+
+FW_EXPORT int FW_Unregister3DObject(void *character_or_null, int handle) {
+    if (!g_active) return 0;
+    return obj3d_engine_unregister(character_or_null, handle);
+}
+
 /* ----------------------------------------------------------------------- */
 /* init                                                                     */
 /* ----------------------------------------------------------------------- */

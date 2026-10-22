@@ -1,5 +1,5 @@
 {
-  "_comment": "Names registered by the NATIVE layer (Mewjector + mewframework) that are not present in base game data. The validator treats these as valid status/ability/component references so data mods that pair with a native mod validate. Seeded with JokersLuck so mods/jokers-luck validates. Add a native mod's registered names here (plain strings, or {\"name\",\"kind\",\"mod\"} objects).",
+  "_comment": "Names registered by the NATIVE layer (Mewjector + mewframework) that are not present in base game data. The validator treats these as valid status/ability/component references so data mods that pair with a native mod validate. Seeded with JokersLuck so mods/jokers-luck validates. Add a native mod's registered names here (plain strings, or {\"name\",\"kind\",\"mod\"} objects). Kind \"model\" is a 3D model a native mod registers with the mesh engine: it only resolves a GON graphics.model \"@Name\" reference (docs/data-mods.md \"3D models in a mod (preview)\"), never a status/ability/character.",
   "names": [
     { "name": "JokersLuck", "kind": "status", "mod": "jokers-luck" }
   ]

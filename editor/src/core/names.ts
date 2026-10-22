@@ -41,8 +41,28 @@ export function loadRegisteredNames(): RegisteredName[] {
   return out;
 }
 
+/** The registered-name kind of a 3D model a native mod registers with the mesh engine (GON `model "@Name"`). */
+export const MODEL_KIND = "model";
+
+/**
+ * Split registered names by kind: `model` entries only resolve a GON `model "@Name"` reference; every other entry
+ * (any other kind, or none) is a general name valid as a status / ability / character / component, as before.
+ */
+export function splitRegisteredNames(list: RegisteredName[]): { names: Set<string>; models: Set<string> } {
+  const names = new Set<string>();
+  const models = new Set<string>();
+  for (const e of list) (e.kind === MODEL_KIND ? models : names).add(e.name);
+  return { names, models };
+}
+
+/** The general native-registered names (every kind but `model`). */
 export function registeredNameSet(): Set<string> {
-  return new Set(loadRegisteredNames().map((e) => e.name));
+  return splitRegisteredNames(loadRegisteredNames()).names;
+}
+
+/** The native-registered 3D model names (kind `model`). */
+export function registeredModelSet(): Set<string> {
+  return splitRegisteredNames(loadRegisteredNames()).models;
 }
 
 /** Clear cached registered names (after editing the file). */
@@ -60,8 +80,10 @@ export interface ResolutionSources {
   root?: string;
   /** component class names; default the editor/data cache */
   components?: Set<string>;
-  /** native-registered names; default editor/registered-names.json */
+  /** native-registered names; default editor/registered-names.json (every kind but `model`) */
   registered?: Set<string>;
+  /** native-registered 3D model names; default editor/registered-names.json entries of kind `model` */
+  models?: Set<string>;
 }
 
 export interface ResolutionSets {
@@ -76,6 +98,8 @@ export interface ResolutionSets {
   /** false when no component class list was available at all (the editor/data cache is missing or empty) */
   componentListKnown: boolean;
   registered: Set<string>;
+  /** native-registered 3D models: what a GON `model "@Name"` resolves against */
+  models: Set<string>;
 }
 
 /** The resolution sets the validator uses. Each is a Set of names. Sources default to the real ones. */
@@ -99,10 +123,6 @@ export function resolutionSets(src: ResolutionSources = {}): ResolutionSets {
     components: new Set([...components, ...registered]),
     componentListKnown: components.size > 0,
     registered,
+    models: src.models ?? registeredModelSet(),
   };
-}
-
-/** RED STUB: split registered names by kind (model vs the rest). */
-export function splitRegisteredNames(_list: RegisteredName[]): { names: Set<string>; models: Set<string> } {
-  return { names: new Set(), models: new Set() };
 }

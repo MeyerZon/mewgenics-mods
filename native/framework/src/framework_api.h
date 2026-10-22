@@ -11,9 +11,10 @@
 
 #define FW_OWNER "mewframework"
 #define FW_VERSION_MAJOR 0
-#define FW_VERSION_MINOR 4
+#define FW_VERSION_MINOR 6
 #define FW_VERSION_PATCH 0
-#define FW_API_VERSION 4   /* bumped when functions are added; existing signatures never change */
+#define FW_API_VERSION 6   /* bumped when functions are added; existing signatures never change. v5 is claimed by two open PRs
+                           * (#109 CatRig, #111 FW_Random); v6 = the 3D objects below. See the FwApi note on ordering. */
 
 /* Code symbols located by byte signature (see signatures.h). APPEND ONLY: mods compiled against an
  * older header keep working because the existing values never move. */
@@ -139,6 +140,20 @@ FW_EXPORT uintptr_t FW_GetData(int dataId);   /* absolute address of a FwData en
  * fight scene and a unit whose pool slot is reused is dropped. Same ABI as v4's first release. 1 on success. */
 FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a);
 FW_EXPORT int FW_ClearUnitGlow(void *character);   /* 1 when it was registered */
+/* --- API v6: 3D objects (preview; docs/data-mods.md "3D models in a mod (preview)", docs/possible_3d_work.md phase M).
+ * Registers WHAT to draw and WHERE; mewframework's mesh engine resolves `model` (a model name registered with the mesh
+ * engine, or a mod path "models/<name>.obj" served through -modpaths) and draws it — until that engine ships these
+ * calls only record. `transform` is the object's own model matrix in world units (1 = one tile; axes = the game's
+ * (x, height, z)), column-major float[16], applied after the translation to the anchor; NULL = identity. Up to 64
+ * objects; they belong to the current fight scene (a new TacticsTest clears them); main thread only. --- */
+/* attach to a unit: the object follows it; one object per unit (registering again replaces model + transform and keeps
+ * the handle); dropped when the unit's pool slot is reused (generation check, like FW_SetUnitGlow). Returns the
+ * handle (> 0), 0 when refused (inactive, NULL unit, bad model name, 64 objects already). */
+FW_EXPORT int FW_Register3DObject(void *character, const char *model, const float transform[16]);
+/* place on a tile: anchored at the tile centre (col + 0.5, 0, row + 0.5); any number per tile. Handle > 0, 0 refused. */
+FW_EXPORT int FW_Place3DObjectOnTile(int col, int row, const char *model, const float transform[16]);
+/* remove a unit's object (character non-NULL; handle ignored) or the object with `handle` (character NULL). 1 when removed. */
+FW_EXPORT int FW_Unregister3DObject(void *character_or_null, int handle);
 
 typedef int (*FW_fn_GetVersion)(void);
 typedef int (*FW_fn_IsActive)(void);
@@ -150,6 +165,9 @@ typedef int (*FW_fn_CharacterHasStatus)(void *, const char *);
 typedef uintptr_t (*FW_fn_GetData)(int);
 typedef int (*FW_fn_SetUnitGlow)(void *, float, float, float, float);
 typedef int (*FW_fn_ClearUnitGlow)(void *);
+typedef int (*FW_fn_Register3DObject)(void *, const char *, const float *);
+typedef int (*FW_fn_Place3DObjectOnTile)(int, int, const char *, const float *);
+typedef int (*FW_fn_Unregister3DObject)(void *, int);
 
 typedef struct FwApi {
     FW_fn_GetVersion GetVersion;
@@ -162,6 +180,10 @@ typedef struct FwApi {
     FW_fn_GetData GetData;            /* v3 */
     FW_fn_SetUnitGlow SetUnitGlow;    /* v4 */
     FW_fn_ClearUnitGlow ClearUnitGlow; /* v4; new fields are appended so older layouts stay valid prefixes */
+    /* v5 fields (#109 CatRig, #111 FW_Random) land here when merged; v6: */
+    FW_fn_Register3DObject Register3DObject;       /* v6 */
+    FW_fn_Place3DObjectOnTile Place3DObjectOnTile; /* v6 */
+    FW_fn_Unregister3DObject Unregister3DObject;   /* v6 */
 } FwApi;
 
 /* Resolve the framework's exports from the loaded module. Returns 1 when every function of
@@ -177,6 +199,7 @@ static inline int FW_Resolve(FwApi *api) {
     FW__R(RegisterStatus) FW__R(SetStatusStacks) FW__R(CharacterHasStatus)
     FW__R(GetData)
     FW__R(SetUnitGlow) FW__R(ClearUnitGlow)
+    FW__R(Register3DObject) FW__R(Place3DObjectOnTile) FW__R(Unregister3DObject)
 #undef FW__R
     return 1;
 }
