@@ -11,6 +11,9 @@ import { loadRegisteredNames } from "./names.ts";
 import * as artio from "./art/art-io.ts";
 import { readPalette, knownRowHints } from "./art/palette.ts";
 import { validateScene, exampleScene, DEFAULT_ABC_MODE } from "./art/scene.ts";
+import { newCatAnimation as catAnim } from "./art/cat-rig.ts";
+import type { NewCatAnimationOptions } from "./art/cat-rig.ts";
+import type { Scene, Finding as SceneFinding } from "./art/scene.ts";
 import * as ingame from "./ingame/index.ts";
 import * as vcHeadless from "./art/vectorcraft-headless.ts";
 export { listVanillaSwfs, readVanillaSwf, vanillaSwfDir } from "./art/art-io.ts";
@@ -120,8 +123,18 @@ export function readArtScene(modName: string, relPath: string) {
 export function writeArtScene(modName: string, relPath: string, scene: unknown, opts?: { force?: boolean }) {
   return artio.writeArtScene(modName, relPath, scene, opts);
 }
-export function newArtScene(modName: string, name: string, opts?: { starter?: boolean }) {
+export function newArtScene(modName: string, name: string, opts?: artio.NewSceneOptions) {
   return artio.newArtScene(modName, name, opts);
+}
+/**
+ * Add a cat animation (a rig `<name>Pose` and the labeled `<name>F` / `<name>B` frames on the `_Append_CatTest`
+ * donor) to a scene object, without touching disk. The scene is validated first; `ok` is false on a refusal.
+ */
+export function newCatAnimation(scene: unknown, name: string, opts?: NewCatAnimationOptions): { ok: boolean; scene: Scene; findings: SceneFinding[]; rig?: string; donor?: string } {
+  const v = validateScene(scene);
+  if (!v.ok) return { ok: false, scene: v.scene, findings: v.findings };
+  const r = catAnim(v.scene, name, opts);
+  return { ok: !r.findings.some((f) => f.severity === "error"), scene: r.scene, findings: r.findings, rig: r.rig, donor: r.donor };
 }
 /** Validate a scene object without touching disk (live editing). */
 export function validateArtScene(scene: unknown) {
