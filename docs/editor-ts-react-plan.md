@@ -43,7 +43,7 @@ editor/
   web/src/state.ts            the app store (S, tpl) + actions (selectMod, openFile, save, …)
   web/src/components/*.tsx    TopBar, Explorer, Center (+ Editor), RightPanel, StatusBar, Toast, modals, drawers, tours
   web/src/art/*.ts(x)         art-state.ts, ArtExplorer, ArtCenter, ArtRightPanel, NewSceneModal, preview-gl.ts
-  web/src/rooms/*.ts(x)       Rooms mode (2026-10-22): room-state.ts (store + actions), Rooms.tsx (explorer, grid, inspector, findings)
+  web/src/rooms/*.ts(x)       Rooms mode (2026-10-22): room-state.ts (store + actions), RoomPanes.tsx (the lazy chunk: explorer, grid / iso, inspector, findings)
   web/art/preview-dev.html    second Vite page (the standalone preview harness) → preview-dev.ts
   web/server.ts → server.ts  static dist + /api bridge with the zod gate
   scripts/*.ts, test/*.ts     node runs them directly
@@ -117,7 +117,7 @@ room, else `default_tileset`, i.e. `alley`).
   resolution + the tileset list), `GET /api/level-tile-art?mod&tileset&tile=<id>|object=<id>` (the PNG; `&meta=1`
   gives its size and the clip's registration point in it). Thumbnails and the export index are cached in
   `editor/data/level-art/` (git-ignored, keyed by the SWF's size + mtime); no game art is ever committed.
-- **Iso view** (`Rooms.tsx` `IsoGrid`, `edit.ts` `isoCellCenter` / `isoDrawOrder`): 2:1 diamonds (the engine's
+- **Iso view** (`rooms/RoomIso.tsx`, `edit.ts` `isoCellCenter` / `isoDrawOrder`): 2:1 diamonds (the engine's
   projection: `docs/3d-rendering-feasibility.md`), cell (x, y) at ((x−y)·w/2, (x+y)·w/4), tile art on the cell centre,
   objects feet-registered on it, drawn in x+y order (back first). Painting, erasing and selecting work on the diamonds.
 - Tests: `test/level-art-tests.ts` (T0 on a SWF built by the editor's emitter + a synthetic base: resolver, reasons,
@@ -194,6 +194,22 @@ PR 1 of the UX overhaul adds the shared building blocks; later PRs move the scre
   replace the edited object, so the `React.memo` shape / sprite / layer rows re-render only when theirs changes. The
   JSON tab keeps typed text when the scene moves underneath (a Reload / Keep banner). Every Art file is off the
   conventions allow-list but one positional path-row key in `SceneTabs.tsx`.
+- **Rooms mode (PR 5)**: Rooms is its own chunk too: `App.tsx` `React.lazy`-loads `rooms/RoomPanes.tsx` (the
+  explorer, the centre, the right panel) behind an `EmptyState` fallback; `room-state.ts` stays in the shell. The old
+  `Rooms.tsx` is split into `RoomExplorer`, `RoomToolbar`, `RoomGrid`, `RoomIso`, `RoomInspector`, `NewRoomModal`,
+  `RoomBits` (labels, art lookup, the self-hiding thumbnail) and `grid-input.ts`. The explorer has the Rooms list and
+  ONE Palette list with a `Tiles | Objects` Segmented switch (`R.paletteKind`; only the active kind is in the DOM, the
+  list fills the rest of the explorer; choosing the Tile / Object tool or a brush shows that kind). The toolbar uses
+  `Segmented` for the tool and the view, a dirty dot after the path and an `IconButton` Close. The right panel is
+  `Inspector | Findings` tabs (`R.rightTab`; the Findings label carries the count, `Findings · 1`; the status pill
+  opens it) and Findings is a `Summary` (`findingsLevel(counts)`) + `FindingsList`. Grid input is pointer events (a
+  touch / pen press releases its implicit capture so a drag reaches the next cells) with ONE window `pointerup` /
+  `pointercancel` listener (`useStrokeEnd`, mounted by `RoomCenter`); both grids are `role=grid` with
+  `role=gridcell` buttons and one roving tab stop (the selection): arrows `moveSelection` (clamped, `clampSel`),
+  Enter / Space `applyAtSelection`. Cells (`Cell`, `IsoCell`) and palette rows are `React.memo` with primitive props
+  (tile id, objects summary, art src, selected, random), so painting one cell re-renders that cell. The New room dialog
+  is a `<form>` (Enter creates). Every `rooms/*` file is off the conventions allow-list. e2e: `tests/e2e/rooms.spec.ts`
+  "the explorer, the panes and the grid input (UX PR 5)".
 
 ## Follow-ups (not in this stack)
 

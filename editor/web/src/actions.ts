@@ -8,7 +8,7 @@ import { S, tpl, lsGet, lsSet, onboarding, toast, applyBasePage, BASE_PAGE, type
 import { getJson, post, url } from "./api.ts";
 import { editorCtl } from "./components/Editor.tsx";
 import { loadArtForMod, refreshArtListings, saveScene, runValidate as runArtValidate, setArtRightTab } from "./art/art-state.ts";
-import { R, loadRoomsForMod, refreshLevels, openLevel, saveLevel, runValidate as runRoomValidate } from "./rooms/room-state.ts";
+import { R, loadRoomsForMod, refreshLevels, openLevel, saveLevel, runValidate as runRoomValidate, setRightTab as setRoomRightTab } from "./rooms/room-state.ts";
 import { registerDirty, guard, isDirty, ALL_SCOPES, type DirtyScope } from "./dirty.ts";
 import { readDeepLink, writeDeepLink, type Mode } from "./deeplink.ts";
 import type {
@@ -180,11 +180,12 @@ export async function validateCurrent(): Promise<void> {
   liveTimer = undefined;
   return runLive();
 }
-/** The status pill: show the current mode's findings (Rooms lists them in its right panel already). */
+/** The status pill: show the current mode's findings (the Data Validation tab, the Art / Rooms Findings tab). */
 export function openFindings(): void {
   const m = currentMode();
   if (m === "art") setArtRightTab("findings");
-  else if (m === "data") setTab("validation");
+  else if (m === "rooms") setRoomRightTab("findings");
+  else setTab("validation");
 }
 
 // ---- editor status (GET /api/status) --------------------------------------------------------------

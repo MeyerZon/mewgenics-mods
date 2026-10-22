@@ -8,14 +8,11 @@
   "window-confirm": {},
   "clickable-span-div": {},
   "uncontrolled-default": {},
-  "effect-deps": {
-    "rooms/Rooms.tsx": 1
-  },
+  "effect-deps": {},
   "index-key": {
     "art/SceneTabs.tsx": 1,
     "components/ConceptsDrawer.tsx": 1,
     "components/Tours.tsx": 2,
-    "components/WorkedExamples.tsx": 1,
-    "rooms/Rooms.tsx": 3
+    "components/WorkedExamples.tsx": 1
   }
 }

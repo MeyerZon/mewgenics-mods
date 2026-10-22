@@ -18,7 +18,6 @@ import { BaseEntryDrawer, ComponentsDrawer } from "./components/Drawers.tsx";
 import { TourModal, ArtTourModal } from "./components/Tours.tsx";
 import { WorkedExample, ArtWorkedExample } from "./components/WorkedExamples.tsx";
 import { initArtUi } from "./art/art-state.ts";
-import { RoomExplorer, RoomCenter, RoomRightPanel } from "./rooms/Rooms.tsx";
 import { startup, closeMenu, saveCurrent, loadStatus } from "./actions.ts";
 import { initShortcuts, setSaveHandler } from "./shortcuts.ts";
 import { isDirty, resolveConfirm } from "./dirty.ts";
@@ -32,17 +31,24 @@ const ArtExplorer = React.lazy(() => artPanes().then((m) => ({ default: m.ArtExp
 const ArtCenter = React.lazy(() => artPanes().then((m) => ({ default: m.ArtCenter })));
 const ArtRightPanel = React.lazy(() => artPanes().then((m) => ({ default: m.ArtRightPanel })));
 
-function ArtLoading(): React.JSX.Element {
+// Rooms mode likewise (rooms/RoomPanes.tsx: the explorer, the grid / iso centre, the Inspector | Findings panel);
+// rooms/room-state.ts stays in the shell.
+const roomPanes = () => import("./rooms/RoomPanes.tsx");
+const RoomExplorer = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomExplorer })));
+const RoomCenter = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomCenter })));
+const RoomRightPanel = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomRightPanel })));
+
+function PaneLoading({ mode }: { mode: "Art" | "Rooms" }): React.JSX.Element {
   return (
     <div className="emptycenter">
-      <EmptyState icon="▲" title="Loading Art mode…" />
+      <EmptyState icon={mode === "Art" ? "▲" : "▦"} title={`Loading ${mode} mode…`} />
     </div>
   );
 }
 
-/** One lazily loaded Art pane, with the loading state while its chunk arrives. */
-function Lazy({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <React.Suspense fallback={<ArtLoading />}>{children}</React.Suspense>;
+/** One lazily loaded Art / Rooms pane, with the loading state while its chunk arrives. */
+function Lazy({ mode = "Art", children }: { mode?: "Art" | "Rooms"; children: React.ReactNode }): React.JSX.Element {
+  return <React.Suspense fallback={<PaneLoading mode={mode} />}>{children}</React.Suspense>;
 }
 
 function Shell(): React.JSX.Element {
@@ -54,9 +60,9 @@ function Shell(): React.JSX.Element {
     <div className="shell">
       <TopBar />
       <div className="body" style={{ gridTemplateColumns: columns }}>
-        <PaneBoundary name="Explorer">{roomMode ? <RoomExplorer /> : artMode ? <Lazy><ArtExplorer /></Lazy> : <Explorer />}</PaneBoundary>
-        <PaneBoundary name="Editor">{roomMode ? <RoomCenter /> : artMode ? <Lazy><ArtCenter /></Lazy> : <Center />}</PaneBoundary>
-        {mod ? <PaneBoundary name="Right panel">{roomMode ? <RoomRightPanel /> : artMode ? <Lazy><ArtRightPanel /></Lazy> : <RightPanel />}</PaneBoundary> : null}
+        <PaneBoundary name="Explorer">{roomMode ? <Lazy mode="Rooms"><RoomExplorer /></Lazy> : artMode ? <Lazy><ArtExplorer /></Lazy> : <Explorer />}</PaneBoundary>
+        <PaneBoundary name="Editor">{roomMode ? <Lazy mode="Rooms"><RoomCenter /></Lazy> : artMode ? <Lazy><ArtCenter /></Lazy> : <Center />}</PaneBoundary>
+        {mod ? <PaneBoundary name="Right panel">{roomMode ? <Lazy mode="Rooms"><RoomRightPanel /></Lazy> : artMode ? <Lazy><ArtRightPanel /></Lazy> : <RightPanel />}</PaneBoundary> : null}
       </div>
       <StatusBar />
     </div>

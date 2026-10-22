@@ -72,7 +72,7 @@ export interface AppState {
   exampleStep: number;
   // art mode (was `artMode` exported from art-ui.mjs) + its onboarding
   artMode: boolean;
-  /** Rooms mode (the Room editor: rooms/Rooms.tsx); exclusive with artMode */
+  /** Rooms mode (the Room editor: rooms/RoomPanes.tsx); exclusive with artMode */
   roomMode: boolean;
   artTourOpen: boolean;
   artTourStep: number;
