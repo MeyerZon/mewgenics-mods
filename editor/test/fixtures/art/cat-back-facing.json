@@ -1,0 +1,18 @@
+{
+  "note": "OBSERVED 2026-10-22, read-only parse of .extracted/swfs (catanis.swf CatTest, catanis2.swf _Append_CatTest, the four-way enemy clips) and .extracted/data (catgen.gon, characters/*.gon); test/art-cat-back-tests.ts re-checks it against the installed game when present. A back-facing cat frame (<anim>B) places a DIFFERENT pose sprite than its <anim>F partner: vanilla idleB stacks head_back@1 arm2@3 leg2@5 body@7 arm1@9 leg1@11 tail@13 (head behind, tail in front). head_back is not a separate part: CatParts::load_faces 0x73a990 registers the slot name \"head_\" + <face> for every catgen.gon faces entry, and faces.back is { back true } — the head drawn from behind. The visitor's `bhead` spelling (0x742bd0) is used by no vanilla cat frame. Four-way clips (graphics.four_way_animations true) carry complete <anim>LF/RF/LB/RB quartets; no CatTest label is four-way.",
+  "back": {
+    "label": "idleB",
+    "slots": ["head_back@1", "arm2@3", "leg2@5", "body@7", "arm1@9", "leg1@11", "tail@13"],
+    "head": "head_back",
+    "faceSlotPrefix": "head_",
+    "face": "back"
+  },
+  "catanis": { "export": "CatTest", "bLabels": 362, "headBack": 356, "head": 19, "bhead": 0 },
+  "catanis2": { "export": "_Append_CatTest", "bLabels": 91, "headBack": 88, "head": 7, "bhead": 0 },
+  "fourWay": {
+    "suffixes": ["LF", "RF", "LB", "RB"],
+    "clips": { "MegaFetus": "enemies.swf", "Thump": "enemies2.swf", "TracyX": "enemies4.swf", "ManglersMonster": "bosses3.swf" },
+    "characters": { "MegaFetus": "characters/enemies.gon", "Thump": "characters/enemies.gon", "TracyFetus": "characters/enemies.gon", "ManglersMonster": "characters/minibosses.gon" },
+    "catTestFourWayLabels": 0
+  }
+}

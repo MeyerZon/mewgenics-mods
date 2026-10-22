@@ -397,7 +397,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     for (const l of fx.catanis2.labelsAmong) assert(ca2.labels.includes(l), `${l} among the appended labels`);
   });
 
-  test("newCatAnimation: a rig <name>Pose (parts \"game\": empty slot sprites the game fills with the cat's own parts), a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing the rig as the layer `ani` at depth 1, exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
+  test("newCatAnimation: a rig <name>Pose (parts \"game\": empty slot sprites the game fills with the cat's own parts), a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing a rig as the layer `ani` at depth 1 (the F frame <name>Pose, the B frame the back rig <name>PoseBack: art-cat-back-tests.ts), exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
     need();
     const base = exampleScene("anim");
     const before = JSON.stringify(base);
@@ -413,7 +413,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     eq(JSON.stringify(d.labels), JSON.stringify({ waveF: 0, waveB: 1 }));
     eq(d.layers.length, 1);
     eq(d.layers[0].name, fx.layer); eq(d.layers[0].depth, fx.depth);
-    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePose");
+    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePoseBack");
     eq(r.scene.exports[fx.append], "CatAnim_wave");
     const v = validateScene(r.scene) as any;
     assert(v.ok, errors(v.findings));
@@ -429,8 +429,8 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     eq(d.frames, 4);
     eq(JSON.stringify(d.labels), JSON.stringify({ waveF: 0, waveB: 1, pounceF: 2, pounceB: 3 }));
     eq(d.layers.length, 1);
-    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePose,2:wavePose,3:wavePose");
-    assert(!two.scene.sprites.pouncePose, "no new rig when opts.rig is given");
+    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePoseBack,2:wavePose,3:pouncePoseBack");
+    assert(!two.scene.sprites.pouncePose, "no new front rig when opts.rig is given (the back rig is new: no opts.backRig)");
     eq(two.scene.exports[fx.append], "CatAnim_wave");
     assert((validateScene(two.scene) as any).ok, "validates");
     const three = R.newCatAnimation(two.scene, "sit");
