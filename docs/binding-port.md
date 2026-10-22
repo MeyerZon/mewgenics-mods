@@ -187,10 +187,17 @@ What the run suggests for the ladder (candidates, not implemented):
 - `FW_SIG_MAX_BYTES` / `sigCap` is 128; `Status_GetCategory` needs 126. Raising it means changing `fw_sig.h`
   and the host test together.
 - An SDL upgrade changes the DYNAPI slot order: the 8 slots become `needs-human` until re-verified.
-- 46 entries (40 struct offsets, 6 vtable slot constants) are still `unanchored`: the port reports them instead of
-  guessing. Adding witness patterns is the next improvement.
+- ~~46 entries are still `unanchored`~~ — closed 2026-10-20 (PRs #53–#56): every one of the manifest's 121 entries
+  carries an anchor (the 40 struct offsets a `witness`, the six vtable-slot constants a `derive` or call-slot
+  witness); none is `unanchored: true`. The new witnesses are verified on the installed exe only — no second build
+  has exercised them yet — and a moved offset is still a `proposed` value the port never applies on its own.
+- **Caller ordinal is the only anchor for two functions.** `Status_ApplyLuckUp` (call #1261 of `Status_ApplyByName`)
+  and `LuckUp_ctor` (call #6 of `Status_ApplyLuckUp`) have no strings and no `after`, so one call added or removed
+  before those ordinals fails both with no fallback. The callee-set / ordinal-window / vftable-store rungs above are
+  candidates, not implemented; they need a body-changing build to test against (TODO "Harden rung 3").
 - A changed arity of the 13 lookups (shapes A–E), a compiler/CRT change (`MsvcString` layout), or a changed
   vtable layout cannot be ported mechanically.
-- The DLL still resolves functions by signature at load time. Entries that only have anchors (`signature: null`)
-  ship as raw RVAs in `signatures.h`; a runtime anchor locator in the DLL (string → lea xref → `.pdata`) is the
-  optional follow-up that would let those survive a relink before anyone runs the port.
+- The DLL still resolves functions by signature at load time. Entries that only have anchors (`signature: null`:
+  the 11 `Status_*` lookups without a unique signature) ship as raw RVAs in `signatures.h`, so they survive a relink
+  only once the port has run. The runtime anchor locator in the DLL (string → lea xref → `.pdata`) that would have
+  covered them was dropped by the owner, 2026-10-19 (TODO "Decisions").
