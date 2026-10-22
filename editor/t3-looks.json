@@ -222,5 +222,21 @@
     "shots": [],
     "regenerate": "ask an agent: MCP vectorcraft_exec { mod: dev-sandbox, shape body, shape.ellipse }, then Build SWF and look in the Ruffle tab or cd editor && npm run test:artprobe",
     "status": "open"
+  },
+  {
+    "id": "pr120-vfx-aura",
+    "pr": 120,
+    "question": "In shot-aura-2, does the new particle aura read as a rising cloud of pink discs on the right-hand Rat (not one flat blob)?",
+    "shots": ["ingame-runs/*-_vfxprobe-vfx-probe/shot-aura-2.png", "ingame-runs/*-_vfxprobe-vfx-probe/shot-baseline.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --vfx",
+    "status": "open"
+  },
+  {
+    "id": "pr120-vfx-repoint",
+    "pr": 120,
+    "question": "In shot-repoint-1, does the re-pointed SparkleBuff draw our yellow-bordered marker clip (streaked along its motion) on the left Rat?",
+    "shots": ["ingame-runs/*-_vfxprobe-vfx-probe/shot-repoint-1.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --vfx",
+    "status": "open"
   }
 ]

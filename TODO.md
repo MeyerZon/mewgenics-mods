@@ -44,7 +44,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       `shot-rat-2.png`): any wrong offset or mirroring of the ArtProbe clip drawn for a plain Rat, against the ArtProbe
       enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
 - [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
-- [ ] **VFX probe shots** (`npm run test:artprobe -- --vfx`, run `20261022-131810-_vfxprobe-vfx-probe`, `shot-aura-2.png`,
+- [ ] `pr120-vfx-aura` / `pr120-vfx-repoint` (#120) — **VFX probe shots** (`npm run test:artprobe -- --vfx`, run `20261022-131810-_vfxprobe-vfx-probe`, `shot-aura-2.png`,
       `shot-repoint-1.png`): does the NEW aura read as a rising cloud of pink discs on the Rat (not a flat blob), and does the
       re-pointed SparkleBuff show our yellow-bordered marker clip (streaked along the motion) on the second Rat? Note: that
       run used PR #117's in-process GL capture (its `mewtest.dll` swapped in and restored); with the window capture every
