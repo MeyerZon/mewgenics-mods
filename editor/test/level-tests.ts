@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { decodeLvl, encodeLvl, buildRoom, lvlIds, LvlFormatError } from "../src/core/level/lvl.ts";
 import { validateMod } from "../src/core/validate/validator.ts";
-import { extractedPath } from "../src/core/repo.ts";
+import { extractedPath, EXTRACTED_DATA } from "../src/core/repo.ts";
 import { newFromTemplate } from "../src/core/templates.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
@@ -240,6 +240,16 @@ export function runLevelTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     console.log("  (skipped: no .extracted/levels — `python -I tools/gpak.py extract .extracted --prefix levels/` for the vanilla round-trip)");
     return;
   }
+  test("validator (maps, T1): every vanilla map passes the map rules (only eventdebug's empty hard pool is reported)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mewged-vanmaps-"));
+    mkdirSync(join(dir, "data", "maps"), { recursive: true });
+    const src = join(EXTRACTED_DATA, "maps");
+    for (const n of readdirSync(src)) if (n.endsWith(".gon")) writeFileSync(join(dir, "data", "maps", n), readFileSync(join(src, n)));
+    const found = validateMod("vanmaps", undefined, { modDir: dir, nativeBuild: null, components: [], registeredNames: [] }).findings
+      .filter((f) => f.code.startsWith("map-") || f.code === "gon-parse-error" || f.code.startsWith("include-"))
+      .map((f) => `${f.code} ${f.location?.file?.split("/").pop()} ${f.location?.path}`);
+    same(found, ["map-level-pool-empty eventdebug.gon levels.hard"]);
+  });
   test("lvl (T1): every vanilla .lvl decodes and re-encodes byte for byte", () => {
     const files: string[] = [];
     const walk = (d: string): void => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else if (p.endsWith(".lvl")) files.push(p); } };

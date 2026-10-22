@@ -233,6 +233,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
       validateLvl(o, rb, palettes, modName, modDir, root);
     } else if (o.fileType === "gon") {
       validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, modDir, fragments);
+      if (/^data\/maps\/[^/]+\.gon$/.test(o.baseName)) validateMapFile(o, rb, overlays, modName, root, modDir);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -240,6 +241,107 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     }
   }
   return rb.build();
+}
+
+/** MapNode::str_to_type 0x225680: every other `type` is a fatal "No node type named: <x>" (MapNode.cpp). */
+export const MAP_NODE_TYPES = [
+  "none", "npc", "enter", "exit", "home", "battle", "hard", "miniboss", "boss", "event", "optional_event",
+  "special_event", "shop", "treasure", "furniturebox", "foodbox", "bonus", "empty", "any",
+];
+
+/** Top-level keys of a base data file plus this mod's copies/overlays of it (any mode). */
+function topKeys(pack: string, overlays: OverlayFile[], dataRoot: string): Set<string> {
+  const out = new Set<string>();
+  const texts: string[] = [];
+  const abs = packPath(pack, dataRoot);
+  if (existsSync(abs)) { try { texts.push(readFileSync(abs, "utf8")); } catch { /* unreadable */ } }
+  for (const o of overlays) if (o.baseName === pack && o.fileType === "gon") texts.push(o.text);
+  for (const t of texts) {
+    try {
+      const v = toValue(parse(t));
+      if (v.t === "obj") for (const e of v.entries) out.add(parsePolicy(e.key).name);
+    } catch { /* reported elsewhere */ }
+  }
+  return out;
+}
+
+/** Does any .lvl live directly in levels/<dir>/ (base extracted pack or this mod)? The game lists it non-recursively. */
+function hasLevels(dir: string, modDir: string, dataRoot: string): boolean | null {
+  const baseDir = packPath(`levels/${dir}`, dataRoot);
+  const baseRoot = packPath("levels", dataRoot);
+  const any = (d: string): boolean => existsSync(d) && readdirSync(d).some((n) => n.toLowerCase().endsWith(".lvl"));
+  if (any(join(modDir, "levels", ...dir.split("/"))) || any(baseDir)) return true;
+  return existsSync(baseRoot) ? false : null; // null: no extracted levels/ to check against
+}
+
+/**
+ * A map file (data/maps/<x>.gon, new or an overlay): node types the game knows (fatal otherwise), next_map targets
+ * that exist, a tileset name, a chapter_id from chapter_id_enum and level pools that are not empty. The map is the
+ * text the game parses (comments stripped, `#include "standard_nodes.gon"` inlined).
+ */
+function validateMapFile(o: OverlayFile, rb: ReportBuilder, overlays: OverlayFile[], modName: string, dataRoot: string, modDir: string): void {
+  const file = `mods/${modName}/${o.relPath}`;
+  let root: VNode;
+  try {
+    root = toValue(parse(preprocessFile(o.text, { resource: o.baseName, dataRoot, modDir }).text));
+  } catch {
+    return; // gon-parse-error is reported by validateGonOverlay
+  }
+  if (root.t !== "obj") return;
+  const child = (v: VNode, k: string): VNode | undefined => (v.t === "obj" ? v.entries.find((e) => parsePolicy(e.key).name === k)?.value : undefined);
+  const str = (v: VNode | undefined): string | undefined => (v && v.t === "str" ? v.raw : undefined);
+
+  const nodes = child(root, "nodes");
+  if (nodes && nodes.t === "obj") {
+    const mapFiles = new Set<string>();
+    const baseMaps = packPath("data/maps", dataRoot);
+    if (existsSync(baseMaps)) for (const n of readdirSync(baseMaps)) mapFiles.add(n.toLowerCase());
+    for (const x of overlays) if (/^data\/maps\/[^/]+\.gon$/.test(x.baseName)) mapFiles.add(x.baseName.slice("data/maps/".length).toLowerCase());
+    for (const e of nodes.entries) {
+      const name = parsePolicy(e.key).name;
+      const type = str(child(e.value, "type"));
+      if (type !== undefined && !MAP_NODE_TYPES.includes(type)) {
+        rb.error("map-node-type-unknown", `node "${name}" has type "${type}": the game knows only ${MAP_NODE_TYPES.join(", ")} (MapNode::str_to_type 0x225680) and stops with a fatal "No node type named: ${type}"`, { file, path: `nodes.${name}.type` });
+      }
+      const next = str(child(e.value, "next_map"));
+      if (next !== undefined && existsSync(baseMaps) && !mapFiles.has(next.toLowerCase())) {
+        rb.error("map-next-map-missing", `node "${name}" leads to next_map ${next}, but there is no data/maps/${next} in the base data or this mod (the run loads "data/maps/" + next_map)`, { file, path: `nodes.${name}.next_map` });
+      }
+    }
+  }
+  const tileset = str(child(root, "tileset"));
+  if (tileset !== undefined && existsSync(packPath("data/tilesets.gon", dataRoot)) && !topKeys("data/tilesets.gon", overlays, dataRoot).has(tileset)) {
+    rb.warn("map-tileset-unknown", `tileset "${tileset}" is not a tileset in data/tilesets.gon (base or this mod's tilesets.gon overlay); add it with new_from_template kind tileset-variant`, { file, path: "tileset" });
+  }
+  const chapter = str(child(root, "chapter_id"));
+  if (chapter !== undefined && existsSync(packPath("data/chapter_id_enum.gon", dataRoot))) {
+    const ids = new Set<string>();
+    for (const text of [readFileSync(packPath("data/chapter_id_enum.gon", dataRoot), "utf8"), ...overlays.filter((x) => x.baseName === "data/chapter_id_enum.gon").map((x) => x.text)]) {
+      try {
+        const arr = child(toValue(parse(text)), "chapter_id_enum");
+        if (arr && arr.t === "arr") for (const it of arr.items) if (it.t === "str") ids.add(it.raw);
+      } catch { /* reported elsewhere */ }
+    }
+    if (!ids.has(chapter)) {
+      rb.warn("map-chapter-id-unknown", `chapter_id "${chapter}" is not in data/chapter_id_enum.gon; the list mirrors a C++ enum (MewDirector.h, the file says) that the game indexes by position, so reuse a vanilla chapter_id for a new map`, { file, path: "chapter_id" });
+    }
+  }
+  const levels = child(root, "levels");
+  const folder = str(levels ? child(levels, "folder") : undefined);
+  if (levels && levels.t === "obj" && folder !== undefined) {
+    for (const e of levels.entries) {
+      // easy / hard are flat folders of rooms; rare may be empty in vanilla (dimensionx) and boss / miniboss / special are
+      // per-boss subfolders chosen through `bosses` / `minibosses`
+      if ((e.key !== "easy" && e.key !== "hard") || e.value.t !== "arr") continue;
+      for (const it of e.value.items) {
+        if (it.t !== "str") continue;
+        const has = hasLevels(`${folder}/${it.raw}`, modDir, dataRoot);
+        if (has === false) {
+          rb.warn("map-level-pool-empty", `levels.${e.key} names levels/${folder}/${it.raw}/, which holds no .lvl in the base data or this mod: that pool is empty (the game lists the folder, mod files included — FileManager_ListDir 0x9a1900)`, { file, path: `levels.${e.key}` });
+        }
+      }
+    }
+  }
 }
 
 /** The numeric ids of the two palettes every level names (data/spawns.gon objects, data/tiles.gon tiles). */
@@ -362,7 +464,10 @@ function validateGonOverlay(
     return;
   }
   const fragment = o.mode === "replace" && fragments.has(o.baseName) && !existsSync(packPath(o.baseName, dataRoot));
-  if (o.mode === "replace" && !fragment) {
+  // a NEW data/maps/<x>.gon replaces nothing: the map DB lists data/maps (SpawnDatabase_LoadGonDir 0x7c0cb0 →
+  // FileManager_ListDir 0x9a1900, which walks every -modpaths dir too) and a run loads "data/maps/" + next_map
+  const newMap = o.mode === "replace" && /^data\/maps\/[^/]+\.gon$/.test(o.baseName) && !existsSync(packPath(o.baseName, dataRoot));
+  if (o.mode === "replace" && !fragment && !newMap) {
     rb.warn("whole-file-replace", `${o.relPath} replaces the whole base file; prefer .append/.merge/.patch`, { file });
   }
   if (!root) return;
