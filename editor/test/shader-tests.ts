@@ -194,7 +194,9 @@ export function runShaderTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     test(`mods/${mod} validates clean (shaders${BASE_SHADERS_READY ? "" : "; base include check skipped"})`, () => {
       const r = real(mod);
       // without .extracted (CI) a .merge overlay cannot be checked against its base (fw-3d gives the vanilla Crate a model): base-missing is a warning then
-      const rest = r.findings.filter((f) => f.code !== "component-list-missing" && !((f.code === "shader-include-unchecked" || f.code === "base-missing") && !BASE_SHADERS_READY));
+      // likewise the base-name checks (fw-glow's sample FwGlowRat is `variant_of Rat` with a `Temporary` status) resolve only against base data
+      const needsBase = new Set(["shader-include-unchecked", "base-missing", "unknown-parent", "unknown-status"]);
+      const rest = r.findings.filter((f) => f.code !== "component-list-missing" && !(needsBase.has(f.code) && !BASE_SHADERS_READY));
       eq(codes(rest), "(none)", JSON.stringify(rest));
     });
   }
