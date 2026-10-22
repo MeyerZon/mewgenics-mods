@@ -6,6 +6,7 @@
 #include "signatures.h"
 #include "offsets.h"
 #include "fw_status_rules.h"   /* MsvcString, the status table rules (pure, host-tested) */
+#include "fw_resolve.h"        /* FwHookSpec: the hook plan both files install steps of (pure, host-tested) */
 
 extern MewjectorAPI g_mj;
 extern int g_mjAvailable;
@@ -16,7 +17,7 @@ extern uintptr_t g_sym[FW_SYMBOL_COUNT_];
 void fw_log(const char *fmt, ...);
 
 /* status_engine.c */
-int status_engine_install_hooks(void);  /* called once the framework is active */
+int status_engine_hook_step(const FwHookSpec *spec);   /* the status-side steps of FW_HOOK_PLAN (framework.c drives the run) */
 int status_engine_register(const FwStatusDef *def);
 const FwStatusTable *status_engine_table(void);   /* the registered names, for fw_status_validate() */
 int status_engine_set_stacks(void *status, int value);

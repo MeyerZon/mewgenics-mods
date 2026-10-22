@@ -111,7 +111,9 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
-  and generated tables, the status definition rules, the harness's modules; 98 checks = 13 + 6 + 14 + 65, `-Werror`),
+  and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
+  walks + apply/merge writes, symbol resolution + the hook plan, the harness's modules;
+  149 checks = 13 + 6 + 14 + 12 + 11 + 14 + 79, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.

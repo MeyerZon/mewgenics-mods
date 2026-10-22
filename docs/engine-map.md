@@ -248,7 +248,15 @@ category and hit-effect rules apply), and `Character::BeginTurn` (dispatches `on
 The rules a definition must satisfy — at most 8 definitions (one vtable-thunk row each), a non-empty name of at
 most 15 bytes (the std::string SSO buffer, so the alias rewrite never reallocates), template `LuckUp` only, unique
 names — and the alias rewrite itself live in the pure `fw_status_rules.c` (host tests `test_status_rules.c`);
-`FW_RegisterStatus` validates against them before it claims the name with Mewjector.
+`FW_RegisterStatus` validates against them before it claims the name with Mewjector. Since 2026-10-21 the rest of
+the logic is pure and host-tested as well: the vtable clone into caller-supplied memory + the thunk bodies
+(`fw_vtable.c`, `test_vtable.c`; a T1 check clones the real dump `.analysis/luckup-vtable.hex` and pins slots 0/1 at
+`0x140566ed0` / `0x140566ec0`), the Character → Entity → component walks and the apply_status argument resolution,
+merge writes (+0x5c, +0xc8, +0xd0 = applier−8) and set-stacks writes over `offsets.h`-shaped fake objects
+(`fw_walk.c`, `test_walk.c`), and the load-time policy — symbol resolution over executable sections only with
+exactly one hit, the `-savesuffix` gate, `FW_GetSymbol`/`FW_GetData` bounds and the hook plan: `Character::BeginTurn`
+(priority 20, abort on failure) → LuckUp vtable sanity check → `apply_status` + the 13 lookups (priority 20, all
+attempted, counted) → `TurnControl::NextTurn` (priority 100) (`fw_resolve.c`, `test_resolve.c`).
 Verified in process on 2026-10-17: all hooks installed, Mewjector integrity ALL OK, `JokersLuck` registered with
 type id 0x1000. Combat behavior still needs a played fight to confirm.
 
