@@ -495,7 +495,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 26 editor tools", () => eq(list.tools.length, 26));
+    test("tools/list returns the 27 editor tools", () => eq(list.tools.length, 27));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -638,6 +638,9 @@ await mcpSmoke();
   let mtt: typeof import("./mesh-tex-tests.ts") | null = null;
   try { mtt = await import("./mesh-tex-tests.ts"); } catch (e) { test("mesh-tex-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (mtt) mtt.runMeshTexTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let gtt: typeof import("./glb-texture-tests.ts") | null = null;
+  try { gtt = await import("./glb-texture-tests.ts"); } catch (e) { test("glb-texture-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (gtt) gtt.runGlbTextureTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let umt: typeof import("./unit-model-tests.ts") | null = null;
   try { umt = await import("./unit-model-tests.ts"); } catch (e) { test("unit-model-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (umt) umt.runUnitModelTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });

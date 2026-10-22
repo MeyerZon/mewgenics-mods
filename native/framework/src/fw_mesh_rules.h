@@ -32,6 +32,10 @@ typedef struct FwMesh {
      * data: URI image. Materials of later primitives are ignored (one material per model). */
     float base_color[4];
     char texture[260];
+    /* M3: the bytes of that image when it is EMBEDDED and a PNG (a .glb bufferView with mimeType image/png, or a
+     * data:image/png;base64 URI): a malloc'd copy (fw_mesh_free releases it), NULL otherwise. Decoded by the DLL
+     * (fw_mesh_embtex.c), never written anywhere. */
+    uint8_t *image; size_t image_len;
 } FwMesh;
 
 /* ---- model codes (design §2.6, docs/data-mods.md "3D models: error codes"): ONE table, FW_MESH_CODES in
@@ -50,6 +54,7 @@ typedef enum FwMeshCodeId {
     FW_MC_MULTI_MATERIAL, FW_MC_NGON_CONCAVE, FW_MC_SKIN_IGNORED, FW_MC_ANIMATION_IGNORED, FW_MC_MORPH_IGNORED,
     FW_MC_TEXCOORD_SET, FW_MC_TEXTURE_TRANSFORM_IGNORED, FW_MC_ALPHA_BLEND, FW_MC_IMAGE_FORMAT, FW_MC_TEXTURE_NO_UVS,
     FW_MC_HEAVY, FW_MC_BELOW_FLOOR, FW_MC_FOOTPRINT, FW_MC_TEXTURE_MISSING, FW_MC_TEXTURE_FORMAT, FW_MC_TEXTURE_SIZE,
+    FW_MC_IMAGE_EMBEDDED_INVALID, FW_MC_IMAGE_EMBEDDED_UNSUPPORTED,
     /* info */
     FW_MC_NO_NORMALS, FW_MC_TEXTURE_EMBEDDED, FW_MC_MTL_IGNORED, FW_MC_EXTENSION_IGNORED, FW_MC_ATTRIBUTE_IGNORED,
     FW_MC_COUNT

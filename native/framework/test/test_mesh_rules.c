@@ -564,7 +564,9 @@ TEST(codes_table_is_complete_unique_and_well_formed) {
         "model-ngon-concave", "model-skin-ignored", "model-animation-ignored", "model-morph-ignored",
         "model-texcoord-set", "model-texture-transform-ignored", "model-alpha-blend", "model-image-format",
         "model-texture-no-uvs", "model-heavy", "model-below-floor", "model-footprint", "model-texture-missing",
-        "model-texture-format", "model-texture-size", "model-no-normals", "model-texture-embedded",
+        "model-texture-format", "model-texture-size",
+        "model-image-embedded-invalid", "model-image-embedded-unsupported",   /* M3: a .glb's own image (fw_mesh_embtex.c) */
+        "model-no-normals", "model-texture-embedded",
         "model-mtl-ignored", "model-extension-ignored", "model-attribute-ignored" };
     CHECK_EQ(FW_MC_COUNT, (int)(sizeof want / sizeof want[0]));
     for (int i = 0; i < FW_MC_COUNT; i++) {

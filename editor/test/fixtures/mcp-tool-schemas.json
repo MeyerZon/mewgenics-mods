@@ -713,6 +713,34 @@
     }
   },
   {
+    "name": "extract_model_texture",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "the model inside the mod, e.g. models/totem.glb (.glb, or .gltf with a data: URI image)"
+        },
+        "overwrite": {
+          "type": "boolean",
+          "description": "replace an existing textures/models/<stem>.png (default false: refuse)"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "find and check the image, write nothing"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "vectorcraft_exec",
     "inputSchema": {
       "type": "object",
