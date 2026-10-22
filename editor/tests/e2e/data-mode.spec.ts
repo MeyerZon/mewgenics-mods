@@ -41,6 +41,31 @@ test.describe("Data mode — base explorer", () => {
     await expect(entries.locator("button.srow")).toHaveCount(300);
   });
 
+  test("Show 300 more appends the next page (600 rows, the note follows)", async ({ page }) => {
+    await openApp(page);
+    await abilitiesCategory(page).click();
+    const entries = page.locator(".explorer .entries");
+    await expect(entries.locator("button.srow")).toHaveCount(300);
+    await entries.getByRole("button", { name: "Show 300 more" }).click();
+    await expect(entries.locator("button.srow")).toHaveCount(600);
+    await expect(entries.locator(".srow", { hasText: /showing 600 of 3[,. ]?076/ })).toBeVisible();
+  });
+
+  test("the filter placeholder names the selected category", async ({ page }) => {
+    await openApp(page);
+    await abilitiesCategory(page).click();
+    await expect(page.locator(".explorer .search input")).toHaveAttribute("placeholder", "Filter entries in abilities…");
+  });
+
+  test("mod-file directory rows expose aria-expanded and toggle it", async ({ page }) => {
+    await openApp(page);
+    await selectMod(page, "jokers-luck");
+    const dir = page.locator(".explorer button.srow.dir").first();
+    await expect(dir).toHaveAttribute("aria-expanded", "true");
+    await dir.click();
+    await expect(dir).toHaveAttribute("aria-expanded", "false");
+  });
+
   test("filter is debounced (not one fetch per keystroke)", async ({ page }) => {
     await openApp(page);
     await abilitiesCategory(page).click();
@@ -123,6 +148,41 @@ test.describe("Data mode — editor, validation, preview, save", () => {
       .toMatch(/error|warning|●/i);
   });
 
+  test("the status line shows validating… while the live check is pending, then validated (no static UTF-8)", async ({ page }) => {
+    await openJokersFile(page);
+    const status = page.locator(".edstatus");
+    await expect(status).toContainText("validated");
+    await expect(status).not.toContainText("UTF-8");
+    await page.locator("textarea.code").click();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type(" ");
+    await expect(status).toContainText("validating…");
+    await expect(status).toContainText("validated");
+    await expect(status).not.toContainText("validating…");
+  });
+
+  test("the Validation tab shows a summary and finding rows after an edit that produces a finding", async ({ page }) => {
+    await openJokersFile(page);
+    await page.locator(".rightpanel .tabs[role=tablist] .tab", { hasText: "Validation" }).click();
+    await page.locator("textarea.code").click();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type("\nBrokenEntry { variant_of ThisParentDoesNotExist_ZZZ }\n");
+    await expect(page.locator(".rightpanel .summary")).toBeVisible();
+    await expect(page.locator(".rightpanel .summary")).toContainText(/error|warning/);
+    await expect(page.locator(".rightpanel .finding").first()).toBeVisible();
+  });
+
+  test("Components tab: a class with usages shows its where-used count and files", async ({ page }) => {
+    test.skip(!existsSync(join(REPO_ROOT, ".extracted", "data")), "(skipped: .extracted/data absent, no where-used index)");
+    await openJokersFile(page);
+    await page.locator(".rightpanel .tab", { hasText: "Components" }).click();
+    await page.getByLabel("Search C++ component class names").fill("AddSelfStatusToBasicAttack");
+    const wu = page.locator(".complist .wu").first();
+    await expect(wu).toContainText(/used in \d+ files?/);
+    await expect(wu.locator(".wufile").first()).toBeVisible();
+    await expect(page.getByTestId("component-keys")).toBeVisible();
+  });
+
   test("merge preview renders the effective entry", async ({ page }) => {
     await openJokersFile(page);
     await page.locator(".rightpanel .tab", { hasText: "Preview" }).click();
@@ -203,31 +263,61 @@ test.describe("Data mode — template scaffolder", () => {
   test("scaffolder opens and guards an empty mod name (dry validation)", async ({ page }) => {
     await openApp(page);
     await openNewModScaffolder(page);
-    const modal = page.locator(".modal", { hasText: "Scaffold an overlay" });
+    // opened from the mod menu with no mod name: the title says what it is for
+    const modal = page.locator(".modal", { hasText: "New mod" });
     await expect(modal).toBeVisible();
     // clicking Scaffold with an empty mod name must not write — it shows the guard
     await modal.getByRole("button", { name: "Scaffold", exact: true }).click();
     await expect(modal).toContainText("enter a mod name first");
   });
 
+  test("+ New overlay opens the modal titled 'Scaffold an overlay'; every core kind is offered; fields are labelled", async ({ page }) => {
+    await openApp(page);
+    await selectMod(page, "jokers-luck");
+    await page.locator(".explorer .exhead button", { hasText: "+ New overlay" }).click();
+    const modal = page.locator(".modal", { hasText: "Scaffold an overlay" });
+    await expect(modal).toBeVisible();
+    const kinds = await modal.getByLabel("kind").locator("option").allInnerTexts();
+    for (const k of ["ability", "passive", "item", "status-data", "particle", "vfx-ability", "room", "tileset-variant"]) expect(kinds).toContain(k);
+    await expect(modal.getByLabel("entry name (GON key)")).toBeVisible();
+    await expect(modal.getByLabel("mod (folder under mods/)")).toHaveValue("jokers-luck");
+  });
+
   test("save/scaffold writes only under mods/<name>/", async ({ page }) => {
     rmSync(join(MODS_DIR, TMP_MOD), { recursive: true, force: true });
     await openApp(page);
     await openNewModScaffolder(page);
-    const modal = page.locator(".modal", { hasText: "Scaffold an overlay" });
+    const modal = page.locator(".modal", { hasText: "New mod" });
     await expect(modal).toBeVisible();
     await modal.locator("label.fld", { hasText: "mod (folder under mods/)" }).locator("xpath=following-sibling::input[1]").fill(TMP_MOD);
     await modal.locator("label.fld", { hasText: "entry name (GON key)" }).locator("xpath=following-sibling::input[1]").fill("E2ETestAbility");
     await modal.getByRole("button", { name: "Scaffold", exact: true }).click();
-    // the scaffolder reports the paths it wrote; they must be under mods/<TMP_MOD>/
-    const resultPre = modal.locator("pre.mergecode");
-    await expect(resultPre).toBeVisible();
-    const resultText = await resultPre.innerText();
-    expect(resultText).toContain(TMP_MOD);
-    const paths = resultText.match(/mods\/[^\s"]+/g) || [];
+    // the scaffolder lists the paths it wrote; they must be under mods/<TMP_MOD>/
+    const written = modal.locator(".tplfiles .tplfile .path");
+    await expect(written.first()).toBeVisible();
+    const paths = await written.allInnerTexts();
     expect(paths.length).toBeGreaterThan(0);
     for (const p of paths) expect(p.startsWith(`mods/${TMP_MOD}/`)).toBe(true);
+    // the raw response stays available behind a <details>
+    await modal.locator("details summary", { hasText: "raw response" }).click();
+    await expect(modal.locator("details pre.mergecode")).toContainText(TMP_MOD);
     expect(existsSync(join(MODS_DIR, TMP_MOD))).toBe(true);
+  });
+
+  test("the scaffold result lists the written files; Open on the first opens it in the editor; Enter submits", async ({ page }) => {
+    rmSync(join(MODS_DIR, TMP_MOD), { recursive: true, force: true });
+    await openApp(page);
+    await openNewModScaffolder(page);
+    const modal = page.locator(".modal", { hasText: "New mod" });
+    await modal.getByLabel("mod (folder under mods/)").fill(TMP_MOD);
+    await modal.getByLabel("entry name (GON key)").fill("E2EOpenAbility");
+    await modal.getByLabel("entry name (GON key)").press("Enter");
+    await expect(modal.locator(".summary")).toContainText(`in mods/${TMP_MOD}`);
+    const first = modal.locator(".tplfiles .tplfile").first();
+    const firstPath = (await first.locator(".path").innerText()).trim();
+    await first.getByRole("button", { name: "Open" }).click();
+    await expect(page.locator(".modal")).toHaveCount(0);
+    await expect(page.locator(".edtabbar .filetab")).toContainText(firstPath.split("/").pop()!);
   });
 });
 

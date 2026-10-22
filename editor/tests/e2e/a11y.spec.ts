@@ -24,7 +24,7 @@ test.describe("a11y — dialogs, menus, toasts, shortcuts", () => {
     await openNewModScaffolder(page);
     const dialog = page.locator('[role="dialog"][aria-modal="true"]');
     await expect(dialog).toHaveCount(1);
-    await expect(dialog).toContainText("Scaffold an overlay");
+    await expect(dialog).toContainText("New mod");
     // focus moved into the dialog
     expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
     await page.keyboard.press("Escape");

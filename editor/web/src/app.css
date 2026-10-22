@@ -516,3 +516,22 @@ button.pill:focus-visible { outline: 2px solid var(--acc-ink); outline-offset: 2
 .launchpop input { flex: 1; min-width: 0; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line2); border-radius: var(--r-sm); background: var(--panel2); color: var(--ink); }
 .launchpop .launchnote { margin: 4px; font-size: 12px; line-height: 1.5; color: var(--ink2); white-space: normal; }
 .statusbar .warn { color: var(--warn); }
+
+/* Data mode (UX PR 3): hero, link buttons, status line, scaffold result, where-used, preview meta */
+.emptystate.hero { max-width: 720px; width: 100%; align-items: stretch; text-align: left; }
+.emptystate.hero .es-icon { width: 56px; height: 56px; border-radius: 14px; background: var(--accbg); display: flex; align-items: center; justify-content: center; color: var(--acc-ink); }
+.emptystate.hero .es-actions { display: block; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--acc-ink); cursor: pointer; font: inherit; }
+.linkbtn:hover { color: var(--link-hover); text-decoration: underline; }
+.edstatus .live.pending { color: var(--warn); }
+.srow.more { cursor: default; }
+.tplfiles { list-style: none; margin: 12px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tplfile { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: var(--r-sm); background: var(--panel2); }
+.tplfile .path { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tplraw summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.complist .wu { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.complist .wu .wucount { padding: 0 8px; }
+.complist .wufiles { list-style: none; margin: 0; padding: 0 8px; font-size: 11.5px; color: var(--ink2); }
+.complist .wufile .mono { font-size: 11.5px; }
+.complist .wu .btn { align-self: flex-start; margin-left: 4px; }
+.pvmeta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

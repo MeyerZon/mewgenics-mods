@@ -4,7 +4,7 @@
 // The shell's mode-aware commands (saveCurrent / validateCurrent / openFindings), the editor status
 // (GET /api/status) and the deep link (?mode=&mod=&file=) live here too.
 
-import { S, tpl, lsGet, lsSet, onboarding, toast, type OpenMenu, type Tab } from "./state.ts";
+import { S, tpl, lsGet, lsSet, onboarding, toast, applyBasePage, BASE_PAGE, type OpenMenu, type Tab, type TemplateIntent, type TemplateForm } from "./state.ts";
 import { getJson, post, url } from "./api.ts";
 import { editorCtl } from "./components/Editor.tsx";
 import { loadArtForMod, refreshArtListings, saveScene, runValidate as runArtValidate, setArtRightTab } from "./art/art-state.ts";
@@ -33,17 +33,33 @@ import type {
 export type { Mode } from "./deeplink.ts";
 
 // ---- live validation / preview (debounced) ----------------------------------------------
+// S.validating is true from the keystroke that schedules a check until the newest check has answered.
 let liveTimer: ReturnType<typeof setTimeout> | undefined;
+let liveRun = 0;
 export function scheduleLive(): void {
   if (liveTimer) clearTimeout(liveTimer);
-  liveTimer = setTimeout(runLive, 350);
+  if (S.get().mod && S.get().file) S.set({ validating: true });
+  liveTimer = setTimeout(() => {
+    liveTimer = undefined;
+    void runLive();
+  }, 350);
 }
 export async function runLive(): Promise<void> {
   const { mod, file } = S.get();
-  if (!mod || !file) return;
-  const text = editorCtl.getValue();
-  S.set({ report: await post<"/api/validate", Report>("/api/validate", { mod, path: file, text }) });
-  S.set({ preview: await post<"/api/preview", PreviewResult>("/api/preview", { mod, path: file, text }) });
+  if (!mod || !file) {
+    S.set({ validating: false });
+    return;
+  }
+  const run = ++liveRun;
+  S.set({ validating: true });
+  try {
+    const text = editorCtl.getValue();
+    S.set({ report: await post<"/api/validate", Report>("/api/validate", { mod, path: file, text }) });
+    S.set({ preview: await post<"/api/preview", PreviewResult>("/api/preview", { mod, path: file, text }) });
+  } finally {
+    // a newer check (running or scheduled) keeps the flag up
+    if (run === liveRun && !liveTimer) S.set({ validating: false });
+  }
 }
 
 // ---- actions ------------------------------------------------------------------------------
@@ -69,7 +85,7 @@ export async function loadCompTotal(): Promise<void> {
 }
 /** Open a mod (closes its open file, scene and room; callers that come from the user guard first: pickMod). */
 export async function selectMod(name: string): Promise<void> {
-  S.set({ mod: name, file: "", report: null, preview: null });
+  S.set({ mod: name, file: "", report: null, preview: null, validating: false });
   void loadStatus();
   await refreshModFiles(name);
   await loadArtForMod(name);
@@ -111,7 +127,7 @@ export async function openFile(relPath: string): Promise<void> {
 }
 export async function closeFile(): Promise<void> {
   if (!(await guard(["data"], "Closing the file"))) return;
-  S.set({ file: "", report: null, preview: null, saved: true });
+  S.set({ file: "", report: null, preview: null, saved: true, validating: false });
 }
 /** Write the open overlay (the top-bar Save / Ctrl+S in Data mode). True when written. */
 export async function save(): Promise<boolean> {
@@ -161,6 +177,7 @@ export async function validateCurrent(): Promise<void> {
   if (m === "art") return runArtValidate();
   if (m === "rooms") return runRoomValidate();
   if (liveTimer) clearTimeout(liveTimer);
+  liveTimer = undefined;
   return runLive();
 }
 /** The status pill: show the current mode's findings (Rooms lists them in its right panel already). */
@@ -206,13 +223,43 @@ export async function copyLaunchCommand(text: string, input: HTMLInputElement | 
   if (ok) toast(`copied: ${text}`, { kind: "ok", ms: 4000 });
   else toast("could not copy — select the command and copy it by hand", { kind: "error" });
 }
+// Base-data listing, one BASE_PAGE at a time: a category with an empty filter can list thousands of entries,
+// so the explorer shows the first page and "Show 300 more" appends the next (applyBasePage folds them in).
+let baseSeq = 0;
+async function loadBasePage(category: string, offset: number): Promise<void> {
+  const seq = offset === 0 ? ++baseSeq : baseSeq;
+  const r = await getJson<ListEntriesResult>(url("/api/base", { category, filter: baseFilter, offset, limit: BASE_PAGE }));
+  // a newer category / filter answered first: drop this reply
+  if (seq !== baseSeq || S.get().baseCategory !== category) return;
+  const entries = r.entries || [];
+  const s = S.get();
+  const next = applyBasePage({ entries: s.baseEntries, total: s.baseEntriesTotal }, { entries, total: typeof r.total === "number" ? r.total : entries.length, offset: typeof r.offset === "number" ? r.offset : offset });
+  S.set({ baseEntries: next.entries, baseEntriesTotal: next.total });
+}
 export async function selectCategory(category: string): Promise<void> {
   S.set({ baseCategory: category });
-  const r = await getJson<ListEntriesResult>(url("/api/base", { category, filter: baseFilter }));
-  const all = r.entries || [];
-  // Cap the DOM: a category with an empty filter can list thousands of entries.
-  // Show the first BASE_ENTRY_CAP and tell the user to refine the search for the rest.
-  S.set({ baseEntriesTotal: all.length, baseEntries: all.slice(0, BASE_ENTRY_CAP) });
+  await loadBasePage(category, 0);
+}
+/** The explorer's "Show 300 more": append the selected category's next page. */
+export async function showMoreBase(): Promise<void> {
+  const s = S.get();
+  if (!s.baseCategory || s.baseEntries.length >= s.baseEntriesTotal) return;
+  await loadBasePage(s.baseCategory, s.baseEntries.length);
+}
+/** The hero's "Browse base data": open the first category when none is, then put the cursor in the filter. */
+export async function browseBaseData(): Promise<void> {
+  const { baseCategory, baseCats } = S.get();
+  if (!baseCategory && baseCats.length) await selectCategory(baseCats[0]!.category);
+  if (typeof document === "undefined") return;
+  const input = document.querySelector<HTMLInputElement>(".explorer .search input");
+  input?.focus();
+  document.querySelector(".explorer .srow.sel")?.scrollIntoView({ block: "nearest" });
+}
+export function closeBaseDrawer(): void {
+  S.set({ baseDrawer: false });
+}
+export function closeComponentsDrawer(): void {
+  S.set({ compDrawer: false });
 }
 export async function viewBaseEntry(name: string): Promise<void> {
   const r = await getJson<BaseEntryView>(url("/api/base-entry", { category: S.get().baseCategory, name }));
@@ -234,7 +281,6 @@ export function scheduleComponentSearch(query: string): void {
 
 // base-data entry filter (kept outside the store; drives selectCategory)
 let baseFilter = "";
-export const BASE_ENTRY_CAP = 300;
 let baseFilterTimer: ReturnType<typeof setTimeout> | undefined;
 /** Debounce the base-data filter so each keystroke doesn't fire a fetch + list rebuild. */
 export function setBaseFilter(value: string): void {
@@ -348,6 +394,8 @@ export function openRoomTour(): void {
 }
 
 export interface TemplatePrefill {
+  /** "mod": the mod menu's New mod (title "New mod"); default "overlay" ("Scaffold an overlay") */
+  intent?: TemplateIntent;
   mod?: string;
   kind?: TemplateKindName;
   name?: string;
@@ -359,6 +407,7 @@ export interface TemplatePrefill {
 export function openTemplate(p?: TemplatePrefill): void {
   const d = p || {};
   tpl.set({
+    intent: d.intent || "overlay",
     mod: d.mod !== undefined ? d.mod : S.get().mod,
     kind: d.kind || "ability",
     name: d.name || "",
@@ -366,19 +415,58 @@ export function openTemplate(p?: TemplatePrefill): void {
     desc: d.desc || "",
     parent: d.parent || "Spin",
     status: d.status || "",
+    colour: "",
     result: null,
   });
   S.set({ openMenu: "", templateOpen: true });
 }
+export function closeTemplate(): void {
+  S.set({ templateOpen: false });
+}
+/** The kind dropdown: a tileset variant copies a tileset (default alley), an ability varies an ability (Spin). */
+export function setTemplateKind(kind: TemplateKindName): void {
+  const t = tpl.get();
+  const parent = kind === "tileset-variant" ? (t.parent === "Spin" || !t.parent ? "alley" : t.parent) : t.kind === "tileset-variant" && t.parent === "alley" ? "Spin" : t.parent;
+  tpl.set({ kind, parent, result: null });
+}
+/** The options POST /api/template gets for the form's kind (only the knobs that kind reads). */
+export function templateOptions(t: Pick<TemplateForm, "kind" | "display" | "desc" | "parent" | "status" | "colour">): Record<string, unknown> {
+  const o: Record<string, unknown> = {};
+  if (t.display) o.displayName = t.display;
+  if (t.desc) o.desc = t.desc;
+  if ((t.kind === "ability" || t.kind === "tileset-variant") && t.parent) o.parent = t.parent;
+  if (t.kind === "ability" && t.status) o.statusEffect = t.status;
+  if (t.kind === "glowing-character" && t.colour) o.colour = t.colour;
+  return o;
+}
+/** A written path of a scaffold result ("mods/<mod>/<rel>") → the path inside the mod (null when it is not one). */
+export function scaffoldRelPath(mod: string, written: string): string | null {
+  const prefix = `mods/${mod}/`;
+  return written.startsWith(prefix) ? written.slice(prefix.length) : null;
+}
+/** A scaffold result's Open: open that file of the scaffolded mod (a .lvl opens in Rooms mode) and close the modal. */
+export async function openScaffolded(written: string, opts: { validate?: boolean } = {}): Promise<void> {
+  const mod = tpl.get().mod;
+  const rel = scaffoldRelPath(mod, written);
+  if (!rel) return;
+  if (S.get().mod !== mod) {
+    if (!(await guard(ALL_SCOPES, `Opening mods/${mod}`))) return;
+    await selectMod(mod);
+  }
+  closeTemplate();
+  if (!/\.lvl$/i.test(rel)) leaveArtMode();
+  await openFile(rel);
+  if (opts.validate) await validateCurrent();
+}
 
-/** The Scaffold button of the template modal. */
+/** The Scaffold button (or Enter) of the template modal. */
 export async function scaffold(): Promise<void> {
   const t = tpl.get();
   if (!t.mod) {
     tpl.set({ result: { ok: false, error: "enter a mod name first" } });
     return;
   }
-  const options = { displayName: t.display, desc: t.desc, parent: t.parent, statusEffect: t.status || undefined };
+  const options = templateOptions(t);
   const res = await post<"/api/template", TemplateResult>("/api/template", { mod: t.mod, kind: t.kind, name: t.name, options });
   tpl.set({ result: res });
   if (res && res.ok) {

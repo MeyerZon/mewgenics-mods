@@ -3,9 +3,12 @@
 // templates). Type aliases (not interfaces) where a value must also satisfy an index-signature
 // parameter such as buildTree's.
 
+import type { TemplateKind } from "../../src/core/template-kinds.ts";
+
 export type OverlayMode = "append" | "merge" | "patch" | "replace";
 export type FileType = "gon" | "csv" | "txt" | "other";
-export type TemplateKindName = "ability" | "passive" | "item" | "status-data" | "room" | "tileset-variant" | "particle" | "vfx-ability" | "glowing-character";
+/** The scaffold kinds: one list in src/core/template-kinds.ts (the template modal imports TEMPLATE_KINDS). */
+export type TemplateKindName = TemplateKind;
 
 /** One file of a mod (mod-io ModFileInfo). */
 export type ModFileInfo = {
@@ -95,9 +98,14 @@ export interface ListBaseResult {
   categories: BaseCategory[];
 }
 
+/** One page of a category's entries (GET /api/base?category=&filter=&offset=&limit=). */
 export interface ListEntriesResult {
   category: string;
   entries: string[];
+  /** how many entries match in all */
+  total: number;
+  /** where this page starts */
+  offset: number;
 }
 
 export type BaseEntryView =

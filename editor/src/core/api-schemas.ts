@@ -8,6 +8,7 @@
 // for the browser.
 
 import { z } from "zod";
+import { TEMPLATE_KINDS } from "./template-kinds.ts";
 
 const str = z.string();
 const anyObject = z.record(z.string(), z.unknown());
@@ -28,8 +29,8 @@ export const PreviewBody = z.object({
   includeFullGon: z.boolean().optional(),
 });
 
-/** Mirrors TemplateKind in src/core/templates. */
-export const TemplateKind = z.enum(["ability", "passive", "item", "status-data", "room", "tileset-variant", "particle", "vfx-ability", "glowing-character"]);
+/** The scaffold kinds: src/core/template-kinds.ts, the one list templates.ts and the web UI share. */
+export const TemplateKind = z.enum(TEMPLATE_KINDS);
 /** Mirrors the abc modes buildSwf accepts (src/core/art/art-io). */
 export const AbcMode = z.enum(["none", "stub"]);
 /** Mirrors SWF_GATE_VARIANTS in src/core/art/art-io. */

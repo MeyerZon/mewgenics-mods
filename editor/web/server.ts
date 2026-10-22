@@ -97,7 +97,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
   try {
     if (method === "GET" && url.pathname === "/api/base") {
       const category = q.get("category");
-      return sendJson(res, 200, category ? api.listBaseEntries(category, q.get("filter") || undefined) : api.listBaseData());
+      // ?offset=&limit= ask for one page (the core clamps junk: negative / non-numeric offset → 0, limit 1..5000)
+      const paged = q.has("offset") || q.has("limit");
+      const page = paged ? { offset: Number(q.get("offset") ?? 0), limit: q.has("limit") ? Number(q.get("limit")) : undefined } : undefined;
+      return sendJson(res, 200, category ? api.listBaseEntries(category, q.get("filter") || undefined, page) : api.listBaseData());
     }
     if (method === "GET" && url.pathname === "/api/base-entry") {
       return sendJson(res, 200, api.readBaseEntry(q.get("category") || "", q.get("name") || ""));

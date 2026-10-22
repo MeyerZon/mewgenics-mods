@@ -57,6 +57,8 @@ export interface AppState {
   busy: Record<string, boolean>;
   docBytes: number;
   docLines: number;
+  /** the live validation of the open overlay is pending (the 350 ms debounce or its request) */
+  validating: boolean;
   openMenu: OpenMenu;
   // overlays
   templateOpen: boolean;
@@ -109,6 +111,7 @@ export const S = createStore<AppState>({
   busy: {},
   docBytes: 0,
   docLines: 1,
+  validating: false,
   openMenu: "",
   templateOpen: false,
   conceptsOpen: false,
@@ -131,8 +134,29 @@ export const S = createStore<AppState>({
   serverOk: true,
 });
 
+// ---- base-data paging (GET /api/base?category=&filter=&offset=&limit=) ----------------
+/** How many base entries one page lists (the explorer's "Show 300 more"). */
+export const BASE_PAGE = 300;
+
+export interface BaseList {
+  entries: string[];
+  total: number;
+}
+/**
+ * Fold one listing page into the loaded entries (pure): offset 0 replaces them, an offset equal to the loaded
+ * length appends, anything else is a stale reply (a newer filter or category won) and returns `cur` unchanged.
+ */
+export function applyBasePage(cur: BaseList, page: BaseList & { offset: number }): BaseList {
+  if (page.offset === 0) return { entries: page.entries, total: page.total };
+  if (page.offset !== cur.entries.length) return cur;
+  return { entries: [...cur.entries, ...page.entries], total: page.total };
+}
+
 // template-scaffolder fields (module-level so onboarding can prefill them)
+/** what the modal was opened for: a new mod (the mod menu's New mod) or an overlay in a mod (its title follows) */
+export type TemplateIntent = "mod" | "overlay";
 export interface TemplateForm {
+  intent: TemplateIntent;
   mod: string;
   kind: TemplateKindName;
   name: string;
@@ -140,9 +164,12 @@ export interface TemplateForm {
   desc: string;
   parent: string;
   status: string;
+  /** glowing-character: rrggbb[aa] */
+  colour: string;
   result: TemplateResult | null;
 }
 export const tpl = createStore<TemplateForm>({
+  intent: "overlay",
   mod: "",
   kind: "ability",
   name: "",
@@ -150,6 +177,7 @@ export const tpl = createStore<TemplateForm>({
   desc: "",
   parent: "Spin",
   status: "",
+  colour: "",
   result: null,
 });
 

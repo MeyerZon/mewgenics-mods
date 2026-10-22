@@ -94,7 +94,7 @@ function ModMenuItems(): React.JSX.Element {
         </div>
       )}
       <div className="sep" />
-      <button className="item" onClick={() => openTemplate({ mod: "" })}>
+      <button className="item" onClick={() => openTemplate({ intent: "mod", mod: "" })}>
         ＋ New mod…
       </button>
       <div className="sep" />
