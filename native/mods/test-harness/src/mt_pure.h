@@ -68,15 +68,21 @@ typedef enum MtDirKind {
     MT_D_SEED,          /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
     MT_D_EXPECT_UNIT,   /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
     MT_D_GLOW,          /* glow <unit> <r> <g> <b> <a> | <unit> off: FW_SetUnitGlow / FW_ClearUnitGlow on a unit of the walk (API v4) */
-    MT_D_EXPECT_GON     /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
+    MT_D_EXPECT_GON,    /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
+    MT_D_FACE           /* face <unit> <dx> <dy> | <unit> front|back: Character::Face(dir, instant) on a unit of the walk (mt_face.c) */
 } MtDirKind;
 /* expect unit: which MtUnit field; name|class|namekey compare as strings (== !=), the rest as integers (any op).
  * Order = mt_script.c UNIT_FIELDS = script.ts UNIT_FIELDS; the stat fields follow MT_STAT_* (data/characters order). */
 typedef enum MtUnitField {
     MT_F_NAME, MT_F_CLASS, MT_F_NAMEKEY, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND, MT_F_HP, MT_F_SHIELD, MT_F_DIVINESHIELD,
-    MT_F_STRENGTH, MT_F_DEXTERITY, MT_F_CONSTITUTION, MT_F_INTELLIGENCE, MT_F_SPEED, MT_F_CHARISMA, MT_F_LUCK
+    MT_F_STRENGTH, MT_F_DEXTERITY, MT_F_CONSTITUTION, MT_F_INTELLIGENCE, MT_F_SPEED, MT_F_CHARISMA, MT_F_LUCK,
+    MT_F_FACING,        /* string: the animation suffix the clip labels get (AnimStateMachine+OFF_ANIMSM_FACING: "F" / "B", four-way "LF".."RB") */
+    MT_F_DIRX, MT_F_DIRY, /* Character+OFF_CH_ORIENTATION: the grid direction Character::Face stored */
+    MT_F_FLIP,          /* AnimStateMachine+OFF_ANIMSM_FLIP: +-art_flip, negative = mirrored (two-way only) */
+    MT_F_SIGN           /* Character+OFF_CH_FACE_SIGN: the facing sign Face multiplies the direction by */
 } MtUnitField;
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
+int mt_unit_field_is_string(MtUnitField f);                           /* name|class|namekey|facing: a quoted value, == / != */
 /* expect gon: how the value is compared (decided by the literal's shape at parse time) */
 typedef enum MtGonCheck { MT_G_NUM, MT_G_STR, MT_G_BOOL, MT_G_EXISTS, MT_G_MISSING } MtGonCheck;
 const char *mt_unit_field_name(MtUnitField f);
@@ -116,6 +122,8 @@ typedef struct MtDirective {
     const char *c;      /* expect gon: the quoted string value (a = the path, b/n = the unit) */
     double dvalue;      /* expect gon: the numeric value; a bool value lives in value */
     MtGonCheck gonCheck;
+    int faceNamed;      /* face: MT_FACE_RAW (faceDx/faceDy given) | MT_FACE_FRONT | MT_FACE_BACK (resolved per unit, mt_face_named_dir) */
+    int faceDx, faceDy; /* face: the raw grid direction (one of (+-1,0) / (0,+-1)) */
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
@@ -124,6 +132,24 @@ typedef struct MtScript {
     size_t arenaUsed;
 } MtScript;
 int mt_script_parse(const char *text, size_t len, MtScript *out, char *err, size_t errCap, int *errLine); /* 1 ok */
+
+/* ---- mt_face.c: Character::Face (0x10ce50) as a pure rule, so the harness can say what a turn should produce ---- */
+#define MT_FACE_RAW   0
+#define MT_FACE_FRONT 1   /* the unmirrored front facing: suffix F, flip +art_flip (two-way) */
+#define MT_FACE_BACK  2   /* the unmirrored back facing:  suffix B, flip +art_flip (two-way) */
+const char *mt_face_name(int named);   /* "front" / "back" / "" */
+/* the grid direction that gives `named` on a unit whose facing sign (Character+OFF_CH_FACE_SIGN) is `sign`
+ * (0 is treated as 1): front = (0, -sign), back = (sign, 0) */
+void mt_face_named_dir(int named, int sign, int *dx, int *dy);
+/* What Character::Face(dir, instant) does to a unit, from its decompile (engine-map "Facing: Character::Face"):
+ * lock (lockX/lockY != 0) replaces dir; alwaysFront maps (1,0) -> (0,-1) and (0,1) -> (-1,0); two-way (fourWay 0):
+ * d' = sign * d, suffix "B" when d'x > 0 || d'y > 0, else "F" when d'x < 0 || d'y < 0; flipMul -1 (mirrored) when
+ * d'x < 0 || d'y > 0, +1 when d'x > 0 || d'y < 0, 0 when noHFlip; four-way: no sign, no flip, suffix
+ * (L when dx < 0 || dy > 0, else R) + (B / F as above). Writes the effective direction; returns 0 for (0,0)
+ * (Face then changes nothing), else 1. */
+typedef struct MtFaceIn { int dx, dy, lockX, lockY, sign, fourWay, noHFlip, alwaysFront; } MtFaceIn;
+typedef struct MtFaceOut { int dx, dy; char suffix[4]; int flipMul; } MtFaceOut;
+int mt_face_predict(const MtFaceIn *in, MtFaceOut *out);
 
 /* ---- mt_console.c ------------------------------------------------------ */
 typedef struct MtConsoleTrack { int seen; int windowStart; } MtConsoleTrack;
@@ -189,6 +215,14 @@ typedef struct MtUnit {
     int statusCount;
     char statuses[MT_UNIT_STATUSES][MT_STATUS_NAME];
     int stacks[MT_UNIT_STATUSES];          /* parallel to statuses (Status+OFF_STATUS_STACKS) */
+    /* facing (2026-10-22, Character::Face 0x10ce50): what the units event reports and `face` changes */
+    char facing[8];                        /* AnimStateMachine(Character+OFF_CH_ANIMSM)+OFF_ANIMSM_FACING std::string: "F" / "B" (four-way "LF".."RB") */
+    int dirX, dirY;                        /* Character+OFF_CH_ORIENTATION */
+    int lockX, lockY;                      /* Character+OFF_CH_LOCK_ORIENTATION (graphics.lock_orientation; (0,0) = none) */
+    int faceSign;                          /* Character+OFF_CH_FACE_SIGN */
+    int flip;                              /* AnimStateMachine+OFF_ANIMSM_FLIP: +-art_flip */
+    int artFlip;                           /* Character+OFF_CH_ART_FLIP (graphics.art_flip, default 1) */
+    int fourWay, noHFlip, alwaysFront;     /* Character+OFF_CH_FOUR_WAY / OFF_CH_NO_HFLIP / OFF_CH_ALWAYS_FRONT (bytes) */
 } MtUnit;
 
 /* values of (unit index, status) seen by dump / expect stacks, for `expect stacks … varied` */
@@ -225,6 +259,9 @@ typedef struct MtHost {
      * NULL when the unit or the pointer is unreadable). The walker reads through mem_read only. */
     int         (*mem_read)(void *u, const void *addr, void *out, size_t n);
     const void *(*unit_gon)(void *u, int i);
+    /* face: Character::Face(unit i, (dx, dy), instant 1, 0) on the game thread. 1 done, 0 refused (detail), -1
+     * unavailable (framework without FW_SYM_Character_Face) */
+    int         (*face_unit)(void *u, int i, int dx, int dy, char *detail, size_t cap);
 } MtHost;
 
 typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_IDLE } MtState;

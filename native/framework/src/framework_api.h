@@ -57,6 +57,8 @@ typedef enum FwSymbol {
     FW_SYM_Material_SetUniformFloat,    /* void (Material*, std::string name, float v) — callee destroys name */
     FW_SYM_Material_SetTexture,         /* void (Material*, std::string name, Texture*, int slot) — callee destroys name */
     FW_SYM_Camera_AddPostProcessPass,   /* Pass* (Camera*, Material*, int layer) — owned by the camera; never cache the Pass* */
+    /* facing (2026-10-22): the test harness's `face` directive (docs/engine-map.md "Facing: Character::Face") */
+    FW_SYM_Character_Face,              /* void (Character*, iVec2D dir (packed: x low, y high, by value in rdx), bool instant, bool forceTurnAnim) */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 

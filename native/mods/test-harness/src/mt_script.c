@@ -64,7 +64,9 @@ static int parse_op(const char *p, size_t n, MtOp *out) {
 
 /* MtUnitField order; the units event's keys; script.ts UNIT_FIELDS */
 static const char *const UNIT_FIELDS[] = { "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
-                                           "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck" };
+                                           "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck",
+                                           "facing", "dirx", "diry", "flip", "sign" };
+int mt_unit_field_is_string(MtUnitField f) { return f == MT_F_NAME || f == MT_F_CLASS || f == MT_F_NAMEKEY || f == MT_F_FACING; }
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out) {
     for (size_t i = 0; i < sizeof UNIT_FIELDS / sizeof UNIT_FIELDS[0]; i++) {
         if (strlen(UNIT_FIELDS[i]) == n && !strncmp(p, UNIT_FIELDS[i], n)) { *out = (MtUnitField)i; return 1; }
@@ -274,16 +276,16 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             }
             const char *field = skip_ws(tail);
             size_t fl = tok_len(field);
-            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|namekey|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck)");
+            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|namekey|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck|facing|dirx|diry|flip|sign)");
             const char *opp = skip_ws(field + fl);
             size_t ol = tok_len(opp);
             const char *val = skip_ws(opp + ol);
             if (!ol || !*val) return fail(err, errCap, errLine, lineNo, "expect unit needs: <unit> <field> <op> <value>");
             if (!parse_op(opp, ol, &d.op)) return fail(err, errCap, errLine, lineNo, "expect unit: bad operator (== != >= <= > <)");
-            if (d.field == MT_F_NAME || d.field == MT_F_CLASS || d.field == MT_F_NAMEKEY) {
-                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey take == or != and a quoted value");
+            if (mt_unit_field_is_string(d.field)) {
+                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey/facing take == or != and a quoted value");
                 const char *after = parse_quoted(val, q, sizeof q, &qn);
-                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey take == or != and a quoted value");
+                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey/facing take == or != and a quoted value");
                 if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
             } else {
                 size_t nl = tok_len(val);
@@ -402,6 +404,31 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
                 t = skip_ws(t + nl);
             }
             if (*t) return fail(err, errCap, errLine, lineNo, "glow: unexpected text after the colour");
+        }
+    } else if (wl == 4 && !strncmp(p, "face", 4)) {
+        /* face <idx|bareword|"name"> (<dx> <dy> | front | back): one of the four grid directions, or the named
+         * unmirrored facing resolved per unit (mt_face_named_dir) */
+        static const char *const usage = "face needs: <unit> <dx> <dy> (one of 1 0 | -1 0 | 0 1 | 0 -1) or <unit> front|back";
+        d.kind = MT_D_FACE;
+        if (!*rest) return fail(err, errCap, errLine, lineNo, usage);
+        if (!(d.a = arena_add(s, rest, strlen(rest)))) return fail(err, errCap, errLine, lineNo, "script too large");
+        int full = 0;
+        const char *tail = parse_unit(s, rest, &d, q, sizeof q, &full);
+        if (!tail) return fail(err, errCap, errLine, lineNo, full ? "script too large" : "face: bad quoted unit name");
+        tail = skip_ws(tail);
+        size_t tl = tok_len(tail);
+        if (!tl) return fail(err, errCap, errLine, lineNo, usage);
+        if ((tl == 5 && !strncmp(tail, "front", 5)) || (tl == 4 && !strncmp(tail, "back", 4))) {
+            d.faceNamed = tl == 5 ? MT_FACE_FRONT : MT_FACE_BACK;
+            if (*skip_ws(tail + tl)) return fail(err, errCap, errLine, lineNo, "face: unexpected text after front/back");
+        } else {
+            long dx, dy;
+            const char *ty = skip_ws(tail + tl);
+            size_t yl = tok_len(ty);
+            if (!parse_int(tail, tl, &dx) || !yl || !parse_int(ty, yl, &dy)) return fail(err, errCap, errLine, lineNo, usage);
+            if (*skip_ws(ty + yl)) return fail(err, errCap, errLine, lineNo, "face: unexpected text after the direction");
+            if (!((dx == 0) != (dy == 0)) || dx < -1 || dx > 1 || dy < -1 || dy > 1) return fail(err, errCap, errLine, lineNo, usage);
+            d.faceNamed = MT_FACE_RAW; d.faceDx = (int)dx; d.faceDy = (int)dy;
         }
     } else if (wl == 4 && !strncmp(p, "quit", 4)) {
         d.kind = MT_D_QUIT;

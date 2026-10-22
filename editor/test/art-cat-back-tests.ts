@@ -232,6 +232,9 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
   });
 
   // ---- the in-game probe: a cat facing away ----
+  // 2026-10-22 (facing): those lock runs had the keys under `graphics`; Character::init reads lock_orientation /
+  // start_orientation from `properties` (engine-map "Facing: Character::Face"), so they were inert. The probe now turns
+  // ArtProbeCatFacing with the harness's `face 9 back` and gives ArtProbeCatBack properties.lock_orientation [1 0].
   // OBSERVED 2026-10-22 (runs 20261022-113746 with lock_orientation [1 0], 20261022-113911 with [0 -1]): a spawned
   // TomTom variant with lock_orientation still shows its face in TacticsTest (only the mirror changes) — the probe keeps
   // one turn attempt and adds ArtProbeCatBackShown, whose probeBackShowF / probeBackShowB BOTH place the back rig, so
@@ -287,19 +290,19 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
     }
   });
 
-  test("_artprobe: ArtProbeCatFacing = TomTom + alt_animations [[idle probeBack]] (the control, no orientation key); ArtProbeCatBack = the same with start_orientation [0 -1] and lock_orientation [0 -1] (the turn attempt); ArtProbeCatBackShown = TomTom + alt_animations [[idle probeBackShow]]; render-cat-back.mewtest: baseline, TomTom, the control (front), the turn attempt (back 1..3), the shown back pose (shown 1..2), no _autoplay", () => {
+  test("_artprobe: ArtProbeCatFacing = TomTom + alt_animations [[idle probeBack]] (the control, no orientation key); ArtProbeCatBack = the same with properties.lock_orientation [1 0] (faces away from data); ArtProbeCatBackShown = TomTom + alt_animations [[idle probeBackShow]]; render-cat-back.mewtest: baseline, TomTom, the control (front), then `face 9 back` turns it away (back 1..3, expect unit 9 facing == \"B\"), the data-locked cat is B and `face 10 front` leaves it B (locked 1..2), the shown back pose (shown 1..2), no _autoplay", () => {
     const entry = (n: string) => { const m = new RegExp(`\\n${n}\\s*\\{[\\s\\S]*?\\n\\}`).exec(gon); return m ? m[0] : ""; };
     const tom = (e: string) => /variant_of TomTom/.test(e) && /movieclip _CAT/.test(e) && /custom_cat_data TomTom/.test(e);
     const ctl = entry("ArtProbeCatFacing"), back = entry("ArtProbeCatBack"), shown = entry("ArtProbeCatBackShown");
     assert(tom(ctl) && /alt_animations \[\[idle probeBack\]\]/.test(ctl) && !/orientation/.test(ctl), "ArtProbeCatFacing");
-    assert(tom(back) && /alt_animations \[\[idle probeBack\]\]/.test(back) && /start_orientation \[0 -1\]/.test(back) && /lock_orientation \[0 -1\]/.test(back), "ArtProbeCatBack");
+    assert(tom(back) && /alt_animations \[\[idle probeBack\]\]/.test(back) && /properties \{\s*lock_orientation \[1 0\]\s*\}/.test(back) && !/orientation \[0 -1\]/.test(back), "ArtProbeCatBack");
     assert(tom(shown) && /alt_animations \[\[idle probeBackShow\]\]/.test(shown), "ArtProbeCatBackShown");
     const plan = parseScript(readFileSync(join(MODS_DIR, "_artprobe", "tests", "render-cat-back.mewtest"), "utf8"), { owningMod: "_artprobe", name: "render-cat-back" });
     assert(plan.ok, JSON.stringify(plan.errors));
     assert(!plan.mods.includes("_autoplay"), plan.mods.join(","));
     const b = plan.body;
     const at = (s: string) => b.indexOf(s);
-    const order = ["enter TacticsTest", 'shot "baseline"', "cmd spawn TomTom", 'shot "vanilla"', "cmd spawn ArtProbeCatFacing", 'shot "front"', "cmd spawn ArtProbeCatBack\n", 'shot "back 1"', "cmd spawn ArtProbeCatBackShown", 'shot "shown 1"'];
+    const order = ["enter TacticsTest", 'shot "baseline"', "cmd spawn TomTom", 'shot "vanilla"', "cmd spawn ArtProbeCatFacing", 'expect gon 9 graphics.alt_animations.0.1 == "probeBack"', 'expect unit 9 facing == "F"', 'shot "front"', "face 9 back", 'expect unit 9 facing == "B"', 'shot "back 1"', "cmd spawn ArtProbeCatBack\n", 'expect gon 10 properties.lock_orientation.0 == 1', 'expect unit 10 facing == "B"', 'shot "locked 1"', "face 10 front", 'shot "locked 2"', "cmd spawn ArtProbeCatBackShown", 'shot "shown 1"'];
     for (let i = 1; i < order.length; i++) assert(at(order[i - 1]!) >= 0 && at(order[i]!) > at(order[i - 1]!), `${order[i - 1]} before ${order[i]}`);
     assert(/expect console "Spawned ArtProbeCatBackShown"/.test(b), b);
     eq((b.match(/shot "back \d"/g) || []).length, 3);
@@ -317,19 +320,32 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
     eq(P.catBackOutcome({ ...none, shown: [1.5, null] }), "not-drawn");
     eq(P.catBackOutcome(none), "not-drawn");
     eq(P.catBackOutcome({ ...none, verdict: "crash" }), "crash");
+    // 2026-10-22 (facing): the turn pair — `face 9 front` swaps unit 9's back rig for its front rig in place; the
+    // vanished B pose at >= CAT_BACK_BIG times the F pose's height is the back rig on a back-facing unit, even when
+    // the earlier shots are unusable (a desktop capture instead of the window)
+    eq(P.catBackOutcome({ ...none, back: [null, null, null], shown: [null, null], turn: 1.52 }), "back-facing");
+    eq(P.catBackOutcome({ ...none, back: [null, null, null], shown: [null, null], turn: 1.0 }), "not-drawn");
+    eq(P.catBackOutcome({ ...none, turn: null }), "not-drawn");
   });
 
-  test("OBSERVED fixture (artprobe-cat-back-summary.json, npm run test:artprobe -- --cat-back): the run passed with the real save unchanged; the control is TomTom-sized; outcome back-facing (the turn attempt plays the 1.5x B frame) or back-pose-drawn (the shown cat is our 1.5x back rig, filled with the cat's own parts)", () => {
+  test("OBSERVED fixture (artprobe-cat-back-summary.json, npm run test:artprobe -- --cat-back): the run passed with the real save unchanged; outcome back-facing: face 9 back draws the 1.5x B frame (the turn pair), the face events and every harness expect agree, the data lock keeps unit 10 on B", () => {
     const p = join(HERE, "fixtures", "ingame", "artprobe-cat-back-summary.json");
     assert(existsSync(p), "written by npm run test:artprobe -- --cat-back");
     const j = JSON.parse(readFileSync(p, "utf8")) as any;
     eq(j.verdict, "pass");
     assert(/real save file\(s\) unchanged/.test(j.save), String(j.save));
-    assert(j.outcome === "back-facing" || j.outcome === "back-pose-drawn", j.outcome);
-    assert(j.front.ratio !== null && j.front.ratio < 1.3, `control ratio ${j.front.ratio}`);
-    const list = j.outcome === "back-facing" ? j.back : j.shown;
-    const big = list.filter((s: any) => s.ratio !== null && s.ratio >= 1.3 && s.ratio <= 1.8);
-    assert(big.length >= 2, `big in ${big.length} shots: ${JSON.stringify(list)}`);
-    assert(/start_orientation/.test(j.turnAttempt), j.turnAttempt);
+    // 2026-10-22 (facing): `face 9 back` turns ArtProbeCatFacing away and it draws our 1.5x back rig; ArtProbeCatBack
+    // faces away from data (properties.lock_orientation [1 0]) and `face 10 front` cannot turn it (the lock wins)
+    eq(j.outcome, "back-facing", "the genuinely back-facing unit draws the 1.5x back rig");
+    const windowShot = (l: string) => (j.capture as string[]).some((c) => c.startsWith(l + ": window"));
+    if (windowShot("front") && windowShot("vanilla")) assert(j.front.ratio !== null && j.front.ratio < 1.3, `control ratio ${j.front.ratio}`);
+    assert(j.turnPair.ratio !== null && j.turnPair.ratio >= 1.3 && j.turnPair.ratio <= 1.8, `turn pair ${JSON.stringify(j.turnPair)}`);
+    const f9 = (j.faces as any[]).find((f) => f.unit === 9 && f.arg === "9 back");
+    assert(!!f9 && f9.ok && f9.facing === "B" && f9.expect === "B" && JSON.stringify(f9.dir) === "[1,0]", JSON.stringify(j.faces));
+    const f10 = (j.faces as any[]).find((f) => f.unit === 10);
+    assert(!!f10 && f10.ok && f10.arg === "10 front" && f10.facing === "B" && JSON.stringify(f10.effective) === "[1,0]", `the lock keeps unit 10 on B: ${JSON.stringify(f10)}`);
+    assert((j.facing["10"] as any[]).every((u) => u.facing === "B" && JSON.stringify(u.lock) === "[1,0]"), JSON.stringify(j.facing));
+    assert((j.expects as string[]).length >= 16 && (j.expects as string[]).every((e) => e.startsWith("ok")), (j.expects as string[]).join("; "));
+    assert(/face 9 back/.test(j.turn), j.turn);
   });
 }

@@ -246,6 +246,11 @@
             "target": "0x52780"
           },
           {
+            "ordinal": 7,
+            "name": "Character_Face",
+            "target": "0x10ce50"
+          },
+          {
             "ordinal": 19,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
@@ -7576,6 +7581,11 @@
             "target": "0x9bb5d0"
           },
           {
+            "ordinal": 506,
+            "name": "Character_Face",
+            "target": "0x10ce50"
+          },
+          {
             "ordinal": 732,
             "name": "GonObject_Int",
             "target": "0x941540"
@@ -8496,6 +8506,353 @@
         ".analysis/decompiled/GonObject_child_by_name_0x942b50.c"
       ],
       "note": "sizeof(GonObject): the children vector's element stride"
+    },
+    {
+      "name": "Character_Face",
+      "kind": "function",
+      "rva": "0x10ce50",
+      "signature": {
+        "pattern": "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 00 FD",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void glaiel::Character::Face(iVec2D dir, bool instant, bool forceTurnAnim) — the name is in its 12 lambda vftable names (`public: void __cdecl glaiel::Character::Face(iVec2D,bool,bool)'::`32'::<lambda_1>` ...); 3817 B; inline strings turnFlip / turnRev / turn180 / _DEFAULT; calls 0x352aa0 first and AnimStateMachine_SetState 0x9aa360 last",
+        "callees": [
+          {
+            "ordinal": 14,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 25,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "prologue": "48 89 5C 24 20 55 56 57 41 54 41 55",
+        "cfgLite": {
+          "bytes": 3822,
+          "calls": 33,
+          "ripRefs": 35,
+          "resyncs": 0
+        },
+        "callers": [
+          {
+            "function": "Character_init",
+            "note": "Character::init (graphics: start_orientation) calls Face once (0xf93c8, the start_orientation apply); 112 calls in 89 functions image-wide",
+            "ordinal": 506
+          }
+        ]
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_face_unit"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Character_Face",
+          "index": 35
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c",
+        ".analysis/decompiled/Character_UpdateFacing_0x10ce50.c"
+      ],
+      "note": "rcx Character*, rdx iVec2D by value (x low dword, y high dword), r8b instant (only honoured when the byte Character+0x11 is set; otherwise every call is instant), r9b force the turn animation. lock_orientation (+0x3ac) replaces dir when non-zero; the new direction is stored at +0x388; two-way: suffix (AnimSM+0xb8) = prefix (+0x3e0, empty by default) + F/B, flip (AnimSM+0x14c) = +-art_flip and, when instant, the root node's x-scale; instant replays the current state with _DEFAULT (AnimStateMachine_SetState) so the new label shows at once. The harness's `face` directive calls it with instant 1, force 0."
+    },
+    {
+      "name": "Character_animSM",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x58",
+      "ctype": "AnimStateMachine*",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "48 8B 4F ?? 48 81 C1 B8 00 00 00 48 8D 55 B0",
+          "dispAt": 3,
+          "dispSize": 1
+        },
+        "note": "mov rcx,[rdi+0x58]; add rcx,0xb8; lea rdx,[rbp-0x50]: the F branch's suffix assignment target; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_ANIMSM"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "the character's AnimStateMachine (catA: 0x90a90 -> 0x91e10)"
+    },
+    {
+      "name": "AnimSM_facing",
+      "kind": "offset",
+      "struct": "AnimStateMachine",
+      "value": "0xb8",
+      "ctype": "std::string",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "48 8B 4F 58 48 81 C1 ?? ?? ?? ?? 48 8D 55 B0",
+          "dispAt": 7,
+          "dispSize": 4
+        },
+        "note": "mov rcx,[rdi+0x58]; add rcx,0xb8; lea rdx,[rbp-0x50]; call string_assign: the suffix Face writes (prefix + \"F\"); unique (the B branch's twin loads lea rdx,[rsp+0x40])"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_ANIMSM_FACING"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "the animation suffix PlayAnimation appends to every label (0x9ab740 turns _DEFAULT into it): \"F\" / \"B\" two-way, \"LF\"/\"RF\"/\"LB\"/\"RB\" four-way; Character::IsFacingFront 0xf0490 = (this == \"F\")"
+    },
+    {
+      "name": "AnimSM_flip",
+      "kind": "offset",
+      "struct": "AnimStateMachine",
+      "value": "0x14c",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "44 89 80 ?? ?? ?? ?? 45 84 F6",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov [rax+0x14c],r8d (= +art_flip); test r14b,r14b: the unmirrored store; unique (the mirrored one is mov [r8+0x14c],eax after neg eax)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_ANIMSM_FLIP"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "+-art_flip: negative = the unit is drawn mirrored (two-way only)"
+    },
+    {
+      "name": "Character_orientation",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x388",
+      "ctype": "iVec2D",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "48 89 9F ?? ?? ?? ?? 45 84 F6",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov [rdi+0x388],rbx; test r14b,r14b: the one store of the new direction (skipped for (0,0)); unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_ORIENTATION"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "the grid direction the unit faces (int x, int y); graphics.start_orientation seeds it"
+    },
+    {
+      "name": "Character_lockOrientation",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x3ac",
+      "ctype": "iVec2D",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "48 8B 99 ?? ?? ?? ?? 45 84 F6",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rbx,[rcx+0x3ac]; test r14b,r14b: the lock replaces the argument when either half is non-zero; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_LOCK_ORIENTATION"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "graphics.lock_orientation [x y]; (0,0) = no lock"
+    },
+    {
+      "name": "Character_faceSign",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x3a4",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "8B 8F ?? ?? ?? ?? 8B D1 0F AF D3",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov ecx,[rdi+0x3a4]; mov edx,ecx; imul edx,ebx: the sign the two-way rule multiplies the direction by; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_FACE_SIGN"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "+-1; negated by a 180-degree turn when the byte +0xc86 is set"
+    },
+    {
+      "name": "Character_artFlip",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x3a0",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "44 8B 87 ?? ?? ?? ?? 44 89 80",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov r8d,[rdi+0x3a0]; mov [rax+0x14c],r8d: art_flip copied into the animation's flip; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_ART_FLIP"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "graphics.art_flip (default 1; Character::init)"
+    },
+    {
+      "name": "Character_noHFlip",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x3a8",
+      "ctype": "char",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "44 38 A7 ?? ?? ?? ?? 75 62",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "cmp [rdi+0x3a8],r12b; jne +0x62: no_horizontal_flip skips the flip stores; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_NO_HFLIP"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "graphics.no_horizontal_flip"
+    },
+    {
+      "name": "Character_alwaysFront",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x3b4",
+      "ctype": "char",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "44 38 A7 ?? ?? ?? ?? 74",
+          "dispAt": 3,
+          "dispSize": 4,
+          "nth": 1
+        },
+        "note": "cmp [rdi+0x3b4],r12b; je: always_face_forward maps (1,0) -> (0,-1) and (0,1) -> (-1,0); the 2nd of the cmp-byte-then-je tests (1st +0xc86)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_ALWAYS_FRONT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "graphics.always_face_forward"
+    },
+    {
+      "name": "Character_fourWay",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x4cd",
+      "ctype": "char",
+      "anchors": {
+        "witness": {
+          "function": "Character_Face",
+          "pattern": "44 38 A7 ?? ?? ?? ?? 0F 84",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "cmp [rdi+0x4cd],r12b; je rel32 (the two-way branch): four_way_animations; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_FOUR_WAY"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#facing-characterface-2026-10-22",
+        ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
+      ],
+      "note": "graphics.four_way_animations (read once in 0xf1150)"
     }
   ]
 }

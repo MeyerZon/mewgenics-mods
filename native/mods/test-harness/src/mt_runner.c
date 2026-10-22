@@ -112,6 +112,19 @@ static MtStackTrack *record_stacks(MtRunner *r, int unit, const char *status, in
     return free;
 }
 
+static void jw_pair(MtJsonW *w, const char *key, int a, int b) {
+    mt_jw_arr_begin(w, key); mt_jw_arr_int(w, a); mt_jw_arr_int(w, b); mt_jw_arr_end(w);
+}
+/* the facing fields of a unit (units event; Character::Face 0x10ce50 writes them) */
+static void emit_facing_fields(MtJsonW *w, const MtUnit *u) {
+    mt_jw_str(w, "facing", u->facing);
+    jw_pair(w, "dir", u->dirX, u->dirY);
+    jw_pair(w, "lock", u->lockX, u->lockY);
+    mt_jw_int(w, "sign", u->faceSign);
+    mt_jw_int(w, "flip", u->flip);
+    mt_jw_int(w, "fourway", u->fourWay);
+}
+
 /* id >= 0: a dump requested over the pipe (the id is echoed so the reply can be matched) */
 static void do_dump(MtRunner *r, const MtHost *h, long id) {
     int avail = h->units_available(h->user);
@@ -146,6 +159,7 @@ static void do_dump(MtRunner *r, const MtHost *h, long id) {
         mt_jw_arr_begin(&w, "stacks");
         for (int k = 0; k < u.statusCount && k < MT_UNIT_STATUSES; k++) { mt_jw_arr_int(&w, u.stacks[k]); record_stacks(r, i, u.statuses[k], u.stacks[k]); }
         mt_jw_arr_end(&w);
+        emit_facing_fields(&w, &u);
         mt_jw_obj_end(&w);
     }
     mt_jw_arr_end(&w);
@@ -166,6 +180,7 @@ static long unit_int_field(const MtUnit *u, MtUnitField f) {
     switch (f) {
         case MT_F_FACTION: return u->faction; case MT_F_MOVE: return u->move; case MT_F_ACT: return u->act; case MT_F_TURNKIND: return u->turnKind;
         case MT_F_HP: return u->hp; case MT_F_SHIELD: return u->shield; case MT_F_DIVINESHIELD: return u->divineShield;
+        case MT_F_DIRX: return u->dirX; case MT_F_DIRY: return u->dirY; case MT_F_FLIP: return u->flip; case MT_F_SIGN: return u->faceSign;
         default: return f >= MT_F_STRENGTH && f <= MT_F_LUCK ? u->stats[f - MT_F_STRENGTH] : 0;
     }
 }
@@ -351,6 +366,52 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, 1);
             return 0;
         }
+        case MT_D_FACE: {
+            /* Character::Face(dir, instant) on a unit of the walk, then the unit read back: what the game wrote next to
+             * what the decompiled rule (mt_face.c) says it should have written */
+            MtUnit u;
+            memset(&u, 0, sizeof u);
+            int avail = h->units_available(h->user);
+            int idx = avail ? resolve_unit(h, d, &u) : -1;
+            int dx = d->faceDx, dy = d->faceDy, rc;
+            MtFaceOut want;
+            memset(&want, 0, sizeof want);
+            detail[0] = 0;
+            if (idx >= 0 && d->faceNamed != MT_FACE_RAW) mt_face_named_dir(d->faceNamed, u.faceSign, &dx, &dy);
+            if (idx < 0) { rc = 0; snprintf(detail, sizeof detail, "no such unit%s", avail ? "" : " (no combat)"); }
+            else if (!h->face_unit) { rc = -1; snprintf(detail, sizeof detail, "host without face_unit"); }
+            else {
+                MtFaceIn in = { dx, dy, u.lockX, u.lockY, u.faceSign, u.fourWay, u.noHFlip, u.alwaysFront };
+                mt_face_predict(&in, &want);
+                rc = h->face_unit(h->user, idx, dx, dy, detail, sizeof detail);
+                if (rc == 1 && (u.lockX || u.lockY)) {
+                    size_t dl = strlen(detail);
+                    snprintf(detail + dl, sizeof detail - dl, "; lock_orientation [%d %d] replaces the direction", u.lockX, u.lockY);
+                }
+                MtUnit after;
+                memset(&after, 0, sizeof after);
+                if (h->unit_info(h->user, idx, &after)) u = after;
+            }
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "face");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_int(&w, "unit", idx);
+            mt_jw_str(&w, "name", idx >= 0 ? u.name : "");
+            mt_jw_str(&w, "arg", d->a);
+            jw_pair(&w, "dir", dx, dy);
+            jw_pair(&w, "effective", want.dx, want.dy);
+            mt_jw_str(&w, "expect", want.suffix);
+            mt_jw_str(&w, "facing", idx >= 0 ? u.facing : "");
+            mt_jw_int(&w, "flip", idx >= 0 ? u.flip : 0);
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "face_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "face_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
         case MT_D_SHOT: {
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "shot");
@@ -411,7 +472,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             return 1;
         }
         case MT_D_EXPECT_UNIT: {
-            int isStr = d->field == MT_F_NAME || d->field == MT_F_CLASS || d->field == MT_F_NAMEKEY;
+            int isStr = mt_unit_field_is_string(d->field);
             char unitText[80];
             unit_text(d, unitText, sizeof unitText);
             if (isStr) snprintf(arg, sizeof arg, "%s %s %s \"%s\"", unitText, mt_unit_field_name(d->field), op_text(d->op), d->a);
@@ -429,7 +490,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             }
             int ok;
             if (isStr) {
-                const char *actual = d->field == MT_F_NAME ? u.name : d->field == MT_F_CLASS ? u.cls : u.nameKey;
+                const char *actual = d->field == MT_F_NAME ? u.name : d->field == MT_F_CLASS ? u.cls : d->field == MT_F_FACING ? u.facing : u.nameKey;
                 int same = strcmp(actual, d->a) == 0;
                 ok = d->op == MT_OP_EQ ? same : !same;
                 snprintf(detail, sizeof detail, "unit %d \"%s\": %s \"%s\"", idx, u.name, mt_unit_field_name(d->field), actual);

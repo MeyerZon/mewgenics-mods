@@ -154,6 +154,32 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.ok && p.body.startsWith('glow "Lil\' Rat" 1 0 1 1\nglow "Lil\' Rat" off\n'), `DLL-side directive: ${JSON.stringify(p.errors)}`);
     });
 
+    test("face directive (2026-10-22): <unit> <dx> <dy> (one of (±1,0) / (0,±1)) or <unit> front|back; bad forms are line errors; it passes through to the DLL (Character::Face)", () => {
+      eq(JSON.stringify(parseDirective("face 3 1 0", 2)), JSON.stringify({ line: 2, kind: "face", unit: "3", dir: [1, 0] }));
+      eq(JSON.stringify(parseDirective('face "Lil\' Rat" 0 -1', 3)), JSON.stringify({ line: 3, kind: "face", unit: "Lil' Rat", dir: [0, -1] }));
+      eq(JSON.stringify(parseDirective("face Rat back", 4)), JSON.stringify({ line: 4, kind: "face", unit: "Rat", named: "back" }));
+      eq(JSON.stringify(parseDirective("face 0 front", 5)), JSON.stringify({ line: 5, kind: "face", unit: "0", named: "front" }));
+      for (const bad of ["face", "face 3", "face 3 1", "face 3 1 1", "face 3 0 0", "face 3 2 0", "face 3 x 0", "face 3 left", "face 3 back now", "face 3 1 0 9", 'face "Lil Rat 1 0']) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript('face "Lil\' Rat" back\nface 0 -1 0\nquit\n', { owningMod: "m" });
+      assert(p.ok && p.body.startsWith('face "Lil\' Rat" back\nface 0 -1 0\n'), `DLL-side directive: ${JSON.stringify(p.errors)}`);
+    });
+
+    test("expect unit: the facing fields (2026-10-22) — facing (string, == !=), dirx|diry|flip|sign (integers); UNIT_FIELDS == mt_script.c order", () => {
+      eq(script.UNIT_FIELDS.slice(17).join(","), "facing,dirx,diry,flip,sign");
+      // the DLL's table (mt_script.c UNIT_FIELDS, MtUnitField order) is the same list, in the same order
+      const c = readFileSync(join(REPO_ROOT, "native", "mods", "test-harness", "src", "mt_script.c"), "utf8");
+      const table = /UNIT_FIELDS\[\]\s*=\s*\{([^}]*)\}/.exec(c);
+      assert(!!table, "mt_script.c has a UNIT_FIELDS table");
+      eq([...table![1]!.matchAll(/"([a-z]+)"/g)].map((m) => m[1]).join(","), script.UNIT_FIELDS.join(","), "mt_script.c UNIT_FIELDS == script.ts UNIT_FIELDS");
+      for (const s of ["facing"]) assert((script.UNIT_STRING_FIELDS as readonly string[]).includes(s), `${s} is a string field`);
+      const f = parseDirective('expect unit 8 facing == "B"', 1) as { field: string; op: string; value: string };
+      eq(f.field, "facing"); eq(f.op, "=="); eq(f.value, "B");
+      eq((parseDirective("expect unit 8 dirx == -1", 1) as { value: number }).value, -1);
+      eq((parseDirective("expect unit Pooter flip < 0", 1) as { field: string }).field, "flip");
+      eq((parseDirective("expect unit 0 sign == 1", 1) as { field: string }).field, "sign");
+      for (const bad of ['expect unit 1 facing > "B"', "expect unit 1 facing == B", 'expect unit 1 dirx == "1"']) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+    });
+
     test("combat directives: wait rounds needs N >= 1; expect round needs <op> <N>; expect stacks needs <op> <N> or varied", () => {
       assert("error" in parseDirective("wait rounds 0", 1), "rounds 0");
       assert("error" in parseDirective("expect round 3", 1), "round without op");
@@ -180,7 +206,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     });
 
     test("expect unit: the GON-at-runtime fields (2026-10-22) — namekey (string), hp|shield|divineshield and the seven stats (integers, negatives allowed); UNIT_FIELDS == mt_script.c order", () => {
-      eq(script.UNIT_FIELDS.join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck");
+      eq(script.UNIT_FIELDS.slice(0, 17).join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck");
       const a = parseDirective("expect unit 8 hp == 12", 1) as { what: string; unit: string; field: string; op: string; value: number };
       eq(a.what, "unit"); eq(a.unit, "8"); eq(a.field, "hp"); eq(a.op, "=="); eq(a.value, 12);
       eq((parseDirective("expect unit Pooter speed >= 15", 1) as { field: string; value: number }).field, "speed");

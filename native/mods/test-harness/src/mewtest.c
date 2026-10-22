@@ -50,6 +50,7 @@ typedef void **(*fn_SavePropGet)(void *propMap, void **out16, MtMsvcString *key)
 typedef void *(*fn_AddDirectorTest)(void *scene, void *entity);   /* the test director on test00.sav (name hard-coded in the callee) */
 typedef void *(*fn_GetGame)(void *component);                       /* Component::GetGame: the MewGame object of the component's scene */
 typedef uint64_t *(*fn_RngSeedState)(uint64_t *out4, uint64_t seed); /* expands a seed into the 32-byte RNG state */
+typedef void (*fn_CharacterFace)(void *character, uint64_t dir, char instant, char forceTurnAnim); /* iVec2D by value: x low, y high */
 
 static MewjectorAPI g_mj;
 static int g_mjOk;
@@ -90,6 +91,7 @@ static fn_SavePropGet g_SavePropGet;
 static fn_AddDirectorTest g_AddDirectorTest;
 static fn_GetGame g_GetGame;
 static fn_RngSeedState g_RngSeedState;
+static fn_CharacterFace g_CharacterFace;    /* NULL when the framework predates FW_SYM_Character_Face: `face` reports face_unavailable */
 
 static void *volatile g_dc;
 static volatile LONG g_dcInits;
@@ -556,6 +558,20 @@ static int h_unit_info(void *u, int i, MtUnit *out) {
     read_i32(AT(ch, OFF_CH_SHIELD), &out->shield);
     read_i32(AT(ch, OFF_CH_DIVINE_SHIELD), &out->divineShield);
     if (!safe_read(AT(ch, OFF_CH_STATS), out->stats, sizeof out->stats)) memset(out->stats, 0, sizeof out->stats);
+    /* facing (2026-10-22): what Character::Face 0x10ce50 wrote (docs/engine-map.md "Facing: Character::Face") */
+    read_i32(AT(ch, OFF_CH_ORIENTATION), &out->dirX); read_i32(AT(ch, OFF_CH_ORIENTATION + 4), &out->dirY);
+    read_i32(AT(ch, OFF_CH_LOCK_ORIENTATION), &out->lockX); read_i32(AT(ch, OFF_CH_LOCK_ORIENTATION + 4), &out->lockY);
+    read_i32(AT(ch, OFF_CH_FACE_SIGN), &out->faceSign);
+    read_i32(AT(ch, OFF_CH_ART_FLIP), &out->artFlip);
+    unsigned char b = 0;
+    if (safe_read(AT(ch, OFF_CH_FOUR_WAY), &b, 1)) out->fourWay = b != 0;
+    if (safe_read(AT(ch, OFF_CH_NO_HFLIP), &b, 1)) out->noHFlip = b != 0;
+    if (safe_read(AT(ch, OFF_CH_ALWAYS_FRONT), &b, 1)) out->alwaysFront = b != 0;
+    void *sm = NULL;
+    if (read_ptr(AT(ch, OFF_CH_ANIMSM), &sm) && sm) {
+        if (!read_msvc_string(AT(sm, OFF_ANIMSM_FACING), out->facing, sizeof out->facing)) out->facing[0] = 0;
+        read_i32(AT(sm, OFF_ANIMSM_FLIP), &out->flip);
+    }
     void *ent = NULL;
     uint32_t cc = 0;
     void *comps = NULL;
@@ -646,10 +662,26 @@ static int h_set_unit_glow(void *u, int i, const float *rgba, char *detail, size
     return ok ? 1 : 0;
 }
 
+/* face <unit> …: Character::Face(unit, dir, instant 1, no forced turn animation) on the Character* of the units walk.
+ * Instant: Face stores the direction, writes the suffix and the flip (and the root node's x-scale) and replays the
+ * current animation state with _DEFAULT, so the <anim>F / <anim>B label switch is visible on the next frame. */
+static int h_face_unit(void *u, int i, int dx, int dy, char *detail, size_t cap) {
+    (void)u;
+    void *d[MAX_UNITS]; int n;
+    if (!g_CharacterFace) { snprintf(detail, cap, "symbol missing: FW_SYM_Character_Face (framework older than this harness)"); return -1; }
+    if (!char_array(d, &n) || i < 0 || i >= n || !d[i]) { snprintf(detail, cap, "unit %d is not in the units walk", i); return 0; }
+    void *sm = NULL;
+    if (!read_ptr(AT(d[i], OFF_CH_ANIMSM), &sm) || !sm) { snprintf(detail, cap, "unit %d has no animation state machine (+0x%x)", i, OFF_CH_ANIMSM); return 0; }
+    uint64_t packed = (uint64_t)(uint32_t)dx | ((uint64_t)(uint32_t)dy << 32);
+    g_CharacterFace(d[i], packed, 1, 0);
+    snprintf(detail, cap, "Character::Face(%p, [%d %d], instant) called", d[i], dx, dy);
+    return 1;
+}
+
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
     h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
-    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon,
+    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon, h_face_unit,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
@@ -1033,6 +1065,7 @@ static void init(void) {
     g_AddDirectorTest = (fn_AddDirectorTest)g_fw.GetSymbol(FW_SYM_AddComponent_MewDirector_test);
     g_GetGame = (fn_GetGame)g_fw.GetSymbol(FW_SYM_Component_GetGame);
     g_RngSeedState = (fn_RngSeedState)g_fw.GetSymbol(FW_SYM_Rng_SeedState);
+    g_CharacterFace = (fn_CharacterFace)g_fw.GetSymbol(FW_SYM_Character_Face);
     logf_("run-entry symbols: CreateScene=%p CreateEntity=%p AddComponent<TacticsTest>=%p GetGame=%p AddComponent<MewDirector>(test, reference)=%p",
           (void *)g_CreateScene, (void *)g_CreateEntity, (void *)g_AddTacticsTest, (void *)g_GetGame, (void *)g_AddDirectorTest);
     for (int i = 0; i < FW_DATA_COUNT_; i++) {

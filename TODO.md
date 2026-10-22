@@ -28,7 +28,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr70-svg-roundtrip` (#70) — Export SVG → edit mods/<mod>/art/<shape>.svg in VectorCraft or Inkscape → save as plain SVG → Replace…: does the shape change in place?
 - [ ] `pr76-cat-anim-ui` (#76) — Rig tab → type a name → New cat animation: do the donor card and the <name>F / <name>B pills read well, with the under-test note visible but not alarming?
 - [ ] `pr76-animate-pose` (#76) — Does Animate pose land on the rig in the Timeline tab, and does Timeline on the donor show the two labeled frames?
-- [ ] `pr-cat-back` (#105) — In shot-shown-1, does the big cat read as TomTom seen from behind (head from behind with both ears, body, tail in front), nothing missing?
+- [ ] `pr-cat-back` (#105, re-shot by the facing PR) — In shot-shown-2, do the three big cats (one turned away by `face 9 back`, one data-locked `properties.lock_orientation [1 0]`, the shown one) read as TomTom seen from behind (head from behind with both ears, body, tail in front), nothing missing? shot-turned-back shows the turned one facing the camera again.
 - [ ] `pr76-wave-in-game` (#76) — Measured (run 20261022-101117, `npm run test:artprobe -- --cat-wave`): an animated `wave` pose authored with newCatAnimation, played via `alt_animations [[idle wave]]` on a TomTom, gets the cat's own parts (outline ~10.7k px vs TomTom's 11.0k) and moves (outline change 10773 px between shots vs 4380 for the idle control). Eyeball: in shot-wave-1 vs shot-wave-3, does the lower TomTom's arm wave read as a wave, not a twitch?
 - [ ] `pr80-glow-in-game` (#80) — Measured (run 20261022-101249, `npm run test:artprobe -- --glow-arena`): the baked halo is drawn in the arena — inner band = the #ff8000 swatch, alpha falling off outward on 4/4 rays, the unglowed control unlit — and its 4 bands show as 4 plateaus (alpha ~.86/.66/.44/.21). Eyeball: in shot-glow-1, does the rim read as a glow, or are the bands too visible (then more default steps)?
 - [ ] `pr80-bake-form` (#80) — The Bake glow… form: are kind / colour / blur / offset the right knobs (No = strength and bands should be exposed too)?
@@ -73,9 +73,10 @@ these without a decision (status per bullet below; the PR map follows).
       (hook seam S1 in engine-map "Cat parts: entry path, palette, faces, mirroring" — parked, optional) and new part
       art in catparts.swf. 2026-10-22: the back facing's `head_back` layout (`<name>PoseBack`, `facing: "back"`)
       and the four-way `LF/RF/LB/RB` quartet (`newCatAnimation { fourWay }`, Rig tab checkbox) are authored and
-      validated (engine-map "The back facing and the four-way quartet"; probe `render-cat-back`: the back rig drawn with the cat's own parts, OBSERVED run 20261022-114912). Open: turning a
-      unit away in a test fight (lock/start_orientation did not; no harness command), the back rig's non-slot marker not
-      drawn, a four-way cat in the game.
+      validated (engine-map "The back facing and the four-way quartet"; probe `render-cat-back`: the back rig drawn with the cat's own parts, OBSERVED run 20261022-114912). Turning a unit away is
+      solved (2026-10-22, #105 stack): the harness's `face <unit> back` calls `Character::Face` 0x10ce50 (engine-map
+      "Facing: Character::Face"; #105's `lock_orientation [0 -1]` asked for a FRONT facing and a lock overrides every
+      turn; the orientation keys are `properties.*`, #105 had them under `graphics`). Open: the back rig's non-slot marker is not drawn even on a genuinely back-facing unit (OBSERVED run 20261022-124301 — a property of the back rig, not of the facing; undecompiled), a four-way cat in the game.
       Done 2026-10-22: a ghost cat in the preview for empty slots (`ghost-cat.ts`; catparts.swf outlines when
       extracted, built-in otherwise; toggle "ghost cat"; docs/art-preview-plan.md §3.1).
 - [x] **Localized text?** **Owner, 2026-10-21: deferred; Peralta is fine as the default font.** Since then session

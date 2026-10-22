@@ -384,10 +384,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (35, incl. the v4 run-entry symbols and the 7 glow symbols); each has a signature except the three with no relocation-free unique window", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (36, incl. the v4 run-entry symbols, the 7 glow symbols and Character_Face); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 35);
+    eq(want.length, 36);
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");
@@ -489,7 +489,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 72, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86)");
+    eq(offs.length, 82, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face)");
   });
   if (exe) {
     const m = loadManifest(realPath);
@@ -1823,6 +1823,52 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const left = m.entries.filter((e) => e.anchors.unanchored).length;
     assert(left <= 46 - WITNESSED_OFFSETS_BATCH1.length, `unanchored count dropped by at least the batch: ${left}`);
   });
+  // ---- facing bindings (2026-10-22): Character::Face, the harness's `face` directive and the units event's facing fields ----
+  const FACING_SYMBOLS: [string, string, number][] = [["Character_Face", "0x10ce50", 35]];
+  /** struct offsets Character::Face reads or writes: name, macro, value (every witness lives in Character_Face) */
+  const FACING_OFFSETS: [string, string, string][] = [
+    ["Character_animSM", "OFF_CH_ANIMSM", "0x58"], ["AnimSM_facing", "OFF_ANIMSM_FACING", "0xb8"], ["AnimSM_flip", "OFF_ANIMSM_FLIP", "0x14c"],
+    ["Character_orientation", "OFF_CH_ORIENTATION", "0x388"], ["Character_lockOrientation", "OFF_CH_LOCK_ORIENTATION", "0x3ac"],
+    ["Character_faceSign", "OFF_CH_FACE_SIGN", "0x3a4"], ["Character_artFlip", "OFF_CH_ART_FLIP", "0x3a0"], ["Character_noHFlip", "OFF_CH_NO_HFLIP", "0x3a8"],
+    ["Character_alwaysFront", "OFF_CH_ALWAYS_FRONT", "0x3b4"], ["Character_fourWay", "OFF_CH_FOUR_WAY", "0x4cd"],
+  ];
+  const FACING_NAMES = new Set([...FACING_SYMBOLS.map((x) => x[0]), ...FACING_OFFSETS.map((x) => x[0])]);
+  test("the committed manifest carries the facing bindings (2026-10-22) as one contiguous block: Character_Face (FW_SYM 35, signed) and 10 offsets witnessed inside it; the generated headers expose them", () => {
+    const m = loadManifest(realPath);
+    for (const [name, rva, index] of FACING_SYMBOLS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ enum: `FW_SYM_${name}`, index }]), `${name} enumerator`);
+      assert(e!.consumers.some((c) => c.includes("mewtest.c")), `${name}: the harness consumes it`);
+    }
+    for (const [name, macro, value] of FACING_OFFSETS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset", `${name} is an offset entry`);
+      eq(e!.value, value, `${name} value`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      const w = e!.anchors.witness;
+      assert(!!w && w.function === "Character_Face" && typeof w.pattern === "string" && Number.isInteger(w.dispAt), `${name}: witness in Character_Face: ${JSON.stringify(w)}`);
+    }
+    const names = m.entries.map((e) => e.name);
+    const idx = names.map((n, i) => (FACING_NAMES.has(n) ? i : -1)).filter((i) => i >= 0);
+    eq(idx.length, FACING_NAMES.size, "every facing entry is present");
+    eq(idx[idx.length - 1]! - idx[0]! + 1, FACING_NAMES.size, "the facing entries are one contiguous block");
+    eq(idx[idx.length - 1], names.length - 1, "the facing block is the manifest's last block (appended)");
+    const oh = genOffsetsH([m]);
+    for (const [, macro, value] of FACING_OFFSETS) assert(new RegExp(`^#define ${macro}\\s+${value}\\s`, "m").test(oh), `${macro} ${value} in offsets.h`);
+    const sh = genSignaturesH([m]);
+    assert(sh.includes('"Character_Face", "') && sh.includes("0x10ce50u },  /* FW_SYM_Character_Face */"), "the Character_Face signature row");
+  });
+  if (exe) {
+    test("T1 real exe: the facing block verifies on the installed exe (harvest): Character_Face's signature and every facing offset witness", () => {
+      const m = loadManifest(realPath);
+      const rep = harvestManifest(parsePe(exe), exe, m).report;
+      for (const n of [...FACING_SYMBOLS.map((x) => x[0]), ...FACING_OFFSETS.map((x) => x[0])]) {
+        const x = rep.find((r) => r.name === n);
+        eq(x?.status, "verified", `${n}: ${x?.detail}`);
+      }
+    });
+  }
   // ---- per-unit glow bindings (2026-10-22): the combat outline mask mewframework's glow engine rides ----
   /** FwSymbol functions the glow engine calls or hooks: name, rva, enumerator index (appended after SaveProps_GetOrCreate = 27) */
   const GLOW_SYMBOLS: [string, string, number][] = [
@@ -1857,7 +1903,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const GLOW_NAMES = new Set([...GLOW_SYMBOLS.map((x) => x[0]), ...GLOW_REFERENCE.map((x) => x[0]), "ShaderManager_global", "TacticsTest_vftable", ...GLOW_OFFSETS.map((x) => x[0]), ...GLOW_CONSTANTS.map((x) => x[0])]);
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block");
+    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + FACING_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the facing block");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);

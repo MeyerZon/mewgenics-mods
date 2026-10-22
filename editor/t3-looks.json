@@ -226,8 +226,8 @@
   {
     "id": "pr-cat-back",
     "pr": 105,
-    "question": "Measured back-pose-drawn (run 20261022-114912: the shown cat is 1.57x TomTom's height, i.e. our 1.5x back rig). In shot-shown-1, the big cat at the top right of the arena: does it read as TomTom seen from behind — the back of the head with both ears, the body, the tail in front — with nothing missing or misplaced (compare a vanilla cat walking away)?",
-    "shots": ["ingame-runs/*-_artprobe-render-cat-back/shot-shown-1.png", "ingame-runs/*-_artprobe-render-cat-back/shot-vanilla.png"],
+    "question": "Turned away (run 20261022-124301, the harness's `face 9 back` = Character::Face): in shot-shown-2, the three big cats seen from behind are our 1.5x back rig — the turned cat (bottom right; turned back to the camera in shot-turned-back), the data-locked one and the shown one. Does each read as TomTom seen from behind — the back of the head with both ears, the body, the tail in front — with nothing missing or misplaced (compare a vanilla cat walking away)?",
+    "shots": ["ingame-runs/*-_artprobe-render-cat-back/shot-shown-2.png", "ingame-runs/*-_artprobe-render-cat-back/shot-turned-back.png"],
     "regenerate": "cd editor && npm run test:artprobe -- --cat-back",
     "status": "open"
   }

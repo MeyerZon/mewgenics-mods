@@ -127,4 +127,18 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(GON_NODE_SIZE, 0xb0);
 }
 
+/* facing (2026-10-22): Character::Face and the fields the harness's `face` / units event read (docs/engine-map.md
+ * "Facing: Character::Face") */
+TEST(build_25143593_facing_symbol_and_offsets) {
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Character_Face].expectedRva, 0x10ce50u);
+    CHECK(FW_SYMBOLS_25143593[FW_SYM_Character_Face].pattern != NULL);
+#ifdef OFF_CH_ORIENTATION
+    CHECK_EQ(OFF_CH_ANIMSM, 0x58); CHECK_EQ(OFF_ANIMSM_FACING, 0xb8); CHECK_EQ(OFF_ANIMSM_FLIP, 0x14c);
+    CHECK_EQ(OFF_CH_ORIENTATION, 0x388); CHECK_EQ(OFF_CH_LOCK_ORIENTATION, 0x3ac); CHECK_EQ(OFF_CH_FACE_SIGN, 0x3a4);
+    CHECK_EQ(OFF_CH_ART_FLIP, 0x3a0); CHECK_EQ(OFF_CH_NO_HFLIP, 0x3a8); CHECK_EQ(OFF_CH_ALWAYS_FRONT, 0x3b4); CHECK_EQ(OFF_CH_FOUR_WAY, 0x4cd);
+#else
+    CHECK(!"offsets.h carries the facing offsets (OFF_CH_ORIENTATION ...)");
+#endif
+}
+
 int main(void) { return MT_RUN_ALL(); }
