@@ -16,6 +16,7 @@
 #include "fw_gl_state.h"
 #include "fw_mesh_draw.h"
 #include "offsets.h"
+#include <stdio.h>
 
 #define NEAR(a, b, eps) (fabs((double)(a) - (double)(b)) <= (eps))
 #define CHECK_NEAR(a, b, eps) do { double _x = (double)(a), _y = (double)(b); if (!NEAR(_x, _y, eps)) MT_FAIL("CHECK_NEAR failed: %s = %.6f, expected %.6f", #a, _x, _y); } while (0)
@@ -439,6 +440,98 @@ TEST(mesh_probe_log_line) {
     char small[12];
     fw_mesh_fmt_probe(small, sizeof small, 61, 3, 3, ndc, canvas);
     CHECK_EQ(strlen(small), sizeof small - 1);
+}
+
+
+/* ---- M2/M3: model bytes, the shader dialect, object matrices ---- */
+static char *slurp(const char *rel, size_t *len) {   /* a file relative to this source (the repo checkout) */
+    char path[1024];
+    const char *f = __FILE__, *slash = strrchr(f, '/'), *bs = strrchr(f, '\\');
+    if (bs > slash) slash = bs;
+    size_t dir = slash ? (size_t)(slash - f + 1) : 0;
+    if (dir + strlen(rel) + 1 > sizeof path) return NULL;
+    memcpy(path, f, dir); strcpy(path + dir, rel);
+    FILE *fp = fopen(path, "rb");
+    if (!fp) return NULL;
+    fseek(fp, 0, SEEK_END); long n = ftell(fp); fseek(fp, 0, SEEK_SET);
+    char *b = malloc((size_t)n + 1);
+    if (b && fread(b, 1, (size_t)n, fp) != (size_t)n) { free(b); b = NULL; }
+    fclose(fp);
+    if (b) { b[n] = 0; *len = (size_t)n; }
+    return b;
+}
+
+TEST(shader_stage_renames_the_first_entry_and_resolves_the_guards) {
+    const char *src = "#version 150\n// vertical() stays\n#if COMPILING_VERTEX_PROGRAM\nvoid vert(){ }\n#elif COMPILING_FRAGMENT_PROGRAM\nvoid frag(){ }\n#endif\n#if MATRICES_AS_ATTRIBS\n#endif\n";
+    char out[512];
+    int n = fw_shader_stage(src, strlen(src), 1, out, sizeof out);
+    CHECK(n > 0);
+    CHECK(strstr(out, "void main(){ }\n#elif 0") != NULL);
+    CHECK(strstr(out, "#if 1\nvoid main()") != NULL);
+    CHECK(strstr(out, "void frag()") != NULL);           /* the other stage's entry is left alone (its guard is 0) */
+    CHECK(strstr(out, "vertical() stays") != NULL);
+    CHECK(strstr(out, "#if 1\n#endif") != NULL);           /* MATRICES_AS_ATTRIBS -> 1, as the game compiles with base_instance */
+    CHECK_EQ(n, (int)strlen(out));
+    n = fw_shader_stage(src, strlen(src), 0, out, sizeof out);
+    CHECK(n > 0);
+    CHECK(strstr(out, "#if 0\nvoid vert()") != NULL);
+    CHECK(strstr(out, "#elif 1\nvoid main()") != NULL);
+}
+
+TEST(shader_stage_refuses_include_missing_entry_and_overflow) {
+    char out[256];
+    const char *inc = "#version 150\n#include \"std_in.shader\"\nvoid vert(){}\nvoid frag(){}\n";
+    CHECK_EQ(fw_shader_stage(inc, strlen(inc), 1, out, sizeof out), -1);
+    const char *noEntry = "#version 150\nvoid main(){}\n";
+    CHECK_EQ(fw_shader_stage(noEntry, strlen(noEntry), 1, out, sizeof out), -1);
+    const char *ok = "#version 150\nvoid vert(){}\nvoid frag(){}\n";
+    CHECK_EQ(fw_shader_stage(ok, strlen(ok), 1, out, 8), -1);
+    CHECK(fw_shader_stage(ok, strlen(ok), 0, out, sizeof out) > 0);
+}
+
+TEST(shader_stage_compiles_the_shipped_fw_mesh_shader_text) {
+    size_t len = 0;
+    char *src = slurp("../../../mods/fw-3d/shaders/fw_mesh.shader", &len);
+    CHECK(src != NULL);
+    if (!src) return;
+    static char out[16384];
+    CHECK(fw_shader_stage(src, len, 1, out, sizeof out) > 0);
+    CHECK(strstr(out, "void main(){") != NULL && strstr(out, "#if 1") != NULL && strstr(out, "#elif 0") != NULL);
+    CHECK(fw_shader_stage(src, len, 0, out, sizeof out) > 0);
+    CHECK(strstr(out, "void main(){") != NULL && strstr(out, "#if 0") != NULL && strstr(out, "#elif 1") != NULL);
+    free(src);
+}
+
+TEST(mesh_load_bytes_by_kind) {
+    size_t len = 0;
+    char *obj = slurp("fixtures/mesh/crate.obj", &len);
+    CHECK(obj != NULL);
+    if (!obj) return;
+    FwMesh m; FwMeshError e;
+    CHECK_EQ(fw_mesh_load_bytes("models/crate.obj", (const uint8_t *)obj, len, &m, &e), 1);
+    CHECK_EQ(m.nverts, 24); CHECK_EQ(m.nindices, 36);
+    fw_mesh_free(&m);
+    CHECK_EQ(fw_mesh_load_bytes("models/crate.fbx", (const uint8_t *)obj, len, &m, &e), 0);
+    CHECK(e.text[0] != 0);
+    free(obj);
+    char *gl = slurp("fixtures/mesh/tri.gltf", &len);
+    CHECK(gl != NULL);
+    if (!gl) return;
+    CHECK_EQ(fw_mesh_load_bytes("models/tri.gltf", (const uint8_t *)gl, len, &m, &e), 1);
+    CHECK(m.nindices >= 3);
+    fw_mesh_free(&m);
+    free(gl);
+}
+
+TEST(mesh_object_mvp_equals_the_probe_path) {
+    float B[16], world[16], a[16], b[16], tv[16], place[16];
+    base_ortho(0, 1280, 720, 0, B);
+    fw_m4_identity(world); world[12] = 2.5f; world[14] = 5.5f;     /* fw_obj3d_model_matrix of a tile object, identity transform */
+    fw_mesh_object_mvp(B, VP_F1, ISO, world, a);
+    fw_m4_mul(B, VP_F1, tv);
+    fw_m4_place(ISO, 2.5, 0, 5.5, 1, place);
+    fw_m4_mul(tv, place, b);
+    for (int i = 0; i < 16; i++) CHECK_NEAR(a[i], b[i], 1e-4);
 }
 
 int main(void) { return MT_RUN_ALL(); }

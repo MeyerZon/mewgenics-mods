@@ -43,3 +43,8 @@ int fw_mesh_fmt_probe(char *buf, size_t n, int frame, int col, int row, const fl
     if (k < 0) { if (n) buf[0] = 0; return 0; }
     return (size_t)k < n ? k : (int)(n ? n - 1 : 0);
 }
+
+/* ---- red stubs (the green commit implements them) ---- */
+int fw_shader_stage(const char *src, size_t len, int vertex, char *out, size_t cap) { (void)src; (void)len; (void)vertex; (void)out; (void)cap; return -1; }
+int fw_mesh_load_bytes(const char *path, const uint8_t *bytes, size_t len, FwMesh *out, FwMeshError *err) { (void)path; (void)bytes; (void)len; (void)err; memset(out, 0, sizeof *out); return 0; }
+void fw_mesh_object_mvp(const float top[16], const float vp[16], const float iso[16], const float world[16], float out[16]) { (void)top; (void)vp; (void)iso; (void)world; memset(out, 0, 16 * sizeof(float)); }

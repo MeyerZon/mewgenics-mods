@@ -65,7 +65,7 @@ if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_obs3d_rules.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
-  "%HERE%test\test_mesh_draw.c" "%HERE%src\fw_m4.c" "%HERE%src\fw_functor.c" "%HERE%src\fw_gl_state.c" "%HERE%src\fw_mesh_draw.c" ^
+  "%HERE%test\test_mesh_draw.c" "%HERE%src\fw_m4.c" "%HERE%src\fw_functor.c" "%HERE%src\fw_gl_state.c" "%HERE%src\fw_mesh_draw.c" "%HERE%src\fw_mesh_rules.c" "%HERE%src\fw_mesh_gltf.c" "%HERE%src\fw_json.c" ^
   -o "%OUT%\test_mesh_draw.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_draw.exe"
