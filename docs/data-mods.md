@@ -271,6 +271,73 @@ A file `mods/<mod>/shaders/<name>.shader` is compiled by the game when native co
 A shader that another shader in the same mod `#include`s is a library: it needs no `#version`, entry points or
 guards. Not settled: whether the loader resolves an `#include` against the `-modpaths` as well as the pack (the
 validator accepts both); `fw_mesh.shader` avoids the question by including nothing.
+## 3D models in a mod (preview)
+
+Phase M of `docs/possible_3d_work.md`: real meshes in the vanilla (orthographic) combat scene, drawn by mewframework.
+This section is the **data seam and the API**; what draws today is listed at the end.
+
+**The GON key.** A `data/characters/*.gon` entry (inanimate objects such as `Crate` are characters there) names its
+model inside its `graphics { }` block, next to `movieclip`:
+
+```
+Crate {
+    graphics {
+        movieclip Crate           // vanilla, stays: the 2D fallback whenever the framework is inactive
+        model "models/crate.obj"  // the 3D model mewframework draws for this unit
+    }
+}
+```
+
+Why `graphics`: that block is where the game keeps everything about how a unit looks (`movieclip`, `name`,
+`water_mask`, `tooltip`, `depth_offset`), so the 3D look sits next to its 2D fallback and a `.merge` touches one block.
+The game's own GON getters look keys up by name and never ask for `model`, so vanilla ignores it — **INFERRED** (no
+reader of the key exists in the pack's data or the decompiles seen so far; no T2 run has checked the GON log for it
+yet). Add it with a `.merge` (`mods/fw-3d/data/characters/inanimate_objects.gon.merge`); the validator knows
+`graphics.model` is a framework key and does not warn `merge-target-missing` for it.
+
+**The value.** Either a file in the mod — `models/<name>.obj` (sub-folders allowed: `models/props/tire.obj`) — or
+`"@Name"`, a model a native mod registers with the mesh engine and declares in `editor/registered-names.json` as
+`{ "name": "Name", "kind": "model", "mod": "<mod>" }` (kind `model` names resolve only `@` references, never a status
+or ability). Path rule (the editor's `editor/src/core/model3d.ts` and the DLL's `fw_obj3d_model_path_ok` apply the
+same one): relative to the mod folder, starts `models/`, ends `.obj` (OBJ only for now; glTF later), no `..`, no empty
+segment, no backslash, not absolute, printable ASCII, under 64 bytes. Model files are served through `-modpaths` like
+any pack file (`ResourceManager_GetBinaryResource`, the first mod path that has the file; `possible_3d_work.md` §1
+"Mesh bytes") and are **mod-only**: the pack has none, so nothing is looked up in base data. Files under a mod's
+`models/` are assets, not overlays (no `whole-file-replace`). World units: 1 = one tile, axes = the game's
+(x, height, z), +height up, the model's origin = the anchor (tile centre / the unit's position) on the ground.
+
+**Validator codes** (all errors, on `<Entry>.graphics.model`): `model-path-invalid` (the rule above, or not a
+string), `model-file-missing` (`mods/<mod>/models/...` is not a file), `model-unregistered` (`@Name` without a
+`kind: "model"` registration). A `model` key anywhere else is not checked.
+
+**The native API (framework API v6, `native/framework/src/framework_api.h`).** A native mod places objects itself:
+
+| Function | Does |
+|---|---|
+| `int FW_Register3DObject(void *character, const char *model, const float transform[16])` | attach a model to a unit (it follows the unit); one per unit, registering again replaces it; dropped when the unit's pool slot is reused (the glow registry's generation check). Handle > 0, 0 refused. |
+| `int FW_Place3DObjectOnTile(int col, int row, const char *model, const float transform[16])` | place a model on a tile, anchored at the tile centre (col + 0.5, 0, row + 0.5); any number per tile. Handle > 0. |
+| `int FW_Unregister3DObject(void *character_or_null, int handle)` | remove a unit's object (character given) or the object with `handle` (character NULL). 1 when removed. |
+
+`transform` is the object's own model matrix (column-major, world units), applied after the translation to the anchor;
+NULL = identity. Up to 64 objects; they belong to the current fight scene (a new `TacticsTest` clears them); main
+thread only. The registry is `native/framework/src/fw_obj3d_rules.c` (host-tested by `test_obj3d_rules.c`) behind
+`obj3d_engine.c`. The GON key is read at run time from the unit's live, overlay-merged entry at
+`Character+OFF_CH_GON_ENTRY` (0x240, the pointer the harness's `expect gon` walks) by `fw_gon.c`'s walker
+(`fw_gon_model`, promoted from the harness's `mt_gon.c`, host-tested by `test_gon.c`) through a VirtualQuery-guarded
+reader (`obj3d_engine_unit_model`).
+
+**What draws today vs not.** Today: the data seam (key, validator, sample mod), the API (v6 exports, logged in
+`mod_logs/mewframework.log`) and the GON read are in place; **nothing is drawn yet** — the mesh engine (OBJ loader,
+the functor in the world camera's unit layer, depth against sprites: phase M1/M2) consumes the registry and the
+`graphics.model` key when it lands. Not planned in this step: glTF, textures/materials, animation, `render3d`
+modes (floor / billboard / upright), perspective (phase P). Tile entries (`data/tiles.gon`) have no runtime entry
+pointer yet, so tiles get models through `FW_Place3DObjectOnTile` only.
+
+**Loading.** Needs a framework built with API v6 (mewframework 0.6) on a known build, and `mods/fw-3d` on the mod
+path next to the mod that uses it (`mods: <mod>, fw-3d` in a `.mewtest` header, `-modpaths … mods/fw-3d` in a
+launch): `mods/fw-3d` ships `models/crate.obj` (a hand-written 0.8-unit crate with normals and UVs) and gives the
+vanilla `Crate` its `graphics.model`. The API version is v6 because two open PRs (#109 CatRig, #111 `FW_Random`)
+each claim v5; their `FwApi` fields go before the v6 ones when they merge (the owner settles the order).
 
 ## Limits of the data layer
 

@@ -7,6 +7,7 @@
 #include "offsets.h"
 #include "fw_status_rules.h"   /* MsvcString, the status table rules (pure, host-tested) */
 #include "fw_resolve.h"        /* FwHookSpec: the hook plan both files install steps of (pure, host-tested) */
+#include "fw_obj3d_rules.h"    /* Fw3dObject: the 3D-object registry (pure, host-tested) */
 
 extern MewjectorAPI g_mj;
 extern int g_mjAvailable;
@@ -37,3 +38,14 @@ void obs3d_on_late_render(void *tacticsTest);        /* called by the glow engin
 int mesh_engine_wants_layer_hook(void);               /* reads MEWFW_MESH_PROBE once; 1 when the Camera_RenderOneLayer hook must be installed */
 void mesh_engine_after_layer(void *cam, int layer);   /* record time, after the original Camera_RenderOneLayer */
 void mesh_engine_on_late_render(void *tacticsTest);   /* every combat frame, from the glow engine's LateRender hook */
+/* obj3d_engine.c (API v6: 3D objects; records only — the mesh engine resolves models and draws) */
+int obj3d_engine_register(void *character, const char *model, const float transform[16]);   /* handle > 0, 0 refused */
+int obj3d_engine_place(int col, int row, const char *model, const float transform[16]);     /* handle > 0, 0 refused */
+int obj3d_engine_unregister(void *character, int handle);   /* by character when non-NULL, else by handle; 1 removed */
+/* for the mesh engine, every combat frame: on_fight first (a new TacticsTest clears the registry, freed units are
+ * pruned), then iterate count/get; fw_obj3d_model_matrix(o, unitXZ, out) gives the world matrix */
+int obj3d_engine_count(void);
+const Fw3dObject *obj3d_engine_get(int i);                  /* NULL out of range; valid until the next register/remove/on_fight */
+void obj3d_engine_on_fight(void *tacticsTest);
+/* the unit's GON graphics.model (its live entry at Character+OFF_CH_GON_ENTRY, guarded reads): 1 found, 0 none, -1 unreadable */
+int obj3d_engine_unit_model(const void *character, char *out, size_t cap);
