@@ -605,6 +605,10 @@ await mcpSmoke();
   let pm: typeof import("./preview-merge-tests.ts") | null = null;
   try { pm = await import("./preview-merge-tests.ts"); } catch (e) { test("preview-merge-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (pm) pm.runPreviewMergeTests(test, assert, eq);
+  // T3 looks gallery (editor/t3-looks.json → editor/data/t3-gallery/index.html, `npm run t3`)
+  let tg: typeof import("./t3-gallery-tests.ts") | null = null;
+  try { tg = await import("./t3-gallery-tests.ts"); } catch (e) { test("t3-gallery-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (tg) tg.runT3GalleryTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
