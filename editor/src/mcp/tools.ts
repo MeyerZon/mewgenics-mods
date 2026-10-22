@@ -181,6 +181,15 @@ export const TOOL_INPUT = {
     timeoutMs: num("how long to wait for the app to start in headless Chromium (default 120000)").optional(),
     webgl: bool("force the WebGL2 backend (?webgl; default true in headless)").optional(),
   }),
+  pack_mod: z.object({
+    mod: str(),
+    force: bool("pack despite validation errors, failed SWF builds or missing native DLLs (the result says what was forced)").optional(),
+    init: bool("draft mods/<mod>/mod.json from description.json first when it is missing").optional(),
+  }),
+  install_mod: z.object({
+    zip: str("path to the mod zip to install into mods/<name>/"),
+    acceptBuildMismatch: bool("install although the mod's gameBuild is not the installed game's build (pass only after the user agreed to the returned prompt)").optional(),
+  }),
 };
 
 export type ToolName = keyof typeof TOOL_INPUT;
@@ -384,6 +393,16 @@ export const TOOLS: ToolDef[] = [
     "vectorcraft_exec",
     "Draw on a scene shape headlessly in VectorCraft (the vendored web build, github.com/storytold/vectorcraft, started in Playwright's headless Chromium; nothing is installed). Opens the shape as the SVG export_svg writes (an artboard of its viewBox moved to 0,0), runs the engine commands in order through window.vectorcraft.execute (shape.rectangle { x, y, width, height }, shape.ellipse, path.create { d }, object.move { dx, dy }, …), exports the document as SVG (presentation attributes, text outlined), undoes the artboard re-origin and replaces exportTo (default shapeId) in the scene file through import_svg's path — returns { ok, opened, results: [{ command, ok, result | error }], applied: { shapeId, paths, findings }, reorigin: { dx, dy }, documents, screenshotPath?, ms }. Without shapeId it starts from a blank artboard of the stage size; without shapeId and exportTo it only runs the commands and returns the SVG text. Refuses with skipped:true + reason when the build is not vendored (cd editor && npm run build, online once) or Playwright's Chromium is absent. Static drawing only — animation stays in the scene's sprites.",
     (a) => api.vectorcraftExec({ mod: a.mod, scenePath: a.scene, shapeId: a.shapeId, commands: a.commands, exportTo: a.exportTo, screenshot: a.screenshot, continueOnError: a.continueOnError, timeoutMs: a.timeoutMs, webgl: a.webgl }),
+  ),
+  def(
+    "pack_mod",
+    "Package a mod for others (docs/data-mods.md \"Shipping a mod\"): needs mods/<mod>/mod.json (name, version, author, description, gameBuild = the Steam build id it was tested on; native + frameworkApi for a mod with DLLs; license, attribution optional; init: true drafts it). Rebuilds every art/*.scene.json (build_swf), runs validate_mod and refuses on errors unless force, then writes editor/data/dist/<name>-<version>.zip: <name>/ (the mod folder minus tests/, art/ sources and dot-files, plus native/<dll> from native/dist for each mod.json `native` DLL), README-INSTALL.txt (unzip, the -modpaths launch line, the save advice, the native step) and MANIFEST.sha256. Returns { ok, zipPath, bytes, sha256, entries, builds, report, forced?, warnings? } or { ok: false, refused: { code, message } } (mod-missing | manifest-missing | manifest-invalid | swf-build-failed | validation-errors | native-dll-missing | out-dir-unsafe).",
+    (a) => api.packMod(a.mod, { force: a.force, init: a.init }),
+  ),
+  def(
+    "install_mod",
+    "Install a mod zip (as pack_mod writes it) into mods/<name>/ and nowhere else. Checks first and writes nothing on a refusal: size caps (64 MiB zip, 256 MiB unpacked, 5000 entries), path traversal / absolute / backslash names, symlinks, saves/ segments, case-only duplicates, layout (one <name>/ folder + README-INSTALL.txt / MANIFEST.sha256), <name>/mod.json valid and naming that folder, MANIFEST.sha256 matching every file, an existing mods/<name>/ (never overwritten). Then compares mod.json gameBuild with the installed game (check_game_build): on a mismatch it returns { ok: false, verdict: \"build-mismatch\", prompt } — show the prompt to the user and call again with acceptBuildMismatch: true only if they agree. Success: { ok: true, verdict: \"installed\", name, version, dir, files, build, notes, report (validate_mod of the installed mod) }; refusal: { ok: false, verdict: \"refused\", code, reason }.",
+    (a) => api.installMod(resolveReadPath(a.zip), { acceptBuildMismatch: a.acceptBuildMismatch }),
   ),
 ];
 

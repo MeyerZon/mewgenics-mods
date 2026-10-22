@@ -68,7 +68,7 @@ export async function selectMod(name: string): Promise<void> {
   S.set({ mod: name, file: "", report: null, preview: null });
   const r = await getJson<ReadModResult>(url("/api/mod", { mod: name }));
   const files = r.ok ? r.files : [];
-  S.set({ files: files.filter((f) => f.relPath !== "description.json") });
+  S.set({ files: files.filter((f) => f.relPath !== "description.json" && f.relPath !== "mod.json") });
   await loadArtForMod(name);
 }
 export async function openFile(relPath: string): Promise<void> {
@@ -275,4 +275,60 @@ export function startup(): void {
     S.set({ artMode: true, tourOpen: false });
     onboarding.artTourTriggered = true; // don't auto-pop the art tour over a deep-linked session
   }
+}
+
+// ---- shipping a mod: Export… / Import mod… (docs/data-mods.md "Shipping a mod") ----------
+interface PackReply {
+  ok: boolean;
+  refused?: { code: string; message: string };
+  zipName?: string;
+  zipPath?: string;
+  bytes?: number;
+  forced?: boolean;
+}
+type InstallReply =
+  | { ok: true; verdict: "installed"; name: string; version: string; notes: string[] }
+  | { ok: false; verdict: "refused"; code: string; reason: string }
+  | { ok: false; verdict: "build-mismatch"; prompt: string };
+
+/** Pack the open mod into editor/data/dist/ and download the zip. Offers init (no mod.json) and force (errors). */
+export async function exportMod(): Promise<void> {
+  const mod = S.get().mod;
+  if (!mod) return;
+  S.set({ openMenu: "" });
+  let r = await post<"/api/mod/pack", PackReply>("/api/mod/pack", { mod });
+  if (!r.ok && r.refused?.code === "manifest-missing" && window.confirm(`mods/${mod} has no mod.json (name, version, author, gameBuild…). Draft one from description.json and pack?`)) {
+    r = await post<"/api/mod/pack", PackReply>("/api/mod/pack", { mod, init: true });
+  }
+  if (!r.ok && (r.refused?.code === "validation-errors" || r.refused?.code === "swf-build-failed" || r.refused?.code === "native-dll-missing") && window.confirm(`${r.refused.message}\n\nPack anyway?`)) {
+    r = await post<"/api/mod/pack", PackReply>("/api/mod/pack", { mod, force: true });
+  }
+  if (!r.ok || !r.zipName) {
+    flash(`export refused (${r.refused?.code ?? "error"}): ${r.refused?.message ?? ""}`, 8000);
+    return;
+  }
+  flash(`exported ${r.zipPath} (${r.bytes} bytes)${r.forced ? " — forced" : ""}`, 8000);
+  const a = document.createElement("a");
+  a.href = url("/api/dist", { file: r.zipName });
+  a.download = r.zipName;
+  a.click();
+}
+
+/** Install a mod zip the user picked into mods/<name>/; a build mismatch asks before installing. */
+export async function importModFile(file: File): Promise<void> {
+  S.set({ openMenu: "" });
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const base64 = btoa(bin);
+  let r = await post<"/api/mod/install", InstallReply>("/api/mod/install", { base64, fileName: file.name });
+  if (!r.ok && r.verdict === "build-mismatch") {
+    if (!window.confirm(r.prompt)) { flash("import cancelled", 4000); return; }
+    r = await post<"/api/mod/install", InstallReply>("/api/mod/install", { base64, fileName: file.name, acceptBuildMismatch: true });
+  }
+  if (r.ok) {
+    flash(`installed ${r.name} ${r.version} into mods/${r.name}${r.notes.length ? ` — ${r.notes.join("; ")}` : ""}`, 8000);
+    await loadMods();
+    await selectMod(r.name);
+  } else if (r.verdict === "refused") flash(`import refused (${r.code}): ${r.reason}`, 8000);
 }

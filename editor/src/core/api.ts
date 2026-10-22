@@ -16,6 +16,7 @@ import type { NewCatAnimationOptions } from "./art/cat-rig.ts";
 import type { Scene, Finding as SceneFinding } from "./art/scene.ts";
 import * as ingame from "./ingame/index.ts";
 import * as vcHeadless from "./art/vectorcraft-headless.ts";
+import * as pack from "./pack.ts";
 export { listVanillaSwfs, readVanillaSwf, vanillaSwfDir } from "./art/art-io.ts";
 import { checkInstalledBuild } from "./bindings/check.ts";
 import { portManifest, renderPortReport } from "./bindings/port.ts";
@@ -410,3 +411,23 @@ export function portBindings(args: PortBindingsArgs): PortBindingsResult {
   }
   return out;
 }
+
+// ---- shipping a mod (docs/data-mods.md "Shipping a mod") ---------------------
+
+/** Pack mods/<name>/ into editor/data/dist/<name>-<version>.zip (builds SWFs, validates; refuses on errors unless force). */
+export function packMod(modName: string, opts: { force?: boolean; init?: boolean } = {}) {
+  return pack.packMod(modName, { force: opts.force, init: opts.init });
+}
+/** Install a mod zip (a path or the bytes) into mods/<name>/. A build mismatch is returned as verdict build-mismatch unless accepted. */
+export function installMod(zip: string | Uint8Array, opts: { acceptBuildMismatch?: boolean } = {}) {
+  return pack.installMod(zip, { acceptBuildMismatch: opts.acceptBuildMismatch });
+}
+/** A packed zip from editor/data/dist/ by its file name (for the web UI's download), or null. */
+export function readPackedZip(fileName: string): Uint8Array | null {
+  if (!/^[A-Za-z0-9_][A-Za-z0-9_.+-]*\.zip$/.test(fileName)) return null;
+  const p = join(pack.DIST_DIR, fileName);
+  return existsSync(p) ? new Uint8Array(readFileSync(p)) : null;
+}
+export { MOD_MANIFEST_FILE } from "./mod-manifest.ts";
+export type { ModManifest } from "./mod-manifest.ts";
+export type { PackResult, InstallResult } from "./pack.ts";

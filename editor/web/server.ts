@@ -201,6 +201,24 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       const b = await body("/api/art/prepare-swf-gate", req);
       return sendJson(res, 200, api.prepareSwfGate({ mod: b.mod || undefined, variant: b.variant }));
     }
+    // ---- shipping a mod (docs/data-mods.md "Shipping a mod") ------------------
+    if (method === "POST" && url.pathname === "/api/mod/pack") {
+      const b = await body("/api/mod/pack", req);
+      return sendJson(res, 200, api.packMod(b.mod, { force: b.force, init: b.init }));
+    }
+    if (method === "POST" && url.pathname === "/api/mod/install") {
+      // the zip arrives base64 in the JSON body (8 MB body cap -> ~6 MB zips; bigger ones: npm run pack -- --install)
+      const b = await body("/api/mod/install", req);
+      return sendJson(res, 200, api.installMod(new Uint8Array(Buffer.from(b.base64, "base64")), { acceptBuildMismatch: b.acceptBuildMismatch }));
+    }
+    if (method === "GET" && url.pathname === "/api/dist") {
+      const name = q.get("file") || "";
+      const bytes = api.readPackedZip(name);
+      if (!bytes) return sendJson(res, 404, { error: `no packed zip ${JSON.stringify(name)} in editor/data/dist/` });
+      res.writeHead(200, { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store" });
+      res.end(bytes);
+      return;
+    }
     return sendJson(res, 404, { error: `no route: ${method} ${url.pathname}` });
   } catch (e) {
     if (e instanceof BodyError) return sendJson(res, 400, { error: e.message, issues: e.issues });
