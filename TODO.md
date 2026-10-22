@@ -32,10 +32,16 @@ these without a decision (status per bullet below; the PR map follows).
       `mods/fw-glow`). Decide: (a) a data-level way to ask for it (a `registered-names.json` kind `glow` a
       status/passive names?) and per-unit colours (v2: one material + pass per unit, or a camera per colour); (b)
       whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
-- [ ] **VectorCraft's agent channel:** **Owner, 2026-10-21: approved in principle, at least for testing** (agents
-      drawing parts headlessly through its MCP server / JSON control port, alpha). **Awaiting the install decision**:
-      scope and the install go to the owner before any work — nothing is installed without the owner's say-so. The
-      plain SVG round trip (#70) stays the working path meanwhile.
+- [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
+      draw parts headlessly, or stay with plain SVG round trips (#70)?
+      **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly).
+      **2026-10-22, owner's YES to a build-time download (nothing installed):** the pinned web build is vendored at
+      `npm run build` (hash-verified, `scripts/vendor-vectorcraft.ts`) and Art mode's **VectorCraft** sub-tab draws on
+      a shape in place — VectorCraft on a Shapes row → draw → Apply to shape, the artboard re-origin undone by
+      `svg-reorigin.ts` (`docs/art-preview-plan.md` "VectorCraft in-editor"). The agent channel is MCP
+      `vectorcraft_exec` (the same `window.vectorcraft` API in Playwright's headless Chromium, ~0.5–4 s to boot;
+      skips when not vendored). The native `vectorcraft-cli mcp --headless` route needs an install and stays unasked.
+      Remaining: T3 — the owner's look at the tab and at a `vectorcraft_exec` drawing in game.
 - [ ] **T3 looks** (owner, 2026-10-21: he will do these later) still unticked from the art PRs — the shots are in
       `editor/data/ingame-runs/` (`npm run test:artprobe`, `-- --cat`, `-- --cat-append` rebuild them):
       gradient square red → black (#63); top green line shorter than the bottom one (#64); the add square a lightened

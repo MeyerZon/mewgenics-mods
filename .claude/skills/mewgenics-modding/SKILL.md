@@ -112,9 +112,18 @@ an ~83%-complete main save that must stay untouched.
 The MCP art tools cover the whole loop: `new_art_scene` → `import_svg { svgText, mod, into: { scene, shapeId } }` (or
 `write_art_scene` with a whole scene; `dryRun` validates) → `build_swf` → `inspect_swf`. Gray fills (`gray:0..15`) are
 palette-remapped by the game for cats; enemy clips are not paletted and are drawn mirrored; bitmaps are smoothed and
-clamped (`npm run test:artprobe` shows the game drawing a probe; `docs/art-preview-plan.md` §8). The server has 24
-tools; the art ones are `list_art_scenes`, `read_art_scene`, `write_art_scene`, `new_art_scene`, `import_svg`,
-`export_svg`, `build_swf`, `inspect_swf`.
+clamped (`npm run test:artprobe` shows the game drawing a probe; `docs/art-preview-plan.md` §8).
+Humans draw single shapes in place in Art mode's **VectorCraft** sub-tab (the vendored web build in an iframe:
+VectorCraft on a Shapes row → draw → Apply to shape; the artboard re-origin is undone by `svg-reorigin.ts`);
+`export_svg` / `import_svg { options: { applyViewBox: false }, into: { …, replace: true } }` is the file round trip.
+Agents draw parts headlessly with **`vectorcraft_exec { mod, scene, shapeId?, commands: [{ command, params }],
+exportTo?, screenshot? }`**: the vendored VectorCraft web build starts in Playwright's headless Chromium (nothing
+installed), the shape's SVG becomes its artboard (the viewBox moved to 0,0 — command coordinates are artboard px),
+the commands run through `window.vectorcraft.execute` (`shape.rectangle { x, y, width, height }`, `shape.ellipse`,
+`path.create { d }`, `object.move { dx, dy }`, …), the export is re-origined and replaces `exportTo` in the scene file;
+it answers `skipped: true` with the reason when the build is not vendored. The server has 26 tools; the art ones are
+`list_art_scenes`, `read_art_scene`, `write_art_scene`, `new_art_scene`, `import_svg`, `export_svg`, `bake_glow`,
+`build_swf`, `inspect_swf`, `vectorcraft_exec`.
 
 What the game does with a mod's SWF (OBSERVED 2026-10-20/21, build 25143593; `editor/src/core/art/engine-behaviour.ts`):
 

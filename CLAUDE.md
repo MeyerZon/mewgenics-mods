@@ -70,7 +70,10 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 
 **Editor** (run from `editor/`; runtime deps `react`, `react-dom`, `zod`, `@ruffle-rs/ruffle` (browser-only, vendored into the git-ignored
 `web/public/ruffle/` by `npm run build` / `dev`); dev-only `vite`, `typescript@7.0.2`,
-`@playwright/test`; see `docs/editor-ts-react-plan.md`):
+`@playwright/test`; see `docs/editor-ts-react-plan.md`). `npm run build` / `dev` also vendor VectorCraft's prebuilt
+web build (`scripts/vendor-vectorcraft.ts`: the ONE pinned release zip, size + SHA-256 verified before extraction,
+Node built-ins only, nothing installed; owner decision 2026-10-22) into the git-ignored `web/public/vectorcraft/`,
+skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hashes it:
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates). In a secondary git
   worktree, point at the main checkout instead: one `node_modules` junction plus `MEWGENICS_EXTRACTED_DATA` /
@@ -90,15 +93,16 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
-- `npm run test:e2e` — `vite build && playwright test`: the 42-check browser suite in `editor/tests/e2e/` that pins
+- `npm run test:e2e` — `vite build && playwright test`: the 44-check browser suite in `editor/tests/e2e/` that pins
   the UI's DOM and flows (Data mode, Art mode, preview, onboarding). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (25 tools, incl. the art tools
-  with `bake_glow`, `check_game_build` and `port_bindings`).
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (26 tools, incl. the art tools
+  with `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
+  Chromium), `check_game_build` and `port_bindings`).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
 
 **Data access / tooling** (repo root):
