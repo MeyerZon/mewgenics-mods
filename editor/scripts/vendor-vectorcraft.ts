@@ -3,7 +3,7 @@
 // VectorCraft tab embeds it as a same-origin <iframe>. Owner decision 2026-10-22: `npm run build` may download the
 // ONE pinned release asset below from GitHub Releases — nothing is installed on the machine, and the download is
 // verified (exact size, then SHA-256) BEFORE a single byte is extracted. The zip is unpacked with the small reader
-// in this file (Node built-ins only: node:zlib inflateRawSync over the central directory, CRC-32 checked, no
+// in src/core/zip.ts (Node built-ins only: node:zlib inflateRawSync over the central directory, CRC-32 checked, no
 // path escapes, no zip64), and the licence texts (LICENSE-*, NOTICE, OFL-*.txt, licenses/**, fonts/**/OFL.txt)
 // travel with the runtime. VENDORED.json records { version, sha256, date, files[{ path, bytes, sha256 }] }.
 //
@@ -20,7 +20,8 @@ import { get as httpsGet } from "node:https";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DATA_CACHE_DIR } from "../src/core/repo.ts";
-import { inflateRawSync } from "node:zlib";
+import { listZip, readZipEntry, safeZipPath } from "../src/core/zip.ts";
+import type { ZipEntry } from "../src/core/zip.ts";
 
 export interface VcPin {
   version: string;
@@ -48,21 +49,6 @@ export interface VendoredManifest { version: string; sha256: string; bytes?: num
 export function sha256Hex(b: Uint8Array): string {
   return createHash("sha256").update(b).digest("hex");
 }
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-export function crc32(b: Uint8Array): number {
-  let c = 0xffffffff;
-  for (let i = 0; i < b.length; i++) c = CRC_TABLE[(c ^ b[i]!) & 0xff]! ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
 /** Size first (cheap, and a truncated download is the common failure), then SHA-256. */
 export function verifyPinnedZip(buf: Uint8Array, pin: VcPin): { ok: true } | { ok: false; reason: string } {
   if (buf.length !== pin.bytes) return { ok: false, reason: `size ${buf.length} bytes, expected ${pin.bytes}` };
@@ -71,89 +57,9 @@ export function verifyPinnedZip(buf: Uint8Array, pin: VcPin): { ok: true } | { o
   return { ok: true };
 }
 
-// ---- a minimal zip reader (central directory; stored + deflate; CRC checked; no zip64, no encryption) ----------
-export interface ZipEntry {
-  name: string;
-  method: number;
-  crc32: number;
-  compressedSize: number;
-  size: number;
-  localHeaderOffset: number;
-  /** where the entry's bytes start (after the local header's name + extra field) */
-  dataOffset: number;
-  isDir: boolean;
-}
-
-const SIG_LOCAL = 0x04034b50, SIG_CENTRAL = 0x02014b50, SIG_EOCD = 0x06054b50;
-
-function view(b: Uint8Array): DataView {
-  return new DataView(b.buffer, b.byteOffset, b.byteLength);
-}
-
-/** The entries of a zip from its central directory (the authoritative sizes; data-descriptor entries need no special case). */
-export function listZip(buf: Uint8Array): ZipEntry[] {
-  const dv = view(buf);
-  const n = buf.length;
-  let eocd = -1;
-  for (let i = n - 22; i >= Math.max(0, n - 22 - 0xffff); i--) {
-    if (dv.getUint32(i, true) === SIG_EOCD) { eocd = i; break; }
-  }
-  if (eocd < 0) throw new Error("not a zip file (no end-of-central-directory record)");
-  const count = dv.getUint16(eocd + 10, true);
-  const cdSize = dv.getUint32(eocd + 12, true);
-  const cdOffset = dv.getUint32(eocd + 16, true);
-  if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) throw new Error("zip64 archives are not supported");
-  if (cdOffset + cdSize > eocd) throw new Error("zip central directory lies outside the file");
-  const entries: ZipEntry[] = [];
-  let p = cdOffset;
-  for (let i = 0; i < count; i++) {
-    if (p + 46 > n || dv.getUint32(p, true) !== SIG_CENTRAL) throw new Error(`bad central directory entry #${i} at ${p}`);
-    const flags = dv.getUint16(p + 8, true);
-    const method = dv.getUint16(p + 10, true);
-    const crc = dv.getUint32(p + 16, true);
-    const compressedSize = dv.getUint32(p + 20, true);
-    const size = dv.getUint32(p + 24, true);
-    const nameLen = dv.getUint16(p + 28, true);
-    const extraLen = dv.getUint16(p + 30, true);
-    const commentLen = dv.getUint16(p + 32, true);
-    const localHeaderOffset = dv.getUint32(p + 42, true);
-    const name = new TextDecoder("utf8").decode(buf.subarray(p + 46, p + 46 + nameLen));
-    if (flags & 0x1) throw new Error(`zip entry "${name}" is encrypted`);
-    if (localHeaderOffset + 30 > n || dv.getUint32(localHeaderOffset, true) !== SIG_LOCAL) throw new Error(`zip entry "${name}": bad local header at ${localHeaderOffset}`);
-    const dataOffset = localHeaderOffset + 30 + dv.getUint16(localHeaderOffset + 26, true) + dv.getUint16(localHeaderOffset + 28, true);
-    if (dataOffset + compressedSize > n) throw new Error(`zip entry "${name}": data runs past the end of the file`);
-    entries.push({ name, method, crc32: crc, compressedSize, size, localHeaderOffset, dataOffset, isDir: name.endsWith("/") });
-    p += 46 + nameLen + extraLen + commentLen;
-  }
-  return entries;
-}
-
-/** An entry's bytes (inflated when deflated), verified against the directory's size and CRC-32. */
-export function readZipEntry(buf: Uint8Array, e: ZipEntry): Uint8Array {
-  const raw = buf.subarray(e.dataOffset, e.dataOffset + e.compressedSize);
-  let out: Uint8Array;
-  if (e.method === 0) out = raw;
-  else if (e.method === 8) out = new Uint8Array(inflateRawSync(raw));
-  else throw new Error(`zip entry "${e.name}": unsupported compression method ${e.method}`);
-  if (out.length !== e.size) throw new Error(`zip entry "${e.name}": inflated to ${out.length} bytes, directory says ${e.size}`);
-  const c = crc32(out);
-  if (c !== e.crc32) throw new Error(`zip entry "${e.name}": CRC-32 mismatch (${c.toString(16)} vs ${e.crc32.toString(16)})`);
-  return out;
-}
-
-/**
- * The destination-relative path for a zip entry, or null when it must not be written: outside `strip` (the
- * release folder), a directory, absolute, a drive letter, a backslash, or any "." / ".." / empty segment.
- */
-export function safeZipPath(name: string, strip = ""): string | null {
-  if (name.includes("\\") || name.startsWith("/") || /^[A-Za-z]:/.test(name)) return null;
-  if (strip && !name.startsWith(strip)) return null;
-  const rel = name.slice(strip.length);
-  if (!rel || rel.endsWith("/")) return null;
-  const segs = rel.split("/");
-  if (segs.some((s) => s === "" || s === "." || s === "..")) return null;
-  return segs.join("/");
-}
+// ---- the zip reader lives in src/core/zip.ts (shared with pack / install); re-exported for this script's callers ----
+export { crc32, listZip, readZipEntry, safeZipPath } from "../src/core/zip.ts";
+export type { ZipEntry } from "../src/core/zip.ts";
 
 /** Unpack every file of `buf` under `dst` (release folder stripped). Refuses the whole archive before writing anything when an entry is unsafe. */
 export function extractZip(buf: Uint8Array, dst: string, opts: { strip?: string } = {}): { files: VendoredFile[] } {
