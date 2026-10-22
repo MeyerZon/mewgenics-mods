@@ -1,4 +1,4 @@
-mods: dev-sandbox
+mods: dev-sandbox, fw-3d
 timeout: 120s
 hide: false
 # 3D phase M1 (docs/possible_3d_work.md): the probe cube. Launch it with MEWFW_MESH_PROBE=1 (tile 3,3) or
