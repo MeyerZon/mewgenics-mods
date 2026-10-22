@@ -21,12 +21,13 @@
 // control _artprobe/render-tileset-control.mewtest (no overlay) and write tileset-summary.json: the marker per shot
 // (baseline before `spawn Rat`, two after) and the outcome (probe-outcomes.ts tilesetOutcome). `--loctext --from <runDir>`
 // re-reads an earlier run's report.json and shots instead of launching the game.
-// Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
+// Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run, 3 when the run's shots are stale (all byte-identical: no verdict).
 //   node scripts/art-probe.ts [--json]
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as api from "../src/core/api.ts";
+import { staleShotsRefusal } from "../src/core/ingame/shot.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { decodePng } from "../src/core/art/png.ts";
 import { measureLocText, summarizeLocText, tilesetOutcome } from "../src/core/art/probe-outcomes.ts";
@@ -49,6 +50,7 @@ if (process.argv.includes("--tileset")) {
     const r = await api.runIngameTest({ mod, test, hide: false });
     if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
     if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
+    { const stale = staleShotsRefusal(r); if (stale) { console.log(stale); process.exit(3); } }
     const shots = r.artifacts.shots.filter((s) => s.path).map((s) => ({ label: s.label, a: analyzeProbeShot(decodePng(readFileSync(s.path!))) }));
     const base = shots.find((s) => s.label === "baseline");
     runs[key] = { mod, test, verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, baseline: base ? { found: base.a.found, box: base.a.box } : null, after: shots.filter((s) => s.label !== "baseline").map((s) => ({ label: s.label, found: s.a.found, box: s.a.box, scale: s.a.scale, mirrored: s.a.mirrored })) };
@@ -65,6 +67,7 @@ if (process.argv.includes("--loctext")) {
   const r = fromAt > 0 ? (JSON.parse(readFileSync(join(process.argv[fromAt + 1]!, "report.json"), "utf8")) as Awaited<ReturnType<typeof api.runIngameTest>>) : await api.runIngameTest({ mod: "_artprobe", test: "render-loctext", hide: false });
   if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
   if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
+  { const stale = staleShotsRefusal(r); if (stale) { console.log(stale); process.exit(3); } }
   const shots = r.artifacts.shots.filter((s) => s.path).map((s) => { const img = decodePng(readFileSync(s.path!)); const a = analyzeProbeShot(img); const g = geomOf(a); return { label: s.label, marker: g, measure: g && g.found ? measureLocText(img, g) : null }; });
   // every shot with the marker votes on the questions whose three boxes it shows uncovered (summarizeLocText)
   const first = shots.find((s) => s.measure);
@@ -82,6 +85,7 @@ if (process.argv.includes("--loctext")) {
 const report = await api.runIngameTest({ mod: "_artprobe", test: catAppend ? "render-cat-append" : cat ? "render-cat" : "render-probe", hide: false });
 if (!("verdict" in report)) { console.error(report.error); process.exit(2); }
 if (report.verdict === "skipped" || report.verdict === "cannot-run") { console.log(`skipped: ${report.reason}`); process.exit(2); }
+{ const stale = staleShotsRefusal(report); if (stale) { console.log(stale); process.exit(3); } }
 if (catAppend) {
   /** the cat append probe: screen px around the marker (or the spawned unit) that count as "near" */
   const RADIUS = 350;

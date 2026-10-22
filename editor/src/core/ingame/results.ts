@@ -64,6 +64,14 @@ export interface ShotEvent {
   line: number;
   label: string;
   frame: number;
+  /** "gl": the DLL read the back buffer itself into `file` (raw; shot.ts decodeRawShot); "window": the runner must
+   * capture the window (`gl` says why the in-process capture did not happen); absent: a DLL without the capture */
+  source?: "gl" | "window";
+  file?: string;
+  w?: number;
+  h?: number;
+  gl?: string;
+  detail?: string;
 }
 
 /** `popup`: a modal dialog the harness's watchdog dismissed (the game's own WARNING/ERROR boxes). */
@@ -161,7 +169,17 @@ export function parseResults(text: string | null | undefined): ResultSummary {
       case "units": r.units = e; break;
       case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), mode: String(e.mode ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "popup": r.popups.push({ title: String(e.title ?? ""), text: String(e.text ?? ""), frame: Number(e.frame ?? 0) }); break;
-      case "shot": r.shots.push({ line: Number(e.line ?? 0), label: String(e.label ?? ""), frame: Number(e.frame ?? 0) }); break;
+      case "shot": {
+        const sh: ShotEvent = { line: Number(e.line ?? 0), label: String(e.label ?? ""), frame: Number(e.frame ?? 0) };
+        if (e.source === "gl" || e.source === "window") sh.source = e.source;
+        if (typeof e.file === "string" && e.file) sh.file = e.file;
+        if (typeof e.w === "number") sh.w = e.w;
+        if (typeof e.h === "number") sh.h = e.h;
+        if (typeof e.gl === "string") sh.gl = e.gl;
+        if (typeof e.detail === "string") sh.detail = e.detail;
+        r.shots.push(sh);
+        break;
+      }
       case "seed": r.seed = { line: Number(e.line ?? 0), seed: String(e.seed ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "exec": {
         r.execs.push({

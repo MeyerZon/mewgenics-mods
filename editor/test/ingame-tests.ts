@@ -458,6 +458,12 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(v.expects.failed, 0); eq(g.expects.failed, 0);
       eq(v.end!.code, 0); eq(g.end!.code, 0);
     });
+    test("OBSERVED 2026-10-22 fixture: hide: true run with the in-process capture -> six shot events, all source gl with a raw file at the client size, the window hidden (result-shot-gl-hidden.jsonl)", () => {
+      const r = parseResults(fixture("result-shot-gl-hidden.jsonl")) as unknown as { shots: { label: string; source?: string; file?: string; w?: number; h?: number; detail?: string }[]; end: { code: number } | null };
+      eq(r.shots.map((s) => s.label).join(","), "menu0,menu1,enter0,fight1,fight2,fight3");
+      assert(r.shots.every((s) => s.source === "gl" && /shot-\d+\.mtraw$/.test(s.file || "") && s.w === 3440 && s.h === 1440 && /window hidden/.test(s.detail || "")), JSON.stringify(r.shots[0]));
+      eq(r.end!.code, 0);
+    });
     test("OBSERVED 2026-10-20 fixture: enter Campaign house -> the real House (no intro), the campaign director's 57 commands pinned, a house command executes (result-enter-house.jsonl + console-campaign-listcmds.txt)", () => {
       const r = parseResults(fixture("result-enter-house.jsonl")) as unknown as { enter: { ok: boolean; name: string; mode: string; detail: string } | null; expects: { passed: number; failed: number }; end: { code: number } | null; popups: unknown[]; shots: unknown[] };
       assert(!!r.enter && r.enter.ok && r.enter.name === "Campaign" && r.enter.mode === "house" && /game_began set/.test(r.enter.detail), JSON.stringify(r.enter));
@@ -1147,7 +1153,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     // buffer itself (shot events with source "gl" + a raw file); the runner flags runs whose shots are all identical.
     type ShotsCheck = { status: string; detail: string };
     type ShotMod = typeof shotMod & {
-      decodeRawShot?: (b: Uint8Array) => { width: number; height: number; data: Uint8Array };
+      decodeRawShot?: (b: Uint8Array) => { width: number; height: number; rgba: Uint8Array };
       assessShots?: (shots: { label: string; path: string | null }[]) => ShotsCheck;
       staleShotsRefusal?: (r: { artifacts: { shotsCheck?: ShotsCheck } }) => string | null;
     };
@@ -1159,9 +1165,9 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const head = Buffer.alloc(16); head.write("MTSHOT01", 0, "latin1"); head.writeUInt32LE(2, 8); head.writeUInt32LE(1, 12);
       const img = sm.decodeRawShot(Buffer.concat([head, Buffer.from([1, 2, 3, 4, 5, 6])]));
       eq(img.width, 2); eq(img.height, 1);
-      eq(Array.from(img.data).join(","), "1,2,3,255,4,5,6,255");
+      eq(Array.from(img.rgba).join(","), "1,2,3,255,4,5,6,255");
       const two = Buffer.alloc(16); two.write("MTSHOT01", 0, "latin1"); two.writeUInt32LE(1, 8); two.writeUInt32LE(2, 12);
-      eq(Array.from(sm.decodeRawShot(Buffer.concat([two, Buffer.from([9, 9, 9, 7, 7, 7])])).data).join(","), "7,7,7,255,9,9,9,255", "bottom row first in the file -> last in the image");
+      eq(Array.from(sm.decodeRawShot(Buffer.concat([two, Buffer.from([9, 9, 9, 7, 7, 7])])).rgba).join(","), "7,7,7,255,9,9,9,255", "bottom row first in the file -> last in the image");
       let threw = 0;
       try { sm.decodeRawShot(Buffer.from("NOTASHOT00000000")); } catch { threw++; }
       try { sm.decodeRawShot(Buffer.concat([head, Buffer.from([1, 2, 3])])); } catch { threw++; }
@@ -1180,7 +1186,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       if (!shots[0]!.path) return;
       const png = decodePng(readFileSync(shots[0]!.path));
       eq(`${png.width}x${png.height}`, "2x2");
-      eq(Array.from(png.data.slice(0, 8)).join(","), "255,0,0,255,0,255,0,255", "top row red, green (the raw file's last row)");
+      eq(Array.from(png.rgba.slice(0, 8)).join(","), "255,0,0,255,0,255,0,255", "top row red, green (the raw file's last row)");
       assert(!existsSync(join(dirname(shots[0]!.path), "shot-1.mtraw")), "the raw file is removed once converted");
       assert(/glReadPixels error 0x502/.test(shots[1]!.note || ""), `the fallback names the in-process failure: ${shots[1]!.note}`);
     });
