@@ -24,6 +24,12 @@ uintptr_t fw_resolve_scan_unique(const FwImage *img, const char *pattern, int *m
 FwResolveCode fw_resolve_symbol(const FwImage *img, const SymbolSig *sig, FwResolveResult *out) {
     uint8_t bytes[FW_SIG_MAX_BYTES], mask[FW_SIG_MAX_BYTES];
     memset(out, 0, sizeof *out);
+    if (!sig->pattern) {
+        if (!sig->expectedRva) return out->code = FW_RESOLVE_NO_RVA;
+        out->rva = sig->expectedRva;
+        out->addr = img->base + sig->expectedRva;
+        return out->code = FW_RESOLVE_RAW_RVA;
+    }
     if (fw_parse_pattern(sig->pattern, bytes, mask, sizeof bytes) <= 0) return out->code = FW_RESOLVE_BAD_PATTERN;
     uintptr_t hit = fw_resolve_scan_unique(img, sig->pattern, &out->matches);
     if (out->matches == 0) return out->code = FW_RESOLVE_NO_MATCH;
@@ -37,7 +43,7 @@ int fw_resolve_symbols(const FwImage *img, const SymbolSig *syms, size_t n, uint
     int ok = 1;
     for (size_t i = 0; i < n; i++) {
         FwResolveCode c = fw_resolve_symbol(img, &syms[i], &results[i]);
-        if (c == FW_RESOLVE_OK || c == FW_RESOLVE_DRIFT) addrs[i] = results[i].addr;
+        if (c == FW_RESOLVE_OK || c == FW_RESOLVE_DRIFT || c == FW_RESOLVE_RAW_RVA) addrs[i] = results[i].addr;
         else ok = 0;
     }
     return ok;

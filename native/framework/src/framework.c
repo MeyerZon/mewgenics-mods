@@ -94,6 +94,10 @@ static int resolve_symbols(void) {
         if (res[i].code == FW_RESOLVE_DRIFT)
             fw_log("signature %s resolved to RVA 0x%llx (expected 0x%llx for known build); using scan result",
                   s->name, (unsigned long long)res[i].rva, (unsigned long long)s->expectedRva);
+        else if (res[i].code == FW_RESOLVE_RAW_RVA)
+            fw_log("symbol %s: no signature on this build; using RVA 0x%llx", s->name, (unsigned long long)res[i].rva);
+        else if (res[i].code == FW_RESOLVE_NO_RVA)
+            fw_log("symbol %s: no signature and no RVA; framework disabled", s->name);
         else if (res[i].code != FW_RESOLVE_OK)
             fw_log("signature %s: %d matches (need exactly 1); framework disabled", s->name, res[i].matches);
     }

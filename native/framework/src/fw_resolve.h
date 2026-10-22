@@ -20,17 +20,21 @@ typedef enum FwResolveCode {
     FW_RESOLVE_DRIFT,         /* resolved, but not at expectedRva (the scan result is used; log only) */
     FW_RESOLVE_NO_MATCH,
     FW_RESOLVE_AMBIGUOUS,     /* two or more hits */
-    FW_RESOLVE_BAD_PATTERN    /* does not parse (reported as 0 matches, like a miss) */
+    FW_RESOLVE_BAD_PATTERN,   /* does not parse (reported as 0 matches, like a miss) */
+    FW_RESOLVE_RAW_RVA,       /* no signature on this build (manifest `signature: null`): the identity gate already proved
+                                 the image, so expectedRva is taken as-is, like FW_LK (resolved; no scan) */
+    FW_RESOLVE_NO_RVA         /* no signature and no expectedRva: nothing to take (fails) */
 } FwResolveCode;
 typedef struct FwResolveResult { FwResolveCode code; int matches; uintptr_t addr; uintptr_t rva; } FwResolveResult;
 
 /* Scan the executable sections for an IDA-style pattern: the FIRST hit (0 if none) and the hit count in *matches
  * (reset to 0 first; counting stops at 2). A pattern that does not parse is 0 hits. */
 uintptr_t fw_resolve_scan_unique(const FwImage *img, const char *pattern, int *matches);
-/* One symbol: out->addr = hit + sig->offset (0 unless OK/DRIFT), out->rva = addr - img->base. */
+/* One symbol: out->addr = hit + sig->offset (0 unless OK/DRIFT/RAW_RVA), out->rva = addr - img->base.
+ * A NULL pattern never scans: it is RAW_RVA (addr = base + expectedRva) or NO_RVA. */
 FwResolveCode fw_resolve_symbol(const FwImage *img, const SymbolSig *sig, FwResolveResult *out);
 /* All n symbols: addrs[i] is written for OK/DRIFT and left alone otherwise; results[i] may be NULL-free output.
- * Returns 1 iff every symbol resolved (DRIFT counts as resolved). */
+ * Returns 1 iff every symbol resolved (DRIFT and RAW_RVA count as resolved). */
 int fw_resolve_symbols(const FwImage *img, const SymbolSig *syms, size_t n, uintptr_t *addrs, FwResolveResult *results);
 
 /* ---- activation gate and API bounds ---- */

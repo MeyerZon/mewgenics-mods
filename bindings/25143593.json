@@ -37,7 +37,7 @@
           "bytes": 4474,
           "calls": 93,
           "ripRefs": 43,
-          "resyncs": 1
+          "resyncs": 0
         },
         "callees": [
           {
@@ -232,7 +232,7 @@
           "bytes": 7831,
           "calls": 186,
           "ripRefs": 62,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -639,23 +639,7 @@
       "name": "Status_GetCategory",
       "kind": "function",
       "rva": "0x4929c0",
-      "signature": {
-        "pattern": "48 89 5C 24 20 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC D0 00 00 00 48 8B F9 45 33 E4 48 8B 71 10 48 8B D1 4C 8B 79 18 49 83 FF 0F 76 03 48 8B 11 49 B9 ?? ?? ?? ?? ?? ?? ?? ?? 49 8B CC 48 85 F6 74 26 49 B8 ?? ?? ?? ?? ?? ?? ?? ?? 66 0F 1F 84 00 00 00 00 00 0F B6 04 0A 4C 33 C8 4D 0F AF C8 48 FF C1 48 3B CE 72 ED 4C 8B C7 48 8D 55 F7 48 8D 0D 6F",
-        "exactLen": 126,
-        "offset": 0,
-        "wildcards": [
-          {
-            "at": 61,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 79,
-            "len": 8,
-            "why": "movabs imm64"
-          }
-        ]
-      },
+      "signature": null,
       "anchors": {
         "strings": [
           {
@@ -692,7 +676,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56"
+        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56",
+        "after": {
+          "function": "Status_ApplyByName"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[0]"
@@ -711,9 +698,10 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        "docs/engine-map.md#status-effects"
+        "docs/engine-map.md#status-effects",
+        ".analysis/notes-bind.md"
       ],
-      "note": "glaiel::get_status_type(std::string) -> StatusType; FNV-1a name lookup; unknown names log NO STATUS NAMED. Also FW_LK[0]."
+      "note": "glaiel::get_status_type(std::string) -> StatusType; FNV-1a name lookup; unknown names log NO STATUS NAMED. Also FW_LK[0]. Signature null since 2026-10-21: the only unique <=128-byte windows end in the __LINE__ immediate of the NO STATUS NAMED assert (`C7 45 B7 48`, line 72) and would port a twin silently when the line shifts; the funcsig xref and the .pdata chain locate it, the DLL takes the raw RVA on the identified build (notes-bind §2.1)."
     },
     {
       "name": "Status_GetFlags",
@@ -766,7 +754,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41",
+        "after": {
+          "function": "Status_GetValue"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[4]"
@@ -785,7 +776,8 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Status_GetFlags_0x493190.c"
+        ".analysis/decompiled/Status_GetFlags_0x493190.c",
+        ".analysis/notes-bind.md"
       ],
       "note": "glaiel::get_status_flags(std::string) hit-effect flag bits. Also FW_LK[4]."
     },
@@ -793,48 +785,49 @@
       "name": "LuckUp_ctor",
       "kind": "function",
       "rva": "0x711c90",
-      "signature": {
-        "pattern": "4D 8B F1 4D 8B F8 48 8B F2 48 8B F9 33 ED 40 38 A9 B0 04 00 00 74 07 33 C0 E9 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B D8 48 89 44 24 40 48 85 C0 74 49 33 D2 41 B8 F0 00 00 00 48 8B C8 E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 89 AB C8 00 00 00 48 89 AB D0 00 00 00 48 89 AB D8 00 00 00 48 89 AB E0 00 00 00 66 C7 83 E8 00 00 00 01 00 48 8D 05 95 5D",
-        "exactLen": 121,
-        "offset": -24,
-        "wildcards": [
-          {
-            "at": 26,
-            "len": 4,
-            "why": "E9 rel32"
-          },
-          {
-            "at": 33,
-            "len": 4,
-            "why": "rip-relative disp32"
-          },
-          {
-            "at": 38,
-            "len": 4,
-            "why": "E8 rel32"
-          },
-          {
-            "at": 67,
-            "len": 4,
-            "why": "E8 rel32"
-          },
-          {
-            "at": 75,
-            "len": 4,
-            "why": "E8 rel32"
-          }
-        ]
-      },
+      "signature": null,
       "anchors": {
         "strings": [],
         "cfgLite": {
           "bytes": 292,
           "calls": 6,
-          "ripRefs": 2,
+          "ripRefs": 3,
           "resyncs": 0
         },
-        "callees": [],
-        "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89"
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "Passive_ctor",
+            "target": "0x4c940"
+          },
+          {
+            "ordinal": 5,
+            "name": "Status_OnInit_base",
+            "target": "0x8104b0"
+          }
+        ],
+        "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89",
+        "vtableStore": {
+          "vtable": "LuckUp_vftable",
+          "pattern": "48 8D 05 ?? ?? ?? ?? 48 89 03",
+          "note": "the only rip-relative code reference to LuckUp_vftable (1 hit image-wide on 25143593): lea rax,[vftable]; mov [rbx],rax at +140"
+        },
+        "dataRefs": [
+          {
+            "rva": "0x1414e40",
+            "role": "pool",
+            "note": "per-class pool; referenced only by this ctor and its 54-byte static initialiser 0x1fa40",
+            "ripRefOrdinal": 0
+          }
+        ],
+        "callers": [
+          {
+            "function": "Status_ApplyLuckUp",
+            "ordinal": 6,
+            "unique": true,
+            "note": "the only E8 caller image-wide (notes-bind §1.2)"
+          }
+        ]
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_LuckUp_ctor"
@@ -847,8 +840,95 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/LuckUp_ctor_0x711c90.c"
-      ]
+        ".analysis/decompiled/LuckUp_ctor_0x711c90.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "LuckUp* (Character* owner, Entity* entity, int* stacks, void** src, void** applier): pool-allocates 0xF0 bytes, base ctor (Passive_ctor), stores LuckUp_vftable, +0x18 entity / +0x20 owner, runs slot 30 (Status_OnInit_base). Byte-twin of the AIControlNextTurn / sibling ctors modulo relocations: no relocation-free unique signature exists, its identity is the vftable store and the pool global (notes-bind §1.2)."
+    },
+    {
+      "name": "Passive_ctor",
+      "kind": "function",
+      "rva": "0x4c940",
+      "signature": {
+        "pattern": "8B 15 ?? ?? ?? ?? 8D 42 01 89 05 ?? ?? ?? ?? 89 51 08 0F B6 41 0C 24 FE 24 FD 24 FB 24 F7 24 EF 24 DF 24 BF 24 7F 88 41 0C 0F B6 41 0D 24 FE 24 FD 24 FB 24 F7 24 EF 24 DF 24 BF 88 41 0D C7 41 0E 00 00 01 00 33 D2 48 89 51 18 48 89 51 20 48 89 51 28 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 89 41 30 48 8D 05 ?? ?? ?? ?? 48 89 01 48 89 51 38 48",
+        "exactLen": 112,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 2,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 11,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 85,
+            "len": 8,
+            "why": "movabs imm64"
+          },
+          {
+            "at": 100,
+            "len": 4,
+            "why": "rip-relative disp32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [],
+        "cfgLite": {
+          "bytes": 244,
+          "calls": 0,
+          "ripRefs": 4,
+          "resyncs": 0
+        },
+        "prologue": "8B 15 ?? ?? ?? ?? 8D 42 01 89 05 ??"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        ".analysis/decompiled/Passive_ctor_0x4c940.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "glaiel::Passive::Passive — the Status/Passive base constructor (2340 E8 callers); LuckUp_ctor call #2. Reference entry so the ctor's callee anchor has a name."
+    },
+    {
+      "name": "Status_OnInit_base",
+      "kind": "function",
+      "rva": "0x8104b0",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 74 24 20 55 57 41 54 41 56 41 57 48 8B EC 48 83 EC 70",
+        "exactLen": 25,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1231,
+          "calls": 24,
+          "ripRefs": 12,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 18 48 89 74 24 20 55 57"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        ".analysis/decompiled/Status_OnInit_base_0x8104b0.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "the base Status::OnInit(stacks, GonObject* data, applier) that LuckUp_ctor calls devirtualised (slot 30; call #5). Reference entry so the ctor's callee anchor has a name."
     },
     {
       "name": "Status_Remove",
@@ -1082,10 +1162,31 @@
       "kind": "function",
       "rva": "0x9b7870",
       "signature": {
-        "pattern": "48 8B C4 48 89 58 10 48 89 70 18 48 89 78 20 55 48 8D 68",
-        "exactLen": 19,
-        "offset": 0,
-        "wildcards": []
+        "pattern": "33 F6 C7 45 E4 FF FF FF 09 32 C0 48 89 75 D7 24 F9 89 75 DF 0C 09 89 75 F1 88 45 E3 48 8B D9 0F 11 05 ?? ?? ?? ?? 66 89 75 F5 B9 E2 0B 00 00 0F 11 05 ?? ?? ?? ?? C7 45 E8 02 02 02 04 0F 11 05 ?? ?? ?? ?? C7 45 EC 05 04 05 02 0F 11 05 ?? ?? ?? ?? C6 45 F0 02",
+        "exactLen": 86,
+        "offset": -45,
+        "wildcards": [
+          {
+            "at": 34,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 50,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 64,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 78,
+            "len": 4,
+            "why": "rip-relative disp32"
+          }
+        ]
       },
       "anchors": {
         "strings": [],
@@ -1096,7 +1197,10 @@
           "resyncs": 0
         },
         "callees": [],
-        "prologue": "48 8B C4 48 89 58 10 48 89 70 18 48"
+        "prologue": "48 8B C4 48 89 58 10 48 89 70 18 48",
+        "before": {
+          "function": "ApplicationBase_FrameEnd"
+        }
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:hook_FrameBegin"
@@ -1108,9 +1212,10 @@
         }
       ],
       "evidence": [
-        "docs/engine-map.md#functions-and-signatures"
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c"
       ],
-      "note": "prologue is generic; the 20-byte signature is unique on this build only. ApplicationBase_Step is the fallback hook point."
+      "note": "Body signature from +45 (86 bytes, 4 rip refs masked) keyed on the per-frame defaults it stores (0xffffff09, 0x0be2, 02 02 02 04, 05 04 05 02, 02) instead of the generic 19-byte register-save prologue that was unique on this build only; 1 hit image-wide on 25143593. Also the .pdata predecessor of ApplicationBase_FrameEnd (25655 -> 25656). No __FUNCSIG__/__FILE__ string is lea'd by it (71 rip refs, all globals). ApplicationBase_Step remains the fallback hook point."
     },
     {
       "name": "string_Allocate",
@@ -1188,7 +1293,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56"
+        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56",
+        "after": {
+          "function": "Status_GetCategory"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[1]"
@@ -1202,8 +1310,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_GetStackMode_0x492c20.c"
-      ]
+        ".analysis/decompiled/Status_GetStackMode_0x492c20.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_NameExists",
@@ -1233,6 +1343,14 @@
         "prologue": "40 53 48 83 EC 30 48 83 79 18 0F 48",
         "after": {
           "function": "Status_GetStackMode"
+        },
+        "before": {
+          "function": "Status_GetValue"
+        },
+        "sharedDataRef": {
+          "with": "Status_GetValue",
+          "ripRefOrdinal": 0,
+          "note": "the status-value map 0x13c4830 is referenced by exactly two functions: NameExists (+0x50) and GetValue (+0x7d) — NameExists is \"the value map has this name\""
         }
       },
       "consumers": [
@@ -1247,9 +1365,10 @@
         }
       ],
       "evidence": [
-        "docs/engine-map.md#status-effects"
+        "docs/engine-map.md#status-effects",
+        ".analysis/notes-bind.md"
       ],
-      "note": "bool predicate: FNV-1a hash of the name, map lookup (map global at 0x13c3c30, end sentinel at 0x13c3c38); no __FUNCSIG__ string; sits between get_status_stackmode and get_status_value. Anchored as the .pdata function right after Status_GetStackMode (no string of its own)."
+      "note": "bool predicate: FNV-1a hash of the name, lookup in the SAME map global as Status_GetValue (0x13c4830; end sentinel +8); no __FUNCSIG__ string; sits between get_status_stackmode and get_status_value in .pdata (11370 -> 11371 -> 11372). Anchored as the successor of Status_GetStackMode, the predecessor of Status_GetValue, and the other function referencing GetValue's map."
     },
     {
       "name": "Status_GetValue",
@@ -1297,7 +1416,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41",
+        "after": {
+          "function": "Status_NameExists"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[3]"
@@ -1311,8 +1433,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_GetValue_0x492f20.c"
-      ]
+        ".analysis/decompiled/Status_GetValue_0x492f20.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_IsHitEffect",
@@ -1370,7 +1494,8 @@
       ],
       "evidence": [
         ".analysis/decompiled/Status_IsHitEffect_0x5028e0.c"
-      ]
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_OnAppliedToDamageInstance",
@@ -1408,7 +1533,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89",
+        "after": {
+          "function": "Status_GetIcon"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[6]"
@@ -1422,8 +1550,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_OnAppliedToDamageInstance_0x493690.c"
-      ]
+        ".analysis/decompiled/Status_OnAppliedToDamageInstance_0x493690.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_OnAppliedToTile",
@@ -1461,7 +1591,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89",
+        "after": {
+          "function": "Status_OnAppliedToDamageInstance"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[7]"
@@ -1475,7 +1608,8 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_OnAppliedToTile_0x493910.c"
+        ".analysis/decompiled/Status_OnAppliedToTile_0x493910.c",
+        ".analysis/notes-bind.md"
       ]
     },
     {
@@ -1514,7 +1648,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89",
+        "after": {
+          "function": "Status_OnAppliedToTile"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[8]"
@@ -1528,8 +1665,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_OnKilledCharacter_0x493b80.c"
-      ]
+        ".analysis/decompiled/Status_OnKilledCharacter_0x493b80.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_OnDamageReport",
@@ -1567,7 +1706,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89",
+        "after": {
+          "function": "Status_OnKilledCharacter"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[9]"
@@ -1581,8 +1723,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_OnDamageReport_0x493e00.c"
-      ]
+        ".analysis/decompiled/Status_OnDamageReport_0x493e00.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_GetIcon",
@@ -1625,7 +1769,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56"
+        "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56",
+        "after": {
+          "function": "Status_GetFlags"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[10]"
@@ -1639,7 +1786,8 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_GetIcon_0x4933e0.c"
+        ".analysis/decompiled/Status_GetIcon_0x4933e0.c",
+        ".analysis/notes-bind.md"
       ]
     },
     {
@@ -1673,7 +1821,10 @@
             "target": "0x5f9760"
           }
         ],
-        "prologue": "44 88 4C 24 20 4C 89 44 24 18 48 89"
+        "prologue": "44 88 4C 24 20 4C 89 44 24 18 48 89",
+        "after": {
+          "function": "Status_OnDamageReport"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[11]"
@@ -1687,7 +1838,8 @@
         }
       ],
       "evidence": [
-        "docs/binding-port.md#known-limits-and-human-decisions"
+        "docs/binding-port.md#known-limits-and-human-decisions",
+        ".analysis/notes-bind.md"
       ]
     },
     {
@@ -2086,7 +2238,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41",
+        "after": {
+          "function": "Status_IsHitEffect"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[12]"
@@ -2100,7 +2255,8 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_SpawnTile_0x502b40.c"
+        ".analysis/decompiled/Status_SpawnTile_0x502b40.c",
+        ".analysis/notes-bind.md"
       ]
     },
     {
@@ -2365,7 +2521,7 @@
           "bytes": 1323,
           "calls": 34,
           "ripRefs": 31,
-          "resyncs": 4
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2440,7 +2596,7 @@
           "bytes": 1808,
           "calls": 38,
           "ripRefs": 40,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2659,7 +2815,7 @@
           "bytes": 1568,
           "calls": 31,
           "ripRefs": 8,
-          "resyncs": 1
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2703,7 +2859,7 @@
           "bytes": 2633,
           "calls": 42,
           "ripRefs": 33,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -3019,14 +3175,20 @@
       "name": "Status_ApplyLuckUp",
       "kind": "function",
       "rva": "0x5f9760",
-      "signature": {
-        "pattern": "F1 89 55 AF 48 8B F9 45 33 FF 48 8B 41 20 44 38 B8 B0 04 00 00 74 07 33 C0 E9 67 02 00 00 4C 8D 2D 83 B5",
-        "exactLen": 35,
-        "offset": -40,
-        "wildcards": []
-      },
+      "signature": null,
       "anchors": {
-        "strings": [],
+        "strings": [
+          {
+            "text": "LuckUp",
+            "role": "literal",
+            "unique": true
+          },
+          {
+            "text": "None",
+            "role": "literal",
+            "unique": true
+          }
+        ],
         "cfgLite": {
           "bytes": 711,
           "calls": 12,
@@ -3055,14 +3217,38 @@
             "target": "0x483120"
           }
         ],
-        "prologue": "4C 89 4C 24 20 89 54 24 10 48 89 4C"
+        "prologue": "4C 89 4C 24 20 89 54 24 10 48 89 4C",
+        "imm32Witness": {
+          "pattern": "41 B8 ?? ?? ?? ??",
+          "imm32At": 2,
+          "equals": "LuckUp_typeid",
+          "callee": "Entity_FindComponentsByTypeId",
+          "maxForward": 4,
+          "note": "mov r8d, LuckUp_typeid (4 instructions before call #4 -> Entity_FindComponentsByTypeId); 1 hit image-wide on 25143593; the type id is re-derived from LuckUp_vftable slot 1 on the new build"
+        },
+        "callers": [
+          {
+            "function": "Status_ApplyByName",
+            "ordinal": 1261,
+            "afterStringLea": "LuckUp",
+            "note": "the first in-tolerance E8 after lea rdx,[\"LuckUp\"] (the compare call string==cstr is skipped by the size tolerance); +56 bytes on 25143593"
+          },
+          {
+            "function": "Status_AttachPassive",
+            "ordinal": 3439,
+            "afterStringLea": "LuckUp",
+            "note": "same shape; the call is 17 instructions (+97 bytes) after the lea on 25143593"
+          }
+        ]
       },
       "consumers": [],
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Status_ApplyLuckUp_0x5f9760.c"
-      ]
+        ".analysis/decompiled/Status_ApplyLuckUp_0x5f9760.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "apply_<LuckUp>: builds the SSO name, compares with \"None\" / \"LuckUp\", merges into an existing LuckUp (by type id) or constructs via LuckUp_ctor, else Status_ApplyByName. No relocation-free unique byte signature exists (the only unique bytes are the type id `41 B8 D6 04`, which changes per build) — located by the imm32 witness, the callers after the LuckUp lea, the two literals + tolerance, or the caller ordinal (notes-bind §1.1)."
     },
     {
       "name": "Status_ctor",
@@ -3108,7 +3294,18 @@
           "ripRefs": 3,
           "resyncs": 0
         },
-        "callees": [],
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "Passive_ctor",
+            "target": "0x4c940"
+          },
+          {
+            "ordinal": 5,
+            "name": "Status_OnInit_base",
+            "target": "0x8104b0"
+          }
+        ],
         "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89"
       },
       "consumers": [],
@@ -3163,13 +3360,17 @@
           "resyncs": 0
         },
         "callees": [],
-        "prologue": "40 55 53 56 57 41 56 48 8B EC 48 83"
+        "prologue": "40 55 53 56 57 41 56 48 8B EC 48 83",
+        "after": {
+          "function": "ApplicationBase_FrameBegin"
+        }
       },
       "consumers": [],
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures"
-      ]
+      ],
+      "note": "The .pdata successor of ApplicationBase_FrameBegin (both void(ApplicationBase*), once per frame from Step)."
     },
     {
       "name": "ApplicationBase_Step",
@@ -4675,7 +4876,7 @@
           "bytes": 193,
           "calls": 6,
           "ripRefs": 1,
-          "resyncs": 1
+          "resyncs": 0
         },
         "prologue": "48 89 5C 24 18 48 89 74 24 20 48 89"
       },
@@ -5608,34 +5809,39 @@
       "kind": "function",
       "rva": "0x61ea0",
       "signature": {
-        "pattern": "78 18 0F 76 03 49 8B 10 48 BB ?? ?? ?? ?? ?? ?? ?? ?? 45 33 C0 4D 85 C9 74 2A 48 B9 ?? ?? ?? ?? ?? ?? ?? ?? 0F 1F 40 00 0F 1F 84 00 00 00 00 00 42 0F B6 04 02 48 33 D8 48 0F AF D9 49 FF C0 4D 3B C1 72 EC 4C 8B CB 4D 8B C6 48 8D 54 24 20 48 8B CD E8 ?? ?? ?? ?? 48 8B 44 24 28 48 85 C0 74 0C 48 89 06 C6 46 08 00 E9 ?? ?? ?? ?? 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 39 45 10 0F 84 C6",
-        "exactLen": 126,
-        "offset": -48,
+        "pattern": "48 0F AF D9 49 FF C0 4D 3B C1 72 EC 4C 8B CB 4D 8B C6 48 8D 54 24 20 48 8B CD E8 ?? ?? ?? ?? 48 8B 44 24 28 48 85 C0 74 0C 48 89 06 C6 46 08 00 E9 ?? ?? ?? ?? 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 39 45 10 0F 84 ?? ?? ?? ?? 4C 8D 65 08 4C 89 64 24 30 48 C7 44 24 38 00 00 00 00 B9 38 00 00 00 E8 ?? ?? ?? ?? 48 8B F8 48 89 44 24 38 49 8B D6 48 8D 48 10 E8 ?? ?? ?? ?? 48",
+        "exactLen": 122,
+        "offset": -104,
         "wildcards": [
           {
-            "at": 10,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 28,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 83,
+            "at": 27,
             "len": 4,
             "why": "E8 rel32"
           },
           {
-            "at": 105,
+            "at": 49,
             "len": 4,
             "why": "E9 rel32"
           },
           {
-            "at": 111,
+            "at": 55,
             "len": 8,
             "why": "movabs imm64"
+          },
+          {
+            "at": 69,
+            "len": 4,
+            "why": "Jcc rel32"
+          },
+          {
+            "at": 97,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 117,
+            "len": 4,
+            "why": "E8 rel32"
           }
         ]
       },
