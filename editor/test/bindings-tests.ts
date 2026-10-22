@@ -384,10 +384,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (39, incl. the v4 run-entry symbols, the 7 glow symbols, the 2 glow-v2 screen-matrix symbols and the 2 observe3d camera symbols); each has a signature except the three with no relocation-free unique window", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, the 2 glow-v2 screen-matrix symbols and the 3 observe3d camera symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 39);
+    eq(want.length, 40);
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");
@@ -1869,7 +1869,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   // 37/38), the functions the full-3D build hooks or calls (reference, signed so a port finds them again), 7 render
   // globals (FwData 11..17), the MaskedRendererIso vftable, 19 witnessed offsets and 4 witnessed constants. Appended
   // at the end of the manifest as one contiguous block.
-  const R3D_SYMBOLS: [string, string, number][] = [["Camera_render", "0x9787c0", 37], ["Camera_GetViewProjection", "0x9785e0", 38]];
+  // T2 (2026-10-22, the first observe3d run): RenderCore 0x989020 calls Camera_render only for its first camera list (the
+  // 5 RTT cameras); the world and UI cameras are drawn layer by layer through Camera_RenderOneLayer 0x979210 (second
+  // list, every layer index x every camera), which pushes the same VP. Both are hooked.
+  const R3D_SYMBOLS: [string, string, number][] = [["Camera_render", "0x9787c0", 37], ["Camera_GetViewProjection", "0x9785e0", 38], ["Camera_RenderOneLayer", "0x979210", 39]];
   const R3D_REFERENCE: [string, string][] = [["Layer_Draw", "0x9896f0"], ["Position_GetInterpolated", "0x9b4a30"],
     ["Batch_SubmitFunctor", "0xa47820"], ["Batch_Replay", "0xa481d0"], ["Batch_AddInstance", "0xa47e50"], ["Batch_ApplyGroupState", "0xa497d0"], ["Material_Bind", "0x9bda20"],
     ["Swf_DisplayObject_Render", "0x9b0a50"], ["MatStack_Ortho", "0x9fec80"], ["MatStack_Push", "0x9feaf0"], ["Mat4_IsMirrored", "0xa082b0"], ["Camera_MouseToCamera2D", "0x9796d0"],
@@ -1891,7 +1894,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
   const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",
     ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]);
-  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 2 FwSymbol + 27 reference functions (all signed; 2 are witness-host .pdata chunks), 7 FwData render globals with harvested witnesses, the MaskedRendererIso vftable (RTTI), 19 offsets and 4 constants with witnesses; the generated headers expose them", () => {
+  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 3 FwSymbol + 27 reference functions (all signed; 2 are witness-host .pdata chunks), 7 FwData render globals with harvested witnesses, the MaskedRendererIso vftable (RTTI), 19 offsets and 4 constants with witnesses; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     for (const [name, rva, index] of R3D_SYMBOLS) {
       const e = entry(m, name);
