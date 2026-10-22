@@ -146,6 +146,17 @@ export async function runArtMultiAppendTests(test: TestFn, assert: AssertFn, eq:
     eq(alone.findings.filter((f) => /^(cat-append|swf-file)-/.test(f.code)).length, 0);
   });
 
+  const tools = await import("../src/mcp/tools.ts");
+  const api = await import("../src/core/api.ts");
+  test("MCP validate_mod { mod, modpaths } and api.validate(mod, undefined, { modpaths }) return the cross-mod findings", () => {
+    need();
+    const r = tools.callTool("validate_mod", { mod: "_catappendA", modpaths: ["_catappendA", "_catappendB"] }) as any;
+    const codes = (r.findings || []).map((f: any) => f.code);
+    assert(codes.includes("cat-append-conflict"), JSON.stringify(codes));
+    const a = (api.validate as any)("_catappendA", undefined, { modpaths: ["_catappendA", "_catappendSame"] });
+    assert(a.findings.some((f: any) => f.code === "swf-file-conflict"), JSON.stringify(a.findings.map((f: any) => f.code)));
+  });
+
   test("OBSERVED fixture multi-append-summary.json: both mods' appends coexist in either order, the later -modpaths mod wins the shared label, a same-named SWF drops the earlier mod's appends; multiAppendOutcome re-derives every run's outcome from its counts", () => {
     need();
     const f = join(HERE, "fixtures", "ingame", "multi-append-summary.json");
