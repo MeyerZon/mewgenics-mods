@@ -547,6 +547,66 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     rs.setRightTab("inspector");
   });
 
+  // ---- onboarding (UX PR 6): the coachmark placement and the worked example's one step list ----------------
+  const ta = await load("../web/src/tour-anchors.ts");
+  test("web/src/tour-anchors.ts loads", () => assert(!ta.__error, ta.__error ?? ""));
+  test("tour anchors: TOUR ids are unique kebab-case strings; tourAttr(id) is {'data-tour': id}", () => {
+    const ids = Object.values(ta.TOUR ?? {}) as string[];
+    assert(ids.length >= 19, `expected the 19 anchors, got ${ids.length}`);
+    eq(new Set(ids).size, ids.length, "unique");
+    for (const id of ids) assert(/^[a-z]+(-[a-z]+)*$/.test(id), id);
+    eq(JSON.stringify(ta.tourAttr?.("explorer-base")), '{"data-tour":"explorer-base"}');
+  });
+  test("tour placeCard: right of the target by default, vertically clamped into the viewport", () => {
+    const vp = { width: 1366, height: 820 };
+    const card = { width: 420, height: 300 };
+    const p = ta.placeCard?.({ left: 0, top: 400, width: 300, height: 380 }, vp, card);
+    eq(p?.side, "right");
+    assert(p.left >= 300, `left ${p?.left} clears the target`);
+    assert(p.top >= 0 && p.top + card.height <= vp.height, `top ${p?.top} inside the viewport`);
+  });
+  test("tour placeCard: flips left when the right side would overflow, below when neither side fits, 'over' when nothing fits", () => {
+    const vp = { width: 1366, height: 820 };
+    const card = { width: 420, height: 300 };
+    const l = ta.placeCard?.({ left: 1000, top: 60, width: 360, height: 40 }, vp, card);
+    eq(l?.side, "left");
+    assert(l.left + card.width <= 1000, `left card ends before the target (${l?.left})`);
+    const b = ta.placeCard?.({ left: 300, top: 10, width: 800, height: 40 }, vp, card);
+    eq(b?.side, "below");
+    assert(b.top >= 50, `below the target (${b?.top})`);
+    assert(b.left >= 0 && b.left + card.width <= vp.width, "clamped horizontally");
+    const o = ta.placeCard?.({ left: 300, top: 50, width: 700, height: 760 }, vp, card);
+    eq(o?.side, "over");
+  });
+  test("tour isOnScreen: a zero-size or fully off-viewport rect is not on screen; a partly visible one is", () => {
+    const vp = { width: 1000, height: 800 };
+    eq(ta.isOnScreen?.({ left: 10, top: 10, width: 0, height: 20 }, vp), false);
+    eq(ta.isOnScreen?.({ left: 10, top: 900, width: 50, height: 20 }, vp), false);
+    eq(ta.isOnScreen?.({ left: -60, top: 10, width: 50, height: 20 }, vp), false);
+    eq(ta.isOnScreen?.({ left: 10, top: 780, width: 50, height: 40 }, vp), true);
+  });
+  const exs = await load("../web/src/components/examples/steps.ts");
+  test("web/src/components/examples/steps.ts loads", () => assert(!exs.__error, exs.__error ?? ""));
+  test("EXAMPLE_STEPS: 5 steps, unique titles and ids, step 1 creates the mod folder, step 2 scaffolds, step 3 is combined.csv.append", () => {
+    const st = (exs.EXAMPLE_STEPS ?? []) as { id: string; title: string; body: unknown; action?: string }[];
+    eq(st.length, 5);
+    eq(new Set(st.map((s) => s.title)).size, 5, "unique titles");
+    eq(new Set(st.map((s) => s.id)).size, 5, "unique ids");
+    eq(st[0]?.title, "Create the mod folder");
+    eq(st[1]?.title, "Add the ability overlay");
+    eq(st[1]?.action, "scaffold");
+    eq(st[2]?.title, "Add localization rows");
+    const body3 = JSON.stringify(st[2]?.body);
+    assert(body3.includes("combined.csv.append"), "step 3 names combined.csv.append");
+    assert(body3.includes("ABILITY_JOKERSGAMBIT_NAME"), "step 3 shows the name row");
+  });
+  test("ART_EXAMPLE_STEPS: 5 steps with unique titles; the build step says the DoABC stub is optional", () => {
+    const st = (exs.ART_EXAMPLE_STEPS ?? []) as { title: string; body: unknown }[];
+    eq(st.length, 5);
+    eq(new Set(st.map((s) => s.title)).size, 5);
+    assert(/DoABC stub is optional/.test(JSON.stringify(st[4]?.body)), "SymbolClass / DoABC-optional wording");
+  });
+
   const bd = await load("../web/src/components/boundary.ts");
   test("web/src/components/boundary.ts loads", () => assert(!bd.__error, bd.__error ?? ""));
   let rds: Record<string, any> = {};
