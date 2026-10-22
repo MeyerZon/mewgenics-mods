@@ -1,0 +1,8 @@
+// test-only: a Rat that plays the mod's NEW sound group AudioProbe_New (audio/combat_sfx.gon.merge, file
+// audio/combat_sfx/audioprobe_new.wav from this mod) through the vanilla LoopingSoundWhileAlive passive.
+AudioProbeRat {
+    variant_of Rat
+    passives {
+        LoopingSoundWhileAlive AudioProbe_New
+    }
+}

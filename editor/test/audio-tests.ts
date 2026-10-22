@@ -156,6 +156,25 @@ export function runAudioTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     eq(only(r, "sound-missing").map((f) => f.message.match(/audio\/\S+/)?.[0]).join(), "audio/probe_sfx/p2.wav", codes(r));
     eq(only(r, "whole-file-replace").length, 0, "a new set file is not a replace of a base file");
   });
+  test("validator audio: sound-set-not-loaded warns for a new audio/<x>.gon (the game loads only combat_sfx/ui_sfx/house_sfx, catgen voice_sets and audio/npcvoices/*)", () => {
+    const top = v({ "audio/probe_sfx.gon": "SetName ProbeSFX Folder probe_sfx SoundEffectGroups { P1 { files pickup_coin.wav } }" });
+    eq(only(top, "sound-set-not-loaded").length, 1, codes(top)); eq(only(top, "sound-set-not-loaded")[0]!.severity, "warning");
+    const npc = v({ "audio/npcvoices/probe.gon": "SetName NPC_Probe Folder npcvoices/probe SoundEffectGroups { a { files a.wav } }", "audio/npcvoices/probe/a.wav": tone });
+    eq(only(npc, "sound-set-not-loaded").length, 0, `npcvoices are listed from mod paths too: ${codes(npc)}`);
+    const voice = v({ "audio/voices/probe.gon": "SetName probe Folder voices/probe SoundEffectGroups { Angry { files a.wav } }", "audio/voices/probe/a.wav": tone });
+    eq(only(voice, "sound-set-not-loaded").length, 1, `a voice set needs a catgen voice_sets entry: ${codes(voice)}`);
+    const voiced = v({ "audio/voices/probe.gon": "SetName probe Folder voices/probe SoundEffectGroups { Angry { files a.wav } }", "audio/voices/probe/a.wav": tone, "data/catgen.gon.merge": "voice_sets [probe]" });
+    eq(only(voiced, "sound-set-not-loaded").length, 0, codes(voiced));
+  });
+  test("validator audio: sound-unsupported is an error for a group file that is not *.wav / *.ogg (lower-case: SoundData::load memcmps the extension and asserts otherwise)", () => {
+    const r = v({ "audio/combat_sfx.gon.merge": "SoundEffectGroups { P { files [a.mp3, b.WAV, c.ogg] } }", "audio/combat_sfx/a.mp3": "x", "audio/combat_sfx/b.WAV": tone, "audio/combat_sfx/c.ogg": "OggS" });
+    eq(only(r, "sound-unsupported").map((f) => f.message.match(/^\S+/)?.[0]).join(), "a.mp3,b.WAV", codes(r));
+    eq(only(r, "sound-unsupported")[0]!.severity, "error");
+  });
+  test("validator audio: music-not-ogg is an error for a music_info track file that is not .ogg (.mid only under midi): songs stream through stb_vorbis", () => {
+    const r = v({ "audio/music/music_info.gon.append": 'probe_track { map "probe/m.wav" midi "probe/m.mid" }', "audio/music/probe/m.wav": tone, "audio/music/probe/m.mid": "MThd" });
+    eq(only(r, "music-not-ogg").length, 1, codes(r));
+  });
   test("validator audio: sound-not-wav / sound-not-ogg are errors for a mod audio file the game's decoders refuse", () => {
     const r = v({ "audio/combat_sfx/pickup_coin.wav": "OggS not a wav", "audio/music/alley/eatinrats_map.ogg": tone });
     eq(only(r, "sound-not-wav").length, 1, codes(r)); eq(only(r, "sound-not-ogg").length, 1, codes(r)); assert(!r.ok, "errors");
@@ -186,6 +205,7 @@ export function runAudioTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   test("validator audio: sound-set-append warns for X.gon.append on a pack sound set (a second SoundEffectGroups block)", () => {
     const r = v({ "audio/combat_sfx.gon.append": "SoundEffectGroups { Probe_New { files [pickup_coin.wav] } }" });
     eq(only(r, "sound-set-append").length, 1, codes(r));
+    assert(/hides every vanilla group/.test(only(r, "sound-set-append")[0]!.message), "LoadSoundEffectSet reads SoundEffectGroups by name: the appended copy wins");
   });
   test("validator audio: without an audio index the pack checks are skipped with one audio-index-missing info; mod-local checks still run", () => {
     const r = v({ "audio/combat_sfx.gon.merge": "SoundEffectGroups { P { files [x.wav] } }", "audio/combat_sfx/bad.wav": "nope" }, { audioIndex: null });

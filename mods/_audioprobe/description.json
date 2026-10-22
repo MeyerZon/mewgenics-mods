@@ -1,0 +1,7 @@
+{
+  "title": "Audio probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: proves a data mod can replace and add sounds. Replaces the vanilla pickup_coin.wav at its mirrored path, adds the AudioProbe_New sound group (a new file) through audio/combat_sfx.gon.merge and references it from a mod ability. The WAVs are generated tones (editor/scripts/audio-probe-tones.ts; *.wav is git-ignored). Never for play.",
+  "requirements": []
+}
