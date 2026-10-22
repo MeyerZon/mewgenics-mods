@@ -297,6 +297,12 @@ export function runGonPreprocessTests(test: TestFn, assert: AssertFn, eq: EqFn):
   test("gon pre-pass: an unterminated `/*` silently drops the rest of the text", () => {
     eq(stripComments("a 1 /* b 2").text, "a 1 ");
   });
+  test("gon pre-pass: an unterminated `/*` is reported with the offset of its `/` (and preprocess gives line:col)", () => {
+    eq(stripComments("a 1 /* b 2").unclosedBlockAt, 4);
+    eq(stripComments("a /* b */ 1").unclosedBlockAt, undefined);
+    const r = preprocess("x 1\n  /* open\ny 2");
+    eq(r.unclosedComment ? `${r.unclosedComment.line}:${r.unclosedComment.col}` : "none", "2:3");
+  });
   test("gon pre-pass: a lone trailing `/` is kept", () => {
     eq(stripComments("a /").text, "a /");
   });
