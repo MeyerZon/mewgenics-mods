@@ -57,8 +57,9 @@ these without a decision (status per bullet below; the PR map follows).
       shape — `new_art_scene template cat-animation`, `parts: "game"` rigs, `cat-anim-*` validator codes, the Rig tab).
       The import route stays closed (#71). What remains native or copied: a non-`_CAT` character wearing a cat's parts
       (hook seam S1 in engine-map "Cat parts: entry path, palette, faces, mirroring" — parked, optional) and new part
-      art in catparts.swf. Not authored yet: the back facing's `head_back` layout, the four-way `LF/RF/LB/RB` quartet,
-      a ghost cat in the preview for empty slots.
+      art in catparts.swf. Not authored yet: the back facing's `head_back` layout, the four-way `LF/RF/LB/RB` quartet.
+      Done 2026-10-22: a ghost cat in the preview for empty slots (`ghost-cat.ts`; catparts.swf outlines when
+      extracted, built-in otherwise; toggle "ghost cat"; docs/art-preview-plan.md §3.1).
 - [x] **Localized text?** **Owner, 2026-10-21: deferred; Peralta is fine as the default font.** Since then session
       `loc` found it **looks data-only** (the text-box ctor 0x98d910 localizes an initial text that is a loc key; every
       `data/text/*.csv` is loaded — engine-map "Localization and text fields"). **Probed 2026-10-22 (OBSERVED,

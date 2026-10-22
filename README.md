@@ -68,7 +68,7 @@ npm run test:ingame  # T2: launch the real game per mods/<mod>/tests/*.mewtest (
 npm run build        # Vite build of the web UI → web/dist/ (git-ignored)
 npm run web          # http://127.0.0.1:4173/ (serves web/dist + the /api bridge)
 npm run dev          # hot-reloading UI at http://127.0.0.1:5173/ (proxies /api to `npm run web`)
-npm run test:e2e     # vite build && playwright test (34 browser checks)
+npm run test:e2e     # vite build && playwright test (45 browser checks)
 npm run mcp          # MCP stdio server (register with Claude Code as `mewgenics-editor`)
 ```
 
