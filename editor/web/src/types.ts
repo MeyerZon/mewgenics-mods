@@ -5,7 +5,7 @@
 
 export type OverlayMode = "append" | "merge" | "patch" | "replace";
 export type FileType = "gon" | "csv" | "txt" | "other";
-export type TemplateKindName = "ability" | "passive" | "item" | "status-data";
+export type TemplateKindName = "ability" | "passive" | "item" | "status-data" | "room" | "tileset-variant" | "particle" | "vfx-ability" | "glowing-character";
 
 /** One file of a mod (mod-io ModFileInfo). */
 export type ModFileInfo = {
@@ -116,9 +116,19 @@ export interface ComponentSearchResult {
   count: number;
   names: string[];
   whereUsed?: { name: string; usedIn: ComponentUsage[] }[];
+  /** the GON keys the top matches read (editor/component-schema.json) */
+  schema?: ComponentKeyInfo[];
+}
+export interface ComponentKeyInfo {
+  name: string;
+  chain: string[];
+  open: boolean;
+  children: string | null;
+  required: string[];
+  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string }>;
 }
 
 // ---- template scaffolder (templates) -------------------------------------------------------
 export type TemplateResult =
-  | { ok: true; kind?: string; name?: string; written?: string[]; localizationKeys?: string[]; dryRun?: boolean }
+  | { ok: true; kind?: string; name?: string; written?: string[]; localizationKeys?: string[]; dryRun?: boolean; hint?: string }
   | { ok: false; error: string; partial?: string[] };

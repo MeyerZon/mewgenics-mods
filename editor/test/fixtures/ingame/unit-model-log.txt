@@ -1,0 +1,41 @@
+# T2 2026-10-22, build 25143593: mods/_unitmodel/tests/unit-model.mewtest (mods dev-sandbox, fw-3d, _autoplay, _unitmodel), run 20261022-150711;
+# the per-unit model lines of mod_logs/mewframework.log (window of this run), verbatim, filtered to unit model / Register3DObject / mesh object / mesh: model / NextTurn #1
+TurnControl::NextTurn #1 (tc=0000017435f60008)
+unit model: Rat 0000017575f67708 -> models/unit-box.gltf (block scale=1 yaw=45 offset=(0 0 0))
+Register3DObject(0000017575f67708, models/unit-box.gltf): ok handle 1 (1 object(s))
+unit model at: Rat handle=1 world=(8.500 0.500) screen=(7.155 4.025) facing=-1 m0=-1 ms=1792681636231
+mesh: model models/unit-box.gltf loaded: 24 verts, 36 indices, bounds (-0.30 0.00 -0.30)-(0.30 0.60 0.30)
+mesh object f=1 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50)
+mesh draw f=1 n=1 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=2 n=2 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+unit model: Crate 0000017575f685e8 -> models/crate.obj
+Register3DObject(0000017575f685e8, models/crate.obj): ok handle 2 (2 object(s))
+unit model at: Crate handle=2 world=(1.500 9.500) screen=(-7.155 4.919) facing=+1 m0=1 ms=1792681636242
+mesh: model models/crate.obj loaded: 24 verts, 36 indices, bounds (-0.40 0.00 -0.40)-(0.40 0.80 0.40)
+mesh draw f=3 n=3 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0
+mesh draw f=4 n=4 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0
+mesh object f=61 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50)
+mesh object f=61 handle=2 model=models/crate.obj unit world=(1.50 0.00 9.50)
+mesh object f=121 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50)
+mesh object f=121 handle=2 model=models/crate.obj unit world=(1.50 0.00 9.50)
+mesh object f=181 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50)
+mesh object f=181 handle=2 model=models/crate.obj unit world=(1.50 0.00 9.50)
+mesh object f=241 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50)
+unit model at: Rat handle=1 world=(8.500 0.556) screen=(7.146 4.030) facing=-1 m0=-1 ms=1792681639979
+unit model at: Rat handle=1 world=(8.500 0.611) screen=(7.105 4.050) facing=-1 m0=-1 ms=1792681639984
+unit model at: Rat handle=1 world=(8.500 0.667) screen=(7.022 4.092) facing=-1 m0=-1 ms=1792681639998
+unit model at: Rat handle=1 world=(8.500 0.722) screen=(6.980 4.112) facing=-1 m0=-1 ms=1792681640006
+unit model at: Rat handle=1 world=(8.500 0.778) screen=(6.939 4.133) facing=-1 m0=-1 ms=1792681640013
+unit model at: Rat handle=1 world=(8.500 0.833) screen=(6.898 4.154) facing=-1 m0=-1 ms=1792681640022
+unit model at: Rat handle=1 world=(8.500 0.889) screen=(6.856 4.175) facing=-1 m0=-1 ms=1792681640027
+unit model at: Rat handle=1 world=(8.500 0.944) screen=(6.773 4.216) facing=-1 m0=-1 ms=1792681640041
+unit model at: Rat handle=1 world=(8.500 1.000) screen=(6.732 4.237) facing=-1 m0=-1 ms=1792681640047
+unit model at: Rat handle=1 world=(8.500 1.056) screen=(6.690 4.257) facing=-1 m0=-1 ms=1792681640054
+unit model at: Rat handle=1 world=(8.500 1.111) screen=(6.649 4.278) facing=-1 m0=-1 ms=1792681640061
+unit model at: Rat handle=1 world=(8.500 1.167) screen=(6.608 4.299) facing=-1 m0=-1 ms=1792681640069
+unit model at: Rat handle=1 world=(8.500 1.222) screen=(6.525 4.340) facing=-1 m0=-1 ms=1792681640083
+unit model at: Rat handle=1 world=(8.500 1.278) screen=(6.483 4.361) facing=-1 m0=-1 ms=1792681640088
+unit model at: Rat handle=1 world=(8.500 1.333) screen=(6.442 4.382) facing=-1 m0=-1 ms=1792681640097
+unit model at: Rat handle=1 world=(8.500 1.389) screen=(6.401 4.402) facing=-1 m0=-1 ms=1792681640105
+unit model at: Rat handle=1 world=(8.500 1.444) screen=(6.359 4.423) facing=-1 m0=-1 ms=1792681640109
+unit model at: Rat handle=1 world=(8.500 1.500) screen=(6.276 4.464) facing=-1 m0=-1 ms=1792681640124

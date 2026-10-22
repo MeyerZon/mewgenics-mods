@@ -43,6 +43,34 @@ export interface LogExpect {
   substr: string;
   ok: boolean;
   detail: string;
+  /** which runner-side expectation produced it (absent = log) */
+  what?: "log" | "deltas";
+  /** which log: debug.log (`expect log`, the default) or this launch's mewframework.log window (`expect fwlog`) */
+  source?: "debug" | "fwlog";
+}
+
+/**
+ * Runner-side `expect deltas "<prefix>" <d1> ...`: take every console line (result.jsonl, the whole run) that contains
+ * `prefix`, read the integer right after it, and require the successive differences to be exactly d1..dn (n+1 lines).
+ * Pure. `substr` echoes the directive for the verdict reason.
+ */
+export function checkDeltaExpects(consoleLines: string[], expects: { line: number; prefix: string; deltas: number[] }[]): LogExpect[] {
+  return expects.map(({ line, prefix, deltas }) => {
+    const substr = `deltas ${JSON.stringify(prefix)} ${deltas.join(" ")}`;
+    const values: number[] = [];
+    for (const l of consoleLines) {
+      const i = l.indexOf(prefix);
+      if (i < 0) continue;
+      const m = /^\s*(-?\d+)/.exec(l.slice(i + prefix.length));
+      if (m) values.push(Number(m[1]));
+    }
+    const steps = values.slice(1).map((v, k) => v - values[k]!);
+    const fmt = (xs: number[]): string => xs.map((x) => (x >= 0 ? `+${x}` : String(x))).join(", ");
+    const seen = `${values.length} values ${values.join(" -> ")}`.trim();
+    if (values.length !== deltas.length + 1) return { line, substr, ok: false, what: "deltas", detail: `expected ${deltas.length + 1} console values after the prefix, saw ${seen}` };
+    const ok = steps.every((s, k) => s === deltas[k]);
+    return { line, substr, ok, what: "deltas", detail: ok ? `${values.join(" -> ")} steps ${fmt(steps)}` : `steps ${fmt(steps)}, expected ${fmt(deltas)} (${seen})` };
+  });
 }
 
 /**
@@ -55,6 +83,21 @@ export function checkLogExpects(text: string | null, expects: { line: number; su
     if (msgs === null) return { line, substr, ok: false, detail: "debug.log absent" };
     const i = msgs.findIndex((m) => m.includes(substr));
     return i >= 0 ? { line, substr, ok: true, detail: `matched debug.log line ${i + 1}` } : { line, substr, ok: false, detail: "not found in debug.log" };
+  });
+}
+
+/**
+ * Runner-side `expect fwlog "<substr>"`: each substring must occur in some line of this launch's mewframework.log
+ * window (plain lines, no prefix). Pure; `text` null means the log was not found.
+ */
+export function checkFwLogExpects(text: string | null, expects: { line: number; substr: string }[]): LogExpect[] {
+  const lines = text === null ? null : text.split(/\r?\n/);
+  return expects.map(({ line, substr }) => {
+    if (lines === null) return { line, substr, ok: false, detail: "mewframework.log absent", source: "fwlog" as const };
+    const i = lines.findIndex((m) => m.includes(substr));
+    return i >= 0
+      ? { line, substr, ok: true, detail: `matched mewframework.log window line ${i + 1}`, source: "fwlog" as const }
+      : { line, substr, ok: false, detail: "not found in this launch's mewframework.log window", source: "fwlog" as const };
   });
 }
 

@@ -1,0 +1,7 @@
+{
+  "title": "Cat rig sample (data half)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "The data half of the cat rig sample (framework API v7, DLL route). native/mods/catrig-sample (catrig_sample.dll) registers the rig clip RigSampleCatClip for the character entry RigSampleCat with FW_RegisterCatRig; this mod ships the entry (a TomTom variant, movieclip _CAT, custom_cat_data RigSampleParts), the control RigSampleVanillaCat on the same parts, and art/rig.scene.json, whose root clip is exported as RigSampleCatClip (NOT _CatRig_<Entry>, so only the DLL can bind it) with the labels idleF / idleB (a yellow marker over the cat) and hitF / hitB (the marker at 2x) only. Spawn-only test content (harness fights); no vanilla entry is changed. Build the SWF with the editor (npm run test:catrigsample builds it).",
+  "requirements": []
+}

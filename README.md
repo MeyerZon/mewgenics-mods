@@ -68,9 +68,21 @@ npm run test:ingame  # T2: launch the real game per mods/<mod>/tests/*.mewtest (
 npm run build        # Vite build of the web UI → web/dist/ (git-ignored)
 npm run web          # http://127.0.0.1:4173/ (serves web/dist + the /api bridge)
 npm run dev          # hot-reloading UI at http://127.0.0.1:5173/ (proxies /api to `npm run web`)
-npm run test:e2e     # vite build && playwright test (34 browser checks)
+npm run test:e2e     # vite build && playwright test (54 browser checks)
 npm run mcp          # MCP stdio server (register with Claude Code as `mewgenics-editor`)
+npm run pack -- <mod>               # ship it: build SWFs, validate, write data/dist/<mod>-<version>.zip
+npm run pack -- --install <zip>     # install a mod zip into mods/<name>/ (checked first, never overwrites)
 ```
+
+**Shipping a mod.** Give the mod a `mods/<mod>/mod.json` (name, version, author, description, the Steam build id it
+was tested on, its native DLLs + framework API version if any, license; `npm run pack -- <mod> --init` drafts it), then
+`npm run pack -- <mod>`: it rebuilds the SWFs, refuses while `validate_mod` reports errors (`--force` overrides), and
+writes a zip of the mod folder (without `tests/` and the `art/` sources) plus a generated `README-INSTALL.txt` (unzip,
+the `-modpaths` launch line, save advice, the native step) and a `MANIFEST.sha256`. The receiving side installs it with
+`--install`, MCP `install_mod` or the web UI's *Import mod…*: path traversal, oversize zips, a missing manifest and
+tampered files are refused, and a game-build mismatch is asked about first. The repo's own mods each carry a `mod.json` (the `_`-prefixed
+test-only mods do not), so `npm run pack -- jokers-luck` works out of the box once `native/dist/` holds its DLL. Details: [`docs/data-mods.md`
+"Shipping a mod"](docs/data-mods.md#shipping-a-mod).
 
 Register the MCP server so agents can author and validate mods through it:
 

@@ -1,0 +1,13 @@
+{
+  "name": "catrig-sample",
+  "version": "0.1.0",
+  "author": "MeyerZon",
+  "description": "Sample mod: a cat rig registered from a DLL. native/mods/catrig-sample (catrig_sample.dll) binds the rig clip RigSampleCatClip to the character entry RigSampleCat with FW_RegisterCatRig; this folder ships the entry, a vanilla control cat and the rig scene. Spawn-only test content.",
+  "gameBuild": "25143593",
+  "native": [
+    "catrig_sample.dll"
+  ],
+  "frameworkApi": 8,
+  "license": "MIT",
+  "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
+}

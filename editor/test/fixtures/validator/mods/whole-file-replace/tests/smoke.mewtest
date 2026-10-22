@@ -1,0 +1,4 @@
+mods: whole-file-replace
+timeout: 30s
+# validator fixture: a harness script is not a pack file, so it is not an overlay (no whole-file-replace)
+quit

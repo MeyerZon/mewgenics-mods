@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "vfx",
+  "frameRate": 60,
+  "stage": { "width": 1280, "height": 720, "background": "#000000" },
+  "shapes": {
+    "checker": { "paths": [ { "d": "M0 0 L12 0 L12 8 L0 8 Z", "fill": "bitmap:checkerbmp", "transform": [8, 0, 0, 8, 0, 0] } ] },
+    "dot": { "paths": [ { "d": "M0 -24 C13 -24 24 -13 24 0 C24 13 13 24 0 24 C-13 24 -24 13 -24 0 C-24 -13 -13 -24 0 -24 Z", "fill": "#ff0090" } ] }
+  },
+  "bitmaps": { "checkerbmp": { "file": "art/checker.png" } },
+  "sprites": {
+    "VfxProbeMarkerMc": { "frames": 1, "layers": [ { "name": "marker", "depth": 1, "keys": [ { "frame": 0, "ref": "checker", "x": -48, "y": -32 } ] } ] },
+    "VfxProbeDotMc": { "frames": 1, "layers": [ { "name": "dot", "depth": 1, "keys": [ { "frame": 0, "ref": "dot", "x": 0, "y": 0 } ] } ] }
+  },
+  "exports": { "VfxProbeMarker": "VfxProbeMarkerMc", "VfxProbeDot": "VfxProbeDotMc" }
+}

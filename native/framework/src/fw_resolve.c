@@ -82,6 +82,12 @@ const FwHookSpec FW_HOOK_PLAN[] = {
     { FW_HOOK_STATUS_BARRIER, 0, 0, "status hooks", FW_HOOK_ABORT },
     { FW_HOOK_SYMBOL, FW_SYM_TurnControl_NextTurn, 100, "TurnControl::NextTurn", FW_HOOK_ABORT },
     { FW_HOOK_SYMBOL, FW_SYM_TacticsTest_LateRender, 100, "TacticsTest::LateRender (unit glow)", FW_HOOK_ABORT },
+    { FW_HOOK_SYMBOL, FW_SYM_ApplicationBase_FrameBegin, 100, "ApplicationBase::FrameBegin (game speed)", FW_HOOK_ABORT },
+    { FW_HOOK_SYMBOL, FW_SYM_ApplicationBase_ProcessAnimationMerges, 100, "ApplicationBase::process_animation_merges (cat rig scan)", FW_HOOK_ABORT },
+    { FW_HOOK_SYMBOL, FW_SYM_Character_init, 100, "Character::init (cat rig entry scope)", FW_HOOK_ABORT },
+    { FW_HOOK_SYMBOL, FW_SYM_Swf_GetCharacterByName, 100, "Swf::GetCharacterByName (cat rig redirect)", FW_HOOK_ABORT },
+    { FW_HOOK_SYMBOL, FW_SYM_Camera_render, 100, "Camera::render (observe3d)", FW_HOOK_CONTINUE },
+    { FW_HOOK_SYMBOL, FW_SYM_Camera_RenderOneLayer, 100, "Camera::RenderOneLayer (observe3d)", FW_HOOK_CONTINUE },
 };
 const size_t FW_HOOK_PLAN_COUNT = sizeof FW_HOOK_PLAN / sizeof FW_HOOK_PLAN[0];
 

@@ -154,11 +154,15 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     }
     if (method === "POST" && url.pathname === "/api/art/validate") {
       const b = await body("/api/art/validate", req);
-      return sendJson(res, 200, api.validateArtScene(b.scene));
+      return sendJson(res, 200, api.validateArtScene(b.scene, b.mod));
     }
     if (method === "POST" && url.pathname === "/api/art/import-svg") {
       const b = await body("/api/art/import-svg", req);
       return sendJson(res, 200, api.importSvgShape({ svgText: b.svgText, mod: b.mod, relPath: b.path, options: b.options }));
+    }
+    if (method === "POST" && url.pathname === "/api/art/import-bitmap") {
+      const b = await body("/api/art/import-bitmap", req);
+      return sendJson(res, 200, api.importBitmap({ base64: b.base64, mod: b.mod, id: b.id }));
     }
     if (method === "POST" && url.pathname === "/api/art/export-svg") {
       const b = await body("/api/art/export-svg", req);
@@ -184,6 +188,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     if (method === "GET" && url.pathname === "/api/art/palette") {
       return sendJson(res, 200, api.readArtPalette(q.get("which") === "fx_palette" ? "fx_palette" : "palette"));
     }
+    if (method === "GET" && url.pathname === "/api/art/ghost-parts") {
+      return sendJson(res, 200, api.readGhostCatParts());
+    }
     if (method === "GET" && url.pathname === "/api/art/asset") {
       const r = api.readArtAsset(q.get("mod") || "", q.get("path") || "");
       if (!r.ok) return sendJson(res, 404, { error: r.error });
@@ -200,6 +207,55 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     if (method === "POST" && url.pathname === "/api/art/prepare-swf-gate") {
       const b = await body("/api/art/prepare-swf-gate", req);
       return sendJson(res, 200, api.prepareSwfGate({ mod: b.mod || undefined, variant: b.variant }));
+    }
+    // ---- shipping a mod (docs/data-mods.md "Shipping a mod") ------------------
+    if (method === "POST" && url.pathname === "/api/mod/pack") {
+      const b = await body("/api/mod/pack", req);
+      return sendJson(res, 200, api.packMod(b.mod, { force: b.force, init: b.init }));
+    }
+    if (method === "POST" && url.pathname === "/api/mod/install") {
+      // the zip arrives base64 in the JSON body (8 MB body cap -> ~6 MB zips; bigger ones: npm run pack -- --install)
+      const b = await body("/api/mod/install", req);
+      return sendJson(res, 200, api.installMod(new Uint8Array(Buffer.from(b.base64, "base64")), { acceptBuildMismatch: b.acceptBuildMismatch }));
+    }
+    if (method === "GET" && url.pathname === "/api/dist") {
+      const name = q.get("file") || "";
+      const bytes = api.readPackedZip(name);
+      if (!bytes) return sendJson(res, 404, { error: `no packed zip ${JSON.stringify(name)} in editor/data/dist/` });
+      res.writeHead(200, { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store" });
+      res.end(bytes);
+      return;
+    }
+    // ---- rooms: levels/**/*.lvl (the Room editor) ------------------------------
+    if (method === "GET" && url.pathname === "/api/levels") {
+      return sendJson(res, 200, api.listLevels(q.get("mod") || ""));
+    }
+    if (method === "GET" && url.pathname === "/api/level") {
+      return sendJson(res, 200, api.readLevel(q.get("mod") || "", q.get("path") || ""));
+    }
+    if (method === "GET" && url.pathname === "/api/level-palette") {
+      return sendJson(res, 200, api.levelPalette(q.get("mod") || ""));
+    }
+    if (method === "GET" && url.pathname === "/api/level-art") {
+      return sendJson(res, 200, api.levelArtInfo(q.get("mod") || "", { tileset: q.get("tileset") || undefined, path: q.get("path") || undefined }));
+    }
+    if (method === "GET" && url.pathname === "/api/level-tile-art") {
+      // tile=<id> or object=<id>; meta=1 answers the PNG's size and registration point as JSON instead of the PNG
+      const num = (k: string) => (q.get(k) !== null && /^\d+$/.test(q.get(k)!) ? Number(q.get(k)) : undefined);
+      const r = api.levelArtImage(q.get("mod") || "", { tileset: q.get("tileset") || undefined, path: q.get("path") || undefined, tile: num("tile"), object: num("object") });
+      if (!r.ok) return sendJson(res, 404, r);
+      if (q.get("meta")) return sendJson(res, 200, { ok: true, ...r.meta, resolution: r.resolution });
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
+      res.end(Buffer.from(r.png));
+      return;
+    }
+    if (method === "POST" && url.pathname === "/api/level") {
+      const b = await body("/api/level", req);
+      return sendJson(res, 200, api.writeLevel(b.mod, b.path, b.level, { dryRun: !!b.dryRun }));
+    }
+    if (method === "POST" && url.pathname === "/api/level/validate") {
+      const b = await body("/api/level/validate", req);
+      return sendJson(res, 200, api.validateLevel(b.mod, b.path, b.level));
     }
     return sendJson(res, 404, { error: `no route: ${method} ${url.pathname}` });
   } catch (e) {

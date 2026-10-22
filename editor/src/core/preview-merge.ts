@@ -8,6 +8,7 @@ import { EXTRACTED_DATA, MODS_DIR, resolveReadPath, packPath } from "./repo.ts";
 import { parseOverlayName, applyGonOverlay, applyCsvOverlay } from "./overlay/overlay.ts";
 import { parsePolicy } from "./overlay/policy.ts";
 import { pretty, findLastIndex } from "./gon/value.ts";
+import { preprocessFile } from "./gon-includes.ts";
 import type { VObject, VNode } from "./gon/types.ts";
 import type { OverlayMode } from "./overlay/overlay.ts";
 
@@ -38,6 +39,8 @@ export interface PreviewMergeOptions {
   includeFullGon?: boolean;
   /** the base-data root in the `.extracted/data` layout (tests/fixtures); default EXTRACTED_DATA */
   extractedData?: string;
+  /** the mod folder (tests/fixtures); default mods/<modName> */
+  modDir?: string;
 }
 
 export interface CsvAppendPreview {
@@ -122,7 +125,8 @@ export type PreviewMergeResult = CsvAppendPreview | CsvMergePreview | GonPreview
 
 /** @param relPath overlay path relative to the mod folder */
 export function previewMerge(modName: string, relPath: string, opts: PreviewMergeOptions = {}): PreviewMergeResult {
-  const overlayAbs = join(MODS_DIR, modName, relPath);
+  const modDir = opts.modDir ?? join(MODS_DIR, modName);
+  const overlayAbs = join(modDir, relPath);
   let overlayText = opts.overrideText;
   if (overlayText === undefined) {
     if (!existsSync(overlayAbs)) {
@@ -168,8 +172,12 @@ export function previewMerge(modName: string, relPath: string, opts: PreviewMerg
     };
   }
 
-  // GON
-  const { base, overlay, effective, text } = applyGonOverlay(baseText, overlayText, mode);
+  // GON — the game pre-passes the base file and the overlay separately (GonResource::combined_decode 0x9a64a0:
+  // comments stripped, #include inlined against the base resource's directory, this mod's files taking part).
+  const dataRoot = opts.extractedData ?? EXTRACTED_DATA;
+  const ctx = { resource: baseRel, dataRoot, modDir };
+  const pre = (t: string): string => preprocessFile(t, ctx).text;
+  const { base, overlay, effective, text } = applyGonOverlay(baseText === null ? null : pre(baseText), pre(overlayText), mode);
 
   return {
     ok: true,

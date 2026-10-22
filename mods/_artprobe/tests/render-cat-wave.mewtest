@@ -1,0 +1,35 @@
+mods: _artprobe
+timeout: 120s
+hide: false
+# Wave probe (2026-10-22, T3 card pr76-wave-in-game): an ANIMATED cat pose authored the editor's way. probe.swf's
+# _Append_CatTest donor carries waveF / waveB (cat-rig.ts newCatAnimation) placing wavePose — a parts: "game" rig
+# whose seven slots are EMPTY sprites, with arm1 / arm2 / head keyed over its own 30-frame timeline (linear tweens)
+# and the checker marker at the non-slot depth 15. ArtProbeCatWave = TomTom + alt_animations [[idle wave]].
+# No _autoplay: nobody acts on the player's turn, so the rig cat is neither hit nor moved and any motion under our
+# marker is the animation's. Shots: baseline (settled, no spawn), vanilla (TomTom, the real-parts control), then the
+# wave five times ~130 ms apart (the wave cycle is 0.5 s at 60 fps, so at least two shots fall on different poses).
+# editor/scripts/art-probe.ts --cat-wave reads them (probe-outcomes.ts catWaveOutcome): our marker, new near-black
+# pixels under it vs the vanilla shot (the cat's outline: real parts), no slot colour, and the outline change between
+# wave shots in the rig's window vs the same change in TomTom's window.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+cmd spawn TomTom
+expect console "Spawned TomTom" within 10
+wait frames 120
+shot "vanilla"
+cmd spawn ArtProbeCatWave
+expect console "Spawned ArtProbeCatWave" within 10
+wait frames 90
+shot "wave 1"
+wait ms 130
+shot "wave 2"
+wait ms 130
+shot "wave 3"
+wait ms 130
+shot "wave 4"
+wait ms 130
+shot "wave 5"
+quit

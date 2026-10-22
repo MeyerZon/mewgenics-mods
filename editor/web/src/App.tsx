@@ -17,19 +17,21 @@ import { ArtExplorer } from "./art/ArtExplorer.tsx";
 import { ArtCenter } from "./art/ArtCenter.tsx";
 import { ArtRightPanel } from "./art/ArtRightPanel.tsx";
 import { initArtUi } from "./art/art-state.ts";
+import { RoomExplorer, RoomCenter, RoomRightPanel } from "./rooms/Rooms.tsx";
 import { startup, closeMenu } from "./actions.ts";
 
 function Shell(): React.JSX.Element {
   const mod = useS((s) => s.mod);
   const artMode = useS((s) => s.artMode);
-  const columns = mod ? (artMode ? "282px 1fr 420px" : "302px 1fr 384px") : "302px 1fr";
+  const roomMode = useS((s) => s.roomMode);
+  const columns = mod ? (roomMode ? "292px 1fr 380px" : artMode ? "282px 1fr 420px" : "302px 1fr 384px") : "302px 1fr";
   return (
     <div className="shell">
       <TopBar />
       <div className="body" style={{ gridTemplateColumns: columns }}>
-        {artMode ? <ArtExplorer /> : <Explorer />}
-        {artMode ? <ArtCenter /> : <Center />}
-        {mod ? artMode ? <ArtRightPanel /> : <RightPanel /> : null}
+        {roomMode ? <RoomExplorer /> : artMode ? <ArtExplorer /> : <Explorer />}
+        {roomMode ? <RoomCenter /> : artMode ? <ArtCenter /> : <Center />}
+        {mod ? roomMode ? <RoomRightPanel /> : artMode ? <ArtRightPanel /> : <RightPanel /> : null}
       </div>
       <StatusBar />
     </div>

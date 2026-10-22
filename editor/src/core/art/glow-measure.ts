@@ -82,3 +82,65 @@ export function compareGlowShots(glow: GlowMeasure, noglow: GlowMeasure): GlowCo
   const verdict: GlowComparison["verdict"] = delta >= GLOW_MIN_DELTA && patch >= GLOW_MIN_PATCH && patch - patchBefore >= GLOW_MIN_PATCH ? "glow" : "none";
   return { verdict, delta, glowPixels: glow.pixels, noglowPixels: noglow.pixels, glowRegion: glow.region, noglowRegion: noglow.region };
 }
+
+// ---- glow v2 (per-unit colours): two units, two colours, one shot ----
+
+/** the second colour of the v2 proof: cyan, which the arena and the UI do not use either */
+export const GLOW_PROBE_COLOUR_B: Rgb = [0, 255, 255];
+
+export interface TwoColourComparison {
+  /** "two-colour" when each colour adds its own rim over the no-glow shot and the two rims lie apart */
+  verdict: "two-colour" | "none";
+  /** colour A (magenta) against the no-glow shot */
+  a: GlowComparison;
+  /** colour B (cyan) against the no-glow shot */
+  b: GlowComparison;
+  /** the two largest patches' bounding boxes do not overlap: each rim sits around its own unit */
+  apart: boolean;
+}
+
+const overlaps = (p: GlowRegion, q: GlowRegion) => p.x0 <= q.x1 && q.x0 <= p.x1 && p.y0 <= q.y1 && q.y0 <= p.y1;
+
+/** the v2 shot ("two": unit 1 in colour A, unit 2 in colour B) against the no-glow shot, both measured in both colours.
+ * v1 (one shared colour) gives no colour-B rim; a rim painted over every unit in both colours gives overlapping
+ * patches: both are "none". */
+export function compareTwoColourShot(two: { a: GlowMeasure; b: GlowMeasure }, noglow: { a: GlowMeasure; b: GlowMeasure }): TwoColourComparison {
+  const a = compareGlowShots(two.a, noglow.a), b = compareGlowShots(two.b, noglow.b);
+  const apart = !!(a.glowRegion && b.glowRegion) && !overlaps(a.glowRegion!, b.glowRegion!);
+  return { verdict: a.verdict === "glow" && b.verdict === "glow" && apart ? "two-colour" : "none", a, b, apart };
+}
+
+// ---- glow v3, the removal half: a Temporary FwGlow_ status expires and takes the rim with it ----
+
+/** one unit's status as a units event (the harness `dump`) shows it */
+export interface StatusInDump { found: boolean; carries: boolean }
+
+/** does the units event list the unit (by name) and does it carry the status? A missing event or unit: found false. */
+export function statusInDump(ev: { [k: string]: unknown } | null | undefined, unit: string, status: string): StatusInDump {
+  const list = ev && Array.isArray(ev.list) ? (ev.list as { name?: unknown; statuses?: unknown }[]) : [];
+  const u = list.find((x) => x && x.name === unit);
+  if (!u) return { found: false, carries: false };
+  return { found: true, carries: Array.isArray(u.statuses) && u.statuses.includes(status) };
+}
+
+export interface ExpiryComparison {
+  /** expired: rim + status first, then neither on the still-living unit. stuck: the rim outlived the status.
+   * status-kept: the status had not gone yet (inconclusive). unit-gone: the unit died / left (inconclusive).
+   * no-glow: no rim or no status at the first check (the grant itself failed). */
+  verdict: "expired" | "stuck" | "status-kept" | "unit-gone" | "no-glow";
+  /** the "glow" shot (status live) against the pre-spawn shot */
+  glow: GlowComparison;
+  /** the "expired" shot (after the Temporary ran out) against the pre-spawn shot */
+  expired: GlowComparison;
+  status: { atGlow: StatusInDump; atExpired: StatusInDump };
+}
+
+export function compareExpiry(shots: { glow: GlowMeasure; expired: GlowMeasure; noglow: GlowMeasure }, status: { atGlow: StatusInDump; atExpired: StatusInDump }): ExpiryComparison {
+  const glow = compareGlowShots(shots.glow, shots.noglow), expired = compareGlowShots(shots.expired, shots.noglow);
+  let verdict: ExpiryComparison["verdict"];
+  if (glow.verdict !== "glow" || !status.atGlow.carries) verdict = "no-glow";
+  else if (!status.atExpired.found) verdict = "unit-gone";
+  else if (status.atExpired.carries) verdict = "status-kept";
+  else verdict = expired.verdict === "glow" ? "stuck" : "expired";
+  return { verdict, glow, expired, status };
+}

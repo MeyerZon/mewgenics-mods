@@ -117,6 +117,13 @@
         "text": {
           "type": "string",
           "description": "optional unsaved content for `path`"
+        },
+        "modpaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "optional: the mods loaded together, in -modpaths order; adds the cross-mod checks (two mods appending the same _Append_ label, two mods shipping the same swfs/<name>.swf, a label or SWF name vanilla already has)"
         }
       },
       "required": [
@@ -175,7 +182,12 @@
             "ability",
             "passive",
             "item",
-            "status-data"
+            "status-data",
+            "room",
+            "tileset-variant",
+            "particle",
+            "vfx-ability",
+            "glowing-character"
           ]
         },
         "name": {
@@ -188,7 +200,7 @@
             "type": "string"
           },
           "additionalProperties": {},
-          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)"
+          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, movieclip (particle / vfx-ability: the SWF clip), dryRun, ...; glowing-character: colour (rrggbb or rrggbbaa, required), parent (default Rat), trigger (StatusOnSpawnIn | StatusOnBattleStart))"
         }
       },
       "required": [
@@ -447,11 +459,15 @@
           "enum": [
             "cat-animation"
           ],
-          "description": "\"cat-animation\": a cat rig <animation>Pose plus an _Append_CatTest donor sprite with the labeled frames <animation>F / <animation>B, each placing the rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)"
+          "description": "\"cat-animation\": a front cat rig <animation>Pose, a back-facing rig <animation>PoseBack (head_back behind, tail in front, as vanilla idleB) and an _Append_CatTest donor sprite with the labeled frames <animation>F (front rig) / <animation>B (back rig), each placing its rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)"
         },
         "animation": {
           "type": "string",
           "description": "the animation name for template cat-animation (default: the scene name, which must then be an identifier); GON refers to it bare: alt_animations [[idle <animation>]] or an ability's animation <animation>"
+        },
+        "fourWay": {
+          "type": "boolean",
+          "description": "template cat-animation: emit the four-way quartet <animation>LF / RF / LB / RB (the L frames mirrored) for a character with graphics { four_way_animations true }; vanilla CatTest has no four-way label"
         }
       },
       "required": [
@@ -508,6 +524,92 @@
           ],
           "additionalProperties": false,
           "description": "save the imported shape into a scene (needs mod); without it nothing is written"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "import_bitmap",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "mod folder (for file, for scene, and where base64 is written as art/<id>.png)"
+        },
+        "file": {
+          "type": "string",
+          "description": "a .png already inside the mod, e.g. art/Photo.png"
+        },
+        "base64": {
+          "type": "string",
+          "description": "or the PNG bytes, base64 (8-bit, non-interlaced; < 4096 in both dimensions)"
+        },
+        "scene": {
+          "type": "string",
+          "description": "scene file inside the mod to add it to; without it the PNG is only checked (size + findings)"
+        },
+        "id": {
+          "type": "string",
+          "description": "shape id (default: the file name); the bitmap is <id>Bmp, the clip <id>Clip"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "sprite",
+            "background",
+            "fill"
+          ],
+          "description": "sprite (default): a 1-frame clip exported for graphics.movieclip, origin at the feet; background: the same with origin top-left, for a tileset combat_background plate; fill: only the bitmap + a shape to place yourself"
+        },
+        "scale": {
+          "type": "number",
+          "description": "clip px per texel (default 1; vanilla combat plates: 2000x1500 at 0.7667). Above 1 it looks soft in-game (bitmap-upscaled)"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "top-left",
+            "center",
+            "bottom-center"
+          ],
+          "description": "where clip (0,0) sits on the image"
+        },
+        "repeat": {
+          "type": "boolean",
+          "description": "tile the bitmap outside its rectangle (fill type 0x40) instead of streaking the edge texels (0x41)"
+        },
+        "smooth": {
+          "type": "boolean",
+          "description": "false: pixel-snapped sampling (0x43 / 0x42) for pixel art; default true: filtered with mips"
+        },
+        "area": {
+          "type": "object",
+          "properties": {
+            "width": {
+              "type": "number",
+              "description": "px"
+            },
+            "height": {
+              "type": "number",
+              "description": "px"
+            }
+          },
+          "required": [
+            "width",
+            "height"
+          ],
+          "additionalProperties": false,
+          "description": "fill mode: the shape's size in clip px; with repeat the bitmap tiles over it"
+        },
+        "exportName": {
+          "type": "string",
+          "description": "sprite / background: the linkage name (default the id)"
+        },
+        "replace": {
+          "type": "boolean",
+          "description": "overwrite existing ids / export"
         }
       },
       "additionalProperties": false
@@ -778,6 +880,346 @@
         "mod",
         "scene",
         "commands"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "pack_mod",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "force": {
+          "type": "boolean",
+          "description": "pack despite validation errors, failed SWF builds or missing native DLLs (the result says what was forced)"
+        },
+        "init": {
+          "type": "boolean",
+          "description": "draft mods/<mod>/mod.json from description.json first when it is missing"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "install_mod",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string",
+          "description": "path to the mod zip to install into mods/<name>/"
+        },
+        "acceptBuildMismatch": {
+          "type": "boolean",
+          "description": "install although the mod's gameBuild is not the installed game's build (pass only after the user agreed to the returned prompt)"
+        }
+      },
+      "required": [
+        "zip"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_level",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "a level inside the mod, levels/<folder>/<name>.lvl; omit to list the mod's levels"
+        },
+        "palette": {
+          "type": "boolean",
+          "description": "also return the tile (tiles.gon) and object (spawns.gon) palettes: base + this mod's overlays, with names, classes and swatch colours"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "write_level",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "levels/<folder>/<name>.lvl inside the mod (nothing else is writable)"
+        },
+        "level": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "width": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "height": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "objectPalette": {
+              "type": "string"
+            },
+            "tilePalette": {
+              "type": "string"
+            },
+            "tiles": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "weight": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "weight"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                ]
+              }
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "y": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "id": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "weight": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "weight"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "raw": {
+              "type": "object",
+              "properties": {
+                "layers": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "a": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "b": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "width2": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "height2": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "pad1": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "pad2": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "trailer": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "layers",
+                "a",
+                "b",
+                "width2",
+                "height2",
+                "pad1",
+                "pad2",
+                "trailer"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "version",
+            "width",
+            "height",
+            "objectPalette",
+            "tilePalette",
+            "tiles",
+            "objects"
+          ],
+          "additionalProperties": false,
+          "description": "the whole level as read_level returns it (version, width, height, objectPalette, tilePalette, tiles row-major: id | [{id, weight}], objects: [{x, y, id}], raw?)"
+        },
+        "base64": {
+          "type": "string",
+          "description": "or the level file's bytes"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": [
+                  "tile",
+                  "object",
+                  "remove"
+                ],
+                "description": "tile: paint the cell's tile; object: put an object on the cell (replaces the first one there); remove: clear the cell's objects"
+              },
+              "x": {
+                "type": "number",
+                "description": "column 0..width-1"
+              },
+              "y": {
+                "type": "number",
+                "description": "row 0..height-1"
+              },
+              "id": {
+                "type": "number",
+                "description": "a tiles.gon / spawns.gon id"
+              },
+              "object": {
+                "type": "string",
+                "description": "a spawns.gon object/utility name instead of an id, e.g. Rat, PlayerSpawn"
+              },
+              "random": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "number",
+                      "description": "id"
+                    },
+                    "object": {
+                      "type": "string",
+                      "description": "name"
+                    },
+                    "weight": {
+                      "type": "number",
+                      "description": "weight (default 1)"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "a weighted random list instead of one id"
+              }
+            },
+            "required": [
+              "op",
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          },
+          "description": "applied in order to level / base64 / the file on disk / an empty 10x10 room"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "encode and validate, write nothing (returns base64)"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
       ],
       "additionalProperties": false
     }

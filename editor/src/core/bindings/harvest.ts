@@ -515,6 +515,48 @@ export function readOffsetWitness(pe: Pe, buf: Buffer, fnRva: number, w: { patte
   return { found: true, at, raw, value: raw / scale, matches };
 }
 
+/** an rdata witness's float (its raw IEEE-754 bits) as the integer constant it encodes: "f32" the value itself,
+ * "f32-recip" the rounded reciprocal (LateRender multiplies by 1/1280); null unless integral within 1e-3 */
+export function rdataWitnessValue(bits: number, kind: string): number | null {
+  const b = Buffer.alloc(4);
+  b.writeUInt32LE(bits >>> 0, 0);
+  const f = b.readFloatLE(0);
+  let v: number;
+  if (kind === "f32") v = f;
+  else if (kind === "f32-recip") { if (f === 0 || !Number.isFinite(f)) return null; v = 1 / f; }
+  else return null;
+  const r = Math.round(v);
+  return Number.isFinite(v) && Math.abs(v - r) < 1e-3 ? r : null;
+}
+
+/**
+ * Read an rdata witness: the `nth` match of `pattern` in the function's .pdata body, the rip-relative disp32 at
+ * `ripAt` inside it (the operand ends the instruction: rip = match + ripAt + 4), the 32-bit float at that target
+ * (+ 4 * lane) and its value per `rdata`. A constant the code only ever multiplies by (a reciprocal in .rdata) is pinned
+ * this way.
+ */
+export function readRdataWitness(pe: Pe, buf: Buffer, fnRva: number, w: { pattern: string; nth?: number; ripAt: number; rdata: string; lane?: number }, sigCap?: number): { found: boolean; target: number | null; value: number | null; matches: number } {
+  const d = decodeFunction(pe, buf, fnRva);
+  const pat = parsePattern(w.pattern, sigCap);
+  const want = w.nth || 0;
+  let matches = 0, at = -1;
+  for (let i = 0; i + pat.length <= d.bytes.length; i++) {
+    let k = 0;
+    for (; k < pat.length; k++) if (pat.mask[k] && d.bytes[i + k] !== pat.bytes[k]) break;
+    if (k !== pat.length) continue;
+    if (matches === want) at = i;
+    matches++;
+  }
+  if (at < 0 || at + w.ripAt + 4 > d.bytes.length) return { found: false, target: null, value: null, matches };
+  const o = at + w.ripAt;
+  const disp = (d.bytes[o] | (d.bytes[o + 1] << 8) | (d.bytes[o + 2] << 16) | (d.bytes[o + 3] << 24)) | 0;
+  const target = fnRva + o + 4 + disp + 4 * (w.lane || 0);
+  const off = pe.rvaToOff(target);
+  if (off < 0 || off + 4 > buf.length) return { found: false, target, value: null, matches };
+  const value = rdataWitnessValue(buf.readUInt32LE(off), w.rdata);
+  return { found: value !== null, target, value, matches };
+}
+
 export interface ConstantSources {
   slot: number | null;
   arg: number | null;
@@ -524,6 +566,8 @@ export interface ConstantSources {
   search: number | null;
   /** a displacement witness (pattern + dispAt [+ scale]) without a callee, e.g. the slot index of a vtable call */
   disp: number | null;
+  /** an rdata witness (pattern + ripAt + rdata): a float the code loads rip-relative */
+  rdata: number | null;
   notes: string[];
 }
 
@@ -536,7 +580,7 @@ export interface ConstantSources {
 export function constantSources(manifest: Manifest, pe: Pe, buf: Buffer, e: Entry): ConstantSources {
   const a = e.anchors;
   const usable = (x: Entry | null | undefined): boolean => !!x && (!x.port || String(x.port.status).startsWith("ported"));
-  const r: ConstantSources = { slot: null, arg: null, extent: null, search: null, disp: null, notes: [] };
+  const r: ConstantSources = { slot: null, arg: null, extent: null, search: null, disp: null, rdata: null, notes: [] };
   if (a.derive && a.derive.vtable && (a.derive.extent || a.derive.slotSearch)) {
     const vt = entry(manifest, a.derive.vtable);
     const vtRva = usable(vt) && vt ? parseInt(vt.rva || "0", 16) : null;
@@ -571,17 +615,26 @@ export function constantSources(manifest: Manifest, pe: Pe, buf: Buffer, e: Entr
       ? `displacement witness ${w.pattern} #${w.nth || 0} in ${w.function} ${rd ? (rd.matches ? "matched but gave no value" : "not found") : "unusable (function did not port)"}`
       : `displacement witness in ${w.function} gives ${hex(rd!.raw!)}${w.scale && w.scale !== 1 ? ` / ${w.scale} = ${r.disp}` : ""}`);
   }
+  if (a.witness && !a.witness.callee && a.witness.pattern && Number.isInteger(a.witness.ripAt) && a.witness.rdata) {
+    const w = a.witness;
+    const f = entry(manifest, w.function);
+    const rd = usable(f) && f ? readRdataWitness(pe, buf, parseInt(f.rva || "0", 16), { pattern: w.pattern!, nth: w.nth, ripAt: w.ripAt!, rdata: w.rdata!, lane: w.lane }, manifest.sigCap) : null;
+    r.rdata = rd && rd.found ? rd.value : null;
+    r.notes.push(r.rdata === null
+      ? `rdata witness ${w.pattern} #${w.nth || 0} in ${w.function} ${rd ? (rd.matches ? `matched but the float at ${rd.target !== null ? hex(rd.target) : "?"} gave no ${w.rdata} value` : "not found") : "unusable (function did not port)"}`
+      : `rdata witness in ${w.function}: ${w.rdata} of the float at ${hex(rd!.target!)} = ${r.rdata}`);
+  }
   return r;
 }
 
 /** constants with any derivation or witness source (the harvest verifies them, the port re-derives them) */
 export function constantHasSources(a: Anchors): boolean {
-  return !!((a.derive && a.derive.vtable) || (a.witness && a.witness.callee) || (a.witness && !a.witness.callee && a.witness.pattern && Number.isInteger(a.witness.dispAt)));
+  return !!((a.derive && a.derive.vtable) || (a.witness && a.witness.callee) || (a.witness && !a.witness.callee && a.witness.pattern && Number.isInteger(a.witness.dispAt)) || (a.witness && !a.witness.callee && a.witness.pattern && Number.isInteger(a.witness.ripAt) && !!a.witness.rdata));
 }
 
 /** every value a constant's sources produced, in a fixed order (all must agree) */
 export function constantValues(src: ConstantSources): number[] {
-  return [src.slot, src.arg, src.extent, src.search, src.disp].filter((v): v is number => v !== null);
+  return [src.slot, src.arg, src.extent, src.search, src.disp, src.rdata].filter((v): v is number => v !== null);
 }
 
 export type HarvestStatus = "harvested" | "verified" | "mismatch" | "unresolved" | "unanchored" | "skipped";

@@ -1,13 +1,13 @@
 {
   "summary": {
     "verdict": "glow",
-    "delta": 5653,
-    "glowPixels": 5653,
+    "delta": 5564,
+    "glowPixels": 5564,
     "noglowPixels": 0,
     "glowRegion": {
-      "count": 5653,
+      "count": 5564,
       "x0": 2628,
-      "y0": 692,
+      "y0": 693,
       "x1": 2759,
       "y1": 825
     },
@@ -18,15 +18,60 @@
       255
     ],
     "verdictRun": "pass",
-    "reason": "all 1 expectation(s) passed; 2 shot(s)",
+    "reason": "all 1 expectation(s) passed; 3 shot(s)",
     "saveUnchanged": true,
     "shots": {
       "glow": "shot-glow.png",
-      "noglow": "shot-noglow.png"
+      "noglow": "shot-noglow.png",
+      "two": "shot-two.png"
+    },
+    "two": {
+      "verdict": "two-colour",
+      "a": {
+        "verdict": "glow",
+        "delta": 5515,
+        "glowPixels": 5515,
+        "noglowPixels": 0,
+        "glowRegion": {
+          "count": 5515,
+          "x0": 2629,
+          "y0": 694,
+          "x1": 2757,
+          "y1": 824
+        },
+        "noglowRegion": null
+      },
+      "b": {
+        "verdict": "glow",
+        "delta": 9961,
+        "glowPixels": 9961,
+        "noglowPixels": 0,
+        "glowRegion": {
+          "count": 9961,
+          "x0": 1237,
+          "y0": 705,
+          "x1": 1440,
+          "y1": 878
+        },
+        "noglowRegion": null
+      },
+      "apart": true,
+      "colours": [
+        [
+          255,
+          0,
+          255
+        ],
+        [
+          0,
+          255,
+          255
+        ]
+      ]
     }
   },
   "observed": "2026-10-22",
   "script": "mods/dev-sandbox/tests/unit-glow.mewtest",
-  "run": "editor/data/ingame-runs/20261022-073646-dev-sandbox-unit-glow (git-ignored; 3440x1440 window, launch 4 of 4)",
-  "note": "FW_SetUnitGlow(\"Lil' Rat\", 1 0 1 1) in a seeded TacticsTest fight (seed 42, spawn Rat): the glow shot holds one connected magenta patch of 5653 px around the Rat (bbox 2628,692-2759,825, i.e. the sprite 2646..2741 x 724..808 plus a ~16 px band that fades outward); the black outline and the body keep their own pixels; after FW_ClearUnitGlow the noglow shot holds no magenta at all."
+  "run": "editor/data/ingame-runs/20261022-102435-dev-sandbox-unit-glow (git-ignored; 3440x1440 window; glow v2 build of mewframework.dll)",
+  "note": "v1 scenario: FW_SetUnitGlow(\"Lil' Rat\", 1 0 1 1) in a seeded TacticsTest fight (seed 42, spawn Rat): one connected magenta patch of 5564 px around the Rat (bbox 2628,693-2759,825); after FW_ClearUnitGlow the noglow shot holds no magenta. v2 scenario (per-unit colours): the Rat magenta and unit 0 (the cat Wengar The Wion) cyan at once: the two shot holds a 5515 px magenta patch around the Rat (2629,694-2757,824) and a 9961 px cyan patch around the cat (1237,705-1440,878), apart; the framework log shows two materials (fw_unit_glow, fw_unit_glow_1) and two passes, no rect failure."
 }

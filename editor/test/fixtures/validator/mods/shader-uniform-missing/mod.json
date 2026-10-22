@@ -1,0 +1,8 @@
+{
+  "name": "shader-uniform-missing",
+  "version": "0.1.0",
+  "author": "fixture",
+  "description": "validator fixture: shader-uniform-missing",
+  "gameBuild": "25143593",
+  "license": "MIT"
+}

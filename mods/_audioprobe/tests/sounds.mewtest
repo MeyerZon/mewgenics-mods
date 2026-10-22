@@ -1,0 +1,34 @@
+mods: _audioprobe
+timeout: 60s
+# T2 for sounds in data mods (docs/data-mods.md "Sounds and music"). No audio capture: the witness is the game's own
+# debug_sfx_memory_use counter (DAT_1413c6cb0), which SoundData::load 0x9718a0 raises by the WAV's data-chunk size
+# when it decodes a file. The tones come from editor/scripts/audio-probe-tones.ts (*.wav is git-ignored).
+#   AudioProbe_New  -> audio/combat_sfx/audioprobe_new.wav, a file only this mod has: +35280 (0.4 s mono 44.1 kHz)
+#   PickupCoin      -> SE_PickupCoin -> audio/combat_sfx/pickup_coin.wav, replaced at the mirrored path: +24000
+#                      (the vanilla file's data chunk is 44714 bytes: a run without the mod adds 44714)
+#   AudioProbe_Absent -> a file nowhere: +0, no log line, no crash (the game plays a silent stub)
+wait frames 120
+enter TacticsTest
+# let the fight intro finish loading its own sounds before measuring
+wait ms 4000
+cmd debug_list_loaded_files
+expect console "_audioprobe/audio/combat_sfx.gon.merge.raw" within 5
+cmd debug_sfx_memory_use
+expect console "Total loaded sfx: " within 5
+cmd play_sound AudioProbe_New
+wait frames 60
+cmd debug_sfx_memory_use
+expect console "Total loaded sfx: " within 5
+cmd play_sound PickupCoin
+wait frames 60
+cmd debug_sfx_memory_use
+expect console "Total loaded sfx: " within 5
+cmd play_sound AudioProbe_Absent
+wait frames 60
+cmd debug_sfx_memory_use
+expect console "Total loaded sfx: " within 5
+expect deltas "Total loaded sfx: " 35280 24000 0
+cmd debug_list_loaded_files
+expect console "audio/combat_sfx/audioprobe_new.wav" within 5
+expect noconsole "audioprobe_absent"
+quit

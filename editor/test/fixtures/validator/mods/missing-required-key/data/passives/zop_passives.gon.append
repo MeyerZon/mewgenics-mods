@@ -1,0 +1,7 @@
+Zop {
+	1 {
+		passives {
+			SpawnThing { number 2 }
+		}
+	}
+}

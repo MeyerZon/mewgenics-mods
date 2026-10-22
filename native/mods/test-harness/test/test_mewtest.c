@@ -435,6 +435,12 @@ typedef struct Fake {
     char pipeReply[8192]; int pipeReplies;                          /* pipe_reply: the last reply the runner handed to the glue */
     int glowResult; int glowCalls; int glowUnit; int glowCleared; float glowRgba[4];   /* set_unit_glow: programmable result (1 ok / 0 refused / -1 unavailable) */
     const void *gon[8];                                             /* unit_gon: the unit's entry node (NULL = unreadable) */
+    int runResult; int runCalls; int runOp; char runArg[64]; MtRunInfo runInfo;   /* run_step: programmable result + the info it reports */
+    int runReadyAfter;                                              /* run_step answers 2 (not ready) this many times first */
+    int shotArmResult; int shotArmCalls; int shotArmLine;           /* shot_arm: programmable result (1 armed / -1 unavailable) */
+    int shotPollResults[8]; int shotPollCount; int shotPollCalls;   /* shot_poll: results returned in order (then the last one again) */
+    MtShotResult shotRes;                                           /* what a finished poll hands back */
+    int speedResult; int speedCalls; double speedFactor; double speedApplied;   /* set_speed: programmable result; speedApplied = what the fake framework keeps */
 } Fake;
 static Fake fk;
 
@@ -487,10 +493,46 @@ static int fk_set_unit_glow(void *u, int i, const float *rgba, char *detail, siz
     return fk.glowResult;
 }
 
+static int fk_set_speed(void *u, double factor, double *applied, char *detail, size_t cap) {
+    (void)u;
+    fk.speedCalls++; fk.speedFactor = factor;
+    *applied = fk.speedApplied ? fk.speedApplied : factor;
+    snprintf(detail, cap, "fake speed");
+    return fk.speedResult;
+}
+
+static int fk_run_step(void *u, int op, const char *arg, MtRunInfo *info, char *detail, size_t cap) {
+    (void)u;
+    fk.runCalls++; fk.runOp = op; snprintf(fk.runArg, sizeof fk.runArg, "%s", arg ? arg : "");
+    if (fk.runReadyAfter > 0) { fk.runReadyAfter--; snprintf(detail, cap, "fake not ready"); return 2; }
+    *info = fk.runInfo;
+    snprintf(detail, cap, "fake run %d", op);
+    return fk.runResult;
+}
+
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
-    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon,
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, NULL, fk_run_step,   /* face_unit: the facing tests use FACE_HOST */
+    NULL, NULL,                                                     /* no in-process capture: the legacy window path */
+    fk_set_speed,
+};
+
+static int fk_shot_arm(void *u, int line) { (void)u; fk.shotArmCalls++; fk.shotArmLine = line; return fk.shotArmResult; }
+static int fk_shot_poll(void *u, MtShotResult *out) {
+    (void)u;
+    int i = fk.shotPollCalls < fk.shotPollCount ? fk.shotPollCalls : fk.shotPollCount - 1;
+    fk.shotPollCalls++;
+    int r = i >= 0 ? fk.shotPollResults[i] : 0;
+    if (r != 0) *out = fk.shotRes;
+    return r;
+}
+/* the same fake with the in-process (GL back-buffer) capture */
+static const MtHost HOST_GL = {
+    NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
+    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, NULL, NULL,   /* no face / run step: the shot tests */
+    fk_shot_arm, fk_shot_poll, NULL,
 };
 
 static MtRunner rr;
@@ -752,7 +794,7 @@ TEST(runner_dump_with_and_without_units) {
     fk_two_units();
     steps_until_done(5);
     CHECK(has(ev(0), "\"available\":true")); CHECK(has(ev(0), "\"count\":2"));
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"effective\":{\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"maxhp\":0},\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
     CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\""));
 }
 
@@ -796,8 +838,8 @@ TEST(runner_dump_emits_stacks_parallel_to_statuses) {
     fk_reset("dump\nquit\n");
     fk_two_units_with_stacks();
     steps_until_done(5);
-    CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7]}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[],\"stacks\":[]}"));
+    CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"effective\":{\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"maxhp\":0},\"statuses\":[],\"stacks\":[],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
 }
 
 TEST(runner_wait_rounds_advances_on_round_counter) {
@@ -834,6 +876,31 @@ TEST(runner_expect_stacks_op_by_index_and_name_and_missing_status) {
     CHECK(has(ev(4), "\"ok\":false")); CHECK(has(ev(4), "absent"));
     CHECK(has(ev(5), "\"ok\":false")); CHECK(has(ev(5), "unit not found"));
     CHECK(has(last_ev(), "\"expect_pass\":2")); CHECK(has(last_ev(), "\"expect_fail\":4"));
+}
+
+/* signed operands: JokersLuck goes below 0 (luck-seeded round 3: Wengar -10); `-` is a sign, never a flag */
+TEST(script_expect_stacks_takes_a_signed_integer) {
+    char err[256]; int line = 0;
+    const char *s = "expect stacks JokersLuck on 0 == -10\nexpect stacks JokersLuck on \"Wengar The Wion\" < -0\nexpect unit 0 luck == -3\nexpect gon 0 a.b == -0.5\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 5);
+    CHECK_EQ(g_s.d[0].kind, MT_D_EXPECT_STACKS); CHECK_EQ(g_s.d[0].op, MT_OP_EQ); CHECK_EQ(g_s.d[0].value, -10); CHECK_EQ(g_s.d[0].varied, 0);
+    CHECK_EQ(g_s.d[1].kind, MT_D_EXPECT_STACKS); CHECK_STR(g_s.d[1].b, "Wengar The Wion"); CHECK_EQ(g_s.d[1].op, MT_OP_LT); CHECK_EQ(g_s.d[1].value, 0);
+    CHECK_EQ(g_s.d[2].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[2].value, -3);
+    CHECK_EQ(g_s.d[3].kind, MT_D_EXPECT_GON); CHECK(g_s.d[3].dvalue == -0.5);
+    const char *bad[] = { "expect stacks JokersLuck on 0 == -\n", "expect stacks JokersLuck on 0 == --1\n", "expect stacks JokersLuck on 0 == - 1\n",
+                          "expect stacks JokersLuck on 0 == 1-\n", "expect stacks JokersLuck on 0 == -1.5\n", "expect units == -1\n", "wait rounds -1\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_expect_stacks_compares_negative_values) {
+    fk_reset("expect stacks JokersLuck on 0 == -10\nexpect stacks JokersLuck on Lumee < 0\nexpect stacks JokersLuck on 0 == 10\nquit\n");
+    fk_two_units_with_stacks();
+    fk.units[0].stacks[1] = -10;
+    steps_until_done(6);
+    CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"JokersLuck on 0 == -10\"")); CHECK(has(ev(0), "JokersLuck -10 on unit 0"));
+    CHECK(has(ev(1), "\"ok\":true"));
+    CHECK(has(ev(2), "\"ok\":false"));
 }
 
 /* ---- expect unit <unit> <field> <op> <value>: name|class (quoted, == !=), faction|move|act|turnkind (int, any op) ---- */
@@ -1120,6 +1187,81 @@ TEST(runner_shot_emits_event_then_holds_then_continues) {
     CHECK_EQ(count_ev("end"), 1); CHECK_EQ(fk.exitCode, 0);
 }
 
+/* ---- shot with the in-process capture (2026-10-22, stale-shot fix): the DLL reads the GL back buffer at the next
+ * SDL_GL_SwapWindow and the shot event then carries the file; on failure it says why and the runner captures the window ---- */
+TEST(runner_shot_gl_emits_the_event_after_the_capture_with_the_file) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.shotArmResult = 1;
+    fk.shotPollResults[0] = 0; fk.shotPollResults[1] = 1; fk.shotPollCount = 2;
+    snprintf(fk.shotRes.path, sizeof fk.shotRes.path, "C:\\r\\shot-1.mtraw");
+    fk.shotRes.w = 3440; fk.shotRes.h = 1440;
+    snprintf(fk.shotRes.detail, sizeof fk.shotRes.detail, "back buffer of window 0x1");
+    CHECK_EQ(mt_runner_step(&rr, &HOST_GL), 1);       /* armed: no event until the present */
+    CHECK_EQ(fk.shotArmCalls, 1); CHECK_EQ(fk.shotArmLine, 1);
+    CHECK_EQ(count_ev("shot"), 0);
+    CHECK_EQ(mt_runner_step(&rr, &HOST_GL), 1);       /* poll 0: still pending */
+    CHECK_EQ(count_ev("shot"), 0);
+    fk.now = 2000;
+    CHECK_EQ(mt_runner_step(&rr, &HOST_GL), 1);       /* poll 1: captured */
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "\"label\":\"menu\"")); CHECK(has(ev(0), "\"source\":\"gl\""));
+    CHECK(has(ev(0), "\"file\":\"C:\\\\r\\\\shot-1.mtraw\"")); CHECK(has(ev(0), "\"w\":3440")); CHECK(has(ev(0), "\"h\":1440"));
+    fk.now = 2000 + MT_SHOT_HOLD_MS - 1;
+    mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("end"), 0);                     /* the hold still applies (the scene stays put for older runners) */
+    fk.now = 2000 + MT_SHOT_HOLD_MS + 1;
+    mt_runner_step(&rr, &HOST_GL); mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("end"), 1); CHECK_EQ(fk.exitCode, 0);
+}
+
+TEST(runner_shot_gl_failure_falls_back_to_the_window_with_the_reason) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.shotArmResult = 1;
+    fk.shotPollResults[0] = -1; fk.shotPollCount = 1;
+    snprintf(fk.shotRes.detail, sizeof fk.shotRes.detail, "glReadPixels error 0x502");
+    mt_runner_step(&rr, &HOST_GL);
+    mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "\"source\":\"window\"")); CHECK(has(ev(0), "\"gl\":\"glReadPixels error 0x502\""));
+    CHECK(!has(ev(0), "\"file\""));
+}
+
+TEST(runner_shot_gl_without_a_present_times_out_to_the_window) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.shotArmResult = 1;
+    fk.shotPollResults[0] = 0; fk.shotPollCount = 1;
+    for (int i = 0; i < MT_SHOT_GL_FRAMES; i++) mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("shot"), 0);
+    mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "\"source\":\"window\"")); CHECK(has(ev(0), "no present"));
+}
+
+TEST(runner_shot_gl_unavailable_emits_at_once_for_the_window) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.shotArmResult = -1;
+    mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "\"source\":\"window\"")); CHECK(has(ev(0), "\"gl\":\"unavailable\""));
+    CHECK_EQ(fk.shotPollCalls, 0);
+}
+
+TEST(runner_shot_without_the_capture_hook_keeps_the_legacy_event) {
+    fk_reset("shot \"menu\"\nquit\n");
+    mt_runner_step(&rr, &HOST);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(!has(ev(0), "\"source\"")); CHECK(!has(ev(0), "\"file\""));
+}
+
+TEST(shot_raw_header_is_magic_then_le_width_height) {
+    unsigned char h[MT_SHOT_RAW_HEADER];
+    CHECK_EQ(MT_SHOT_RAW_HEADER, 16);
+    mt_shot_raw_header(h, 3440, 0x10203);
+    CHECK(memcmp(h, "MTSHOT01", 8) == 0);
+    CHECK_EQ(h[8], 0x70); CHECK_EQ(h[9], 0x0d); CHECK_EQ(h[10], 0); CHECK_EQ(h[11], 0);
+    CHECK_EQ(h[12], 0x03); CHECK_EQ(h[13], 0x02); CHECK_EQ(h[14], 0x01); CHECK_EQ(h[15], 0);
+}
+
 TEST(runner_expect_status_without_combat_fails) {
     fk_reset("expect status LuckUp on 0\nquit\n");
     steps_until_done(5);
@@ -1354,6 +1496,10 @@ static void fk_units_with_numbers(void) {
     fk.units[1].hp = 12;
     for (int k = 0; k < MT_STAT_COUNT; k++) fk.units[1].stats[k] = 5;
     fk.units[1].stats[MT_STAT_SPEED] = 15;
+    /* effective (recompute_stats): unit 0 carries a LuckUp 3 (luck 10 -> 13), unit 1 nothing (effective == base) */
+    for (int k = 0; k < MT_STAT_COUNT; k++) { fk.units[0].eff[k] = fk.units[0].stats[k]; fk.units[1].eff[k] = fk.units[1].stats[k]; }
+    fk.units[0].eff[6] = 13;
+    fk.units[0].maxHp = 30; fk.units[1].maxHp = 12;
     fg_tree();
     fk.gon[1] = fg_node(0);    /* unit 1 carries the fake entry; unit 0 has none (an unreadable +0x240) */
 }
@@ -1437,12 +1583,12 @@ TEST(script_expect_unit_accepts_hp_shield_divineshield_stats_namekey_and_negativ
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
 }
 
-TEST(runner_dump_emits_namekey_hp_shield_divineshield_and_the_seven_stats) {
+TEST(runner_dump_emits_namekey_hp_shield_divineshield_the_seven_stats_and_the_effective_block) {
     fk_reset("dump\nquit\n");
     fk_units_with_numbers();
     steps_until_done(5);
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"statuses\":[],\"stacks\":[]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"effective\":{\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":13,\"maxhp\":30},\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"effective\":{\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"maxhp\":12},\"statuses\":[],\"stacks\":[],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
 }
 
 TEST(runner_expect_unit_hp_shield_stats_and_namekey) {
@@ -1491,6 +1637,373 @@ TEST(runner_expect_gon_number_string_bool_exists_missing_no_entry_unreadable_and
     fk_reset("expect gon 0 stats exists\nquit\n");      /* no combat */
     steps_until_done(5);
     CHECK(has(ev(0), "\"kind\":\"gon\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
+}
+
+/* ---- facing (2026-10-22): Character::Face 0x10ce50 as a pure rule, the `face` directive, the facing fields ---- */
+static MtFaceOut face_of(int dx, int dy, int sign, int fourWay, int noHFlip, int alwaysFront, int lockX, int lockY, int *ret) {
+    MtFaceIn in = { dx, dy, lockX, lockY, sign, fourWay, noHFlip, alwaysFront };
+    MtFaceOut o;
+    *ret = mt_face_predict(&in, &o);
+    return o;
+}
+TEST(face_predict_two_way_suffix_and_flip_follow_the_signed_direction) {
+    int r; MtFaceOut o;
+    o = face_of(0, -1, 1, 0, 0, 0, 0, 0, &r); CHECK_EQ(r, 1); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, 1);  CHECK_EQ(o.dx, 0); CHECK_EQ(o.dy, -1);
+    o = face_of(-1, 0, 1, 0, 0, 0, 0, 0, &r); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, -1);               /* front, mirrored */
+    o = face_of(1, 0, 1, 0, 0, 0, 0, 0, &r);  CHECK_STR(o.suffix, "B"); CHECK_EQ(o.flipMul, 1);                /* back */
+    o = face_of(0, 1, 1, 0, 0, 0, 0, 0, &r);  CHECK_STR(o.suffix, "B"); CHECK_EQ(o.flipMul, -1);               /* back, mirrored */
+    o = face_of(1, 0, -1, 0, 0, 0, 0, 0, &r); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, -1);               /* sign -1 turns the axis around */
+    o = face_of(0, -1, -1, 0, 0, 0, 0, 0, &r); CHECK_STR(o.suffix, "B"); CHECK_EQ(o.flipMul, -1);
+    o = face_of(-1, 0, 1, 0, 1, 0, 0, 0, &r); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, 0);                /* no_horizontal_flip */
+    o = face_of(0, 0, 1, 0, 0, 0, 0, 0, &r);  CHECK_EQ(r, 0); CHECK_STR(o.suffix, ""); CHECK_EQ(o.flipMul, 0);  /* (0,0) changes nothing */
+}
+TEST(face_predict_lock_always_front_and_four_way) {
+    int r; MtFaceOut o;
+    o = face_of(-1, 0, 1, 0, 0, 0, 1, 0, &r);  CHECK_EQ(o.dx, 1); CHECK_EQ(o.dy, 0); CHECK_STR(o.suffix, "B");  /* lock_orientation replaces the direction */
+    o = face_of(1, 0, 1, 0, 0, 1, 0, 0, &r);   CHECK_EQ(o.dx, 0); CHECK_EQ(o.dy, -1); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, 1);   /* always_face_forward */
+    o = face_of(0, 1, 1, 0, 0, 1, 0, 0, &r);   CHECK_EQ(o.dx, -1); CHECK_EQ(o.dy, 0); CHECK_STR(o.suffix, "F"); CHECK_EQ(o.flipMul, -1);
+    o = face_of(0, -1, 1, 1, 0, 0, 0, 0, &r);  CHECK_STR(o.suffix, "RF"); CHECK_EQ(o.flipMul, 0);              /* four-way: no flip, no sign */
+    o = face_of(-1, 0, -1, 1, 0, 0, 0, 0, &r); CHECK_STR(o.suffix, "LF");
+    o = face_of(1, 0, 1, 1, 0, 0, 0, 0, &r);   CHECK_STR(o.suffix, "RB");
+    o = face_of(0, 1, 1, 1, 0, 0, 0, 0, &r);   CHECK_STR(o.suffix, "LB");
+}
+TEST(face_named_dir_front_and_back_per_sign) {
+    int dx = 9, dy = 9;
+    mt_face_named_dir(MT_FACE_FRONT, 1, &dx, &dy);  CHECK_EQ(dx, 0); CHECK_EQ(dy, -1);
+    mt_face_named_dir(MT_FACE_BACK, 1, &dx, &dy);   CHECK_EQ(dx, 1); CHECK_EQ(dy, 0);
+    mt_face_named_dir(MT_FACE_FRONT, -1, &dx, &dy); CHECK_EQ(dx, 0); CHECK_EQ(dy, 1);
+    mt_face_named_dir(MT_FACE_BACK, -1, &dx, &dy);  CHECK_EQ(dx, -1); CHECK_EQ(dy, 0);
+    mt_face_named_dir(MT_FACE_BACK, 0, &dx, &dy);   CHECK_EQ(dx, 1); CHECK_EQ(dy, 0);  /* an unread sign counts as 1 */
+    CHECK_STR(mt_face_name(MT_FACE_FRONT), "front"); CHECK_STR(mt_face_name(MT_FACE_BACK), "back"); CHECK_STR(mt_face_name(MT_FACE_RAW), "");
+    for (int named = MT_FACE_FRONT; named <= MT_FACE_BACK; named++)
+        for (int sign = -1; sign <= 1; sign += 2) {   /* the named direction really produces that facing, unmirrored */
+            int r; mt_face_named_dir(named, sign, &dx, &dy);
+            MtFaceOut o = face_of(dx, dy, sign, 0, 0, 0, 0, 0, &r);
+            CHECK_STR(o.suffix, named == MT_FACE_FRONT ? "F" : "B"); CHECK_EQ(o.flipMul, 1);
+        }
+}
+TEST(script_face_parses_raw_and_named_directions_and_rejects_bad_forms) {
+    char err[256]; int line = 0;
+    const char *s = "face 3 1 0\nface \"Lil' Rat\" 0 -1\nface Rat back\nface 0 front\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 5);
+    CHECK_EQ(g_s.d[0].kind, MT_D_FACE); CHECK_EQ(g_s.d[0].unitIsIndex, 1); CHECK_EQ(g_s.d[0].n, 3); CHECK_EQ(g_s.d[0].faceNamed, MT_FACE_RAW);
+    CHECK_EQ(g_s.d[0].faceDx, 1); CHECK_EQ(g_s.d[0].faceDy, 0); CHECK_STR(g_s.d[0].a, "3 1 0");
+    CHECK_EQ(g_s.d[1].unitIsIndex, 0); CHECK_STR(g_s.d[1].b, "Lil' Rat"); CHECK_EQ(g_s.d[1].faceDx, 0); CHECK_EQ(g_s.d[1].faceDy, -1);
+    CHECK_STR(g_s.d[2].b, "Rat"); CHECK_EQ(g_s.d[2].faceNamed, MT_FACE_BACK);
+    CHECK_EQ(g_s.d[3].faceNamed, MT_FACE_FRONT);
+    const char *bad[] = { "face\n", "face 3\n", "face 3 1\n", "face 3 1 1\n", "face 3 0 0\n", "face 3 2 0\n", "face 3 x 0\n", "face 3 left\n", "face 3 back now\n", "face 3 1 0 9\n", "face \"Lil Rat 1 0\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+        CHECK(strstr(err, "face") != NULL);
+    }
+}
+
+static int fk_faceResult, fk_faceCalls, fk_faceUnit, fk_faceDx, fk_faceDy;
+static int fk_face_unit(void *u, int i, int dx, int dy, char *detail, size_t cap) {
+    (void)u;
+    fk_faceCalls++; fk_faceUnit = i; fk_faceDx = dx; fk_faceDy = dy;
+    if (fk_faceResult == 1 && i >= 0 && i < fk.unitCount) {   /* the fake game applies the rule, like Character::Face */
+        MtUnit *x = &fk.units[i];
+        MtFaceIn in = { dx, dy, x->lockX, x->lockY, x->faceSign, x->fourWay, x->noHFlip, x->alwaysFront };
+        MtFaceOut o;
+        if (mt_face_predict(&in, &o)) {
+            x->dirX = o.dx; x->dirY = o.dy;
+            snprintf(x->facing, sizeof x->facing, "%s", o.suffix);
+            if (o.flipMul) x->flip = o.flipMul * x->artFlip;
+        }
+    }
+    snprintf(detail, cap, "fake face %d", i);
+    return fk_faceResult;
+}
+static const MtHost FACE_HOST = {
+    NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
+    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, fk_face_unit, NULL, NULL, NULL, NULL,   /* run_step: the walk tests use HOST; no in-process shots; no speed */
+};
+static int face_steps(int max) { int n = 0; while (n < max && mt_runner_step(&rr, &FACE_HOST)) n++; return n; }
+static void fk_two_facing_units(void) {
+    fk_two_units();
+    for (int k = 0; k < 2; k++) { MtUnit *x = &fk.units[k]; snprintf(x->facing, sizeof x->facing, "F"); x->dirX = -1; x->dirY = 0; x->faceSign = 1; x->artFlip = 1; x->flip = -1; }
+    fk.units[1].faceSign = -1;
+    fk_faceResult = 1; fk_faceCalls = 0; fk_faceUnit = -9; fk_faceDx = fk_faceDy = 9;
+}
+TEST(runner_face_turns_the_unit_and_emits_a_face_event_with_the_result) {
+    fk_reset("face 0 back\nface Rat back\nface 0 0 -1\nquit\n");
+    fk_two_facing_units();
+    face_steps(10);
+    CHECK_EQ(fk_faceCalls, 3);
+    CHECK(has(ev(0), "{\"ev\":\"face\"")); CHECK(has(ev(0), "\"line\":1")); CHECK(has(ev(0), "\"unit\":0")); CHECK(has(ev(0), "\"name\":\"Lumee\""));
+    CHECK(has(ev(0), "\"arg\":\"0 back\"")); CHECK(has(ev(0), "\"dir\":[1,0]")); CHECK(has(ev(0), "\"expect\":\"B\"")); CHECK(has(ev(0), "\"facing\":\"B\""));
+    CHECK(has(ev(0), "\"flip\":1")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"detail\":\"fake face 0\""));
+    CHECK(has(ev(1), "\"unit\":1")); CHECK(has(ev(1), "\"dir\":[-1,0]")); CHECK(has(ev(1), "\"facing\":\"B\""));   /* sign -1: back is (-1,0) */
+    CHECK(has(ev(2), "\"dir\":[0,-1]")); CHECK(has(ev(2), "\"expect\":\"F\"")); CHECK(has(ev(2), "\"facing\":\"F\"")); CHECK(has(ev(2), "\"ok\":true"));
+    CHECK(has(last_ev(), "{\"ev\":\"end\"")); CHECK(has(last_ev(), "\"code\":0"));
+}
+TEST(runner_face_reports_a_facing_that_differs_from_the_rule_and_a_lock) {
+    fk_reset("face 0 back\nquit\n");
+    fk_two_facing_units();
+    fk.units[0].lockX = 0; fk.units[0].lockY = -1;   /* lock_orientation [0 -1]: Face keeps the unit facing front */
+    face_steps(6);
+    CHECK(has(ev(0), "\"dir\":[1,0]")); CHECK(has(ev(0), "\"effective\":[0,-1]")); CHECK(has(ev(0), "\"expect\":\"F\"")); CHECK(has(ev(0), "\"facing\":\"F\""));
+    CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "lock_orientation"));
+}
+TEST(runner_face_unknown_unit_refused_or_unavailable) {
+    fk_reset("face 5 back\nquit\n");                               /* no such unit: the host is never called */
+    fk_two_facing_units();
+    face_steps(6);
+    CHECK_EQ(fk_faceCalls, 0);
+    CHECK(has(ev(0), "{\"ev\":\"face\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "\"unit\":-1"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"face_failed\""));
+    fk_reset("face 0 back\nquit\n");                               /* the host refused */
+    fk_two_facing_units(); fk_faceResult = 0;
+    face_steps(6);
+    CHECK_EQ(fk_faceCalls, 1);
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"face_failed\""));
+    fk_reset("face 0 back\nquit\n");                               /* a framework without FW_SYM_Character_Face */
+    fk_two_facing_units(); fk_faceResult = -1;
+    face_steps(6);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"face_unavailable\""));
+    fk_reset("face 0 back\nquit\n");                               /* no combat */
+    fk_two_facing_units(); fk.unitsAvailable = 0; fk.unitCount = 0;
+    face_steps(6);
+    CHECK_EQ(fk_faceCalls, 0); CHECK(has(last_ev(), "\"reason\":\"face_failed\""));
+}
+TEST(runner_dump_emits_the_facing_fields_and_expect_unit_reads_them) {
+    fk_reset("dump\nexpect unit 0 facing == \"F\"\nexpect unit 1 sign == -1\nexpect unit 0 dirx == -1\nexpect unit 0 diry == 0\nexpect unit 0 flip < 0\nface 0 back\nexpect unit 0 facing == \"B\"\nexpect unit Lumee facing != \"B\"\nquit\n");
+    fk_two_facing_units();
+    fk.units[1].fourWay = 1;
+    face_steps(14);
+    CHECK(has(ev(0), "\"stacks\":[0,0],\"facing\":\"F\",\"dir\":[-1,0],\"lock\":[0,0],\"sign\":1,\"flip\":-1,\"fourway\":0}"));
+    CHECK(has(ev(0), "\"facing\":\"F\",\"dir\":[-1,0],\"lock\":[0,0],\"sign\":-1,\"flip\":-1,\"fourway\":1}"));
+    CHECK(has(ev(1), "\"kind\":\"unit\"")); CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "\"arg\":\"0 facing == \\\"F\\\"\"")); CHECK(has(ev(1), "facing \\\"F\\\""));
+    CHECK(has(ev(2), "\"ok\":true")); CHECK(has(ev(2), "sign -1"));
+    CHECK(has(ev(3), "\"ok\":true")); CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(5), "\"ok\":true")); CHECK(has(ev(5), "flip -1"));
+    CHECK(has(ev(7), "\"ok\":true")); CHECK(has(ev(7), "facing \\\"B\\\""));
+    CHECK(has(ev(8), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"expect_pass\":6")); CHECK(has(last_ev(), "\"expect_fail\":1"));
+    MtUnitField f = MT_F_NAME;
+    CHECK(mt_unit_field_parse("facing", 6, &f)); CHECK_EQ(f, MT_F_FACING);
+    CHECK(mt_unit_field_parse("sign", 4, &f)); CHECK_EQ(f, MT_F_SIGN); CHECK_STR(mt_unit_field_name(MT_F_DIRX), "dirx"); CHECK_STR(mt_unit_field_name(MT_F_FLIP), "flip");
+    char err[256]; int line = 0;
+    const char *bad = "expect unit 0 facing > \"F\"\n";   /* facing is a string field: == / != only */
+    CHECK(!mt_script_parse(bad, strlen(bad), &g_s, err, sizeof err, &line));
+}
+
+/* ====================================================================== */
+/* mt_walk: the campaign walk (run start | run travel <type> | run fight, expect level)                    */
+/* ====================================================================== */
+TEST(walk_node_type_names_match_mapnode_str_to_type) {
+    /* MapNode::str_to_type 0x225680: none 0 ... any 18 */
+    const char *names[] = { "none", "npc", "enter", "exit", "home", "battle", "hard", "miniboss", "boss", "event", "optional_event",
+                            "special_event", "shop", "treasure", "furniturebox", "foodbox", "bonus", "empty", "any" };
+    CHECK_EQ((int)(sizeof names / sizeof names[0]), MT_NODE_TYPE_COUNT);
+    for (int i = 0; i < MT_NODE_TYPE_COUNT; i++) { CHECK_EQ(mt_node_type_id(names[i], strlen(names[i])), i); CHECK_STR(mt_node_type_name(i), names[i]); }
+    CHECK_EQ(mt_node_type_id("battl", 5), -1); CHECK_EQ(mt_node_type_id("Battle", 6), -1); CHECK_EQ(mt_node_type_id("", 0), -1);
+    CHECK_STR(mt_node_type_name(-1), "?"); CHECK_STR(mt_node_type_name(19), "?");
+}
+
+TEST(walk_nearest_is_breadth_first_over_next_edges_and_skips_the_start) {
+    /* 0 enter -> 1 empty -> 3 battle ; 0 -> 2 event -> 4 battle -> 5 battle ; 0 -> 6 battle (depth 1 wins) */
+    int type[] = { 2, 17, 9, 5, 5, 5, 5 };
+    int adjStart[] = { 0, 3, 4, 5, 5, 6, 6, 6 };
+    int adj[] = { 1, 2, 6, 3, 4, 5 };
+    int depth = -1;
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart, adj, 0, 5, &depth), 6); CHECK_EQ(depth, 1);
+    /* without the direct edge: edge order decides between equal depths (1 before 2 -> node 3) */
+    int adjStart2[] = { 0, 2, 3, 4, 4, 5, 5, 5 };
+    int adj2[] = { 1, 2, 3, 4, 5 };
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart2, adj2, 0, 5, &depth), 3); CHECK_EQ(depth, 2);
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart2, adj2, 0, 9, &depth), 2); CHECK_EQ(depth, 1);   /* event */
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart2, adj2, 3, 5, &depth), -1);                      /* 3 has no next node */
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart2, adj2, 0, 8, &depth), -1);                      /* no boss */
+    CHECK_EQ(depth, -1);
+}
+
+TEST(walk_nearest_survives_cycles_bad_edges_and_bad_input) {
+    int type[] = { 2, 17, 17, 5 };
+    int adjStart[] = { 0, 1, 3, 4, 4 };
+    int adj[] = { 1, 0, 99, 3 };          /* 1 -> 0 is a cycle, 99 is out of range and ignored, 2 -> 3 is never reached */
+    int depth = 0;
+    CHECK_EQ(mt_walk_nearest(4, type, adjStart, adj, 0, 5, &depth), -1);
+    adj[2] = 2;                           /* 1 -> 2 -> 3 */
+    CHECK_EQ(mt_walk_nearest(4, type, adjStart, adj, 0, 5, &depth), 3); CHECK_EQ(depth, 3);
+    CHECK_EQ(mt_walk_nearest(4, type, adjStart, adj, 7, 5, &depth), -1);   /* start out of range */
+    CHECK_EQ(mt_walk_nearest(0, type, adjStart, adj, 0, 5, &depth), -1);
+    CHECK_EQ(mt_walk_nearest(MT_WALK_MAX_NODES + 1, type, adjStart, adj, 0, 5, &depth), -1);
+}
+
+TEST(script_run_directives_parse_and_bad_forms_are_line_errors) {
+    char err[256]; int line = 0;
+    const char *s = "run start\nrun start sewers.gon\nrun travel battle\nrun travel optional_event\nrun fight\nexpect level \"walkprobe/\"\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 7);
+    CHECK_EQ(g_s.d[0].kind, MT_D_RUN); CHECK_EQ(g_s.d[0].n, MT_RUN_START); CHECK_STR(g_s.d[0].a, "alley.gon");   /* the default map: the run's first */
+    CHECK_EQ(g_s.d[1].n, MT_RUN_START); CHECK_STR(g_s.d[1].a, "sewers.gon");
+    CHECK_EQ(g_s.d[2].n, MT_RUN_TRAVEL); CHECK_STR(g_s.d[2].a, "battle"); CHECK_EQ(g_s.d[2].value, 5);
+    CHECK_EQ(g_s.d[3].n, MT_RUN_TRAVEL); CHECK_EQ(g_s.d[3].value, 10);
+    CHECK_EQ(g_s.d[4].kind, MT_D_RUN); CHECK_EQ(g_s.d[4].n, MT_RUN_FIGHT);
+    CHECK_EQ(g_s.d[5].kind, MT_D_EXPECT_LEVEL); CHECK_STR(g_s.d[5].a, "walkprobe/");
+    CHECK_STR(mt_run_op_name(MT_RUN_START), "start"); CHECK_STR(mt_run_op_name(MT_RUN_TRAVEL), "travel"); CHECK_STR(mt_run_op_name(MT_RUN_FIGHT), "fight");
+    const char *bad[] = { "run\n", "run walk\n", "run start alley\n", "run start a b.gon\n", "run start ../x.gon\n", "run travel\n", "run travel castle\n",
+                          "run travel battle now\n", "run fight now\n", "expect level\n", "expect level walkprobe\n", "expect level \"x\" more\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) { line = 0; CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line)); CHECK_EQ(line, 1); }
+}
+
+TEST(runner_run_calls_the_host_with_op_and_arg_and_emits_a_run_event) {
+    fk_reset("run start\nrun travel battle\nquit\n");
+    fk.runResult = 1;
+    snprintf(fk.runInfo.map, sizeof fk.runInfo.map, "alley.gon"); fk.runInfo.node = -1; fk.runInfo.nodeType = -1; fk.runInfo.depth = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.runCalls, 1); CHECK_EQ(fk.runOp, MT_RUN_START); CHECK_STR(fk.runArg, "alley.gon");
+    CHECK(has(last_ev(), "{\"ev\":\"run\"")); CHECK(has(last_ev(), "\"line\":1")); CHECK(has(last_ev(), "\"op\":\"start\""));
+    CHECK(has(last_ev(), "\"arg\":\"alley.gon\"")); CHECK(has(last_ev(), "\"ok\":true")); CHECK(has(last_ev(), "\"map\":\"alley.gon\""));
+    CHECK(!has(last_ev(), "\"node\"")); CHECK(!has(last_ev(), "\"level\""));                      /* unset fields add no key */
+    CHECK(has(last_ev(), "\"detail\":\"fake run 1\""));
+    fk.runInfo.node = 7; fk.runInfo.nodeType = 5; fk.runInfo.depth = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.runOp, MT_RUN_TRAVEL); CHECK_STR(fk.runArg, "battle");
+    CHECK(has(last_ev(), "\"op\":\"travel\"")); CHECK(has(last_ev(), "\"node\":7")); CHECK(has(last_ev(), "\"type\":\"battle\"")); CHECK(has(last_ev(), "\"depth\":1"));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":0"));
+}
+
+TEST(runner_run_fight_waits_while_not_ready_then_records_the_level_for_expect_level) {
+    fk_reset("run fight\nexpect level \"walkprobe/wp_\"\nexpect level \"alley/easy\"\nquit\n");
+    fk.runResult = 1; fk.runReadyAfter = 2;
+    snprintf(fk.runInfo.level, sizeof fk.runInfo.level, "alley/walkprobe/wp_alley"); fk.runInfo.node = -1; fk.runInfo.nodeType = -1; fk.runInfo.depth = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("run"), 0); CHECK_EQ(rr.pc, 0);                                   /* retrying: no event yet */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.runCalls, 3); CHECK_EQ(count_ev("run"), 1);
+    CHECK(has(last_ev(), "\"op\":\"fight\"")); CHECK(has(last_ev(), "\"level\":\"alley/walkprobe/wp_alley\""));
+    steps_until_done(5);
+    CHECK(has(ev(1), "{\"ev\":\"expect\"")); CHECK(has(ev(1), "\"kind\":\"level\"")); CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "\"arg\":\"walkprobe/wp_\""));
+    CHECK(has(ev(1), "\"detail\":\"battle level \\\"alley/walkprobe/wp_alley\\\"\""));
+    CHECK(has(ev(2), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"expect_pass\":1")); CHECK(has(last_ev(), "\"expect_fail\":1"));
+}
+
+TEST(runner_expect_level_without_a_fight_fails_and_run_failures_end_the_script) {
+    fk_reset("expect level \"x\"\nquit\n");
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"kind\":\"level\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no battle level yet (run fight first)"));
+    fk_reset("run travel battle\nquit\n");
+    fk.runResult = 0; fk.runInfo.node = -1; fk.runInfo.nodeType = -1; fk.runInfo.depth = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "{\"ev\":\"run\"")); CHECK(has(ev(0), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"run_failed\"")); CHECK_EQ(fk.exitCode, 1);
+    fk_reset("run start\nquit\n");
+    fk.runResult = -1; fk.runInfo.node = -1; fk.runInfo.nodeType = -1; fk.runInfo.depth = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"run_unavailable\"")); CHECK_EQ(fk.exitCode, 4);
+    fk_reset("run fight\nquit\n");
+    fk.runResult = 2; fk.now = 1000; fk.runReadyAfter = 0;
+    mt_runner_step(&rr, &HOST);
+    fk.now = 1000 + MT_CONSOLE_WAIT_MS + 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "not ready")); CHECK(has(last_ev(), "\"reason\":\"run_failed\""));
+    fk_reset("run start\nquit\n");
+    fk.ready = 0; fk.runResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1); CHECK_EQ(fk.runCalls, 0);                 /* like enter: waits for the console */
+}
+
+/* ====================================================================== */
+/* Effective stats (2026-10-22): Character::recompute_stats' results —     */
+/* the units event's "effective" block and expect unit <stat>.effective     */
+/* ====================================================================== */
+TEST(script_expect_unit_accepts_stat_dot_effective_and_maxhp_effective) {
+    char err[256]; int line = 0;
+    const char *s = "expect unit 0 luck.effective == 13\nexpect unit \"Lil' Rat\" luck.effective == 5\nexpect unit 1 strength.effective >= 4\nexpect unit 0 maxhp.effective > 1\n"
+                    "expect unit 0 speed.effective != -2\nexpect unit 0 dexterity.effective == 5\nexpect unit 0 constitution.effective == 6\nexpect unit 0 intelligence.effective == 7\nexpect unit 0 charisma.effective < 10\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 10);
+    CHECK_EQ(g_s.d[0].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[0].field, MT_F_LUCK_EFF); CHECK_EQ(g_s.d[0].value, 13);
+    CHECK_EQ(g_s.d[1].field, MT_F_LUCK_EFF); CHECK_STR(g_s.d[1].b, "Lil' Rat");
+    CHECK_EQ(g_s.d[2].field, MT_F_STRENGTH_EFF); CHECK_EQ(g_s.d[2].op, MT_OP_GE);
+    CHECK_EQ(g_s.d[3].field, MT_F_MAXHP_EFF); CHECK_EQ(g_s.d[3].op, MT_OP_GT); CHECK_EQ(g_s.d[3].value, 1);
+    CHECK_EQ(g_s.d[4].field, MT_F_SPEED_EFF); CHECK_EQ(g_s.d[4].value, -2);
+    CHECK_EQ(g_s.d[5].field, MT_F_DEXTERITY_EFF); CHECK_EQ(g_s.d[6].field, MT_F_CONSTITUTION_EFF); CHECK_EQ(g_s.d[7].field, MT_F_INTELLIGENCE_EFF); CHECK_EQ(g_s.d[8].field, MT_F_CHARISMA_EFF);
+    CHECK_STR(mt_unit_field_name(MT_F_LUCK_EFF), "luck.effective"); CHECK_STR(mt_unit_field_name(MT_F_STRENGTH_EFF), "strength.effective");
+    CHECK_STR(mt_unit_field_name(MT_F_MAXHP_EFF), "maxhp.effective"); CHECK_STR(mt_unit_field_name(MT_F_LUCK), "luck");
+    /* the field order is the contract with script.ts UNIT_FIELDS: the seven <stat>.effective follow luck in stat order, then maxhp.effective */
+    for (int k = 0; k < MT_STAT_COUNT; k++) {
+        char want[40]; snprintf(want, sizeof want, "%s.effective", mt_stat_name(k));
+        CHECK_STR(mt_unit_field_name((MtUnitField)(MT_F_STRENGTH_EFF + k)), want);
+    }
+    const char *bad[] = { "expect unit 0 luck.effectiv == 1\n", "expect unit 0 maxhp == 1\n", "expect unit 0 hp.effective == 1\n", "expect unit 0 name.effective == \"x\"\n",
+                          "expect unit 0 .effective == 1\n", "expect unit 0 luck.effective == \"x\"\n", "expect unit 0 luck.effective.effective == 1\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_expect_unit_effective_stats_and_maxhp) {
+    fk_reset("expect unit 0 luck.effective == 13\nexpect unit 0 luck == 10\nexpect unit 1 luck.effective == 5\nexpect unit Rat speed.effective == 15\nexpect unit 0 maxhp.effective == 30\n"
+             "expect unit 1 maxhp.effective == 12\nexpect unit 0 luck.effective > 13\nexpect unit 0 strength.effective == 4\nquit\n");
+    fk_units_with_numbers();
+    steps_until_done(12);
+    CHECK(has(ev(0), "\"kind\":\"unit\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"0 luck.effective == 13\"")); CHECK(has(ev(0), "\"detail\":\"unit 0 \\\"Lumee\\\": luck.effective 13\""));
+    CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "luck 10"));
+    CHECK(has(ev(2), "\"ok\":true")); CHECK(has(ev(2), "luck.effective 5"));
+    CHECK(has(ev(3), "\"ok\":true")); CHECK(has(ev(3), "speed.effective 15"));
+    CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(4), "maxhp.effective 30"));
+    CHECK(has(ev(5), "\"ok\":true")); CHECK(has(ev(5), "maxhp.effective 12"));
+    CHECK(has(ev(6), "\"ok\":false")); CHECK(has(ev(6), "luck.effective 13"));
+    CHECK(has(ev(7), "\"ok\":true")); CHECK(has(ev(7), "strength.effective 4"));
+    CHECK(has(last_ev(), "\"expect_pass\":7")); CHECK(has(last_ev(), "\"expect_fail\":1"));
+    fk_reset("expect unit 0 luck.effective == 5\nquit\n");      /* no combat */
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
+}
+
+
+/* ====================================================================== */
+/* speed <factor> | speed off (2026-10-22): FW_SetTimeScale, API v6       */
+/* ====================================================================== */
+TEST(script_speed_parses_a_positive_factor_or_off_and_rejects_bad_forms) {
+    char err[256]; int line;
+    const char *s = "speed 4\nspeed 0.5\nspeed off\nspeed 16.25\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 5);
+    CHECK_EQ(g_s.d[0].kind, MT_D_SPEED); CHECK(g_s.d[0].dvalue == 4.0); CHECK_STR(g_s.d[0].a, "4");
+    CHECK_EQ(g_s.d[1].kind, MT_D_SPEED); CHECK(g_s.d[1].dvalue == 0.5);
+    CHECK_EQ(g_s.d[2].kind, MT_D_SPEED); CHECK(g_s.d[2].dvalue == 1.0); CHECK_STR(g_s.d[2].a, "off");
+    CHECK_EQ(g_s.d[3].kind, MT_D_SPEED); CHECK(g_s.d[3].dvalue == 16.25);
+    const char *bad[] = { "speed\n", "speed 0\n", "speed -2\n", "speed x\n", "speed 4 extra\n", "speed 4x\n", "speed off now\n", "speed .\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+        CHECK_EQ(line, 1);
+    }
+}
+
+TEST(runner_speed_calls_the_host_and_emits_a_speed_event_with_the_applied_factor) {
+    fk_reset("speed 8\nspeed off\nquit\n");
+    fk.speedResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.speedCalls, 1); CHECK(fk.speedFactor == 8.0);
+    CHECK(has(ev(0), "{\"ev\":\"speed\"")); CHECK(has(ev(0), "\"line\":1")); CHECK(has(ev(0), "\"arg\":\"8\""));
+    CHECK(has(ev(0), "\"applied\":\"8\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"detail\":\"fake speed\""));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.speedCalls, 2); CHECK(fk.speedFactor == 1.0);
+    CHECK(has(ev(1), "\"arg\":\"off\"")); CHECK(has(ev(1), "\"applied\":\"1\""));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":0"));
+}
+
+TEST(runner_speed_reports_the_clamped_factor_and_fails_with_1_or_4) {
+    fk_reset("speed 1000\nquit\n");
+    fk.speedResult = 1; fk.speedApplied = 64.0;                          /* the framework clamped */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK(has(ev(0), "\"arg\":\"1000\"")); CHECK(has(ev(0), "\"applied\":\"64\""));
+    fk_reset("speed 4\nquit\n");                                        /* refused */
+    fk.speedResult = 0;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"speed_failed\""));
+    fk_reset("speed 4\nquit\n");                                        /* a framework older than API v6 */
+    fk.speedResult = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"speed_unavailable\""));
 }
 
 int main(void) { return MT_RUN_ALL(); }

@@ -289,6 +289,14 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
     assert(!r.findings.some((f) => f.code === "unknown-status" || f.code === "unknown-component"), r.findings.map((f) => f.code).join(","));
   });
   else console.log(`  (skipped: ${cache.hint}; StatusOnBattleStart cannot be checked as a component)`);
+  if (cache.ok) test("fw-glow (the data glow sample) validates: FwGlowRat's StatusOnSpawnIn { FwGlow_ff00ff 1 } resolves through the registered glow pattern, its keyword tooltip and text rows are complete", () => {
+    const r = validateMod("fw-glow", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } });
+    assert(r.ok, `expected ok, got ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
+    const bad = r.findings.filter((f) => ["unknown-status", "invalid-glow-name", "unknown-component", "unknown-parent", "missing-loc-key", "missing-translation", "incomplete-loc-row"].includes(f.code));
+    eq(bad.length, 0, bad.map((f) => `${f.code} ${f.location?.path ?? ""}`).join(", "));
+    assert(existsSync(join(REPO_ROOT, "mods", "fw-glow", "data", "characters", "enemies.gon.append")), "the FwGlowRat sample");
+  });
+  else console.log(`  (skipped: ${cache.hint}; StatusOnSpawnIn cannot be checked as a component)`);
   // The check above needs the git-ignored component-names cache. A fresh worktree has none: the test must then
   // say so with a '(skipped: …)' line, not FAIL (nested run with MEWGENICS_EDITOR_DATA pointing at an empty dir).
   // MEWGENICS_ANALYSIS_DIR -> an empty dir too, so the on-demand distill from list_names.tsv cannot fill the list on
@@ -417,6 +425,39 @@ if (BASE_READY) {
   let vt: typeof import("./validator-tests.ts") | null = null;
   try { vt = await import("./validator-tests.ts"); } catch (e) { test("validator-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (vt) vt.runValidatorTests(test, assert, eq);
+  // the game's .shader dialect (Shader::compile 0xa55470) + the validator's mod-shader rule (mods/*/shaders/)
+  let st: typeof import("./shader-tests.ts") | null = null;
+  try { st = await import("./shader-tests.ts"); } catch (e) { test("shader-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (st) st.runShaderTests(test, assert, eq);
+}
+
+// ---- 4f. The 3D data seam: graphics.model (validator codes, registered model names, mods/fw-3d; T0 + T1) ----
+{
+  let m3: typeof import("./model3d-tests.ts") | null = null;
+  try { m3 = await import("./model3d-tests.ts"); } catch (e) { test("model3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (m3) m3.runModel3dTests(test, assert, eq);
+}
+
+// ---- 4b'. Component key schema (editor/component-schema.json; T0 synthetic + T1 vanilla zero findings) ----
+{
+  let cs: typeof import("./component-schema-tests.ts") | null = null;
+  try { cs = await import("./component-schema-tests.ts"); } catch (e) { test("component-schema-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (cs) cs.runComponentSchemaTests(test, assert, eq);
+}
+
+// ---- 4c. Sounds and music (WAV rules, gpak index, sound sets, audio validator findings; T1 on the pack) ----
+console.log("\n# Audio (sounds and music)");
+{
+  let at: typeof import("./audio-tests.ts") | null = null;
+  try { at = await import("./audio-tests.ts"); } catch (e) { test("audio-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (at) at.runAudioTests(test, assert, eq);
+}
+
+// ---- 4g. The model codes (design §2.6): one list with the DLL (fw_mesh_rules.c FW_MESH_CODES), the header reader, the validator ----
+{
+  let mc: typeof import("./model-codes-tests.ts") | null = null;
+  try { mc = await import("./model-codes-tests.ts"); } catch (e) { test("model-codes-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mc) mc.runModelCodesTests(test, assert, eq);
 }
 
 // ---- 5. MCP smoke test ------------------------------------------------------
@@ -477,7 +518,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 26 editor tools", () => eq(list.tools.length, 26));
+    test("tools/list returns the 31 editor tools", () => eq(list.tools.length, 31));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -554,6 +595,13 @@ await mcpSmoke();
   await runArtTimelineEditTests(test, assert, eq);
   const { runArtCatRigTests } = await import("./art-catrig-tests.ts");
   await runArtCatRigTests(test, assert, eq);
+  const { runArtGhostCatTests } = await import("./art-ghostcat-tests.ts");
+  await runArtGhostCatTests(test, assert, eq);
+  {
+    let cs: typeof import("./catrig-sample-tests.ts") | null = null;
+    try { cs = await import("./catrig-sample-tests.ts"); } catch (e) { test("catrig-sample-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+    if (cs) await cs.runCatRigSampleTests(test, assert, eq);
+  }
   const { runArtSvgExportTests } = await import("./art-svg-export-tests.ts");
   await runArtSvgExportTests(test, assert, eq);
   const { runArtSvgReoriginTests } = await import("./art-svg-reorigin-tests.ts");
@@ -562,8 +610,22 @@ await mcpSmoke();
   runArtImportTests(test, assert, eq);
   const { runArtTextTests } = await import("./art-text-tests.ts");
   await runArtTextTests(test, assert, eq);
+  const { runArtRasterTests } = await import("./art-raster-tests.ts");
+  await runArtRasterTests(test, assert, eq);
+  const { runArtFontTests } = await import("./art-font-tests.ts");
+  await runArtFontTests(test, assert, eq);
+  const { runArtRasterProbeTests } = await import("./art-raster-probe-tests.ts");
+  await runArtRasterProbeTests(test, assert, eq);
+  const { runArtMultiAppendTests } = await import("./art-multi-append-tests.ts");
+  await runArtMultiAppendTests(test, assert, eq);
   const { runArtProbesTests } = await import("./art-probes-tests.ts");
   await runArtProbesTests(test, assert, eq);
+  const { runArtWaveGlowTests } = await import("./art-wave-glow-tests.ts");
+  await runArtWaveGlowTests(test, assert, eq);
+  const { runArtCatBackTests } = await import("./art-cat-back-tests.ts");
+  await runArtCatBackTests(test, assert, eq);
+  const { runParticlesTests } = await import("./particles-tests.ts");
+  await runParticlesTests(test, assert, eq);
   const { runArtGlowTests } = await import("./art-glow-tests.ts");
   await runArtGlowTests(test, assert, eq);
   const { runArtEngineRulesTests } = await import("./art-engine-rules-tests.ts");
@@ -614,6 +676,25 @@ await mcpSmoke();
   let gm: typeof import("./glow-measure-tests.ts") | null = null;
   try { gm = await import("./glow-measure-tests.ts"); } catch (e) { test("glow-measure-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (gm) gm.runGlowMeasureTests(test, assert, eq, (n) => readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"));
+  let mpt: typeof import("./mesh-probe-tests.ts") | null = null;
+  try { mpt = await import("./mesh-probe-tests.ts"); } catch (e) { test("mesh-probe-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mpt) mpt.runMeshProbeTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mtt: typeof import("./mesh-tex-tests.ts") | null = null;
+  try { mtt = await import("./mesh-tex-tests.ts"); } catch (e) { test("mesh-tex-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mtt) mtt.runMeshTexTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let umt: typeof import("./unit-model-tests.ts") | null = null;
+  try { umt = await import("./unit-model-tests.ts"); } catch (e) { test("unit-model-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (umt) umt.runUnitModelTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mot: typeof import("./mesh-occlusion-tests.ts") | null = null;
+  try { mot = await import("./mesh-occlusion-tests.ts"); } catch (e) { test("mesh-occlusion-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mot) mot.runMeshOcclusionTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let o3t: typeof import("./obs3d-tests.ts") | null = null;
+  try { o3t = await import("./obs3d-tests.ts"); } catch (e) { test("obs3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (o3t) o3t.runObs3dTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  // 3D model readers (OBJ / glTF 2.0 subset), game axes, budgets, iso wireframe (docs/3d-importer-design.md)
+  let mrt: typeof import("./model-read-tests.ts") | null = null;
+  try { mrt = await import("./model-read-tests.ts"); } catch (e) { test("model-read-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mrt) mrt.runModelReadTests(test, assert, eq);
   let dt: typeof import("./deps-tests.ts") | null = null;
   try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (dt) await dt.runDepsTests(test, assert, eq);
@@ -636,6 +717,26 @@ await mcpSmoke();
   let tg: typeof import("./t3-gallery-tests.ts") | null = null;
   try { tg = await import("./t3-gallery-tests.ts"); } catch (e) { test("t3-gallery-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (tg) tg.runT3GalleryTests(test, assert, eq);
+  // shipping a mod: zip writer/reader, mod.json, pack + install (docs/data-mods.md "Shipping a mod")
+  let pk: typeof import("./pack-tests.ts") | null = null;
+  try { pk = await import("./pack-tests.ts"); } catch (e) { test("pack-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (pk) await pk.runPackTests(test, assert, eq);
+  // level files (levels/**/*.lvl): the binary codec, the room builder, the validator's .lvl rules
+  let lv: typeof import("./level-tests.ts") | null = null;
+  try { lv = await import("./level-tests.ts"); } catch (e) { test("level-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (lv) lv.runLevelTests(test, assert, eq);
+  // the Room editor: grid-edit helpers, level I/O on the app API, /api/level bodies, MCP read_level / write_level
+  let le: typeof import("./level-editor-tests.ts") | null = null;
+  try { le = await import("./level-editor-tests.ts"); } catch (e) { test("level-editor-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (le) await le.runLevelEditorTests(test, assert, eq);
+  // the Room editor's tileset art: tile/object → clip resolver, the SWF rasteriser, /api/level-tile-art (+ T1 alley)
+  let la: typeof import("./level-art-tests.ts") | null = null;
+  try { la = await import("./level-art-tests.ts"); } catch (e) { test("level-art-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (la) await la.runLevelArtTests(test, assert, eq);
+  // new_from_template (editor/src/core/templates.ts): the glowing-character template
+  let tt: typeof import("./templates-tests.ts") | null = null;
+  try { tt = await import("./templates-tests.ts"); } catch (e) { test("templates-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (tt) tt.runTemplatesTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----

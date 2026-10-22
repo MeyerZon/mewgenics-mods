@@ -30,6 +30,11 @@ typedef struct FwVtableIdentity {
  * Returns the number of slots written, 0 on a NULL argument or fewer than FW_VTABLE_PATCHED_SLOTS slots. */
 size_t fw_vtable_clone(void **dst, void *const *templateVt, size_t slots, void *const thunks[FW_VTABLE_PATCHED_SLOTS]);
 
+/* The glow status (fw_glow_rules.h data seam): fw_vtable_clone, then slot VT_APPLYSTATMODIFIERS = applyStatMods. The
+ * template's slot adds the stacks to the character's luck (+0x5d4) and removes the status at 0 stacks; the glow
+ * status must not change luck, so its replacement only keeps the removal. 0 on a NULL argument or too few slots. */
+size_t fw_vtable_clone_glow(void **dst, void *const *templateVt, size_t slots, void *const thunks[FW_VTABLE_PATCHED_SLOTS], void *applyStatMods);
+
 /* dst = templateHier with every fromId in ids[0..count) replaced by toId; returns the number swapped. */
 int fw_vtable_make_hier(FwTypeHierarchy *dst, const FwTypeHierarchy *templateHier, uintptr_t fromId, int toId);
 

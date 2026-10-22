@@ -1,0 +1,17 @@
+// test-only (VFX probe b): a Rat wearing the NEW particle system VfxProbeAura as a permanent aura (the elite-buff
+// passive EliteParticle, here outside any elite buff)
+VfxProbeAura {
+    variant_of Rat
+    passives {
+        EliteParticle VfxProbeAura
+    }
+}
+
+// test-only (VFX probe a): a Rat wearing the vanilla SparkleBuff system, which this mod's particles.gon.merge
+// re-points to the VfxProbeMarker clip
+VfxProbeRepoint {
+    variant_of Rat
+    passives {
+        EliteParticle SparkleBuff
+    }
+}

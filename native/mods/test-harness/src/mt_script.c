@@ -64,7 +64,11 @@ static int parse_op(const char *p, size_t n, MtOp *out) {
 
 /* MtUnitField order; the units event's keys; script.ts UNIT_FIELDS */
 static const char *const UNIT_FIELDS[] = { "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
-                                           "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck" };
+                                           "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck",
+                                           "facing", "dirx", "diry", "flip", "sign",
+                                           "strength.effective", "dexterity.effective", "constitution.effective", "intelligence.effective",
+                                           "speed.effective", "charisma.effective", "luck.effective", "maxhp.effective" };
+int mt_unit_field_is_string(MtUnitField f) { return f == MT_F_NAME || f == MT_F_CLASS || f == MT_F_NAMEKEY || f == MT_F_FACING; }
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out) {
     for (size_t i = 0; i < sizeof UNIT_FIELDS / sizeof UNIT_FIELDS[0]; i++) {
         if (strlen(UNIT_FIELDS[i]) == n && !strncmp(p, UNIT_FIELDS[i], n)) { *out = (MtUnitField)i; return 1; }
@@ -195,6 +199,12 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
                 d.within = (int)w;
             }
             if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
+        } else if (kl == 5 && !strncmp(rest, "level", 5)) {
+            d.kind = MT_D_EXPECT_LEVEL;
+            const char *after = parse_quoted(arg, q, sizeof q, &qn);
+            if (!after) return fail(err, errCap, errLine, lineNo, "expect level needs a quoted substring");
+            if (*skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect level: unexpected text after the quoted substring");
+            if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
         } else if (kl == 6 && !strncmp(rest, "status", 6)) {
             d.kind = MT_D_EXPECT_STATUS;
             size_t sl = tok_len(arg);
@@ -254,7 +264,7 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
                 size_t nl = tok_len(num);
                 if (!tl || !nl || *skip_ws(num + nl)) return fail(err, errCap, errLine, lineNo, "expect stacks needs: <Status> on <unit> (<op> <N> | varied)");
                 if (!parse_op(tail, tl, &d.op)) return fail(err, errCap, errLine, lineNo, "expect stacks: bad operator (== != >= <= > <) or `varied`");
-                if (!parse_uint(num, nl, &d.value)) return fail(err, errCap, errLine, lineNo, "expect stacks: N must be an integer");
+                if (!parse_int(num, nl, &d.value)) return fail(err, errCap, errLine, lineNo, "expect stacks: N must be an integer (optionally negative)");
             }
         } else if (kl == 4 && !strncmp(rest, "unit", 4)) {
             /* expect unit <idx|bareword|"name"> <field> <op> <value> */
@@ -274,16 +284,16 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             }
             const char *field = skip_ws(tail);
             size_t fl = tok_len(field);
-            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|namekey|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck)");
+            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|namekey|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck|facing|dirx|diry|flip|sign, <stat>.effective, maxhp.effective)");
             const char *opp = skip_ws(field + fl);
             size_t ol = tok_len(opp);
             const char *val = skip_ws(opp + ol);
             if (!ol || !*val) return fail(err, errCap, errLine, lineNo, "expect unit needs: <unit> <field> <op> <value>");
             if (!parse_op(opp, ol, &d.op)) return fail(err, errCap, errLine, lineNo, "expect unit: bad operator (== != >= <= > <)");
-            if (d.field == MT_F_NAME || d.field == MT_F_CLASS || d.field == MT_F_NAMEKEY) {
-                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey take == or != and a quoted value");
+            if (mt_unit_field_is_string(d.field)) {
+                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey/facing take == or != and a quoted value");
                 const char *after = parse_quoted(val, q, sizeof q, &qn);
-                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey take == or != and a quoted value");
+                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey/facing take == or != and a quoted value");
                 if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
             } else {
                 size_t nl = tok_len(val);
@@ -343,6 +353,14 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
         for (size_t i = 0; i < nl; i++) if (rest[i] < '0' || rest[i] > '9') return fail(err, errCap, errLine, lineNo, "seed needs one unsigned integer (0..18446744073709551615)");
         d.kind = MT_D_SEED;
         d.seed = strtoull(rest, NULL, 10);
+    } else if (wl == 5 && !strncmp(p, "speed", 5)) {
+        /* speed <factor> | speed off: FW_SetTimeScale (API v6); the framework clamps, the event reports what it kept */
+        size_t nl = tok_len(rest);
+        if (!nl || *skip_ws(rest + nl)) return fail(err, errCap, errLine, lineNo, "speed needs one factor > 0 (e.g. 4, 0.5) or off");
+        d.kind = MT_D_SPEED;
+        if (nl == 3 && !strncmp(rest, "off", 3)) d.dvalue = 1.0;
+        else if (!parse_number(rest, nl, &d.dvalue) || !(d.dvalue > 0)) return fail(err, errCap, errLine, lineNo, "speed needs one factor > 0 (e.g. 4, 0.5) or off");
+        if (!(d.a = arena_add(s, rest, nl))) return fail(err, errCap, errLine, lineNo, "script too large");
     } else if (wl == 4 && !strncmp(p, "shot", 4)) {
         const char *after = parse_quoted(rest, q, sizeof q, &qn);
         if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "shot needs one quoted label");
@@ -372,6 +390,37 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             if (*skip_ws(modeTok + ml)) return fail(err, errCap, errLine, lineNo, "enter takes a scene name and at most one mode word");
             d.enterMode = MT_ENTER_HOUSE;
         }
+    } else if (wl == 3 && !strncmp(p, "run", 3)) {
+        /* run start [<map>.gon] | run travel <node type> | run fight — the campaign walk */
+        size_t ol = tok_len(rest);
+        const char *arg = skip_ws(rest + ol);
+        size_t al = tok_len(arg);
+        int extra = al && *skip_ws(arg + al);
+        d.kind = MT_D_RUN;
+        if (ol == 5 && !strncmp(rest, "start", 5)) {
+            d.n = MT_RUN_START;
+            if (extra) return fail(err, errCap, errLine, lineNo, "run start takes at most one map file name");
+            if (!al) { arg = MT_RUN_DEFAULT_MAP; al = strlen(arg); }
+            int okName = al > 4 && al < 64 && !strncmp(arg + al - 4, ".gon", 4);
+            for (size_t i = 0; okName && i < al; i++) {
+                char c = arg[i];
+                if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.')) okName = 0;
+            }
+            if (okName && strstr(arg, "..")) okName = 0;
+            if (!okName) return fail(err, errCap, errLine, lineNo, "run start: the map is a data/maps file name like alley.gon ([A-Za-z0-9_.-], ends in .gon, no ..)");
+        } else if (ol == 6 && !strncmp(rest, "travel", 6)) {
+            d.n = MT_RUN_TRAVEL;
+            if (!al || extra) return fail(err, errCap, errLine, lineNo, "run travel needs one node type (battle, hard, event, treasure, shop, ...)");
+            d.value = mt_node_type_id(arg, al);
+            if (d.value < 0) return fail(err, errCap, errLine, lineNo, "run travel: unknown node type (the 19 names of MapNode::str_to_type: none npc enter exit home battle hard miniboss boss event optional_event special_event shop treasure furniturebox foodbox bonus empty any)");
+        } else if (ol == 5 && !strncmp(rest, "fight", 5)) {
+            d.n = MT_RUN_FIGHT;
+            if (al) return fail(err, errCap, errLine, lineNo, "run fight takes no arguments");
+            arg = ""; al = 0;
+        } else {
+            return fail(err, errCap, errLine, lineNo, "run needs an op: start [<map>.gon] | travel <node type> | fight");
+        }
+        if (!(d.a = arena_add(s, arg, al))) return fail(err, errCap, errLine, lineNo, "script too large");
     } else if (wl == 4 && !strncmp(p, "glow", 4)) {
         /* glow <idx|bareword|"name"> (<r> <g> <b> <a> | off) */
         d.kind = MT_D_GLOW;
@@ -402,6 +451,31 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
                 t = skip_ws(t + nl);
             }
             if (*t) return fail(err, errCap, errLine, lineNo, "glow: unexpected text after the colour");
+        }
+    } else if (wl == 4 && !strncmp(p, "face", 4)) {
+        /* face <idx|bareword|"name"> (<dx> <dy> | front | back): one of the four grid directions, or the named
+         * unmirrored facing resolved per unit (mt_face_named_dir) */
+        static const char *const usage = "face needs: <unit> <dx> <dy> (one of 1 0 | -1 0 | 0 1 | 0 -1) or <unit> front|back";
+        d.kind = MT_D_FACE;
+        if (!*rest) return fail(err, errCap, errLine, lineNo, usage);
+        if (!(d.a = arena_add(s, rest, strlen(rest)))) return fail(err, errCap, errLine, lineNo, "script too large");
+        int full = 0;
+        const char *tail = parse_unit(s, rest, &d, q, sizeof q, &full);
+        if (!tail) return fail(err, errCap, errLine, lineNo, full ? "script too large" : "face: bad quoted unit name");
+        tail = skip_ws(tail);
+        size_t tl = tok_len(tail);
+        if (!tl) return fail(err, errCap, errLine, lineNo, usage);
+        if ((tl == 5 && !strncmp(tail, "front", 5)) || (tl == 4 && !strncmp(tail, "back", 4))) {
+            d.faceNamed = tl == 5 ? MT_FACE_FRONT : MT_FACE_BACK;
+            if (*skip_ws(tail + tl)) return fail(err, errCap, errLine, lineNo, "face: unexpected text after front/back");
+        } else {
+            long dx, dy;
+            const char *ty = skip_ws(tail + tl);
+            size_t yl = tok_len(ty);
+            if (!parse_int(tail, tl, &dx) || !yl || !parse_int(ty, yl, &dy)) return fail(err, errCap, errLine, lineNo, usage);
+            if (*skip_ws(ty + yl)) return fail(err, errCap, errLine, lineNo, "face: unexpected text after the direction");
+            if (!((dx == 0) != (dy == 0)) || dx < -1 || dx > 1 || dy < -1 || dy > 1) return fail(err, errCap, errLine, lineNo, usage);
+            d.faceNamed = MT_FACE_RAW; d.faceDx = (int)dx; d.faceDy = (int)dy;
         }
     } else if (wl == 4 && !strncmp(p, "quit", 4)) {
         d.kind = MT_D_QUIT;

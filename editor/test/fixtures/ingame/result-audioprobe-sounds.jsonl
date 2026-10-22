@@ -1,0 +1,56 @@
+{"ev":"start","harness":"mewtest 0.1.0","build":"1.1.21239 (steam 25143593)","script":"<repo>\\editor\\data\\ingame-runs\\20261022-132558-_audioprobe-sounds\\script.mewtest","out":"<repo>\\editor\\data\\ingame-runs\\20261022-132558-_audioprobe-sounds\\result.jsonl","pid":1234,"hide":1,"timeout_ms":60000,"clean":0,"t":0,"frame":0}
+{"ev":"wait","line":1,"kind":"frames","n":120,"actual":120,"t":1156,"frame":120}
+{"ev":"enter","line":2,"name":"TacticsTest","ok":true,"detail":"scene=000002abad0e5a98 entity=000002ae1103aa60 component=000002b827ae0008 manager=000002abab5cd350 director=000002b3a1c00008 GetGame(console)=000002b3a1c00008 director(after init)=000002b3a1c00008","t":3484,"frame":907}
+{"ev":"turn","n":1,"round":1,"t":4453,"frame":1039}
+{"ev":"wait","line":3,"kind":"ms","n":4000,"actual":4000,"t":7937,"frame":1890}
+{"ev":"cmd","line":4,"text":"debug_list_loaded_files","t":7937,"frame":1891}
+{"ev":"console","text":"audio/combat_sfx.gon.rawpak","t":7937,"frame":1891}
+{"ev":"console","text":"<repo>\\mods\\_audioprobe/audio/combat_sfx.gon.merge.raw","t":7937,"frame":1891}
+{"ev":"console","text":"audio/ui_sfx.gon","t":7937,"frame":1891}
+{"ev":"console","text":"audio/house_sfx.gon","t":7937,"frame":1891}
+{"ev":"console","text":"<repo>\\mods\\_audioprobe/data/characters/enemies.gon.append.raw","t":7937,"frame":1891}
+{"ev":"console","text":"audio/music/music_info.gon","t":7937,"frame":1891}
+{"ev":"console","text":"audio/ui_sfx/combatmessage_battlestart.wav","t":7937,"frame":1891}
+{"ev":"console","text":"audio/ui_sfx/ui_turnindicator_gotoally.wav","t":7937,"frame":1891}
+{"ev":"console","text":"Executed: debug_list_loaded_files","t":7937,"frame":1891}
+{"ev":"expect","line":5,"kind":"console","arg":"_audioprobe/audio/combat_sfx.gon.merge.raw","ok":true,"detail":"matched console line 73","t":8109,"frame":1892}
+{"ev":"cmd","line":6,"text":"debug_sfx_memory_use","t":8125,"frame":1893}
+{"ev":"console","text":"Total loaded sfx: 430532 bytes (0 mb)","t":8125,"frame":1893}
+{"ev":"console","text":"Executed: debug_sfx_memory_use","t":8125,"frame":1893}
+{"ev":"expect","line":7,"kind":"console","arg":"Total loaded sfx: ","ok":true,"detail":"matched console line 506","t":8125,"frame":1894}
+{"ev":"cmd","line":8,"text":"play_sound AudioProbe_New","t":8125,"frame":1895}
+{"ev":"console","text":"Executed: play_sound","t":8125,"frame":1895}
+{"ev":"wait","line":9,"kind":"frames","n":60,"actual":60,"t":8375,"frame":1955}
+{"ev":"cmd","line":10,"text":"debug_sfx_memory_use","t":8390,"frame":1956}
+{"ev":"console","text":"Total loaded sfx: 465812 bytes (0 mb)","t":8390,"frame":1956}
+{"ev":"console","text":"Executed: debug_sfx_memory_use","t":8390,"frame":1956}
+{"ev":"expect","line":11,"kind":"console","arg":"Total loaded sfx: ","ok":true,"detail":"matched console line 509","t":8390,"frame":1957}
+{"ev":"cmd","line":12,"text":"play_sound PickupCoin","t":8390,"frame":1958}
+{"ev":"console","text":"Executed: play_sound","t":8390,"frame":1958}
+{"ev":"wait","line":13,"kind":"frames","n":60,"actual":60,"t":8640,"frame":2018}
+{"ev":"cmd","line":14,"text":"debug_sfx_memory_use","t":8656,"frame":2019}
+{"ev":"console","text":"Total loaded sfx: 489812 bytes (0 mb)","t":8656,"frame":2019}
+{"ev":"console","text":"Executed: debug_sfx_memory_use","t":8656,"frame":2019}
+{"ev":"expect","line":15,"kind":"console","arg":"Total loaded sfx: ","ok":true,"detail":"matched console line 512","t":8656,"frame":2020}
+{"ev":"cmd","line":16,"text":"play_sound AudioProbe_Absent","t":8656,"frame":2021}
+{"ev":"console","text":"Executed: play_sound","t":8656,"frame":2021}
+{"ev":"wait","line":17,"kind":"frames","n":60,"actual":60,"t":8906,"frame":2081}
+{"ev":"cmd","line":18,"text":"debug_sfx_memory_use","t":8922,"frame":2082}
+{"ev":"console","text":"Total loaded sfx: 489812 bytes (0 mb)","t":8922,"frame":2082}
+{"ev":"console","text":"Executed: debug_sfx_memory_use","t":8922,"frame":2082}
+{"ev":"expect","line":19,"kind":"console","arg":"Total loaded sfx: ","ok":true,"detail":"matched console line 515","t":8922,"frame":2083}
+{"ev":"cmd","line":21,"text":"debug_list_loaded_files","t":8937,"frame":2084}
+{"ev":"console","text":"audio/combat_sfx.gon.rawpak","t":8937,"frame":2084}
+{"ev":"console","text":"<repo>\\mods\\_audioprobe/audio/combat_sfx.gon.merge.raw","t":8937,"frame":2084}
+{"ev":"console","text":"audio/ui_sfx.gon","t":8937,"frame":2084}
+{"ev":"console","text":"audio/house_sfx.gon","t":8937,"frame":2084}
+{"ev":"console","text":"<repo>\\mods\\_audioprobe/data/characters/enemies.gon.append.raw","t":8937,"frame":2084}
+{"ev":"console","text":"audio/music/music_info.gon","t":8937,"frame":2084}
+{"ev":"console","text":"audio/combat_sfx/pickup_coin.wav","t":8937,"frame":2084}
+{"ev":"console","text":"audio/ui_sfx/combatmessage_battlestart.wav","t":8937,"frame":2084}
+{"ev":"console","text":"audio/ui_sfx/ui_turnindicator_gotoally.wav","t":8937,"frame":2084}
+{"ev":"console","text":"audio/combat_sfx/audioprobe_new.wav","t":8937,"frame":2084}
+{"ev":"console","text":"Executed: debug_list_loaded_files","t":8937,"frame":2084}
+{"ev":"expect","line":22,"kind":"console","arg":"audio/combat_sfx/audioprobe_new.wav","ok":true,"detail":"matched console line 1023","t":9094,"frame":2085}
+{"ev":"expect","line":23,"kind":"noconsole","arg":"audioprobe_absent","ok":true,"detail":"not found in 508 console line(s) since the last cmd","t":9109,"frame":2086}
+{"ev":"end","code":0,"reason":"quit","frames":2087,"turns":1,"elapsed_ms":9109,"expect_pass":7,"expect_fail":0,"t":9109,"frame":2087}

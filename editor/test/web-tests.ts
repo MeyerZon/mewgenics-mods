@@ -37,10 +37,15 @@ export const POST_ROUTES = [
   "/api/art/new-scene",
   "/api/art/validate",
   "/api/art/import-svg",
+  "/api/art/import-bitmap",
   "/api/art/export-svg",
   "/api/art/build",
   "/api/art/asset",
   "/api/art/prepare-swf-gate",
+  "/api/mod/pack",
+  "/api/mod/install",
+  "/api/level",
+  "/api/level/validate",
 ];
 
 /** Start web/server.ts on an OS-chosen port and return { port, stop }. */

@@ -1,0 +1,27 @@
+mods: _catappendA, _catappendSame
+timeout: 120s
+hide: true
+# Multi-append probe, same file name (2026-10-22): _catappendSame ships B's scene as swfs/catappendA.swf, the name
+# _catappendA's own SWF has. Expected from the name resolution (OBSERVED): the later mod's file loads for both swflist
+# entries, so only CYAN (probeB) and GREEN (probeC from B's content) show and A's MAGENTA never does. No _autoplay.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+cmd spawn ProbeCatA
+expect console "Spawned ProbeCatA" within 10
+wait frames 90
+shot "after ProbeCatA"
+cmd spawn ProbeCatB
+expect console "Spawned ProbeCatB" within 10
+wait frames 90
+shot "after ProbeCatB"
+cmd spawn ProbeCatC
+expect console "Spawned ProbeCatC" within 10
+wait frames 90
+shot "after ProbeCatC"
+wait frames 60
+shot "all"
+dump
+quit

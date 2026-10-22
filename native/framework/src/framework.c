@@ -29,6 +29,7 @@
 #include "fw_sig.h"
 #include "fw_build.h"
 #include "fw_resolve.h"
+#include "fw_rng.h"
 
 MewjectorAPI g_mj;
 int g_mjAvailable = 0;
@@ -116,6 +117,7 @@ static volatile long g_turnCounter = 0;
 static void hook_TurnControl_NextTurn(void *turnControl) {
     long n = InterlockedIncrement(&g_turnCounter);
     if (n <= 20 || (n % 50) == 0) fw_log("TurnControl::NextTurn #%ld (tc=%p)", n, turnControl);
+    obj3d_engine_on_turn_control(turnControl);   /* the per-unit models walk this fight's units from it */
     if (g_next_TurnControl_NextTurn) g_next_TurnControl_NextTurn(turnControl);
 }
 
@@ -127,10 +129,14 @@ static void hook_Character_BeginTurn(void *character, int kind) {
     if (g_next_Character_BeginTurn) g_next_Character_BeginTurn(character, kind);
 }
 
-/* One step of FW_HOOK_PLAN: this file's two observer hooks, the glow engine's render hook; everything else is the status engine's. */
+/* One step of FW_HOOK_PLAN: this file's two observer hooks, the glow engine's render hook, the speed engine's frame hook, the cat rig hooks, the 3D observer's camera hook;
+ * everything else is the status engine's. */
 static int install_step(const FwHookSpec *spec, int ordinal, int failuresSoFar, void *user) {
     (void)ordinal; (void)failuresSoFar; (void)user;
+    if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_ApplicationBase_FrameBegin) return speed_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_TacticsTest_LateRender) return glow_engine_hook_step(spec);
+    if (catrig_engine_is_step(spec)) return catrig_engine_hook_step(spec);
+    if (spec->step == FW_HOOK_SYMBOL && (spec->index == FW_SYM_Camera_render || spec->index == FW_SYM_Camera_RenderOneLayer)) return obs3d_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Character_BeginTurn) {
         uintptr_t rva = g_sym[spec->index] - g_base;
         void *tramp = NULL;
@@ -212,10 +218,61 @@ FW_EXPORT int FW_ClearUnitGlow(void *character) {
     return glow_engine_clear(character);
 }
 
+/* --- API v5: the mods' random stream (fw_rng.c); never the CRT rand --- */
+static FwRng g_rng;
+
+FW_EXPORT uint32_t FW_Random(uint32_t bound) { return fw_rng_below(&g_rng, bound); }
+FW_EXPORT void FW_SeedRandom(uint64_t seed) {
+    fw_rng_seed(&g_rng, seed);
+    fw_log("FW_Random seeded with %llu", (unsigned long long)seed);
+}
+
+/* --- API v6: game speed (speed_engine.c) --- */
+FW_EXPORT double FW_SetTimeScale(double factor) {
+    if (!g_active) return 0.0;
+    return speed_engine_set(factor);
+}
+
+FW_EXPORT double FW_GetTimeScale(void) {
+    if (!g_active) return 0.0;
+    return speed_engine_get();
+}
+
+/* --- API v7: cat rigs (catrig_engine.c) --- */
+FW_EXPORT int FW_RegisterCatRig(const FwCatRigDef *def) {
+    if (!g_active) return 0;
+    return catrig_engine_register(def);
+}
+
+FW_EXPORT const char *FW_CatRigFor(const char *character) {
+    if (!g_active) return NULL;
+    return catrig_engine_for(character);
+}
+
+/* --- API v8: 3D objects (obj3d_engine.c records them; the mesh engine draws) --- */
+FW_EXPORT int FW_Register3DObject(void *character, const char *model, const float transform[16]) {
+    if (!g_active) return 0;
+    return obj3d_engine_register(character, model, transform);
+}
+
+FW_EXPORT int FW_Place3DObjectOnTile(int col, int row, const char *model, const float transform[16]) {
+    if (!g_active) return 0;
+    return obj3d_engine_place(col, row, model, transform);
+}
+
+FW_EXPORT int FW_Unregister3DObject(void *character_or_null, int handle) {
+    if (!g_active) return 0;
+    return obj3d_engine_unregister(character_or_null, handle);
+}
+
 /* ----------------------------------------------------------------------- */
 /* init                                                                     */
 /* ----------------------------------------------------------------------- */
 static void init(void) {
+    {   /* varied by default; the harness `seed <N>` re-seeds with N (FW_SeedRandom) */
+        LARGE_INTEGER qpc; QueryPerformanceCounter(&qpc);
+        fw_rng_seed(&g_rng, (uint64_t)qpc.QuadPart ^ ((uint64_t)GetCurrentProcessId() << 32) ^ (uint64_t)GetCurrentThreadId());
+    }
     g_log = fopen("mod_logs\\mewframework.log", "a");
     g_mjAvailable = MJ_Require(FW_OWNER) && MJ_Resolve(&g_mj);
     fw_log("mewframework %d.%d.%d starting; mewjector=%s", FW_VERSION_MAJOR, FW_VERSION_MINOR, FW_VERSION_PATCH,

@@ -1,0 +1,19 @@
+mods: _artprobe, _autoplay
+timeout: 90s
+hide: false
+# Raster + font probe (2026-10-22): ArtProbeRaster (raster.swf) = the probe marker, a PNG raster sprite, smoothed /
+# pixel-snapped / repeated bitmap fills, a minified 1024×768 "photo" and two texts in the mod's DefineFont3
+# ProbeBlocks. editor/scripts/art-probe.ts --raster measures the shots (probe-raster.ts measureRasterShot).
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+cmd spawn ArtProbeRaster
+expect console "Spawned ArtProbeRaster" within 10
+wait frames 60
+shot "raster 1"
+wait frames 40
+shot "raster 2"
+wait frames 40
+shot "raster 3"
+quit

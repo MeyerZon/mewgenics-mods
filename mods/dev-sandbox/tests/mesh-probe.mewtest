@@ -1,0 +1,26 @@
+mods: dev-sandbox, fw-3d
+timeout: 120s
+hide: false
+# 3D phase M1 (docs/possible_3d_work.md): the probe cube. Launch it with MEWFW_MESH_PROBE=1 (tile 3,3) or
+# MEWFW_MESH_PROBE=<col>,<row> in the environment — `npm run test:artprobe -- --mesh` sets it — and mewframework draws a
+# flat magenta unit cube (0.8 tiles) on that tile through a draw functor submitted after the world camera's units
+# layer, depth-tested against the main RT. It logs "mesh probe f=.. tile=(c,r) ndc=(x y z) canvas=(x y)" (the
+# projected tile centre) and "mesh draw ..." (the GL state it found, its GL errors) into mod_logs/mewframework.log;
+# editor/src/core/art/mesh-measure.ts reads those lines and the shots (a magenta patch at the projected centre; refuses
+# when the shots are byte-identical). Without the variable nothing is drawn and this is a plain fight with shots.
+# M2 textures: MEWFW_MESH_PROBE_TEXTURE=<name under textures/> and MEWFW_MESH_PROBE_PALETTE=<palette.png row> set the probe
+# model's material (default: textures/models/<stem>.png when present, palette off); the "mesh object ... ndc=.. tex=..
+# palette=.." lines + mesh-measure.ts judgeColourPatch measure the drawn colours around the model's anchor.
+# The spawned Rat gives the sprites/mesh occlusion record (phase M2 is not done: the cube is drawn over its layer).
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 90
+shot "mesh-a"
+wait frames 45
+shot "mesh-b"
+wait frames 30
+quit

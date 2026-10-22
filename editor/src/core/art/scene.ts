@@ -14,9 +14,11 @@ import { gradientProblems } from "./gradient.ts";
 import { fillRuleProblems } from "./shape.ts";
 import { vanillaExportSource, exportShadowsMessage } from "./swf-rules.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
-import { rigFindings, catAnimFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
-import { textProblems } from "./text.ts";
-import type { SceneText } from "./text.ts";
+import { rigFindings, catAnimFindings, catRigFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
+import { textProblems, locKeyHtmlProblem, GAME_FONTS } from "./text.ts";
+import { fontProblems, missingGlyphs } from "./font.ts";
+import type { SceneFont } from "./font.ts";
+import type { SceneText, LocKeySource } from "./text.ts";
 import { VANILLA_EXPORTS } from "./vanilla-exports.ts";
 import type { SceneImport } from "./vanilla-exports.ts";
 import type { SceneFilter } from "./effects.ts";
@@ -159,6 +161,21 @@ export interface SceneSprite {
   rig?: "cat";
   /** "game" (cat rigs): the slots are empty sprites the game fills with the cat's own parts (cat-rig.ts) */
   parts?: "game";
+  /** "back" (cat rigs): the back-facing layout a `<anim>B` frame places (head_back behind, tail in front; cat-rig.ts CAT_BACK_SLOTS) */
+  facing?: "back";
+}
+
+/**
+ * A PNG inside the mod, drawn as a bitmap fill. The fill type the emitter writes follows the game's FillStyle_read
+ * 0xb6ebc0: 0x41 clipped + smoothed (default), 0x40 repeat (smoothed), 0x43 clipped pixel-snapped, 0x42 repeat
+ * pixel-snapped (raster.ts bitmapFillType; swf_lib.shader samples 0x40/0x41 LINEAR with mips, 0x42/0x43 nearest mip 0).
+ */
+export interface SceneBitmap {
+  file: string;
+  /** tile the bitmap outside its own rectangle (mod(uv,1)) instead of streaking its edge texels (default false) */
+  repeat?: boolean;
+  /** false: pixel-snapped (nearest texel, no mips) — pixel art; default true: filtered with mips */
+  smooth?: boolean;
 }
 
 export interface SceneStage {
@@ -175,7 +192,9 @@ export interface Scene {
   preview?: { palette?: number };
   curveResolution?: number;
   shapes: Record<string, SceneShape>;
-  bitmaps?: Record<string, { file: string }>;
+  bitmaps?: Record<string, SceneBitmap>;
+  /** fonts this mod carries (font.ts: a DefineFont3 + a SymbolClass name = the font id); texts[].font may name one */
+  fonts?: Record<string, SceneFont>;
   gradients?: Record<string, SceneGradient>;
   /** DefineEditText characters in a game font (text.ts); keys place them like shapes */
   texts?: Record<string, SceneText>;
@@ -350,11 +369,16 @@ export interface SceneValidation {
   findings: Finding[];
 }
 
+export interface SceneValidateOptions {
+  /** is this string a localization key, and whose (text-loc-key-html)? Without it only the key shape is tested. */
+  locKey?: (key: string) => LocKeySource | null | undefined;
+}
+
 /**
  * Validate (and lightly normalize, in place, on a deep copy) a scene. Never throws on
  * bad user data; returns findings. `ok` is false only on errors.
  */
-export function validateScene(input: unknown): SceneValidation {
+export function validateScene(input: unknown, opts: SceneValidateOptions = {}): SceneValidation {
   const findings: Finding[] = [];
   const err = (code: string, message: string, at?: string[]) => findings.push({ severity: "error", code, message, path: at && at[0] });
   const warn = (code: string, message: string, at?: string[]) => findings.push({ severity: "warning", code, message, path: at && at[0] });
@@ -442,6 +466,8 @@ export function validateScene(input: unknown): SceneValidation {
     const bm = scene.bitmaps[id];
     if (!bm || typeof bm.file !== "string" || !/\.png$/i.test(bm.file)) err("bitmap-file", `bitmap "${id}" needs a .png file path relative to the mod`, [`bitmaps.${id}`]);
     else if (bm.file.includes("..") || bm.file.startsWith("/") || /^[A-Za-z]:/.test(bm.file)) err("bitmap-path", `bitmap "${id}" path must stay inside the mod folder`, [`bitmaps.${id}.file`]);
+    if (bm && bm.repeat !== undefined && typeof bm.repeat !== "boolean") err("bitmap-option", `bitmap "${id}": repeat must be true or false`, [`bitmaps.${id}.repeat`]);
+    if (bm && bm.smooth !== undefined && typeof bm.smooth !== "boolean") err("bitmap-option", `bitmap "${id}": smooth must be true or false`, [`bitmaps.${id}.smooth`]);
   }
   for (const id of Object.keys(scene.sprites)) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap`, [`sprites.${id}`]);
@@ -467,10 +493,28 @@ export function validateScene(input: unknown): SceneValidation {
     // whose clip places an imported symbol crashes the game (0xc0000005 at Mewgenics.exe+0xa4a1a9)
     err("import-unsupported", `import "${id}": the game crashes when a clip places a symbol imported from another SWF (OBSERVED 2026-10-20)`, [`imports.${id}`]);
   }
+  const fonts = scene.fonts || {};
+  for (const id of Object.keys(fonts)) {
+    if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text/font`, [`fonts.${id}`]);
+    ids.add(id);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(id)) err("font-id", `font id "${id}" is its class name in the game's registry: letters, digits and _ only`, [`fonts.${id}`]);
+    for (const p of fontProblems(fonts[id])) err(p.code, `font "${id}": ${p.message}`, [`fonts.${id}` + (p.at ? `.${p.at}` : "")]);
+    // the by-name lookup (Swf_FindCharacterByClassName 0x9bb910 → 0x9bb6f0) scans the last-loaded file first
+    if (GAME_FONTS.includes(id)) findings.push({ severity: "info", code: "export-shadows-vanilla", message: `font "${id}" has the name of a game font class: the by-name lookup scans the last-loaded file first, so this mod font replaces the game's "${id}" in every text that names it (INFERRED from the decompile, not run in-game)`, path: `fonts.${id}` });
+  }
   for (const id of Object.keys(scene.texts || {})) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text`, [`texts.${id}`]);
     ids.add(id);
-    for (const p of textProblems((scene.texts || {})[id])) err(p.code, `text "${id}": ${p.message}`, [`texts.${id}` + (p.at ? `.${p.at}` : "")]);
+    const t = (scene.texts || {})[id];
+    const problems = textProblems(t, Object.keys(fonts));
+    for (const p of problems) err(p.code, `text "${id}": ${p.message}`, [`texts.${id}` + (p.at ? `.${p.at}` : "")]);
+    const lk = !problems.length && t ? locKeyHtmlProblem(t, opts.locKey) : null;
+    if (lk) findings.push({ severity: lk.severity, code: "text-loc-key-html", message: `text "${id}": ${lk.message}`, path: `texts.${id}` });
+    const f = t && typeof t.font === "string" ? fonts[t.font] : undefined;
+    if (f && t && typeof t.text === "string") {
+      const miss = missingGlyphs(f, t.text);
+      if (miss.length) warn("font-glyph-missing", `text "${id}": font "${t.font}" has no glyph for ${miss.map((c) => JSON.stringify(c)).join(", ")}; add them to fonts.${t.font}.glyphs (what the game draws instead: docs/art-pipeline.md "Fonts")`, [`texts.${id}.text`]);
+    }
   }
   for (const id of Object.keys(scene.sprites)) {
     const sp = scene.sprites[id];
@@ -483,6 +527,8 @@ export function validateScene(input: unknown): SceneValidation {
     else if (sp.rig !== undefined) err("sprite-rig", `rig must be "cat"`, [at + ".rig"]);
     if (sp.parts !== undefined && sp.parts !== "game") err("sprite-parts", `parts must be "game"`, [at + ".parts"]);
     else if (sp.parts === "game" && sp.rig !== "cat") err("sprite-parts", `parts: "game" needs rig: "cat"`, [at + ".parts"]);
+    if (sp.facing !== undefined && sp.facing !== "back") err("sprite-facing", `facing must be "back" (or absent for a front rig)`, [at + ".facing"]);
+    else if (sp.facing === "back" && sp.rig !== "cat") err("sprite-facing", `facing: "back" needs rig: "cat"`, [at + ".facing"]);
     if (!(Number.isInteger(sp.frames) && sp.frames >= 1)) {
       err("sprite-frames", `sprite "${id}" frames must be an integer >= 1`, [at + ".frames"]);
       sp.frames = Math.max(1, sp.frames | 0);
@@ -554,6 +600,8 @@ export function validateScene(input: unknown): SceneValidation {
   }
   // a cat animation donor (exports._Append_CatTest): facing pairs, a rig per labeled frame, depth 1 (cat-rig.ts)
   findings.push(...catAnimFindings(scene));
+  // a swap rig (exports._CatRig_<Entry>, framework API v7): the entry name, the seven slots, the idle labels (cat-rig.ts)
+  findings.push(...catRigFindings(scene));
   scene.stage_instances.forEach((si, i) => {
     if (!si || typeof si.ref !== "string" || !(scene.shapes[si.ref] || scene.sprites[si.ref] || (scene.texts || {})[si.ref] || (scene.imports || {})[si.ref])) err("stage-ref", `stage_instances[${i}].ref is not a shape or sprite`, [`stage_instances[${i}]`]);
   });
@@ -584,6 +632,7 @@ export function buildOrder(scene: Scene): string[] {
   const out = Object.keys(scene.imports || {}).sort();
   out.push(...Object.keys(scene.bitmaps || {}).sort());
   out.push(...Object.keys(scene.shapes).sort());
+  out.push(...Object.keys(scene.fonts || {}).sort());
   out.push(...Object.keys(scene.texts || {}).sort());
   const seen = new Set(out);
   const visit = (id: string) => {

@@ -58,6 +58,29 @@ static void emit_wait(MtRunner *r, const MtHost *h, const MtDirective *d, const 
     stamp_and_emit(r, h, &w);
 }
 
+/* the shot event, then the hold. gl = the in-process capture's file (source "gl"); else the runner captures the
+ * window (source "window", glWhy = why the in-process capture did not happen; both NULL = a glue without one). */
+static void emit_shot(MtRunner *r, const MtHost *h, const MtDirective *d, const MtShotResult *gl, const char *glWhy) {
+    MtJsonW w;
+    mt_jw_begin(&w, g_json, sizeof g_json, "shot");
+    mt_jw_int(&w, "line", d->line);
+    mt_jw_str(&w, "label", d->a);
+    mt_jw_int(&w, "hold_ms", MT_SHOT_HOLD_MS);
+    if (gl) {
+        mt_jw_str(&w, "source", "gl");
+        mt_jw_str(&w, "file", gl->path);
+        mt_jw_int(&w, "w", gl->w);
+        mt_jw_int(&w, "h", gl->h);
+        if (gl->detail[0]) mt_jw_str(&w, "detail", gl->detail);
+    } else if (glWhy) {
+        mt_jw_str(&w, "source", "window");
+        mt_jw_str(&w, "gl", glWhy);
+    }
+    stamp_and_emit(r, h, &w);
+    r->waitDeadline = r->now + MT_SHOT_HOLD_MS;   /* keep the script (and so the scene) still while the runner captures */
+    r->state = MT_S_WAIT_SHOT;
+}
+
 static void finish(MtRunner *r, const MtHost *h, int code, const char *reason) {
     if (r->finished) return;
     r->finished = 1;
@@ -112,6 +135,19 @@ static MtStackTrack *record_stacks(MtRunner *r, int unit, const char *status, in
     return free;
 }
 
+static void jw_pair(MtJsonW *w, const char *key, int a, int b) {
+    mt_jw_arr_begin(w, key); mt_jw_arr_int(w, a); mt_jw_arr_int(w, b); mt_jw_arr_end(w);
+}
+/* the facing fields of a unit (units event; Character::Face 0x10ce50 writes them) */
+static void emit_facing_fields(MtJsonW *w, const MtUnit *u) {
+    mt_jw_str(w, "facing", u->facing);
+    jw_pair(w, "dir", u->dirX, u->dirY);
+    jw_pair(w, "lock", u->lockX, u->lockY);
+    mt_jw_int(w, "sign", u->faceSign);
+    mt_jw_int(w, "flip", u->flip);
+    mt_jw_int(w, "fourway", u->fourWay);
+}
+
 /* id >= 0: a dump requested over the pipe (the id is echoed so the reply can be matched) */
 static void do_dump(MtRunner *r, const MtHost *h, long id) {
     int avail = h->units_available(h->user);
@@ -140,12 +176,18 @@ static void do_dump(MtRunner *r, const MtHost *h, long id) {
         mt_jw_int(&w, "shield", u.shield);
         mt_jw_int(&w, "divineshield", u.divineShield);
         for (int k = 0; k < MT_STAT_COUNT; k++) mt_jw_int(&w, mt_stat_name(k), u.stats[k]);
+        /* what Character::recompute_stats made of them (every passive's / status's ApplyStatModifiers folded in) */
+        mt_jw_obj_begin(&w, "effective");
+        for (int k = 0; k < MT_STAT_COUNT; k++) mt_jw_int(&w, mt_stat_name(k), u.eff[k]);
+        mt_jw_int(&w, "maxhp", u.maxHp);
+        mt_jw_obj_end(&w);
         mt_jw_arr_begin(&w, "statuses");
         for (int k = 0; k < u.statusCount && k < MT_UNIT_STATUSES; k++) mt_jw_arr_str(&w, u.statuses[k]);
         mt_jw_arr_end(&w);
         mt_jw_arr_begin(&w, "stacks");
         for (int k = 0; k < u.statusCount && k < MT_UNIT_STATUSES; k++) { mt_jw_arr_int(&w, u.stacks[k]); record_stacks(r, i, u.statuses[k], u.stacks[k]); }
         mt_jw_arr_end(&w);
+        emit_facing_fields(&w, &u);
         mt_jw_obj_end(&w);
     }
     mt_jw_arr_end(&w);
@@ -166,7 +208,12 @@ static long unit_int_field(const MtUnit *u, MtUnitField f) {
     switch (f) {
         case MT_F_FACTION: return u->faction; case MT_F_MOVE: return u->move; case MT_F_ACT: return u->act; case MT_F_TURNKIND: return u->turnKind;
         case MT_F_HP: return u->hp; case MT_F_SHIELD: return u->shield; case MT_F_DIVINESHIELD: return u->divineShield;
-        default: return f >= MT_F_STRENGTH && f <= MT_F_LUCK ? u->stats[f - MT_F_STRENGTH] : 0;
+        case MT_F_DIRX: return u->dirX; case MT_F_DIRY: return u->dirY; case MT_F_FLIP: return u->flip; case MT_F_SIGN: return u->faceSign;
+        case MT_F_MAXHP_EFF: return u->maxHp;
+        default:
+            if (f >= MT_F_STRENGTH && f <= MT_F_LUCK) return u->stats[f - MT_F_STRENGTH];
+            if (f >= MT_F_STRENGTH_EFF && f <= MT_F_LUCK_EFF) return u->eff[f - MT_F_STRENGTH_EFF];
+            return 0;
     }
 }
 /* the unit as an expect arg: the index, the bare name, or the quoted name when it has a space */
@@ -351,15 +398,83 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, 1);
             return 0;
         }
-        case MT_D_SHOT: {
+        case MT_D_FACE: {
+            /* Character::Face(dir, instant) on a unit of the walk, then the unit read back: what the game wrote next to
+             * what the decompiled rule (mt_face.c) says it should have written */
+            MtUnit u;
+            memset(&u, 0, sizeof u);
+            int avail = h->units_available(h->user);
+            int idx = avail ? resolve_unit(h, d, &u) : -1;
+            int dx = d->faceDx, dy = d->faceDy, rc;
+            MtFaceOut want;
+            memset(&want, 0, sizeof want);
+            detail[0] = 0;
+            if (idx >= 0 && d->faceNamed != MT_FACE_RAW) mt_face_named_dir(d->faceNamed, u.faceSign, &dx, &dy);
+            if (idx < 0) { rc = 0; snprintf(detail, sizeof detail, "no such unit%s", avail ? "" : " (no combat)"); }
+            else if (!h->face_unit) { rc = -1; snprintf(detail, sizeof detail, "host without face_unit"); }
+            else {
+                MtFaceIn in = { dx, dy, u.lockX, u.lockY, u.faceSign, u.fourWay, u.noHFlip, u.alwaysFront };
+                mt_face_predict(&in, &want);
+                rc = h->face_unit(h->user, idx, dx, dy, detail, sizeof detail);
+                if (rc == 1 && (u.lockX || u.lockY)) {
+                    size_t dl = strlen(detail);
+                    snprintf(detail + dl, sizeof detail - dl, "; lock_orientation [%d %d] replaces the direction", u.lockX, u.lockY);
+                }
+                MtUnit after;
+                memset(&after, 0, sizeof after);
+                if (h->unit_info(h->user, idx, &after)) u = after;
+            }
             MtJsonW w;
-            mt_jw_begin(&w, g_json, sizeof g_json, "shot");
+            mt_jw_begin(&w, g_json, sizeof g_json, "face");
             mt_jw_int(&w, "line", d->line);
-            mt_jw_str(&w, "label", d->a);
-            mt_jw_int(&w, "hold_ms", MT_SHOT_HOLD_MS);
+            mt_jw_int(&w, "unit", idx);
+            mt_jw_str(&w, "name", idx >= 0 ? u.name : "");
+            mt_jw_str(&w, "arg", d->a);
+            jw_pair(&w, "dir", dx, dy);
+            jw_pair(&w, "effective", want.dx, want.dy);
+            mt_jw_str(&w, "expect", want.suffix);
+            mt_jw_str(&w, "facing", idx >= 0 ? u.facing : "");
+            mt_jw_int(&w, "flip", idx >= 0 ? u.flip : 0);
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
             stamp_and_emit(r, h, &w);
-            r->waitDeadline = r->now + MT_SHOT_HOLD_MS;   /* keep the script (and so the scene) still while the runner captures */
-            r->state = MT_S_WAIT_SHOT;
+            if (rc == 1) { r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "face_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "face_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
+        case MT_D_SPEED: {
+            double applied = 0.0;
+            detail[0] = 0;
+            int rc = h->set_speed ? h->set_speed(h->user, d->dvalue, &applied, detail, sizeof detail) : -1;
+            char num[32];
+            snprintf(num, sizeof num, "%g", applied);
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "speed");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_str(&w, "arg", d->a);
+            mt_jw_str(&w, "applied", num);
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "speed_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "speed_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
+        case MT_D_SHOT: {
+            if (h->shot_arm && h->shot_poll) {
+                if (h->shot_arm(h->user, d->line) == 1) {   /* the glue reads the back buffer at the next present */
+                    r->waitLeft = MT_SHOT_GL_FRAMES;
+                    r->state = MT_S_WAIT_SHOT_GL;
+                    return 1;
+                }
+                emit_shot(r, h, d, NULL, "unavailable");
+                return 1;
+            }
+            emit_shot(r, h, d, NULL, NULL);
             return 1;
         }
         case MT_D_WAIT_ROUNDS:
@@ -411,7 +526,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             return 1;
         }
         case MT_D_EXPECT_UNIT: {
-            int isStr = d->field == MT_F_NAME || d->field == MT_F_CLASS || d->field == MT_F_NAMEKEY;
+            int isStr = mt_unit_field_is_string(d->field);
             char unitText[80];
             unit_text(d, unitText, sizeof unitText);
             if (isStr) snprintf(arg, sizeof arg, "%s %s %s \"%s\"", unitText, mt_unit_field_name(d->field), op_text(d->op), d->a);
@@ -429,7 +544,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             }
             int ok;
             if (isStr) {
-                const char *actual = d->field == MT_F_NAME ? u.name : d->field == MT_F_CLASS ? u.cls : u.nameKey;
+                const char *actual = d->field == MT_F_NAME ? u.name : d->field == MT_F_CLASS ? u.cls : d->field == MT_F_FACING ? u.facing : u.nameKey;
                 int same = strcmp(actual, d->a) == 0;
                 ok = d->op == MT_OP_EQ ? same : !same;
                 snprintf(detail, sizeof detail, "unit %d \"%s\": %s \"%s\"", idx, u.name, mt_unit_field_name(d->field), actual);
@@ -512,6 +627,63 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             int code = d->hasCode ? (int)d->n : (r->expectFail ? 1 : 0);
             finish(r, h, code, "quit");
             h->request_exit(h->user, code);
+            return 0;
+        }
+        case MT_D_EXPECT_LEVEL: {
+            int ok = r->battleLevel[0] && strstr(r->battleLevel, d->a) != NULL;
+            if (r->battleLevel[0]) snprintf(detail, sizeof detail, "battle level \"%s\"", r->battleLevel);
+            else snprintf(detail, sizeof detail, "no battle level yet (run fight first)");
+            emit_expect(r, h, d, "level", d->a, ok, detail);
+            r->pc++;
+            return 1;
+        }
+        case MT_D_RUN: {
+            /* like enter: the walk needs the game's console (the main menu has been reached) */
+            if (!h->console_ready(h->user)) {
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince > MT_CONSOLE_WAIT_MS) { finish(r, h, 4, "console_unavailable"); h->request_exit(h->user, 4); return 0; }
+                return 1;
+            }
+            MtRunInfo info;
+            memset(&info, 0, sizeof info);
+            info.node = info.nodeType = info.depth = -1;
+            detail[0] = 0;
+            int rc = h->run_step ? h->run_step(h->user, (int)d->n, d->a, &info, detail, sizeof detail) : -1;
+            if (!h->run_step) snprintf(detail, sizeof detail, "this host has no run_step");
+            if (rc == 2) {
+                /* not ready (e.g. run fight before the battle the node started exists): retry next frame, same budget as the console wait */
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince <= MT_CONSOLE_WAIT_MS) return 1;
+                rc = 0;
+                char why[400];
+                snprintf(why, sizeof why, "%s", detail[0] ? detail : "the game never reported ready");
+                snprintf(detail, sizeof detail, "not ready after %d ms: %s", MT_CONSOLE_WAIT_MS, why);
+            }
+            r->consoleWaitSince = 0;
+            r->state = MT_S_RUN;
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "run");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_str(&w, "op", mt_run_op_name((int)d->n));
+            mt_jw_str(&w, "arg", d->a ? d->a : "");
+            mt_jw_bool(&w, "ok", rc == 1);
+            if (info.map[0]) mt_jw_str(&w, "map", info.map);
+            if (info.node >= 0) mt_jw_int(&w, "node", info.node);
+            if (info.nodeType >= 0) mt_jw_str(&w, "type", mt_node_type_name(info.nodeType));
+            if (info.depth >= 0) mt_jw_int(&w, "depth", info.depth);
+            if (info.level[0]) mt_jw_str(&w, "level", info.level);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) {
+                if (d->n == MT_RUN_FIGHT && info.level[0]) snprintf(r->battleLevel, sizeof r->battleLevel, "%s", info.level);
+                r->pc++;
+                return 1;
+            }
+            if (rc < 0) { finish(r, h, 4, "run_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "run_failed");
+            h->request_exit(h->user, 1);
             return 0;
         }
         case MT_D_ENTER: {
@@ -635,6 +807,19 @@ static int dispatch(MtRunner *r, const MtHost *h) {
         case MT_S_WAIT_SHOT:
             if (r->now >= r->waitDeadline) { r->state = MT_S_RUN; r->pc++; }
             return 1;
+        case MT_S_WAIT_SHOT_GL: {
+            MtShotResult res;
+            memset(&res, 0, sizeof res);
+            int p = h->shot_poll(h->user, &res);
+            if (p == 1) emit_shot(r, h, d, &res, NULL);
+            else if (p < 0) emit_shot(r, h, d, NULL, res.detail[0] ? res.detail : "capture failed");
+            else if (--r->waitLeft <= 0) {
+                char why[64];
+                snprintf(why, sizeof why, "no present within %d frames", MT_SHOT_GL_FRAMES);
+                emit_shot(r, h, d, NULL, why);
+            }
+            return 1;
+        }
         case MT_S_WAIT_ROUNDS: {
             long round = h->units_available(h->user) ? h->round_number(h->user) : 0;
             if (round >= r->waitTargetRound) { emit_wait(r, h, d, "rounds", round - r->waitStartRound); r->state = MT_S_RUN; r->pc++; }

@@ -1,0 +1,17 @@
+# OBSERVED 2026-10-22 (build 25143593): mods/dev-sandbox/tests/mesh-probe.mewtest with MEWFW_MESH_PROBE=1, the mesh lines of
+# mod_logs/mewframework.log (run 20261022-132126; shots via PR #117's in-process capture: verdict cube, 31097 magenta px at
+# (1622,745)-(1817,950) of 3440x1440, 0 px from the projected centre).
+mesh: probe cube on tile (3,3) (MEWFW_MESH_PROBE)
+hook installed: Camera::RenderOneLayer (observe3d) rva 0x979210 (observe3d: 0 window(s) of 60 world frames; meshes: on)
+mesh probe f=1 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.08)
+mesh probe f=1 top=[0.0015625 0 0 0 0 -0.00277778 0 0 0 0 0.0001 0 -1 1 -0 1] det(top x vp)=2.01015e-06
+mesh: GL objects ready: program 102 (fw_mvp 1, fw_base_color 0), vao 76, cube 24 verts / 36 indices
+mesh draw f=1 n=1 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 errors=0
+mesh draw f=2 n=2 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 errors=0
+mesh draw f=3 n=3 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 errors=0
+mesh draw f=4 n=4 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 errors=0
+mesh probe f=61 tile=(3,3) ndc=(1.49e-08 -0.201 0.0409) canvas=(640.00 432.52)
+mesh probe f=121 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh probe f=181 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh probe f=241 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh probe f=301 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)

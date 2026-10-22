@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "loc",
+  "frameRate": 60,
+  "shapes": {},
+  "sprites": {},
+  "exports": {},
+  "texts": {
+    "plainKey": { "text": "KEYWORD_POISON", "font": "Peralta", "size": 22, "width": 300, "height": 40, "html": false },
+    "htmlKey": { "text": "KEYWORD_POISON", "font": "Peralta", "size": 22, "width": 300, "height": 40 },
+    "htmlWords": { "text": "Poison KEYWORD_POISON now", "font": "Peralta", "size": 22, "width": 300, "height": 40 },
+    "htmlWord": { "text": "Hello", "font": "Peralta", "size": 22, "width": 300, "height": 40 },
+    "htmlModKey": { "text": "mymod_hello", "font": "Peralta", "size": 22, "width": 300, "height": 40 },
+    "plainModKey": { "text": "mymod_hello", "font": "Peralta", "size": 22, "width": 300, "height": 40, "html": false }
+  }
+}

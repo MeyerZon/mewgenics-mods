@@ -7,6 +7,7 @@
 import { z } from "zod";
 import * as api from "../core/api.ts";
 import { resolveReadPath } from "../core/repo.ts";
+import { LvlFileSchema } from "../core/api-schemas.ts";
 
 export class ToolError extends Error {
   constructor(message: string) {
@@ -48,6 +49,7 @@ export const TOOL_INPUT = {
     mod: str(),
     path: str("optional overlay path to override with unsaved text").optional(),
     text: str("optional unsaved content for `path`").optional(),
+    modpaths: z.array(str()).describe("optional: the mods loaded together, in -modpaths order; adds the cross-mod checks (two mods appending the same _Append_ label, two mods shipping the same swfs/<name>.swf, a label or SWF name vanilla already has)").optional(),
   }),
   preview_merge: z.object({
     mod: str(),
@@ -58,9 +60,9 @@ export const TOOL_INPUT = {
   list_registered_native_names: z.object({}),
   new_from_template: z.object({
     mod: str(),
-    kind: z.enum(["ability", "passive", "item", "status-data"]),
+    kind: z.enum(["ability", "passive", "item", "status-data", "room", "tileset-variant", "particle", "vfx-ability", "glowing-character"]),
     name: str("the new entry's GON key, e.g. MyCoolSpin"),
-    options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)").optional(),
+    options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, movieclip (particle / vfx-ability: the SWF clip), dryRun, ...; glowing-character: colour (rrggbb or rrggbbaa, required), parent (default Rat), trigger (StatusOnSpawnIn | StatusOnBattleStart))").optional(),
   }),
   list_ingame_tests: z.object({
     mod: str("optional mod folder to restrict to").optional(),
@@ -83,8 +85,9 @@ export const TOOL_INPUT = {
     mod: str(),
     name: str("scene name, becomes art/<name>.scene.json"),
     starter: bool("start from the example scene (default true)").optional(),
-    template: z.enum(["cat-animation"]).describe("\"cat-animation\": a cat rig <animation>Pose plus an _Append_CatTest donor sprite with the labeled frames <animation>F / <animation>B, each placing the rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)").optional(),
+    template: z.enum(["cat-animation"]).describe("\"cat-animation\": a front cat rig <animation>Pose, a back-facing rig <animation>PoseBack (head_back behind, tail in front, as vanilla idleB) and an _Append_CatTest donor sprite with the labeled frames <animation>F (front rig) / <animation>B (back rig), each placing its rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)").optional(),
     animation: str("the animation name for template cat-animation (default: the scene name, which must then be an identifier); GON refers to it bare: alt_animations [[idle <animation>]] or an ability's animation <animation>").optional(),
+    fourWay: bool("template cat-animation: emit the four-way quartet <animation>LF / RF / LB / RB (the L frames mirrored) for a character with graphics { four_way_animations true }; vanilla CatTest has no four-way label").optional(),
   }),
   import_svg: z.object({
     svgText: str("SVG markup (or pass mod + path of an .svg inside the mod)").optional(),
@@ -96,6 +99,21 @@ export const TOOL_INPUT = {
       shapeId: str("the new shape's id"),
       replace: bool("overwrite a shape with that id").optional(),
     }).describe("save the imported shape into a scene (needs mod); without it nothing is written").optional(),
+  }),
+  import_bitmap: z.object({
+    mod: str("mod folder (for file, for scene, and where base64 is written as art/<id>.png)").optional(),
+    file: str("a .png already inside the mod, e.g. art/Photo.png").optional(),
+    base64: str("or the PNG bytes, base64 (8-bit, non-interlaced; < 4096 in both dimensions)").optional(),
+    scene: str("scene file inside the mod to add it to; without it the PNG is only checked (size + findings)").optional(),
+    id: str("shape id (default: the file name); the bitmap is <id>Bmp, the clip <id>Clip").optional(),
+    mode: z.enum(["sprite", "background", "fill"]).describe("sprite (default): a 1-frame clip exported for graphics.movieclip, origin at the feet; background: the same with origin top-left, for a tileset combat_background plate; fill: only the bitmap + a shape to place yourself").optional(),
+    scale: num("clip px per texel (default 1; vanilla combat plates: 2000x1500 at 0.7667). Above 1 it looks soft in-game (bitmap-upscaled)").optional(),
+    origin: z.enum(["top-left", "center", "bottom-center"]).describe("where clip (0,0) sits on the image").optional(),
+    repeat: bool("tile the bitmap outside its rectangle (fill type 0x40) instead of streaking the edge texels (0x41)").optional(),
+    smooth: bool("false: pixel-snapped sampling (0x43 / 0x42) for pixel art; default true: filtered with mips").optional(),
+    area: z.object({ width: num("px"), height: num("px") }).describe("fill mode: the shape's size in clip px; with repeat the bitmap tiles over it").optional(),
+    exportName: str("sprite / background: the linkage name (default the id)").optional(),
+    replace: bool("overwrite existing ids / export").optional(),
   }),
   export_svg: z.object({
     mod: str(),
@@ -181,6 +199,35 @@ export const TOOL_INPUT = {
     timeoutMs: num("how long to wait for the app to start in headless Chromium (default 120000)").optional(),
     webgl: bool("force the WebGL2 backend (?webgl; default true in headless)").optional(),
   }),
+  pack_mod: z.object({
+    mod: str(),
+    force: bool("pack despite validation errors, failed SWF builds or missing native DLLs (the result says what was forced)").optional(),
+    init: bool("draft mods/<mod>/mod.json from description.json first when it is missing").optional(),
+  }),
+  install_mod: z.object({
+    zip: str("path to the mod zip to install into mods/<name>/"),
+    acceptBuildMismatch: bool("install although the mod's gameBuild is not the installed game's build (pass only after the user agreed to the returned prompt)").optional(),
+  }),
+  read_level: z.object({
+    mod: str(),
+    path: str("a level inside the mod, levels/<folder>/<name>.lvl; omit to list the mod's levels").optional(),
+    palette: bool("also return the tile (tiles.gon) and object (spawns.gon) palettes: base + this mod's overlays, with names, classes and swatch colours").optional(),
+  }),
+  write_level: z.object({
+    mod: str(),
+    path: str("levels/<folder>/<name>.lvl inside the mod (nothing else is writable)"),
+    level: LvlFileSchema.describe("the whole level as read_level returns it (version, width, height, objectPalette, tilePalette, tiles row-major: id | [{id, weight}], objects: [{x, y, id}], raw?)").optional(),
+    base64: str("or the level file's bytes").optional(),
+    edits: z.array(z.object({
+      op: z.enum(["tile", "object", "remove"]).describe("tile: paint the cell's tile; object: put an object on the cell (replaces the first one there); remove: clear the cell's objects"),
+      x: num("column 0..width-1"),
+      y: num("row 0..height-1"),
+      id: num("a tiles.gon / spawns.gon id").optional(),
+      object: str("a spawns.gon object/utility name instead of an id, e.g. Rat, PlayerSpawn").optional(),
+      random: z.array(z.object({ id: num("id").optional(), object: str("name").optional(), weight: num("weight (default 1)").optional() })).describe("a weighted random list instead of one id").optional(),
+    })).describe("applied in order to level / base64 / the file on disk / an empty 10x10 room").optional(),
+    dryRun: bool("encode and validate, write nothing (returns base64)").optional(),
+  }),
 };
 
 export type ToolName = keyof typeof TOOL_INPUT;
@@ -211,7 +258,7 @@ function def<N extends ToolName>(name: N, description: string, handler: (args: T
 export const TOOLS: ToolDef[] = [
   def(
     "list_base_data",
-    "List base game data. With no arguments, returns the data categories (abilities, passives, items, characters, classes, difficulties, statuses, ...) with entry counts. With `category`, lists the entry names in that category (optionally filtered by substring).",
+    "List base game data. With no arguments, returns the data categories (abilities, passives, items, characters, classes, difficulties, statuses, ..., and from the audio index: sounds = sound group names, music = music_info tracks, sound_files = pack audio paths) with entry counts. With `category`, lists the entry names in that category (optionally filtered by substring).",
     (a) => (a.category ? api.listBaseEntries(a.category, a.filter) : api.listBaseData()),
   ),
   def(
@@ -221,7 +268,7 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "search_components",
-    "Search the ~2,007 glaiel::<Name> C++ behavior component class names by substring. With `whereUsed: true`, also returns which base .gon files reference the top matches.",
+    "Search the ~2,007 glaiel::<Name> C++ behavior component class names by substring. Also returns, for the top 15 matches, the GON keys each component reads from its block (type, default, required, inherited base keys, the decompile that witnesses it; editor/component-schema.json). With `whereUsed: true`, also returns which base .gon files reference the top matches.",
     (a) => api.searchComponents(a.query, { whereUsed: a.whereUsed, limit: a.limit }),
   ),
   def(
@@ -236,10 +283,10 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "validate_mod",
-    "Validate a mod's overlays: reference integrity (statuses/abilities/components resolve against base data or registered names), localization completeness (keys exist in combined.csv with all 12 columns), and overlay-target existence (.merge/.patch target existing paths, .append adds non-colliding keys, positional CSV .merge flagged fragile). Returns ok/warning/error findings with source locations. Pass `path`+`text` to validate unsaved content for one file.",
+    "Validate a mod's overlays: reference integrity (statuses/abilities/components resolve against base data or registered names), localization completeness (keys exist in combined.csv with all 12 columns), and overlay-target existence (.merge/.patch target existing paths, .append adds non-colliding keys, positional CSV .merge flagged fragile). Returns ok/warning/error findings with source locations. Pass `path`+`text` to validate unsaved content for one file. Pass `modpaths` (the mods loaded together, in -modpaths order) for the cross-mod checks: cat-append-conflict (a label two mods append to the same clip; the later mod wins), swf-file-conflict (two mods ship the same swfs/<name>.swf; only the later one loads), cat-append-shadows-vanilla, swf-file-shadows-vanilla.",
     (a) => {
       const override = a.path !== undefined && a.text !== undefined ? { relPath: a.path, text: a.text } : undefined;
-      return api.validate(a.mod, override);
+      return api.validate(a.mod, override, a.modpaths ? { modpaths: a.modpaths } : {});
     },
   ),
   def(
@@ -249,12 +296,12 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "list_registered_native_names",
-    "List status/ability/component names registered by the native layer (from registered-names.json). The validator treats these as valid references so a data mod paired with a native mod validates. Seeded with JokersLuck.",
+    "List status/ability/component names registered by the native layer (from registered-names.json). The validator treats these as valid references so a data mod paired with a native mod validates. Seeded with JokersLuck; entries with a `pattern` are names the framework recognises by shape (kind glow: a status FwGlow_<rrggbb[aa]> gives its carrier a coloured rim, no DLL).",
     () => api.listRegisteredNativeNames(),
   ),
   def(
     "new_from_template",
-    "Scaffold a new content entry (kind: ability | passive | item | status-data) plus matching localization rows, writing them as .append overlays under mods/<name>/. Pass `options.dryRun: true` to return the content without writing. `options` may include displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations.",
+    "Scaffold a new content entry (kind: ability | passive | item | status-data | room | tileset-variant | particle | vfx-ability | glowing-character) plus matching localization rows, writing them as .append overlays under mods/<name>/. glowing-character: a character variant (options.parent, default Rat) whose passives grant the status FwGlow_<options.colour> (rrggbb or rrggbbaa; a malformed colour is refused by the invalid-glow-name rule) on spawn (options.trigger StatusOnSpawnIn, or StatusOnBattleStart), plus the status's keyword_tooltips entry and its text rows; the unit glows that colour while it carries the status (load fw-glow next to the mod; docs/data-mods.md \"Asking for a unit glow from data\"). Pass `options.dryRun: true` to return the content without writing. `options` may include displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations.",
     (a) => api.newFromTemplate(a.mod, a.kind, a.name, a.options ?? {}),
   ),
   def(
@@ -320,12 +367,12 @@ export const TOOLS: ToolDef[] = [
   def(
     "write_art_scene",
     "Write a whole scene file inside the mod (validated first; refused with findings when invalid unless force). dryRun validates only. Writes are confined to mods/<mod>/.",
-    (a) => (a.dryRun ? api.validateArtScene(a.scene) : api.writeArtScene(a.mod, a.path, a.scene, { force: a.force })),
+    (a) => (a.dryRun ? api.validateArtScene(a.scene, a.mod) : api.writeArtScene(a.mod, a.path, a.scene, { force: a.force })),
   ),
   def(
     "new_art_scene",
-    "Create art/<name>.scene.json (the example scene by default: two gray shapes, a 24-frame sprite with idle/blink labels, exports). template \"cat-animation\" instead creates a cat animation: a rig: \"cat\" sprite <animation>Pose whose seven slots are EMPTY sprites (parts: \"game\" — the game draws the cat's own parts, palette, texture and face included, into them; placeholder art is preview-only and a visible non-empty slot crashes the game) and a donor sprite exported as _Append_CatTest whose labeled frames <animation>F / <animation>B place the rig as the child `ani` at depth 1 — the shape of every vanilla CatTest frame (catanis.swf; catanis2.swf appends the same way) and the child the engine restarts on every play. Then build_swf and refer to it from GON as alt_animations [[idle <animation>]] on a character or animation <animation> on an ability. The validator reports cat-anim-* findings (cat-anim-slot-not-empty when a slot holds art; the info cat-anim-untested says what the game draws, OBSERVED in PR #74 once its empty-slot run lands). Never export a clip named CatTest itself (cat-clip-override).",
-    (a) => api.newArtScene(a.mod, a.name, { starter: a.starter, template: a.template, animation: a.animation }),
+    "Create art/<name>.scene.json (the example scene by default: two gray shapes, a 24-frame sprite with idle/blink labels, exports). template \"cat-animation\" instead creates a cat animation: rig: \"cat\" sprites <animation>Pose (front) and <animation>PoseBack (facing: \"back\": head_back behind the body, the tail in front — vanilla idleB's layout) whose seven slots are EMPTY sprites (parts: \"game\" — the game draws the cat's own parts, palette, texture and face included, into them; placeholder art is preview-only and a visible non-empty slot crashes the game) and a donor sprite exported as _Append_CatTest whose labeled frames <animation>F / <animation>B place the front / back rig as the child `ani` at depth 1 (fourWay: <animation>LF / RF / LB / RB, the L frames mirrored) — the shape of every vanilla CatTest frame (catanis.swf; catanis2.swf appends the same way) and the child the engine restarts on every play. Then build_swf and refer to it from GON as alt_animations [[idle <animation>]] on a character or animation <animation> on an ability. The validator reports cat-anim-* findings (cat-anim-slot-not-empty when a slot holds art; the info cat-anim-untested says what the game draws, OBSERVED on a static pose in PR #74 and on an animated pose with keyed slots on 2026-10-22, mods/_artprobe render-cat-wave). Never export a clip named CatTest itself (cat-clip-override).",
+    (a) => api.newArtScene(a.mod, a.name, { starter: a.starter, template: a.template, animation: a.animation, fourWay: a.fourWay }),
   ),
   def(
     "import_svg",
@@ -337,6 +384,14 @@ export const TOOLS: ToolDef[] = [
       }
       if (!a.svgText && !(a.mod && a.path)) throw new ToolError("pass svgText, or mod + path");
       return api.importSvgShape({ svgText: a.svgText, mod: a.mod, relPath: a.path, options: a.options });
+    },
+  ),
+  def(
+    "import_bitmap",
+    "Import a PNG as raster art (the game draws bitmaps natively: every vanilla combat background is a 2000x1500 bitmap plate, enemies and props carry bitmap parts). Checks it (8-bit, non-interlaced: bitmap-unsupported-format; both sides < 4096 = texture_atlas_size or the game stops with \"Bitmap Fill could not fit into atlas\": bitmap-too-large), writes base64 bytes to mods/<mod>/art/<id>.png, and with scene adds <id>Bmp (a DefineBitsLossless2 at build), the shape <id> (a rect with the bitmap fill: clipped/repeat x smoothed/pixel-snapped) and, for mode sprite / background, a 1-frame clip <id>Clip exported as exportName: use it as graphics.movieclip, or point a tileset's combat_background at it (data/tilesets.gon.merge). Then build_swf. See docs/art-pipeline.md \"Raster art\" for what the game does with gray pixels and scale.",
+    (a) => {
+      if (!a.base64 && !(a.mod && a.file)) throw new ToolError("pass base64, or mod + file");
+      return api.importBitmap({ mod: a.mod, file: a.file, base64: a.base64, scenePath: a.scene, id: a.id, mode: a.mode, scale: a.scale, origin: a.origin, repeat: a.repeat, smooth: a.smooth, area: a.area, exportName: a.exportName, replace: a.replace });
     },
   ),
   def(
@@ -384,6 +439,34 @@ export const TOOLS: ToolDef[] = [
     "vectorcraft_exec",
     "Draw on a scene shape headlessly in VectorCraft (the vendored web build, github.com/storytold/vectorcraft, started in Playwright's headless Chromium; nothing is installed). Opens the shape as the SVG export_svg writes (an artboard of its viewBox moved to 0,0), runs the engine commands in order through window.vectorcraft.execute (shape.rectangle { x, y, width, height }, shape.ellipse, path.create { d }, object.move { dx, dy }, …), exports the document as SVG (presentation attributes, text outlined), undoes the artboard re-origin and replaces exportTo (default shapeId) in the scene file through import_svg's path — returns { ok, opened, results: [{ command, ok, result | error }], applied: { shapeId, paths, findings }, reorigin: { dx, dy }, documents, screenshotPath?, ms }. Without shapeId it starts from a blank artboard of the stage size; without shapeId and exportTo it only runs the commands and returns the SVG text. Refuses with skipped:true + reason when the build is not vendored (cd editor && npm run build, online once) or Playwright's Chromium is absent. Static drawing only — animation stays in the scene's sprites.",
     (a) => api.vectorcraftExec({ mod: a.mod, scenePath: a.scene, shapeId: a.shapeId, commands: a.commands, exportTo: a.exportTo, screenshot: a.screenshot, continueOnError: a.continueOnError, timeoutMs: a.timeoutMs, webgl: a.webgl }),
+  ),
+  def(
+    "pack_mod",
+    "Package a mod for others (docs/data-mods.md \"Shipping a mod\"): needs mods/<mod>/mod.json (name, version, author, description, gameBuild = the Steam build id it was tested on; native + frameworkApi for a mod with DLLs; license, attribution optional; init: true drafts it). Rebuilds every art/*.scene.json (build_swf), runs validate_mod and refuses on errors unless force, then writes editor/data/dist/<name>-<version>.zip: <name>/ (the mod folder minus tests/, art/ sources and dot-files, plus native/<dll> from native/dist for each mod.json `native` DLL), README-INSTALL.txt (unzip, the -modpaths launch line, the save advice, the native step) and MANIFEST.sha256. Returns { ok, zipPath, bytes, sha256, entries, builds, report, forced?, warnings? } or { ok: false, refused: { code, message } } (mod-missing | manifest-missing | manifest-invalid | swf-build-failed | validation-errors | native-dll-missing | out-dir-unsafe).",
+    (a) => api.packMod(a.mod, { force: a.force, init: a.init }),
+  ),
+  def(
+    "install_mod",
+    "Install a mod zip (as pack_mod writes it) into mods/<name>/ and nowhere else. Checks first and writes nothing on a refusal: size caps (64 MiB zip, 256 MiB unpacked, 5000 entries), path traversal / absolute / backslash names, symlinks, saves/ segments, case-only duplicates, layout (one <name>/ folder + README-INSTALL.txt / MANIFEST.sha256), <name>/mod.json valid and naming that folder, MANIFEST.sha256 matching every file, an existing mods/<name>/ (never overwritten). Then compares mod.json gameBuild with the installed game (check_game_build): on a mismatch it returns { ok: false, verdict: \"build-mismatch\", prompt } — show the prompt to the user and call again with acceptBuildMismatch: true only if they agree. Success: { ok: true, verdict: \"installed\", name, version, dir, files, build, notes, report (validate_mod of the installed mod) }; refusal: { ok: false, verdict: \"refused\", code, reason }.",
+    (a) => api.installMod(resolveReadPath(a.zip), { acceptBuildMismatch: a.acceptBuildMismatch }),
+  ),
+  def(
+    "read_level",
+    "Read a room (an encounter layout, levels/<folder>/<name>.lvl: a 10x10 tile grid of data/tiles.gon ids plus objects placed by data/spawns.gon id; 0xffff in the file = a weighted random list, here [{id, weight}]). With path: { level, base64, bytes }; without: the mod's levels with a summary. palette: true adds the tile and object palettes (base + this mod's .append/.merge/.patch) with names, classes (tile WaterTile / object Rat / utility PlayerSpawn) and swatch colours. The web UI's Rooms mode edits the same files.",
+    (a) => {
+      const r = a.path ? api.readLevel(a.mod, a.path) : api.listLevels(a.mod);
+      if (!r.ok) throw new ToolError(r.error);
+      return a.palette ? { ...r, palette: api.levelPalette(a.mod) } : r;
+    },
+  ),
+  def(
+    "write_level",
+    "Write a room levels/<folder>/<name>.lvl inside the mod (the only place it writes; byte-identical for an unedited level). Give the whole level (as read_level returns it), its bytes (base64), and/or edits: [{ op: tile|object|remove, x, y, id | object: <spawns name> | random: [{id|object, weight}] }] applied to it, to the file on disk, or to an empty 10x10 room. Returns { ok, path, bytes, findings } with the lvl-* validator findings (lvl-unknown-spawn-id, lvl-unknown-tile-id, lvl-no-player-spawn, …). To start a room with 4 player spawns and 2 Rats use new_from_template kind room; play it with the console command load <folder>/<name> in a test fight.",
+    (a) => {
+      const r = api.writeLevelFrom(a.mod, a.path, { level: a.level, base64: a.base64, edits: a.edits, dryRun: a.dryRun });
+      if (!r.ok) throw new ToolError(r.error);
+      return r;
+    },
   ),
 ];
 

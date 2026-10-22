@@ -9,12 +9,16 @@
 import { createStore } from "../store.ts";
 import { S, toast } from "../state.ts";
 import { getJson, post, url } from "../api.ts";
-import { createPreview, type Preview } from "./preview-gl.ts";
+import { createPreview, type Preview, type PreviewView } from "./preview-gl.ts";
+import { BUILTIN_GHOST_PARTS, ghostCatsIn, ghostBounds } from "../../../src/core/art/ghost-cat.ts";
+import type { GhostParts } from "../../../src/core/art/ghost-cat.ts";
 import { grayLevelToByte } from "../../../src/core/art/scene.ts";
 import { adoptGradients } from "../../../src/core/art/gradient.ts";
 import { shapeToSvg } from "../../../src/core/art/svg-export.ts";
 import { parseViewBox, reoriginSvg } from "../../../src/core/art/svg-reorigin.ts";
 import { bakeGlow } from "../../../src/core/art/glow.ts";
+import { addBitmapToScene } from "../../../src/core/art/raster.ts";
+import type { RasterMode } from "../../../src/core/art/raster.ts";
 import type { BakeGlowOptions } from "../../../src/core/art/glow.ts";
 import type {
   AbcMode,
@@ -25,6 +29,7 @@ import type {
   BuildResponse,
   Finding,
   ImportSvgResponse,
+  ImportBitmapResponse,
   InspectResponse,
   NewSceneResponse,
   PaletteResponse,
@@ -69,6 +74,18 @@ export interface ArtState {
   // VectorCraft tab: the shape it targets and a counter bumped by every "Open in VectorCraft" request
   vcShape: string;
   vcRequest: number;
+  // ghost cat (preview-only placeholders in a parts: "game" rig's empty slots): on/off is a per-viewer convenience
+  ghostCat: boolean;
+  ghostSource: GhostParts["source"];
+}
+
+const GHOST_PREF_KEY = "mewged.art.ghostCat";
+function readGhostPref(): boolean {
+  try {
+    return typeof window === "undefined" || window.localStorage.getItem(GHOST_PREF_KEY) !== "0";
+  } catch {
+    return true;
+  }
 }
 
 export const A = createStore<ArtState>({
@@ -102,6 +119,8 @@ export const A = createStore<ArtState>({
   dropOver: false,
   vcShape: "",
   vcRequest: 0,
+  ghostCat: readGhostPref(),
+  ghostSource: "builtin",
 });
 
 /** The open scene, edited in place; read `A.rev` from a component to track edits. */
@@ -182,6 +201,19 @@ export async function loadArtForMod(modName: string): Promise<void> {
       /* preview falls back to the identity ramp */
     }
   }
+  if (!ghostPartsLoaded) {
+    ghostPartsLoaded = true;
+    try {
+      const gp = await getJson<GhostParts>("/api/art/ghost-parts");
+      if (gp && gp.parts) {
+        ghostParts = gp;
+        A.set({ ghostSource: gp.source });
+        if (pv) pv.setExtraBounds(ghostExtraBounds);
+      }
+    } catch {
+      /* the built-in silhouettes stay */
+    }
+  }
   bump();
 }
 
@@ -227,7 +259,7 @@ export function scheduleValidate(): void {
 }
 async function runValidate(): Promise<void> {
   if (!scene) return;
-  const r = await post<"/api/art/validate", SceneValidateResponse>("/api/art/validate", { scene: sceneBody(scene) });
+  const r = await post<"/api/art/validate", SceneValidateResponse>("/api/art/validate", { scene: sceneBody(scene), mod: mod() });
   A.set({ findings: r.findings || [] });
   pushSceneToPreview(r.scene);
   bump();
@@ -391,18 +423,68 @@ export async function applyVectorcraftSvg(id: string, exportedSvg: string, origi
   toast(`applied VectorCraft's drawing to shape "${id}" (${r.shape.paths.length} paths${re.dx || re.dy ? `, re-origined by ${re.dx},${re.dy}` : ""})`);
 }
 
-/** Drop / file-picker entry: an SVG becomes a shape of the open scene, or of a new scene if none is open. */
+/** base64 of bytes, chunked (String.fromCharCode(...big) overflows the argument limit) */
+function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+export interface ImportPngOptions {
+  mode?: RasterMode;
+  scale?: number;
+  smooth?: boolean;
+  repeat?: boolean;
+}
+
+/**
+ * Import PNG…: the server checks the PNG and writes it to art/<id>.png; addBitmapToScene (raster.ts, the same code as
+ * MCP import_bitmap) adds <id>Bmp, the shape <id> and — sprite / background — the exported 1-frame clip <id>Clip.
+ */
+export async function importPngFile(file: File, opts: ImportPngOptions = {}): Promise<void> {
+  if (!scene) return toast("open or create a scene first");
+  const sc = scene;
+  const base = file.name.replace(/\.png$/i, "").replace(/[^A-Za-z0-9_]/g, "_") || "Bitmap";
+  const stem = /^[A-Za-z_]/.test(base) ? base : `Bitmap_${base}`;
+  const taken = (x: string) => !!(sc.shapes[x] || sc.sprites[x] || (sc.bitmaps || {})[x] || sc.exports[x]);
+  let id = stem;
+  let n = 2;
+  while (taken(id) || taken(`${id}Bmp`) || taken(`${id}Clip`)) id = `${stem}_${n++}`;
+  const r = await post<"/api/art/import-bitmap", ImportBitmapResponse>("/api/art/import-bitmap", { mod: mod(), base64: toBase64(new Uint8Array(await file.arrayBuffer())), id });
+  if (!r.ok || !r.width || !r.height || !r.relPath) {
+    A.set((a) => ({ findings: [...(r.findings || []), ...a.findings] }));
+    return toast(`PNG import failed: ${r.error || "see findings"}`);
+  }
+  const add = addBitmapToScene(sc, { id, file: r.relPath, width: r.width, height: r.height, ...opts });
+  if (!add.ok) {
+    A.set((a) => ({ findings: [...add.findings, ...a.findings] }));
+    return toast(`PNG import failed: ${add.findings[0] ? add.findings[0].message : "?"}`);
+  }
+  sc.bitmaps = add.scene.bitmaps;
+  sc.shapes = add.scene.shapes;
+  sc.sprites = add.scene.sprites;
+  sc.exports = add.scene.exports;
+  A.set((a) => ({ findings: [...add.findings, ...(r.findings || []), ...a.findings], subtab: "shapes", target: add.spriteId || id }));
+  toast(`imported ${file.name} (${r.width}×${r.height}) as ${add.spriteId ? `the clip "${add.spriteId}" exported as ${add.exportName}` : `the bitmap-filled shape "${id}"`}`);
+  scheduleValidate();
+  bump();
+  pushSceneToPreview();
+}
+
+/** Drop / file-picker entry: an SVG becomes a shape of the open scene, or of a new scene if none is open; a PNG a raster sprite. */
 export async function importIntoSceneOrNew(f: File): Promise<void> {
-  if (!/\.svg$/i.test(f.name)) return toast("only .svg files are importable here (PNG bitmaps are referenced from the scene JSON)");
+  const png = /\.png$/i.test(f.name);
+  if (!png && !/\.svg$/i.test(f.name)) return toast("drop an .svg (a vector shape) or a .png (a raster sprite)");
   if (!scene) {
     if (!mod()) return toast("open a mod first");
-    const name = f.name.replace(/\.svg$/i, "").replace(/[^A-Za-z0-9_.-]/g, "_") || "art";
+    const name = f.name.replace(/\.(svg|png)$/i, "").replace(/[^A-Za-z0-9_.-]/g, "_") || "art";
     const r = await post<"/api/art/new-scene", NewSceneResponse>("/api/art/new-scene", { mod: mod(), name, starter: false });
     if (!r.ok) return toast(`could not create scene: ${r.error}`);
     await loadArtForMod(mod());
     await openScene(r.relPath);
   }
-  await importSvgFile(f);
+  if (png) await importPngFile(f);
+  else await importSvgFile(f);
 }
 
 // ---- preview (wraps web/src/art/preview-gl.ts) -------------------------------------------
@@ -430,7 +512,9 @@ export function ensurePreview(): Preview {
     // keep the transport's play/pause label truthful, including when playback
     // auto-stops on the last frame with loop off.
     onPlaying: (p: boolean) => A.set({ playing: p }),
+    onRender: drawGhosts,
   });
+  pv.setExtraBounds(ghostExtraBounds);
   const a = A.get();
   pv.setPalette(a.palette && a.palette.ok ? a.palette.rows : null);
   pv.setPaletteRow(a.row);
@@ -515,4 +599,71 @@ export function rampColor(level: number): string {
   const row = pal.rows[Math.max(0, Math.min(pal.rows.length - 1, a.row))] || [];
   const c = row[level] || [0, 0, 0];
   return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+// ---- ghost cat (preview only: src/core/art/ghost-cat.ts; never in the scene, the SWF or the findings) ----------------
+let ghostParts: GhostParts = BUILTIN_GHOST_PARTS;
+let ghostPartsLoaded = false;
+let ghostSvg: SVGSVGElement | null = null;
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** The one persistent overlay the Preview panel mounts over the canvas: the ghost silhouettes and their slot labels. */
+export function ghostLayer(): SVGSVGElement {
+  if (!ghostSvg) {
+    ghostSvg = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
+    ghostSvg.setAttribute("class", "ghost-cat");
+    ghostSvg.setAttribute("aria-hidden", "true");
+  }
+  return ghostSvg;
+}
+
+/** Turn the ghost cat on/off (remembered per viewer in this browser). */
+export function setGhostCat(on: boolean): void {
+  A.set({ ghostCat: on });
+  try {
+    window.localStorage.setItem(GHOST_PREF_KEY, on ? "1" : "0");
+  } catch {
+    /* private mode / blocked storage: the toggle still works for this session */
+  }
+  if (pv) pv.setExtraBounds(ghostExtraBounds); // re-fit with or without the ghosts (renders)
+}
+
+/** "Fit" includes the ghosts of every frame, so an all-empty rig is framed like the cat it will be. */
+function ghostExtraBounds(id: string) {
+  if (!scene || !A.get().ghostCat) return null;
+  const sp = scene.sprites[id];
+  const n = sp ? Math.max(1, sp.frames | 0) : 1;
+  let out = null as ReturnType<typeof ghostBounds>;
+  for (let f = 0; f < n; f++) {
+    const b = ghostBounds(ghostCatsIn(scene, id, f, f, ghostParts));
+    if (b) out = out ? { xmin: Math.min(out.xmin, b.xmin), ymin: Math.min(out.ymin, b.ymin), xmax: Math.max(out.xmax, b.xmax), ymax: Math.max(out.ymax, b.ymax) } : b;
+  }
+  return out;
+}
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+const num = (v: number) => String(Math.round(v * 1000) / 1000);
+
+/** Redraw the overlay for what the preview just rendered (called after every render, playback included). */
+function drawGhosts(view: PreviewView): void {
+  const svg = ghostSvg;
+  if (!svg) return;
+  const ghosts = scene && view.target && A.get().ghostCat ? ghostCatsIn(scene, view.target, view.frame, view.clock, ghostParts) : [];
+  svg.setAttribute("data-source", ghostParts.source);
+  if (!ghosts.length) {
+    if (svg.firstChild) svg.textContent = "";
+    return;
+  }
+  const z = view.zoom;
+  const toCss = (x: number, y: number): [number, number] => [(x - view.center[0]) * z + view.width / 2, (y - view.center[1]) * z + view.height / 2];
+  const view2css = `matrix(${num(z)} 0 0 ${num(z)} ${num(view.width / 2 - view.center[0] * z)} ${num(view.height / 2 - view.center[1] * z)})`;
+  let parts = "";
+  let labels = "";
+  for (const g of ghosts) {
+    const m = g.matrix.map(num).join(" ");
+    parts += `<g class="ghost-part" data-slot="${esc(g.slot)}" opacity="${num(Math.max(0, Math.min(1, g.alpha)))}"><path d="${esc(g.d)}" fill-rule="${g.fillRule}" transform="matrix(${m})" vector-effect="non-scaling-stroke"/></g>`;
+    const [x, y] = toCss(g.at[0], g.at[1]);
+    labels += `<text class="ghost-label" x="${num(x)}" y="${num(y)}">${esc(g.label)}</text>`;
+  }
+  svg.innerHTML = `<g transform="${view2css}">${parts}</g><g>${labels}</g>`;
 }

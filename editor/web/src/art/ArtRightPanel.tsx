@@ -7,7 +7,8 @@ import React, { useEffect, useRef } from "react";
 import { useStore } from "../store.ts";
 import { S, toast } from "../state.ts";
 import { post } from "../api.ts";
-import { A, getScene, bump, build, ensurePreview, getPreview, previewCanvas, pushSceneToPreview, setTarget, setShowGray, setRow, rampColor } from "./art-state.ts";
+import { A, getScene, bump, build, ensurePreview, getPreview, previewCanvas, ghostLayer, setGhostCat, pushSceneToPreview, setTarget, setShowGray, setRow, rampColor } from "./art-state.ts";
+import { hasGhostRig } from "../../../src/core/art/ghost-cat.ts";
 import { sx, FindingRow } from "./Bits.tsx";
 import type { ArtRightTab, PrepareGateResponse } from "./types.ts";
 import { RufflePanel } from "./RufflePanel.tsx";
@@ -156,6 +157,8 @@ function PreviewPanel() {
   const target = useStore(A, (a) => a.target);
   const backend = useStore(A, (a) => a.backend);
   const pvStatus = useStore(A, (a) => a.pvStatus);
+  const ghostCat = useStore(A, (a) => a.ghostCat);
+  const ghostSource = useStore(A, (a) => a.ghostSource);
   useStore(A, (a) => a.frames); // the target list (frame counts) tracks the pushed scene
   useStore(A, (a) => a.rev);
   const box = useRef<HTMLDivElement>(null);
@@ -165,16 +168,21 @@ function PreviewPanel() {
     if (!el) return;
     const canvas = previewCanvas();
     el.insertBefore(canvas, el.firstChild);
+    const ghosts = ghostLayer();
+    el.insertBefore(ghosts, canvas.nextSibling);
     const p = ensurePreview();
     p.resize();
     pushSceneToPreview();
     p.render();
     return () => {
       if (canvas.parentNode === el) el.removeChild(canvas);
+      if (ghosts.parentNode === el) el.removeChild(ghosts);
     };
   }, []);
   const pv = getPreview();
   const targets = pv && hasScene ? pv.getTargets() : [];
+  const sc = getScene();
+  const ghostable = !!sc && hasScene && hasGhostRig(sc, target);
   return (
     <div className="pvwrap">
       {!hasScene ? (
@@ -187,6 +195,12 @@ function PreviewPanel() {
               <option key={t.id} value={t.id}>{`${t.id}${t.kind === "sprite" ? ` (${t.frames}f)` : t.kind === "stage" ? " (main timeline)" : ""}`}</option>
             ))}
           </select>
+          {ghostable ? (
+            <label title={`Preview only: grey placeholders (${ghostSource === "catparts.swf" ? "outlines from the game's catparts.swf" : "built-in silhouettes; extract the game files for the real outlines"}) where the game draws the cat's own parts into the empty slots. Never in the SWF.`}>
+              <input type="checkbox" aria-label="ghost cat" checked={ghostCat} onChange={(e) => setGhostCat(e.target.checked)} />
+              ghost cat
+            </label>
+          ) : null}
           <div className="grow" />
           <button className="btn ghost sm" onClick={() => { const p = getPreview(); if (p) { p.setZoom("fit"); p.render(); } }}>Fit</button>
         </div>

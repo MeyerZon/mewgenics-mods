@@ -1,0 +1,36 @@
+# OBSERVED 2026-10-22 (build 25143593): mods/dev-sandbox/tests/mesh-probe.mewtest (mods: dev-sandbox, fw-3d) with
+# MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/crate.obj — the mesh / obj3d lines of mod_logs/mewframework.log
+# (run 20261022-151053-dev-sandbox-mesh-tex-crate; run: pass, 1 real save file(s) unchanged; PR #117's in-process GL shots, judged by mesh-measure.ts judgeColourPatch).
+mesh: probe cube on tile (3,3) (MEWFW_MESH_PROBE); probe model models/crate.obj
+hook installed: Camera::RenderOneLayer (observe3d) rva 0x979210 (observe3d: 0 window(s) of 60 world frames; meshes: on)
+Place3DObjectOnTile(4, 3, models/crate.obj): ok handle 1 (1 object(s))
+mesh: shaders/fw_mesh.shader found on the mod path
+mesh probe f=1 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.08)
+mesh: model models/crate.obj loaded: 24 verts, 36 indices, bounds (-0.40 0.00 -0.40)-(0.40 0.80 0.40)
+mesh: texture models/crate.png for models/crate.obj: loaded 16x16 (Texture2D 0000028539ca8360, gl name 40 at load)
+mesh object f=1 handle=1 model=models/crate.obj tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0935 0.047) tex=models/crate.png palette=-1
+mesh: program 102 ready (mods/fw-3d/shaders/fw_mesh.shader; fw_mvp 9, fw_base_color 2, fw_light_dir 7)
+mesh: uploaded the unit cube: 24 verts / 36 indices (vao 76)
+mesh: uploaded models/crate.obj: 24 verts / 36 indices (vao 77)
+mesh: texture models/crate.png gl name 40 (Texture2D+0x8, read at replay; unit 0, fw_has_tex 1)
+mesh draw f=1 n=1 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0
+mesh: texture models/crate.png gl name 40 (Texture2D+0x8, read at replay; unit 0, fw_has_tex 1)
+mesh draw f=2 n=2 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0
+mesh: texture models/crate.png gl name 40 (Texture2D+0x8, read at replay; unit 0, fw_has_tex 1)
+mesh draw f=3 n=3 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0
+mesh: texture models/crate.png gl name 40 (Texture2D+0x8, read at replay; unit 0, fw_has_tex 1)
+mesh draw f=4 n=4 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0
+mesh: texture models/crate.png gl name 40 (Texture2D+0x8, read at replay; unit 0, fw_has_tex 1)
+mesh: texture models/crate.png gl name 40 (Texture2D+0x8, read at replay; unit 0, fw_has_tex 1)
+mesh probe f=61 tile=(3,3) ndc=(1.49e-08 -0.201 0.0409) canvas=(640.00 432.42)
+mesh object f=61 handle=1 model=models/crate.obj tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.117 0.047) tex=models/crate.png palette=-1
+mesh probe f=121 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh object f=121 handle=1 model=models/crate.obj tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0936 0.047) tex=models/crate.png palette=-1
+mesh probe f=181 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh object f=181 handle=1 model=models/crate.obj tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0936 0.047) tex=models/crate.png palette=-1
+mesh probe f=241 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh object f=241 handle=1 model=models/crate.obj tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0936 0.047) tex=models/crate.png palette=-1
+mesh probe f=301 tile=(3,3) ndc=(1.49e-08 -0.178 0.0409) canvas=(640.00 424.12)
+mesh object f=301 handle=1 model=models/crate.obj tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0936 0.047) tex=models/crate.png palette=-1
+mesh object f=361 handle=1 model=models/crate.obj tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0936 0.047) tex=models/crate.png palette=-1
+mesh object f=421 handle=1 model=models/crate.obj tile world=(4.50 0.00 3.50) ndc=(0.0951 -0.0936 0.047) tex=models/crate.png palette=-1

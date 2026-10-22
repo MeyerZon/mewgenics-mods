@@ -1,0 +1,5 @@
+ModCat {
+	graphics {
+		movieclip _CAT
+	}
+}

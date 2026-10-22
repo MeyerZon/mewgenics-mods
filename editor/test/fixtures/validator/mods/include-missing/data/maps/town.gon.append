@@ -1,0 +1,5 @@
+// adds a node list to town.gon; one include exists in the base, one exists nowhere
+newstuff {
+	#include "std_nodes.gon"
+	#include "nope_nodes.gon"
+}

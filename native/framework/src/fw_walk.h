@@ -23,6 +23,12 @@ static inline char    fw_walk_status_temporary(const void *status) { return *((c
 /* The first component of `character` whose vtable is `vt` and that is neither removing nor temporary; NULL if none
  * (also when character or its entity is NULL). */
 void *fw_walk_find_status(void *character, const void *vt);
+/* The same over an Entity directly (the `entity` apply_status resolves from its ctx): the glow apply's merge lookup */
+void *fw_walk_entity_find_status(void *entity, const void *vt);
+
+/* The first component of `character` whose vtable is `vt` and that is not removing, temporary ones included (a
+ * glow status granted as a Temporary still glows until it expires); NULL if none or NULL character/entity. */
+void *fw_walk_find_live(void *character, const void *vt);
 
 /* Index of `vt` in vts[0..count), -1 if absent (a NULL vt never matches). */
 int fw_walk_vt_index(void *const *vts, int count, const void *vt);
@@ -33,9 +39,13 @@ typedef void (*FwWalkVisit)(int defIndex, void *component, void *user);
 int fw_walk_each_custom(void *character, void *const *vts, int count, FwWalkVisit cb, void *user);
 
 /* ---- apply_status(name, ctx, stacks, src, p5, p6, temporary, p8) argument resolution ---- */
-typedef struct FwApplyResolved { void *character; void *entity; void *source; void *applier; } FwApplyResolved;
-/* character/entity from ctx; source = src or defaultSource; applier = p5, else p6->applier, else NULL */
+typedef struct FwApplyResolved { void *scene; void *entity; void *source; void *applier; } FwApplyResolved;
+/* scene/entity from ctx (a Component in every shape: the passive component, the Character itself; its +0x18 = the
+ * unit's entity, +0x20 = the Scene, which LuckUp_ctor takes first exactly as the vanilla apply passes it); source = src or defaultSource; applier = p5, else p6->applier, else NULL */
 void fw_walk_apply_resolve(const void *ctx, void *src, void *p5, const void *p6, void *defaultSource, FwApplyResolved *out);
+/* The instance of vt an apply_status with this resolution merges into (fw_walk_apply_merges decides whether it does):
+ * the first non-removing, non-temporary one among the components of the unit the apply targets; NULL if none. */
+void *fw_walk_apply_existing(const FwApplyResolved *a, const void *vt);
 /* an existing instance is merged into unless the apply is temporary; otherwise a new object is constructed */
 static inline int fw_walk_apply_merges(const void *existing, char temporary) { return existing != NULL && temporary == 0; }
 /* the merge writes: stacks += delta, applier, applierOwner (= *(applier + OFF_APPLIER_OWNER), NULL without an applier);

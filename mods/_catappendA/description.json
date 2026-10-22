@@ -1,0 +1,7 @@
+{
+  "title": "Multi-append probe A (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: one of two mods that each append cat animations to the vanilla CatTest clip from their own SWF (_Append_CatTest), so the harness shows how the game merges two mods' appends and what a label both define resolves to. Never for play.",
+  "requirements": []
+}

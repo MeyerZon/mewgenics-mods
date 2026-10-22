@@ -1,0 +1,24 @@
+mods: _artprobe, _autoplay
+timeout: 120s
+hide: false
+# Raster palette probe (2026-10-22): ArtProbeRasterCat is a _CAT (palette 54) whose idle is probe.swf's appended
+# CatTest frame probeRaster (withRasterCatFrame: the rig's slots are empty, the game fills them; plus the marker and a
+# 16-level gray ramp as a bitmap and as vector gray:N squares). art-probe.ts --raster compares each cell with palette
+# row 54. ArtProbeCatReal (A0's frame on the same donor) is spawned first as the control that the donor plays.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+cmd spawn ArtProbeCatReal
+expect console "Spawned ArtProbeCatReal" within 10
+wait frames 120
+shot "a0"
+cmd spawn ArtProbeRasterCat
+expect console "Spawned ArtProbeRasterCat" within 10
+wait frames 120
+shot "cat 1"
+wait frames 20
+shot "cat 2"
+wait frames 20
+shot "cat 3"
+quit

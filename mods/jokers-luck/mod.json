@@ -1,0 +1,13 @@
+{
+  "name": "jokers-luck",
+  "version": "0.1.0",
+  "author": "MeyerZon",
+  "description": "Sample mod: Joker's Luck, a status that rerolls the unit's luck modifier to a random value from -10 to +10 at the start of each of its turns. Data half (this folder) plus a native DLL loaded through Mewjector + mewframework.",
+  "gameBuild": "25143593",
+  "native": [
+    "jokers_luck.dll"
+  ],
+  "frameworkApi": 8,
+  "license": "MIT",
+  "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
+}

@@ -1,0 +1,7 @@
+{
+  "name": "not-the-folder",
+  "version": "one",
+  "author": "fixture",
+  "description": "validator fixture: triggers manifest-invalid",
+  "gameBuild": "1.1.21239"
+}

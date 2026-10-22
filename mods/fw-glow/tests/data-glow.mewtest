@@ -1,0 +1,20 @@
+mods: fw-glow
+timeout: 90s
+hide: false
+# Glow from DATA (no mod DLL, no harness `glow` directive): mods/fw-glow appends FwGlowRat, a Rat variant whose
+# passives grant the status FwGlow_ff00ff on spawn (StatusOnSpawnIn). The framework recognises the status NAME in its
+# apply_status hook and asks the glow engine for a magenta rim (docs/data-mods.md "Asking for a unit glow from data").
+# editor/scripts/unit-glow-probe.ts --data (`npm run test:unitglow -- --data`) runs this and measures magenta in the
+# two shots (glow-measure.ts): "glow" must add a connected magenta patch the pre-spawn "noglow" shot lacks.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+shot "noglow"
+cmd spawn FwGlowRat
+expect console "Spawned FwGlowRat" within 10
+wait frames 60
+dump
+expect status FwGlow_ff00ff on "Lil' Rat"
+shot "glow"
+quit

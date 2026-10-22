@@ -29,7 +29,7 @@ export const PreviewBody = z.object({
 });
 
 /** Mirrors TemplateKind in src/core/templates. */
-export const TemplateKind = z.enum(["ability", "passive", "item", "status-data"]);
+export const TemplateKind = z.enum(["ability", "passive", "item", "status-data", "room", "tileset-variant", "particle", "vfx-ability", "glowing-character"]);
 /** Mirrors the abc modes buildSwf accepts (src/core/art/art-io). */
 export const AbcMode = z.enum(["none", "stub"]);
 /** Mirrors SWF_GATE_VARIANTS in src/core/art/art-io. */
@@ -58,7 +58,7 @@ export const ArtNewSceneBody = z.object({
   animation: str.optional(),
 });
 
-export const ArtValidateBody = z.object({ scene: anyObject });
+export const ArtValidateBody = z.object({ scene: anyObject, mod: str.optional() });
 
 export const ArtExportSvgBody = z.object({
   mod: str,
@@ -84,10 +84,36 @@ export const ArtBuildBody = z.object({
 
 export const ArtAssetBody = z.object({ mod: str, path: str, base64: str });
 
+/** Import PNG…: check the PNG and (with mod) write it to art/<id>.png; the UI then adds it to the open scene (raster.ts). */
+export const ArtImportBitmapBody = z.object({ base64: str, mod: str.optional(), id: str.optional() });
+
 export const PrepareSwfGateBody = z.object({
   mod: str.optional(),
   variant: SwfGateVariant.default("flat"),
 });
+
+/** Export… (docs/data-mods.md "Shipping a mod"): pack mods/<mod>/ into editor/data/dist/. */
+export const ModPackBody = z.object({ mod: str, force: z.boolean().optional(), init: z.boolean().optional() });
+/** Import mod…: the zip's bytes; always installs into the repo's mods/ (strict: no `into`). */
+export const ModInstallBody = z.strictObject({ base64: str, fileName: str.optional(), acceptBuildMismatch: z.boolean().optional() });
+// ---- rooms (src/core/level/lvl.ts LvlFile; ranges are checked by the core's structuralErrors) ----
+const int = z.number().int();
+export const LvlChoiceSchema = z.object({ id: int, weight: int });
+/** A palette id, or a weighted random list (0xffff + list in the file). */
+export const LvlPickSchema = z.union([int, z.array(LvlChoiceSchema)]);
+export const LvlFileSchema = z.object({
+  version: int,
+  width: int,
+  height: int,
+  objectPalette: str,
+  tilePalette: str,
+  tiles: z.array(LvlPickSchema),
+  objects: z.array(z.object({ x: int, y: int, id: LvlPickSchema })),
+  raw: z.object({ layers: int, a: int, b: int, width2: int, height2: int, pad1: int, pad2: int, trailer: int }).optional(),
+});
+
+export const LevelWriteBody = z.object({ mod: str, path: str, level: LvlFileSchema, dryRun: z.boolean().optional() });
+export const LevelValidateBody = z.object({ mod: str, path: str, level: LvlFileSchema });
 
 /** Route → body schema. Keys are the exact POST paths web/server serves. */
 export const API_BODY = {
@@ -99,10 +125,15 @@ export const API_BODY = {
   "/api/art/new-scene": ArtNewSceneBody,
   "/api/art/validate": ArtValidateBody,
   "/api/art/import-svg": ArtImportSvgBody,
+  "/api/art/import-bitmap": ArtImportBitmapBody,
   "/api/art/export-svg": ArtExportSvgBody,
   "/api/art/build": ArtBuildBody,
   "/api/art/asset": ArtAssetBody,
   "/api/art/prepare-swf-gate": PrepareSwfGateBody,
+  "/api/mod/pack": ModPackBody,
+  "/api/mod/install": ModInstallBody,
+  "/api/level": LevelWriteBody,
+  "/api/level/validate": LevelValidateBody,
 } as const;
 
 export type PostRoute = keyof typeof API_BODY;

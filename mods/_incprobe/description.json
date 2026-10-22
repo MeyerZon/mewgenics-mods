@@ -1,0 +1,7 @@
+{
+  "title": "Include probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: IncProbe, a Rat variant whose properties come from an #include of a file this mod ships (data/characters/incprobe_props.gon), and IncProbeMacro, a Rat variant written with a two-argument #define macro. tests/include-probe.mewtest spawns both and reads the merged GON the game holds. Never for play.",
+  "requirements": []
+}

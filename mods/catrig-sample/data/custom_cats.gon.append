@@ -1,0 +1,25 @@
+// the cat rig sample: Mangy's distinctive part indices on TomTom's palette 9 (as _artprobe's ArtProbeParts), so the
+// parts CatParts draws into RigSampleCatClip's empty slots are recognisably not TomTom's defaults
+RigSampleParts {
+    default_frame 1001
+    texture 1000
+    claws 1
+    palette 9
+
+    body 1001
+    head 1001
+    tail 1001
+    leg1 1
+    leg2 1001
+    arm1 2
+    arm2 1001
+    lefteye 1001
+    righteye 1
+    lefteyebrow 1001
+    righteyebrow 1001
+    leftear 1
+    rightear 1001
+    mouth 1001
+
+    voice male4
+}

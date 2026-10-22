@@ -29,6 +29,8 @@ import type { Rect, Rgba } from "./swf-bits.ts";
 export interface ShapeContext {
   /** scene bitmap id → character id of its DefineBitsLossless2 */
   bitmapIds?: Map<string, number>;
+  /** scene bitmap id → its fill type (raster.ts bitmapFillType: 0x40 / 0x41 / 0x42 / 0x43); default 0x41 */
+  bitmapTypes?: Map<string, number>;
   /** scene id, used in finding paths */
   shapeName?: string;
   /** quadratics per cubic (geometry default 4) */
@@ -53,7 +55,7 @@ export interface EncodedShape {
 
 type FillDef =
   | { kind: "solid"; color: Rgba }
-  | { kind: "bitmap"; id: number; matrix: Mat }
+  | { kind: "bitmap"; id: number; matrix: Mat; type: number }
   | { kind: "gradient"; type: 0x10 | 0x12 | 0x13; matrix: Mat; stops: ResolvedStop[]; spread: 0 | 1 | 2; focal: number };
 interface LineDef {
   /** twips */
@@ -148,7 +150,8 @@ export function encodeDefineShape(shapeId: number, shape: SceneShape, ctx: Shape
       } else {
         const t = p.transform || IDENTITY;
         // bitmap px → shape twips: scale 20 after the path transform; translate stays px (writeMatrix ×20)
-        fillStyles.push({ kind: "bitmap", id: cid, matrix: [20 * t[0], 20 * t[1], 20 * t[2], 20 * t[3], t[4], t[5]] });
+        const type = (ctx.bitmapTypes && ctx.bitmapTypes.get(pf.fill.id)) ?? 0x41;
+        fillStyles.push({ kind: "bitmap", id: cid, matrix: [20 * t[0], 20 * t[1], 20 * t[2], 20 * t[3], t[4], t[5]], type });
         fillIdx = fillStyles.length;
       }
     } else if (pf.fill.kind === "gradient") {
@@ -331,7 +334,7 @@ function writeFillStyle(w: BitWriter, f: FillDef): void {
     }
     if (f.type === 0x13) w.u16(Math.round(f.focal * 256) & 0xffff); // FIXED8 focal point
   } else {
-    w.u8(0x41); // clipped bitmap
+    w.u8(f.type); // 0x40 repeat / 0x41 clipped (smoothed), 0x42 / 0x43 pixel-snapped
     w.u16(f.id);
     writeMatrix(w, f.matrix);
   }
@@ -354,7 +357,7 @@ function toTwips(sub: SubPath): { start: [number, number]; edges: Edge[] } {
 }
 
 /** StraightEdgeRecord(s) for a delta; splits deltas wider than 17 bits. Returns records written. */
-function writeStraight(w: BitWriter, dx: number, dy: number): number {
+export function writeStraight(w: BitWriter, dx: number, dy: number): number {
   if (dx === 0 && dy === 0) return 0;
   const nbits = Math.max(2, nbitsForSigned([dx, dy]));
   if (nbits > MAX_EDGE_BITS) {
@@ -378,7 +381,7 @@ function writeStraight(w: BitWriter, dx: number, dy: number): number {
 }
 
 /** CurvedEdgeRecord(s); splits (de Casteljau) when a delta needs more than 17 bits. */
-function writeCurve(w: BitWriter, x0: number, y0: number, cx: number, cy: number, x1: number, y1: number): number {
+export function writeCurve(w: BitWriter, x0: number, y0: number, cx: number, cy: number, x1: number, y1: number): number {
   const cdx = cx - x0;
   const cdy = cy - y0;
   const adx = x1 - cx;

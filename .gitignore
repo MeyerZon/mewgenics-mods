@@ -11,6 +11,12 @@ mods/*/swfs/
 *.dll
 *.o
 *.obj
+# ...except hand-written Wavefront OBJ text models (3D meshes): test fixtures and a mod's models/
+!native/framework/test/fixtures/mesh/*.obj
+!mods/*/models/*.obj
+# ...except hand-written OBJ models (text sources, not compiler output): a mod's models/ and the editor test fixtures
+!mods/*/models/**/*.obj
+!editor/test/fixtures/**/*.obj
 build/
 # local launcher output
 launch-*.local.bat
@@ -30,3 +36,5 @@ editor/web/public/vectorcraft.tmp/
 # editor: Playwright (dev-only) run output
 editor/test-results/
 editor/playwright-report/
+# art probes: big generated PNGs (written by editor/scripts/art-probe.ts --raster)
+mods/*/art/generated/

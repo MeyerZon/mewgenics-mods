@@ -1,0 +1,25 @@
+mods: _incprobe, _autoplay
+timeout: 120s
+# Include probe (2026-10-22): enemies.gon.append's IncProbe gets its properties from `#include "incprobe_props.gon"`,
+# a file this mod ships at data/characters/; small_enemies.gon.append's IncProbeMacro gets them from a two-argument
+# #define. Both are Rat variants; `expect gon` reads the merged entry the game holds (Character+0x240) and
+# `expect unit … hp` what Character::init made of it. Rat's own health is 5, so 77 / 55 can only come from the
+# include / the macro. (Positive case only: a missing include is a fatal error box.)
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+expect units == 8
+cmd spawn IncProbe
+expect console "Spawned IncProbe" within 10
+cmd spawn IncProbeMacro
+expect console "Spawned IncProbeMacro" within 10
+wait frames 10
+dump
+expect units == 10
+expect gon 8 properties.health == 77
+expect unit 8 hp == 77
+expect gon 9 properties.health == 55
+expect gon 9 properties.movement == 2
+expect unit 9 hp == 55
+quit

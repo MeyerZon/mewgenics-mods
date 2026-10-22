@@ -11,9 +11,9 @@
 
 #define FW_OWNER "mewframework"
 #define FW_VERSION_MAJOR 0
-#define FW_VERSION_MINOR 4
+#define FW_VERSION_MINOR 6
 #define FW_VERSION_PATCH 0
-#define FW_API_VERSION 4   /* bumped when functions are added; existing signatures never change */
+#define FW_API_VERSION 8   /* bumped when functions are added; existing signatures never change */
 
 /* Code symbols located by byte signature (see signatures.h). APPEND ONLY: mods compiled against an
  * older header keep working because the existing values never move. */
@@ -57,6 +57,29 @@ typedef enum FwSymbol {
     FW_SYM_Material_SetUniformFloat,    /* void (Material*, std::string name, float v) — callee destroys name */
     FW_SYM_Material_SetTexture,         /* void (Material*, std::string name, Texture*, int slot) — callee destroys name */
     FW_SYM_Camera_AddPostProcessPass,   /* Pass* (Camera*, Material*, int layer) — owned by the camera; never cache the Pass* */
+    /* facing (2026-10-22): the test harness's `face` directive (docs/engine-map.md "Facing: Character::Face") */
+    FW_SYM_Character_Face,              /* void (Character*, iVec2D dir (packed: x low, y high, by value in rdx), bool instant, bool forceTurnAnim) */
+    /* the campaign walk (mewtest's run start / run travel / run fight; docs/engine-map.md "Campaign walk") */
+    FW_SYM_MewDirector_GoOnAnAdventure, /* void (MewDirector*, std::string map, TeamType, int cats, bool debug) — by-value map, callee destroys; debug = generate the party, skip the class chooser */
+    FW_SYM_MapScreen_init,              /* void (MapScreen*, std::string map, bool debug) — hooked: the map screen of the run; by-value map, callee destroys */
+    FW_SYM_MapScreen_EnterNode,         /* void (MapScreen*, MapNode*) — what arriving at a node does (battle: BattleInTransition, then the pool pick + StartMapBattle) */
+    FW_SYM_MewDirector_StartMapBattle,  /* void* (MewDirector*, std::string levelPath, bool, bool) — hooked: the level the map pool picked; by-value, callee destroys */
+    /* glow v2: a unit's screen rect, as TacticsTest::LateRender computes the hovered unit's (per-unit colours) */
+    FW_SYM_Renderer_GetScreenMatrix,    /* float* (Renderer*, float out[16]) — the renderer's world-to-canvas matrix */
+    FW_SYM_Position_GetViewMatrix,      /* float* (Position*, float out[16], double interp) — a camera's view matrix (LateRender inverts it) */
+    /* API v7: cat rig redirect (catrig_engine.c; docs/engine-map.md "Cat rig redirect") */
+    FW_SYM_Character_init,              /* void (Character*, std::string* name, bool, bool) — by-value string, callee destroys; hooked (entry scope) */
+    FW_SYM_Swf_GetCharacterByName,      /* MovieClip* (void* unused, std::string* name) — by-value string, callee destroys; NULL when unknown; hooked */
+    FW_SYM_ApplicationBase_ProcessAnimationMerges, /* void (ApplicationBase*, SWF* file) — once per loaded SWF; post-hooked (the _CatRig_ scan) */
+    /* the 3D block (docs/possible_3d_work.md): the phase-0 observer's hook, and the view-projection a perspective camera replaces */
+    FW_SYM_Camera_render,               /* void (Camera*) — binds the RT (RTT cameras), stack top *= Camera_GetViewProjection, draws the enabled layers + passes */
+    FW_SYM_Camera_GetViewProjection,    /* float* (Camera*, float out[16]) — K x inverse(view): zoom +0x168, y-flip int +0x170, 1280x720 canvas centre 640,360 */
+    FW_SYM_Camera_RenderOneLayer,       /* void (Camera*, int layer) — how the world (TacticsTest+0x68) and UI cameras draw: one layer, own VP push */
+    /* M1 meshes (docs/possible_3d_work.md phase M): the draw functor, model bytes, the palette texture and material binding */
+    FW_SYM_Batch_SubmitFunctor,         /* void (unused, std::function<void()>* fn) — copies fn into the frame recording (run at replay via slot 2), destroys the argument */
+    FW_SYM_ResourceManager_GetBinaryResource, /* BinaryResource* (unused, std::string path by value) — bytes via -modpaths then the gpak; data +0x28, int32 size +0x30; NULL when missing */
+    FW_SYM_App_GetTexture,              /* Texture2D* (unused, std::string name by value) — cached "textures/"+name; a missing file is dereferenced */
+    FW_SYM_Material_Bind,               /* void (Material*) — program, uniforms, textures through the engine caches */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -74,6 +97,15 @@ typedef enum FwData {
     FW_DATA_SDL_CreateWindowWithProperties,
     FW_DATA_MewDirector,                       /* MewDirector* global; non-null at the main menu of a dev launch (test director) */
     FW_DATA_ShaderManager,                     /* ShaderManager* global (API v4): the App object itself, material map at +0x278 */
+    /* the 3D block: render globals (docs/possible_3d_work.md K1-K13) */
+    FW_DATA_Iso,                               /* float[16] col-major: the iso basis (x, height, z columns) RendererIso projects through */
+    FW_DATA_IsoInverse,                        /* float[16]: the 2x2 ground inverse of Iso (picking) */
+    FW_DATA_RenderStateFlags,                  /* u8: current group flags (bit0 force, 2 depth test, 4 stencil, 8 colour+depth mask) */
+    FW_DATA_CullDisableCounter,                /* int: the 2D screen-space cull runs only while 0 */
+    FW_DATA_DepthBias,                         /* float: global depth_bias (+1 per depth-tested layer) */
+    FW_DATA_MatStackTop,                       /* int: matrix stack top index */
+    FW_DATA_CurrentCamera,                     /* Camera*: the camera rendering right now */
+    FW_DATA_MatStackData,                      /* float*: matrix stack data (top = data + MatStackTop * 16 floats) */
     FW_DATA_COUNT_
 } FwData;
 
@@ -118,11 +150,56 @@ FW_EXPORT int FW_CharacterHasStatus(void *character, const char *statusName);
 /* --- API v3: data addresses --- */
 FW_EXPORT uintptr_t FW_GetData(int dataId);   /* absolute address of a FwData entry, 0 if inactive/unknown */
 /* --- API v4: per-unit glow (combat scenes only; call on the game's main thread, e.g. from a turn callback or the
- * harness). Draws a coloured rim around the unit through the game's own outline-mask pipeline. v1 keeps ONE shared
- * colour (the first registered unit's); up to 16 units; registrations belong to the current fight scene and a unit
- * whose pool slot is reused is dropped. 1 on success. */
+ * harness). Draws a coloured rim around the unit through the game's own outline-mask pipeline, in the unit's own
+ * colour (glow v2: one material per distinct colour; with several colours each rim is scissored to its unit's screen
+ * rect, so units whose rects overlap share both colours there); up to 16 units; registrations belong to the current
+ * fight scene and a unit whose pool slot is reused is dropped. Same ABI as v4's first release. 1 on success. */
 FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a);
 FW_EXPORT int FW_ClearUnitGlow(void *character);   /* 1 when it was registered */
+/* --- API v5: a random stream for mods (fw_rng.c: splitmix64 + an unbiased bounded draw). Use it instead of the CRT
+ * rand: msvcrt keeps rand's state per thread, so a DLL's srand in DllMain never reaches the game thread and nothing
+ * can pin it. ONE stream shared by every mod, seeded when the framework loads from QueryPerformanceCounter, the
+ * process and the thread id (varied run to run) and re-seeded by the harness `seed <N>` directive with N (so every
+ * draw after it is identical run to run). Main thread only (turn callbacks, the harness); works on an inactive
+ * framework too. */
+FW_EXPORT uint32_t FW_Random(uint32_t bound);   /* uniform in [0, bound); 0 when bound == 0 */
+FW_EXPORT void FW_SeedRandom(uint64_t seed);    /* restart the stream from seed (the harness `seed` directive) */
+/* --- API v6: game speed. Multiplies the game's own time scale (App+0xdc0: combat_speed, hit pause, 1.0 elsewhere)
+ * once per rendered frame, so the fixed-step main loop runs factor x as many identical updates per frame: the
+ * simulation runs factor x faster in wall-clock time, deterministically (same dt, same RNG sequence). 1.0 = off
+ * (the game's value is restored); NaN / <= 0 -> 1.0; clamped to [1/16, 64]. Returns the factor kept, 0 if inactive.
+ * Call on the main thread. docs/engine-map.md "Frame timing and game speed". */
+FW_EXPORT double FW_SetTimeScale(double factor);
+FW_EXPORT double FW_GetTimeScale(void);   /* the current factor (1.0 = off), 0 if inactive */
+/* --- API v7: cat rigs. A `movieclip _CAT` character entry with a registered rig is drawn by the rig clip instead of
+ * the vanilla CatTest: the game keeps its whole cat path (CatData, CatParts, palette, face, shadow, the animation state
+ * machine) and CatParts fills the rig's named EMPTY slot sprites (tail leg2 arm2 body leg1 arm1 head) with the cat's
+ * own parts, as it does for any clip. The rig clip is a SymbolClass export of a loaded SWF whose root has the labels
+ * the game plays (<anim>F / <anim>B: idleF / idleB at least) placing the pose as the child `ani`. Data mods declare a
+ * rig with no DLL by exporting it as `_CatRig_<CharacterEntry>` (registered when the SWF loads); a DLL may register any
+ * export name for an entry. A rig clip that no loaded SWF exports leaves the vanilla CatTest in place (logged). One rig
+ * per entry (first registration wins), up to 16, names up to 63 bytes; `<Entry>_Champion` / `_Elite` use the entry's
+ * rig unless they have their own. 1 on success (also when the same pair is registered again). */
+typedef struct FwCatRigDef {
+    const char *character;   /* the data/characters entry name, e.g. "TomTom" */
+    const char *rig_clip;    /* the SymbolClass export that replaces CatTest for it */
+} FwCatRigDef;
+FW_EXPORT int FW_RegisterCatRig(const FwCatRigDef *def);
+FW_EXPORT const char *FW_CatRigFor(const char *character);   /* the rig clip registered for that entry, NULL if none */
+/* --- API v8: 3D objects (preview; docs/data-mods.md "3D models in a mod (preview)", docs/possible_3d_work.md phase M).
+ * Registers WHAT to draw and WHERE; mewframework's mesh engine resolves `model` (a model name registered with the mesh
+ * engine, or a mod path "models/<name>.obj" served through -modpaths) and draws it — until that engine ships these
+ * calls only record. `transform` is the object's own model matrix in world units (1 = one tile; axes = the game's
+ * (x, height, z)), column-major float[16], applied after the translation to the anchor; NULL = identity. Up to 64
+ * objects; they belong to the current fight scene (a new TacticsTest clears them); main thread only. --- */
+/* attach to a unit: the object follows it; one object per unit (registering again replaces model + transform and keeps
+ * the handle); dropped when the unit's pool slot is reused (generation check, like FW_SetUnitGlow). Returns the
+ * handle (> 0), 0 when refused (inactive, NULL unit, bad model name, 64 objects already). */
+FW_EXPORT int FW_Register3DObject(void *character, const char *model, const float transform[16]);
+/* place on a tile: anchored at the tile centre (col + 0.5, 0, row + 0.5); any number per tile. Handle > 0, 0 refused. */
+FW_EXPORT int FW_Place3DObjectOnTile(int col, int row, const char *model, const float transform[16]);
+/* remove a unit's object (character non-NULL; handle ignored) or the object with `handle` (character NULL). 1 when removed. */
+FW_EXPORT int FW_Unregister3DObject(void *character_or_null, int handle);
 
 typedef int (*FW_fn_GetVersion)(void);
 typedef int (*FW_fn_IsActive)(void);
@@ -134,6 +211,15 @@ typedef int (*FW_fn_CharacterHasStatus)(void *, const char *);
 typedef uintptr_t (*FW_fn_GetData)(int);
 typedef int (*FW_fn_SetUnitGlow)(void *, float, float, float, float);
 typedef int (*FW_fn_ClearUnitGlow)(void *);
+typedef uint32_t (*FW_fn_Random)(uint32_t);
+typedef void (*FW_fn_SeedRandom)(uint64_t);
+typedef double (*FW_fn_SetTimeScale)(double);
+typedef double (*FW_fn_GetTimeScale)(void);
+typedef int (*FW_fn_RegisterCatRig)(const FwCatRigDef *);
+typedef const char *(*FW_fn_CatRigFor)(const char *);
+typedef int (*FW_fn_Register3DObject)(void *, const char *, const float *);
+typedef int (*FW_fn_Place3DObjectOnTile)(int, int, const char *, const float *);
+typedef int (*FW_fn_Unregister3DObject)(void *, int);
 
 typedef struct FwApi {
     FW_fn_GetVersion GetVersion;
@@ -145,7 +231,16 @@ typedef struct FwApi {
     FW_fn_CharacterHasStatus CharacterHasStatus;
     FW_fn_GetData GetData;            /* v3 */
     FW_fn_SetUnitGlow SetUnitGlow;    /* v4 */
-    FW_fn_ClearUnitGlow ClearUnitGlow; /* v4; new fields are appended so older layouts stay valid prefixes */
+    FW_fn_ClearUnitGlow ClearUnitGlow; /* v4 */
+    FW_fn_Random Random;              /* v5 */
+    FW_fn_SeedRandom SeedRandom;      /* v5 */
+    FW_fn_SetTimeScale SetTimeScale;   /* v6 */
+    FW_fn_GetTimeScale GetTimeScale;   /* v6 */
+    FW_fn_RegisterCatRig RegisterCatRig; /* v7 */
+    FW_fn_CatRigFor CatRigFor;           /* v7 */
+    FW_fn_Register3DObject Register3DObject;       /* v8 */
+    FW_fn_Place3DObjectOnTile Place3DObjectOnTile; /* v8 */
+    FW_fn_Unregister3DObject Unregister3DObject;   /* v8; new fields are appended so older layouts stay valid prefixes */
 } FwApi;
 
 /* Resolve the framework's exports from the loaded module. Returns 1 when every function of
@@ -161,6 +256,7 @@ static inline int FW_Resolve(FwApi *api) {
     FW__R(RegisterStatus) FW__R(SetStatusStacks) FW__R(CharacterHasStatus)
     FW__R(GetData)
     FW__R(SetUnitGlow) FW__R(ClearUnitGlow)
+    FW__R(Random) FW__R(SeedRandom) FW__R(SetTimeScale) FW__R(GetTimeScale) FW__R(RegisterCatRig) FW__R(CatRigFor) FW__R(Register3DObject) FW__R(Place3DObjectOnTile) FW__R(Unregister3DObject)
 #undef FW__R
     return 1;
 }

@@ -15,10 +15,16 @@ export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
 export const UNIT_FIELDS = [
   "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
   "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck",
+  // facing (2026-10-22, Character::Face): the animation suffix, the stored direction, the flip and the facing sign
+  "facing", "dirx", "diry", "flip", "sign",
+  // effective (2026-10-22): after Character::recompute_stats folded every passive's / status's ApplyStatModifiers in
+  // (the units event's `effective` block: Character+0x5bc.., max HP +0x4bc)
+  "strength.effective", "dexterity.effective", "constitution.effective", "intelligence.effective",
+  "speed.effective", "charisma.effective", "luck.effective", "maxhp.effective",
 ] as const;
 export type UnitField = (typeof UNIT_FIELDS)[number];
 /** the `expect unit` fields that take a quoted value with == / != (the rest are integers with any op) */
-export const UNIT_STRING_FIELDS: readonly UnitField[] = ["name", "class", "namekey"];
+export const UNIT_STRING_FIELDS: readonly UnitField[] = ["name", "class", "namekey", "facing"];
 
 export interface Finding {
   line: number;
@@ -46,6 +52,12 @@ export type Directive =
   | { line: number; kind: "expect"; what: "gon"; unit: string; path: string; check: "exists" | "missing" }
   /** runner-side: debug.log (after the `[file: …]` prefix) contains substr; evaluated after the run, never sent to the DLL */
   | { line: number; kind: "expect"; what: "log"; substr: string }
+  /** runner-side: the integers right after `prefix` in successive console lines (the whole run) step by exactly
+   *  `deltas` (n deltas = n+1 matching lines); evaluated after the run from result.jsonl, never sent to the DLL */
+  | { line: number; kind: "expect"; what: "deltas"; prefix: string; deltas: number[] }
+  /** runner-side: this launch's mewframework.log window has a line containing substr (the framework's own lines —
+   *  catrig registrations / redirects, hook installs — reach neither the console nor debug.log) */
+  | { line: number; kind: "expect"; what: "fwlog"; substr: string }
   | { line: number; kind: "dump" }
   | { line: number; kind: "log"; text: string }
   | { line: number; kind: "quit"; code: number | null }
@@ -56,7 +68,26 @@ export type Directive =
   /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
   | { line: number; kind: "seed"; seed: string }
   /** per-unit glow (framework API v4): FW_SetUnitGlow(unit, rgba) or, with `off`, FW_ClearUnitGlow on a unit of the walk */
-  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null };
+  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null }
+  /** turn a unit of the walk (mewtest.dll: Character::Face(dir, instant)): a grid direction, or the named unmirrored
+   *  facing the DLL resolves from the unit's facing sign (front = (0, -sign), back = (sign, 0)) */
+  | { line: number; kind: "face"; unit: string; dir: [number, number] }
+  | { line: number; kind: "face"; unit: string; named: "front" | "back" }
+  /** the campaign walk (mewtest.dll: MtHost.run_step): start = GoOnAnAdventure(arg map), travel = EnterNode on the nearest
+   *  node of type arg, fight = wait for the battle that node started (its level path feeds `expect level`) */
+  | { line: number; kind: "run"; op: "start" | "travel" | "fight"; arg: string }
+  /** the level path the last `run fight` reported contains substr (DLL-side) */
+  | { line: number; kind: "expect"; what: "level"; substr: string }
+  /** game speed (framework API v6): FW_SetTimeScale(factor); `off` = 1 (the game's own scale back) */
+  | { line: number; kind: "speed"; factor: number };
+
+/** MapNode::str_to_type 0x225680's names in enum order; must agree with mt_walk.c NODE_TYPES. */
+export const NODE_TYPES = [
+  "none", "npc", "enter", "exit", "home", "battle", "hard", "miniboss", "boss", "event", "optional_event",
+  "special_event", "shop", "treasure", "furniturebox", "foodbox", "bonus", "empty", "any",
+] as const;
+/** `run start` without a map: the run's first map (mt_pure.h MT_RUN_DEFAULT_MAP) */
+export const RUN_DEFAULT_MAP = "alley.gon";
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
 export const KNOWN_SCENES = ["TacticsTest", "Campaign"];
@@ -181,7 +212,7 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         }
         if (rest2 === "varied") return { line: lineNo, kind: "expect", what: "stacks", status: m[1]!, unit, varied: true };
         if (rest2.startsWith("varied")) return { error: "expect stacks: unexpected text after varied" };
-        const op = /^(\S+)\s+(\d+)$/.exec(rest2);
+        const op = /^(\S+)\s+(-?\d+)$/.exec(rest2); // signed: stacks go below 0 (mt_script.c parse_int)
         if (!op) return { error: "expect stacks needs: <Status> on <unit> (<op> <N> | varied)" };
         if (!UNITS_OPS.includes(op[1]!)) return { error: `expect stacks: bad operator "${op[1]}" (${UNITS_OPS.join(" ")}) or varied` };
         return { line: lineNo, kind: "expect", what: "stacks", status: m[1]!, unit, op: op[1]!, n: Number(op[2]) };
@@ -206,9 +237,9 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (!(UNIT_FIELDS as readonly string[]).includes(field)) return { error: `expect unit: unknown field "${field}" (${UNIT_FIELDS.join("|")})` };
         if (!UNITS_OPS.includes(op)) return { error: `expect unit: bad operator "${op}" (${UNITS_OPS.join(" ")})` };
         if ((UNIT_STRING_FIELDS as readonly string[]).includes(field)) {
-          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class/namekey take == or != and a quoted value" };
+          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class/namekey/facing take == or != and a quoted value" };
           const q = parseQuoted(val, 0);
-          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class/namekey take == or != and a quoted value" };
+          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class/namekey/facing take == or != and a quoted value" };
           return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: q.value };
         }
         if (!/^-?\d+$/.test(val)) return { error: "expect unit: the integer fields take one integer" };
@@ -254,14 +285,50 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (!/^-?\d+(\.\d+)?$/.test(val)) return { error: "expect gon: the value is a number (-?digits[.digits]), a quoted string or true/false" };
         return { line: lineNo, kind: "expect", what: "gon", unit, path, op: word, value: Number(val) };
       }
-      if (what === "log") {
+      if (what === "log" || what === "fwlog") {
+        const file = what === "log" ? "debug.log" : "mewframework.log";
         const q = parseQuoted(arg, 0);
-        if (!q) return { error: arg ? "expect log: unterminated or missing quoted string" : "expect log needs a quoted substring" };
+        if (!q) return { error: arg ? `expect ${what}: unterminated or missing quoted string` : `expect ${what} needs a quoted substring` };
         const tail = arg.slice(q.end).trim();
-        if (tail) return { error: `expect log: unexpected trailing text "${tail}" (no within: debug.log is read once, after the run)` };
-        return { line: lineNo, kind: "expect", what: "log", substr: q.value };
+        if (tail) return { error: `expect ${what}: unexpected trailing text "${tail}" (no within: ${file} is read once, after the run)` };
+        return { line: lineNo, kind: "expect", what, substr: q.value };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|log)" };
+      if (what === "level") {
+        const q = parseQuoted(arg, 0);
+        if (!q) return { error: arg ? "expect level: unterminated or missing quoted string" : "expect level needs a quoted substring" };
+        if (arg.slice(q.end).trim()) return { error: "expect level: unexpected text after the quoted substring" };
+        return { line: lineNo, kind: "expect", what: "level", substr: q.value };
+      }
+      if (what === "deltas") {
+        const q = parseQuoted(arg, 0);
+        if (!q) return { error: arg ? "expect deltas: unterminated or missing quoted prefix" : 'expect deltas needs a quoted prefix and integers: expect deltas "<prefix>" <d1> [<d2> ...]' };
+        const nums = arg.slice(q.end).trim().split(/\s+/).filter(Boolean);
+        if (!nums.length) return { error: "expect deltas: give at least one integer delta after the prefix" };
+        const bad = nums.find((n) => !/^[-+]?\d{1,15}$/.test(n));
+        if (bad) return { error: `expect deltas: "${bad}" is not an integer (no within: the console is read once, after the run)` };
+        return { line: lineNo, kind: "expect", what: "deltas", prefix: q.value, deltas: nums.map(Number) };
+      }
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|level|log|deltas|fwlog)" };
+    }
+    case "run": {
+      const words = rest ? rest.split(/\s+/) : [];
+      const [op, arg] = words as [string | undefined, string | undefined];
+      if (op === "start") {
+        if (words.length > 2) return { error: "run start takes at most one map file name" };
+        const map = arg ?? RUN_DEFAULT_MAP;
+        if (!/^[A-Za-z0-9_.-]{1,59}\.gon$/.test(map) || map.includes("..")) return { error: "run start: the map is a data/maps file name like alley.gon ([A-Za-z0-9_.-], ends in .gon, no ..)" };
+        return { line: lineNo, kind: "run", op: "start", arg: map };
+      }
+      if (op === "travel") {
+        if (words.length !== 2) return { error: "run travel needs one node type (battle, hard, event, treasure, shop, ...)" };
+        if (!(NODE_TYPES as readonly string[]).includes(arg!)) return { error: `run travel: unknown node type "${arg}" (${NODE_TYPES.join(" ")})` };
+        return { line: lineNo, kind: "run", op: "travel", arg: arg! };
+      }
+      if (op === "fight") {
+        if (words.length !== 1) return { error: "run fight takes no arguments" };
+        return { line: lineNo, kind: "run", op: "fight", arg: "" };
+      }
+      return { error: "run needs an op: start [<map>.gon] | travel <node type> | fight" };
     }
     case "dump":
       if (rest) return { error: "dump takes no arguments" };
@@ -279,6 +346,12 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
     case "seed": {
       if (!/^\d{1,20}$/.test(rest) || BigInt(rest) > 18446744073709551615n) return { error: "seed needs one unsigned integer (0..18446744073709551615)" };
       return { line: lineNo, kind: "seed", seed: BigInt(rest).toString() };
+    }
+    case "speed": {
+      // same shape as mt_script.c: one -?digits[.digits] factor > 0, or `off` (= 1); the framework clamps to [1/16, 64]
+      if (rest === "off") return { line: lineNo, kind: "speed", factor: 1 };
+      if (!/^-?\d*(\.\d*)?$/.test(rest) || !/\d/.test(rest) || !(Number(rest) > 0)) return { error: "speed needs one factor > 0 (e.g. 4, 0.5) or off" };
+      return { line: lineNo, kind: "speed", factor: Number(rest) };
     }
     case "glow": {
       const usage = "glow needs: <unit> <r> <g> <b> <a> | <unit> off";
@@ -300,6 +373,29 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
       const parts = tail.split(/\s+/);
       if (parts.length !== 4 || !parts.every((p) => /^\d+(\.\d+)?$/.test(p) && Number(p) <= 1)) return { error: "glow needs four colour values 0..1 (r g b a) or off" };
       return { line: lineNo, kind: "glow", unit, rgba: parts.map(Number) as [number, number, number, number] };
+    }
+    case "face": {
+      const usage = "face needs: <unit> <dx> <dy> (one of 1 0 | -1 0 | 0 1 | 0 -1) or <unit> front|back";
+      if (!rest) return { error: usage };
+      let unit: string, tail: string;
+      if (rest.startsWith('"')) {
+        const q = parseQuoted(rest, 0);
+        if (!q) return { error: "face: bad quoted unit name" };
+        unit = q.value;
+        tail = rest.slice(q.end).trim();
+      } else {
+        const sp = rest.search(/\s/);
+        if (sp < 0) return { error: usage };
+        unit = rest.slice(0, sp);
+        tail = rest.slice(sp).trim();
+      }
+      if (tail === "front" || tail === "back") return { line: lineNo, kind: "face", unit, named: tail };
+      if (/^(front|back)\s/.test(tail)) return { error: "face: unexpected text after front/back" };
+      const parts = tail.split(/\s+/);
+      if (parts.length !== 2 || !parts.every((p) => /^-?[01]$/.test(p))) return { error: usage };
+      const [dx, dy] = parts.map(Number) as [number, number];
+      if ((dx === 0) === (dy === 0)) return { error: usage };
+      return { line: lineNo, kind: "face", unit, dir: [dx, dy] };
     }
     case "enter": {
       if (!rest) return { error: `enter needs a scene name (${KNOWN_SCENES.join("|")})` };
@@ -324,8 +420,8 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
 }
 
 /** Directives the Node runner evaluates itself (the DLL gets a comment placeholder instead). */
-export function isRunnerSide(d: Directive): d is Extract<Directive, { what: "log" }> {
-  return d.kind === "expect" && d.what === "log";
+export function isRunnerSide(d: Directive): d is Extract<Directive, { what: "log" | "deltas" | "fwlog" }> {
+  return d.kind === "expect" && (d.what === "log" || d.what === "deltas" || d.what === "fwlog");
 }
 
 export interface ParseScriptOptions {

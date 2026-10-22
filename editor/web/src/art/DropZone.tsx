@@ -27,7 +27,7 @@ export function DropZone({ text }: { text: string }) {
       <div style={sx("font-size:12.5px")}>{text}</div>
       <input
         type="file"
-        accept=".svg,image/svg+xml"
+        accept=".svg,image/svg+xml,.png,image/png"
         id="art-svg-file"
         onChange={async (e: React.ChangeEvent<HTMLInputElement>) => {
           const f = e.target.files;

@@ -67,6 +67,18 @@ PR; everything else is on `main`.
   typing (PR #83: `"5"` is a number, `""` is 0, only `true`/`false` are bools). Details + content shapes:
   **[data-mods.md](data-mods.md)** ("Fidelity to the decompiled merges", "GON typing fidelity", "Lighting and tint
   knobs", "Localized text for mods").
+- **New rooms, spawn ids, tilesets and maps are data (2026-10-22).** A room is a binary `levels/<path>.lvl` (10x10
+  tile ids into `tiles.gon` + objects whose ids index `spawns.gon`; codec `editor/src/core/level/lvl.ts`); every file
+  listing the game does (`FileManager_ListDir` 0x9a1900) walks the mod paths, so a mod's new room joins a map's level
+  pool, and `load <path>` plays it (OBSERVED, `mods/_roomprobe`). Hard limits: node `type` (19 names, fatal otherwise),
+  `chapter_id` (a C++ enum), the run's first map. Details: **[data-mods.md](data-mods.md)** "Maps, rooms and encounters".
+- **Sounds and music are data-moddable** (OBSERVED 2026-10-22, `mods/_audioprobe`): a file at the mirrored path
+  (`mods/<m>/audio/combat_sfx/pickup_coin.wav`, `audio/music/<area>/*.ogg`) replaces the vanilla one (mod paths are
+  searched first); new sounds are new groups merged into a loaded set (`audio/combat_sfx.gon.merge` →
+  `SoundEffectGroups { MyGroup { files [x.wav] } }`, `.merge` never `.append`) referenced by name from data (`sounds {
+  ontrigger MyGroup }`, `LoopingSoundWhileAlive`, `sfx`, …). WAV PCM16 / Ogg Vorbis, lower-case extension; music Ogg
+  only, same rate/channels as the track it replaces. Backend FAudio + stb_vorbis. **[data-mods.md](data-mods.md)**
+  "Sounds and music", engine facts in [engine-map.md](engine-map.md) "Audio".
 
 ### Native layer
 - The Mewjector `version.dll` chainloader loads our `mewframework.dll`, which **gates on `-savesuffix` + the build id
@@ -131,7 +143,12 @@ PR; everything else is on `main`.
 - [x] **Localized mod text — OBSERVED 2026-10-22** (`render-loctext.mewtest`): a `DefineEditText` whose initial text
   is exactly a key (vanilla's or one a mod adds via `combined.csv.append`) is shown localized **only when emitted
   without the HTML flag** (`scene.texts[].html: false`); in vanilla's `<p><font>` wrapper the key is drawn as
-  written. Left: the editor does not yet switch key texts to plain by itself (`data-mods.md` "Localized text for mods").
+  written. The validator warns `text-loc-key-html` on an HTML key text; Art mode's text row has a **plain (localized)**
+  box (`data-mods.md` "Localized text for mods").
+- [x] **New rooms / encounters / tilesets — OBSERVED 2026-10-22** (`mods/_roomprobe`): a mod's new
+  `levels/roomprobe/probe.lvl` placing a new `spawns.gon.append` id is the fight after `load roomprobe/probe` (77-hp
+  RoomProbeRats), a bare `load rp_nested_find` finds a mod-only nested level, and a new `tilesets.gon.append` name
+  draws its art. Open: a campaign node drawing the room from a pool (decompiled, not run — the harness cannot walk a run).
 - [x] **`tilesets.gon` clip redirect — OBSERVED 2026-10-22** (`mods/_tileprobe`): `alley { Rat ArtProbe }` in a
   `tilesets.gon.merge` makes a plain Rat draw the mod clip in the alley tileset; the control run without the overlay
   draws the vanilla Rat (`data-mods.md` "Redirecting a vanilla character's clip via tilesets.gon").

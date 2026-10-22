@@ -30,6 +30,74 @@ and `mods/dev-sandbox/data/abilities/fighter_abilities.gon.append` (adds `SpinDe
 CSV merge works by position: a `combined.csv.merge` row `,5,,` changes only column 2 of that row, so it is
 fragile when the base game adds rows. Prefer `.append` with new localization keys.
 
+Not every file in a mod folder is an overlay: `tests/` (the harness's `.mewtest` scripts), `art/` (the editor's
+scene sources; the built SWFs go under `swfs/`) and dotfiles are never loaded by the game (the pack has no such
+root), so the validator skips them (`isPackPath` in `editor/src/core/validate/validator.ts`; before 2026-10-22 each
+`.mewtest` drew a `whole-file-replace` warning). The one exception is `art/*.scene.json`, which the validator runs
+through the scene validator (`text-loc-key-html` and the other scene codes) instead of skipping.
+
+### Comments and `#include` (OBSERVED 2026-10-22, engine-map "GON text pre-pass")
+
+Every `.gon` the game loads — base files **and** every mod `.gon`, `.gon.append`, `.gon.merge`, `.gon.patch` — goes
+through the same pre-pass before parsing, so a mod file may use all of these:
+
+- `# …`, `// …` comments to end of line, `/* … */` block comments (no nesting: the first `*/` closes; an unclosed
+  `/*` silently swallows the rest of the file — the validator warns `comment-unclosed` at its line). Comment markers
+  inside `"…"` are text.
+- `#include "file.gon"` (quotes optional; the name may not contain a quote; anything after it on the line stays):
+  the file's text — its own comments stripped, its own includes expanded — is pasted in place, so put it where its
+  content belongs (vanilla: `nodes { #include "standard_nodes.gon" … }` in the 19 `maps/*.gon`).
+- **Where it resolves:** `<directory of the file being loaded>/<name>`, by the pack path. For an overlay that is the
+  directory of its **base** file: in `mods/m/data/maps/alley.gon.append`, `#include "x.gon"` means `data/maps/x.gon`,
+  looked up in the mod folders first and then the pack — so a mod can ship `mods/m/data/maps/x.gon` and include it
+  (**OBSERVED in-game 2026-10-22**: `mods/_incprobe` — `IncProbe { variant_of Rat  #include "incprobe_props.gon" }`
+  in `data/characters/enemies.gon.append`, the included file only in the mod's `data/characters/`; the spawned unit
+  has the included `health 77`). A helper the mod ships only to be included is an include fragment: the validator
+  does not call it a `whole-file-replace` when the base has no file of that name.
+  A nested include resolves against the **top-level** file's directory, not the included file's.
+- **Write the name as a plain relative path** (`x.gon`, `sub/x.gon`). The game joins `directory + name` and never
+  normalises it (OBSERVED, `.analysis/notes-inc2.md`): the pack is searched for that exact string (lower-cased), a
+  mod folder through the OS. So `../maps/x.gon`, `./x.gon`, `a//b.gon`, a leading `/`, a drive letter or a
+  backslash never find a pack file (fatal, see below) and, for loose files, let the OS resolve the path — a `..` can
+  reach outside the mod folder. The validator reports these as `include-path-unsafe` (error) and never reads them.
+- **A missing include is fatal:** the game shows an error message box `Could not locate include file: <name>` and
+  exits. The validator
+  reports it as `include-missing` (error) at the directive's line.
+- **Overlays and included files:** the includer's overlays apply after inlining (an `alley.gon.merge` sees the
+  included nodes as part of the base). An overlay *on the included file's own name* (`standard_nodes.gon.append`)
+  is picked up, but included files are read as plain text, so its text is just **pasted after** the base text —
+  `.append` behaves as expected inside the including object, while `.merge` / `.patch` do **not** merge (their keys
+  arrive as extra children, `.patch` suffixes literally). To change shared nodes, overlay each including file.
+- **`#define` macros** (unused by vanilla — 0 of 210 files —; derived from `Gon_Pre_CollectDefines` 0xa4f4a0,
+  `Gon_Pre_ExpandMacros` 0xa501c0, `Gon_Pre_SubstituteArgs` 0xa4e0b0; **OBSERVED in-game 2026-10-22** for a
+  two-argument macro, `mods/_incprobe` `IncProbeMacro`). Only in the file being loaded and what it includes (each
+  file — the base and each overlay — has its own macro table; a base file's macros are invisible to its overlays).
+
+  ```
+  #define NODE(name, kind)          // parameters: tokens in ( ), separated by blanks or , (a space before ( is fine)
+      name { type kind }           // the body: from right after ) up to #end, newlines included
+  #end
+  nodes {
+      #NODE shop1 shop             // use: #NAME, then one token per parameter (blanks or , between them)
+      #NODE camp1, camp
+  }
+  ```
+  becomes `nodes { shop1 { type shop } camp1 { type camp } }`. The rules: the whole `#define … #end` is removed
+  (definitions anywhere in the file count, later ones replace earlier ones); a use is a `#`-word exactly equal to
+  `#NAME` — **`#NODE(shop1, shop)` is not a use** (no blank after the name: the tokenizer then reads it as a `#`
+  comment), and `#NODE (shop1, shop)` works but leaves the `)` in the text; arguments and parameter names are
+  tokens delimited by blanks and `( ) , : = [ ] { }` (no quotes, no spaces inside an argument); in the body only
+  whole tokens equal to a parameter are replaced (`name_x`, `"name"`, `#name` are not), and the body's last
+  token is replaced only when a blank or delimiter follows it (end the body with a newline before `#end`). Macro
+  names and calls are not looked for inside `"…"`. Without parameters the body starts at its first non-blank
+  character. Expansion repeats over the whole text until nothing changes, at most 256 rounds (a macro may use another;
+  a self-using one stops there — the validator warns `gon-macro-runaway`). An unknown `#NAME` stays and is a `#`
+  comment to the tokenizer. The editor expands macros exactly this way before validating and previewing.
+
+The editor mirrors this in `editor/src/core/gon/preprocess.ts` + `editor/src/core/gon-includes.ts`; the validator and
+the merge preview check the text the game would actually parse, while the GON editor keeps comments and `#include`
+lines as written.
+
 ## GON typing fidelity (2026-10-22)
 
 How the game reads a `.gon` file, OBSERVED in `Gon_LoadText` 0x940840 → `Gon_Tokenize` 0x93f090 →
@@ -43,9 +111,9 @@ for all 210 vanilla files); its *typing* now follows the game's rules below. Pin
 is flushed first), inside it `\` escapes the next character — **only `\n` becomes a newline**, `\t` is a plain `t`,
 `\"` → `"`, `\\` → `\` — and the closing `"` ends the token. **The quotes are dropped and no "was quoted" flag
 survives**: `"5"` and `5` reach the parser as the same token. Unclosed quote / comment → `GON ERROR: didn't close
-a quote/comment somewhere`. `//` and `/* */` are **not** in this tokenizer, yet 188 / 35 of the 210 vanilla
-`data/*.gon` files use them (comments containing `"`, `{`, `:` that would otherwise break parsing), so an earlier
-pass must strip them (INFERRED; not located — a candidate is the text pass at 0xa50bd0 before parsing).
+a quote/comment somewhere`. `//`, `/* */` and `#include` are **not** in this tokenizer (188 / 35 / 19 of the 210
+vanilla `data/*.gon` files use them): the pre-pass `Gon_Preprocess` 0xa50bd0 strips the comments and inlines the
+includes first (OBSERVED; "Comments and `#include`" above, engine-map "GON text pre-pass").
 
 **Parser.** `{` → object (type 3, children are `name value` pairs; `GON ERROR: missing a '}'`), `[` → array
 (type 4; `missing a ']'`), anything else is a scalar typed **from its text alone**: type starts as string (1) and
@@ -74,8 +142,9 @@ string; `.add` / `.multiply` (Gon_DeepMerge 0x946680) add / multiply the **doubl
 | `:` `=` as whitespace (`a=5`, `a:5`, `[1:2=3]`) | yes (no vanilla line has either outside a comment or a quoted string) | no — `a=5` was one bare token | **DIVERGED → fixed**; they live in the trivia, round trip intact; a string holding `=` `:` `,` is now pretty-printed quoted |
 | `{ } [ ]` adjacency (`a{b 1}`, `c[2]`, `"a"5`) | single-char tokens; a quote flushes the pending token | same | MATCH |
 | `#` line comment, also mid-token (`5#c` → `5`) | yes | yes | MATCH |
-| `//` line and `/* */` block comments | not in the tokenizer; stripped earlier (INFERRED from 188 / 35 vanilla files) | comments | MATCH (inferred); editor-only until the pass is located |
-| `#include "standard_nodes.gon"` (the 20 `maps/*.gon`, inside `nodes { … }`; the only vanilla `#` use) | to the tokenizer a `#` comment — so the same pre-pass must be a preprocessor that inlines the file (INFERRED) | a comment; the included nodes are invisible to the editor | gap (not fixed here): the editor neither inlines nor validates includes — a mod overlaying `maps/*.gon` nodes sees fewer base children than the game |
+| `//` line and `/* */` block comments | stripped by the pre-pass `Gon_Pre_StripComments` 0xa4eb80 (OBSERVED): `//` keeps its newline, `/* */` drops its newlines, no nesting, `/*/` closes at once, never inside `"…"` | comments (trivia); `/*/` ran to the next `*/` | **`/*/` DIVERGED → fixed**; otherwise MATCH. The semantic readers (validator, merge preview) parse `preprocess()` output, which is the exact port — the trivia tokenizer still differs where the pre-pass ignores `#` comments (a `/*` or `"` inside a `#` comment counts to the game; none in vanilla) |
+| `#include "standard_nodes.gon"` (19 `maps/*.gon`, inside `nodes { … }`; the only vanilla `#` directive) | inlined by `Gon_Pre_ExpandIncludes` 0xa4edf0 from `<dir of the resource>/<name>` as a TextResource (OBSERVED; missing = fatal) | a `#` comment; the included nodes were invisible | **DIVERGED → fixed**: `preprocess()` + `gon-includes.ts` inline it for the validator and the merge preview (mod copy first, the mod's overlays on the included name concatenated as text); `include-missing` when it resolves nowhere; the editing AST keeps the line as trivia |
+| `#define NAME … #end` / `#NAME` macros | expanded by the pre-pass, top level only (OBSERVED: decompiles + one in-game 2-argument macro; none in vanilla) | not modelled | **DIVERGED → fixed** (2026-10-22): `preprocess()` expands them (passes 3/4, synthetic tests in `gon-tests.ts` "gon macros"); `gon-macro-runaway` past 256 rounds |
 | `\n` in quotes | newline (5 vanilla uses) | newline | MATCH |
 | `\t`, `\r` in quotes | plain `t`, `r` | tab, CR | **DIVERGED → fixed**; the pretty-printer emits raw tabs / CRs and escapes only `\` `"` `\n` |
 | `\"`, `\\`, `\/`, `\z` | `"`, `\`, `/`, `z` | same | MATCH |
@@ -166,10 +235,32 @@ this section in sync with `merge.ts` and the fixtures.
 - **SWF list** (`swfs/swflist.gon`): `game [ ... ]` array of SWF files; add art with `swflist.gon.append`.
   In this repo `mods/<mod>/swfs/` is **build output** of the editor's art pipeline (the SWF and the generated
   `swflist.gon.append`) and is git-ignored; the source is `mods/<mod>/art/*.scene.json`.
+
+### Several mods appending to one clip (OBSERVED 2026-10-22)
+
+`npm run test:artprobe -- --multi-append` (mods `_catappendA`, `_catappendB`, `_catappendSame`; fixture
+`editor/test/fixtures/ingame/multi-append-summary.json`; the engine side is in `docs/engine-map.md` "Several mods
+appending to one clip"):
+
+- **Two mods' `_Append_CatTest` exports coexist**, in either `-modpaths` order: every donor's frames are merged into
+  `CatTest`, and each mod's cat plays its own appended idle.
+- **A label both mods append resolves to the later `-modpaths` mod's frame.** The earlier mod's frame stays in the
+  timeline but nothing can reach it by that name. The same overwrite applies to a label vanilla already has (e.g. a mod
+  `idleF` would replace the idle of every cat; INFERRED from the same store). Prefix labels with your mod's name.
+- **Two mods shipping the same `swfs/<name>.swf`:** the game resolves swflist entries by file name, later mods first,
+  so only the later mod's file loads, for both entries. The earlier mod's SWF (every export and append in it) never
+  loads. A mod SWF named like a vanilla one replaces it the same way (INFERRED). Give each SWF a distinct name.
+- `validate_mod { mod, modpaths: [...] }` (or `validateMod(mod, undefined, { modpaths })`) checks a set of mods
+  loaded together: `swf-file-conflict`, `swf-file-shadows-vanilla`, `cat-append-conflict`, `cat-append-shadows-vanilla`
+  (warnings) and `cat-append-shared` (info: several mods append to one clip, which is fine). It reads each mod's built
+  `swfs/*.swf`, or its `art/*.scene.json` when nothing is built.
 - **Text** (`data/text/combined.csv`): `KEY,en,notes,sp,fr,de,it,pt-br,ru,ko,ja,zh-cn`.
 - **Tilesets** (`data/tilesets.gon`): one flat object per tileset (`alley`, `junkyard`, `sewers`, …, `house`,
   `tutorial`, `finalboss`; 22 in this build) of `key value` string pairs plus `global_objects` / `reverb`
   sub-objects, keyed by `default_tileset`. The game also uses it as a per-tileset **clip-name indirection** (below).
+  A **new** tileset name is an `.append` entry (OBSERVED, "Maps, rooms and encounters").
+- **Maps and rooms** (`data/maps/*.gon`, `levels/**/*.lvl`, `data/spawns.gon`, `data/tiles.gon`): see "Maps, rooms
+  and encounters" below.
 
 ### Redirecting a vanilla character's clip via tilesets.gon (OBSERVED 2026-10-22)
 
@@ -215,6 +306,22 @@ applies the status. The native half (`native/mods/jokers-luck`) registers the na
 `effects { JokersLuck N }` valid everywhere the game accepts a status name. Test in battle with the console command
 `bind JokersGambit`, then use the ability; carriers should show a luck modifier that changes every turn.
 
+A second application **merges** like a vanilla LuckUp: `JokersLuck 1` then `JokersLuck 2` on the same unit is one
+JokersLuck with 3 stacks (a Temporary application always builds its own object), whatever grants it — an ability's
+`effects`, `StatusOnBattleStart`, `StatusOnSpawnIn`. The framework finds the existing instance through the unit's
+entity, the one thing every `apply_status` context shape has in common (`docs/engine-map.md` "Status effects"; before
+2026-10-22 a second application built a second object). T2: `mods/jokers-luck/tests/merge-contexts.mewtest` with the
+test-only overlay `mods/_jokersluck-merge` (both shapes, 3 stacks per unit).
+
+**Randomness in a native mod: `FW_Random`, never the CRT `rand`.** msvcrt keeps `rand`'s state per thread, so an
+`srand` in `DllMain` need not reach the game thread that rolls, and nothing can pin it: Joker's Luck's rerolls looked
+seeded until 2026-10-22 and then changed on every launch (`luck-seeded` failing with -7 / -1 where 10 / 7 were
+expected). A native mod draws from the framework's stream instead: `FW_Random(bound)` (API v5, uniform in
+`[0, bound)`, `native/framework/src/fw_rng.c`, host-tested), varied by default (seeded from
+`QueryPerformanceCounter` when the framework loads) and re-seeded by the harness `seed <N>` directive, so a `.mewtest`
+with `seed` sees the same rolls on every run. Keep the rule pure and host-test it the way
+`native/mods/jokers-luck/src/jl_roll.c` does (`test/test_roll.c`: the same seed gives the same reroll sequence).
+
 ## Lighting and tint knobs
 
 The engine has no per-unit glow or outline a mod can switch on (the combat rim is a hover effect with a constant white
@@ -238,20 +345,748 @@ What data *can* do, all plain passives on a character / class / item:
 For a sprite-shaped glow or drop shadow, bake it into the art: the editor's `bake_glow` (`docs/art-pipeline.md` §6)
 adds a halo shape under the source; the result is ordinary SWF geometry the game draws like any other.
 
-**Glows (2026-10-22).** The per-unit glow is a **native-only API in v1**: a native mod calls `FW_SetUnitGlow(Character*,
+**Glows (2026-10-22).** The per-unit glow is drawn by the framework: a native mod calls `FW_SetUnitGlow(Character*,
 r, g, b, a)` / `FW_ClearUnitGlow` (framework API v4, `docs/engine-map.md` "Per-unit glow") and the framework draws a
-coloured rim around the unit through the game's own outline mask. There is no data-level way to ask for one yet — no
-`registered-names.json` kind, no GON key; a `glow` kind that a status or passive could name is the natural v2 once
-per-unit colours exist. What the data layer does carry is the rim shader: `mods/fw-glow/shaders/fw_unit_glow.shader`
+coloured rim around the unit through the game's own outline mask; since glow v3 a **data mod asks for it with a status
+name** and no DLL (next section). What the data layer always carries is the rim shader: `mods/fw-glow/shaders/fw_unit_glow.shader`
 (`.shader` files in a mod path load like any pack file). A mod whose native half calls the API lists `fw-glow` next to
 itself (`mods: <mod>, fw-glow` in a `.mewtest` header, `-modpaths … mods/fw-glow` in a launch); the harness directive
 `glow <unit> <r> <g> <b> <a>` exercises it (`mods/dev-sandbox/tests/unit-glow.mewtest`). Static halos that need no
 native code remain the editor's baked glow (PR #80).
 
+## Component keys (2026-10-22)
+
+A component block is `passives { <Component> { key value … } }` (also `bonus_passives` / `additional_passives`, a
+component nested inside another, and a status under `effects` / `temporary_effects`). The game has no schema: a key
+the component never reads is **silently ignored** — the commonest silent mod bug. `editor/component-schema.json`
+(tracked) maps, per `glaiel::` class, the keys it reads from its own block: type as read, default when absent,
+whether it is required, inherited base keys, and the decompile that witnesses each one. MCP `search_components`
+returns it for the top matches; the web UI's component search shows it when you click a class name.
+
+- **What the validator does with it.** `unknown-key` (warning): a child of a component block that the component (or
+  its base classes, or a shared parser it includes) never reads. `missing-required-key` (error): a required key absent
+  from a complete block — `.append` files and new files only; `.merge` / `.patch` blocks are partial and the base may
+  supply the key. `.patch` keys are checked without their policy suffix (`chance.multiply` → `chance`). A component
+  that is `open` (its key set may be incomplete) is never flagged; a component whose `children` are `effects` or
+  `passives` also accepts status / effect / passive names as children (`AddStatusToBasicAttack { Bleed 1 }`), and
+  `children: any` accepts every key (an arbitrary map: `FormChanger { 0 {…} 1 {…} }`, element names, part names).
+- **Proof on vanilla (T1).** Every vanilla component block passes with zero findings (`editor/test/
+  component-schema-tests.ts`: 210 files, 7728 component blocks, 2204 object blocks checked, 0 findings; and four
+  vanilla files copied as renamed `.append` mods give 0 `unknown-key` / `missing-required-key`). The generator
+  enforces it by construction: a key vanilla writes that RE did not find **opens** the component and is listed in its
+  `vanillaMissed`; a `required` key some vanilla block omits is demoted.
+- **Patterns the RE found (OBSERVED; `docs/engine-map.md` "Component GON keys").** A Passive's data node is
+  `this+0x68`; most classes read keys lazily in event slots or in `std::function` lambdas, not in an init. The
+  scalar form `Comp N` is the stacks for most components (`Passive` reads `stacks`, the logging `Int` on a number
+  node), but many inline lookups are **child-or-self**: `ChanceToBlock 0.3` is `chance`, `DeathRattle X` is
+  `ability`, `MovementReaction X` is its ability (the `scalar` field says which). `statuses` / `passives` /
+  `damage_instance` / `pattern` sub-blocks are optional: absent, the component's own node is used, so
+  `MeleeRevengeDamage { damage 2 type melee }` and `MeleeRevengeDamage { damage_instance { … } }` are both valid.
+  Shared parsers (`shared` in the schema): `@DamageInstance` (`DamageInstance::FromGon` 0x2ba080, 30+ keys),
+  `@StatusesBlock` / `@StatusList` (`Passive_ApplyStatusChildren` 0x76a160: every child except the class's own keys
+  is a status application — scalar = stacks, `[stacks chance]`, or `{ stacks chance }`), `@BrainGon` (0x134400:
+  `decision_weights move_weights animate_choice auto_orient`), `@FormChangerForm`, `@Passive_QueueAbility`
+  (`even_if_stunned`, `force_display_name`, which every ability-casting passive reads).
+- **Vanilla quirks it surfaced** (the game ignores these vanilla values): `LowHealthAllyDodgeChanceAura { theshold … }`
+  (the engine reads `threshold`, default 5), `AbilityOnRoundEndOnce { even_of_stunned … }` (reads `even_if_stunned`),
+  `TourettesMeows { cooldown … }` (reads `pool`, `duration`), `DamageReductionAura { allies_only … }` (hard-coded),
+  `MoveTowardsDamageSource { ability … }` (reads `move_ability`). They stay `open` so vanilla stays clean.
+- **Coverage (build 25143593).** 1741 classes with a vftable (of the 2007 `glaiel::` names; the other 266 are not
+  components: templates, lambdas, helpers): 473 mapped from decompiles, 898 read no keys of their own, 369 carry only
+  the objdump seed keys (engine / UI / ability-hierarchy classes that never appear as a block; `confidence:
+  inferred`), 1 unresolved (`AddAdvantageToEvent`). 1314 keys: 767 observed with a decompile, 547 inferred. Vanilla:
+  of 384 components vanilla writes as object blocks, 345 are closed (unknown keys flagged), 39 open; vanilla literal
+  keys found 589 / 635 (+188 keys of arbitrary maps).
+- **Regenerating.** Fragments are `.analysis/component-schema-<tag>.json` (one per RE session, shape checked by
+  `validateFragment` in `editor/src/core/component-schema-build.ts`; `.analysis/compmap/` holds the work lists and
+  `dispatch-names.json`, the names the by-name dispatch chains accept). `cd editor && npm run build:component-schema`
+  merges them, runs the vanilla cross-check and writes the file; `-- --check` fails when the tracked file is stale.
+  After a game update the keys are string literals and usually survive; re-run the RE for classes whose vftable
+  changed and regenerate.
+
+## Maps, rooms and encounters (2026-10-22)
+
+**Yes: a data mod can add a new room (encounter layout), a new spawn entry, a new tileset and a new map file.**
+OBSERVED in-game for the first three (`mods/_roomprobe`, below); the map pools and new map files rest on the
+decompiles (engine-map "Maps, rooms and level files").
+
+### The content model
+
+1. **Map** = `data/maps/<name>.gon` (19 vanilla + `standard_nodes.gon` + `world.gon`). Top-level keys:
+   `chapter_id`, `tileset`, `graphics`, `music`, `act` / `chapter`, `levels { folder <dir> easy [..] hard [..]
+   rare [..] boss [..] miniboss [..] special [..] }`, `bosses { <name> auto }`, `minibosses { … }`, `events`,
+   `enemy_pools`, `item_pools`, `nodes { #include "standard_nodes.gon" … }` and `flags { <SaveFlag> { <node> {…} } }`.
+2. **Nodes** are the map's node kinds, not a laid-out graph: `nodes { battle { type battle } exit0 { type exit
+   next_map sewers.gon locked true } … }`. `type` is one of 19 hard-coded names (below); an exit's `next_map` is a
+   file name the run loads as `"data/maps/" + next_map`. The node graph itself is generated by the game.
+3. **Level pools**: a battle picks a room from `levels/<folder>/<pool>/*.lvl`, `<pool>` from the map's `easy` / `hard`
+   / `rare` arrays (sub-folder names); bosses and minibosses from `levels/<folder>/boss|miniboss/<boss name>/`.
+4. **Room** = one binary `.lvl` file: a grid (10x10 in every vanilla level) of tile ids into `data/tiles.gon` plus
+   objects `(x, y, id)` whose ids index `data/spawns.gon` (`<id> { editor {…} object <Character> }`,
+   `utility PlayerSpawn` for the party). A cell or an object can instead be a weighted random list (id 0 = nothing).
+   Format: `editor/src/core/level/lvl.ts` (every vanilla level re-encodes byte for byte).
+5. **Spawn palette** `data/spawns.gon`: numeric id → `object <data/characters entry>` (enemies 11+, props 5000+).
+   **Tile palette** `data/tiles.gon`: id 0..26 → `tile <TileClass>` (Water, Grass, …; C++ tile classes).
+6. **Tileset** = one object in `data/tilesets.gon` (art slots `combat_background`, `static_1x1_a` …, `debris`,
+   `global_objects`, `reverb`, plus clip-name redirects); a map names it with `tileset <name>`.
+7. **Run order** (INFERRED from the strings and the map files): the run starts on `data/maps/alley.gon` (a literal in
+   the exe, `.rdata` 0xf0c250) and follows `next_map`; `world.gon` lists the areas for the world map;
+   `chapter_id_enum.gon` maps chapter names to positions (SpawnDatabase_init 0x7a74b0 fills a name → index map).
+
+### What is extendable (by `.append` / a new file) and what is hard-coded
+
+| Thing | Extendable? | How / why |
+|---|---|---|
+| New room `levels/<path>.lvl` | **Yes — OBSERVED** | the file manager reads `levels/<name>.lvl` from every mod path; `load <path>` plays it |
+| New room picked by a map's pool | **Yes — OBSERVED** | the pool lists `levels/<folder>/<pool>/` with FileManager_ListDir 0x9a1900, which walks the mod paths; drop a `.lvl` into `levels/alley/easy/` or point a pool at your own sub-folder (`alley.gon.merge` → `levels { easy [walkprobe] }`: alley's first battle node drew `levels/alley/walkprobe/wp_alley.lvl`) |
+| New spawn id (`data/spawns.gon.append`) | **Yes — OBSERVED** | id 9001 → `object RoomProbeRat` placed by the mod's `.lvl` |
+| New tileset name (`data/tilesets.gon.append`) | **Yes — OBSERVED** | `tileset roomprobe_yard` then `load …` builds the fight in it |
+| New map file `data/maps/<x>.gon` | **Yes (decompiled)** | loaded as `"data/maps/" + next_map`; reach it from an exit node's `next_map` (a `.merge` on a vanilla map) |
+| New tile id (`data/tiles.gon.append`) | data yes, behaviour no | `tile <Class>` must be an existing C++ tile class |
+| Node `type` | **No** | MapNode::str_to_type 0x225680 knows exactly `none npc enter exit home battle hard miniboss boss event optional_event special_event shop treasure furniturebox foodbox bonus empty any`; anything else is a fatal "No node type named" |
+| New `chapter_id` | **No (in practice)** | `chapter_id_enum.gon` "must match the order of the enum in MewDirector.h"; reuse a vanilla chapter id for a new map |
+| The first map of a run | **No (INFERRED)** | `data/maps/alley.gon` is a literal; a mod changes alley (or its exits), not the entry |
+
+### Recipes
+
+```
+// a new room: new_from_template { kind: "room", name: "my_room", options: { folder: "alley/easy",
+//   objects: [{ x: 1, y: 0, object: "PlayerSpawn" }, { x: 5, y: 8, object: "Rat" }], tiles: [{ x: 0, y: 5, id: 1 }] } }
+// → mods/<mod>/levels/alley/easy/my_room.lvl — alley's easy pool now includes it; try it with
+//   `enter TacticsTest` + `cmd load alley/easy/my_room`
+// a new enemy placed by id: data/spawns.gon.append
+9001 { editor { category 3 image ["rat.png"] paint false name "My Rat" } object MyRat }
+// a new tileset: new_from_template { kind: "tileset-variant", name: "my_yard", options: { parent: "junkyard" } }
+// a new map behind alley's first exit: data/maps/alley.gon.merge
+nodes { exit0 { next_map mymap.gon } }
+```
+
+**Editing rooms by hand:** the editor's **Rooms** mode (`npm run web`, top-bar Data | Art | **Rooms**, or
+`?mode=rooms`) paints a room on its 10x10 grid: the tile palette is `tiles.gon` and the object palette `spawns.gon`
+(base + the mod's `.append`/`.merge`/`.patch`), each entry labelled by its `editor { name … }` and coloured by its
+`image_tint` (objects without one by category). Click or drag to paint, place or erase; the inspector edits a cell's
+tile and objects, each as an id or a weighted random list; the `lvl-*` findings update as you paint; **+ New room**
+uses the `room` template; Save writes only `mods/<mod>/levels/**.lvl` and an unedited room byte for byte. Agents use
+MCP `read_level` / `write_level` (edit ops) for the same thing (`editor/src/core/level/edit.ts`, `level-io.ts`).
+With the game files extracted, the grid and the palettes show each tile's and object's own clip (frame 1) in the
+tileset chosen in the toolbar (default: the room's map, else `alley`), and **Iso** draws the room as the game's 2:1
+diamonds with the sprites standing on their cells; anything without a clip keeps its swatch, the tooltip saying why
+(`docs/editor-ts-react-plan.md` "Tileset art and the Iso view").
+
+The validator checks rooms (`lvl-bad-format`, `lvl-unknown-spawn-id`, `lvl-unknown-tile-id`, `lvl-no-player-spawn`,
+`lvl-outside-levels`, `whole-file-replace` when a room shadows a vanilla one) and maps (`map-node-type-unknown`,
+`map-next-map-missing`, `map-tileset-unknown`, `map-chapter-id-unknown`, `map-level-pool-empty` for easy/hard pools).
+
+### Proven in-game (T2, 2026-10-22, `mods/_roomprobe`, real save unchanged in every run)
+
+- `new-room.mewtest` (run `20261022-131655`): `enter TacticsTest`, `cmd load roomprobe/probe` — the fight becomes the
+  mod's room: 4 cats, two Lil' Rats with the RoomProbeRat entry's 77 hp (`expect gon 4/5 properties.health == 77`;
+  one rolled a champion buff, 154 hp), the Pooter and the Trash Bag, and the three water tiles where the grid puts them.
+- `find-room.mewtest` (run `20261022-131734`): `cmd load rp_nested_find` names no file; the console searches the
+  recursive `levels/` listing and finds the mod-only `levels/roomprobe/deep/rp_nested_find.lvl` (three 77-hp rats) —
+  the listing walks the mod paths.
+- `new-tileset.mewtest` (run `20261022-131707`): `cmd tileset roomprobe_yard` + `load` — the junkyard art around the
+  probe room (shot `roomprobe_yard`) where TacticsTest's default is alley.
+- Pinned in `editor/test/fixtures/ingame/roomprobe-summary.json` (`level-tests.ts`).
+- `walk-battle.mewtest` (run `20261022-141225`): a **campaign** battle node draws the mod room from a map pool.
+  `data/maps/alley.gon.merge` sets `levels { easy [walkprobe] hard [walkprobe] rare [walkprobe] }` (`.merge` merges
+  arrays by index, so each one-item pool's entry is replaced); `enter Campaign house`, `seed 42`, `run start` (the
+  adventure on alley.gon), `run travel battle` (the battle node next to the start), `run fight` — the level the pool
+  handed to the battle is `levels/alley/walkprobe/wp_alley.lvl` (`expect level`), and units 4 and 5 are the 77-hp
+  RoomProbeRats. The vanilla control `dev-sandbox/walk-vanilla.mewtest` (run `20261022-141324`, no overlay) drew
+  `levels/alley/easy/ch1-82.lvl`. Pinned in `editor/test/fixtures/ingame/walk-summary.json`. The walk directives:
+  `docs/ingame-testing.md` "Campaign walk".
+
+## Particles and VFX (2026-10-22)
+
+**Yes — a data mod can define new particle effects with its own art and attach them.** Decompiled 2026-10-22 (session
+`particles`, `docs/engine-map.md` "Particle systems and effect clips") and run in-game (`mods/_vfxprobe`, below).
+Two different things are called "particle" in the data:
+
+| what | where it is defined | what names it | the art |
+|---|---|---|---|
+| **particle system** — an emitter: rate, lifetime, motion, size / alpha curves | a named entry of `data/particles.gon` (combat, 3D) or `data/particles2d.gon` (2D scenes); add with `particles.gon.append`, change with `.merge` | `passives { EliteParticle <system> }` (a permanent aura on the unit), `ParticleBurst <system>`, `global_particles [..]` (tilesets.gon), `particles [..]` (house_weather.gon), `FormChangeOnElementInfluence { particle <system> }`, and other systems via `combo [..]` / `chain` | `movieclip <clip>`: every particle is one copy of that SWF clip |
+| **effect clip** — a one-shot animation played on cast / hit | an SWF export (vanilla: `effects.swf`, e.g. `PoisonPoof`, `HealMed`, `Explosion`; projectiles: `NeedleProjectile`, …) | an ability's `graphics { particle / affected_particle / center_particle / area_particle / miss_particle <clip>; projectile <clip> }` | the clip itself |
+
+Both resolve clip names through the game's one global clip registry (`App_FindMovieClipByName` 0x9bb6f0, last-loaded
+first), so **a clip your mod's SWF exports works anywhere a vanilla clip name does** (build it with `build_swf`; the
+generated `swfs/swflist.gon.append` loads it).
+
+Keys of a particle system (the decoder `ParticleSystemData decode` 0x9c5970 plus the loader 0x9c88d0; the editor's list
+is `editor/src/core/particles.ts`, the validator warns `particle-unknown-key` for anything else):
+
+- clip and drawing: `movieclip`, `movieclip_timescale`, `material`, `unlit`, `depth_bias`, `render_mode`
+  (`default` | `separate`), `render_layer`, `projection_matrix`;
+- simulation: `simulation_space` (`global` | `local`), `ownership`, `update_mode` (`unlocked` | `locked`),
+  `max_particles`, `adaptive_growth`, `flat_movement`, `live_bounds` (4 or 6 numbers), `particle_lifetime`,
+  `face_moving_direction`, `speed_scale`, `inherit_speed`, `tags`;
+- emission: `emit_rate`, `emit_amount`, `emit_direction`, `emit_spread`, `emit_box` (4 or 6 numbers: an AABB),
+  `emit_radius`, `emit_shell`, `emitshape_scale`, `emit_timespread`, `emit_timespread_curve` (`flat` | `ease_in` |
+  `ease_out`), `spurt`;
+- curves, each as `X` or `X_start` / `X_end` / `X_in` / `X_out` (a number or `[min max]`): `size`, `alpha`, `speed`,
+  `friction`, `force`, `rotation`, `rotation_speed`;
+- composition: `combo [A, B]` (spawn several systems), `chain <system>` + `chain_chance`, `variant_of`,
+  `scripts { ParticleBouncePlane {..} ParticleTornadoForce {..} … }` (seven script components).
+
+Limits: **there is no colour key** — a particle's colour is its clip's art (and the alpha curve); for a coloured effect
+draw the clip in that colour. `continual_emission` (one vanilla use) is read by nothing. A `movieclip` the registry
+does not know logs `No Movieclip Named <name>` and draws vanilla's `ParticleError` clip instead. Re-pointing a vanilla
+system (`.merge` its `movieclip`) changes it everywhere it is used.
+
+**OBSERVED in-game 2026-10-22** (`mods/_vfxprobe`, `npm run test:artprobe -- --vfx`; fixture
+`editor/test/fixtures/ingame/vfxprobe-summary.json`): (a) `particles.gon.merge` `SparkleBuff { movieclip
+VfxProbeMarker }` made the vanilla Reactive-elite aura draw our marker clip (stretched along the motion, as the system's
+`face_moving_direction` / `speed_scale` say); (b) a NEW system `VfxProbeAura` (`particles.gon.append`, `movieclip
+VfxProbeDot` — a #ff0090 disc in our SWF) worn by a spawned Rat through `passives { EliteParticle VfxProbeAura }` drew a
+moving cloud of pink discs on the unit. Not run: an ability's `graphics.particle` pointing at a mod clip (same
+registry, INFERRED to work), `ParticleBurst` / `global_particles` with a mod system.
+
+Recipe — a coloured aura on a character:
+
+```
+// art/myfx.scene.json exports MyDot (a small disc in your colour); build_swf
+// data/particles.gon.append (or: new_from_template particle MyAura { movieclip: "MyDot" })
+MyAura { movieclip MyDot  unlit true  render_mode separate  simulation_space global  ownership local
+         emit_rate 30  emit_amount 1  emit_direction [0, 1, 0]  emit_spread 30  emit_box [-.3 .3 0 1 -.3 .3]
+         live_bounds [-999 999 -999 999 -999 999]  particle_lifetime 1.5  speed_start .6  size .4  alpha 1 }
+// data/characters/enemies.gon.append (or a class / item / passive's passives block)
+MyRat { variant_of Rat  passives { EliteParticle MyAura } }
+```
+
+A hit effect with your own art: `new_from_template vfx-ability PinkSpin { movieclip: "MyHitClip" }` (an ability whose
+`graphics.particle` names your clip). The validator checks the names: `particle-missing` (error) for a system no
+particles file defines, `clip-missing` (warning) for a clip neither vanilla nor your scenes export (another loaded mod
+may still provide it), `clip-list-missing` (info) when the vanilla SWFs are not extracted.
+
+## Sounds and music (OBSERVED 2026-10-22)
+
+A data mod can **replace** any vanilla sound or song and **add** new sounds, with no native code. Engine facts and
+RVAs: `docs/engine-map.md` "Audio"; the in-game proof: `mods/_audioprobe` (T2 below).
+
+**How the game finds audio.** Every audio file is read through the same file manager as the GON data: mod paths
+first (in `-modpaths` order), then the pack (`FileManager_GetFile` 0x99ff50). So:
+
+- **Replace** a vanilla file: ship it at the mirrored path, e.g. `mods/<mod>/audio/combat_sfx/pickup_coin.wav`
+  replaces the coin pickup sound, `mods/<mod>/audio/music/alley/eatinrats_battle.ogg` the Alley battle music,
+  `mods/<mod>/audio/ambience/amb_rain.ogg` the rain ambience. No GON change needed.
+- **Add** a sound: the data layer never names a file, it names a **sound group** of a sound set. Add the group to a
+  set the game loads, then reference the group name from data:
+
+  ```
+  // mods/<mod>/audio/combat_sfx.gon.merge   (.merge, never .append — see below)
+  SoundEffectGroups {
+      MyMod_Zap {
+          files [mymod_zap1.wav mymod_zap2.wav]   // one is picked at random; audio/combat_sfx/<file>
+          pitch_range [.95, 1.05]
+          volume .8
+      }
+  }
+  ```
+  ship `mods/<mod>/audio/combat_sfx/mymod_zap1.wav` (…`2.wav`), and use `MyMod_Zap` wherever data takes a sound:
+  `sounds { ontrigger MyMod_Zap }` (abilities: `ontrigger`, `oncast`, `oncastpoint`, `ontrigger_intentional`),
+  `passives { LoopingSoundWhileAlive MyMod_Zap }`, `sfx`, `deathsound`, `sound_event`, `SoundEventOnHit`,
+  `equip_sound`, `play_sound`, `sound { alt_sounds [[…]] }`. In a fight the console command `play_sound MyMod_Zap`
+  plays it.
+
+**Sound sets** (`audio/<set>.gon`, read by `AudioCore::LoadSoundEffectSet` 0x956110 through the overlay-aware GON
+loader, so `.merge` / `.patch` apply): `SetName`, `Folder` (files resolve as `audio/<Folder>/<file>`), `Channels`
+(`main { volume, max_sounds, parent environment|none, falloff… }` + named channels a group picks with `channel`), and
+`SoundEffectGroups { <Group> { files, pitch, pitch_range, volume, volume_range, delay, delay_frames, extra_events,
+limit_amount, limit_period, play_chance, channel, … } }` (the vanilla header comment in `audio/combat_sfx.gon`
+documents each key). The game loads exactly: `audio/combat_sfx.gon` (Folder `combat_sfx`), `audio/ui_sfx.gon`,
+`audio/house_sfx.gon`, `audio/voices/<n>.gon` for each `n` in `data/catgen.gon` `voice_sets` / `special_voice_sets`
+(cat voices), and every `audio/npcvoices/*.gon` (listed from the pack **and** each mod path). A new
+`audio/<anything-else>.gon` is never read — put new groups into one of those sets.
+
+- **Use `.merge`, not `.append`, on a set.** The loader reads `SoundEffectGroups` by name; an appended second
+  `SoundEffectGroups` block is the one it finds, so every vanilla group of that set goes silent.
+- A new cat voice: `audio/voices/<n>.gon` (copy a vanilla one's shape: `#include voice_template.gon`, groups `Angry`
+  `Death` `Happy` `Hiss` `Hit` `Normal` `Purr` `Sad` `Sing`) + `mods/<mod>/data/catgen.gon.merge` adding `<n>` to
+  `voice_sets` (untested in game).
+
+**Formats** (`SoundData::load` 0x9718a0, `SoundStream::QueueSongChunk` 0xb511b0):
+
+| | accepted | notes |
+|---|---|---|
+| sound files (groups) | `*.wav`, `*.ogg` — **lower-case extension** | anything else stops the game: fatal `Unsupported Sound File: <path>` (validator `sound-unsupported`) |
+| WAV | RIFF / `fmt ` / `data`, other chunks skipped; the fmt block goes to FAudio as-is | every vanilla WAV is PCM 16-bit, mono (or 189 stereo), 44100 or 48000 Hz — stay there (`sound-format` warns otherwise). A non-RIFF `.wav` is a fatal assert (`sound-not-wav`) |
+| OGG sound | Ogg Vorbis, decoded fully to PCM16 in memory by stb_vorbis | |
+| music | Ogg Vorbis only (`music-not-ogg`), held in memory and decoded as it plays | every chunk queued on one stream must share the first one's **sample rate and channel count** (fatal `Song Chunk Mismatched …`); vanilla songs are 44100 Hz stereo — match the file you replace. A missing song file is fatal (`Couldn't Find Song File`) |
+| ambience | `ambient_sound <file>.ogg` → `audio/ambience/<file>` | |
+
+A sound file that exists nowhere is **silent and logs nothing** (a 4 KB silent stub); only the settings.txt key
+`debug_check_audio_files_exist 1` makes the set loader log `Sound File Missing: <path> When Loading Set: <set>` (and
+makes a missing music file fatal). Loaded sounds stay cached up to `soundeffect_cache_size_mb` (default 200).
+Volume routing: FAudio submixes `music_main`, `voice_main`, `ambience_main`, `environment` (the settings' volume
+sliders); a set's `Channels.main.parent` hangs it under `environment` (reverb) or `none`.
+
+**Music tracks** are keys of `audio/music/music_info.gon` (`map`, `battle`, `boss`, `event`, `midi`, `intro`, paths
+relative to `audio/music/`), named from data by `music` (maps), `override_music`, `new_music`. A new track is a
+`music_info.gon.append` entry + its `.ogg` files; the validator checks the key (`music-unknown`) and the files.
+
+**Validator** (`validate_mod`, needs `npm run build:index` for the pack's audio list, else one
+`audio-index-missing` info): `sound-missing` (a group / track / ambient file in neither mod nor pack), `sound-not-wav`,
+`sound-not-ogg`, `sound-unsupported`, `music-not-ogg` (errors); `sound-format`, `sound-event-unknown` (a data ref to
+no group of any set), `music-unknown`, `sound-set-append`, `sound-set-not-loaded` (warnings); `sound-replaces` (info:
+the mod file overrides a vanilla one). `list_base_data` lists `sounds` (8,215 group names), `music` (111 tracks) and
+`sound_files` (every pack audio path) once the index is built.
+
+**T2 proof** (`mods/_audioprobe`, `npm run test:ingame -- _audioprobe`; the WAVs are generated by
+`editor/scripts/audio-probe-tones.ts` — `*.wav` is git-ignored). There is no audio capture; the witness is the game's
+own `debug_sfx_memory_use` counter, which rises by each decoded WAV's data-chunk size (checked with the runner-side
+`expect deltas`): `play_sound AudioProbe_New` (mod-only file) **+35280** = the generated tone; `play_sound PickupCoin`
+with the replaced `pickup_coin.wav` **+24000** = the mod tone, against **+44714** (the vanilla file) in
+`pickup-vanilla-control.mewtest`; `AudioProbe_Absent` **+0**; `debug_list_loaded_files` shows
+`<mod>/audio/combat_sfx.gon.merge.raw` (the overlay was read) and the key `audio/combat_sfx/audioprobe_new.wav`.
+`character-ref.mewtest`: spawning `AudioProbeRat` (`LoopingSoundWhileAlive AudioProbe_New`) loads the mod file without
+any `play_sound`. Not proven in game: music / ambience replacement and new voice sets (same file path code; RE only).
+
+## Asking for a unit glow from data (glow v3, OBSERVED 2026-10-22)
+
+Give the unit a status named **`FwGlow_<rrggbb>`** or **`FwGlow_<rrggbbaa>`** (hex, either case; alpha `ff` when
+omitted) and load `fw-glow` next to your mod: the unit glows that colour for exactly as long as it carries the status.
+Any vanilla way of applying a status works — the name is the whole request:
+
+```
+// data/characters/enemies.gon.append — a unit that glows from the moment it spawns (mods/fw-glow ships this as FwGlowRat)
+MyGlowingRat {
+    variant_of Rat
+    passives {
+        StatusOnSpawnIn {          // or StatusOnBattleStart for units present when the fight starts
+            FwGlow_ff00ff 1
+        }
+    }
+}
+// an ability: damage_instance { effects { FwGlow_00ffff 1 } }, or temporary_effects / Temporary { status FwGlow_00ffff … }
+```
+
+- **How it works.** mewframework recognises the name in its `apply_status` hook (no registration, no Mewjector name)
+  and builds a LuckUp-template status with the glow vtable, **without** LuckUp's luck bonus (asserted in-game: `mods/_effective-stats/tests/effective-luck.mewtest`, `expect unit <glowing unit> luck.effective == 5` on a luck-5 Rat); the 13 name-keyed lookups
+  read it as LuckUp, so nothing reports `NO STATUS NAMED`. Removing the status by any vanilla route (expiry of a
+  Temporary, stacks to 0, a cleanse, death) ends the rim on the next frame. One glow status per unit: a second
+  `FwGlow_` apply merges into it and the **latest colour wins**. Several units in different colours work (glow v2).
+- **Validator.** `editor/registered-names.json` carries a pattern entry (kind `glow`, `^FwGlow_(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$`),
+  so any such name is a valid status; a name in the namespace that does not fit (`FwGlow_ff00f`) is the error
+  `invalid-glow-name`; on an exe the bindings do not know, `native-build-unknown` warns (the framework stays off).
+- **Display.** The status icon on the unit's bar is LuckUp's (the four-leaf clover, seen in the shot); name and
+  tooltip should come from `keyword_tooltips` by the full name (INFERRED from JokersLuck; a T3 look) — `mods/fw-glow` names `FwGlow_ff00ff` "Glowing"; give each
+  colour you use an entry, or alias it: `FwGlow_00ffff { alias FwGlow_ff00ff }`.
+- **Limits.** Combat only (the glow engine rides `TacticsTest`); up to 16 glowing units; native mods may not register
+  a `FwGlow_` name (`FW_STATUS_ERR_RESERVED`); a native `FW_SetUnitGlow` / `FW_ClearUnitGlow` on the same unit takes it
+  over (the status then no longer drives it). Proven by `mods/fw-glow/tests/data-glow.mewtest` (`npm run test:unitglow --
+  --data`; fixture `editor/test/fixtures/ingame/data-glow-summary.json`: a 5620 px magenta rim around the spawned
+  FwGlowRat, none before the spawn).
+- **A timed glow (OBSERVED 2026-10-22).** Grant it as a Temporary and the rim lasts exactly as long:
+
+  ```
+  FwGlowTempRat {                  // mods/fw-glow: glows until the end of its first turn
+      variant_of Rat
+      passives {
+          StatusOnSpawnIn {
+              Temporary {
+                  status FwGlow_ff00ff
+                  stacks 1
+                  turns 1
+                  expires_on_end_turn true   // or expires_on_begin_turn, as the vanilla Temporaries do
+              }
+          }
+      }
+  }
+  ```
+
+  `mods/fw-glow/tests/data-glow-expiry.mewtest` (`npm run test:unitglow -- --data-expiry`; fixture
+  `data-glow-expiry-summary.json`) spawns it in an autoplayed fight: rim and status at the spawn, both gone after the
+  rat's turn while the rat lives (verdict `expired`). Stacks reaching 0 and a cleanse take the same removal path but
+  were not run in-game.
+- **Scaffold one.** `new_from_template { mod, kind: "glowing-character", name, options: { colour } }` writes the
+  variant (`parent`, default `Rat`; `trigger` `StatusOnSpawnIn` or `StatusOnBattleStart`) into
+  `data/characters/enemies.gon.append`, the status's `keyword_tooltips` entry (skipped if the mod already has one) and
+  its 12-column text rows (`displayName` / `desc`, default "Glowing"). `colour` is `rrggbb`, `rrggbbaa` or the whole
+  `FwGlow_…` name; anything else is refused with the `invalid-glow-name` rule. For example
+  `{ kind: "glowing-character", name: "TealRat", options: { colour: "00ffcc" } }` gives
+  `TealRat { variant_of Rat passives { StatusOnSpawnIn { FwGlow_00ffcc 1 } } }` plus
+  `FwGlow_00ffcc { name "KEYWORD_FWGLOW_00FFCC_NAME" … }`. Spawn it with `spawn TealRat` in a fight, with `fw-glow` loaded.
+
+## Combat speed knobs (2026-10-22, static decode)
+
+Game speed is not a GON knob: it is the `combat_speed` **setting** (settings.txt, menu values 1..4, read as an
+unclamped float every update in combat; docs/engine-map.md "Frame timing and game speed"). Two data-side touches:
+an ability's `graphics { bypass_combatspeed true }` makes its animation play at 1x whatever the setting (vanilla:
+`ChaosSwitchForms`), and `particles.gon` entries carry `movieclip_timescale` (a per-effect clip rate). A mod that
+wants faster simulation for tests uses the harness's `speed <factor>` (framework API v6), not data.
+
+## A whole cat rig for one character (framework API v7, OBSERVED 2026-10-22)
+
+Appended cat animations (`_Append_CatTest`, data only) add labels to the one vanilla cat clip every cat shares. To
+give ONE character entry its own complete cat clip, export the clip from the mod's SWF as **`_CatRig_<CharacterEntry>`**
+and keep the entry a normal cat:
+
+```
+ArtProbeRigCat { variant_of TomTom  graphics { movieclip _CAT  custom_cat_data ArtProbeParts  … } }
+```
+
+- With `mewframework.dll` (dev launches only), the framework registers every `_CatRig_<Entry>` export when the SWF
+  loads, and while that entry's `Character::init` runs it answers the game's `CatTest` lookup with the rig clip. The
+  game keeps its whole cat path — CatData, palette, face, shadow, the animation state machine — and `CatParts` fills
+  the rig's slots by name, so the rig cat is drawn with its own `custom_cat_data` parts. Every other cat keeps
+  `CatTest`. A DLL can register any export for an entry with `FW_RegisterCatRig({character, rig_clip})`
+  (`FW_CatRigFor` reads it back); `<Entry>_Champion` / `_Elite` use the entry's rig unless they have their own.
+- The clip's shape is CatTest's: root labels `<anim>F` / `<anim>B` (**`idleF` / `idleB` at least** — the cat starts in
+  idle; a label the rig lacks is a silent no-op, the cat keeps its frame), each placing the pose as the child **`ani`**
+  at depth 1; the pose is a `rig: "cat"` sprite with the seven **empty** slot sprites `tail leg2 arm2 body leg1 arm1
+  head` (`parts: "game"`); any extra art (the probe's marker) draws as authored.
+- Validator: `cat-rig-target-unknown` (the entry is no character of the base game or the mod), `cat-rig-slot-missing`
+  (no labeled frame places a rig with all seven slots), `cat-rig-idle-missing` (warning), `cat-rig-export-name` (empty
+  or > 63-byte entry). `editor/registered-names.json` lists the shape as kind `catrig`.
+- Without the framework (a plain launch, an unknown build) the export is inert and the cat is the vanilla one.
+- Proven by `mods/_artprobe/tests/render-rig.mewtest` (`npm run test:artprobe -- --rig`; fixture
+  `editor/test/fixtures/ingame/artprobe-rig-summary.json`): ArtProbeRigCat shows the rig's marker over a real cat in all
+  three shots, ArtProbeVanillaCat on the same parts shows none. Engine side: `docs/engine-map.md` "Cat rig redirect".
+
+### Pairing a cat rig with a DLL (the sample, OBSERVED 2026-10-22)
+
+`mods/catrig-sample/` + `native/mods/catrig-sample/` is the loop for the DLL route — the shape to copy when a native
+mod decides which entry gets which rig (or wants an export name of its own):
+
+- **Data half** (`mods/catrig-sample/`): the entry `RigSampleCat { variant_of TomTom  graphics { movieclip _CAT
+  custom_cat_data RigSampleParts … } }`, its parts in `custom_cats.gon.append`, and `art/rig.scene.json` whose root clip
+  is exported as **`RigSampleCatClip`** — any name; it deliberately has no `_CatRig_` prefix, so nothing binds it
+  without the DLL. The validator's `cat-rig-*` checks only look at `_CatRig_` exports; a DLL-bound rig is checked by
+  the mod's own tests.
+- **Native half** (`native/mods/catrig-sample/`, pattern `native/mods/jokers-luck/`): `DllMain` → `FW_Resolve` →
+  `IsActive` → `FW_RegisterCatRig({"RigSampleCat", "RigSampleCatClip"})` → `FW_CatRigFor("RigSampleCat")` to read it
+  back. Registering in `DllMain` is fine: the registry is read only when a character spawns. The pairs, the checks
+  (entry 1..63 bytes, clip 1..71, not a `_CatRig_` name) and the bind loop are pure C (`catrig_sample_rules.c`,
+  host suite `test/test_catrig_sample.c`, in `native\test-all.bat`). Build with `build.bat`, deploy
+  `build/catrig_sample.dll` next to `mewframework.dll` in `native/dist/`.
+- **The join** is the entry name: the framework logs `catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)`
+  at load and `catrig: RigSampleCat: CatTest -> RigSampleCatClip` at each spawn; the DLL's own lines land in
+  `chainloader.log` as `[catrig_sample] bound RigSampleCat -> RigSampleCatClip (FW_CatRigFor agrees)`. A `.mewtest`
+  asserts the framework lines with the runner-side **`expect fwlog "<substr>"`** (they never reach the console or
+  debug.log; `docs/ingame-testing.md`).
+- **Champion / elite.** `RigSampleCat_Champion` / `RigSampleCat_Elite` get the entry's rig (the framework strips the
+  suffix). The harness's `spawn` cannot make a real champion (`No enemy named RigSampleCat_Champion`), so the sample
+  declares the two names as entries (`variant_of RigSampleCat`) — the string `Character::init` then receives is the
+  one the game's champion spawn hands it.
+- **Labels the rig lacks** (the sample ships `idleF/B`, `hitF/B`, `hithardF/B`, `hitupF/B`, `knockbackF/B` only): a
+  non-lethal hit plays the rig's `hitF/B`; anything else is a silent no-op — the cat holds its frame, the fight runs
+  exactly as with the vanilla clip. Visible: **a killed rig cat with no death label stays standing** in its idle pose
+  (the vanilla cat lies dead). Ship the death labels (`dyingF/B`, `deadF/B`, …) with a rig used in real fights.
+- T2: `cd editor && npm run test:catrigsample` (builds the SWF, needs `catrig_sample.dll` in `native/dist`; runs
+  `rig-dll`, `rig-champion`, `rig-elite`, `rig-labels` and its vanilla control `rig-labels-ctl`; writes
+  `catrig-sample-summary.json`, fixture `editor/test/fixtures/ingame/catrig-sample-summary.json`).
+
+### Mod-shipped shaders (validator, 2026-10-22)
+
+A file `mods/<mod>/shaders/<name>.shader` is compiled by the game when native code asks for it by name
+(`ShaderManager_GetOrCreateMaterial(mgr, "<material>", "<name>.shader")`; `fw-glow`'s `fw_unit_glow.shader`, `fw-3d`'s
+`fw_mesh.shader`). It is not a data overlay, so the validator checks it against the game's shader dialect
+(`editor/src/core/shader/dialect.ts`, from `Shader::compile` 0xa55470; `docs/engine-map.md`) instead of warning
+`whole-file-replace`:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `shader-version-first` | error | the first non-comment line is not `#version` (the engine adds none) |
+| `shader-entry-missing` | error | no `" vert()"` / `" frag()"`: that stage gets no `main()` |
+| `shader-entry-shadowed` | error | the first `" vert()"` / `" frag()"` (e.g. in a comment) is not the `void vert() {` definition; only the first is renamed |
+| `shader-guard-missing` | error | no `#if`/`#elif COMPILING_VERTEX_PROGRAM` (or `..._FRAGMENT_...`) guard |
+| `shader-include-missing` | error | an `#include` that is neither in the mod's `shaders/` nor a base shader |
+| `shader-include-unchecked` | info | no `.extracted/shaders` to look in (CI) |
+| `shader-uniform-missing` / `shader-uniform-type` | error | a uniform native code sets by name is undeclared / of another type (`EXPECTED_UNIFORMS`: `fw_mesh.shader` → `FW_MESH_UNIFORMS`) |
+| `shader-attribute-unbound` | warning | a vertex `in` not named `position`/`color`/`texcoord`/`mvp`/`color_xform`/`depth_bias` (the engine binds locations by those names only) |
+| `whole-file-replace` | warning | the name is a base shader: the mod replaces it for every material |
+
+A shader that another shader in the same mod `#include`s is a library: it needs no `#version`, entry points or
+guards. Not settled: whether the loader resolves an `#include` against the `-modpaths` as well as the pack (the
+validator accepts both); `fw_mesh.shader` avoids the question by including nothing.
+## 3D models in a mod (preview)
+
+Phase M of `docs/possible_3d_work.md`: real meshes in the vanilla (orthographic) combat scene, drawn by mewframework.
+This section is the **data seam and the API**; what draws today is listed at the end.
+
+**The GON key.** A `data/characters/*.gon` entry (inanimate objects such as `Crate` are characters there) names its
+model inside its `graphics { }` block, next to `movieclip`:
+
+```
+Crate {
+    graphics {
+        movieclip Crate           // vanilla, stays: the 2D fallback whenever the framework is inactive
+        model "models/crate.obj"  // the 3D model mewframework draws for this unit
+    }
+}
+```
+
+Why `graphics`: that block is where the game keeps everything about how a unit looks (`movieclip`, `name`,
+`water_mask`, `tooltip`, `depth_offset`), so the 3D look sits next to its 2D fallback and a `.merge` touches one block.
+The game's own GON getters look keys up by name and never ask for `model`, so vanilla ignores it — **INFERRED** (no
+reader of the key exists in the pack's data or the decompiles seen so far; no T2 run has checked the GON log for it
+yet). Add it with a `.merge` (`mods/fw-3d/data/characters/inanimate_objects.gon.merge`); the validator knows
+`graphics.model` is a framework key and does not warn `merge-target-missing` for it.
+
+**The value.** Either a file in the mod — `models/<name>.obj` (sub-folders allowed: `models/props/tire.obj`) — or
+`"@Name"`, a model a native mod registers with the mesh engine and declares in `editor/registered-names.json` as
+`{ "name": "Name", "kind": "model", "mod": "<mod>" }` (kind `model` names resolve only `@` references, never a status
+or ability). Path rule (the editor's `editor/src/core/model3d.ts` and the DLL's `fw_obj3d_model_path_ok` apply the
+same one): relative to the mod folder, starts `models/`, ends `.obj`, `.gltf` or `.glb` (lowercase; one rule with the DLL's loader, `fw_mesh_model_kind`, so a path that validates also loads; see "glTF models" below), no `..`, no empty
+segment, no backslash, not absolute, printable ASCII, under 64 bytes. Model files are served through `-modpaths` like
+any pack file (`ResourceManager_GetBinaryResource`, the first mod path that has the file; `possible_3d_work.md` §1
+"Mesh bytes") and are **mod-only**: the pack has none, so nothing is looked up in base data. Files under a mod's
+`models/` are assets, not overlays (no `whole-file-replace`). World units: 1 = one tile, axes = the game's
+(x, height, z), +height up, the model's origin = the anchor (tile centre / the unit's position) on the ground.
+
+**Validator codes** (all errors, on `<Entry>.graphics.model`): `model-path-invalid` (the rule above, or not a
+string), `model-file-missing` (`mods/<mod>/models/...` is not a file), `model-unregistered` (`@Name` without a
+`kind: "model"` registration). A `model` key anywhere else is not checked.
+
+**The native API (framework API v8, `native/framework/src/framework_api.h`).** A native mod places objects itself:
+
+| Function | Does |
+|---|---|
+| `int FW_Register3DObject(void *character, const char *model, const float transform[16])` | attach a model to a unit (it follows the unit); one per unit, registering again replaces it; dropped when the unit's pool slot is reused (the glow registry's generation check). Handle > 0, 0 refused. |
+| `int FW_Place3DObjectOnTile(int col, int row, const char *model, const float transform[16])` | place a model on a tile, anchored at the tile centre (col + 0.5, 0, row + 0.5); any number per tile. Handle > 0. |
+| `int FW_Unregister3DObject(void *character_or_null, int handle)` | remove a unit's object (character given) or the object with `handle` (character NULL). 1 when removed. |
+
+`transform` is the object's own model matrix (column-major, world units), applied after the translation to the anchor;
+NULL = identity. Up to 64 objects; they belong to the current fight scene (a new `TacticsTest` clears them); main
+thread only. The registry is `native/framework/src/fw_obj3d_rules.c` (host-tested by `test_obj3d_rules.c`) behind
+`obj3d_engine.c`. The GON key is read at run time from the unit's live, overlay-merged entry at
+`Character+OFF_CH_GON_ENTRY` (0x240, the pointer the harness's `expect gon` walks) by `fw_gon.c`'s walker
+(`fw_gon_model`, promoted from the harness's `mt_gon.c`, host-tested by `test_gon.c`) through a VirtualQuery-guarded
+reader (`obj3d_engine_unit_model`).
+
+**What draws today vs not (2026-10-22, OBSERVED in a fight).** The mesh engine (`native/framework/src/mesh_engine.c`)
+draws every object of the API v8 registry: tile objects (`FW_Place3DObjectOnTile`) and unit objects
+(`FW_Register3DObject`, following the unit's position), with `mods/fw-3d/shaders/fw_mesh.shader` (Lambert, base colour;
+an inline flat shader when `fw-3d` is not on the mod path). Seen in-game: `models/crate.obj` read from `mods/fw-3d`
+through the mod path and drawn on a tile next to the probe cube (`docs/engine-map.md` "Mod models and the mod shader").
+Since phase M2 (below): per-unit GON models, sorting with the sprites, textures and the palette. Not yet: `@Name` models; animation; `render3d` modes (floor / billboard / upright); perspective (phase P). Tile entries
+(`data/tiles.gon`) have no runtime entry pointer yet, so tiles get models through `FW_Place3DObjectOnTile` only.
+
+**glTF models (the DLL's loader, `fw_mesh_gltf.c`).** What a `.gltf` / `.glb` must be to load on the first try:
+- glTF **2.0** (`asset.version` "2.x"); one `.glb` (preferred), or `.gltf` + `.bin` side by side in `mods/<mod>/models/`,
+  or a `.gltf` with the buffer as a `data:` URI; name `<name>.gltf|.glb`, letters/digits/`_`/`-`, at most 63 bytes
+  for the whole `models/...` path, lowercase extension, sub-folders fine; OBJ texture v is flipped on load (`v' = 1 - v`).
+- **Triangles only** (Blender: Triangulate modifier or the exporter's option); points/lines/strips are refused.
+- At most 1 048 576 vertices / 3 145 728 indices for the whole model (a prop: a few thousand).
+- **Y up** (the glTF / Blender exporter default "+Y Up"); **1 unit = 1 m = 1 tile**; origin = the feet / ground contact,
+  centred on the tile, nothing below y = 0. The loader mirrors z (the game's axes are left-handed) and keeps the winding.
+- Node transforms and hierarchies are baked (applying transforms first is optional; mirrors are handled); several
+  meshes / primitives are merged into one model.
+- POSITION (float) required; NORMAL recommended (else flat shading); TEXCOORD_0 float or normalized u8/u16.
+- **Refused by name:** Draco (`KHR_draco_mesh_compression`), meshopt, `KHR_texture_transform`,
+  `KHR_mesh_quantization`, KTX2/Basis/WebP textures, any other *required* extension, sparse accessors, morph targets.
+  **Ignored:** skins (bind pose drawn), animations, cameras, lights, a second UV set, vertex colours, tangents.
+- One material: only `baseColorFactor` and the `baseColorTexture` image are read (metallic/roughness/normal/occlusion/
+  emissive ignored); the texture is drawn from `textures/models/<name>.png` (see "What draws (phase M2)"), not from the glTF's own image
+  yet.
+
+**Loading.** Needs a framework built with API v8 (mewframework 0.6) on a known build, and `mods/fw-3d` on the mod
+path next to the mod that uses it (`mods: <mod>, fw-3d` in a `.mewtest` header, `-modpaths … mods/fw-3d` in a
+launch): `mods/fw-3d` ships `models/crate.obj` (a hand-written 0.8-unit crate with normals and UVs) and gives the
+vanilla `Crate` its `graphics.model`. The API version is v6 because two open PRs (#109 CatRig, #111 `FW_Random`)
+each claim v5; their `FwApi` fields go before the v6 ones when they merge (the owner settles the order).
+
+### The block form (phase M2)
+
+The value of `model` may also be a block, so one `.merge` still touches one key and the string form stays valid:
+
+```
+Rat {
+    graphics {
+        model {
+            file "models/rat.glb"      // required: models/<...>.obj|.gltf|.glb, or "@Name"
+            scale 1                    // uniform, > 0; 1 model unit (1 Blender metre) = 1 tile
+            yaw 45                     // degrees about the height axis; 0 = the model's front (glTF +Z, Blender -Y)
+                                       // faces the lower right; +45 = straight down, +90 = lower left (clockwise on
+                                       // screen); multiples of 45 match the iso view
+            offset [0 0 0]             // (x, height, z) in tiles, applied after scale and yaw
+            texture "models/rat.png"   // under the mod's textures/ (default: textures/models/<model name>.png)
+            tint [1 1 1 1]             // multiplies the base colour (3 numbers = alpha 1)
+            palette true               // stored; a palette row source for GON units is not wired yet
+            double_sided false         // stored
+        }
+    }
+}
+```
+
+Validator codes for the block: `model-path-invalid` (also a block without `file`), `model-file-missing`,
+`model-unregistered`, `model-scale`, `model-yaw` (error; warning when not a multiple of 45), `model-offset`,
+`model-tint`, `model-flag` (palette / double_sided not a bool), `model-texture-missing` (warning),
+`model-key-unknown` (warning).
+
+### What draws (phase M2, OBSERVED in fights 2026-10-22)
+
+- **Per unit from GON:** every unit of the fight whose entry has `graphics.model` (string or block) gets its model,
+  anchored at the unit's position on the floor and following it as it moves (the position is interpolated, so the
+  model slides with the sprite); it mirrors with the unit's sprite. Units present at the start of a fight are picked
+  up at the first turn, units spawned later on the next frame. The 2D sprite still draws next to the model for now.
+  Try it: `mods/_unitmodel` (the vanilla Rat with a magenta box), `npm run test:ingame -- _unitmodel unit-model`.
+- **Sorting with the sprites:** a model takes its place in the units layer like a unit standing at its origin — a
+  model on a tile is hidden behind units nearer to the camera and drawn over units farther away; a model on a unit is
+  drawn right after that unit's sprite. A model larger than one tile is sorted by its origin only, so a long model can
+  still be drawn over a unit next to its far end; a model and a unit on the same tile: the model is on top. Models are
+  drawn under the HUD and anything on the layers above the units layer.
+- **Textures:** a model `models/<...>/<name>.obj|.gltf|.glb` uses `textures/models/<name>.png` of the same mod when
+  that file exists (sub-folders dropped), or the block's `texture`. Ship **8-bit RGB or RGBA PNGs**, at most 2048 px a
+  side (grey / indexed / 16-bit PNGs are refused, `model-texture-format`). Texels are used as stored (the game
+  premultiplies alpha on load); alpha < 0.5 is cut out. glTF uvs as exported; OBJ `vt` is flipped on load. The glTF's
+  embedded image is not read yet — put the PNG at the conventional path. A named texture that is missing = one
+  `model-texture-missing` line and the base colour.
+- **The palette rule** (like cat art): with a palette row ≥ 0, every pixel whose colour (texel × base colour, before
+  lighting) is grey (r, g, b within 0.001) becomes `palette.png`'s texel at column `round(grey × shade × 15)` of that
+  row (shade = the face's light, 0.45..1); coloured pixels pass through. Paint the parts that should take a cat's
+  colours in exact greys. Today a row is set by the probe (`MEWFW_MESH_PROBE_PALETTE`) and inside the framework
+  (`fw_obj3d_set_material`); an exported API call and a cat's own row for GON units come next.
+- **Probe knobs** (`mods/dev-sandbox/tests/mesh-probe.mewtest`, `mods: dev-sandbox, fw-3d`): `MEWFW_MESH_PROBE=1`
+  (or `<col>,<row>`) draws the magenta cube; `MEWFW_MESH_PROBE_MODEL=models/crate.obj|models/pillar.glb` places that
+  model one tile to the right; `MEWFW_MESH_PROBE_TEXTURE=models/x.png`, `MEWFW_MESH_PROBE_PALETTE=<row>` set its
+  material. `cd editor && node scripts/make-fw3d-assets.ts` regenerates `mods/fw-3d/textures/models/crate.png` and
+  `mods/fw-3d/models/pillar.glb` (`--check` compares).
+
+### 3D models: error codes
+
+
+A model that cannot be loaded is a missing model, never a crash: the unit keeps drawing its 2D `movieclip`. The
+framework writes **one line per model per game session** to `mod_logs/mewframework.log`, and the editor's validator
+reports the same codes at `<Entry>.graphics.model`. One list serves both (`native/framework/src/fw_mesh_rules.c`
+`FW_MESH_CODES` = `editor/src/core/model-codes.ts`, pinned identical by a test).
+
+What the log says:
+
+```
+mesh: models/crate.glb: model-glb-header: glb version 1 is not 2 — drawing the 2D clip
+mesh: models/crate.obj: model-parse-error: face index 7 out of range (3 vertices) at line 4 — drawing the 2D clip
+mesh: models/crate.obj: loaded 24 vertices, 12 triangles, bounds x -0.40..0.40 h 0.00..0.80 z -0.40..0.40
+mesh: models/tree.gltf: loaded 812 vertices, 1204 triangles, bounds x -0.42..0.42 h -0.20..0.90 z -0.40..0.40; model-no-normals, model-below-floor
+```
+
+A loaded model's warnings / info codes are appended to its `loaded` line after `; `.
+
+Errors (the model is refused; the unit draws its 2D clip):
+
+| Code | Log (mewframework.log) | Validator | How to fix |
+|---|---|---|---|
+| `model-path-invalid` | `mesh: <path>: model-path-invalid: not a models/<name>.obj\|.gltf\|.glb path ...` | error, with the reason | Use `models/<sub/folders/>name.obj\|.gltf\|.glb`, forward slashes, relative to the mod folder, < 64 bytes. |
+| `model-file-missing` | `... not found on the mod path (mods/<mod>/<path>) nor in the game's resources, or empty` | error | Put the file at `mods/<mod>/<path>` (exact case); a 0-byte file counts as missing in the game. |
+| `model-unregistered` | (editor only) | error | Declare the `@Name` in `editor/registered-names.json` with `kind: "model"`, or use a file path. |
+| `model-parse-error` | the parser's words, OBJ with `at line N` | error (JSON / GLB JSON only) | Fix the OBJ line named; re-export a glTF whose JSON parses. |
+| `model-extension` | `not a .obj, .gltf or .glb file` | error | Export OBJ, glTF (.gltf) or GLB. |
+| `model-glb-header` | `glb version N is not 2`, `not a GLB file (no glTF magic ...)`, `... not 4-byte aligned`, `... past the end` | error | Re-export the .glb (glTF 2.0 binary); a truncated download or a renamed .gltf gives this. |
+| `model-gltf-version` | `no asset object (not a glTF file)` / `asset.version must be 2.x` | error | Export glTF 2.0. |
+| `model-extension-required` | `glTF extension required but not supported: KHR_draco_mesh_compression` | error, naming it | Export without that compression / extension (Blender: untick Draco). |
+| `model-uri-unsupported` | `buffer N: uri '...' is not a safe relative path`, `data URI is not base64` | — (game only, until #128) | Keep buffers / images relative to the model, no `..`, no `http:`; or export .glb. |
+| `model-buffer-missing` | `buffer N: no reader for x.bin` / `... has no uri and there is no .glb BIN chunk` | — | v1 does not read external `.bin` files: export .glb or "glTF Embedded". |
+| `model-buffer-range` | `bufferView N ... is outside buffer`, `accessor N ... is outside bufferView` | — | The file is truncated or corrupt: re-export. |
+| `model-accessor-invalid` | `accessor N: bad componentType`, `byteStride ...`, `accessor N does not exist` | — | Re-export; this is an exporter bug. |
+| `model-sparse-unsupported` | `accessor N: sparse accessors are not supported` | — | Apply morphs / disable sparse output on export. |
+| `model-primitive-mode` | `mode 1 is not TRIANGLES (4)`, `unsupported OBJ statement 'l'` | — | Export triangles only (no loose edges / points). |
+| `model-attribute-missing` | `mesh N primitive N has no POSITION` | — | Re-export. |
+| `model-attribute-format` | `POSITION accessor N must be VEC3 float`, `TEXCOORD_0 ... integer components must be normalized` | — | Turn off mesh quantization (KHR_mesh_quantization) on export. |
+| `model-index-range` | `index 7 out of range (3 vertices)`, `N indices is not a multiple of 3` | — | Re-export / triangulate. |
+| `model-node-invalid` | `node N does not exist`, `mesh N does not exist`, `material N does not exist` | — | Re-export; a dangling index. |
+| `model-node-cycle` | `node N is reached twice (a cycle or a shared child)` | — | Give every node one parent. |
+| `model-empty` | `no faces` (OBJ) / `no triangles to draw` | error (OBJ with no `f`) | Make sure the mesh object is exported (selection only? hidden?). |
+| `model-limit` | `more than 1048576 vertices (limit)`, `node tree is too deep`, `the model registry is full (32 models per process)` | — | Decimate the model; use fewer distinct models. |
+
+Warnings / info (the model loads):
+
+| Code | Sev. | Where | Meaning / fix |
+|---|---|---|---|
+| `model-multi-material` | warning | game | More than one material: v1 draws every part with the first one. Join materials / bake to one texture. |
+| `model-morph-ignored` | warning | game | Morph targets (shape keys) are skipped: the base mesh draws. |
+| `model-skin-ignored` | warning | game + validator | Skins are skipped: the bind pose draws. |
+| `model-animation-ignored` | warning | game + validator | Animations are skipped: the model draws still. |
+| `model-below-floor` | warning | game | Part of the model is under height 0 (more than 0.01): the origin is the ground point, so it sinks into the floor. Move the origin to the feet. |
+| `model-texture-no-uvs` | warning | game | A texture is named but the model has no UVs. Unwrap it. |
+| `model-no-normals` | info | game | No normals in the file: flat ones are computed. |
+| `model-texture-embedded` | info | game | The texture is inside the file (GLB bufferView / data URI). |
+| `model-mtl-ignored` | info | game + validator | OBJ `mtllib` / `usemtl`: .mtl files are not read. |
+| `model-extension-ignored` | info | game + validator | `extensionsUsed` (not required): ignored by v1. |
+| (reserved) `model-ngon-concave`, `model-texcoord-set`, `model-texture-transform-ignored`, `model-alpha-blend`, `model-image-format`, `model-heavy`, `model-footprint`, `model-texture-missing`, `model-texture-format`, `model-texture-size`, `model-attribute-ignored` | | — | In the list (so both halves agree) but not raised yet: they arrive with the texture / budget phases and PR #128's reader. |
+
+"—" in the Validator column: the editor's reader is header-level for now (extension, GLB container, `asset.version`,
+`extensionsRequired`, OBJ faces, ignored extensions / skins / animations / mtl); these codes appear only in
+mewframework.log until PR #128's full reader lands. Note: a refused model reports its error only — warnings are not
+listed for it (the log has one line).
+
+
 ## Limits of the data layer
 
-Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses
+Data recombines ~1,750 existing C++ behavior components (the keys each one reads: "Component keys" above). A mechanic that no component expresses
 (new status tick logic, new systems, new UI) needs the native layer (`native/`).
+
+## Shipping a mod
+
+A mod folder is all a player needs, but handing one over takes three more things: a manifest that says what it is and
+which game build it was tested on, a zip with the right contents, and install steps. The editor does all three
+(`editor/src/core/mod-manifest.ts`, `pack.ts`, `zip.ts`; Node built-ins only).
+
+**`mods/<name>/mod.json`** — the game never reads it (like `description.json`, a root file no pack file is named
+after); the validator, `pack` and `install` do:
+
+```json
+{
+  "name": "jokers-luck",
+  "version": "0.1.0",
+  "author": "MeyerZon",
+  "description": "A status that rerolls luck every turn.",
+  "gameBuild": "25143593",
+  "native": ["jokers_luck.dll"],
+  "frameworkApi": 4,
+  "license": "MIT",
+  "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
+}
+```
+
+`name` must equal the folder; `version` is semver; `gameBuild` is the **Steam build id** the mod was tested on (the
+`bindings/<id>.json` name, not the version string); `native` lists the mod's own DLLs and then needs `frameworkApi`
+(mewframework's `FW_API_VERSION`); `license` and `attribution` are optional — the attribution line is the
+`ATTRIBUTION.md` ask, suggested, never required. `npm run pack -- <mod> --init` (MCP `pack_mod { init: true }`, the web
+UI offers it) drafts one from `description.json`, the installed build and, for a repo mod with
+`native/mods/<mod>/build.bat`, its DLL name and the framework's API version. Validator findings:
+`manifest-missing` (info — the mod loads, it just cannot be packed), `manifest-invalid` (error, every bad field named),
+`manifest-build-mismatch` (warning — the installed exe is another known build, or one no `bindings/*.json` knows; said
+only when an exe is installed, `check_game_build`'s identity).
+
+**Which repo mods carry one** (pinned by `editor/test/pack-tests.ts` "repo mods"): every `mods/<name>/` whose name
+does not start with `_` has a `mod.json` (`dev-sandbox`, `fw-glow`, `jokers-luck`, `swf-gate`; author MeyerZon, license MIT,
+`gameBuild` a `bindings/<id>.json` build, `native`/`frameworkApi` exactly what `--init` detects from `native/mods/<mod>/`);
+the `_`-prefixed folders are test-only harness overlays and never get one (their `manifest-missing` info is expected —
+they are never packed). The game ignores the file: T2 `jokers-luck/smoke` and `dev-sandbox/console-smoke` pass with it.
+
+**Pack** — `cd editor && npm run pack -- <mod> [--force] [--init] [--out <dir>]`, MCP `pack_mod { mod, force?, init? }`,
+web UI mod menu → *Export…*:
+1. rebuilds every `art/**/*.scene.json` through `build_swf` (so `swfs/` matches the sources);
+2. runs `validate_mod` and **refuses on any error** unless `--force` (warnings pass);
+3. copies each `native` DLL from `native/dist/` (refuses when one is missing, unless `--force`);
+4. writes `editor/data/dist/<name>-<version>.zip` (git-ignored) holding `<name>/` — the mod folder **minus** `tests/`,
+   `art/` (scene sources; the game loads the built `swfs/`), dot-files and editor clutter, plus `native/<dll>` — and at
+   the zip root `README-INSTALL.txt` (where to unzip, the `-modpaths` launch line, the save advice, the Mewjector /
+   mewframework step when there is a native part; CRLF) and `MANIFEST.sha256` (`sha256sum -c` format, every other
+   entry). Entries are timestamped 1980-01-01, so the same mod packs to the same bytes.
+Refusal codes: `mod-missing`, `manifest-missing`, `manifest-invalid`, `swf-build-failed`, `validation-errors`,
+`native-dll-missing`, `out-dir-unsafe` (an output dir under `saves/` or inside the mod).
+
+**Install** — `npm run pack -- --install <zip> [--into <dir>] [--yes]`, MCP `install_mod { zip, acceptBuildMismatch? }`
+(always into `mods/`), web UI → *Import mod…* (zips up to ~6 MB, the `/api` body cap; bigger ones through the CLI).
+Everything is checked before a byte is written, and a refusal writes nothing:
+- size: the zip ≤ 64 MiB, the declared unpacked total ≤ 256 MiB, ≤ 5000 entries; each entry inflates at most to its
+  declared size (a zip bomb stops there) and must match its CRC-32;
+- names: no absolute path, drive letter, backslash, `.`/`..`/empty segment, NUL, symlink entry, `saves` segment, or two
+  names that differ only by case;
+- layout: exactly one top folder `<name>/` holding a valid `mod.json` whose `name` is that folder, and nothing else at the
+  root but `README-INSTALL.txt` / `MANIFEST.sha256`; when `MANIFEST.sha256` is present every file must be listed and match;
+- the destination `<into>/<name>/` must not exist (install never overwrites; remove or rename the old version first),
+  `<into>` must not be under `saves/` or the game folder.
+Then the game build: `mod.json` `gameBuild` vs the installed exe. On a mismatch install returns
+`{ verdict: "build-mismatch", prompt }` and writes nothing — the CLI asks `[y/N]` on a terminal (or needs `--yes`, exit
+3 otherwise), the web UI shows a confirm, an MCP caller shows the prompt to the user and calls again with
+`acceptBuildMismatch: true`. Files are written into a temp sibling and renamed into place; the installed mod is then
+validated and the report returned. `README-INSTALL.txt` and `MANIFEST.sha256` stay out of the mod folder.
+
+**Saves.** The generated README tells players to back up the saves folder and to pass `-savesuffix`, and says plainly
+that the suffix is not a protection on the builds examined (`docs/engine-map.md` "Save safety": it never reaches a save
+path); the framework does need it to activate.
 
 ## Test-only overlays
 
@@ -314,7 +1149,85 @@ Recipe:
 2. `scene.texts.label = { "text": "MY_MOD_LABEL", "html": false, "font": "Peralta", "size": 24, … }`, placed by a key.
 3. `build_swf`. The text is resolved once at instance creation (not on a language switch).
 
-Not done: the editor does not switch a key text to plain by itself, and the validator does not warn about an
-HTML-wrapped key (follow-up); the preview draws the key, not the localized value. Measure and its limits:
+The validator warns **`text-loc-key-html`** (scene findings in `read_art_scene` / `write_art_scene` / Art mode, and
+`validate_mod` for every `art/*.scene.json`) when a text is exactly a key and not `"html": false`: a key of the base
+`combined.csv` (that half is empty without `.extracted/`) or one this mod's `data/text/*.csv` overlays add; the message
+names which matched. A text that only has the key shape `^[A-Z][A-Z0-9_]{2,}$` and is in neither table is an
+**info** ("looks like a loc key but no such key exists …; if it is meant to be localized, add the key and set
+html: false"), so plain capitals like `PROBE` do not raise a warning. A wrapper of several words that merely
+contains a key is not a key text. Fix it with `"html": false` or Art mode's **plain (localized)** box on the text row.
+Not done: the editor does not switch a key text to plain by itself (the warning asks instead); the preview draws the
+key, not the localized value. Measure and its limits:
 `editor/src/core/art/probe-outcomes.ts` (ink masks per box on a clip-space grid, key vs value vs look-alike,
 min over ±3 px shifts; a box under 60 % of its best ink — the "Battle Start!" banner, the unit — does not vote).
+
+## 3D models: exporting from Blender
+
+**For the owner** (you said you can provide `.gltf` files). Phase M of `docs/possible_3d_work.md`; the importer rules
+behind every step are in [`3d-importer-design.md`](3d-importer-design.md) (§2.5 lists what is read, ignored or
+refused). Written for Blender 5.x's bundled glTF exporter (File > Export > glTF 2.0); the setting names are the
+exporter's own (`scripts/addons_core/io_scene_gltf2/__init__.py` at v5.2.3).
+
+**Before exporting — the model itself**
+
+1. **Scale: 1 metre = 1 tile.** A prop that fills its tile is about 1 × 1 m on the ground; keep it inside a
+   1 × 1 m square around its origin (the editor warns `model-footprint` past 0.5 m from the origin). Height is free;
+   a cat-sized prop is 0.6–1.0 m. Leave the scene's Unit Scale at 1.0.
+2. **Origin at the feet.** Put the object's origin at the bottom centre of the model: snap the 3D cursor there
+   (Shift+S > Cursor to Selected on the bottom face, or to the world origin if the model already stands on it), then
+   Object > Set Origin > Origin to 3D Cursor. Nothing should go below the origin (`model-below-floor`).
+3. **Front = Blender's −Y** (what the Front view, numpad 1, shows). In the game that side faces the lower right of
+   the screen; turning it is a GON setting, not an export setting.
+4. **Apply the object's transform** (Ctrl+A > All Transforms). Not strictly needed — the importer bakes node
+   transforms — but it makes the origin and the size you see the size you get.
+5. **One object, one material.** Join parts into one object (Ctrl+J) and give it one material; v1 draws the whole
+   model with one colour/texture (`model-multi-material` warns otherwise). Several objects in one file are merged,
+   which also works, but one is simplest.
+6. **Material: Principled BSDF with Base Color only.** Either a plain colour, or an **Image Texture node plugged
+   straight into Base Color** — no Mapping node between them (a Mapping node becomes `KHR_texture_transform`, which v1
+   ignores). Metallic, roughness, normal maps and emission are ignored. Exactly grey colours (R = G = B) are recoloured
+   by the unit's palette like cat art; use `palette false` in the GON block to keep authored colours.
+7. **Texture: PNG, RGB or RGBA, 8 bit, at most 1024 × 1024** (256 or 512 is plenty: the prop is ~100 px on screen
+   and the game uses no mipmaps). Not greyscale-only (a 1-channel PNG cannot be uploaded by the game's loader).
+   Transparency is a cut-out (alpha below 0.5 is a hole); no soft translucency.
+8. **Triangle budget: ≤ 5 000 triangles** (≈ 2 000 is plenty; Decimate modifier if needed). The glTF exporter
+   triangulates by itself; add a Triangulate modifier first only if you want to control how n-gons are split.
+9. **No armature, no shape keys, no animation** for now (v1 draws a static prop; skins and animations are skipped
+   with a warning, and shape keys make the exporter write sparse accessors).
+10. **Name**: lowercase letters, digits, `_` or `-` (e.g. `crate`, `bone_pile-2`); the file becomes
+    `models/<name>.glb` (the whole path under 64 characters).
+
+**Export — File > Export > glTF 2.0 (.glb/.gltf), then in the side panel:**
+
+| Panel | Setting | Value |
+|---|---|---|
+| (top) | Format | **glTF Binary (.glb)** — one self-contained file |
+| Include | Limit to: Selected Objects | **on** (select only the model) |
+| Include | Custom Properties, Cameras, Punctual Lights | off |
+| Transform | +Y Up | **on** (the default) |
+| Data > Mesh | Apply Modifiers | **on** |
+| Data > Mesh | UVs | on (needed for a texture) |
+| Data > Mesh | Normals | on (off = flat shading) |
+| Data > Mesh | Tangents, Loose Edges, Loose Points, Shared Accessors | off |
+| Data > Material | Materials | Export |
+| Data > Material | Images | Automatic (PNG stays PNG) |
+| Data > Shape Keys | Shape Keys | **off** |
+| Data > Armature / Skinning | Skinning | off |
+| Data > Compression | Draco mesh compression | **off** (a Draco file is refused) |
+| Data > Compression | Meshopt compression | off |
+| Animation | Animation | off |
+
+Save it as `mods/<your mod>/models/<name>.glb`, or just hand the `.glb` to an agent.
+
+**The texture file.** The game loads textures by file name from `textures/`, so the PNG also has to sit at
+`mods/<mod>/textures/models/<name>.png`. With a `.glb` the editor extracts the embedded PNG there (planned:
+`extract_model_texture`; until then an agent does it). Alternatively export **glTF Separate (.gltf + .bin +
+textures)** and copy the PNG to that path yourself.
+
+**OBJ instead** (File > Export > Wavefront (.obj)): Forward −Z, Up Y (the defaults), Selected Only, Apply Modifiers,
+UV Coordinates, Normals, **Triangulated Mesh on**, Materials off (the `.mtl` is not read: colour and texture come from
+the GON block). Same scale, origin and name rules.
+
+**Check:** `validate_mod` (once the model checks are wired, `3d-importer-design.md` §3.3) lists every problem with a
+`model-*` code; until then an agent runs `readModel` on the file. What is drawn today is in "3D models in a mod
+(preview)" once the `feat/3d-meshes-*` branches land.

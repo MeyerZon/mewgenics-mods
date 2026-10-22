@@ -26,11 +26,14 @@ layer, which tier of test covers what, where a human still has to look, and what
   finding code is pinned at T0 by `editor/test/validator-tests.ts` on the synthetic base and fixture mods under
   `editor/test/fixtures/validator/` (one mod per code, plus a clean one); the sample mods against the real
   `.extracted/` remain the T1 check.
-- **Native framework**: the pure modules have 79 host tests (`native/framework/test/`): the signature scanner (13),
-  the build gate + generated tables (6), the status definition rules + alias rewrite (14), the custom-status vtable
-  clone + thunk bodies (13, incl. a T1 clone of the real `.analysis/luckup-vtable.hex`), the entity/component walks
-  + apply/merge/set-stacks writes over fake objects (11) and symbol resolution / the launch gate / API bounds / the
-  hook plan (14) and the per-unit glow rules: registry, pruning, layer vector, pass lookup and writes (8). The glue
+- **Native framework**: the pure modules have 106 host tests (`native/framework/test/`): the signature scanner (14),
+  the build gate + generated tables (6), the status definition rules + alias rewrite, incl. the reserved `FwGlow_`
+  namespace and its alias (16), the custom-status vtable clone + thunk bodies, incl. the glow clone's no-luck slot 82
+  (15, with T1 checks on the real `.analysis/luckup-vtable.hex`), the entity/component walks + apply/merge/set-stacks
+  writes over fake objects (13) and symbol resolution / the launch gate / API bounds / the hook plan (15) and the
+  per-unit glow rules: registry, pruning, layer vector, pass lookup and writes, the v2 colour groups, draw plan,
+  screen-rect stages, per-draw pass writes and the generated canvas constants, and the v3 data seam (the `FwGlow_`
+  name parser, status-sourced entries, the sweep, the per-object names) (27). The glue
   (`framework.c`, `status_engine.c`, `glow_engine.c`: PE header, Mewjector calls, the game-ABI thunks and
   the calls into the game) is verified by the harness run (the symbols resolve, hooks install, Joker's Luck
   registers) and, since 2026-10-20, in a real fight:

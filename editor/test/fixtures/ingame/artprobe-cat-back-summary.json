@@ -1,0 +1,424 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "verdict": "pass",
+  "reason": "all 16 expectation(s) passed; 11 shot(s)",
+  "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+  "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-132159-_artprobe-render-cat-back",
+  "outcome": "back-facing",
+  "big": 1.3,
+  "turn": "face 9 back (Character::Face 0x10ce50, instant) on ArtProbeCatFacing; ArtProbeCatBack faces away from data (properties.lock_orientation [1 0]) and face 10 front leaves it on B (the lock replaces the direction); #105's runs had the keys under graphics, which Character::init never reads",
+  "faces": [
+    {
+      "line": 18,
+      "unit": 9,
+      "arg": "9 back",
+      "dir": [
+        1,
+        0
+      ],
+      "effective": [
+        1,
+        0
+      ],
+      "expect": "B",
+      "facing": "B",
+      "flip": 1,
+      "ok": true
+    },
+    {
+      "line": 37,
+      "unit": 10,
+      "arg": "10 front",
+      "dir": [
+        0,
+        -1
+      ],
+      "effective": [
+        1,
+        0
+      ],
+      "expect": "B",
+      "facing": "B",
+      "flip": 1,
+      "ok": true
+    },
+    {
+      "line": 49,
+      "unit": 9,
+      "arg": "9 front",
+      "dir": [
+        0,
+        -1
+      ],
+      "effective": [
+        0,
+        -1
+      ],
+      "expect": "F",
+      "facing": "F",
+      "flip": 1,
+      "ok": true
+    }
+  ],
+  "facing": {
+    "9": [
+      {
+        "facing": "F",
+        "dir": [
+          -1,
+          0
+        ],
+        "lock": [
+          0,
+          0
+        ],
+        "sign": 1,
+        "flip": -1
+      },
+      {
+        "facing": "B",
+        "dir": [
+          1,
+          0
+        ],
+        "lock": [
+          0,
+          0
+        ],
+        "sign": 1,
+        "flip": 1
+      },
+      {
+        "facing": "B",
+        "dir": [
+          1,
+          0
+        ],
+        "lock": [
+          0,
+          0
+        ],
+        "sign": 1,
+        "flip": 1
+      }
+    ],
+    "10": [
+      {
+        "facing": "B",
+        "dir": [
+          1,
+          0
+        ],
+        "lock": [
+          1,
+          0
+        ],
+        "sign": 1,
+        "flip": 1
+      }
+    ]
+  },
+  "expects": [
+    "ok line 8: console Spawned TomTom (matched console line 0)",
+    "ok line 12: console Spawned ArtProbeCatFacing (matched console line 2)",
+    "ok line 15: gon 9 graphics.alt_animations.0.1 == \"probeBack\" (unit 9 \"Tom Tom\" (ENEMY_TOMTOM_NAME): graphics.alt_animations.0.1 = string \"probeBack\")",
+    "ok line 16: unit 9 facing == \"F\" (unit 9 \"Tom Tom\": facing \"F\")",
+    "ok line 21: unit 9 facing == \"B\" (unit 9 \"Tom Tom\": facing \"B\")",
+    "ok line 22: unit 9 flip > 0 (unit 9 \"Tom Tom\": flip 1)",
+    "ok line 29: console Spawned ArtProbeCatBack (matched console line 4)",
+    "ok line 31: gon 10 properties.lock_orientation.0 == 1 (unit 10 \"Tom Tom\" (ENEMY_TOMTOM_NAME): properties.lock_orientation.0 = number 1 (int 1, double 1, text \"1\"))",
+    "ok line 32: gon 10 properties.health exists (unit 10 \"Tom Tom\" (ENEMY_TOMTOM_NAME): properties.health = number 15 (int 15, double 15, text \"15\"))",
+    "ok line 34: unit 10 facing == \"B\" (unit 10 \"Tom Tom\": facing \"B\")",
+    "ok line 35: unit 10 dirx == 1 (unit 10 \"Tom Tom\": dirx 1)",
+    "ok line 39: unit 10 facing == \"B\" (unit 10 \"Tom Tom\": facing \"B\")",
+    "ok line 40: unit 10 dirx == 1 (unit 10 \"Tom Tom\": dirx 1)",
+    "ok line 43: console Spawned ArtProbeCatBackShown (matched console line 6)",
+    "ok line 45: gon 11 graphics.alt_animations.0.1 == \"probeBackShow\" (unit 11 \"Tom Tom\" (ENEMY_TOMTOM_NAME): graphics.alt_animations.0.1 = string \"probeBackShow\")",
+    "ok line 51: unit 9 facing == \"F\" (unit 9 \"Tom Tom\": facing \"F\")"
+  ],
+  "markerShots": [
+    "back 1",
+    "back 2",
+    "back 3",
+    "locked 1",
+    "locked 2",
+    "shown 1",
+    "shown 2"
+  ],
+  "markers": [
+    {
+      "label": "vanilla",
+      "found": false,
+      "scale": null,
+      "clipped": null,
+      "box": null
+    },
+    {
+      "label": "front",
+      "found": false,
+      "scale": null,
+      "clipped": null,
+      "box": null
+    },
+    {
+      "label": "back 1",
+      "found": true,
+      "scale": 2.875,
+      "clipped": null,
+      "box": {
+        "x0": 1711,
+        "y0": 240,
+        "x1": 1986,
+        "y1": 423
+      }
+    },
+    {
+      "label": "back 2",
+      "found": true,
+      "scale": 2.875,
+      "clipped": null,
+      "box": {
+        "x0": 1711,
+        "y0": 240,
+        "x1": 1986,
+        "y1": 423
+      }
+    },
+    {
+      "label": "back 3",
+      "found": true,
+      "scale": 2.875,
+      "clipped": null,
+      "box": {
+        "x0": 1711,
+        "y0": 240,
+        "x1": 1986,
+        "y1": 423
+      }
+    },
+    {
+      "label": "locked 1",
+      "found": true,
+      "scale": 2.875,
+      "clipped": null,
+      "box": {
+        "x0": 1711,
+        "y0": 240,
+        "x1": 1986,
+        "y1": 423
+      }
+    },
+    {
+      "label": "locked 2",
+      "found": true,
+      "scale": 2.875,
+      "clipped": null,
+      "box": {
+        "x0": 1711,
+        "y0": 240,
+        "x1": 1986,
+        "y1": 423
+      }
+    },
+    {
+      "label": "shown 1",
+      "found": true,
+      "scale": 2.875,
+      "clipped": null,
+      "box": {
+        "x0": 1711,
+        "y0": 240,
+        "x1": 1986,
+        "y1": 423
+      }
+    },
+    {
+      "label": "shown 2",
+      "found": true,
+      "scale": 2.875,
+      "clipped": null,
+      "box": {
+        "x0": 1711,
+        "y0": 241,
+        "x1": 1986,
+        "y1": 423
+      }
+    },
+    {
+      "label": "turned back",
+      "found": false,
+      "scale": null,
+      "clipped": null,
+      "box": null
+    }
+  ],
+  "shots": [
+    "baseline",
+    "vanilla",
+    "front",
+    "back 1",
+    "back 2",
+    "back 3",
+    "locked 1",
+    "locked 2",
+    "shown 1",
+    "shown 2",
+    "turned back"
+  ],
+  "vanilla": {
+    "region": {
+      "n": 9951,
+      "x0": 1851,
+      "y0": 510,
+      "x1": 2087,
+      "y1": 683,
+      "cx": 1969,
+      "cy": 596.5
+    },
+    "height": 174
+  },
+  "front": {
+    "label": "front",
+    "region": {
+      "n": 9849,
+      "x0": 1731,
+      "y0": 815,
+      "x1": 1964,
+      "y1": 988,
+      "cx": 1847.5,
+      "cy": 901.5
+    },
+    "ratio": 1
+  },
+  "back": [
+    {
+      "label": "back 1",
+      "region": {
+        "n": 19427,
+        "x0": 1647,
+        "y0": 776,
+        "x1": 2025,
+        "y1": 1008,
+        "cx": 1836,
+        "cy": 892
+      },
+      "ratio": 1.339
+    },
+    {
+      "label": "back 2",
+      "region": {
+        "n": 19425,
+        "x0": 1647,
+        "y0": 776,
+        "x1": 2025,
+        "y1": 1008,
+        "cx": 1836,
+        "cy": 892
+      },
+      "ratio": 1.339
+    },
+    {
+      "label": "back 3",
+      "region": {
+        "n": 19439,
+        "x0": 1647,
+        "y0": 776,
+        "x1": 2025,
+        "y1": 1008,
+        "cx": 1836,
+        "cy": 892
+      },
+      "ratio": 1.339
+    }
+  ],
+  "locked": [
+    {
+      "label": "locked 1",
+      "region": {
+        "n": 21654,
+        "x0": 795,
+        "y0": 350,
+        "x1": 1173,
+        "y1": 622,
+        "cx": 984,
+        "cy": 486
+      },
+      "ratio": 1.569
+    },
+    {
+      "label": "locked 2",
+      "region": {
+        "n": 21669,
+        "x0": 795,
+        "y0": 350,
+        "x1": 1173,
+        "y1": 622,
+        "cx": 984,
+        "cy": 486
+      },
+      "ratio": 1.569
+    }
+  ],
+  "shown": [
+    {
+      "label": "shown 1",
+      "region": {
+        "n": 14055,
+        "x0": 1447,
+        "y0": 144,
+        "x1": 1792,
+        "y1": 317,
+        "cx": 1619.5,
+        "cy": 230.5
+      },
+      "ratio": 1
+    },
+    {
+      "label": "shown 2",
+      "region": {
+        "n": 14056,
+        "x0": 1447,
+        "y0": 144,
+        "x1": 1792,
+        "y1": 317,
+        "cx": 1619.5,
+        "cy": 230.5
+      },
+      "ratio": 1
+    }
+  ],
+  "turnPair": {
+    "backGone": {
+      "n": 10007,
+      "x0": 1761,
+      "y0": 776,
+      "x1": 2025,
+      "y1": 1008,
+      "cx": 1893,
+      "cy": 892
+    },
+    "frontCame": {
+      "n": 6245,
+      "x0": 1766,
+      "y0": 815,
+      "x1": 1940,
+      "y1": 977,
+      "cx": 1853,
+      "cy": 896
+    },
+    "ratio": 1.429
+  },
+  "capture": [
+    "baseline: window 3440 x 1440",
+    "vanilla: window 3440 x 1440",
+    "front: window 3440 x 1440",
+    "back 1: window 3440 x 1440",
+    "back 2: window 3440 x 1440",
+    "back 3: window 3440 x 1440",
+    "locked 1: window 3440 x 1440",
+    "locked 2: window 3440 x 1440",
+    "shown 1: window 3440 x 1440",
+    "shown 2: window 3440 x 1440",
+    "turned back: window 3440 x 1440"
+  ]
+}

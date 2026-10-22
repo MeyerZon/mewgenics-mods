@@ -1,0 +1,111 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "verdict": "pass",
+  "reason": "all 2 expectation(s) passed; 5 shot(s)",
+  "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+  "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-121534-_artprobe-render-rig",
+  "outcome": "redirected",
+  "markers": 3,
+  "partsDrawn": 3,
+  "radius": 350,
+  "log": {
+    "registered": [
+      {
+        "clip": "_CatRig_ArtProbeRigCat",
+        "character": "ArtProbeRigCat",
+        "source": "data"
+      }
+    ],
+    "redirected": [
+      {
+        "character": "ArtProbeRigCat",
+        "clip": "_CatRig_ArtProbeRigCat"
+      }
+    ],
+    "missing": [],
+    "refused": []
+  },
+  "shots": [
+    "baseline",
+    "vanilla",
+    "rig 1",
+    "rig 2",
+    "rig 3"
+  ],
+  "vanilla": {
+    "label": "vanilla",
+    "marker": null,
+    "region": {
+      "n": 9819,
+      "x0": 2109,
+      "y0": 370,
+      "x1": 2313,
+      "y1": 563,
+      "cx": 2211,
+      "cy": 466.5
+    },
+    "outline": 10628
+  },
+  "rig": [
+    {
+      "label": "rig 1",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1621,
+          "y0": 180,
+          "x1": 1803,
+          "y1": 301
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "ours": true,
+      "centre": {
+        "x": 1712,
+        "y": 747.5625
+      },
+      "outline": 16998
+    },
+    {
+      "label": "rig 2",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1621,
+          "y0": 181,
+          "x1": 1803,
+          "y1": 301
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "ours": true,
+      "centre": {
+        "x": 1712,
+        "y": 748.0625
+      },
+      "outline": 22256
+    },
+    {
+      "label": "rig 3",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1621,
+          "y0": 181,
+          "x1": 1803,
+          "y1": 301
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "ours": true,
+      "centre": {
+        "x": 1712,
+        "y": 748.0625
+      },
+      "outline": 17537
+    }
+  ]
+}

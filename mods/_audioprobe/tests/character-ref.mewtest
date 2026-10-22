@@ -1,0 +1,16 @@
+mods: _audioprobe
+timeout: 60s
+# T2: a NEW sound referenced from a mod character. AudioProbeRat (data/characters/enemies.gon.append) carries the
+# vanilla passive LoopingSoundWhileAlive AudioProbe_New; spawning it must make the game load the mod-only file
+# audio/combat_sfx/audioprobe_new.wav (nothing in this script plays the group by name).
+wait frames 120
+enter TacticsTest
+wait ms 4000
+cmd debug_list_loaded_files
+expect noconsole "audioprobe_new.wav"
+cmd spawn AudioProbeRat
+expect console "Spawned AudioProbeRat" within 10
+wait frames 90
+cmd debug_list_loaded_files
+expect console "audio/combat_sfx/audioprobe_new.wav" within 5
+quit

@@ -3,6 +3,7 @@
 
 import * as baseData from "./base-data.ts";
 import * as components from "./components.ts";
+import { loadComponentSchema, describeComponent } from "./component-schema.ts";
 import * as modio from "./mod-io.ts";
 import { validateMod } from "./validate/validator.ts";
 import { previewMerge } from "./preview-merge.ts";
@@ -10,19 +11,26 @@ import { newFromTemplate as scaffold } from "./templates.ts";
 import { loadRegisteredNames } from "./names.ts";
 import * as artio from "./art/art-io.ts";
 import { readPalette, knownRowHints } from "./art/palette.ts";
+import { readGhostCatParts as readGhostParts } from "./art/ghost-cat-swf.ts";
 import { validateScene, exampleScene, DEFAULT_ABC_MODE } from "./art/scene.ts";
 import { newCatAnimation as catAnim } from "./art/cat-rig.ts";
 import type { NewCatAnimationOptions } from "./art/cat-rig.ts";
 import type { Scene, Finding as SceneFinding } from "./art/scene.ts";
 import * as ingame from "./ingame/index.ts";
 import * as vcHeadless from "./art/vectorcraft-headless.ts";
+import * as pack from "./pack.ts";
+import * as levelio from "./level/level-io.ts";
+import * as levelart from "./level/level-art.ts";
+import type { LvlFile } from "./level/lvl.ts";
 export { listVanillaSwfs, readVanillaSwf, vanillaSwfDir } from "./art/art-io.ts";
 import { checkInstalledBuild } from "./bindings/check.ts";
 import { portManifest, renderPortReport } from "./bindings/port.ts";
 import { loadManifest, saveManifest, listManifests, BINDINGS_DIR } from "./bindings/manifest.ts";
 import { parsePe, PeError } from "./bindings/pe.ts";
 import { locateGameDir } from "./ingame/launch.ts";
-import { isInside, touchesSaves, SafetyError } from "./repo.ts";
+import { isInside, touchesSaves, SafetyError, MODS_DIR, DATA_CACHE_DIR } from "./repo.ts";
+import { sceneLocLookup } from "./art/scene-loc.ts";
+import { loadAudioIndex, audioCategoryEntries, AUDIO_CATEGORIES } from "./audio/sound-sets.ts";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import type { TextOverride } from "./validate/validator.ts";
@@ -40,11 +48,21 @@ export type { RegisteredName } from "./names.ts";
 
 /** List base-data categories with entry counts. */
 export function listBaseData(): { hasBaseData: boolean; categories: baseData.CategoryCount[] } {
-  return { hasBaseData: baseData.hasBaseData(), categories: baseData.listCategories() };
+  const categories = baseData.listCategories();
+  // sounds / music / sound_files come from the cached audio index (npm run build:index), when present
+  const ix = loadAudioIndex(DATA_CACHE_DIR);
+  if (ix) for (const c of AUDIO_CATEGORIES) categories.push({ category: c, count: audioCategoryEntries(ix, c)?.length ?? 0 });
+  return { hasBaseData: baseData.hasBaseData(), categories };
 }
 
 /** List entries within a category. */
 export function listBaseEntries(category: string, filter?: string): { category: string; entries: string[] } {
+  if ((AUDIO_CATEGORIES as readonly string[]).includes(category)) {
+    const ix = loadAudioIndex(DATA_CACHE_DIR);
+    const all = ix ? audioCategoryEntries(ix, category) ?? [] : [];
+    const f = filter?.toLowerCase();
+    return { category, entries: f ? all.filter((n) => n.toLowerCase().includes(f)) : all };
+  }
   return { category, entries: baseData.listEntries(category, filter) };
 }
 
@@ -62,14 +80,32 @@ export interface ComponentSearchResult {
   count: number;
   names: string[];
   whereUsed?: Array<{ name: string; usedIn: WhereUsedHit[] }>;
+  /** the GON keys each of the top 15 matches reads (editor/component-schema.json; base keys inherited) */
+  schema?: ComponentKeyInfo[];
+}
+
+/** One component's resolved key schema (component-schema.ts describeComponent). */
+export interface ComponentKeyInfo {
+  name: string;
+  chain: string[];
+  status: string;
+  open: boolean;
+  children: string | null;
+  scalar: string | null;
+  required: string[];
+  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string; confidence: string; evidence?: string; note?: string }>;
 }
 
 /** Search C++ component class names, optionally with where-used. */
 export function searchComponents(query: string, opts: { whereUsed?: boolean; limit?: number } = {}): ComponentSearchResult {
   const names = components.searchComponentNames(query, opts.limit ?? 50);
-  if (!opts.whereUsed) return { query, count: names.length, names };
+  const cs = loadComponentSchema();
+  // an exact match first, so searching a full class name always describes that class
+  const top = [...names.filter((n) => n === query), ...names.filter((n) => n !== query)].slice(0, 15);
+  const schema = cs ? (top.map((n) => describeComponent(cs, n)).filter((x) => x !== null) as unknown as ComponentKeyInfo[]) : [];
+  if (!opts.whereUsed) return { query, count: names.length, names, schema };
   const detailed = names.slice(0, 15).map((name) => ({ name, usedIn: components.whereUsed(name, 20) }));
-  return { query, count: names.length, names, whereUsed: detailed };
+  return { query, count: names.length, names, whereUsed: detailed, schema };
 }
 
 export function listMods(): { mods: string[] } {
@@ -88,8 +124,9 @@ export function writeOverlay(modName: string, relPath: string, content: string):
   return modio.writeOverlay(modName, relPath, content);
 }
 
-export function validate(modName: string, override?: TextOverride) {
-  return validateMod(modName, override);
+/** `opts.modpaths`: the mods loaded together, in -modpaths order — adds the cross-mod append / SWF-name findings */
+export function validate(modName: string, override?: TextOverride, opts: { modpaths?: string[] } = {}) {
+  return validateMod(modName, override, opts.modpaths ? { modpaths: opts.modpaths } : {});
 }
 
 export function preview(modName: string, relPath: string, opts?: PreviewMergeOptions) {
@@ -127,18 +164,18 @@ export function newArtScene(modName: string, name: string, opts?: artio.NewScene
   return artio.newArtScene(modName, name, opts);
 }
 /**
- * Add a cat animation (a rig `<name>Pose` and the labeled `<name>F` / `<name>B` frames on the `_Append_CatTest`
- * donor) to a scene object, without touching disk. The scene is validated first; `ok` is false on a refusal.
+ * Add a cat animation (a front rig `<name>Pose`, a back rig `<name>PoseBack` and the labeled `<name>F` / `<name>B`
+ * frames — `<name>LF/RF/LB/RB` with `fourWay` — on the `_Append_CatTest` donor) to a scene object, without touching disk. The scene is validated first; `ok` is false on a refusal.
  */
-export function newCatAnimation(scene: unknown, name: string, opts?: NewCatAnimationOptions): { ok: boolean; scene: Scene; findings: SceneFinding[]; rig?: string; donor?: string } {
+export function newCatAnimation(scene: unknown, name: string, opts?: NewCatAnimationOptions): { ok: boolean; scene: Scene; findings: SceneFinding[]; rig?: string; backRig?: string; donor?: string } {
   const v = validateScene(scene);
   if (!v.ok) return { ok: false, scene: v.scene, findings: v.findings };
   const r = catAnim(v.scene, name, opts);
-  return { ok: !r.findings.some((f) => f.severity === "error"), scene: r.scene, findings: r.findings, rig: r.rig, donor: r.donor };
+  return { ok: !r.findings.some((f) => f.severity === "error"), scene: r.scene, findings: r.findings, rig: r.rig, backRig: r.backRig, donor: r.donor };
 }
-/** Validate a scene object without touching disk (live editing). */
-export function validateArtScene(scene: unknown) {
-  const v = validateScene(scene);
+/** Validate a scene object without touching disk (live editing); with `modName` its own loc keys count for text-loc-key-html too. */
+export function validateArtScene(scene: unknown, modName?: string) {
+  const v = validateScene(scene, { locKey: sceneLocLookup(modName ? join(MODS_DIR, modName) : null) });
   return { ok: v.ok, findings: v.findings, scene: v.scene };
 }
 export function importSvgShape(args: Parameters<typeof artio.importSvgShape>[0]) {
@@ -157,6 +194,10 @@ export function exportShapeSvg(modName: string, scenePath: string, shapeId: stri
   return artio.exportShapeSvg(modName, scenePath, shapeId);
 }
 /** Bake a glow / drop shadow of a shape as <shapeId>_glow under it (glow.ts) and save the scene. */
+/** A PNG as raster art: check it, copy it into the mod, add it to a scene as a bitmap fill / raster sprite / background (raster.ts). */
+export function importBitmap(args: Parameters<typeof artio.importBitmap>[0]) {
+  return artio.importBitmap(args);
+}
 export function bakeGlowIntoScene(args: Parameters<typeof artio.bakeGlowIntoScene>[0]) {
   return artio.bakeGlowIntoScene(args);
 }
@@ -169,6 +210,10 @@ export function writeArtAsset(modName: string, relPath: string, bytes: Uint8Arra
 export function readArtPalette(which?: Parameters<typeof readPalette>[0]) {
   const p = readPalette(which);
   return { ...p, hints: knownRowHints(), defaultAbc: DEFAULT_ABC_MODE };
+}
+/** The ghost cat's part outlines for the preview: catparts.swf's silhouettes when extracted, else built-in (ghost-cat-swf.ts). */
+export function readGhostCatParts() {
+  return readGhostParts();
 }
 /** Write (or remove, for `control`) the SWF-gate files in mods/<mod>/swfs/ (docs/swf-emitter-fix-spec.md §8). */
 export function prepareSwfGate(o: Parameters<typeof artio.prepareSwfGate>[0]) {
@@ -409,4 +454,68 @@ export function portBindings(args: PortBindingsArgs): PortBindingsResult {
     out.written = { manifest: outPath, report: reportPath };
   }
   return out;
+}
+
+// ---- shipping a mod (docs/data-mods.md "Shipping a mod") ---------------------
+
+/** Pack mods/<name>/ into editor/data/dist/<name>-<version>.zip (builds SWFs, validates; refuses on errors unless force). */
+export function packMod(modName: string, opts: { force?: boolean; init?: boolean } = {}) {
+  return pack.packMod(modName, { force: opts.force, init: opts.init });
+}
+/** Install a mod zip (a path or the bytes) into mods/<name>/. A build mismatch is returned as verdict build-mismatch unless accepted. */
+export function installMod(zip: string | Uint8Array, opts: { acceptBuildMismatch?: boolean } = {}) {
+  return pack.installMod(zip, { acceptBuildMismatch: opts.acceptBuildMismatch });
+}
+/** A packed zip from editor/data/dist/ by its file name (for the web UI's download), or null. */
+export function readPackedZip(fileName: string): Uint8Array | null {
+  if (!/^[A-Za-z0-9_][A-Za-z0-9_.+-]*\.zip$/.test(fileName)) return null;
+  const p = join(pack.DIST_DIR, fileName);
+  return existsSync(p) ? new Uint8Array(readFileSync(p)) : null;
+}
+export { MOD_MANIFEST_FILE } from "./mod-manifest.ts";
+export type { ModManifest } from "./mod-manifest.ts";
+export type { PackResult, InstallResult } from "./pack.ts";
+// ---- rooms: level files levels/**/*.lvl (the Room editor, MCP read_level / write_level) ----
+// docs/data-mods.md "Maps, rooms and encounters"; the codec is src/core/level/lvl.ts, the edit helpers
+// src/core/level/edit.ts (shared with the browser), the disk side src/core/level/level-io.ts.
+
+export type { LvlFile, LvlPick, LvlChoice, LvlObject } from "./level/lvl.ts";
+export type { LevelInfo, ListLevelsResult, ReadLevelResult, WriteLevelResult, LevelPalette, PaletteEntry, LevelEdit } from "./level/level-io.ts";
+
+/** The mod's levels/**.lvl files with a decode summary. */
+export function listLevels(modName: string) {
+  return levelio.listLevels(modName);
+}
+/** Decode one of the mod's levels: { ok, relPath, level, base64, bytes }. */
+export function readLevel(modName: string, relPath: string) {
+  return levelio.readLevel(modName, relPath);
+}
+/** Encode and write a level (levels/**.lvl inside the mod only); returns the lvl-* findings. */
+export function writeLevel(modName: string, relPath: string, level: LvlFile, opts?: levelio.LevelIoOptions) {
+  return levelio.writeLevel(modName, relPath, level, opts);
+}
+/** write_level's other sources: base64 bytes and/or edit ops applied to the level (or the file on disk / an empty room). */
+export function writeLevelFrom(modName: string, relPath: string, src: levelio.WriteLevelSource) {
+  return levelio.writeLevelFrom(modName, relPath, src);
+}
+/** The lvl-* validator rules for unsaved level content (the Room editor's live findings). */
+export function validateLevel(modName: string, relPath: string, level: LvlFile, opts?: levelio.LevelIoOptions) {
+  return levelio.validateLevel(modName, relPath, level, opts);
+}
+/** The tile (tiles.gon) and object (spawns.gon) palettes for the mod: base + its overlays, with swatch colours. */
+export function levelPalette(modName: string, opts?: levelio.LevelIoOptions) {
+  return levelio.levelPalette(modName, opts);
+}
+
+// ---- the Room editor's tileset art (src/core/level/tile-art.ts resolves, level-art.ts renders + caches) ----
+export type { ArtResolution, ArtReason } from "./level/tile-art.ts";
+export type { LevelArtInfo, LevelArtImage, LevelArtMeta } from "./level/level-art.ts";
+
+/** Which clip draws each tile / spawn id of the mod's palette in a tileset (default: the room's map, else default_tileset). */
+export function levelArtInfo(modName: string, q: levelart.LevelArtQuery = {}, opts?: levelart.LevelArtOptions) {
+  return levelart.levelArtInfo(modName, q, opts);
+}
+/** The PNG thumbnail (frame 1) of one tile or spawn id's clip, cached under editor/data/level-art/. */
+export function levelArtImage(modName: string, q: levelart.LevelArtQuery & { tile?: number; object?: number }, opts?: levelart.LevelArtOptions) {
+  return levelart.levelArtImage(modName, q, opts);
 }

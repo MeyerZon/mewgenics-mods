@@ -95,6 +95,24 @@ TEST(status_table_find_matches_exact_length_only) {
     CHECK_STR(fw_status_table_name(&t, 0), "JokersLuck");
 }
 
+TEST(glow_names_find_the_glow_slot_without_registration_and_are_reserved) {
+    FwStatusTable t; fw_status_table_init(&t);
+    CHECK_EQ(FW_STATUS_GLOW_SLOT, FW_STATUS_MAX_DEFS);                 /* one past the registered slots */
+    CHECK_EQ(fw_status_table_find(&t, "FwGlow_ff00ff", 13), FW_STATUS_GLOW_SLOT);
+    CHECK_EQ(fw_status_table_find(&t, "FwGlow_00FFFF80", 15), FW_STATUS_GLOW_SLOT);
+    CHECK_EQ(fw_status_table_find(&t, "FwGlow_ff00f", 12), -1);        /* 5 digits */
+    CHECK_EQ(fw_status_table_find(&t, "FwGlow_ff00ffz", 14), -1);      /* 7 */
+    CHECK_EQ(fw_status_table_find(&t, "FwGlow_gg00ff", 13), -1);       /* not hex */
+    CHECK_EQ(fw_status_table_find(&t, "FwGlow_ff00ff", 12), -1);       /* exact length only */
+    FwStatusDef d = def_named("FwGlow_ff00ff");                         /* a native mod may not claim the namespace */
+    CHECK_EQ(fw_status_validate(&d, &t), FW_STATUS_ERR_RESERVED);
+    d = def_named("FwGlow_x");
+    CHECK_EQ(fw_status_validate(&d, &t), FW_STATUS_ERR_RESERVED);
+    d = def_named("FwGlowing");                                          /* no underscore: an ordinary name */
+    CHECK_EQ(fw_status_validate(&d, &t), FW_STATUS_OK);
+    CHECK(strstr(fw_status_rule_text(FW_STATUS_ERR_RESERVED), "FwGlow_") != NULL);
+}
+
 static void sso_string(MsvcString *s, const char *text) {
     memset(s, 0, sizeof *s);
     size_t n = strlen(text);
@@ -149,6 +167,21 @@ TEST(alias_in_out_restores_a_name_shorter_than_the_template) {
     fw_alias_out(&s, &sv);
     CHECK_STR(msvc_str(&s), "Hex");
     CHECK_EQ(s.size, (size_t)3);
+}
+
+TEST(alias_in_out_round_trips_a_15_byte_glow_name_with_nothing_registered) {
+    FwStatusTable t; fw_status_table_init(&t);
+    MsvcString s; sso_string(&s, "FwGlow_00ffff80");                 /* 15 bytes: the SSO maximum */
+    FwAliasSave sv;
+    CHECK_EQ(fw_alias_in(&s, &t, &sv), 1);
+    CHECK_STR(msvc_str(&s), FW_STATUS_TEMPLATE);
+    CHECK_EQ(s.cap, (size_t)15);
+    fw_alias_out(&s, &sv);
+    CHECK_STR(msvc_str(&s), "FwGlow_00ffff80");
+    CHECK_EQ(s.size, (size_t)15);
+    sso_string(&s, "FwGlow_nothex");
+    CHECK_EQ(fw_alias_in(&s, &t, &sv), 0);                            /* an invalid glow name is just unknown */
+    CHECK_STR(msvc_str(&s), "FwGlow_nothex");
 }
 
 TEST(alias_in_is_a_noop_for_unknown_names) {

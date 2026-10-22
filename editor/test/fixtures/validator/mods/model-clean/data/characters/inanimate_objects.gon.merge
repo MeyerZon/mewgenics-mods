@@ -1,0 +1,15 @@
+Crate {
+	graphics {
+		model "models/crate.obj"
+	}
+}
+Rock {
+	graphics {
+		model "@Crate3D"
+	}
+}
+Tire {
+	graphics {
+		model models/props/tire.obj
+	}
+}

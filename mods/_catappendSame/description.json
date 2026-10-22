@@ -1,0 +1,7 @@
+{
+  "title": "Multi-append probe, same SWF name (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: _catappendB's content shipped as swfs/catappendA.swf, the same file name _catappendA uses, so the harness shows what the game loads when two mods ship a SWF of the same name. Never for play.",
+  "requirements": []
+}

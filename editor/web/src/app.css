@@ -239,6 +239,8 @@ a:hover { color: #b9ccff; text-decoration: underline; }
 .mergecode { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: auto; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; max-height: 300px; white-space: pre; margin: 0; color: var(--ink2); }
 .muted { color: var(--muted); }
 
+.compkeys { display: flex; flex-direction: column; gap: 2px; margin: 8px 0; padding: 8px; border-radius: 6px; background: var(--panel2); }
+.compkeys .ck code { font-family: var(--mono); font-size: 12px; }
 .complist { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
 .complist .ci { font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 5px 8px; border-radius: 6px; cursor: pointer; border: 0; background: transparent; text-align: left; width: 100%; }
 .complist .ci:hover { background: var(--panel2); color: var(--ink); }
@@ -348,6 +350,9 @@ textarea.scenejson { width: 100%; min-height: 320px; resize: vertical; font-fami
 .pvcanvasbox { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); aspect-ratio: 4 / 3; }
 .pvcanvasbox canvas { width: 100%; height: 100%; display: block; }
 .pvstatus { position: absolute; left: 8px; bottom: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); background: rgba(14,17,22,.7); padding: 2px 6px; border-radius: 6px; }
+.pvcanvasbox svg.ghost-cat { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.ghost-cat .ghost-part path { fill: rgba(170, 178, 190, .26); stroke: rgba(205, 212, 222, .8); stroke-width: 1.2px; stroke-dasharray: 4 3; }
+.ghost-cat .ghost-label { font: 600 10px var(--mono); fill: #dfe5ee; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(14, 17, 22, .85); stroke-width: 3px; }
 .transport { display: flex; align-items: center; gap: 6px; }
 .transport .frame { font-family: var(--mono); font-size: 12px; color: var(--ink2); min-width: 72px; text-align: center; }
 .scrub { position: relative; padding: 8px 0 14px; }
@@ -402,3 +407,46 @@ textarea.scenejson { width: 100%; min-height: 320px; resize: vertical; font-fami
 .vcpanel .vc-status { font-size: 12px; margin: 0 0 8px; min-height: 16px; }
 .vcpanel .vc-shape { font-family: var(--mono); font-size: 12.5px; }
 .vcpanel .vc-frame { display: block; width: 100%; height: max(420px, calc(100vh - 340px)); border: 1px solid var(--line); border-radius: 10px; background: #262626; }
+
+/* ---- Rooms mode (the Room editor: rooms/Rooms.tsx) ---- */
+.exbody.palette-tile, .exbody.palette-object { max-height: 30vh; overflow: auto; }
+.srow.pal { gap: 8px; }
+.swatch { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--line2); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; text-shadow: 0 0 2px #000; font-family: var(--mono); }
+.swatch.round { border-radius: 50%; }
+.roomtools { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.roompath { font-size: 12.5px; color: var(--ink); }
+.roombrush { font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roomgridwrap { flex: 1; overflow: auto; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+.roomgrid { display: grid; gap: 2px; width: min(100%, 620px); aspect-ratio: 1 / 1; background: var(--line); border: 2px solid var(--line2); border-radius: 6px; padding: 2px; user-select: none; }
+.rcell { position: relative; border: 0; border-radius: 3px; background: var(--panel); cursor: crosshair; padding: 0; min-width: 0; min-height: 0; font-family: var(--mono); color: #fff; }
+.rcell:hover { outline: 2px solid var(--acc-ink); outline-offset: -2px; }
+.rcell.sel { outline: 2px solid #fff; outline-offset: -2px; box-shadow: 0 0 0 2px var(--acc) inset; }
+.rcell.rnd { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.18) 0 4px, transparent 4px 8px); }
+.rcell .tl { position: absolute; left: 3px; top: 2px; font-size: 9px; opacity: .85; text-shadow: 0 0 2px #000; }
+.rcell .obj { position: absolute; inset: 22%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid rgba(0,0,0,.45); text-shadow: 0 0 2px #000; }
+.rcell .obj.rnd { border-style: dashed; }
+.rcell .stack { position: absolute; right: 2px; bottom: 1px; font-size: 9px; background: var(--err); border-radius: 6px; padding: 0 3px; }
+.pickedit { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.rndtoggle { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink2); }
+.rndtable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rndtable th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; padding: 2px 4px; }
+.rndtable td { padding: 2px 4px; vertical-align: middle; }
+.rndtable td:first-child { width: 100%; }
+.objrow { display: flex; gap: 8px; align-items: flex-start; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+/* Rooms mode: tileset art (thumbnails from /api/level-tile-art) and the iso view */
+.swatch.art { background: var(--panel2); overflow: hidden; padding: 0; }
+.swatch.art img { width: 100%; height: 100%; object-fit: contain; }
+.rcell .cellart { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.rcell .cellart.objart { inset: 8%; width: 84%; height: 84%; }
+.rcell[data-art="clip"] { background: var(--panel) !important; }
+.rcell[data-art="clip"] .tl { display: none; }
+.roomiso { position: relative; margin: 0 auto; user-select: none; flex: none; }
+.roomiso .icell { position: absolute; border: 0; padding: 0; margin: 0; cursor: crosshair; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: var(--panel); font-family: var(--mono); color: #fff; }
+.roomiso .icell { background: var(--panel2); }
+.roomiso .icell.alt { background: var(--line); }
+.roomiso .icell:hover { filter: brightness(1.25); }
+.roomiso .icell.sel { background: var(--acc); }
+.roomiso .icell.rnd { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.18) 0 4px, transparent 4px 8px); }
+.roomiso .icell .tl { font-size: 9px; text-shadow: 0 0 2px #000; }
+.roomiso .icell .obj { position: absolute; left: 34%; right: 34%; top: 14%; bottom: 14%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; border: 1px solid rgba(0,0,0,.45); }
+.roomiso .isoart { position: absolute; pointer-events: none; }

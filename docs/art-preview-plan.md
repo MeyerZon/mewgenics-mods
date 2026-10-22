@@ -270,6 +270,31 @@ picker (visual 16-swatch ramps from the real table), gray-level overlay (shows t
 un-remapped 16-level art), background colour, zoom/fit. Playback runs at the scene's
 `frameRate` (60) using `requestAnimationFrame` with frame accumulation.
 
+### 3.1 Ghost cat (preview only, 2026-10-22)
+
+A `parts: "game"` cat rig (the Rig tab, `new_art_scene template cat-animation`) has seven EMPTY slot sprites the game
+fills with the cat's own parts in-game, so the model has nothing to draw there. The preview overlays a **ghost cat**:
+one translucent grey silhouette per empty slot, labelled with the slot name, placed with the slot's baked matrix (so
+keys and tweens move it) under every enclosing placement (a donor such as `CatAnim_wave` shows its rig's ghosts
+through `ani`, on the preview's clock like any nested sprite); the slot's alpha carries over.
+- **Core, pure** (`src/core/art/ghost-cat.ts`): `GHOST_SLOT_PART` (tail → `CatTail`, arm1/arm2/leg1/leg2 → `CatLeg`,
+  body → `CatBody`, head → `CatHead` — CatParts' holders, engine-map "How a cat clip's slots are filled"),
+  `BUILTIN_GHOST_PARTS` (our own ellipses/capsules sized like the vanilla parts), `ghostCatFor(scene, rig, frame)`,
+  `ghostCatsIn(scene, target, frame, clock, parts)` → `{ slot, part, d, matrix, alpha, source, label, at }`,
+  `hasGhostRig`, `ghostBounds`. A drawn rig (no `parts`) and a slot that holds art get no ghost.
+- **Outlines**: `src/core/art/ghost-cat-swf.ts` reads frame 1's mask shape (the part silhouette, `clipDepth` set) of
+  `CatBody` / `CatHead` / `CatLeg` / `CatTail` from the extracted `catparts.swf` (`source: "catparts.swf"`; computed
+  per request, cached, never written — no game art in the repo); without it, the built-ins (`source: "builtin"`, with
+  a `note`). Served by `GET /api/art/ghost-parts`.
+- **Drawing**: an SVG overlay (`svg.ghost-cat` › `g.ghost-part` + `text.ghost-label`) over the canvas, redrawn from
+  `preview-gl`'s `onRender(view)` (frame, clock, zoom, centre); `setExtraBounds` makes Fit include the ghosts of every
+  frame. Toggle "ghost cat" next to the target picker, shown only for a target holding a `parts: "game"` rig; on by
+  default, remembered per viewer (`localStorage` `mewged.art.ghostCat`).
+- **Never emitted**: nothing is added to the scene; the SWF, `build_swf` and the validator are unchanged —
+  `test/art-ghostcat-tests.ts` pins the `_artprobe` and `dev-sandbox` builds byte-for-byte and checks that computing
+  ghosts leaves the scene and its findings untouched; `tests/e2e/art-mode.spec.ts` "Ghost cat" checks the overlay and
+  the toggle. The Ruffle tab (a built SWF) shows no ghosts.
+
 ---
 
 ## 4. Editor integration
@@ -563,8 +588,10 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     **Localized text OBSERVED 2026-10-22** (`render-loctext.mewtest`, `npm run test:artprobe -- --loctext`): a text with
     `"html": false` (flags 0xeca1, the raw string as the initial text) whose string is a key of the current language —
     vanilla's `ENEMY_TOMTOM_NAME` or a mod's `combined.csv.append` key — is drawn as the localized string; in the HTML
-    wrapper the key is drawn literally. Plain texts draw in the same font and size as HTML ones (T3 owed). Not done:
-    switching key texts to plain automatically / a validator rule; the preview draws the key, not the value.
+    wrapper the key is drawn literally. Plain texts draw in the same font and size as HTML ones (T3 owed). The
+    validator warns `text-loc-key-html` on an HTML text that is exactly a key (base `combined.csv`, the mod's own csv
+    overlays; an info when it only has the key shape); Art mode's text row has a **plain (localized)** box that writes `html: false`. Not
+    done: switching key texts to plain automatically; the preview draws the key, not the value.
     **tilesets.gon redirect OBSERVED 2026-10-22** (`mods/_tileprobe`, `-- --tileset`): `alley { Rat ArtProbe }` draws
     our clip for every plain Rat in alley — a data-only way to reskin a vanilla non-cat character with a mod clip.
     **Cat-parts import experiment 2026-10-20: negative.** `scene.imports` writes `ImportAssets2("catparts.swf", [{ id,
@@ -583,7 +610,9 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     so the editor names the placed layer `ani`; `.analysis/notes-catA.md`, engine-map "CatTest and the cat animation
     clips"); `idleF`'s pose sprite (180 frames) carries `tail@1 leg2@3 arm2@5 body@7 leg1@9 arm1@11 head@13` =
     `CAT_SLOTS`, while `idleB`'s uses `head_back@1 arm2@3 leg2@5 body@7 arm1@9 leg1@11 tail@13` (a back-facing layout
-    with a `head_back` slot — the editor does not author it yet; both facings place the same front rig for now).
+    with a `head_back` slot — the head with the catgen face `back`; since 2026-10-22 `newCatAnimation` authors it:
+    the B frame places a second rig `<name>PoseBack` with `facing: "back"`, and `{ fourWay: true }` emits the
+    `LF/RF/LB/RB` quartet; engine-map "The back facing and the four-way quartet").
     `catanis2.swf` extends the clip with an export `_Append_CatTest` (id 590, 296 frames, 239 labels such as
     `crawlingIdleF`, `robotWalkF`) of the same shape. GON refers to an animation bare and the engine adds the facing:
     `alt_animations [[idle <name>]]` on a character (cat_enemies.gon `CatCaller`), `animation <name>` on an ability;
@@ -599,15 +628,20 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     hidden or has no children; a visible, non-empty slot is taken for an already-converted one and `children[0]` (a
     depth hole) is dereferenced — the A0 crash (`+0x741f5d`, PR #74). Vanilla hides its placeholders with a frame-1
     ActionScript `setInvisible()` the emitter cannot express, so a mod's slot sprites are **empty 1-frame sprites**;
-    placeholder art is preview-only (and on a non-cat character it is simply drawn). OBSERVED in PR #74 once its
-    empty-slot run lands.
+    placeholder art is preview-only (and on a non-cat character it is simply drawn). OBSERVED in PR #74 (a static pose)
+    and 2026-10-22 (`npm run test:artprobe -- --cat-wave`: an animated pose with keyed slots moves with the cat's parts).
     Built: `cat-rig.ts` `addCatRig(scene, name, { parts: "game" })` → a `rig: "cat"` sprite with `parts: "game"` whose
     seven slots reference empty sprites `<name>_<slot>` (validator `rig-slot-not-empty`, error, when such a slot holds
     art; `sprite-parts` for a bad value). `newCatAnimation(scene, name, { rig?, frames? })` → a `parts: "game"` rig
     `<name>Pose` (or the given rig, refused unless its slots are empty), the donor sprite `CatAnim_<name>` (or the
     scene's existing `_Append_CatTest` donor, extended on its next two frames) with `<name>F` / `<name>B` each placing
     the rig as the layer `ani` at depth 1, and `exports._Append_CatTest`; refusals for bad names, taken labels, a
-    non-rig or non-empty `opts.rig`, an export that is not a donor.
+    non-rig or non-empty `opts.rig`, an export that is not a donor. **2026-10-22:** the B frame places a second rig,
+    `<name>PoseBack` (`addCatRig { facing: "back" }`: `CAT_BACK_SLOTS`, vanilla idleB's `head_back@1 … tail@13`;
+    `opts.backRig` reuses one), and `{ fourWay: true }` emits `<name>LF/RF/LB/RB` (LF/RF on the front rig, LB/RB on
+    the back rig, the L frames with sx −1); validator `rig-back-head` (warning), `sprite-facing` (error),
+    `cat-anim-back-facing` (warning), `cat-anim-four-way-incomplete` (error), `cat-anim-four-way` (info); the Rig tab
+    lists a back rig's own slots and has a Four-way checkbox next to New cat animation.
     Validator (`catAnimFindings`, on the `_Append_CatTest` donor): `cat-anim-missing-facing` (error), `cat-anim-layer-not-rig`
     (error), `cat-anim-layer-name` (error: the placed layer is not `ani`), `cat-anim-slot-not-empty` (error: a slot of
     the placed rig holds art), `cat-anim-depth` (warning), `cat-anim-donor` (error), `cat-anim-untested` (info: what
@@ -621,4 +655,5 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     contract and `src/mcp/` untouched.
 12. Part-indexed cat assembly as a first-class preview mode (slots `body/head/tail/leg1/
     leg2/arm1/arm2`, OBSERVED as named instances on `MinecartCat`): the data model
-    supports it as a sprite with named layers; a dedicated "cat rig" UI is a follow-up.
+    supports it as a sprite with named layers; a dedicated "cat rig" UI is a follow-up. (Since 2026-10-20 the Rig tab;
+    since 2026-10-22 a `parts: "game"` rig previews with a ghost cat in its empty slots, §3.1.)

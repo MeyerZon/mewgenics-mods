@@ -1,0 +1,346 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "note": "own A/B = the mod's own appended frame drew its marker; collision = whose probeC frame the shared label showed; shots taken in-process (PR #117 GL capture, local merge), hidden window; runDir = editor/data/ingame-runs/<name>",
+  "runs": {
+    "aloneA": {
+      "mod": "_catappendA",
+      "test": "alone-a",
+      "verdict": "pass",
+      "reason": "all 2 expectation(s) passed; 4 shot(s)",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+      "runDir": "20261022-141722-_catappendA-alone-a",
+      "shots": [
+        {
+          "label": "after ProbeCatA",
+          "counts": {
+            "A": 9214,
+            "B": 0,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": false,
+            "AC": false,
+            "BC": false
+          }
+        },
+        {
+          "label": "after ProbeCatC",
+          "counts": {
+            "A": 9214,
+            "B": 0,
+            "AC": 9227,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": false,
+            "AC": true,
+            "BC": false
+          }
+        },
+        {
+          "label": "all",
+          "counts": {
+            "A": 9213,
+            "B": 0,
+            "AC": 9228,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": false,
+            "AC": true,
+            "BC": false
+          }
+        }
+      ],
+      "outcome": {
+        "own": {
+          "A": true,
+          "B": false
+        },
+        "collision": "A"
+      }
+    },
+    "aloneB": {
+      "mod": "_catappendB",
+      "test": "alone-b",
+      "verdict": "pass",
+      "reason": "all 1 expectation(s) passed; 3 shot(s)",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+      "runDir": "20261022-141735-_catappendB-alone-b",
+      "shots": [
+        {
+          "label": "after ProbeCatB",
+          "counts": {
+            "A": 0,
+            "B": 9214,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": false,
+            "B": true,
+            "AC": false,
+            "BC": false
+          }
+        },
+        {
+          "label": "all",
+          "counts": {
+            "A": 0,
+            "B": 9214,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": false,
+            "B": true,
+            "AC": false,
+            "BC": false
+          }
+        }
+      ],
+      "outcome": {
+        "own": {
+          "A": false,
+          "B": true
+        },
+        "collision": "none"
+      }
+    },
+    "ab": {
+      "mod": "_catappendA",
+      "test": "multi-append-ab",
+      "verdict": "pass",
+      "reason": "all 3 expectation(s) passed; 5 shot(s)",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+      "runDir": "20261022-141745-_catappendA-multi-append-ab",
+      "shots": [
+        {
+          "label": "after ProbeCatA",
+          "counts": {
+            "A": 9213,
+            "B": 0,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": false,
+            "AC": false,
+            "BC": false
+          }
+        },
+        {
+          "label": "after ProbeCatB",
+          "counts": {
+            "A": 9214,
+            "B": 9247,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": true,
+            "AC": false,
+            "BC": false
+          }
+        },
+        {
+          "label": "after ProbeCatC",
+          "counts": {
+            "A": 9213,
+            "B": 9244,
+            "AC": 0,
+            "BC": 9160
+          },
+          "present": {
+            "A": true,
+            "B": true,
+            "AC": false,
+            "BC": true
+          }
+        },
+        {
+          "label": "all",
+          "counts": {
+            "A": 9214,
+            "B": 9238,
+            "AC": 0,
+            "BC": 9162
+          },
+          "present": {
+            "A": true,
+            "B": true,
+            "AC": false,
+            "BC": true
+          }
+        }
+      ],
+      "outcome": {
+        "own": {
+          "A": true,
+          "B": true
+        },
+        "collision": "B"
+      }
+    },
+    "ba": {
+      "mod": "_catappendA",
+      "test": "multi-append-ba",
+      "verdict": "pass",
+      "reason": "all 3 expectation(s) passed; 5 shot(s)",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+      "runDir": "20261022-141757-_catappendA-multi-append-ba",
+      "shots": [
+        {
+          "label": "after ProbeCatA",
+          "counts": {
+            "A": 9213,
+            "B": 0,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": false,
+            "AC": false,
+            "BC": false
+          }
+        },
+        {
+          "label": "after ProbeCatB",
+          "counts": {
+            "A": 9213,
+            "B": 9237,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": true,
+            "AC": false,
+            "BC": false
+          }
+        },
+        {
+          "label": "after ProbeCatC",
+          "counts": {
+            "A": 9214,
+            "B": 9236,
+            "AC": 9087,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": true,
+            "AC": true,
+            "BC": false
+          }
+        },
+        {
+          "label": "all",
+          "counts": {
+            "A": 9213,
+            "B": 9242,
+            "AC": 9094,
+            "BC": 0
+          },
+          "present": {
+            "A": true,
+            "B": true,
+            "AC": true,
+            "BC": false
+          }
+        }
+      ],
+      "outcome": {
+        "own": {
+          "A": true,
+          "B": true
+        },
+        "collision": "A"
+      }
+    },
+    "sameName": {
+      "mod": "_catappendSame",
+      "test": "same-name",
+      "verdict": "pass",
+      "reason": "all 3 expectation(s) passed; 5 shot(s)",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+      "runDir": "20261022-141809-_catappendSame-same-name",
+      "shots": [
+        {
+          "label": "after ProbeCatA",
+          "counts": {
+            "A": 0,
+            "B": 0,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": false,
+            "B": false,
+            "AC": false,
+            "BC": false
+          }
+        },
+        {
+          "label": "after ProbeCatB",
+          "counts": {
+            "A": 0,
+            "B": 9239,
+            "AC": 0,
+            "BC": 0
+          },
+          "present": {
+            "A": false,
+            "B": true,
+            "AC": false,
+            "BC": false
+          }
+        },
+        {
+          "label": "after ProbeCatC",
+          "counts": {
+            "A": 0,
+            "B": 9238,
+            "AC": 0,
+            "BC": 9224
+          },
+          "present": {
+            "A": false,
+            "B": true,
+            "AC": false,
+            "BC": true
+          }
+        },
+        {
+          "label": "all",
+          "counts": {
+            "A": 0,
+            "B": 9249,
+            "AC": 0,
+            "BC": 9243
+          },
+          "present": {
+            "A": false,
+            "B": true,
+            "AC": false,
+            "BC": true
+          }
+        }
+      ],
+      "outcome": {
+        "own": {
+          "A": false,
+          "B": true
+        },
+        "collision": "B"
+      }
+    }
+  }
+}

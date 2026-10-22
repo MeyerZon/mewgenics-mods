@@ -13,8 +13,8 @@
 
 /* fake sizes are test choices, not game facts; the asserts keep them above every offset the rules touch */
 #define FAKE_CHAR_BYTES 0x60
-#define FAKE_RND_BYTES  0x80
-#define FAKE_CAM_BYTES  0xc0
+#define FAKE_RND_BYTES  0x90
+#define FAKE_CAM_BYTES  0x180
 #define FAKE_TT_BYTES   0xa0
 #define FAKE_PASS_BYTES 0xa0
 #define FAKE_LAYERS     0x30
@@ -208,6 +208,361 @@ TEST(pass_force_writes_the_enable_byte_and_full_screen_rects_adopt_zeroes_the_fl
     CHECK_EQ(p.bytes[OFF_PASS_ENABLED], 1);                             /* adopt = ours, enabled */
     fw_glow_pass_force(NULL, 1, 1);                                     /* NULL is a no-op */
     fw_glow_pass_adopt(NULL);
+}
+
+/* ===================================================================================================== */
+/* v2: per-unit colours: colour groups, the draw plan, the unit's screen rect (LateRender's hovered-unit  */
+/* math, 0x88e24e..0x88e4a0) and the per-draw pass writes                                                */
+/* ===================================================================================================== */
+static const float GREEN[4] = { 0, 1, 0, 1 }, CYAN[4] = { 0, 1, 1, 1 };
+
+TEST(v2_groups_are_the_distinct_colours_in_first_registration_order_each_listing_its_units) {
+    FwGlowRegistry r; fw_glow_reset(&r);
+    FwGlowGroups g;
+    fw_glow_groups(&r, &g);
+    CHECK_EQ(g.count, 0);
+    FakeCharacter c[5]; void *ch[5];
+    for (int i = 0; i < 5; i++) ch[i] = make_character(&c[i], 1 + (uintptr_t)i, NULL);
+    fw_glow_set(&r, ch[0], RED); fw_glow_set(&r, ch[1], BLUE); fw_glow_set(&r, ch[2], RED); fw_glow_set(&r, ch[3], GREEN); fw_glow_set(&r, ch[4], BLUE);
+    fw_glow_groups(&r, &g);
+    CHECK_EQ(g.count, 3);                                                 /* RED, BLUE, GREEN: order of first appearance */
+    CHECK_EQ(fw_glow_colour_eq(g.g[0].colour, RED), 1); CHECK_EQ(fw_glow_colour_eq(g.g[1].colour, BLUE), 1); CHECK_EQ(fw_glow_colour_eq(g.g[2].colour, GREEN), 1);
+    CHECK_EQ(g.g[0].count, 2); CHECK_EQ(g.g[0].units[0], 0); CHECK_EQ(g.g[0].units[1], 2);
+    CHECK_EQ(g.g[1].count, 2); CHECK_EQ(g.g[1].units[0], 1); CHECK_EQ(g.g[1].units[1], 4);
+    CHECK_EQ(g.g[2].count, 1); CHECK_EQ(g.g[2].units[0], 3);
+    CHECK_EQ(fw_glow_group_of(&g, 4), 1); CHECK_EQ(fw_glow_group_of(&g, 3), 2); CHECK_EQ(fw_glow_group_of(&g, 9), -1);
+    fw_glow_set(&r, ch[0], GREEN);                                        /* recolour in place: the unit changes group, the order follows */
+    fw_glow_groups(&r, &g);
+    CHECK_EQ(g.count, 3);
+    CHECK_EQ(fw_glow_colour_eq(g.g[0].colour, GREEN), 1); CHECK_EQ(g.g[0].count, 2); CHECK_EQ(g.g[0].units[1], 3);
+    CHECK_EQ(fw_glow_colour_eq(g.g[1].colour, BLUE), 1);
+    CHECK_EQ(fw_glow_colour_eq(g.g[2].colour, RED), 1); CHECK_EQ(g.g[2].units[0], 2);
+    fw_glow_clear(&r, ch[2]);                                             /* the last RED unit goes: so does its group */
+    fw_glow_groups(&r, &g);
+    CHECK_EQ(g.count, 2);
+    CHECK_EQ(g.g[1].units[1], 3);                                         /* indices follow the compacted registry (ch[4] is now 3) */
+}
+
+TEST(v2_groups_keep_the_cap_sixteen_distinct_colours_are_sixteen_groups) {
+    FwGlowRegistry r; fw_glow_reset(&r);
+    FakeCharacter c[FW_GLOW_MAX_UNITS];
+    for (int i = 0; i < FW_GLOW_MAX_UNITS; i++) {
+        float col[4] = { (float)i / 16.0f, 0, 1, 1 };
+        CHECK_EQ(fw_glow_set(&r, make_character(&c[i], 5, NULL), col), 1);
+    }
+    FwGlowGroups g; fw_glow_groups(&r, &g);
+    CHECK_EQ(g.count, FW_GLOW_MAX_UNITS);
+    CHECK_EQ(FW_GLOW_MAX_GROUPS, FW_GLOW_MAX_UNITS);
+    for (int i = 0; i < FW_GLOW_MAX_UNITS; i++) { CHECK_EQ(g.g[i].count, 1); CHECK_EQ(g.g[i].units[0], i); }
+}
+
+TEST(v2_plan_one_colour_is_one_full_screen_draw_v1_path_several_colours_one_scissored_draw_per_unit) {
+    FwGlowRegistry r; fw_glow_reset(&r);
+    FwGlowGroups g; FwGlowDraw d[FW_GLOW_MAX_UNITS];
+    fw_glow_groups(&r, &g);
+    CHECK_EQ(fw_glow_plan(&r, &g, d), 0);
+    FakeCharacter c[3]; void *ch[3];
+    for (int i = 0; i < 3; i++) ch[i] = make_character(&c[i], 1, NULL);
+    fw_glow_set(&r, ch[0], RED); fw_glow_set(&r, ch[1], RED); fw_glow_set(&r, ch[2], RED);
+    fw_glow_groups(&r, &g);
+    CHECK_EQ(fw_glow_plan(&r, &g, d), 1);                                 /* every unit one colour: the mask needs no split */
+    CHECK_EQ(d[0].group, 0); CHECK_EQ(d[0].unit, -1);
+    fw_glow_set(&r, ch[1], CYAN);
+    fw_glow_groups(&r, &g);
+    CHECK_EQ(fw_glow_plan(&r, &g, d), 3);                                 /* two colours: one draw per unit, registry order */
+    CHECK_EQ(d[0].unit, 0); CHECK_EQ(d[0].group, 0);
+    CHECK_EQ(d[1].unit, 1); CHECK_EQ(d[1].group, 1);
+    CHECK_EQ(d[2].unit, 2); CHECK_EQ(d[2].group, 0);
+    FwGlowFrame f; fw_glow_frame(&r, &f);                                 /* the frame carries groups + plan */
+    CHECK_EQ(f.active, 1); CHECK_EQ(f.groups.count, 2); CHECK_EQ(f.ndraws, 3); CHECK_EQ(f.draws[1].group, 1);
+    CHECK_EQ(fw_glow_colour_eq(f.colour, RED), 1);
+}
+
+TEST(v2_material_names_slot_zero_keeps_the_v1_name) {
+    char b[32];
+    CHECK_STR(fw_glow_material_name(0, b, sizeof b), "fw_unit_glow");
+    CHECK_STR(fw_glow_material_name(1, b, sizeof b), "fw_unit_glow_1");
+    CHECK_STR(fw_glow_material_name(15, b, sizeof b), "fw_unit_glow_15");
+    char tiny[4];
+    CHECK(fw_glow_material_name(3, tiny, sizeof tiny) == NULL);           /* never truncated into another slot's name */
+}
+
+static int feq(double a, double b) { double d = a - b; return d < 1e-4 && d > -1e-4; }
+
+TEST(v2_clip_bounds_is_the_9d46d0_replica_x_from_m0_m3_m4_y_from_m2_m1_m5) {
+    /* bounds {x0, x1, y0, y1}; matrix {m0..m5}: x' = m0*x + m3*y + m4, y' = m2*x + m1*y + m5, as an axis-aligned box */
+    float b[4] = { -1, 4, -2, 6 };
+    const float m[6] = { 2, 3, 0.5f, -1, 10, 20 };
+    fw_glow_clip_bounds(b, m);
+    CHECK(feq(b[0], 2) && feq(b[1], 20) && feq(b[2], 13.5) && feq(b[3], 40));
+}
+
+TEST(v2_matrix_bounds_is_LateRenders_screen_matrix_stage_m0_m4_m12_for_x_m1_m5_m13_for_y) {
+    float b[4] = { -1, 4, -2, 6 };
+    float M[16] = { 0 };
+    M[0] = 2; M[4] = -1; M[12] = 10;                                      /* x' = 2x - y + 10 */
+    M[1] = 0.5f; M[5] = 3; M[13] = 20;                                    /* y' = 0.5x + 3y + 20 */
+    M[2] = 99; M[3] = 99; M[8] = 99; M[14] = 99;                          /* never read */
+    fw_glow_matrix_bounds(b, M);
+    CHECK(feq(b[0], 2) && feq(b[1], 20) && feq(b[2], 13.5) && feq(b[3], 40));
+}
+
+TEST(v2_mat4_inverse_identity_known_affine_rotation_and_singular) {
+    const float I[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+    float out[16];
+    CHECK_EQ(fw_glow_mat4_inverse(I, out), 1);
+    for (int i = 0; i < 16; i++) CHECK(feq(out[i], I[i]));
+    /* scale (2, 4, 1) then translate (3, 5, 0), the translation in elements 12/13 as the game's matrices carry it */
+    const float A[16] = { 2,0,0,0, 0,4,0,0, 0,0,1,0, 3,5,0,1 };
+    CHECK_EQ(fw_glow_mat4_inverse(A, out), 1);
+    CHECK(feq(out[0], 0.5) && feq(out[5], 0.25) && feq(out[10], 1) && feq(out[15], 1));
+    CHECK(feq(out[12], -1.5) && feq(out[13], -1.25) && feq(out[1], 0) && feq(out[4], 0));
+    const float R[16] = { 0,1,0,0, -1,0,0,0, 0,0,1,0, 7,-2,0,1 };        /* a rotation + translation: inverse x R == I */
+    CHECK_EQ(fw_glow_mat4_inverse(R, out), 1);
+    for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) {
+        double s = 0; for (int k = 0; k < 4; k++) s += (double)out[i * 4 + k] * R[k * 4 + j];
+        CHECK(feq(s, i == j ? 1 : 0));
+    }
+    const float S[16] = { 1,2,0,0, 2,4,0,0, 0,0,1,0, 0,0,0,1 };
+    CHECK_EQ(fw_glow_mat4_inverse(S, out), 0);
+}
+
+TEST(v2_view_rect_maps_the_world_box_through_the_inverse_view_and_zoom_into_the_1280x720_canvas_y_flipped) {
+    const float I[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+    FwGlowRect r;
+    const float whole[4] = { -640, 640, -360, 360 };
+    fw_glow_view_rect(whole, I, 1.0, 1, &r);                              /* x = (x + 640) / 1280, y = 1 - (y + 360) / 720 */
+    CHECK(feq(r.x0, 0) && feq(r.x1, 1) && feq(r.y0, 0) && feq(r.y1, 1));
+    const float box[4] = { 0, 64, 0, 36 };
+    fw_glow_view_rect(box, I, 1.0, 1, &r);
+    CHECK(feq(r.x0, 0.5) && feq(r.x1, 0.55) && feq(r.y0, 0.45) && feq(r.y1, 0.5));
+    fw_glow_view_rect(box, I, 2.0, -1, &r);                               /* zoom 2; the int at Camera+0x170 scales y (here -1: flipped) */
+    CHECK(feq(r.x0, 0.5) && feq(r.x1, 0.6) && feq(r.y0, 0.5) && feq(r.y1, 0.6));
+    const float T[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 128,-72,0,1 };        /* an inverse view translating by (128, -72) */
+    fw_glow_view_rect(box, T, 1.0, 1, &r);
+    CHECK(feq(r.x0, 0.6) && feq(r.x1, 0.65) && feq(r.y0, 0.55) && feq(r.y1, 0.6));
+}
+
+TEST(v2_unit_rect_chains_the_stages_adds_the_margin_clamps_and_reports_singular_or_off_screen) {
+    const float raw[4] = { 0, 64, 0, 36 };
+    const float clipM[6] = { 1, 1, 0, 0, 0, 0 };                          /* identity in the replica's layout */
+    const float screen[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+    float view[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+    FwGlowRect r;
+    CHECK_EQ(fw_glow_unit_rect(raw, clipM, screen, view, 1.0, 1, 0.0, &r), 1);
+    CHECK(feq(r.x0, 0.5) && feq(r.x1, 0.55) && feq(r.y0, 0.45) && feq(r.y1, 0.5));
+    CHECK_EQ(fw_glow_unit_rect(raw, clipM, screen, view, 1.0, 1, 12.8, &r), 1);   /* margin in canvas px: 12.8/1280, 12.8/720 */
+    CHECK(feq(r.x0, 0.49) && feq(r.x1, 0.56) && feq(r.y0, 0.45 - 12.8 / 720) && feq(r.y1, 0.5 + 12.8 / 720));
+    view[12] = -600;                                                      /* the view is inverted first: the box lands at x 1240..1304 */
+    CHECK_EQ(fw_glow_unit_rect(raw, clipM, screen, view, 1.0, 1, 0.0, &r), 1);
+    CHECK(feq(r.x0, 1240.0 / 1280) && r.x1 == 1.0);                       /* clamped to the canvas */
+    view[12] = -5000;
+    CHECK_EQ(fw_glow_unit_rect(raw, clipM, screen, view, 1.0, 1, 0.0, &r), -1);   /* wholly off screen: nothing to draw */
+    const float sing[16] = { 0 };
+    CHECK_EQ(fw_glow_unit_rect(raw, clipM, screen, sing, 1.0, 1, 0.0, &r), 0);    /* singular view: no rect */
+}
+
+/* a fake clip with a vtable: slot 0 = the content kind, slot VT_CLIP_BOUNDS = bounds(out[4]) */
+typedef struct FakeClip { void **vt; unsigned char body[0x80]; } FakeClip;
+static int kind_a(void *self) { (void)self; return CONST_CLIP_KIND_A; }
+static int kind_b(void *self) { (void)self; return CONST_CLIP_KIND_B; }
+static int kind_other(void *self) { (void)self; return 7; }
+static float *bounds_fn(void *self, float *out) { (void)self; out[0] = 1; out[1] = 2; out[2] = 3; out[3] = 4; return out; }
+_Static_assert(OFF_CLIP_MATRIX + 24 <= sizeof(FakeClip), "clip fake too small");
+_Static_assert(OFF_RND_CLIP + 8 <= FAKE_RND_BYTES, "renderer fake too small for the clip pointer");
+
+TEST(v2_unit_clip_takes_only_the_two_kinds_LateRender_takes_and_reads_bounds_and_matrix_through_it) {
+    void *vt[VT_CLIP_BOUNDS + 1]; memset(vt, 0, sizeof vt);
+    vt[0] = (void *)kind_a; vt[VT_CLIP_BOUNDS] = (void *)bounds_fn;
+    FakeClip clip; memset(&clip, 0, sizeof clip); clip.vt = vt;
+    const float *cm = (const float *)((const char *)&clip + OFF_CLIP_MATRIX);
+    unsigned char rnd[FAKE_RND_BYTES]; memset(rnd, 0, sizeof rnd);
+    CHECK(fw_glow_unit_clip(rnd) == NULL);                                /* no clip */
+    CHECK(fw_glow_unit_clip(NULL) == NULL);
+    *(void **)(rnd + OFF_RND_CLIP) = &clip;
+    CHECK(fw_glow_unit_clip(rnd) == &clip);
+    vt[0] = (void *)kind_b; CHECK(fw_glow_unit_clip(rnd) == &clip);
+    vt[0] = (void *)kind_other; CHECK(fw_glow_unit_clip(rnd) == NULL);    /* LateRender would not take it either */
+    float b[4] = { 0 };
+    fw_glow_clip_raw_bounds(&clip, b);
+    CHECK(b[0] == 1 && b[1] == 2 && b[2] == 3 && b[3] == 4);
+    CHECK(fw_glow_clip_matrix(&clip) == cm);
+}
+
+TEST(v2_collect_passes_finds_every_pass_whose_first_material_is_one_of_ours_in_vector_order) {
+    FakeCamera cam; void *c = make_camera(&cam, NULL);
+    int m0 = 0, m1 = 0, theirs = 0;
+    void *mats[2] = { &m0, &m1 };
+    FakePass p[4];
+    void *a = make_pass(&p[0], &m1, 1), *game = make_pass(&p[1], &theirs, 1), *b = make_pass(&p[2], &m0, 1), *empty = make_pass(&p[3], &m0, 0);
+    void *out[4];
+    CHECK_EQ(fw_glow_collect_passes(c, CONST_COMPOSITE_LAYER, mats, 2, out, 4), 0);
+    camera_push_pass(&cam, CONST_COMPOSITE_LAYER, a);
+    camera_push_pass(&cam, CONST_COMPOSITE_LAYER, game);
+    camera_push_pass(&cam, CONST_COMPOSITE_LAYER, empty);
+    camera_push_pass(&cam, CONST_COMPOSITE_LAYER, b);
+    CHECK_EQ(fw_glow_collect_passes(c, CONST_COMPOSITE_LAYER, mats, 2, out, 4), 2);
+    CHECK(out[0] == a && out[1] == b);
+    CHECK_EQ(fw_glow_collect_passes(c, CONST_COMPOSITE_LAYER, mats, 1, out, 4), 1);   /* only the materials created so far */
+    CHECK(out[0] == b);
+    CHECK_EQ(fw_glow_collect_passes(c, CONST_COMPOSITE_LAYER, mats, 2, out, 1), 1);   /* capped */
+    CHECK_EQ(fw_glow_collect_passes(NULL, CONST_COMPOSITE_LAYER, mats, 2, out, 4), 0);
+}
+
+TEST(v2_pass_writes_material_swap_and_scissor_rect_b_null_rect_is_full_screen) {
+    FakePass p; int m0 = 0, m1 = 0; void *pass = make_pass(&p, &m0, 1);
+    fw_glow_pass_set_material(pass, &m1);
+    CHECK(p.mats[0].mat == &m1);
+    CHECK(fw_glow_pass_first_material(pass) == &m1);
+    double *a = (double *)(p.bytes + OFF_PASS_RECT_A), *b = (double *)(p.bytes + OFF_PASS_RECT_B);
+    a[0] = 0; a[1] = 1; a[2] = 0; a[3] = 1;
+    const FwGlowRect r = { 0.2, 0.3, 0.4, 0.5 };
+    fw_glow_pass_set_rect(pass, &r);
+    CHECK(b[0] == 0.2 && b[1] == 0.3 && b[2] == 0.4 && b[3] == 0.5);
+    CHECK(a[0] == 0 && a[1] == 1 && a[2] == 0 && a[3] == 1);              /* rect A stays full screen, as the game's composites keep it */
+    fw_glow_pass_set_rect(pass, NULL);
+    CHECK(b[0] == 0 && b[1] == 1 && b[2] == 0 && b[3] == 1);
+    fw_glow_pass_set_material(NULL, &m1);                                 /* NULL-safe */
+    fw_glow_pass_set_rect(NULL, &r);
+    CHECK(fw_glow_pass_first_material(NULL) == NULL);
+}
+
+_Static_assert(OFF_CAM_ZOOM_Y + 4 <= FAKE_CAM_BYTES && OFF_CAM_POSITION + 8 <= FAKE_CAM_BYTES, "camera fake too small for the view fields");
+
+TEST(v2_camera_view_accessors_position_zoom_zoomY_and_the_scene_managers_interpolation) {
+    FakeCamera cam; void *c = make_camera(&cam, NULL);
+    int pos = 0;
+    unsigned char sm[OFF_SCENEMANAGER_INTERP + 8]; memset(sm, 0, sizeof sm);
+    *(double *)(sm + OFF_SCENEMANAGER_INTERP) = 0.25;
+    *(void **)(cam.bytes + OFF_CAM_POSITION) = &pos;
+    *(double *)(cam.bytes + OFF_CAM_ZOOM) = 1.5;
+    *(int *)(cam.bytes + OFF_CAM_ZOOM_Y) = -1;
+    CHECK(fw_glow_camera_position(c) == &pos);
+    CHECK(fw_glow_camera_zoom(c) == 1.5);
+    CHECK_EQ(fw_glow_camera_zoom_y(c), -1);
+    CHECK(fw_glow_camera_interp(c) == 1.0);                               /* no scene manager: no interpolation */
+    *(void **)(cam.bytes + OFF_COMPONENT_SCENEMANAGER) = sm;
+    CHECK(fw_glow_camera_interp(c) == 0.25);
+}
+
+TEST(v2_the_canvas_comes_from_the_generated_offsets_h_not_a_literal) {
+#if defined(CONST_GLOW_CANVAS_W) && defined(CONST_GLOW_CANVAS_H)
+    CHECK_EQ(CONST_GLOW_CANVAS_W, 1280);
+    CHECK_EQ(CONST_GLOW_CANVAS_H, 720);
+    CHECK(FW_GLOW_CANVAS_W == (double)CONST_GLOW_CANVAS_W && FW_GLOW_CANVAS_H == (double)CONST_GLOW_CANVAS_H);
+#else
+    CHECK(!"CONST_GLOW_CANVAS_W / CONST_GLOW_CANVAS_H are missing from the generated offsets.h");
+#endif
+}
+
+/* ---- the data seam: FwGlow_<rrggbb[aa]> status names ---- */
+
+static int near(float a, float b) { return a - b < 1e-6f && b - a < 1e-6f; }
+
+TEST(data_parse_status_name_takes_the_prefix_and_6_or_8_hex_digits_either_case_alpha_ff_when_omitted) {
+    float c[4] = { -1, -1, -1, -1 };
+    CHECK_STR(FW_GLOW_STATUS_PREFIX, "FwGlow_");
+    CHECK_EQ(FW_GLOW_STATUS_PREFIX_LEN, 7);
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_ff00ff", 13, c), 1);
+    CHECK(near(c[0], 1) && near(c[1], 0) && near(c[2], 1) && near(c[3], 1));
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_00FFFF80", 15, c), 1);
+    CHECK(near(c[0], 0) && near(c[1], 1) && near(c[2], 1) && near(c[3], 128.0f / 255.0f));
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_336699", 13, c), 1);
+    CHECK(near(c[0], 0x33 / 255.0f) && near(c[1], 0x66 / 255.0f) && near(c[2], 0x99 / 255.0f));
+    CHECK_EQ(fw_glow_parse_status_name(FW_GLOW_STATUS_FALLBACK, strlen(FW_GLOW_STATUS_FALLBACK), c), 1);
+}
+
+TEST(data_parse_status_name_refuses_anything_else_and_leaves_rgba_alone) {
+    float c[4] = { 7, 7, 7, 7 };
+    const char *bad[] = { "FwGlow_", "FwGlow_ff00f", "FwGlow_ff00ff0", "FwGlow_ff00ff00f", "FwGlow_gg00ff", "FwGlow_ff 0ff",
+                          "fwglow_ff00ff", "FwGlowff00ff", "XFwGlow_ff00ff", "FwGlow_-f00ff", "FwGlow_0xff00", "LuckUp", "" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK_EQ(fw_glow_parse_status_name(bad[i], strlen(bad[i]), c), 0);
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_ff00ff", 12, c), 0);          /* exact length: a prefix of a valid name */
+    CHECK_EQ(fw_glow_parse_status_name(NULL, 13, c), 0);
+    CHECK_EQ(fw_glow_parse_status_name("FwGlow_ff00ff", 13, NULL), 0);
+    CHECK(c[0] == 7 && c[1] == 7 && c[2] == 7 && c[3] == 7);
+    CHECK_EQ(fw_glow_status_prefixed("FwGlow_zz", 9), 1);                   /* the namespace, valid or not */
+    CHECK_EQ(fw_glow_status_prefixed("FwGlow", 6), 0);
+    CHECK_EQ(fw_glow_status_prefixed("JokersLuck", 10), 0);
+    CHECK_EQ(fw_glow_status_prefixed(NULL, 9), 0);
+}
+
+TEST(data_set_from_status_marks_the_entry_a_native_set_takes_it_over_reset_scene_keeps_only_status_entries) {
+    FwGlowRegistry r; fw_glow_reset(&r);
+    FakeCharacter a, b, c; void *ca = make_character(&a, 1, NULL), *cb = make_character(&b, 2, NULL), *cc = make_character(&c, 3, NULL);
+    CHECK_EQ(fw_glow_set_from_status(&r, ca, RED), 1);
+    CHECK_EQ(fw_glow_set(&r, cb, BLUE), 1);
+    CHECK_EQ(fw_glow_set_from_status(&r, cc, BLUE), 1);
+    CHECK_EQ(r.units[0].fromStatus, 1);
+    CHECK_EQ(r.units[1].fromStatus, 0);
+    CHECK(r.units[0].generation == 1);
+    CHECK_EQ(fw_glow_set_from_status(&r, NULL, RED), 0);
+    CHECK_EQ(fw_glow_set_from_status(&r, ca, NULL), 0);
+    CHECK_EQ(fw_glow_set(&r, cc, RED), 1);                                 /* the last call owns the entry */
+    CHECK_EQ(r.units[2].fromStatus, 0);
+    CHECK_EQ(fw_glow_set_from_status(&r, cb, RED), 1);
+    CHECK_EQ(r.units[1].fromStatus, 1);
+    CHECK_EQ(r.count, 3);
+    fw_glow_reset_scene(&r);                                               /* a new fight: native cc goes, ca and cb stay */
+    CHECK_EQ(r.count, 2);
+    CHECK_EQ(fw_glow_find(&r, ca), 0);
+    CHECK_EQ(fw_glow_find(&r, cb), 1);
+    CHECK_EQ(fw_glow_find(&r, cc), -1);
+}
+
+/* the probe stands in for status_engine.c's walk: units listed in `live` carry a glow status of colour `col` */
+typedef struct ProbeState { void *live[4]; int nlive; float col[4]; int calls; } ProbeState;
+static int fake_probe(void *character, float rgba[4], void *user) {
+    ProbeState *p = (ProbeState *)user;
+    p->calls++;
+    for (int i = 0; i < p->nlive; i++) if (p->live[i] == character) { memcpy(rgba, p->col, sizeof p->col); return 1; }
+    return 0;
+}
+
+TEST(data_sweep_probes_only_status_entries_drops_those_without_a_live_status_and_recolours_the_rest) {
+    FwGlowRegistry r; fw_glow_reset(&r);
+    FakeCharacter a, b, c; void *ca = make_character(&a, 1, NULL), *cb = make_character(&b, 2, NULL), *cc = make_character(&c, 3, NULL);
+    fw_glow_set_from_status(&r, ca, RED);
+    fw_glow_set(&r, cb, RED);                                               /* native: never probed, never swept */
+    fw_glow_set_from_status(&r, cc, RED);
+    ProbeState p; memset(&p, 0, sizeof p);
+    p.live[0] = cc; p.nlive = 1; memcpy(p.col, BLUE, sizeof p.col);
+    void *cleared[4] = { 0 };
+    CHECK_EQ(fw_glow_sweep(&r, fake_probe, &p, cleared, 4), 1);
+    CHECK_EQ(p.calls, 2);
+    CHECK(cleared[0] == ca);
+    CHECK_EQ(r.count, 2);
+    CHECK_EQ(fw_glow_find(&r, cb), 0);
+    CHECK_EQ(fw_glow_find(&r, cc), 1);
+    CHECK(r.units[1].rgba[2] == 1.0f && r.units[1].rgba[3] == 0.5f);       /* re-coloured to what the status now says */
+    CHECK(r.units[0].rgba[0] == 1.0f);
+    p.nlive = 0;
+    CHECK_EQ(fw_glow_sweep(&r, fake_probe, &p, NULL, 0), 1);               /* no room to report: still removed */
+    CHECK_EQ(r.count, 1);
+    CHECK_EQ(fw_glow_sweep(&r, NULL, &p, cleared, 4), 0);                  /* no probe: nothing touched */
+    CHECK_EQ(r.count, 1);
+}
+
+TEST(data_status_objs_name_each_object_recolour_in_place_and_ring_when_full) {
+    static FwGlowStatusObjs t; memset(&t, 0, sizeof t);
+    int objs[FW_GLOW_STATUS_OBJS + 1] = { 0 };
+    CHECK(fw_glow_status_get(&t, &objs[0]) == NULL);
+    CHECK_EQ(fw_glow_status_put(&t, &objs[0], "FwGlow_ff00ff", 13), 1);
+    const FwGlowStatusObj *o = fw_glow_status_get(&t, &objs[0]);
+    CHECK(o != NULL);
+    if (o) { CHECK_STR(o->name, "FwGlow_ff00ff"); CHECK(near(o->rgba[0], 1) && near(o->rgba[1], 0) && near(o->rgba[3], 1)); }
+    CHECK_EQ(fw_glow_status_put(&t, &objs[0], "FwGlow_00ffff80", 15), 1);  /* the same object re-coloured: one entry */
+    o = fw_glow_status_get(&t, &objs[0]);
+    if (o) { CHECK_STR(o->name, "FwGlow_00ffff80"); CHECK(near(o->rgba[3], 128.0f / 255.0f)); }
+    CHECK_EQ(t.next, 1);
+    CHECK_EQ(fw_glow_status_put(&t, &objs[1], "FwGlow_nothex", 13), 0);    /* an invalid name is never recorded */
+    CHECK_EQ(fw_glow_status_put(&t, NULL, "FwGlow_ff00ff", 13), 0);
+    CHECK(fw_glow_status_get(&t, &objs[1]) == NULL);
+    for (int i = 1; i <= FW_GLOW_STATUS_OBJS; i++) CHECK_EQ(fw_glow_status_put(&t, &objs[i], "FwGlow_123456", 13), 1);
+    CHECK(fw_glow_status_get(&t, &objs[0]) == NULL);                       /* the oldest went */
+    CHECK(fw_glow_status_get(&t, &objs[FW_GLOW_STATUS_OBJS]) != NULL);
+    CHECK(fw_glow_status_get(&t, &objs[1]) != NULL);
+    CHECK(fw_glow_status_get(&t, NULL) == NULL);
 }
 
 int main(void) { return MT_RUN_ALL(); }

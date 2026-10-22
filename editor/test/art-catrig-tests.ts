@@ -248,12 +248,12 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(scene.exports["CatProbeColours"], "CatProbeColours");
     const root = scene.sprites.CatAppendRoot;
     assert(!!root, "sprite CatAppendRoot");
-    eq(root.frames, 2);
+    eq(root.frames, 10, "probeIdleF / probeIdleB, then the wave probe's waveF / waveB (art-wave-glow-tests.ts), the back probe's probeBackF / probeBackB / probeBackShowF / probeBackShowB (art-cat-back-tests.ts), then the raster probe's probeRasterF / B (probe-raster.ts withRasterCatFrame)");
     eq(root.labels.probeIdleF, 0); eq(root.labels.probeIdleB, 1);
     eq(root.layers.length, 1);
     const ani = root.layers[0];
     assert(ani.name === "ani" && ani.depth === 1, "the one layer is `ani` at depth 1 (the child PlayAnimation restarts)");
-    assert(ani.keys.length === 2 && ani.keys.every((k: any) => k.ref === "CatProbe" && k.x === 3.85 && k.y === -47.95), "ani places CatProbe on both frames at vanilla idleF's (77, -959) twips");
+    assert(ani.keys.filter((k: any) => k.frame <= 1).length === 2 && ani.keys.filter((k: any) => k.frame <= 1).every((k: any) => k.ref === "CatProbe" && k.x === 3.85 && k.y === -47.95), "ani places CatProbe on both frames at vanilla idleF's (77, -959) twips");
     const rig = scene.sprites.CatProbe;
     eq(rig.rig, "cat"); eq(rig.parts, "game");
     for (const s of fixture.catanisMain.slots) {
@@ -333,7 +333,136 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
       assert(r.outline >= 0.3 * vanillaOutline, `${r.label}: real parts near our marker (outline ${r.outline} vs vanilla ${vanillaOutline})`);
     }
   });
+  runCatRigSwapTests(test, assert, eq, need, R);
   await runCatAnimationTests(test, assert, eq, need, R);
+}
+
+// ---- swap rigs: a WHOLE cat clip for one character entry (native S1, framework API v7) ------------------------------
+
+function runCatRigSwapTests(test: TestFn, assert: AssertFn, eq: EqFn, need: () => void, R: Record<string, any>): void {
+  /** a scene with a _CatRig_<entry> export whose root places a parts: "game" rig as `ani` on idleF / idleB */
+  const swapScene = (entry: string, opts: { labels?: Record<string, number>; dropSlot?: string; noRig?: boolean } = {}) => {
+    const s = R.addCatRig(exampleScene("swap"), "SwapPose", { parts: "game" }).scene;
+    if (opts.dropSlot) s.sprites.SwapPose.layers = s.sprites.SwapPose.layers.filter((l: any) => l.name !== opts.dropSlot);
+    const labels = opts.labels || { idleF: 0, idleB: 1 };
+    const frames = Math.max(...Object.values(labels)) + 1;
+    s.sprites.SwapRoot = { frames, labels, layers: [{ name: "ani", depth: 1, keys: Object.values(labels).map((f) => ({ frame: f, ref: opts.noRig ? "SwapPose_body" : "SwapPose", x: 0, y: 0 })) }] };
+    s.exports = { [`${R.CAT_RIG_EXPORT_PREFIX}${entry}`]: "SwapRoot" };
+    return s;
+  };
+  const codesOf = (scene: any) => (validateScene(scene) as any).findings as Array<{ severity: string; code: string; message: string; path?: string }>;
+
+  test("CAT_RIG_EXPORT_PREFIX is the native fw_catrig_rules.h FW_CATRIG_EXPORT_PREFIX (_CatRig_) and catRigEntry parses an export name the way fw_catrig_parse_export does", () => {
+    need();
+    const header = readFileSync(join(HERE, "..", "..", "native", "framework", "src", "fw_catrig_rules.h"), "utf8");
+    const m = /#define FW_CATRIG_EXPORT_PREFIX\s+"([^"]+)"/.exec(header);
+    assert(!!m, "FW_CATRIG_EXPORT_PREFIX in fw_catrig_rules.h");
+    eq(R.CAT_RIG_EXPORT_PREFIX, m![1]);
+    const max = /#define FW_CATRIG_NAME_MAX\s+(\d+)/.exec(header);
+    eq(R.CAT_RIG_NAME_MAX, Number(max![1]));
+    eq(R.catRigEntry("_CatRig_ArtProbeRigCat"), "ArtProbeRigCat");
+    eq(R.catRigEntry("_CatRig_"), "");
+    eq(R.catRigEntry("_Append_CatTest"), null);
+    eq(R.catRigEntry("_catrig_X"), null);
+  });
+
+  test("a swap rig export (_CatRig_<Entry> -> a root whose idleF / idleB place a parts: \"game\" rig as ani) validates with no cat-rig error", () => {
+    need();
+    const f = codesOf(swapScene("TomTom"));
+    const bad = f.filter((x) => x.severity === "error" || x.code.startsWith("cat-rig-"));
+    assert(!bad.some((x) => x.severity === "error"), JSON.stringify(bad));
+    assert(!f.some((x) => x.code === "cat-rig-slot-missing"), "no slot missing");
+  });
+
+  test("cat-rig-slot-missing: a swap rig whose pose lacks a slot, or whose frames place no rig at all, is an error naming the slot", () => {
+    need();
+    const f = codesOf(swapScene("TomTom", { dropSlot: "tail" })).filter((x) => x.code === "cat-rig-slot-missing");
+    eq(f.length, 1);
+    eq(f[0]!.severity, "error");
+    assert(/tail/.test(f[0]!.message), f[0]!.message);
+    const g = codesOf(swapScene("TomTom", { noRig: true })).filter((x) => x.code === "cat-rig-slot-missing");
+    eq(g.length, 1);
+    assert(/no rig/.test(g[0]!.message), g[0]!.message);
+  });
+
+  test("cat-rig-idle-missing (warning): a swap rig without idleF / idleB leaves the cat frozen on frame 0 (a missing label is a silent no-op)", () => {
+    need();
+    const f = codesOf(swapScene("TomTom", { labels: { walkF: 0, walkB: 1 } })).filter((x) => x.code === "cat-rig-idle-missing");
+    eq(f.length, 1);
+    eq(f[0]!.severity, "warning");
+    assert(/idleF/.test(f[0]!.message) && /idleB/.test(f[0]!.message), f[0]!.message);
+  });
+
+  test("cat-rig-export-name: _CatRig_ with no entry, or an entry over 63 bytes (the native registry cap), is an error", () => {
+    need();
+    const e = codesOf(swapScene("")).filter((x) => x.code === "cat-rig-export-name");
+    eq(e.length, 1); eq(e[0]!.severity, "error");
+    const l = codesOf(swapScene("x".repeat(64))).filter((x) => x.code === "cat-rig-export-name");
+    eq(l.length, 1);
+    eq(codesOf(swapScene("x".repeat(63))).filter((x) => x.code === "cat-rig-export-name").length, 0);
+  });
+
+  test("the art probe carries a swap rig: probe.scene.json exports _CatRig_ArtProbeRigCat (idleF / idleB placing the CatProbe rig as ani) and it validates; the probe's characters ArtProbeRigCat / ArtProbeVanillaCat are _CAT cats on ArtProbeParts", () => {
+    need();
+    const scene = JSON.parse(readFileSync(join(MODS_DIR, "_artprobe", "art", "probe.scene.json"), "utf8"));
+    const root = scene.exports["_CatRig_ArtProbeRigCat"];
+    eq(root, "CatRigRoot");
+    const sp = scene.sprites[root];
+    assert("idleF" in sp.labels && "idleB" in sp.labels, JSON.stringify(sp.labels));
+    eq(sp.layers[0].name, "ani"); eq(sp.layers[0].depth, 1);
+    for (const k of sp.layers[0].keys) eq(k.ref, "CatProbe");
+    const v = validateScene(scene) as any;
+    assert(v.ok, JSON.stringify(v.findings.filter((f: any) => f.severity === "error")));
+    assert(!v.findings.some((f: any) => f.code.startsWith("cat-rig-")), JSON.stringify(v.findings.filter((f: any) => f.code.startsWith("cat-rig-"))));
+    const chars = readFileSync(join(MODS_DIR, "_artprobe", "data", "characters", "cat_enemies.gon.append"), "utf8");
+    for (const n of ["ArtProbeRigCat", "ArtProbeVanillaCat"]) assert(new RegExp(`^${n} \\{[\\s\\S]*?movieclip _CAT[\\s\\S]*?custom_cat_data ArtProbeParts`, "m").test(chars), `${n}: movieclip _CAT + custom_cat_data ArtProbeParts`);
+    const cats = readFileSync(join(MODS_DIR, "_artprobe", "data", "custom_cats.gon.append"), "utf8");
+    assert(/^ArtProbeParts \{/m.test(cats), "custom_cats.gon.append defines ArtProbeParts");
+  });
+
+  test("parseCatRigLog reads the framework's catrig lines (registrations from data or a DLL, redirects per spawn, misses and refusals)", () => {
+    const text = [
+      "[mewframework] hook installed: Swf::GetCharacterByName (cat rig redirect) rva 0x9bb890",
+      "catrig: registered _CatRig_ArtProbeRigCat for ArtProbeRigCat (from data, SWF file 0000012345678000)",
+      "catrig: registered MyRig for Rat (from a DLL)",
+      "catrig: _CatRig_ refused: empty character name",
+      "catrig: ArtProbeRigCat: CatTest -> _CatRig_ArtProbeRigCat (instance 00000123456789A0)",
+      "catrig: Rat: rig clip MyRig not found in any loaded SWF; vanilla CatTest kept",
+    ].join("\n");
+    const p = pc.parseCatRigLog(text);
+    eq(JSON.stringify(p.registered), JSON.stringify([{ clip: "_CatRig_ArtProbeRigCat", character: "ArtProbeRigCat", source: "data" }, { clip: "MyRig", character: "Rat", source: "dll" }]));
+    eq(JSON.stringify(p.redirected), JSON.stringify([{ character: "ArtProbeRigCat", clip: "_CatRig_ArtProbeRigCat" }]));
+    eq(JSON.stringify(p.missing), JSON.stringify([{ character: "Rat", clip: "MyRig" }]));
+    eq(p.refused.length, 1);
+    eq(JSON.stringify(pc.parseCatRigLog("")), JSON.stringify({ registered: [], redirected: [], missing: [], refused: [] }));
+  });
+
+  test("rigSwapVerdict: redirected only when the run passed, the rig was registered and redirected for the entry, the vanilla cat shows no marker (scoped), our marker is in >= 2 rig shots and every one of them has real parts under it", () => {
+    const base = { verdict: "pass", character: "ArtProbeRigCat", log: { registered: [{ clip: "_CatRig_ArtProbeRigCat", character: "ArtProbeRigCat", source: "data" }], redirected: [{ character: "ArtProbeRigCat", clip: "_CatRig_ArtProbeRigCat" }], missing: [], refused: [] }, vanilla: { marker: false, outline: 10000 }, rig: [{ label: "rig 1", marker: true, outline: 9000 }, { label: "rig 2", marker: true, outline: 8000 }, { label: "rig 3", marker: false, outline: 0 }] };
+    const v = (o: Record<string, unknown>) => pc.rigSwapVerdict({ ...base, ...o } as any);
+    eq(v({}).outcome, "redirected");
+    eq(v({}).markers, 2); eq(v({}).partsDrawn, 2);
+    eq(v({ verdict: "crash" }).outcome, "crash");
+    eq(v({ log: { ...base.log, registered: [] } }).outcome, "not-registered");
+    eq(v({ log: { ...base.log, redirected: [] } }).outcome, "not-redirected");
+    eq(v({ log: { ...base.log, redirected: [{ character: "Other", clip: "_CatRig_ArtProbeRigCat" }] } }).outcome, "not-redirected");
+    eq(v({ vanilla: { marker: true, outline: 10000 } }).outcome, "not-scoped");
+    eq(v({ rig: [{ label: "rig 1", marker: true, outline: 9000 }] }).outcome, "no-marker");
+    eq(v({ rig: [{ label: "rig 1", marker: true, outline: 9000 }, { label: "rig 2", marker: true, outline: 1000 }] }).outcome, "not-filled");
+    eq(v({ vanilla: { marker: false, outline: 0 } }).outcome, "not-filled");
+  });
+
+  test("OBSERVED 2026-10-22 fixture (S1, artprobe-rig-summary.json): the framework registered _CatRig_ArtProbeRigCat from probe.swf and redirected ArtProbeRigCat's CatTest lookup to it; the rig cat shows our marker with real cat parts under it, the vanilla cat on the same parts shows none; real saves unchanged", () => {
+    const p = join(HERE, "fixtures", "ingame", "artprobe-rig-summary.json");
+    assert(existsSync(p), "written by npm run test:artprobe -- --rig");
+    const j = JSON.parse(readFileSync(p, "utf8"));
+    eq(j.verdict, "pass");
+    eq(j.outcome, "redirected");
+    eq(j.shots.join(","), "baseline,vanilla,rig 1,rig 2,rig 3");
+    assert(/unchanged/.test(j.save || ""), `save guard: ${j.save}`);
+    const again = pc.rigSwapVerdict({ verdict: j.verdict, character: "ArtProbeRigCat", log: j.log, vanilla: { marker: !!(j.vanilla.marker && j.vanilla.marker.found), outline: j.vanilla.outline || 0 }, rig: j.rig.map((r: any) => ({ label: r.label, marker: !!r.ours, outline: r.outline })) });
+    eq(again.outcome, "redirected", "the fixture's numbers give the same outcome");
+  });
 }
 
 // ---- cat animations: labeled facing frames appended to the vanilla CatTest clip ---------------------------------------
@@ -397,7 +526,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     for (const l of fx.catanis2.labelsAmong) assert(ca2.labels.includes(l), `${l} among the appended labels`);
   });
 
-  test("newCatAnimation: a rig <name>Pose (parts \"game\": empty slot sprites the game fills with the cat's own parts), a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing the rig as the layer `ani` at depth 1, exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
+  test("newCatAnimation: a rig <name>Pose (parts \"game\": empty slot sprites the game fills with the cat's own parts), a donor CatAnim_<name> with <name>F at 0 and <name>B at 1 each placing a rig as the layer `ani` at depth 1 (the F frame <name>Pose, the B frame the back rig <name>PoseBack: art-cat-back-tests.ts), exports._Append_CatTest; the scene validates; pure and byte-stable", () => {
     need();
     const base = exampleScene("anim");
     const before = JSON.stringify(base);
@@ -413,7 +542,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     eq(JSON.stringify(d.labels), JSON.stringify({ waveF: 0, waveB: 1 }));
     eq(d.layers.length, 1);
     eq(d.layers[0].name, fx.layer); eq(d.layers[0].depth, fx.depth);
-    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePose");
+    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePoseBack");
     eq(r.scene.exports[fx.append], "CatAnim_wave");
     const v = validateScene(r.scene) as any;
     assert(v.ok, errors(v.findings));
@@ -429,8 +558,8 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     eq(d.frames, 4);
     eq(JSON.stringify(d.labels), JSON.stringify({ waveF: 0, waveB: 1, pounceF: 2, pounceB: 3 }));
     eq(d.layers.length, 1);
-    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePose,2:wavePose,3:wavePose");
-    assert(!two.scene.sprites.pouncePose, "no new rig when opts.rig is given");
+    eq(d.layers[0].keys.map((k: any) => `${k.frame}:${k.ref}`).join(","), "0:wavePose,1:wavePoseBack,2:wavePose,3:pouncePoseBack");
+    assert(!two.scene.sprites.pouncePose, "no new front rig when opts.rig is given (the back rig is new: no opts.backRig)");
     eq(two.scene.exports[fx.append], "CatAnim_wave");
     assert((validateScene(two.scene) as any).ok, "validates");
     const three = R.newCatAnimation(two.scene, "sit");
@@ -459,7 +588,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(c0.includes("info:cat-anim-untested"), c0.join(","));
     assert(!c0.some((c) => /^(error|warning):cat-anim/.test(c)), c0.join(","));
     const note = (validateScene(good) as any).findings.find((f: any) => f.code === "cat-anim-untested");
-    assert(note.severity === "info" && /draws the cat's own parts/.test(note.message) && /OBSERVED in PR #74/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
+    assert(note.severity === "info" && /draws the cat's own parts/.test(note.message) && /OBSERVED 2026-10-22/.test(note.message) && /animated pose/.test(note.message) && /render-cat-wave/.test(note.message) && !/once its empty-slot run lands/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
     const filled = R.assignSlot(good, "wavePose", "head", "body").scene;
     const cf = codes(filled);
     assert(cf.includes("error:cat-anim-slot-not-empty"), cf.join(","));
@@ -482,6 +611,17 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(codes(shapeExport).includes("error:cat-anim-donor"), codes(shapeExport).join(","));
     const plain = exampleScene("anim");
     assert(!codes(plain).some((c) => /cat-anim/.test(c)), "no cat-anim findings without the export");
+  });
+
+  test("validateScene: cat-anim-layer-name is reported once per labeled frame per offending layer (no duplicate findings)", () => {
+    need();
+    const good = R.newCatAnimation(exampleScene("anim"), "wave").scene;
+    const pawing = JSON.parse(JSON.stringify(good)); pawing.sprites.CatAnim_wave.layers[0].name = "pawing";
+    const hits = (validateScene(pawing) as any).findings.filter((f: any) => f.code === "cat-anim-layer-name");
+    const labels = Object.keys(pawing.sprites.CatAnim_wave.labels);
+    eq(hits.length, labels.length, `one per labeled frame (${labels.join(",")}): ${JSON.stringify(hits)}`);
+    const keys = hits.map((f: any) => `${f.path}|${f.message}`);
+    eq(new Set(keys).size, keys.length, `no duplicates: ${keys.join(" ; ")}`);
   });
 
   test("validateScene refuses an export literally named CatTest (cat-clip-override, error): the engine resolves clips through a global last-loaded-first registry, so it would replace the cat clip for every cat", () => {

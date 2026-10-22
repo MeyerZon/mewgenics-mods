@@ -7,6 +7,7 @@ import { toast } from "../state.ts";
 import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, rampColor, exportShapeSvgFile, replaceShapeFromSvg, bakeGlowInScene, openShapeInVectorcraft } from "./art-state.ts";
 import { sx, Ramp, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
+import { ImportPngRow } from "./ImportPng.tsx";
 import { shapeGrayUsage, parseFill } from "../../../src/core/art/scene.ts";
 import { GAME_FONTS } from "../../../src/core/art/text.ts";
 import type { SceneText } from "../../../src/core/art/text.ts";
@@ -82,7 +83,8 @@ export function ShapesTab() {
           <div style={sx("font-size:12.5px;line-height:1.6")}>Import an SVG below (each SVG becomes one shape). Gray fills become 16-level <span className="mono">gray:0–15</span> the engine recolors through a palette row; non-gray colours pass through and are flagged. Once a shape exists, wrap it in a sprite and Build the SWF.</div>
         </div>
       )}
-      <div style={sx("margin-top:12px")}><DropZone text="Drop an SVG to add a shape. Each SVG becomes one shape (many paths)." /></div>
+      <div style={sx("margin-top:12px")}><DropZone text="Drop an SVG to add a shape. Each SVG becomes one shape (many paths). A dropped PNG becomes a raster sprite." /></div>
+      <ImportPngRow />
       <TextsSection />
       {ids.length ? <PathEditor /> : null}
     </div>
@@ -183,6 +185,10 @@ function TextsSection() {
               <option value="center">center</option>
               <option value="right">right</option>
             </select>
+            <label className="muted" title="no HTML flag: the game substitutes a localization key only in a plain text (text-loc-key-html)">
+              <input type="checkbox" aria-label={`plain (localized) of ${id}`} checked={t.html === false} onChange={(e) => set(id, { html: e.target.checked ? false : undefined })} />
+              {" plain (localized)"}
+            </label>
             <button className="btn ghost sm" style={sx("color:var(--err)")} aria-label={`Delete text ${id}`} onClick={() => { const next = { ...texts }; delete next[id]; sc.texts = next; scheduleValidate(); bump(); }}>Delete</button>
           </div>
         );

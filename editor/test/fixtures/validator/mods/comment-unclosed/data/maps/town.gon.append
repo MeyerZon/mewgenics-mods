@@ -1,0 +1,8 @@
+// a block comment that is never closed: the game drops everything after it
+newstuff2 {
+	x 1
+}
+/* forgot to close
+more {
+	y 2
+}

@@ -39,7 +39,7 @@ beyond short byte signatures needed to locate functions.
 | `-dev_mode true` | Dev mode. |
 | `-validate_pedigree_tables true` | Repairs family-tree tables (added 1.0.20941 after a save editor broke saves). |
 
-Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map (in `Gon_overlay_apply`
+Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map (in `Gon_overlay_apply` = `GonResource::combined_decode`
 `0x9a64a0`) to `Gon_Append` `0x945410`, `Gon_DeepMerge_plain` `0x945c30` under the constant MERGE policy
 (`Gon_DefaultMergeMode` `0x9451c0` returns 2, so `.merge` files never read key suffixes) and the policy-driven
 `0x946680`; row by row in `docs/data-mods.md` "Fidelity to the decompiled merges".
@@ -61,15 +61,80 @@ tables (`catgen`, `spawns`, `particles`, `furniture_effects`, `weather`, `diffic
 **GON parser (OBSERVED 2026-10-21/22, `.analysis/decompiled/Gon_{LoadText_0x940840,Tokenize_0x93f090,ParseTokens_0x93fcf0}.c`).**
 `Gon_LoadText` wraps the text in `{ }`, tokenizes, parses the root as an object and logs `GON ERROR: More symbols
 exists after file completed parsing` if tokens remain. Tokenizer: `{ } [ ]` single-char tokens; `,` `:` `=` are
-whitespace (char mask `0x2400100000000000` over chars `< 0x3e`); `#` comments to end of line; `"` opens a quoted
-token, `\` escapes the next char (only `\n` → newline), the quotes are dropped and no flag survives; no `//` /
-`/* */` / `#include` handling, so a pre-pass must supply them (INFERRED, vanilla relies on all three; candidate
-`0xa50bd0`). Parser: `{` → type 3 object, `[` → type 4 array, a scalar is typed from its text: string (1) unless
-`strtol(tok, &end, 0)` or `strtod` consumes it entirely → number (2) with int view `+0x50` and double view
-`+0x58` both stored, exact `null` → 0, `true`/`false` → bool (5, `+0x60`); text kept at `+0x68`, type at `+0xa8`.
-`.add` / `.multiply` in `Gon_DeepMerge` 0x946680 use the double view and re-render the text. The editor reproduces
-the typing in `editor/src/core/gon/typing.ts` (pinned by `editor/test/gon-tests.ts`); the full rule-by-rule
-comparison is `docs/data-mods.md` "GON typing fidelity".
+whitespace (char mask `0x2400100000000000` over chars `< 0x3e`); `#` comments to end of line (one still open at the
+end logs `GON ERROR: didn't close a comment somewhere`); `"` opens a quoted token, `\` escapes the next char (only
+`\n` → newline), the quotes are dropped and no flag survives. Parser: `{` → type 3 object, `[` → type 4 array, a
+scalar is typed from its text: string (1) unless `strtol(tok, &end, 0)` or `strtod` consumes it entirely → number (2)
+with int view `+0x50` and double view `+0x58` both stored, exact `null` → 0, `true`/`false` → bool (5, `+0x60`); text
+kept at `+0x68`, type at `+0xa8`. `.add` / `.multiply` in `Gon_DeepMerge` 0x946680 use the double view and re-render
+the text. The editor reproduces the typing in `editor/src/core/gon/typing.ts` (pinned by `editor/test/gon-tests.ts`);
+the full rule-by-rule comparison is `docs/data-mods.md` "GON typing fidelity".
+
+**GON text pre-pass: `//`, `/* */`, `#include`, `#define` (OBSERVED 2026-10-22, RE session inc,
+`.analysis/notes-inc.md`, `.analysis/decompiled/Gon_Pre*_0x*.c`, `GonResource_decode_real_0x9a6100.c`).** The tokenizer
+never sees comments or includes: `GonResource::decode(File*)` **0x9a6100** (no overlays) and
+`GonResource::combined_decode(vector<CombineFile>)` **0x9a64a0** (the function called `Gon_overlay_apply` elsewhere
+here; once **per CombineFile — the base file and every `.append/.merge/.patch` overlay**) call
+**`Gon_Preprocess` 0xa50bd0**`(text, includeResolver, 0x100, 1)` and hand its output to `Gon_LoadText`. Its passes:
+(1) **`Gon_Pre_StripComments` 0xa4eb80** — `//` up to the newline, which is kept; `/* … */` removed together with any
+newlines inside; no nesting (the first `*/` closes); a `/` whose previous char is `*` closes, so `/*/` closes at once;
+an unterminated `/*` silently drops the rest; neither applies inside `"…"`, where a `"` not preceded by `\` toggles
+the string state; `#` is not a comment to this pass (a `"` or `/*` inside a `#` comment still counts). (2)
+**`Gon_Pre_ExpandIncludes` 0xa4edf0** — outside strings, at any `#` (`CMP byte ptr [RAX+RDX*1],0x23` at 0x140a4ef23)
+whose blank-delimited word is exactly `#include` (`CMP RCX,0x8` 0x140a4f124 + `memcmp` with the literal 0x141134cf8),
+`Gon_Pre_ReadWord` 0xa4e650 reads the name: blanks (space/TAB/CR/LF/NUL) skipped first — newlines included —, then
+up to the next blank; a `"` toggles a quoted part that is not copied and a closing `"` ends the name; no escapes.
+`#include <name>` is replaced by `Gon_Preprocess(resolve(name), resolve, 0x100, 0)` (`MOV byte ptr [RSP+0x20],0x0`
+0x140a4f32b, `CALL 0x140a50bd0` 0x140a4f340): the included text gets passes 1–2 with the **same** resolver; text
+after the name on the line stays; no separator is added; **no depth limit and no cycle guard** (a self-include
+recurses until the stack overflows — INFERRED crash). (3/4, top level only) **`Gon_Pre_CollectDefines` 0xa4f4a0 /
+`Gon_Pre_ExpandMacros` 0xa501c0** — `#define NAME(a, b) … #end` macros (strings at 0x141134ce4: `#`, `#end`,
+`#define`, `#include`); unused by vanilla (0 of 210 files); each `Gon_Preprocess` call has its own macro table, so a
+base file's macros are invisible to its overlays. Syntax (OBSERVED in the decompiles 2026-10-22, `notes-inc2.md`;
+in-game for a 2-argument macro, `mods/_incprobe`): one delimiter set throughout — blanks (mask 0x100002601) and
+`( ) , : = [ ] { }` (`Gon_Pre_ReadBraced` 0xa4e880 masks 0x28000000240013 over `c-0x28` + `{` `}`;
+`Gon_Pre_SubstituteArgs` 0xa4e0b0 0x2400130100002601 + 0x500000005 over `c-0x5b`). CollectDefines: outside strings, a
+`#`-word exactly `#define`; the name = ReadBraced (delimiters skipped, read to a delimiter); blanks skipped; if the next
+char is `(` a parameter list (repeat: `)` ends it; else skip blanks, skip delimiters, read a token, skip blanks, an
+optional `,` + blanks — an unterminated list reads past the text, undefined); the body runs from right after `)` (no
+parameters: from the first non-blank) up to the `#`-word `#end` (consumed; may sit mid-word); the definition is
+dropped from the text and stored under `String_ConcatParts` 0x51d00`("#", name)` (call 0x140a4ffc6, `R9 =
+0x141134ce4`, length 1) via 0xa510c0 (operator[]-shaped: a later definition replaces). ExpandMacros, looped by
+`Gon_Preprocess` while it returns true, at most `0x100` rounds: outside strings, at a `#` whose word (to a blank) is a
+key, ReadWord consumes it, one token per parameter is read (delimiters skipped, read to a delimiter; text after the
+last argument stays — `#NAME (a, b)` leaves `)`), and the output gets SubstituteArgs(body): body tokens are cut at
+each delimiter and a token equal to a parameter name becomes the argument; the final token (no delimiter after it) is
+flushed unsubstituted. The editor ports all four passes. Nothing
+else is rewritten: no BOM, `\r\n` or TAB handling (vanilla has no BOM / CRLF file).
+**Where an include resolves:** the resolver is a lambda (`GonResource::decode::<lambda_1>` 0x9a7610,
+`combined_decode::<lambda_1>` 0x9a7490 — the files `.analysis/decompiled/GonResource_{decode_0x9a7610,
+combined_decode_0x9a7490}.c` are these lambdas) capturing **the directory of the resource being loaded** (`this->path`
+cut after its last `/`, e.g. `data/maps/` for `data/maps/alley.gon`; for an overlay file the BASE resource's
+directory): `path = dir + name` by plain concatenation (`0x6bd40`, no `..` / `./` normalisation), fetched with
+**`ResourceManager_GetTextResource` 0x7c10e0** (cache key `"txt"` + path). Missing → the no-return
+`Fatal_Error` 0x951ee0: category `GonResource`, **`Could not locate include file: <name>`** (0x14112d8d8, the name as
+written), `BasicResourceTypes.cpp` line 89 / 106, an SDL `ERROR` message box, then exit — **fatal, not a log line**.
+**Includes vs `-modpaths` overlays:** `GetTextResource` uses the same file manager as every data file — when the
+path exists, `0x9a1790` (path or `path.append/.merge/.patch` exists) → `FileManager_ResolveWithOverlays` 0x9a09f0 →
+**`TextResource::combined_decode` 0x9a5a20, which concatenates the raw text of every CombineFile and ignores the
+mode**; otherwise `FileManager_GetFile` 0x99ff50 → `TextResource::decode` 0x9a59b0. So a mod's full copy of an
+included file replaces it, and an overlay **on the included name** is pasted after the base text (never merged; a
+`.patch` suffix arrives literally); the includer's own overlays apply normally after inlining (they see the included
+entries as base); a mod can include a file it ships at the mirrored path (**OBSERVED in-game 2026-10-22**,
+`mods/_incprobe/tests/include-probe.mewtest`: a `data/characters/enemies.gon.append` entry `#include`s
+`incprobe_props.gon`, shipped only in the mod's `data/characters/`, and the spawned unit holds its `health 77`).
+**The joined path is never normalised** (OBSERVED, `notes-inc2.md`): the pack test `Pak_HasFile` 0xa4d7b0 /
+`Pak_ReadFile` 0xa4d670 looks up `String_ToLower` 0x949320(path) — a per-char `tolower`, nothing else — in the
+`std::set` at `pak+0x180` (exact, case-insensitive); a loose file is `<modpath> + path` through `std::filesystem::exists`
+(`FileManager_FileExists` 0x9a14c0) and a binary `std::ifstream` (`File_ctor_ReadLoose` 0x99ec60, called per mod path by
+`FileManager_GetFile` 0x99ff50). So `..`, `.`, empty segments, a backslash and a leading `/` never match the pack (→ the fatal
+miss) and are resolved by the OS for loose files (`..` can leave the mod folder); the validator's
+`include-path-unsafe`. `FileManager_enumerate` 0x15e960's three callers (0x15e6f0, `MewApplication::OnLoad` 0x745f60,
+0x912150) all list `data/text/*.csv`; `data/characters` is listed by SpawnDatabase_LoadGonDir 0x7c0cb0 through
+FileManager_ListDir 0x9a1900, which also walks the mod paths ("Maps, rooms and level files"; INFERRED: a mod's helper
+file there is loaded as a file of entries too — keep include fragments free of top-level names that collide). The editor ports the pre-pass in `editor/src/core/gon/preprocess.ts` and the
+resolver in `editor/src/core/gon-includes.ts` (pinned by `editor/test/gon-tests.ts` "gon pre-pass" / "gon include",
+fixtures `editor/test/fixtures/gon-include/`); the validator and the merge preview parse the pre-passed text.
 
 GON objects reference C++ behavior components by class name. 1,750 RTTI classes live in `glaiel::`;
 hundreds are small composable behaviors (`AddStatusToBasicAttack`, `AbilityEnabledIfHasStatus`,
@@ -161,7 +226,10 @@ in-game test harness (`docs/ingame-testing.md`). Absolute addresses, image base 
   `SDL_GL_SwapWindow` `0x1412e7650`, `SDL_HideWindow` `0x1412e82a0`, `SDL_ShowWindow` `0x1412e8c60`,
   `SDL_MinimizeWindow` `0x1412e8438`, `SDL_PollEvent` `0x1412e8528`, `SDL_CreateWindow` `0x1412e73f0`,
   `SDL_CreateWindowWithProperties` `0x1412e7400`. On disk (and until SDL initializes) the slots point at init
-  stubs, so read or patch them only once the window exists. Nothing in `mewframework` hooks these slots yet
+  stubs, so read or patch them only once the window exists. `mewtest.dll` (not `mewframework`) swaps the `SDL_GL_SwapWindow` slot
+  once the window exists, to read the GL back buffer for `shot` (2026-10-22, docs/ingame-testing.md "Shots"; OBSERVED:
+  the game presents every frame through it on the main thread with its context current, also with the window hidden).
+  Nothing in `mewframework` hooks these slots yet
   (earlier notes claiming otherwise were wrong).
 - **RNG**: the global state is 4 qwords (32 bytes) in the main thread's static TLS block at `+0x178` (the exe's
   TLS slot, index from its PE TLS directory; the save's `random_seed` property is loaded into it). `Rng_SeedState`
@@ -170,10 +238,67 @@ in-game test harness (`docs/ingame-testing.md`). Absolute addresses, image base 
   boot's non-dev branch and every dev-menu fight button reseed this way; the dev-mode boot does not). OBSERVED
   2026-10-20: the harness's `seed 42` right before `enter TacticsTest` makes the generated party and every roll
   after it identical run to run (`mods/jokers-luck/tests/luck-seeded.mewtest`); the state before the pin was already
-  identical across launches of the same `test00.sav`.
+  identical across launches of the same `test00.sav`. Native mods do not draw from this state: they use the
+  framework's own stream `FW_Random` (API v5, splitmix64 in `native/framework/src/fw_rng.c`), which the same `seed`
+  directive re-seeds. The CRT `rand` is not pinnable (msvcrt keeps its state per thread; OBSERVED 2026-10-22: Joker's
+  Luck's `srand(GetTickCount())` + `rand()` gave different rerolls on every seeded launch).
 - The framework exposes the code symbols as `FW_SYM_DebugConsole_Execute`, `FW_SYM_DebugConsole_init`,
   `FW_SYM_ApplicationBase_FrameBegin`, `FW_SYM_string_Allocate` and the data addresses as `FW_DATA_*`
   (`FW_GetData`, API v3).
+
+## Frame timing and game speed (2026-10-22)
+
+Ghidra session `speed` (`.analysis/notes-speed.md`, decompiles `TurnControl_Update_0x8e2a30.c`,
+`HitPause_Update_0x7942b0.c`, `HitPause_GetOrCreate_0x122d70.c`, `PauseMenu_SetupGameSettings_0x28eee0.c`,
+`PauseMenu_SetCombatSpeed_lambda8_0x29c3f0.c`, `PauseMenu_Open_0x289d90.c`, `Settings_GetFloat_0x9d3b40.c`,
+`Settings_GetOrCreate_0x9d34c0.c`, `FastTestMode_*`, `App_UpdateTimed_0x9bb110.c`, `App_RenderFrame_fast_0x9bb1a0.c`)
+plus objdump of `appmain` / `Step`.
+
+- **Fixed-step loop (OBSERVED).** appmain reads `update_rate` (float, default 60) → fixed dt `App+0xe08` = 1/rate and
+  step `App+0xe00` = perf-frequency/rate; `update_multiplicity` (default 1) `App+0xe18`; `unlock_framerate` (default
+  true) `App+0xe1c`; `framerate_cap` (default 0) `App+0xe10`. Per loop iteration: a smoothed frame delta `d` (perf
+  ticks); `App+0x11` pauses (`App+0x12` single-steps), `App+0x13` multiplies `d` by 0.25, `App+0x14` by 4 (no writer of
+  either found: debug-only); then **`accumulator App+0xdf8 += d × App+0xdc0`** (`movsd xmm2,[rsi+0xdc0]` at
+  `0x1409ba895`) — `App+0xdc0` (`App_timescale`, double) is the global time scale, `App+0xdc8` a copy of it. A
+  catch-up guard drops time when the accumulator exceeds `max(scale,1) × 8` steps (it scales with the time scale, so
+  it does not clamp speed). `Step` then runs `while (acc > mult × step) { acc -= step; App_UpdateTimed(dt) }` —
+  **every update gets the same dt** — then FrameBegin, render, FrameEnd. Speed therefore = how many identical updates
+  run per rendered frame; the logic, the RNG sequence and the turn order do not depend on it (OBSERVED below).
+- **Who writes the time scale (OBSERVED).** `HitPause_Update` `0x7942b0` (glaiel::HitPause, component type 0x440,
+  vtable `0x140ede408` slot 16) on every update: `App+0xdc0 = hp+0x50` (× `hp+0x48` during a hit pause).
+  `TurnControl_Update` `0x8e2a30` (TurnControl vtable slot 10) on every update: `speed = TC+0x180 ? 1.0 :
+  Settings_GetFloat("combat_speed", 1.0)`, stored to `TC+0x178` and `HitPause+0x50`; `TC+0x180` is set by
+  `Ability_trigger` `0x320a0` for abilities with `graphics { bypass_combatspeed true }` (they animate at 1x).
+  `PauseMenu_Open` `0x289d90` and HitPause's reset write 1.0.
+- **The vanilla speed-up and its limit (OBSERVED, static).** The `combat_speed` setting (settings.txt; the owner's is
+  2). `PauseMenu::SetupGameSettings` `0x28eee0` builds its dropdown from exactly four options `"1"`..`"4"`; the setter
+  lambda `0x29c3f0` stores the string. **The limit is only the UI list**: the reader is an unclamped float. So
+  `combat_speed 8` in settings.txt, or `-combat_speed 8` on the command line, should run combat at 8x. The command
+  line form does not persist: `Settings_GetOrCreate` `0x9d34c0` looks the key up first in `App+0x3b8`, the map
+  `ProcessCmds` fills from every `-key value` pair, and only then in the persistent map (INFERRED: the settings.txt
+  writer reads only the latter). Not run in-game here (the harness runner passes no extra flags); it affects combat
+  only (TurnControl exists only in a fight) and keeps `bypass_combatspeed` animations at 1x.
+- **The dev fast mode (OBSERVED).** `App+0xe1d`: set by the TacticsTest dev menu's `fuzz_test_fast` /
+  `replay_test_fast` / `stress_test_fast` (`FastTestMode_Enable` `0x368980` / `0x36bda0`, with
+  `SDL_GL_SetSwapInterval(0)` and movieclip interpolation off), cleared by `0x3690c0`. In that mode `Step` runs one
+  update per loop iteration and renders at most once per step of wall time — the simulation runs CPU-bound. Not
+  exposed by the framework (yet).
+- **Framework lever (API v6, `FW_SetTimeScale(double)` / `FW_GetTimeScale`, `native/framework/src/speed_engine.c` over
+  the host-tested `fw_speed_rules.c`).** A FrameBegin hook (hook plan, last row) multiplies whatever the game left in
+  `App+OFF_APP_TIMESCALE` once per rendered frame — after that frame's updates, before the next accumulation — so it
+  composes with combat_speed and hit pauses, and works outside combat too. The value written is nudged up one ulp so
+  the next frame can tell its own write (multiply nothing) from a game rewrite (multiply the new base); factor 1
+  restores the game's base. Clamp [1/16, 64]; NaN / ≤ 0 → 1. Harness: `speed <factor>` / `speed off`.
+- **Measured (T2, 2026-10-22, `mods/jokers-luck/tests/luck-seeded*.mewtest`, seed 42, autoplay fight of 11 turns,
+  hidden window = vsync off, this machine).** Wall time from `enter TacticsTest` to `end`: 1x 11968 / 11859 ms;
+  4x 3329 ms (3.6x); 8x 1922 / 2687 / 2141 ms (~5x); 12x 1625 ms (7.3x); 16x 1406 ms (8.5x); 32x 1516 ms (no gain:
+  CPU-bound, ~500 updates/s). Whole run (boot is loading, not scaled) 19.3 s → 8.9–11.3 s at 8x. At 1x, 4x, 8x and
+  12x every expectation held and at 8x the three unit dumps (hp, stats, statuses, stacks of all 8 units) are
+  byte-identical to 1x (fixtures `result-speed-1x.jsonl` / `result-speed-8x.jsonl`). **What broke: at 16x and 32x
+  the expectations after `wait rounds` failed** — several turns now resolve inside one rendered frame and the harness
+  samples once per frame, so it observed a later turn (16x: the round-2 sample saw round 3's value; the turn count
+  at the end was still 11). That is the harness's observation granularity, not a different fight; scripts that
+  sample after `wait turns|rounds` should stay at ≤ 12x. Audio pitch was not measured (harness runs are muted).
 
 ## REA / Ghidra sessions
 
@@ -245,16 +370,16 @@ notes in `.analysis/notes-<tag>.md`):
   2026-10-19, pinned by the T1 bindings test and `bindings/25143593.json` `LuckUp_typeid.anchors.witness`).
 - Vtable slots identified: 0 `GetTypeName(this, std::string* out)`, 1 `GetTypeId()`, 2 `IsA(this, std::string*)`,
   3 `GetTypeHierarchy()` (`{int ids[16]; uint64 count}`), 5 scalar deleting dtor, 30 `OnInit(stacks, GonObject*
-  data, applier)`, 33 `OnApplied`, 82 `ApplyStatModifiers` (LuckUp: `character->luckBonus(+0x5d4) += stacks`, and
+  data, applier)`, 33 `OnApplied`, 82 `ApplyStatModifiers` (LuckUp: `character->effectiveLuck(+0x5d4) += stacks`, called by `Character::recompute_stats` — "Effective stats" below — and
   marks removal when stacks reach 0), 170 `OnStacksChanged`, 171 stacks-cleared callback.
-- Object fields: +0x18 entity, +0x20 owner character (also +0x38), +0x5c `int stacks`, +0x68 GON data, +0x74 applied,
+- Object fields: +0x18 entity, +0x20 the **Scene** (+0x28 = its first qword, the scene manager: the Component layout), +0x38 the unit (Character*), +0x5c `int stacks`, +0x68 GON data, +0x74 applied,
   +0x75 removing, +0x76 `tickdown_this_turn`, +0xc8 applier, +0xe9 "temporary" flag.
 - OBSERVED 2026-10-21 (session `bind`, `.analysis/notes-bind.md`, cross-checked in Ghidra): `LuckUp_ctor`
   (`0x711c90`, 292 B) pool-allocates **0xF0 bytes** (`41 B8 F0 00 00 00` memset length; pool global `0x1414e40`,
   element size 0xf8, referenced only by the ctor and its 54-byte static initialiser `0x1fa40`), runs the base
   `Passive::Passive` (`0x4c940`), zeroes +0xc8..+0xe0, writes word 1 at +0xe8 (so +0xe8 = 1, +0xe9 `temporary` = 0),
   stores `LuckUp_vftable` (`lea rax,[0xf57ab8]; mov [rbx],rax` at +140 — the **only** code reference to that vftable
-  image-wide), sets **+0x18 = entity, +0x20 = owner character**, +0x28 = the owner's first qword, pushes itself into
+  image-wide), sets **+0x18 = entity, +0x20 = its first argument, the Scene** (2026-10-22, below), +0x28 = the scene's first qword, pushes itself into
   `entity+0x20` (`{cap u32, count u32, T** data}`, so Entity +0x24 = count, +0x28 = `Component**`), copies
   `entity+0x19` to +0xe and calls slot 30 `OnInit` devirtualised (`0x8104b0`: stores data at +0x68, stacks at +0x5c,
   reads GON `tickdown_this_turn` into +0x76). It is a byte-twin of the `AIControlNextTurn` ctor (`0x705db0`) and one
@@ -278,13 +403,27 @@ notes in `.analysis/notes-<tag>.md`):
   12 `.pdata` functions; adding `"None"` (`0xed0b90`) and the size tolerance leaves this one. These facts are the
   `bindings/25143593.json` anchors `imm32Witness`, `callers[].afterStringLea`, `vtableStore` and `sharedDataRef`.
 - Character +0x18 = `Entity*`; Entity +0x24 = component count (u32), +0x28 = `Component**` array. Character +0xe50 =
-  `touched_passives` (forces a stat recompute), +0x5d4 = accumulated luck bonus.
+  `touched_passives` (forces a stat recompute), +0x5d4 = effective luck (base + every modifier; "Effective stats").
 - `Status_ApplyByName` (RVA `0x483120`): `Status* f(std::string* name, void* ctx, int stacks, void* src, void* p5,
   void* p6, char temporary, char p8)`, a 793-way if-chain on the name calling a per-status apply function; the
-  callee destroys the by-value string (`std::string::_Tidy_deallocate`, RVA `0x52780`). `ctx` holds the entity at
-  +0x18 and the character at +0x20. The LuckUp branch (`0x5f9760`) merges into an existing LuckUp found through
+  callee destroys the by-value string (`std::string::_Tidy_deallocate`, RVA `0x52780`). **`ctx` is a Component in every shape: +0x18 = the unit's Entity, +0x20 = the
+  Scene** (+0x28 the scene manager — the Component layout of "Dev scenes and run entry"). Shapes seen: the passive
+  component under `StatusOnBattleStart`, the Character itself (a Component too) under `StatusOnSpawnIn`. OBSERVED
+  2026-10-22 (`mods/jokers-luck/tests/merge-contexts.mewtest`, red run `20261022-115757`): the framework logged
+  "JokersLuck: created on <ctx+0x20>" for all 6 applies of both shapes with the one pointer the harness `enter` event
+  reports as `scene=`. CONFIRMED by the decompiles: `Status_ApplyLuckUp` checks `[ctx+0x20]+0x4b0` (`Scene_destroyed`),
+  merges through `Entity_FindComponentsByTypeId(ctx+0x18, 0x4d6)` and passes ctx+0x20 as `LuckUp_ctor`'s first argument,
+  which hands it to `Owner_RegisterComponentTypeIds` (0x96b340: the scene's per-type component arrays at +0x18/+0x20
+  and its +0x488 vector). So **a status is found through ctx+0x18, never through ctx+0x20**, and the unit is the new
+  status's `+0x38` (`OFF_STATUS_CHARACTER`). The manifest entry is `ApplyCtx_scene` (`OFF_APPLYCTX_SCENE`; it was
+  `ApplyCtx_character` until then). Until this fix the framework's JokersLuck merge walked `(ctx+0x20)+0x18`, never
+  found the first instance, and a second apply built a second object (`[JokersLuck=1, JokersLuck=2]` on every unit);
+  `fw_walk_apply_existing` (the one merge lookup of the custom-status and glow paths; host test
+  `apply_existing_finds_the_units_status_under_both_ctx_shapes_never_through_ctx_plus_0x20`) walks ctx+0x18, and the
+  green run `20261022-121252` shows one JokersLuck with 3 stacks per unit (fixture `result-merge-contexts.jsonl`). The
+  TacticsTest console command `status <name>` with no unit selected reaches no apply_status at all (OBSERVED, same runs). The LuckUp branch (`0x5f9760`) merges into an existing LuckUp found through
   `Entity_FindComponentsByTypeId` (`0x969f90`) or constructs via `LuckUp_ctor` (`0x711c90`:
-  `(Character*, Entity*, int* stacks, void** src, void** applier)`) which runs slot 30 before returning.
+  `(Scene*, Entity*, int* stacks, void** src, void** applier)`) which runs slot 30 before returning.
 - `glaiel::get_status_type(std::string)` (`0x4929c0`) and the hit-effect flags lookup (`0x493190`) are FNV-1a
   hash-map lookups keyed by name; unknown names log `NO STATUS NAMED <x>` to the game log.
 - `Status_Remove` (`0x767fa0`): marks +0x75, sets `touched_passives`, calls slot 45.
@@ -301,7 +440,8 @@ category and hit-effect rules apply), and `Character::BeginTurn` (dispatches `on
 `FW_SetStatusStacks` writes +0x5c, calls slot 170, sets `touched_passives`, and removes at 0.
 The rules a definition must satisfy — at most 8 definitions (one vtable-thunk row each), a non-empty name of at
 most 15 bytes (the std::string SSO buffer, so the alias rewrite never reallocates), template `LuckUp` only, unique
-names — and the alias rewrite itself live in the pure `fw_status_rules.c` (host tests `test_status_rules.c`);
+names, none starting with `FwGlow_` (since 2026-10-22 that namespace is the data-level glow, which needs no
+registration: "Per-unit glow" v3) — and the alias rewrite itself live in the pure `fw_status_rules.c` (host tests `test_status_rules.c`);
 `FW_RegisterStatus` validates against them before it claims the name with Mewjector. Since 2026-10-21 the rest of
 the logic is pure and host-tested as well: the vtable clone into caller-supplied memory + the thunk bodies
 (`fw_vtable.c`, `test_vtable.c`; a T1 check clones the real dump `.analysis/luckup-vtable.hex` and pins slots 0/1 at
@@ -495,6 +635,126 @@ probeIdle]]`.
 - Conclusion: **the game fills a mod-appended cat frame's slots by name; the only requirement is that each slot is an
   empty (or hidden) sprite.** A native hook is needed only for scoped standalone rig clips (a non-`_CAT` character
   that should get a cat's parts), not for appended cat animations.
+- **Animated poses too (OBSERVED 2026-10-22, `npm run test:artprobe -- --cat-wave`, run 20261022-101117; fixture
+  `editor/test/fixtures/ingame/artprobe-cat-wave-summary.json`).** `wave` authored with `newCatAnimation` (`waveF` /
+  `waveB` on the same donor, placing `wavePose`: a `parts: "game"` rig whose empty `arm1` / `arm2` / `head` slots are
+  keyed over its own 30-frame timeline, linear tweens) on `ArtProbeCatWave` = TomTom + `alt_animations [[idle wave]]`,
+  no `_autoplay` (nobody acts, so the cat is not hit or moved): our marker in 5/5 shots, the cat's outline under it
+  ~10.7k px (TomTom's 11.0k), no slot colour beyond what TomTom's own fur matches, and the outline changes by up to
+  10773 px between shots ~130 ms apart vs 4380 for the idle TomTom. The slot sprites' timeline matrices drive the
+  game's parts: the arm visibly swings and the head bobs. The nested `ani` plays its own timeline on the held root
+  label.
+
+**The back facing and the four-way quartet (2026-10-22; T1-pinned in `editor/test/fixtures/art/cat-back-facing.json`,
+`editor/test/art-cat-back-tests.ts`).**
+- OBSERVED (read-only parse): a `<anim>B` frame places **its own pose sprite**, not its `<anim>F` partner's. `idleB`
+  (sprite 10; `idleF` is sprite 9, both at (77, −959) twips) stacks **`head_back@1 arm2@3 leg2@5 body@7 arm1@9 leg1@11
+  tail@13`** — the head behind the body, the tail in front, the far limbs swapped (= `CAT_BACK_SLOTS` in `cat-rig.ts`).
+  Across the B frames, `head_back` is in the pose of 356 of 362 CatTest labels and 88 of 91 `_Append_CatTest` labels
+  (a plain `head` in 19 / 7: frames that turn the face to the camera); the visitor's `bhead` spelling (0x742bd0) is in
+  **no** vanilla cat frame.
+- OBSERVED (decompile): **`head_back` is not a separate part.** `CatParts::load_faces` 0x73a990 builds the slot names
+  `"head_" + <face>` (list 0x1413c60f0) and `"headblend_" + <face>` (0x1413c6108) for every `catgen.gon faces` entry,
+  and the first face is `back { back true }`; the visitor matches `head_<face>` → the head holder `+0x8c8` with that
+  preset's flip (`preset+0x4c`) and pose (`ApplyFacePose` 0x740a00). So `head_back` = the cat's own head drawn from
+  behind, and `head_faceleft`, `head_dead`, … in vanilla frames are the same head with other face presets.
+- OBSERVED (read-only parse): the four-way clips (`MegaFetus` enemies.swf, `Thump` enemies2.swf, `TracyX` enemies4.swf,
+  `ManglersMonster` bosses3.swf — the characters with `graphics.four_way_animations true`) carry only complete
+  `<anim>LF/RF/LB/RB` quartets; **no CatTest label is four-way**. With the flag, `Character_SetOrientation` 0x10ce50
+  appends L/R + F/B and never mirrors the character (catC), so a four-way cat needs a quartet for every animation it
+  plays (vanilla idle, walk, hit, … included) or those are silent no-ops; the editor's quartet draws the L frames
+  mirrored (sx −1) — INFERRED from the two-way rule (the engine flips exactly the L directions there), not observed.
+- Authoring (`cat-rig.ts`): `newCatAnimation` adds a front rig `<name>Pose` and a back rig `<name>PoseBack`
+  (`facing: "back"`, the back layout, empty slots); `<name>B` places the back rig. `{ fourWay: true }` emits the
+  quartet (LF / RF on the front rig, LB / RB on the back rig). Validator: `rig-back-head` (a back rig with `head`),
+  `sprite-facing`, `cat-anim-back-facing` (a B frame placing a front rig or the reverse), `cat-anim-four-way-incomplete`,
+  `cat-anim-four-way` (info).
+- **In the game (OBSERVED 2026-10-22, `npm run test:artprobe -- --cat-back`, run 20261022-114912; fixture
+  `editor/test/fixtures/ingame/artprobe-cat-back-summary.json`): the back rig works.** `ArtProbeCatBackShown` (TomTom +
+  `alt_animations [[idle probeBackShow]]`, both labels placing the back rig `probeBackPoseBack` at 1.5x) spawns
+  without a crash and is drawn **from behind with TomTom's own parts** — `head_back` filled with the head seen from
+  behind (ears, no face), the body, the tail in front of it — at 1.572x TomTom's height (21.6k vs 9.8k dark px), so it
+  is our frame, not vanilla idleB. Every run: `real save file(s) unchanged`.
+- ~~A non-slot child of the back rig is not drawn~~ — **wrong, corrected 2026-10-22 (backmarker): it is drawn; it was
+  out of frame.** See the last bullet of this section.
+- ~~Turning a unit away in a test fight is not solved~~ — **solved 2026-10-22** ("Facing: Character::Face"): the
+  #105 runs put `lock_orientation` / `start_orientation` under `graphics`, where `Character::init` never reads them
+  (they are `properties` keys). OBSERVED (run 20261022-124301, fixture `artprobe-cat-back-summary.json`, all 16
+  expects ok, real save unchanged): `face 9 back` turns the spawned ArtProbeCatFacing to `B`, dir (1,0), flip +1,
+  and **our 1.5x back rig is drawn on that genuinely back-facing unit** (`face 9 front` afterwards swaps it for the 1x
+  front rig: the vanished pose is 1.438x the height of the one that replaced it); ArtProbeCatBack with
+  `properties { lock_orientation [1 0] }` spawns on `B` and `face 10 front` leaves it on `B` (effective (1,0)).
+- **A B pose keeps every child; the "missing" depth-15 marker was out of frame (OBSERVED 2026-10-22, backmarker).**
+  - The engine side. The slot visitor `CatParts::prerender::<lambda_2>` 0x742bd0 starts with `xor r14d,r14d`
+    (0x742c06, `45 33 F6`: result = 0) and sets the result to 1 only at the end of a matched slot's path
+    (0x743a95, `41 BE 01 00 00 00`). It returns through `mov eax,r14d` (0x743ad8). The only DisplayObject it writes is
+    the visited child itself (`child+9` bit 7 at 0x743a90 `41 80 4D 09 80`, and the slot fill through 0x741f10).
+    So a name that is not a slot (`marker`) returns 0. `IterateChildren` 0x99c270 then descends into it and nothing
+    touches it. `head_back` is matched like any `head<face>` entry: it fills the head slot and skips only that slot's
+    own subtree. Nothing keys on the `B` suffix here, and no sibling at any depth is hidden, removed or masked.
+  - The pixels. In run 20261022-124301 `shot-shown-2` (a window capture), the checker's lower two thirds sit at the
+    top edge of the window, above unit 9: x 1712..1985, y ≈ 8..107. The magenta and cyan cells are at y 27..75. A
+    foreground beam of the stage crosses the marker at y 33..47, and the rest of it lies above y 0. It is also tinted
+    to ~0.78 (yellow 199,197,0), below the old analyzer's near-#ffff00 tolerance. In `shot-turned-back`, after
+    `face 9 front`, it is gone (0 checker pixels).
+  - The geometry. The marker was authored at (−48, −330) in a rig placed at 1.5x. Its top lands at
+    −47.95 + 1.5·(−330) = −542.95 in the donor, against −377.95 for the 1x front rigs. At ~1.9 screen px per clip
+    px, that puts it ~1030 px above the feet, so it is cut off for every unit standing above y ≈ 1030.
+  - Fix. `probeBackPoseBack`'s marker is now at clip y −220, which gives the same donor top (−377.95).
+    `analyzeProbeShot` accepts a tinted yellow and reports a marker cut by the shot edge as `clipped`.
+  - Run 20261022-132159 (window captures, 16/16 expects, real save unchanged; fixture
+    `artprobe-cat-back-summary.json`):
+    - The marker is found at 1711,240–1986,423, above unit 9, in back 1..3, locked 1..2 and shown 1..2.
+    - Its scale is 2.875 px per clip px, 1.5x the front rigs' 1.92.
+    - It is in neither `front` nor `turned back`.
+  - So a back-pose overlay **can** ride inside the back rig like any front-rig child. Keep it within the frame at the
+    rig's placement scale.
+
+### Several mods appending to one clip (2026-10-22)
+
+Static reading of the decompiles already on disk plus five in-game runs (`npm run test:artprobe -- --multi-append`,
+probe mods `_catappendA` / `_catappendB` / `_catappendSame`; fixture `editor/test/fixtures/ingame/multi-append-summary.json`).
+
+- **When and how often (OBSERVED, decompile).** `process_animation_merges_caller` 0x9baaa0 loads every swflist entry
+  (`app+0x1c0`, 0x9bb9e0 per path), sorts the loaded-SWF array `app+0x118[0..app+0x114)` with 0x9bc690 (comparator
+  not read), then calls `process_animation_merges(app, swf)` 0x9bc070 **once per SWF**. That function walks the
+  file's SymbolClass list (`swf+0x78`) and, for each entry named `_Append_<T>` with a nonzero id, finds the target
+  `T` through the global lookup 0x9bb6f0 (last loaded first), finds the donor by its own id in that file, and calls
+  `Swf_Merge(target, donor)` 0xa58440. A target that cannot be found logs `Append movieclip: <name> could not locate
+  original movieclip to append to`. So the merge runs once per (SWF, `_Append_` export), all at boot, before any
+  instance exists.
+- **Accumulation (OBSERVED, decompile).** On the first merge `Swf_Merge` copies the target's timeline (`target+0x60`)
+  into `target+0x130`. Every merge, including the first, then appends to that copy: frame count `+0` += donor frames
+  (each donor's frames start at the current count); the per-clip file table `+0xa0/+0xa4/+0xa8` grows by the donor's
+  files, and every donor place op's byte 1, the file index (u8; so at most 256 contributing SWFs per clip, INFERRED
+  from the byte add), is shifted by the old count; the max depth `+4` = max(old, donor); frame 0 gets a remove op for
+  each new depth; the keyframe cache `+0xb0..+0xb8` is cleared and the baked byte `+0xc8` reset. A donor that was
+  itself a merge target contributes its own merged copy. Nothing is re-copied per SWF; the target grows in merge order.
+- **Labels: last merge wins (OBSERVED in-game and in the bytes).** Each donor label goes through find-or-insert
+  `0x123a00` (called at **0xa58a1b**) into the merged label map `+0x20`, then a plain store **`mov dword [rcx+0x30],
+  esi` at 0xa58a23** (`89 71 30`, esi = donor frame + offset) overwrites any earlier frame. The frame→name map `+0x60`
+  (0x9a9ad0 at 0xa58a61) is keyed by the new frame numbers and never collides. In-game: with `-modpaths _catappendA
+  _catappendB`, `probeC` (both mods define it) shows B's frame; with `_catappendB _catappendA` it shows A's. The merge
+  order is therefore the `-modpaths` order for mod SWFs (the sort at 0x9bc690 kept it for these two). A mod label that
+  equals a vanilla `CatTest` / catanis2 label is overwritten the same way: INFERRED, same instruction, not run.
+- **Coexistence (OBSERVED).** In both orders both mods' own labels (`probeA`, `probeB`) play their own frames on
+  their own cats, with fresh spawns and no hits. Two cat-animation mods can coexist; only shared label names conflict.
+- **Same file name (OBSERVED).** `_catappendSame` ships B's content as `swfs/catappendA.swf`, the name `_catappendA`
+  uses. With `-modpaths _catappendA _catappendSame`, A's marker never shows and B's content plays: swflist entries
+  resolve by file name through the mod paths, later first (debug.log lists the mod dirs in reverse at App.cpp:136), so
+  the later mod's file loads for both entries.
+- **What PR #124 saw was a measuring artefact, not a merge failure.** A0's marker sits at clip y −330. At game scale
+  (about 1.9 screen px per clip px at 3440×1440) that is about 630 px above the feet, so it leaves the top of the
+  screen for a cat in the back rows. In the #124 `render-raster-cat` shot the cat stands at y ≈ 410, so its marker
+  would be at y ≈ −220. The cat itself looks like the vanilla idle because the rig uses `idleF`'s slot matrices. The
+  probe now puts its markers at y −150.
+- **Editor side.** `src/core/art/append-conflicts.ts` + `validateMod(…, { modpaths })` / MCP `validate_mod { modpaths }`:
+  `swf-file-conflict`, `swf-file-shadows-vanilla`, `cat-append-conflict`, `cat-append-shadows-vanilla`,
+  `cat-append-shared` (info). Nothing in our emitter collides: each SWF has its own character ids and file-table
+  entry, so ids never cross files.
+- **Possible native follow-up (proposed, not built).** A post-hook on 0x9bc070, or a hook at the label store, could
+  log every label overwrite with both files' names, or keep the first definition. The validator already covers the
+  authoring side, so this is optional.
 
 ### SWF loader and display path (closed, 2026-10-21)
 
@@ -573,6 +833,16 @@ batch draw `0xa47e50`).
   `textureLod` LINEAR + mip (bias −0.5) for 0x40 / 0x41, `clamp_to_nearest` mip 0 for 0x42 / 0x43; repeat =
   `mod(uv,1)`, clipped = `clamp(uv, .5/size, 1−.5/size)`; stored premultiplied, un-premultiplied in the shader. The
   emitter writes 0x41 → LINEAR + clamp, what the probe saw. Editor constant `TEXTURE_ATLAS_SIZE` → `bitmap-too-large`.
+  **OBSERVED in-game 2026-10-22** (`npm run test:artprobe -- --raster`, run `20261022-134011`, fixture
+  `artprobe-raster-summary.json`; `src/core/art/probe-raster.ts`): a raster-only character clip draws; 0x41 blends
+  between magnified texels (37 % of a ×32 red/blue stripe's row purple) and 0x43 does not (1 %); 0x40 repeats outside
+  the bitmap (7 crossings over 4 periods of a 2×2 tile, strongly blended at 8 clip px per texel); a 1-texel checker
+  minified to ≈0.43 screen px per texel is flat gray (σ 3.5: mipmapped). The editor now writes all four fill types
+  (`scene.bitmaps[id].repeat / smooth`, `raster.ts bitmapFillType`). Vanilla census (T1, `vanilla-raster.json`): 22
+  files carry bitmaps, all lossless format 5, none JPEG, max 3373×2784; `backgrounds.swf AlleyBGTest` = one 2000×1500
+  plate per frame at 0.7667 from (0,0). A `tilesets.gon.merge` `alley { combat_background <ModClip> }` with a 1-frame
+  plate clip replaces the arena picture (`mods/_bgprobe`). `DefineBitsLossless_init` 0xb7a4e0 has branches for formats
+  3 / 4 / 5 only → `bitmap-unsupported-format` for any other (INFERRED: no pixels).
 - **Palette + cxform order** (`shaders/paletted_full.shader`): `out = compute_color_full(v)` → if `r≈g≈b` (±0.001)
   `out.rgb = texelFetch(palettemap, (r·15+.5, palette))` → **`frag = out × color_xform[0] + color_xform[1]`**. The
   concatenated PlaceObject cxform applies **after** the palette remap; `default_full` is the same minus the remap.
@@ -715,6 +985,125 @@ build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4
   `FW_SYM_AddComponent_MewDirector_named`, `FW_SYM_MewDirector_start`. The slot name is arbitrary (the game uses it
   as the file name under `<userdata>\saves\`); `mewtest01.sav` was chosen because no slot list produces it.
 
+## Maps, rooms and level files (2026-10-22)
+
+RE session `rooms` (Ghidra 12.1.4, build 25143593); decompiles in `.analysis/decompiled/` (names below), notes in
+`.analysis/notes-rooms.md`. The modding recipe is `docs/data-mods.md` "Maps, rooms and encounters".
+
+- **`.lvl` format (OBSERVED, all 2361 vanilla files re-encode byte for byte, `editor/src/core/level/lvl.ts`,
+  `test/level-tests.ts` T1):** little-endian `u32 version (2; four old test levels 1), u32 width, u32 height, u32 1,
+  u32 objectCount, u32 0, u32 0, u32 width, u32 height, str objectPalette "spawns.gon", str tilePalette "tiles.gon"
+  ("" in v1), u32 0, u32 0`, then `width*height` row-major u16 tile ids (`data/tiles.gon`), then `objectCount` ×
+  `u16 x, u16 y, u32 id` (`data/spawns.gon`), then `u32 0`. A cell or object id `0xffff` is followed by `u16 n` and
+  n × `u16 id, u16 weight` (a weighted random pick, id 0 = nothing). Strings are `u32 length` + bytes. Every vanilla
+  level is 10x10. `Level_decode_palettes` 0x376230 sets the palette names (literals "spawns.gon"/"tiles.gon").
+- **`Level::init` / load `0x35aaf0`** (`Level_LoadFile_0x35aaf0.c`): `"levels/" + name + ".lvl"` through the file
+  manager; the function also holds `levels/missing.lvl` (`.rdata` 0xf12778), the name "missing" and a
+  "does not exist" message (INFERRED: the fallback for a missing level). So a mod's new `levels/<path>.lvl` is a loadable level by name (the same resolver as every data file).
+- **Console `load <arg>` = `TacticsTest_cmd_load` 0x888870** (TacticsTest::init lambda, registered with the run
+  commands): `FileExists("levels/" + arg + ".lvl")` (0x9a14c0); when absent, `FileManager_ListDir` 0x9a1900
+  (`"levels"`, `".lvl"`, recursive = 1) and keep the paths ending in `arg + ".lvl"` (one → load it). OBSERVED
+  2026-10-22: `load roomprobe/probe` loads the mod's `levels/roomprobe/probe.lvl`; `load rp_nested_find` finds the
+  mod-only `levels/roomprobe/deep/rp_nested_find.lvl` (`mods/_roomprobe`, fixture `roomprobe-summary.json`).
+- **`FileManager_ListDir` 0x9a1900** (`FileManager_ListDir_0x9a1900.c`; `(fm=&DAT_1413c5650, out, dir, ext,
+  recursive)`): walks the pack's path set (`fm+0x1c0`, prefix `dir/`, suffix `ext`, direct children only unless
+  recursive) **and then every `-modpaths` dir** (`fm+0x268..0x270`, 0x20-byte strings): `std::filesystem::exists(mod +
+  dir)` then a directory iterator (non-recursive: FindNextFile until 0x12; recursive: `recursive_directory_iterator`),
+  merged into one sorted set. **So every listing the game does sees mod files**: SpawnDatabase_LoadGonDir 0x7c0cb0
+  (`data/characters`, `data/abilities`, …, `data/maps` — a mod's *new* `.gon` there is loaded), the level pools and
+  the console search. (Correction to "GON text pre-pass": `data/characters` *is* enumerated, by this function.)
+- **Map level pools — `MapLevelPool_build` 0x394450** (`MapLevelPool_build_0x394450.c`, with 0x395930 / 0x3968e0 for
+  the boss / miniboss paths): reads the map GON (`map+0xb8`): `levels.folder`, then `levels.<pool>` (`easy`, `rare`,
+  …) as sub-folder names, builds `"levels/" + folder + "/" + sub` and lists it with 0x9a1900 (`".lvl"`, recursive 0);
+  candidates go through the director's level registry (`director+0x590`, 0x8dda40 / 0x8ddec0; INFERRED: "already
+  played"), and the `easy` path also reads the map's `chapter_id` and a random roll (not decoded further). OBSERVED 2026-10-22 ("Campaign walk" below): a pool that names a mod-only sub-folder hands the battle that folder's `.lvl` (`levels/alley/walkprobe/wp_alley.lvl`).
+- **Map files**: SpawnDatabase_init 0x7a74b0 lists `data/maps` (0x7c0cb0) but only folds each map's
+  `enemy_pools.medium` into a global list (`+0x13c0`); a run loads a map by path, `"data/maps/" + name` →
+  `Gon_LoadFile` 0x611a0 (`MewDirector_maps_3b0d20` 0x3b0d20), name = an exit node's `next_map`. `data/maps/alley.gon`
+  is a literal at 0xf0c250 (INFERRED: the run's first map). `chapter_id_enum.gon` is read into a name → position map
+  (`SpawnDatabase+0x15b8`) and a vector (`+0x15f8`); the file says it mirrors a C++ enum in MewDirector.h (INFERRED: a
+  new chapter id has no C++ meaning).
+- **Node types are hard-coded — `MapNode::str_to_type` 0x225680** (`MapNode_type_225680_0x225680.c`): none 0, npc 1,
+  enter 2, exit 3, home 4, battle 5, hard 6, miniboss 7, boss 8, event 9, optional_event 10, special_event 11, shop 12,
+  treasure 13, furniturebox 14, foodbox 15, bonus 16, empty 17, any 18; anything else →
+  `Fatal_Error` "No node type named: " (MapNode.cpp). The validator's `map-node-type-unknown`.
+- **Tilesets**: `data/tilesets.gon` is one GON (`SpawnDatabase+0xa88`, overlays apply); `default_tileset` → the
+  current tileset string `+0x14f8`; the console `tileset <name>` sets it. OBSERVED 2026-10-22: a new name added by
+  `tilesets.gon.append` (`roomprobe_yard`, a junkyard copy) selected with `tileset roomprobe_yard` draws the junkyard
+  background around the next `load`ed room (run `20261022-131707-_roomprobe-new-tileset`, shot `roomprobe_yard`).
+- **Tile art (read-only look at `tiles.swf` + the exe's string table, 2026-10-22; no decompile):** `tiles.swf`
+  exports one clip per tile class under the class name (`WaterTile`, `GrassTile`, `FireTile`, `IceTile`, `MetalTile`,
+  `RockTile`, `CreepTile`, `OilTile`, `LavaTile`, `ShadowTile`, `GlassTile`, `SnowTile`, `DirtTile`, `RoadTile`,
+  `BrambleTile`, `FlowerTile`, `StalagmiteTile`, …), each registered at the diamond's centre. Classes without a clip of
+  their own name have one the string table holds next to them: `ToxicTile` → `ToxTile`, `TallGrassTile` →
+  `TallGrassBack` / `TallGrassFront`, `TallFlowerTile` → `TallFlowerBack` / `Front`, `TallBrambleTile` →
+  `TallBrambleTileBack` / `Front`, `FloatingGlassTile` → `FloatingGlassTileBottom` / `Front` (INFERRED pairing; the
+  Room editor's `TILE_CLIP_ALIASES`). `WaterTile_Current` derives from `WaterTile` (RTTI) and is drawn as it
+  (INFERRED). `SupercooledWater` and `GlitchTile` have no clip in `tiles.swf`; `BlankTile` draws nothing. The
+  shader-filled tiles (water, ice, lava, creep, oil, toxic) fill their surface with pure magenta `#ff00ff` (INFERRED:
+  a key the tile shaders replace). `data/tilesets.gon` has no per-tile-class art slot; its only tile key is
+  `water_alt_tile BloodTile` (meatworld, theend; INFERRED to replace the water clip). The `SetTilesetFrame` string
+  belongs to the map screen / CatParts UI (`MapScreen_init_0x38d150.c`), not to tiles. Pinned by the T1 test in
+  `editor/test/level-art-tests.ts` (every `alley` tile id resolves to a clip or a named reason; the clips render).
+- `"No room named: "` (0x2e8d50) belongs to `FurnitureGrid::init` (the house's rooms), not to combat levels.
+
+## Campaign walk (2026-10-22)
+
+RE session `walk` (Ghidra 12.1.4, build 25143593); decompiles in `.analysis/decompiled/` (file names below), notes in
+`.analysis/notes-walk.md`. The harness drives it with `run start` / `run travel <type>` / `run fight` / `expect level`
+(`docs/ingame-testing.md` "Campaign walk"); bindings: the walk block at the end of `bindings/25143593.json`.
+
+- **`MewDirector::GoOnAnAdventure(std::string map, TeamType, int, bool debug)` 0x3b01c0** (OBSERVED name: RTTI lambda
+  `.?AV<lambda_1>@?1??GoOnAnAdventure@MewDirector@glaiel@@QEAAXV?$basic_string…W4TeamType@3@H_N@Z@`;
+  `MewDirector_StartDebugAdventure_0x3b01c0.c`). `debug = false` (the House's door / the house-test dev buttons
+  0x317230 / 0x318db0 with `"alley.gon"`): destroy-next the House, generate the strays, `CreateScene("ClassChooser")` —
+  the interactive class pick. `debug = true` (the event-debug dev button 0x32efc0 with `"eventdebug.gon"`):
+  `DebugGenAdventureCats(TeamType, n)` 0x3b24c0 (a generated party, no popup while `+0x78c` is 0) and then the start lambda
+  0x3b0550 directly: destroy-next `House` (0x9d4e00), **`StartAdventure` 0x3b38c0(director, map, debug)** =
+  `CreateScene("Map")` + `AddComponent<MapTest>` 0x3c5210 → `MapTest::init` 0x39df90 → `AddComponent<MapScreen>`
+  0x39e570 → `MapScreen::init`, then `Gon_LoadFile("data/maps/" + map)` for `innate_weather` / `chapter`, save prop
+  `adventure_started`. The map string is by value (callee destroys). TeamType comes from a `{0,1,2,3}` table at
+  `.rdata` 0xee9700 indexed by the dev widget; the harness passes 1 (INFERRED meaning; the party is generated either way).
+- **`MapScreen::init(std::string map, bool)` 0x38d150** (`__FUNCSIG__` 0xf14040; `MapScreen_init_0x38d150.c`):
+  0x21ae00 (INFERRED: `load_map`), `generate_map` 0x21ca60 (`__FUNCSIG__` 0xeff8f8), then the start node = the first node of type
+  2 (enter) — else the fatal "Map generated without a start node somehow"; the marker component (0x39b2f0) goes to
+  **`+0xa0`**, its `+0x80` std::function is the on-arrive lambda **0x39b180** (`MapScreen_EnterNode_caller_0x39b180.c`):
+  unless the nemesis check 0x392ed0 fires (a nemesis marker at `+0xa8` on the same node) or **`node+0x168`** is set,
+  `EnterNode(mapScreen, node)`. Nodes: glaiel vector **`+0x78` cap, `+0x7c` count, `+0x80` MapNode** data**. Map GON at
+  `+0xb8` (`levels`, `groups`, …). OBSERVED: alley.gon generates 22 nodes / 39 next edges; the marker starts on the
+  enter node (#19).
+- **MapNode** (`MapNode_load_0x21dbc0.c`, `MapNode_load_connections_0x227df0.c`): `+0x50` std::string `level`
+  (a fixed level, e.g. the treasure nodes' `level TreasureHard`; MapLevelPool_build's `param_4+0x50`), `+0xf0` a
+  tileset override EnterNode copies into the current tileset, `+0x114` music layer (-1 = default; INFERRED from its use at 0x151d00), `+0x118..+0x137`
+  the node's own 32-byte RNG state (EnterNode copies it into TLS+0x178 — every node rolls the same way for the same
+  map), **`+0x138` MapNodeType** (str_to_type order; `MapNode_load` re-rolls typed options), **`+0x140` next edges**
+  (glaiel vector: `+0x144` count, `+0x148` data; `load_connections` adds a GON `next` target there with 0x21aac0
+  and the reverse edge at `+0x150`; generate_map walks `+0x148`/`+0x144`), `+0x160` the node's display object
+  (position `+0x70/+0x74`), `+0x168` done flag. The marker's current node is `marker+0x50`.
+- **`MapScreen::EnterNode(MapNode*)` 0x391c20** (RTTI lambda names `…EnterNode@MapScreen@glaiel@@QEAAXPEAUMapNode@3@@Z@`;
+  `MapScreen_EnterNode_0x391c20.c`): does nothing while a key is held (SDL keycode 0x400000e1, INFERRED left shift); reseeds the RNG from the node; then by type:
+  **5 battle** / 6 hard → `mapScreen+0x1e8 = 1` and, when the transition host `DAT_1413c5ba8` is live, the
+  `BattleInTransition` component 0x39b8e0 / 0x39bd20 whose lambda (0x3929e0 battle, 0x39dc90 hard) runs
+  **`MapLevelPool_build(mapScreen, out, "easy"|"hard", node, 1)` 0x394450** (`"hard"` when the save flag
+  `upgrade_basic_combats_to_hard` is set) and **`MewDirector::StartMapBattle(director, out, …)` 0x3b6d10**; 7/8 miniboss
+  /boss → `select_boss_level` 0x395930; 9/10 event, 0xb special event, 0xc shop, 0xd treasure, 0xe furniturebox, 0xf
+  foodbox, 3 exit, 4 home (`return` / `return_early` cutscene). Nothing in EnterNode needs a mouse: the harness calls it
+  on a node it picks (no path animation; the marker stays where it was).
+- **`StartMapBattle(director, std::string levelPath, bool, bool)` 0x3b6d10** (`MewDirector_StartMapBattle_0x3b6d10.c`):
+  registers the level in the played registry (`director+0x590`, 0x8dda40), team bookkeeping, hides the Map scene
+  (0x9d4c80), `CreateScene("Battle")` + `AddComponent<TacticsTest>(battle, e, level)` 0x31e6e0 (→ `TacticsTest::init(level)`),
+  `+0x710 = 1`. The path is the pool's full file path. OBSERVED 2026-10-22: `"levels/alley/walkprobe/wp_alley.lvl"` with
+  `mods/_roomprobe`'s `alley.gon.merge` (run `20261022-141225`), `"levels/alley/easy/ch1-82.lvl"` without (run
+  `20261022-141324`, `seed 42`); the battle starts ~280 frames after EnterNode (the transition), round 1 fires.
+- **Side effect (OBSERVED):** starting the adventure makes the game write a backup of the slot,
+  `saves/backups/mewtest01_<date>_<time>.savbackup` (only after `run start`; earlier `enter Campaign` runs left none).
+  The real save and every other file are untouched; the backups accumulate (one per minute of runs) — an owner
+  decision (TODO.md) whether the runner may move them into the run dir like the slot itself.
+- Not driven: the class chooser (debug start skips it), walking the marker along a path, node rewards after the fight,
+  exits to the next map. The pool pick itself (`MapLevelPool_build` 0x394450): `levels.<pool>` entries are filtered by
+  0x232aa0(`director+0x38` save props, entry) (INFERRED: an unlock check), listed with `ListDir`, run through the
+  played registry; the `easy` pool may swap to `rare` on a roll scaled by a director setting (≤ 1/60).
+
 ## Glow and outline passes (2026-10-21)
 
 Ghidra session `glow` (container `rea_ghidra_glow`, build 25143593; notes in `.analysis/notes-glow.md`, decompiles
@@ -820,6 +1209,14 @@ shape under the source, which every one of these facts allows.
   Everything but the mask draw is reachable through the functions above; being pursued as session `rim`. Until then
   the data-level answers are the baked halo (sprite-shaped, static colour, no engine cost), `CharacterLightSource.glow`
   (ground disc) and `AdvancedTint` (brightness lift).
+- **The baked halo in the arena (OBSERVED 2026-10-22, `npm run test:artprobe -- --glow-arena`, run 20261022-101249;
+  fixture `editor/test/fixtures/ingame/artprobe-glow-arena-summary.json`).** `ArtProbeGlow` (a Rat's
+  `graphics.movieclip`): a 60 px square with a `bakeGlow` halo (#ff8000, blur 24, 4 bands), the identical unglowed
+  square and a swatch of the colour (`probe-outcomes.ts` `GLOW_ARENA_PROBE` / `measureGlowArena`: per-pixel halo alpha
+  against a pre-spawn baseline along four rays). The halo is drawn under the unit's tint like its other fills: inner
+  band ≈ the swatch (196,99,1 vs 235,119,0), alpha falling off outward on 4/4 rays (~.86 → .66 → .44 → .21 → 0), the
+  control square's ring unchanged (alpha 0.00). The bands are visible as plateaus at game scale (1.72 screen px per
+  clip px); the lower ray is cut early where the arena's foreground props overdraw the clip.
 
 Manifest-ready rows (for `bindings/25143593.json` when the native route lands): `ShaderManager_GetOrCreateMaterial`
 0x9bb5d0 (pin by the FNV-1a constants `0xcbf29ce484222325`/`0x100000001b3` + the `+0x278/+0x280` map offsets; callees
@@ -896,8 +1293,8 @@ still open. (`Status+0x68 = const GonObject*` is the status's data node, known.)
 **Stats and HP (OBSERVED unless marked).** Seven `int32` read as `IntOr(Get(stats, name), 5)` (default 5) in
 `data/characters` order at **`+0x5a0` strength, `+0x5a4` dexterity, `+0x5a8` constitution, `+0x5ac` intelligence,
 `+0x5b0` speed, `+0x5b4` charisma, `+0x5b8` luck** (`OFF_CH_STATS`, `int32[7]`; seven `mov edx,edi; mov rcx,rax; call
-IntOr; mov [r14+N],eax` from 0xf99ba, 0x3a apart). INFERRED: `+0x5bc..+0x5d4` are the per-stat bonus ints (the
-known LuckUp `+0x5d4 += stacks` is the 7th = luck). Base block from `entry.properties`, the stat share subtracted so
+IntOr; mov [r14+N],eax` from 0xf99ba, 0x3a apart). `+0x5bc..+0x5d4` are the EFFECTIVE stats (OBSERVED 2026-10-22, "Effective stats" below; the
+earlier "per-stat bonus ints" reading was wrong: LuckUp's `+0x5d4 += stacks` lands on base + bonuses). Base block from `entry.properties`, the stat share subtracted so
 the runtime formula re-adds it: `+0x5d8` base movement (`IntOr(base_movement, 4)`; with `movement`: `Int(movement) -
 (speed-5)/2`), `+0x5dc` base initiative (`Int(initiative) - 2*speed`), `+0x5e4` health regen, **`+0x5e8` base health
 = `Int(properties.health) - 4*constitution`** (`OFF_CH_BASE_HEALTH`; `mov ebx,[r14+0x5a8]; shl ebx,2; … sub eax,ebx;
@@ -910,8 +1307,8 @@ array and does `if (+0x4b0 > 1) +0x4b0 = 1; +0x4b4 = 0` — the one direct HP wi
 every non-ally" through `Character_TakeDamage` 0x110120, not an HP write). OBSERVED in-game: ten frames after
 `spawn`, `+0x4b0` equals `properties.health` (Pooter 6; 12 with `health.multiply 2`; Rat 5). `+0x4b4` shield =
 `IntOr(properties.shield, 0)` × multiplier (`OFF_CH_SHIELD`), `+0x4b8` divine shield likewise
-(`OFF_CH_DIVINE_SHIELD`). **Max HP**: no stored field was found; the champion scaling treats `+0x5e8 + 4*con` as the
-base formula (INFERRED for the runtime value, the getter with stat bonuses and status modifiers is unknown).
+(`OFF_CH_DIVINE_SHIELD`). **Max HP**: `+0x4bc` = max(1, `+0x5e8` + 4 * effective constitution), stored by `Character::recompute_stats`
+(OBSERVED 2026-10-22, `OFF_CH_MAX_HP`; "Effective stats" below).
 `Character_BeginTurn` / `GetTurnControl` touch none of these (`+0xeb4/+0xebc` there are re-entrancy counters).
 
 **Parser scalar typing (OBSERVED: `Gon_LoadText` 0x940840, `Gon_Tokenize` 0x93f090, `Gon_ParseTokens` 0x93fcf0).**
@@ -919,9 +1316,8 @@ base formula (INFERRED for the runtime value, the getter with stat bonuses and s
 exists after file completed parsing` if tokens remain. The tokenizer splits on whitespace where **`,` `:` `=` count
 as whitespace**; `{ } [ ]` are single-char tokens; `#` starts a comment to end of line; `"` opens a quoted token
 (`\` escapes the next char, the closing `"` flushes it) and **the quotes are dropped with no "was quoted" flag**;
-unclosed quote / comment → the two `GON ERROR: didn't close …` messages. `//` comments (the pack's `.gon` files use
-them) are not handled by the tokenizer — INFERRED stripped by an earlier pass (the overlay text goes through
-`0xa50bd0(&gon, &text, …, 0x100, 1)` first). The parser: `{` → type 3 (`name value` pairs), `[` → type 4 (values),
+unclosed quote / comment → the two `GON ERROR: didn't close …` messages. `//`, `/* */` and `#include` never reach
+the tokenizer: `Gon_Preprocess` 0xa50bd0 handles them first ("GON text pre-pass" in "Data model" above). The parser: `{` → type 3 (`name value` pairs), `[` → type 4 (values),
 anything else is a scalar that starts as type 1 with the token in `+0x68`, then `strtol(tok, &end, 0)` consuming the
 whole token → type 2 with `+0x50`, `strtod` consuming it → type 2 with `+0x58` (both are always stored: `1.5` → int
 1, double 1.5), then exact `null` → 0, `true` / `false` → 5. Consequences: bare `5` and `"5"` are identical number
@@ -930,6 +1326,77 @@ nodes; `yes` / `True` / `1` are not bools (`Bool()` on them logs `is not a bool`
 `.add` / `.multiply` (PatchMerge) rewrite the int, the double **and** the token text (OBSERVED in-game:
 `health.multiply 2` → int 12, double 12, text `"12"`). The editor-side parser's typing is another PR's concern;
 these are the facts it must mirror.
+
+## Component GON keys (2026-10-22)
+
+RE run `compmap` (lead) + `compA`..`compE` (Ghidra 12.1.4, build 25143593; notes `.analysis/notes-comp{A..E}.md`,
+decompiles `.analysis/decompiled/<Class>_<slotN|callee|lambda>_0x<rva>.c`, work lists `.analysis/compmap/`). The result
+is `editor/component-schema.json` (data-mods.md "Component keys"), pinned by `editor/test/component-schema-tests.ts`
+(shape + T1 vanilla zero findings).
+
+- **Work list (OBSERVED, objdump over `.analysis/exe/25143593/Mewgenics.exe`).** Each class's base and type id come
+  from the RTTI name `DeriveComponentWithBoilerplate<glaiel::X, glaiel::Base, id>`; its slots from the vftable in
+  `list_names.tsv`. "Own" slots = where X's vftable differs from its base's at the same index; slots 0/1/2/3/5 are the
+  boilerplate (name, id, IsA, hierarchy, dtor). 1741 vftables; `Passive` has 170 slots, `Status` 172.
+- **Init slots (OBSERVED).** Status: slot 30 `OnInit(stacks, data, applier)` 0x8104b0 (`tickdown_this_turn` bool →
+  +0x76, `stacks` int → +0x5c, then `Passive_init_full` 0x767b30). Passive: slot 31 (`+0xf8`) `Passive_init_gon`
+  0x767cd0, devirtualised in every passive ctor (`cmp r8, 0x140767cd0`), reads only `stacks` from the node; Passive
+  slot 30 is a "not implemented" assert. Data node = `this+0x68`.
+- **Lookups.** Besides `Get` / `Get_const` / `Contains`, most reads are an inlined lookup: the key built inline as a
+  `std::string` (length store + `movups`/`movabs` from `.rdata`), an FNV-1a loop (`0xcbf29ce484222325`,
+  `0x100000001b3`) and `GonObject_NameIndex_Find` 0x124df0. When the node is a scalar or the key is missing the inline
+  pattern falls back to the node itself ("child-or-self"), which is how scalar forms carry a value.
+- **Children walks.** The `/0xb0` magic `0x2e8ba2e8ba2e8ba3` over `[node+0x38]/[node+0x40]` iterates children.
+  `Passive_ApplyStatusChildren` 0x76a160 (via 0x76a0c0) applies every child except a passed list of the class's own
+  keys; each child decodes through `DamageInstance::DecodeStatusApplication` 0x2bbab0 (scalar = stacks, `[stacks
+  chance]`, `{stacks (1) chance (percent or expression, 1)}`). `ConditionalPassive` slot 33 0x1520b0 (the base of the
+  `Passive{At,When,While,If}*` family) reads `passives` (child-or-self) and sends each child to
+  `Status_NameExists` 0x492e80 → 0x2bbab0 or to `attach_passive` 0x494080. `GonObject_IsPercentString` 0x9429e0.
+- **Shared parsers.** `DamageInstance::FromGon` 0x2ba080; `Brain_InitFromGon` 0x134400 (from `Brain_CreateByName`
+  0x3d5880); `Passive::QueueAbility` 0x76b4a0 (lambda body 0x76b650 reads `even_if_stunned`, `force_display_name`;
+  the cast helpers 0x76ad70 / 0x76b290 / 0x76bb20 likewise); FormChanger forms in slot 33 0x199010.
+- **Keys in lambdas.** Many keys are read only in `std::function` bodies: the RTTI-named
+  `_Func_impl_no_alloc<…lambda…>::vftable` rows in `list_names.tsv`, `vftable+0x10` = `_Do_call` → the body (compB
+  followed 309 of them across 75 classes). INFERRED: classes whose vanilla keys were not found (`vanillaMissed` in
+  the schema) mostly hide them in a lambda not yet located.
+- **Dispatch names.** The names `apply_status` 0x483120, `attach_passive` 0x494080 and 0x4ccb20 compare against
+  (`lea rdx,[rip+str]` before `std::string == const char*` 0x52560): 1923 names, 386 of them not `glaiel::` classes
+  (`HealthGain`, `Conditional_*`, `TakeExtraTurn`, …) — `.analysis/compmap/dispatch-names.json` →
+  `effectNames` in the schema (the scan ranges are approximate, so the list is permissive).
+
+## Effective stats: Character::recompute_stats (2026-10-22)
+
+RE session `fxstats` (`.analysis/notes-fxstats.md`; decompiles `Character_recompute_stats_0x102520.c`,
+`Character_recompute_stats_lambda1_DoCall_0x129220.c`, `Character_GetPassiveList_0x117c40.c`). OBSERVED unless marked.
+
+- **There is no `GetStat(id)` / per-stat getter.** Effective stats are stored fields written by one function,
+  **`glaiel::Character::recompute_stats(Ability*, bool)` at RVA `0x102520`** (3447 B; named by the RTTI of the six
+  `std::_Func_impl_no_alloc<lambda_N … recompute_stats@Character@glaiel@@QEAAXPEAVAbility@4@_N@Z …>` functors whose
+  vftables `0x140ee0eb8`/`e80`/`e48`/`e10`/`dd8`/`da0` are lea'd only there). 48 direct call sites in 34 functions,
+  among them `Character_init` and `Character_BeginTurn` (the manifest's callee witnesses).
+- **Order.** Early-out `if (+0xeb4 != 0 && touched_passives +0xe50) return` (a re-entrant call during a pass);
+  snapshot of the old values; **base → effective copy** `+0x5a0..+0x5b8 → +0x5bc..+0x5d4` (`mov eax,[rdi+0x5a0]; mov
+  [rdi+0x5bc],eax` …, `OFF_CH_STATS_EFF`); **lambda_1 over the passive list** (`0x117c40`, counter `+0xeb4`; statuses
+  are passives) whose `_Do_call` `0x129220` calls **vtable slot 82 `ApplyStatModifiers`** (`+0x290`) and, when an
+  `Ability*` is passed, slot 87 (`+0x2b8`, ability-specific modifiers, INFERRED); lambda_2 over list `0x118300`
+  (`+0xeb8`) → slot 152, lambda_3 over a `TacticsTile` list `0x117fc0` (`+0xebc`) → slot 39. Then the derived values,
+  all from the **effective** stats: `+0x950` movement = max(1, `+0x5d8` + (spd−5)/2), `+0x954` initiative = `+0x5dc` +
+  2·spd, **`+0x4bc` max HP = max(1, `+0x5e8` + 4·con)** (`lea ecx,[rax+r9*4]; cmp ecx,1; cmovg r12d,ecx; mov
+  [rdi+0x4bc],r12d`, `OFF_CH_MAX_HP`), `+0xd1c` max mana = max(0, `+0x5f0` + 3·cha), `+0x960` = max(0, `+0x5e0` + int),
+  `+0x96c` = `+0x5f8` + str − 5, `+0x970` = `+0x5fc` + (dex−5)/2, `+0xc60` = max(0, `+0x624` + 2·luck), `+0xc70` =
+  (luck−5)·0.1. A second round of lambdas 4–6 over the same lists follows (INFERRED: modifiers of derived values);
+  current HP `+0x4b0` / mana `+0xd18` are clamped to the new maxima under a condition; any change bumps `+0xe68`
+  (INFERRED a stats version counter).
+- **Readers.** `StatusMenu_update` (0x81aee0) shows strength…luck from `+0x5bc..+0x5d4` and max HP from `+0x4bc`;
+  `Character::deval` (0x103320) binds its expression variables to the same block.
+- **In-game (run `20261022-120539-_effective-stats-effective-luck`, seed 42).** Ten frames after `spawn`, a Rat
+  (luck unset → 5) reads luck 5 / effective 5 / max HP 5; `LuckyRat` (`StatusOnSpawnIn { LuckUp 3 }`,
+  `mods/_effective-stats`) base 5 / **effective 8**; `FwGlowRat` (`FwGlow_ff00ff`, LuckUp's vtable with slot 82
+  replaced, "Per-unit glow" v3) **effective 5**; every fresh cat reads `hp == +0x4bc`. So the recompute had run for
+  the spawned units by then. The harness reads these fields (`dump`'s `effective` block, `expect unit <stat>.effective`
+  / `maxhp.effective`; `docs/ingame-testing.md`) and never calls the function. Fixture
+  `editor/test/fixtures/ingame/result-effective-stats.jsonl`; manifest `Character_recompute_stats`,
+  `Character_statsEffective`, `Character_maxHp`.
 
 ## Save safety
 
@@ -1018,7 +1485,12 @@ matter (no hook needed: `_Append_CatTest` frames with empty slots, `docs/art-pip
   `tactical_view_frame` (`+0x330`, default `auto`), `projectile_spawn_offset` (`+0xdd8`), `uifloaters_offset`,
   `shadow_occluded`, `shade_occluded_objects`, `visually_spiky`, `use_turn_animations`, `static`,
   `start_orientation`, `lock_orientation`, `size` (`1x1`/`2x2`/`3x3`/`5x10`), `type` (`normal`/`small`/`boss`/`cat`
-  /`object` → `+0xcf4` = 0..4). 0xf1150 reads: `custom_cat_data` (+ nested `default_face`, `class_anis`),
+  /`object` → `+0xcf4` = 0..4). **Correction (2026-10-22, session facing, OBSERVED):** `type`, `lock_orientation`,
+  `always_face_forward`, `start_orientation`, `two_fronts`, `two_fronts_switch`, `size`, `static` and
+  `visually_spiky` are read from the entry's **`properties`** node (r15 = `entry["properties"]`, 0xf79f0), not from
+  `graphics`; vanilla data agrees (`bosses.gon`, `inanimate_objects.gon`: `properties { lock_orientation [-1 0] }`).
+  `art_flip`, `no_horizontal_flip`, `use_turn_animations` and the portrait / tint / shadow keys are `graphics`.
+  0xf1150 reads: `custom_cat_data` (+ nested `default_face`, `class_anis`),
   `override_portrait` (else `<name>Portrait` / `<name>ChampionPortrait` through 0x9bb890 ×6 → `+0x400`), `scale` (→
   `+0x3c8`, ×1.15 / ×1.1 unless `type == 2`, copied to the root node `*(+0x38)+0x98`), `water_mask` (→ `+0x310`,
   default `default`), `four_way_animations` (→ `+0x4cd`), `alt_animations` (own entry and, for cats,
@@ -1252,6 +1724,60 @@ Manifest-ready rows (prologue bytes and callee ordinals in `notes-catA.md` / `no
 `SpawnDatabase_{init_0x7a74b0,LoadGonDir_0x7c0cb0}.c`, `CatData_GetPalette_0xbdc70.c`, `OverridePalette_OnInit_0x8068d0.c`
 (catC; the full lists are at the end of each notes file).
 
+### Facing: Character::Face (2026-10-22)
+
+RE session `facing` (Ghidra 12.1.4 + objdump of the installed exe; decompiles in `.analysis/decompiled/`, the T2 run
+below). Pinned in `bindings/25143593.json` (the facing block: `Character_Face` = `FW_SYM_Character_Face`, and 10 offsets
+witnessed inside it) and host-tested as a pure rule in `native/mods/test-harness/src/mt_face.c`.
+
+- OBSERVED (the 12 lambda vftable names inside it): **0x10ce50 is `glaiel::Character::Face(iVec2D, bool, bool)`** —
+  what catA/catC called `Character_SetOrientation` / `Character_UpdateFacing`. rcx `Character*`, rdx the `iVec2D` by
+  value (x in the low dword, y in the high), r8b `instant`, r9b force the turn animation. `instant` only counts when the
+  byte `Character+0x11` is set; otherwise every call is instant.
+- OBSERVED (0x10ce95..0x10cf03): a non-zero `lock_orientation` (`+0x3ac/+0x3b0`) **replaces** the argument; a
+  non-instant call parks it at `+0x390` (the pending facing); `Facing_Candidates` 0x352aa0 turns it into its cardinal
+  candidates (a diagonal gives both axes, (0,0) all four) and the current facing (`+0x388/+0x38c`) is kept when it is one
+  of them, else the dominant axis wins.
+- OBSERVED: `two_fronts_switch` (`+0xc86`, read by `Character::init` next to `two_fronts` `+0xc85`) negates the
+  **facing sign `+0x3a4`** on a 180-degree turn; `always_face_forward` (`+0x3b4`) maps (1,0) → (0,−1) and (0,1) →
+  (−1,0). Not instant + (`use_turn_animations` `+0x4cc` or force) + a changed direction → `turnFlip` / `turnRev` /
+  `turn180` through `AnimStateMachine::Play` 0x9aaab0 with a lambda that finishes the turn, and return.
+- OBSERVED (0x10dafb..0x10dcdb, two-way, `+0x4cd == 0`): `d' = sign · d`. Flip: unless `no_horizontal_flip` (`+0x3a8`),
+  `d'x < 0 || d'y > 0` → `AnimSM+0x14c = −art_flip` (`+0x3a0`), `d'x > 0 || d'y < 0` → `+art_flip`; when instant also
+  the root node's x-scale (`*(AnimSM+0x70)+0xb8`). **Suffix** (`AnimSM+0xb8`): `d'x > 0 || d'y > 0` → prefix + `"B"`,
+  else (one negative) prefix + `"F"` (the literal at 0x140ed46bc), where the prefix is the `std::string` at
+  `Character+0x3e0` — **empty by default**, so the suffix is plain `"F"` / `"B"` (catC read the prefix as `"F"`; the `F`
+  is appended). Four-way: no sign, no flip, prefix + (`L` when `dx < 0 || dy > 0`, else `R`) + `F`/`B`.
+- OBSERVED (0x10da7f..0x10dad6): a non-zero result is stored at `+0x388`; when instant, `AnimStateMachine::SetState`
+  0x9aa360 replays the current state (`sm+0x148`) with `_DEFAULT`, so the new `<anim>F` / `<anim>B` label is drawn on
+  the next frame.
+- So, for a unit with sign +1: **(0,−1) and (−1,0) face the camera** (F; (−1,0) mirrored), **(1,0) and (0,1) face away**
+  (B; (0,1) mirrored). A lock overrides every later turn. The orientation keys live under **`properties`** (below);
+  PR #105 had them under `graphics`, which is why they did nothing.
+- OBSERVED in the game (T2 run 20261022-124301, `mods/_artprobe/tests/render-cat-back.mewtest`): every unit of the
+  seeded TacticsTest fight dumps sign 1; spawned units start at (−1,0) (F, flip −1) or (0,−1) (F, flip +1); `face 9
+  back` → `facing "B"`, dir (1,0), flip 1, and the B frame is drawn on the next frame; `properties.lock_orientation
+  [1 0]` spawns a unit on `B` that `face … front` cannot turn; the decompiled rule (`mt_face.c`) predicted every one
+  of the three face events. Real save unchanged on every run.
+- OBSERVED (0xf91c6..0xf9382, `Character::init`, all on `entry["properties"]`): `lock_orientation` → `+0x3ac/+0x3b0`,
+  `always_face_forward` → `+0x3b4`, `start_orientation`, `two_fronts` → `+0xc85`, `two_fronts_switch` → `+0xc86`.
+- OBSERVED (0xf92b6..0xf93c8, `Character::init`): `start_orientation [x y]` defaults to the lock (`IntOr(…, +0x3ac)`),
+  is stored at `+0x388`, and a non-zero one is applied with `Face(+0x388, instant = 1, 0)` — the one `Character_init`
+  call the manifest's `callers` anchor pins.
+- What turns a unit in play (OBSERVED call sites of 0x10ce50: 112 calls in 89 functions plus 4 tail jumps from chunks without a `.pdata` entry, by an E8/E9 scan):
+  `Character::DoAction(TurnAction, bool)` 0x10e550 faces the action's direction (`TurnAction+0x18`) for an ability
+  unless the ability's `graphics.dont_orient`; `Character_FaceTowards` 0x10deb0 = `Face(Character_DirectionTo(tile)
+  0x10e1e0, 0, force)` (`DirectionTo`: the doubled grid delta from `Character+0x60`, current facing kept when it is a
+  candidate); the per-turn update 0x108490 faces the next tile of the move in progress (`+0x118`, INFERRED from the
+  path-tile read) and applies the pending `+0x390` once the animation state machine is idle; the targeting UI
+  0x778da0 (`target_empty_requires_doubleclick`, `move_hastargets` …) turns the selected unit toward the hovered tile;
+  the health-gain sync 0x117410 turns a unit facing away ((1,0)/(0,1)) to the front before its floater; 0x7f4990
+  clears the lock, faces a target and locks the new direction; about 40 ability-effect helpers 0x7c4680..0x7d46a0 face
+  once each (INFERRED role).
+- Harness: `face <unit> <dx> <dy> | front | back` calls `Face(dir, instant 1, 0)`; front / back = the unmirrored
+  facing for the unit's sign (front `(0, −s)`, back `(s, 0)`); `dump` reports `facing` / `dir` / `lock` / `sign` /
+  `flip` / `fourway` and `expect unit` reads them (docs/ingame-testing.md).
+
 ## Localization and text fields (2026-10-21)
 
 Ghidra session `loc` (`.analysis/notes-loc.md`; decompiles `StringsDatabase_*.c`, `DynamicTextBox_*.c`,
@@ -1367,7 +1893,15 @@ DefineFont3 (only version 3 decodes — PR #81) with a SymbolClass / ExportAsset
 later file in `swflist.gon` shadows an earlier one of the same name (INFERRED from the walk order). 0x746a80 reads
 `languages`, `overrides`, `glyph_lookup_order`, `font_adjustments`, `dialate` (`No font info found for language: `);
 `DAT_1413c6c80 = FindCharacterByClassName("NotoSans")` is the global fallback (0x7469b0). `DefineFont::decode`
-0xa2a4a0 (`ERROR: DefineFont version unsupported`).
+0xa2a4a0 (`ERROR: DefineFont version unsupported`): reads flags, the NUL-terminated name, the offset table (wide with
+flag 0x08), the code table (wide with 0x04) into a code → glyph map, and with HasLayout (0x80) ascent / descent /
+leading and the advance table ×0.05 (`+0x40`), skipping the bounds and reading the kerning pairs.
+**OBSERVED in-game 2026-10-22** (run `20261022-134011`, fixture `artprobe-raster-summary.json`): a mod SWF's own
+DefineFont3 (`scene.fonts`, `src/core/art/font.ts`: vanilla's flags 0x84, glyphs with FillStyle0 = 1) exported by
+SymbolClass is found by a DefineEditText naming its class and drawn with its own glyph shapes; a character the font
+lacks is drawn from another font (the fallback above; `font-glyph-missing` warns); **a class that no loaded SWF exports
+crashes the game when the text is shown: 0xc0000005 at `Mewgenics.exe+0xa2addf`** (run `20261022-134035`; the
+`font-class-unknown` error).
 
 **Damage / floating text (OBSERVED calls).** Same path: `data/damage_text_styles.gon` is parsed by 0x7a74b0 (GON
 only; `outline_color` users 0x2bcf90 / 0x3363f0 / 0x88d780); `DamageText_build` 0x2bcf90 builds the style + wstrings
@@ -1464,12 +1998,79 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   (launch 4, 3440x1440): `glow "Lil' Rat" 1 0 1 1` -> one connected magenta patch of **5653 px**, bbox (2628,692)-(2759,825)
   around the sprite 2646..2741 x 724..808, fading over ~16 px, outline and body untouched; after `FW_ClearUnitGlow` the
   noglow shot holds **0** magenta px; the run passed with the real save unchanged.
-- **v1 limits.** One composite, hence one shared colour (the first registered unit's rgba; per-unit colours need one
-  material + pass per unit with rects, or one spare layer + camera per colour — both additive to this); combat scenes
-  only (`TacticsTest`); up to 16 units; registrations belong to the current fight scene (register during the fight);
+- **v2: per-unit colours (2026-10-22, OBSERVED in-game).** The mask is one texture holding every glowing unit with no
+  identity (draw mode 3 writes the sprite's luminance and coverage, nothing per unit), and a `Material` holds ONE value
+  per uniform when the main camera later runs its passes — so one material cannot draw two colours, and one pass cannot
+  tell units apart. v2 therefore (a) groups the registry by exact rgba (stable, first appearance; `fw_glow_groups`)
+  and creates one material per colour group (`fw_unit_glow`, `fw_unit_glow_1`, …, same shader); (b) with ONE colour
+  draws one full-screen pass (exactly v1); with several, one composite pass per unit carrying its group's material
+  (the pass's first `{Material*, int}` entry is rewritten in place each frame), **scissored with pass rect B** to the
+  unit's screen rect. The rect is computed exactly as `TacticsTest::LateRender` computes the hovered unit's
+  (disassembly 0x88e24e..0x88e4a0, the second of two identical blocks; the first, 0x88de1d.., does the StatusMenu's own
+  renderer): `clip = renderer+0x80` only when the clip's vtable slot 0 returns 1 or 2; bounds `{x0,x1,y0,y1}` = clip
+  vtable slot **16** (`call [rax+0x80]`); mapped by the leaf **0x9d46d0** with the clip matrix at **clip+0x60**
+  (`x' = m0 x + m3 y + m4`, `y' = m2 x + m1 y + m5`, as a box; replicated in C); then by `Renderer_GetScreenMatrix`
+  **0x78d600** (`x` from M0/M4/M12, `y` from M1/M5/M13); then `C = inverse(Position_GetViewMatrix` **0x9b4c90**
+  `(maskCamera+0x38, out, interp))` (the inverse is the leaf **0xa07c70**, replaced by a C cofactor inverse; `interp`
+  = `maskCamera+0x28` (scene manager) `+0x30`, a double passed in xmm2), `P = C x K` with
+  `K = {zoom,0,0,0 / 0,zoom*zi,0,0 / 0,0,1,0 / 640,360,0,1}` (`zoom` = camera `+0x168` double, `zi` = the int at
+  `+0x170`; `K`'s rows 2/3 are the .rdata vectors 0x141140520 / 0x141140960), and the canvas `x/1280`, `1 - y/720`
+  (0x14113f47c, 0x14113f488; the canvas size is the manifest constants `CONST_GLOW_CANVAS_W/H`, read back from those
+  floats by an rdata witness). A 20-canvas-px margin covers the band. A unit whose rect cannot be computed (no clip of
+  those kinds, a singular view) has its pass disabled — never a full-screen pass that would paint its colour on every
+  unit. Host-tested in `test_glow_rules.c` (groups, plan, the rect stages, pass writes); proven in-game by the "two"
+  shot of `unit-glow.mewtest`: the Rat magenta + unit 0 (a cat) cyan gave a 5515 px magenta patch around the Rat and a
+  9961 px cyan patch around the cat, apart (`unit-glow-summary.json` `two`). **Rejected:** one RTT camera + spare layer
+  per colour (`Component_AddCamera`, layer bitset and draw-mode writes on layers the rim notes only INFERRED free, a
+  full-window RGBA texture per colour, and a one-frame lag because a camera created after the main camera renders
+  after it) — the rect route reuses only what LateRender already does every hovered frame. Bindings (glow v2 block,
+  harvest-verified): `Renderer_GetScreenMatrix` 0x78d600, `Position_GetViewMatrix` 0x9b4c90 (FwSymbol 35/36),
+  `OFF_RND_CLIP` 0x80, `OFF_CLIP_MATRIX` 0x60, `OFF_CAM_POSITION` 0x38, `OFF_SCENEMANAGER_INTERP` 0x30, `OFF_CAM_ZOOM`
+  0x168, `OFF_CAM_ZOOM_Y` 0x170, `VT_CLIP_BOUNDS` 16, `CONST_CLIP_KIND_A/B` 1/2, every witness in
+  `TacticsTest_LateRender`'s first `.pdata` chunk.
+- **Limits.** Several colours: units whose rects overlap share both colours inside the overlap (the scissor is a
+  rectangle, the mask has no identity); combat scenes only (`TacticsTest`); up to 16 units (and up to 16 colour
+  materials, which live for the process); registrations belong to the current fight scene (register during the fight);
   main thread only; while any unit glows the game's white hover rim (blur mode) is off — the jump-flood passes
-  (`+0x80/+0x88`) are not touched, so a jump-flood hover still works; the API is native-only (no data-level way to ask
-  for a glow yet, see `docs/data-mods.md`).
+  (`+0x80/+0x88`) are not touched, so a jump-flood hover still works. A data mod asks for a glow with a status named
+  `FwGlow_<hex>` (v3, below; `docs/data-mods.md` "Asking for a unit glow from data").
+- **v3: a glow asked for from DATA (2026-10-22, OBSERVED in-game).** The request is a status NAME: `FwGlow_<rrggbb>` or
+  `FwGlow_<rrggbbaa>` (`fw_glow_parse_status_name`, 13 or 15 bytes, so the std::string SSO alias rewrite applies). A data
+  mod grants it through any vanilla mechanism that applies a status (`StatusOnSpawnIn` / `StatusOnBattleStart` passives,
+  an ability's `effects`, a Temporary). `fw_status_table_find` answers `FW_STATUS_GLOW_SLOT` for any valid glow name
+  without registration, so the 13 name-keyed lookups alias it to LuckUp like a registered name (no `NO STATUS NAMED`,
+  no zero divisor) and the `apply_status` hook builds it: the LuckUp ctor, then the **glow vtable** = LuckUp's with the
+  identity slots answering per object (one vtable for every colour; the object -> name table `FwGlowStatusObjs`, a
+  32-entry ring) and slot **82** `VT_APPLYSTATMODIFIERS` replaced: LuckUp's (`0x1408a8f80`, objdump of the saved exe:
+  `mov rdx,[rcx+0x38]; mov eax,[rcx+0x5c]; add [rdx+0x5d4],eax; cmp dword [rcx+0x5c],0; je Status_Remove; ret`) adds the
+  stacks to the unit's luck; ours keeps only the removal at 0 stacks. The unit is registered with
+  `fw_glow_set_from_status` (`fromStatus`); every frame, after the pool-generation prune, `fw_glow_sweep` asks
+  `status_engine_glow_probe` (`fw_walk_find_live`: a non-removing glow object in the unit's entity, temporary ones
+  included) and clears the rim of a unit that no longer carries one, so every vanilla removal ends the glow; a new
+  fight scene drops native registrations only (`fw_glow_reset_scene`). `FW_RegisterStatus` refuses the `FwGlow_`
+  prefix (`FW_STATUS_ERR_RESERVED`). **OBSERVED (run `20261022-113119-fw-glow-data-glow`):** under `StatusOnSpawnIn` the
+  `apply_status` ctx **is the Character itself** — ctx+0x18 is the entity holding the statuses and the new object's
+  `+0x38` (`OFF_STATUS_CHARACTER`) = ctx — while ctx+0x20 is the Scene, in this and every other shape ("Status effects",
+  `Status_ApplyByName`; then still called the "character" of `fw_walk_apply_resolve`), whose +0x18 holds **no** components: the first
+  launch registered that object, the sweep found no glow status on it and cleared the rim the same frame. The glow
+  path therefore merges by the resolved **entity** (`fw_walk_entity_find_status`) and glows the status's own
+  `+0x38`. With that, `spawn FwGlowRat` (mods/fw-glow) gave a 5620 px magenta patch (2628,693)-(2759,825) the pre-spawn
+  shot lacks, `expect status FwGlow_ff00ff on "Lil' Rat"` passed, the real save unchanged
+  (`editor/test/fixtures/ingame/data-glow-summary.json`). The unit's status bar shows LuckUp's clover icon for the
+  status (the icon lookup is aliased to the template). **Rejected:** a per-frame scan of every unit's status list for
+  `FwGlow_` names from the LateRender hook — the game never makes a component for an unknown name (apply_status falls
+  through, the lookups say `NO STATUS NAMED` and one default is a divisor), so the name must be handled where the
+  framework already hooks `apply_status`; the per-frame part is only the removal check of units already registered.
+  **Removal, OBSERVED 2026-10-22 (run `20261022-120852-fw-glow-data-glow-expiry`, `mods/fw-glow/tests/data-glow-expiry.mewtest`):**
+  a Temporary works and its expiry ends the rim. `FwGlowTempRat`'s `StatusOnSpawnIn { Temporary { status FwGlow_ff00ff
+  stacks 1 turns 1 expires_on_end_turn true } }` reaches the same `apply_status` hook with the temporary flag set (log:
+  `FwGlow_ff00ff: glow status created on … with 1 stacks (obj …, temporary)`) and the rim is drawn (5566 px magenta patch
+  (2630,693)-(2757,825), none before the spawn). Spawned during the cats' turn in round 1, the status is gone from the
+  `dump` after round 1 (the rat's own end of turn) and from the one after round 2; the sweep logged `glow: … no longer
+  carries a FwGlow_ status; rim cleared (0 registered)`; the round-3 shot of the still-living rat (hp 964) holds 0 magenta
+  px. Pinned by `editor/test/fixtures/ingame/data-glow-expiry-summary.json` (`compareExpiry`, glow-measure.ts). Not run
+  in-game: stacks reaching 0 and a cleanse (they go through the same `Status_Remove` mark the sweep's
+  `fw_walk_find_live` skips; host-tested only).
 - **Bindings added (glow block, all harvest-verified):** functions `TacticsTest_LateRender` 0x88d780, `vec_u32_AddUnique`
   0x72cd0, `ShaderManager_GetOrCreateMaterial` 0x9bb5d0, `Material_SetUniformVec4` 0x9bde70, `Material_SetUniformFloat`
   0x9bddc0, `Material_SetTexture` 0x9bdcd0, `Camera_AddPostProcessPass` 0x979880 (`FW_SYM_*`), reference
@@ -1485,3 +2086,294 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   `.pdata` chunks (0x9787c0..dc, 0x9787dc..c42, 0x978ded..f98, ...) and the harvester reads only the first, so `Camera+0x9c`
   (had-content) has no witness — the engine never writes it (the predicate reads it). Following chained chunks is an
   improvement candidate for `readOffsetWitness`.
+
+## Particle systems and effect clips (2026-10-22)
+
+Ghidra session `particles` (`.analysis/notes-particles.md`, container `rea_ghidra_particles`; decompiles under
+`.analysis/decompiled/`: `ParticleSystemData_decode_0x9c5970.c`, `ParticleCore_LoadSystems_0x9c88d0.c`,
+`ParticleCore_LoadSystems2D_or_byName_0x9c7c40.c`, `Particle_decode_vec_0x9c3af0.c`, `Particle_decode_aabb_0x9c3e50.c`,
+`AbilityGraphics_decode_0x96c20.c`, `ParticleBurst_spawn_0x604b00.c`, `Particles2D_load_0x338a30.c`). Data-side
+summary and recipe: `docs/data-mods.md` "Particles and VFX"; the key list the editor uses: `editor/src/core/particles.ts`.
+
+- **Decoder** — OBSERVED. `glaiel::decode(const GonObject&) -> ParticleSystemData` **0x9c5970** (funcsig string 0x112f1b0,
+  `Particles.cpp` 0x112ef40). `movieclip` → `App_FindMovieClipByName(DAT_1413c4a30, name)` **0x9bb6f0**; on a miss it logs
+  `"No Movieclip Named " + name` (category `Particles`, 0x951bc0) and substitutes **`ParticleError`**. `material` → material
+  create 0x9bb5d0. Then `adaptive_growth`, `max_particles`, `render_layer`, `render_mode` (`default`/`separate`),
+  `update_mode` (`unlocked`/`locked`), `simulation_space` (`global`/`local`), `ownership`, `projection_matrix`,
+  `flat_movement`, `live_bounds` (`decode_aabb` 0x9c3e50, "needs 4 or 6 values"), the `emit_*` keys (`decode_vec` 0x9c3af0
+  for directions), `emit_timespread_curve` (`flat`/`ease_in`/`ease_out`), `chain`, `spurt`, `chain_chance`,
+  `particle_lifetime`, the curves `speed` / `rotation` / `rotation_speed` / `size` / `alpha` / `force` / `friction`
+  (each `X`, `X_start`, `X_end`, `X_in`, `X_out`: suffix strings 0x112f068 / 0x112f040 / 0x112f048 / 0x112f21c; readers
+  0x9c3500 / 0x9c4370 / 0x9c4740 / 0x9c53d0), `inherit_speed`, `face_moving_direction`, `speed_scale`, `tags`. Key names
+  are built as immediates, so a plain string scan misses most of them.
+- **No colour key.** Neither the decoder nor the .rdata key block 0x112ef00..0x112f5d0 has `color`/`tint`; a particle's
+  colour is its clip's art. `continual_emission` (one vanilla use) has no string in the exe: a dead key. OBSERVED.
+- **Elsewhere:** `scripts` 0x9c9810 (seven components: ParticleBouncePlane, ParticleAttractor, ParticleGlobalForce,
+  ParticleCharacterCollision, ParticleRandomForce, ParticleLineCollisions, ParticleTornadoForce; `towards` 0x9ccdd0);
+  `depth_bias` read at 0xa561be (0xa55470, renderer side); `unlit`, `is_3D`, `variant_of` INFERRED (renderer / GON loader).
+- **Loader** `ParticleCore_LoadSystems` **0x9c88d0** (callers 0x3cef90, 0x7666a0, 0x766bd0) and 0x9c7c40 (callers 0x338a30
+  particles2D, 0x3d1590): the file comes through the GON loader 0x9c78a0 (file manager, so `-modpaths` overlays apply);
+  per top-level child without `combo` → decode → a name-keyed map (0x9c8410 assigns into an existing node: a duplicate
+  name overwrites, INFERRED last-wins); with `combo` → a list of system names. `data/particles.gon` (0xf183a0) is loaded
+  from TacticsTest::init 0x833ec2, AlleyBGTest 0x3cd2c5, ParticleTest 0x765968; `data/particles2D.gon` (0xf0fea8) 0x338b04.
+- **Ability effect clips** — `graphics { particle / affected_particle / center_particle / area_particle / miss_particle /
+  orient_particle }` decoded by **0x96c20** and resolved through `App_FindMovieClipByName` 0x9bb6f0: SWF clip names, played
+  by `SpellParticle` (DetatchedCombatEffect, RTTI 0x132e718). Not particles.gon systems. OBSERVED (decompile).
+- **References to systems:** `EliteParticle` (Passive; RTTI 0x138fa58, IsA 0x5aea90, string 0xf196b0), `ParticleBurst`
+  (0xf222e0; 0x604b00), `GlobalParticle` (GlobalModifier, 0xf224d0), `global_particles` (TacticsTest::init 0x8347d7),
+  `StatusEffectParticles` (component, 0xed88d8).
+- **OBSERVED in-game 2026-10-22** (`mods/_vfxprobe`, `npm run test:artprobe -- --vfx`, fixture
+  `editor/test/fixtures/ingame/vfxprobe-summary.json`): a `particles.gon.append` system whose `movieclip` is a mod SWF export,
+  worn through `EliteParticle` by a spawned Rat, draws (a moving cloud of the mod's #ff0090 discs); a `particles.gon.merge`
+  re-pointing vanilla `SparkleBuff`'s `movieclip` to a mod clip draws the mod clip. The window capture lagged the shot event
+  by up to ~1 s in that run (the probe now waits 240 frames after each shot before changing the scene).
+
+## Audio (2026-10-22)
+
+Session `audio` (`.analysis/notes-audio.md`, 11 decompiles in `.analysis/decompiled/` with the "RE session audio"
+header); the modder-facing summary is `docs/data-mods.md` "Sounds and music". OBSERVED unless marked.
+
+- **Backend**: FAudio (XAudio2 API) over SDL3 audio; Ogg Vorbis by statically linked **stb_vorbis**
+  (`stb_vorbis_decode_memory` 0xa47080 `(mem, len, int* ch, int* rate, short** out)`, open-from-memory 0xa45fd0);
+  WAV by the engine's `WAVResource::decode` 0x9a6dd0. `AudioCore_init` 0x954e20 creates the submix voices
+  `music_main`, `voice_main`, `ambience_main`, `environment`, reads the settings keys `soundeffect_cache_size_mb`
+  (default 200 → cache budget `DAT_1413c1940[0x16]` = MB<<20) and `debug_check_audio_files_exist` (→ AudioCore+0x3a),
+  registers the engine console command `soundevent_debug off|all|real` and the SWF frame-script callback `PlaySound`.
+- **Pack layout**: `audio/` holds 16,076 `.wav` + 835 `.ogg` + 21 `.mid` + 235 `.gon`; sets `audio/combat_sfx.gon`
+  (Folder `combat_sfx`, 7,622 files), `ui_sfx.gon`, `house_sfx.gon`, `audio/voices/*.gon` (cat voices, `#include
+  voice_template.gon`), `audio/npcvoices/*.gon`; music `audio/music/<area>/*.ogg` + `music_info.gon` + `radio.gon`;
+  `audio/ambience/*.ogg`, `audio/cutscenes/*_{music,sfx}.ogg`. Every vanilla WAV is PCM 16-bit, 1 ch (8,989 @ 48 kHz,
+  6,898 @ 44.1 kHz) or 2 ch (189 @ 48 kHz); every music .ogg is 2 ch 44.1 kHz. All 22,525 file refs of the 232 sets
+  resolve at `audio/<Folder>/<file>` lower-cased (T1 `editor/test/audio-tests.ts`).
+- **`AudioCore::LoadSoundEffectSet(name, bool, bool)` 0x956110**: `Gon_LoadFile` 0x611a0 on `"audio/" + name`
+  (`"audio/"` = 0x141115c04) — the overlay path, so `.merge`/`.patch`/`.append` apply (OBSERVED in game:
+  `debug_list_loaded_files` lists `<mod>/audio/combat_sfx.gon.merge.raw`). A SetName already loaded is skipped.
+  `SoundEffectGroups` is looked up **by name** (FNV index), so an `.append`ed second block hides the vanilla one.
+  Each file → `Folder + "/" + file` → `SoundData_GetOrCreate` 0xa3b600 (cached handle, deferred load). With
+  AudioCore+0x3a set, `FileManager_FileExists` 0x9a14c0 first, a miss logs (0x9522c0, non-fatal) `Sound File Missing:
+  <path>\nWhen Loading Set: <SetName>`; default off. Channel parents other than `environment`/none/a defined channel
+  log `NO SOUND EFFECT CHANNEL NAMED: `.
+- **Which sets load**: `App_init_audio_sets` 0x750f90 — `combat_sfx.gon`, `ui_sfx.gon`, `house_sfx.gon`, then
+  `voices/<n>.gon` for `data/catgen.gon` `voice_sets` + `special_voice_sets`, then each `.gon` from
+  `FileManager_ListDir` 0x9a1900 on `audio/npcvoices` (pak index at FileManager+0x1c0, then every mod path at
+  FileManager+0x268..0x270 = the mod-path vector 0x1413c58b8 via `directory_iterator`; code only, not run).
+- **`SoundData::load` 0x9718a0** (async `load_deferred`): extension after the last `.` by `memcmp`, case-sensitive:
+  `"wav"` 0x14112b440 → `GetWAVResource` 0x973380, fmt fields copied into the FAudio WAVEFORMATEX (+0x90 tag, +0x92
+  ch, +0x94 rate, +0x9c align, +0x9e bits), data borrowed; `"ogg"` 0x14112a094 → `GetBinaryResource` 0x973750 +
+  stb_vorbis decode to PCM16; else fatal `Unsupported Sound File: <path>`. Resource NULL (no file) → 0x971de0: 4096
+  bytes of silence, mono 16-bit 41000 Hz — no log, no crash. `DAT_1413c6cb0` += data bytes (WAV) / file + decoded
+  bytes (OGG): the number `debug_sfx_memory_use` 0x754930 prints as `Total loaded sfx: N bytes (M mb)`.
+- **Lookup**: both getters → `FileManager_GetFile` 0x99ff50, mod paths first (r3dE). OBSERVED in game
+  (`mods/_audioprobe`): a mod-only file loads (+35280 = its data chunk), a mod file at a vanilla path replaces it
+  (+24000 vs +44714 vanilla, `pickup-vanilla-control.mewtest`), an absent file adds 0.
+- **Music**: `MewsicController::init` 0x23f440 loads `audio/music/music_info.gon` with `Gon_LoadFile` (overlays
+  apply); under `debug_check_audio_files_exist` a missing file is fatal `Music File Doesn't Exist: `.
+  `SoundStream::QueueSongChunk` 0xb511b0: `GetBinaryResource(path)` (missing → fatal `Couldn't Find Song File: `),
+  the whole .ogg stays in memory, decoded progressively (0xa45fd0); chunk 2+ must match chunk 1's rate and channels
+  (fatal `Song Chunk Mismatched Sample Rate` / `… Channels`); the voice is 32-bit float, block = ch*4.
+  Ambience: `"audio/ambience/" + name` (0x2443a0; INFERRED to stream like music, not followed).
+- **Debug surface**: `debug_list_loaded_files` (App command, after `enter`) prints every loaded file key — text files
+  as `<path>.rawpak` (pak) or `<modpath>/<path>.<mode>.raw` (loose), sounds as their pack path;
+  `debug_sfx_memory_use`; `play_sound <Group>` (TacticsTest). The harness reads them with `expect console` and the
+  runner-side `expect deltas` (`docs/ingame-testing.md`). Pinned by `editor/test/fixtures/ingame/result-audioprobe-sounds.jsonl`.
+
+## Cat rig redirect (native S1, 2026-10-22)
+
+Strategy S1 of the cat-parts plan, built on catA's entry path ("Cat parts: entry path, palette, faces, mirroring"
+above; `.analysis/notes-catA.md`): a WHOLE custom cat clip for one `movieclip _CAT` character entry, the game's cat
+path otherwise untouched. `native/framework/src/catrig_engine.c` (hooks) + `fw_catrig_rules.c` (pure, host-tested),
+framework API v7 (`FW_RegisterCatRig`, `FW_CatRigFor`); data seam: a SymbolClass export `_CatRig_<Entry>`
+(`docs/data-mods.md` "A whole cat rig for one character"). Bytes re-read from the installed exe (objdump) on
+2026-10-22; decompiles on disk: `Swf_GetCharacterByName_0x9bb890.c`, `Swf_SymbolLookup_0x9bb6f0.c`,
+`Renderer_SetClip_0x97a900.c`, `CharacterGraphics_build_0xf1150.c`, `Character_init_0xf70f0.c`,
+`process_animation_merges_0x9bc070.c`, `process_animation_merges_caller_0x9baaa0.c`.
+
+- **Hook sites (OBSERVED, prologues relocatable):** `Character::init(name, bool, bool)` **0xf70f0** (`mov rax,rsp;
+  mov [rax+0x20],r9b; …` — rcx this, rdx the by-value `std::string*` entry name the callee destroys, r8b/r9b);
+  `Swf_GetCharacterByName` **0x9bb890** (`mov [rsp+0x10],rdx; mov [rsp+8],rcx; push rbx/rsi/rdi; sub rsp,0x60` — rcx
+  unused, rdx the by-value name; copies it twice, `ApplicationBase::FindCharacter` 0x9bb6f0, `def->vtable[3]`, destroys
+  both copies and the argument; returns the instance or NULL); `ApplicationBase::process_animation_merges` **0x9bc070**
+  (`mov [rsp+0x20],rbx; …` — rcx app, rdx the SWF file; called once per loaded file by 0x9baaa0's loop over
+  `app+0x118[0..app+0x114)`).
+- **SymbolClass list (OBSERVED in 0x9bc070, the manifest witnesses):** `mov rdi,[rdx+0x78]; mov rbx,[rdi]; cmp rbx,rdi`
+  → `SWF+0x78` = the `std::list` sentinel (`OFF_SWF_SYMBOL_LIST`); `lea r14,[rbx+0x10]` → node+0x10 = the export name
+  `std::string` (`OFF_SYMNODE_NAME`); `cmp dword [r14+0x20],0` → the int id 0x20 after the name (node+0x30,
+  `OFF_SYMNODE_ID_FROM_NAME`), entries with id 0 skipped. The framework walks the same list after the original ran.
+- **The redirect.** The `Character::init` hook keeps the entry's rig (registry lookup: exact, then `_Champion` /
+  `_Elite` stripped) in a thread-local for the call, saved and restored. The by-name hook, while that is set and the
+  name is exactly `CatTest`, calls the original with the rig name (a new by-value string, game allocator) — the
+  creation chain 0xf1150 → 0x12c960 → 0x78ceb0 → `Renderer::init` 0x97a900 → 0x9bb890 is synchronous on the same
+  thread, so only that entry's cat clip is affected; the portrait lookups (`<entry>Portrait`) and CatParts' part
+  symbols pass through. A NULL from the rig name (no loaded SWF exports it) falls back to the original `CatTest`
+  call (logged once), because `Renderer::init` is fatal on NULL. The `app+0x2b8` cache is keyed by the requested name,
+  so the vanilla `CatTest` entry is never touched.
+- **OBSERVED in game (run 20261022-121534, `render-rig.mewtest`; fixture `artprobe-rig-summary.json`):** the log shows
+  `catrig: registered _CatRig_ArtProbeRigCat for ArtProbeRigCat (from data, …)` at load and `catrig: ArtProbeRigCat:
+  CatTest -> _CatRig_ArtProbeRigCat` at the spawn; ArtProbeRigCat (`movieclip _CAT`, `custom_cat_data ArtProbeParts`)
+  is drawn by our clip — the rig's yellow marker above a real cat (new dark outline 16998 / 22256 / 17537 px under it
+  vs 10628 for the vanilla control), in all three shots, scale 1.91, mirrored like every enemy; ArtProbeVanillaCat on
+  the same parts shows no marker (scoped). No crash; `real save file(s) unchanged`. So CatParts, CatData and the state
+  machine accept a non-CatTest clip of CatTest's shape (root `idleF`/`idleB`/…, pose as `ani`, empty slots).
+- **Limits.** The rig replaces CatTest wholesale: every animation the rig has no label for is a silent no-op (the cat
+  keeps its frame) — a full rig needs the labels the cat plays (`idle`, `walk`, hits, `attack`, … × F/B); one rig per
+  entry, 16 entries, names ≤ 63 bytes (clips ≤ 71: `_CatRig_` + entry); dev launches with a known build only (the
+  framework's gate) — elsewhere the export is inert.
+- **OBSERVED with the sample pairing (plan A2.4, 2026-10-22; `native/mods/catrig-sample` + `mods/catrig-sample`,
+  `npm run test:catrigsample`, runs `20261022-130356…130611-catrig-sample-*`, fixture `catrig-sample-summary.json`):**
+  1. *The DLL route.* `FW_RegisterCatRig({"RigSampleCat", "RigSampleCatClip"})` called from a mod DLL's `DllMain` (after
+     `FW_Resolve` + `IsActive`; the framework is loaded first by `[LoadOrder]`) registers before any SWF loads (log
+     `catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)`; the DLL's `FW_CatRigFor` read-back agrees, its
+     own lines go to `chainloader.log` as `[catrig_sample] …`), and the redirect works for an export with **no**
+     `_CatRig_` prefix (`catrig: RigSampleCat: CatTest -> RigSampleCatClip`): marker over real parts 3/3, the control on
+     the same parts none.
+  2. *`_Champion` / `_Elite`.* The console's `spawn` refuses a name that is no entry (`No enemy named
+     RigSampleCat_Champion`), so the game's own champion path (`r3dC_IsoOrPickUser_0x8d66c0.c` appends `_Champion` to an
+     entry name; `Character::init` strips it and sets `+0xcde`/`+0xcdf`) is out of the harness's reach. With
+     `RigSampleCat_Champion` / `_Elite` declared as plain entries (`variant_of RigSampleCat`), `Character::init` receives
+     exactly that string, no rig is registered under it, and the framework's suffix stripping gave both the entry's rig
+     (redirect line naming `RigSampleCat`, marker 3/3 each).
+  3. *A label the rig lacks.* Rig with `idleF/B`, `hitF/B`, `hithardF/B`, `hitupF/B`, `knockbackF/B` only, in a seeded
+     `_autoplay` fight vs the same fight against the vanilla-clip control: the two non-lethal hits played **our
+     `hitF/B`** pose (1x marker caught in 2 shots); everything else the rig lacks was a silent no-op as decoded (the cat
+     keeps its frame; nothing in debug.log or mewframework.log, no crash) and the fight ran identically (HP per dump
+     15 10 5 0 0 0 0 0 0, rounds 1 → 5 in both). The one visible consequence: with no death label the killed rig cat
+     **stays standing in its idle pose** for the rest of the run where the vanilla cat lies dead on its tile. Whether a
+     swap rig should fall back to the vanilla labels it lacks is an owner decision (TODO).
+
+## 3D rendering path (2026-10-22)
+
+Ghidra sessions `r3dA`..`r3dE` (containers `rea_ghidra_r3dA`..`E`; notes `.analysis/notes-r3dA.md`..`notes-r3dE.md`,
+build design `.analysis/notes-r3dF.md`, decompiles named there under `.analysis/decompiled/`) and the first T2 run of
+the phase-0 observer (`MEWFW_OBSERVE3D=3`, `mods/dev-sandbox/tests/observe3d.mewtest`, lines pinned in
+`editor/test/fixtures/ingame/observe3d-log.txt`). The full fact list, the remaining unknowns and the build steps are
+[`possible_3d_work.md`](possible_3d_work.md); every address below is an entry of the manifest's 3D block (the last 61
+entries of `bindings/25143593.json`). RVAs.
+
+- **Two camera lists (OBSERVED, T2 + RenderCore 0x989020 asm 0x1409892c0..0x140989330).** List 1 → `Camera_render`
+  0x9787c0 per camera (the 5 RTT side cameras of a fight; 5 calls per frame). List 2 → for every layer index × every
+  camera, `Camera_RenderOneLayer` 0x979210 `(Camera*, int layer)` (unless `cam+0x58 == 1`): the world camera
+  `TacticsTest+0x68`, the UI camera and other scenes' cameras. Both push `stack top × Camera_GetViewProjection` 0x9785e0
+  (`K × inverse(Position_GetViewMatrix)`, zoom `+0x168`, y-flip int `+0x170`) and set the current camera 0x13c6d88.
+- **World camera in a fight (OBSERVED, T2):** rtt 0, hdr 0, **zoom 78.2624**, flip −1, bitset 0x41fde1ffff1, VP m0 =
+  68.0542 = zoom / 1.15 (the camera Position's scale), det < 0; non-empty layers 0x0, 0xa (shadows), 0xd, 0x12, 0x19
+  (units), 0x23, all draw mode 0. A unit's `Renderer_GetScreenMatrix`: m12/m13 = ISO projection of its tile centre,
+  m14 = 0. Render globals: flags 0x9, cull counter 0, depth bias 0, stack top 0.
+- **Main RT (OBSERVED, r3dD + T2):** `App+0xc10` (RGBA8 + D24S8 MSAA, FBO `rt+0x1c`, samples `rt+0x50` = the
+  `antialias` setting `App+0xdf4`, 32 on the owner's machine) is the target of every non-RTT camera; FrameBegin clears
+  it once per frame with `App+0xd98/0xd99/0xd9a` = 1/1/1 (COLOR|DEPTH|STENCIL). Resolve blits colour only.
+- **Frame model (OBSERVED, r3dA):** `Batch_SubmitFunctor` 0xa47820 copies a `std::function<void()>` (impl slot 0
+  `_Copy`, slot 4 `_Delete_this`) into a state-only group; `Batch_Replay` 0xa481d0 calls slot 2 `_Do_call` in FrameEnd.
+  The force bit (flags bit 0) stays set all frame, so the material/shader/texture caches (0x1413c1980, 0x1413c42b8,
+  0x1413c19a0[], 0x1412f713c) and the instance VBO / indirect buffer / VAO bindings are what a functor must restore.
+- **Depth (OBSERVED, r3dD):** sprite shaders never discard and always write `gl_FragDepth`; depth is tested and written
+  only while flags value 2 (bit 1) is set (mode-1 layers, drawn in reverse; bit 3 = colour AND depth mask, see "Sprites vs meshes"). `Shader_compile` 0xa55470 = text replacement
+  (`" vert()"`/`" frag()"` → `" main()"`, `COMPILING_*_PROGRAM`, `MATRICES_AS_ATTRIBS`). Precisely (decompile
+  re-read 2026-10-22): the entry rename is ONE find + replace of the **first** `" vert()"` / `" frag()"` (a comment
+  holding that text before the definition steals it); the three flags are replace-all loops; then
+  `glBindAttribLocation` binds `position` 0, `color` 1, `texcoord` 2, `mvp` 3, `color_xform` 7, `depth_bias` 9 **by name**
+  on every program before linking. Pinned by `editor/src/core/shader/dialect.ts` + `editor/test/shader-tests.ts`.
+- **Assets (OBSERVED, r3dE):** `ResourceManager_GetBinaryResource` 0x973750 serves any path (first `-modpaths` entry
+  that has it, then the gpak; overlays alone apply last-to-first); `App_GetTexture` 0x9bb490 loads `textures/<name>`
+  through stb_image and crashes on a missing file (check `FileManager_FileExists` first).
+- **Binding notes.** `Camera_render`'s and `Swf_DisplayObject_Render`'s witnesses live in their second `.pdata`
+  chunks, entered as the witness hosts `Camera_render_body` 0x9787dc and `Swf_DisplayObject_Render_cull` 0x9b0b78;
+  `MaskedRendererIso_RefreshSortKey` 0x78d480 and `Renderer_UpdateRootScale` 0x97ac40 are pdata-less leaves (documented,
+  not entered; the Position offsets are witnessed in `Position_GetInterpolated` 0x9b4a30).
+- **Meshes drawn in a fight (OBSERVED, T2 2026-10-22, phase M; `native/framework/src/mesh_engine.c`).** A hand-built C
+  `std::function<void()>` (`fw_functor.c`: impl {vtable, fn, user} in place, `_Copy` returns `where`,
+  `_Delete_this` never frees) submitted through `Batch_SubmitFunctor` 0xa47820 right after
+  `Camera_RenderOneLayer(worldCamera, CONST_UNITS_LAYER)` returns survives the engine's copy, runs once per frame inside
+  `Batch_Replay` and is torn down without a dealloc (`fw_functor_unexpected_deallocs` stayed 0). Inside it the state
+  the replay left was: draw FBO **1** (the main RT `App+0xc10`), viewport 0,0,2560,1440 on a 3440x1440 window (the 16:9
+  canvas letterboxed), depth test **off**, `glDepthFunc` = GL_LESS (0x201), blend **on**, a game program and VAO bound.
+  Our draw with depth test on (GL_LESS, writes on) against that RT's depth buffer, then an exact glGet-based restore
+  (`fw_gl_state.c`), raised **no GL error** in any frame and left the game's rendering intact. mvp = matrix-stack top
+  (`MatStackData` 0x13c5bd8 + `MatStackTop` x 0x40; at that point the base canvas ortho
+  [0.0015625 0 0 0 / 0 -0.00277778 0 0 / 0 0 1e-4 0 / -1 1 -0 1] = `MatStack_Ortho(0, 1280, 720, 0)`) x
+  `Camera_GetViewProjection(cam)` x the ISO basis with a view-depth row (yaw 45 / pitch 30, x100) x the world matrix;
+  the probe cube on tile (3,3) landed at NDC (0, -0.178), 0 px from the measured magenta patch
+  (`editor/test/fixtures/ingame/mesh-probe-log.txt`, `mesh-probe-summary.json`).
+- **Mod models and the mod shader (OBSERVED, same day).** `ResourceManager_GetBinaryResource` 0x973750 served
+  `models/crate.obj` from `mods/fw-3d` on the `-modpaths` (data `*(u8**)(res+0x28)`, int32 size `res+0x30` —
+  `OFF_BINRES_DATA` / `OFF_BINRES_SIZE`, witnessed in `Texture2D_LoadFromFile` 0xa0ad40), and
+  `shaders/fw_mesh.shader` compiled and linked with our own GL calls after the game's text rewrite
+  (`fw_shader_stage`: the first `" vert()"`/`" frag()"` -> `" main()"`, `COMPILING_*` -> 1/0); attribute names
+  `position`/`color`/`texcoord` bound to 0/1/2 before linking (`mesh-model-log.txt`). A GON `graphics.model` key on
+  the vanilla `Crate` (`mods/fw-3d/data/characters/inanimate_objects.gon.merge`) produced no GON error in debug.log.
+- **Sprites vs meshes: painter-order interleave (OBSERVED, T2 2026-10-22, phase M2; `native/framework/src/fw_mesh_order.c`).**
+  The M1 limit (run 20261022-135331: a cube on tile (2,6), farther than the cats on (2,5), was drawn OVER them because
+  the functor ran after the whole units layer) is fixed by taking the mesh's place in the units layer's painter list
+  instead of by depth. Facts relied on:
+  - **Layer item** (0x20 bytes, `Scene_SubmitDraw` 0x989be0): `{renderable*, Position*, double key (+0x10,
+    OFF_ITEM_KEY), u32 flags}`. The key is computed at submit time by the layer's sorter std::function (impl at
+    layer+0x60, installed by `Layer_SetYSorted` 0x989440 = the leaf 0x988d30: `Position+0xb0`, interpolated with
+    `Position+0x68`). Witness: the item store `movups [rcx+rax+0x10],xmm1` (0x140989cbc) in the third `.pdata` chunk of
+    Scene_SubmitDraw, entered as the witness host `Scene_SubmitDraw_tail` 0x989c96.
+  - **Sort (OBSERVED bytes):** `Layer+0x20` (OFF_LAYER_SORTED, byte) set → std::sort with the leaf 0x988dd0
+    `movsd xmm0,[rdx+0x10]; comisd xmm0,[rcx+0x10]; setb al; ret` = `b.key < a.key`: DESCENDING (larger key = farther =
+    drawn first). Mode 0 (`+0x24`) draws forward, mode 1 in reverse. 0x988dd0 / 0x988d30 / 0x78d480 have no `.pdata`.
+  - **Camera per-item filter** (OFF_CAM_LAYER_FILTER, Camera+0x120; witness `48 8B 8F 20 01 00 00` in Layer_Draw):
+    before every item Layer_Draw loads this std::function impl pointer and, when non-null, calls slot 2
+    `bool _Do_call(impl, Item* const& item, int const& layer)` (both arguments by pointer; `&camera[+0xa4]` = the
+    layer index); false skips the item. After each drawn item it calls the post-item std::function at `Camera+0x160`
+    (same arguments; not used).
+  - **Runtime:** the world camera's `+0x120` is **NULL** in a TacticsTest fight (`mesh order: world camera filter
+    before ours = 0000000000000000`); the units layer 0x19 is `sorted=1 mode=0` with 10 items; the item keys come out
+    descending and equal `x + z` of the unit's tile centre (+0.03 for some units: the renderer's sort offsets), e.g.
+    `i=4 key=8.000 at=(2.50 5.50)`. Our C std::function (`fw_filter_*` in `fw_functor.c`) sits there for the one
+    `Camera_RenderOneLayer(world, 0x19)` call (the previous pointer chained and put back) and is called for every item,
+    with no GL error and nothing else changed.
+  - **The interleave:** the mesh engine collects its draws BEFORE the original call; a mesh's key = `x + z` of its
+    origin (a tile object on (c, r): c + r + 1, like a unit on that tile); a unit-attached mesh goes right after its
+    unit's own item (anchor = the renderable). Before item k every pending mesh with key > key_k is submitted as ONE
+    draw functor (`Batch_SubmitFunctor` mid-layer is fine: the next sprite starts a new group); ties go after the item;
+    the rest after the layer. Meshes depth-test and write among themselves only; sprites never write depth (mode 0).
+    A layer that is not sorted or not mode 0 keeps the M1 path (all after it).
+  - **Proof** (`mods/dev-sandbox/tests/mesh-occlusion.mewtest`, fixtures `mesh-occlusion-log.txt` /
+    `mesh-occlusion-summary.json`): cube on (2,6) behind the cat on (2,5): `mesh order f=1 items=10 meshes=1 groups=1
+    unsorted=0 | d0 key=9.000 before item 4 key=8.000`; of the 30694 px the unoccluded silhouette covers (the M1 run
+    measured 30883 px on the same tile) 22966 magenta px remain = **coverage 0.748** (the cat is over the cube). Cube on
+    (1,3) in front of the cat on (1,4): **coverage 1.009** (the cube over the cat). Cube on (2,4): over the cat on (1,5),
+    under the nearer cat on (1,4), coverage 0.861.
+  - **Why not depth (`Batch_ApplyGroupState` 0xa497d0, re-read 2026-10-22):** the group flags map **bit 1 (value 2) →
+    GL_DEPTH_TEST** and **bit 3 (value 8) → glColorMask and glDepthMask together**; FrameBegin sets 0x09, so a
+    depth-tested sprite also writes depth, and the game never calls glDepthFunc (GL_LESS): the parts of one cat sit at
+    one depth and would reject each other, translucent quads would punch holes, and only MaskedRendererIso goes through
+    `Renderer_GetScreenMatrix` (m14). Phase P (perspective) still needs a real per-sprite depth.
+- **Textures and the palette (OBSERVED, T2 2026-10-22, phase M2; `fw_mesh_tex.c`).**
+  - **`Texture2D+0x8` = the GL texture name** (uint32; `glGenTextures(1, tex+8)`), `+0xc` the target. Manifest offset
+    `Texture2D_glName` → `OFF_TEX2D_GLNAME` 0x8, witness `8B 53 08 8B 4B 0C FF 15` (mov edx,[rbx+8]; mov ecx,[rbx+0xc];
+    call [glBindTexture]) at 0x140a0ada7 in `Texture2D_LoadFromFile` 0xa0ad40, harvest-verified.
+  - `App_GetTexture` 0x9bb490 called at record time uploads **synchronously**: the GL name is non-zero right after the
+    call (`gl name 40 at load` for `models/crate.png`) and the same value is read at Texture2D+8 in the replayed functor.
+  - **`App_GetTexture("palette.png")` returns the already cached `textures/palette.png`** (GL name 8, 16 x 256) — the
+    texture TacticsTest::init binds as `palettemap`; row 63 column 5 = (121, 206, 183), measured in the remapped crate.
+  - Existence check: `ResourceManager_GetBinaryResource("textures/" + name)` — the exact call and path the loader makes
+    and whose NULL it dereferences (notes-r3dE) — then a PNG header gate (8-bit RGB/RGBA, ≤ 2048 px; grey PNGs would
+    upload as GL_LUMINANCE). `FileManager_FileExists` was not needed.
+  - A draw binds unit 0 = `fw_tex`, unit 1 = `palettemap` between `fw_gl_save` / `fw_gl_restore` (both units and the
+    active unit are saved): no GL error in any frame, HUD and sprites unaffected. Runs `20261022-151053` (textured crate,
+    orange 2662 px / grey 2216 px at the anchor), `-151124` (palette row 63: 2517 px of palette.png's texel),
+    `-151149` (`models/pillar.glb` drawn, teal 2587 px; one `model-texture-missing` line); fixtures
+    `mesh-tex-{crate,palette,glb}-{log.txt,summary.json}`.
+- **Per-unit models from GON (OBSERVED, T2 2026-10-22, phase M2; `fw_unit_model.c`, `fw_gon_model_block`).**
+  - No spawn hook: the existing `TurnControl::NextTurn` hook (0x8e3c60) hands the fight's TurnControl to
+    `obj3d_engine_on_turn_control`; every combat frame the units walk `TurnControl+0x18 → Scene+0x8 →
+    EntityManager+0x20 → +0x1f90 RefArray (+0xc count, +0x10 Character**)` (the harness's `dump` walk; guarded reads,
+    ≤ 256) lists the units; each `(Character*, pool generation)` is looked at once, its entry `Character+0x240` read
+    with `fw_gon_model_block` (string or block form), and a unit with a model is registered through
+    `obj3d_engine_register`. Units present at fight start are found at the first NextTurn; a unit spawned mid-fight the
+    next frame.
+  - **Following:** the anchor is the unit's renderer Position (x, z), read per frame; it is **interpolated during a
+    move** (~0.056-tile steps over ~150 ms), so the model slides with the sprite. Run `20261022-150711-_unitmodel-unit-model`:
+    the Rat moved (8.5 0.5) → (8.5 1.5) and its magenta model patch moved (−121.5, −61) px, 0.09° off the iso
+    projection of the move (`follows`); `cmd spawn Crate` drew the vanilla Crate's `models/crate.obj`. Fixtures
+    `unit-model-log.txt` / `unit-model-summary.json`.
+  - **Facing:** `Renderer_GetScreenMatrix` m0 read per frame (MaskedRendererIso only): −1 on the spawned Rat (an enemy,
+    mirrored sprite), +1 on the Crate; m0 < 0 mirrors the model x ↔ z about its anchor. A facing *change* was not seen.
+  - The 2D sprite still draws next to the model (accompanied, not replaced).
+- **Model error codes (OBSERVED, T2 2026-10-22; design §2.6).** One table `FW_MESH_CODES` (`fw_mesh_rules.c`, 42 codes)
+  = `editor/src/core/model-codes.ts` (a test keeps them identical). A model that fails costs ONE log line per process
+  (`mesh: models/broken.glb: model-glb-header: glb version 1 is not 2 — drawing the 2D clip`, fixture
+  `mesh-model-codes-log.txt`; the failure is cached) and the fight runs on; a loaded one logs
+  `mesh: <path>: loaded N vertices, M triangles, bounds x .. h .. z ..[; <warning codes>]`.

@@ -59,11 +59,33 @@ export interface SeedEvent {
   detail: string;
 }
 
+/** `run`: a campaign-walk step (run start / travel / fight); map / node / type / depth / level only when the step set them. */
+export interface RunEvent {
+  line: number;
+  op: string;
+  arg: string;
+  ok: boolean;
+  map?: string;
+  node?: number;
+  type?: string;
+  depth?: number;
+  level?: string;
+  detail: string;
+}
+
 /** `shot`: the script asked for a screenshot here; the DLL held the scene for `hold_ms` while the runner captured. */
 export interface ShotEvent {
   line: number;
   label: string;
   frame: number;
+  /** "gl": the DLL read the back buffer itself into `file` (raw; shot.ts decodeRawShot); "window": the runner must
+   * capture the window (`gl` says why the in-process capture did not happen); absent: a DLL without the capture */
+  source?: "gl" | "window";
+  file?: string;
+  w?: number;
+  h?: number;
+  gl?: string;
+  detail?: string;
 }
 
 /** `popup`: a modal dialog the harness's watchdog dismissed (the game's own WARNING/ERROR boxes). */
@@ -107,6 +129,8 @@ export interface ResultSummary {
   seed: SeedEvent | null;
   /** pipe requests served, in order (interactive mode) */
   execs: ExecEvent[];
+  /** campaign-walk steps, in order */
+  runs: RunEvent[];
   /** the script ended and the DLL idled for pipe requests (interactive mode) */
   idle: boolean;
 }
@@ -130,6 +154,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
     shots: [],
     seed: null,
     execs: [],
+    runs: [],
     idle: false,
   };
   if (typeof text !== "string") return r;
@@ -161,7 +186,17 @@ export function parseResults(text: string | null | undefined): ResultSummary {
       case "units": r.units = e; break;
       case "enter": r.enter = { line: Number(e.line ?? 0), name: String(e.name ?? ""), mode: String(e.mode ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "popup": r.popups.push({ title: String(e.title ?? ""), text: String(e.text ?? ""), frame: Number(e.frame ?? 0) }); break;
-      case "shot": r.shots.push({ line: Number(e.line ?? 0), label: String(e.label ?? ""), frame: Number(e.frame ?? 0) }); break;
+      case "shot": {
+        const sh: ShotEvent = { line: Number(e.line ?? 0), label: String(e.label ?? ""), frame: Number(e.frame ?? 0) };
+        if (e.source === "gl" || e.source === "window") sh.source = e.source;
+        if (typeof e.file === "string" && e.file) sh.file = e.file;
+        if (typeof e.w === "number") sh.w = e.w;
+        if (typeof e.h === "number") sh.h = e.h;
+        if (typeof e.gl === "string") sh.gl = e.gl;
+        if (typeof e.detail === "string") sh.detail = e.detail;
+        r.shots.push(sh);
+        break;
+      }
       case "seed": r.seed = { line: Number(e.line ?? 0), seed: String(e.seed ?? ""), ok: Boolean(e.ok), detail: String(e.detail ?? "") }; break;
       case "exec": {
         r.execs.push({
@@ -176,6 +211,20 @@ export function parseResults(text: string | null | undefined): ResultSummary {
         break;
       }
       case "idle": r.idle = true; break;
+      case "run":
+        r.runs.push({
+          line: Number(e.line ?? 0),
+          op: String(e.op ?? ""),
+          arg: String(e.arg ?? ""),
+          ok: Boolean(e.ok),
+          ...(typeof e.map === "string" ? { map: e.map } : {}),
+          ...(typeof e.node === "number" ? { node: e.node } : {}),
+          ...(typeof e.type === "string" ? { type: e.type } : {}),
+          ...(typeof e.depth === "number" ? { depth: e.depth } : {}),
+          ...(typeof e.level === "string" ? { level: e.level } : {}),
+          detail: String(e.detail ?? ""),
+        });
+        break;
       case "expect":
         if (e.ok) r.expects.passed++;
         else {

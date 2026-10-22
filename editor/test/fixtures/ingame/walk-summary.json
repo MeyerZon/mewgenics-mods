@@ -1,0 +1,360 @@
+{
+ "note": "T2 runs of the campaign walk (2026-10-22, build 25143593): enter Campaign house, seed 42, run start (alley.gon), run travel battle, run fight. Pointer values in details are per-process. Written from each run dir result.jsonl + report.json.",
+ "runs": [
+  {
+   "run": "20261022-141225-_roomprobe-walk-battle",
+   "mod": "_roomprobe",
+   "test": "walk-battle",
+   "verdict": "pass",
+   "saveUnchanged": true,
+   "runs": [
+    {
+     "ev": "run",
+     "line": 5,
+     "op": "start",
+     "arg": "alley.gon",
+     "ok": true,
+     "map": "alley.gon",
+     "detail": "director=00000245a38d07a0 mapScreen=0000025284bf0008 (MapScreen::init \"alley.gon\") nodes=22 marker=0000025344bf0008 on node 0000024864735c00 (enter); party 4 cats, TeamType 1, debug start (no class chooser)"
+    },
+    {
+     "ev": "run",
+     "line": 7,
+     "op": "travel",
+     "arg": "battle",
+     "ok": true,
+     "node": 0,
+     "type": "battle",
+     "depth": 1,
+     "detail": "mapScreen=0000025284bf0008 22 nodes 39 edges; marker on node #19 (enter) -> node #0 0000023eba8e4da0 (battle, depth 1) entered with MapScreen::EnterNode"
+    },
+    {
+     "ev": "run",
+     "line": 8,
+     "op": "fight",
+     "arg": "",
+     "ok": true,
+     "level": "levels/alley/walkprobe/wp_alley.lvl",
+     "detail": "MewDirector::StartMapBattle(\"levels/alley/walkprobe/wp_alley.lvl\") (battle #1), TurnControl 00000257c5bc0008, round 1"
+    }
+   ],
+   "expects": [
+    {
+     "line": 9,
+     "kind": "level",
+     "arg": "walkprobe/wp_alley",
+     "ok": true,
+     "detail": "battle level \"levels/alley/walkprobe/wp_alley.lvl\""
+    },
+    {
+     "line": 12,
+     "kind": "gon",
+     "arg": "4 properties.health == 77",
+     "ok": true,
+     "detail": "unit 4 \"Lil' Rat\" (ENEMY_LILRAT_NAME): properties.health = number 77 (int 77, double 77, text \"77\")"
+    },
+    {
+     "line": 13,
+     "kind": "gon",
+     "arg": "5 properties.health == 77",
+     "ok": true,
+     "detail": "unit 5 \"Lil' Rat\" (ENEMY_LILRAT_NAME): properties.health = number 77 (int 77, double 77, text \"77\")"
+    }
+   ],
+   "gon77": [
+    4,
+    5
+   ],
+   "units": [
+    {
+     "i": 0,
+     "name": "BJ",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 24
+    },
+    {
+     "i": 1,
+     "name": "Bridgette",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 24
+    },
+    {
+     "i": 2,
+     "name": "Blaze Cowboy",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 20
+    },
+    {
+     "i": 3,
+     "name": "Poupy",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 28
+    },
+    {
+     "i": 4,
+     "name": "Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 77
+    },
+    {
+     "i": 5,
+     "name": "Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 77
+    },
+    {
+     "i": 6,
+     "name": "Pooter",
+     "namekey": "ENEMY_POOTER_NAME",
+     "faction": 2,
+     "hp": 6
+    },
+    {
+     "i": 7,
+     "name": "Trash Bag",
+     "namekey": "OBJECT_TRASHBAG_NAME",
+     "faction": 0,
+     "hp": 25
+    },
+    {
+     "i": 8,
+     "name": "Food",
+     "namekey": "PICKUP_FOOD_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 9,
+     "name": "Coin",
+     "namekey": "PICKUP_COIN_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 10,
+     "name": "Coin",
+     "namekey": "PICKUP_COIN_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 11,
+     "name": "Scrap",
+     "namekey": "PICKUP_SCRAP_NAME",
+     "faction": 0,
+     "hp": 20
+    }
+   ]
+  },
+  {
+   "run": "20261022-141324-dev-sandbox-walk-vanilla",
+   "mod": "dev-sandbox",
+   "test": "walk-vanilla",
+   "verdict": "pass",
+   "saveUnchanged": true,
+   "runs": [
+    {
+     "ev": "run",
+     "line": 5,
+     "op": "start",
+     "arg": "alley.gon",
+     "ok": true,
+     "map": "alley.gon",
+     "detail": "director=000001e7a56907a0 mapScreen=000001f486330008 (MapScreen::init \"alley.gon\") nodes=22 marker=000001f547300008 on node 000001e1b8f8ec10 (enter); party 4 cats, TeamType 1, debug start (no class chooser)"
+    },
+    {
+     "ev": "run",
+     "line": 7,
+     "op": "travel",
+     "arg": "battle",
+     "ok": true,
+     "node": 0,
+     "type": "battle",
+     "depth": 1,
+     "detail": "mapScreen=000001f486330008 22 nodes 39 edges; marker on node #19 (enter) -> node #0 000001e1ded69080 (battle, depth 1) entered with MapScreen::EnterNode"
+    },
+    {
+     "ev": "run",
+     "line": 8,
+     "op": "fight",
+     "arg": "",
+     "ok": true,
+     "level": "levels/alley/easy/ch1-82.lvl",
+     "detail": "MewDirector::StartMapBattle(\"levels/alley/easy/ch1-82.lvl\") (battle #1), TurnControl 000001f9c7300008, round 1"
+    }
+   ],
+   "expects": [
+    {
+     "line": 9,
+     "kind": "level",
+     "arg": "levels/alley/easy/",
+     "ok": true,
+     "detail": "battle level \"levels/alley/easy/ch1-82.lvl\""
+    },
+    {
+     "line": 12,
+     "kind": "units",
+     "arg": ">= 5",
+     "ok": true,
+     "detail": "21 units"
+    }
+   ],
+   "gon77": [],
+   "units": [
+    {
+     "i": 0,
+     "name": "STATIC OBJECT",
+     "namekey": "STATIC OBJECT",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 1,
+     "name": "STATIC OBJECT",
+     "namekey": "STATIC OBJECT",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 2,
+     "name": "STATIC OBJECT",
+     "namekey": "STATIC OBJECT",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 3,
+     "name": "STATIC OBJECT",
+     "namekey": "STATIC OBJECT",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 4,
+     "name": "STATIC OBJECT",
+     "namekey": "STATIC OBJECT",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 5,
+     "name": "STATIC OBJECT",
+     "namekey": "STATIC OBJECT",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 6,
+     "name": "BJ",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 24
+    },
+    {
+     "i": 7,
+     "name": "Bridgette",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 24
+    },
+    {
+     "i": 8,
+     "name": "Blaze Cowboy",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 20
+    },
+    {
+     "i": 9,
+     "name": "Poupy",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 28
+    },
+    {
+     "i": 10,
+     "name": "Mangy",
+     "namekey": "ENEMY_MANGY_NAME",
+     "faction": 2,
+     "hp": 7
+    },
+    {
+     "i": 11,
+     "name": "Food",
+     "namekey": "PICKUP_FOOD_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 12,
+     "name": "Kitten",
+     "namekey": "ENEMY_KITTEN_NAME",
+     "faction": 2,
+     "hp": 5
+    },
+    {
+     "i": 13,
+     "name": "Mangy",
+     "namekey": "ENEMY_MANGY_NAME",
+     "faction": 2,
+     "hp": 7
+    },
+    {
+     "i": 14,
+     "name": "Kitten",
+     "namekey": "ENEMY_KITTEN_NAME",
+     "faction": 2,
+     "hp": 5
+    },
+    {
+     "i": 15,
+     "name": "Food",
+     "namekey": "PICKUP_FOOD_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 16,
+     "name": "Food",
+     "namekey": "PICKUP_FOOD_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 17,
+     "name": "Kitten",
+     "namekey": "ENEMY_KITTEN_NAME",
+     "faction": 2,
+     "hp": 5
+    },
+    {
+     "i": 18,
+     "name": "Kitten",
+     "namekey": "ENEMY_KITTEN_NAME",
+     "faction": 2,
+     "hp": 5
+    },
+    {
+     "i": 19,
+     "name": "Coin",
+     "namekey": "PICKUP_COIN_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 20,
+     "name": "Food",
+     "namekey": "PICKUP_FOOD_NAME",
+     "faction": 0,
+     "hp": 20
+    }
+   ]
+  }
+ ]
+}

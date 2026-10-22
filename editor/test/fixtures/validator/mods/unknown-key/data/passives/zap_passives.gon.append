@@ -1,0 +1,11 @@
+Zap {
+	1 {
+		passives {
+			CatchProjectiles { chance 0.5 chanse 1 stacks 2 }
+			OnHitEffects { Bleed 1 Conditional_Enemy { Bleed 1 } chance 3 }
+			Mystery { anything 1 }
+			SpawnThing { object Rat number 2 }
+			Metal 1
+		}
+	}
+}

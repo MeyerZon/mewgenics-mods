@@ -52,3 +52,10 @@ int fw_vtable_is_a(const FwVtableIdentity *id, void *self, MsvcString *name, FwS
 }
 
 const FwTypeHierarchy *fw_vtable_get_hier(const FwVtableIdentity *id) { return id->hier; }
+
+size_t fw_vtable_clone_glow(void **dst, void *const *templateVt, size_t slots, void *const thunks[FW_VTABLE_PATCHED_SLOTS], void *applyStatMods) {
+    if (!applyStatMods || slots <= VT_APPLYSTATMODIFIERS) return 0;
+    if (fw_vtable_clone(dst, templateVt, slots, thunks) != slots) return 0;
+    dst[VT_APPLYSTATMODIFIERS] = applyStatMods;
+    return slots;
+}

@@ -136,6 +136,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.ok && p.body.startsWith("seed 7\n"), "DLL-side directive");
     });
 
+    test("run directives (campaign walk): run start [<map>.gon] (default alley.gon), run travel <node type> (MapNode::str_to_type's 19 names), run fight, expect level \"<substr>\"; bad forms are line errors; all pass through to the DLL", () => {
+      eq(JSON.stringify(parseDirective("run start", 2)), JSON.stringify({ line: 2, kind: "run", op: "start", arg: "alley.gon" }));
+      eq(JSON.stringify(parseDirective("run start sewers.gon", 3)), JSON.stringify({ line: 3, kind: "run", op: "start", arg: "sewers.gon" }));
+      eq(JSON.stringify(parseDirective("run travel battle", 4)), JSON.stringify({ line: 4, kind: "run", op: "travel", arg: "battle" }));
+      eq(JSON.stringify(parseDirective("run travel optional_event", 4)), JSON.stringify({ line: 4, kind: "run", op: "travel", arg: "optional_event" }));
+      eq(JSON.stringify(parseDirective("run fight", 5)), JSON.stringify({ line: 5, kind: "run", op: "fight", arg: "" }));
+      eq(JSON.stringify(parseDirective('expect level "walkprobe/"', 6)), JSON.stringify({ line: 6, kind: "expect", what: "level", substr: "walkprobe/" }));
+      eq(script.NODE_TYPES.length, 19); eq(script.NODE_TYPES[5], "battle");
+      for (const bad of ["run", "run walk", "run start alley", "run start a b.gon", "run start ../x.gon", "run travel", "run travel castle", "run travel battle now", "run fight now", "expect level", "expect level walkprobe", 'expect level "x" more']) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript('enter Campaign house\nrun start\nrun travel battle\nrun fight\nexpect level "walkprobe/"\nquit\n', { owningMod: "m" });
+      assert(p.ok && p.body.startsWith('enter Campaign house\nrun start\nrun travel battle\nrun fight\nexpect level "walkprobe/"\n'), `DLL-side directives: ${JSON.stringify(p.errors)}`);
+    });
+
     test("shot directive parses a quoted label; bare or missing label is a line error; it passes through to the DLL", () => {
       const d = parseDirective('shot "round one"', 4) as { kind: string; label: string };
       eq(d.kind, "shot"); eq(d.label, "round one");
@@ -153,6 +166,40 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const p = parseScript('glow "Lil\' Rat" 1 0 1 1\nglow "Lil\' Rat" off\nquit\n', { owningMod: "m" });
       assert(p.ok && p.body.startsWith('glow "Lil\' Rat" 1 0 1 1\nglow "Lil\' Rat" off\n'), `DLL-side directive: ${JSON.stringify(p.errors)}`);
     });
+    test("speed directive: speed <factor> (a positive decimal) or speed off (= 1); bad forms are line errors; it passes through to the DLL (FW_SetTimeScale, API v6)", () => {
+      eq(JSON.stringify(parseDirective("speed 4", 3)), JSON.stringify({ line: 3, kind: "speed", factor: 4 }));
+      eq(JSON.stringify(parseDirective("speed 0.5", 4)), JSON.stringify({ line: 4, kind: "speed", factor: 0.5 }));
+      eq(JSON.stringify(parseDirective("speed off", 5)), JSON.stringify({ line: 5, kind: "speed", factor: 1 }));
+      for (const bad of ["speed", "speed 0", "speed -2", "speed x", "speed 4 extra", "speed 4x", "speed off now", "speed ."]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript("speed 8\nwait frames 10\nspeed off\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.body.startsWith("speed 8\nwait frames 10\nspeed off\n"), `DLL-side directive: ${JSON.stringify(p.errors)}`);
+    });
+
+    test("face directive (2026-10-22): <unit> <dx> <dy> (one of (±1,0) / (0,±1)) or <unit> front|back; bad forms are line errors; it passes through to the DLL (Character::Face)", () => {
+      eq(JSON.stringify(parseDirective("face 3 1 0", 2)), JSON.stringify({ line: 2, kind: "face", unit: "3", dir: [1, 0] }));
+      eq(JSON.stringify(parseDirective('face "Lil\' Rat" 0 -1', 3)), JSON.stringify({ line: 3, kind: "face", unit: "Lil' Rat", dir: [0, -1] }));
+      eq(JSON.stringify(parseDirective("face Rat back", 4)), JSON.stringify({ line: 4, kind: "face", unit: "Rat", named: "back" }));
+      eq(JSON.stringify(parseDirective("face 0 front", 5)), JSON.stringify({ line: 5, kind: "face", unit: "0", named: "front" }));
+      for (const bad of ["face", "face 3", "face 3 1", "face 3 1 1", "face 3 0 0", "face 3 2 0", "face 3 x 0", "face 3 left", "face 3 back now", "face 3 1 0 9", 'face "Lil Rat 1 0']) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript('face "Lil\' Rat" back\nface 0 -1 0\nquit\n', { owningMod: "m" });
+      assert(p.ok && p.body.startsWith('face "Lil\' Rat" back\nface 0 -1 0\n'), `DLL-side directive: ${JSON.stringify(p.errors)}`);
+    });
+
+    test("expect unit: the facing fields (2026-10-22) — facing (string, == !=), dirx|diry|flip|sign (integers); UNIT_FIELDS == mt_script.c order", () => {
+      eq(script.UNIT_FIELDS.slice(17, 22).join(","), "facing,dirx,diry,flip,sign");
+      // the DLL's table (mt_script.c UNIT_FIELDS, MtUnitField order) is the same list, in the same order
+      const c = readFileSync(join(REPO_ROOT, "native", "mods", "test-harness", "src", "mt_script.c"), "utf8");
+      const table = /UNIT_FIELDS\[\]\s*=\s*\{([^}]*)\}/.exec(c);
+      assert(!!table, "mt_script.c has a UNIT_FIELDS table");
+      eq([...table![1]!.matchAll(/"([a-z.]+)"/g)].map((m) => m[1]).join(","), script.UNIT_FIELDS.join(","), "mt_script.c UNIT_FIELDS == script.ts UNIT_FIELDS");
+      for (const s of ["facing"]) assert((script.UNIT_STRING_FIELDS as readonly string[]).includes(s), `${s} is a string field`);
+      const f = parseDirective('expect unit 8 facing == "B"', 1) as { field: string; op: string; value: string };
+      eq(f.field, "facing"); eq(f.op, "=="); eq(f.value, "B");
+      eq((parseDirective("expect unit 8 dirx == -1", 1) as { value: number }).value, -1);
+      eq((parseDirective("expect unit Pooter flip < 0", 1) as { field: string }).field, "flip");
+      eq((parseDirective("expect unit 0 sign == 1", 1) as { field: string }).field, "sign");
+      for (const bad of ['expect unit 1 facing > "B"', "expect unit 1 facing == B", 'expect unit 1 dirx == "1"']) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+    });
 
     test("combat directives: wait rounds needs N >= 1; expect round needs <op> <N>; expect stacks needs <op> <N> or varied", () => {
       assert("error" in parseDirective("wait rounds 0", 1), "rounds 0");
@@ -162,6 +209,17 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert("error" in parseDirective("expect stacks LuckUp 0 == 1", 1), "missing on");
       const ok = parseDirective("expect stacks LuckUp on Lumee != 0", 1) as { what: string; unit: string; op: string; n: number };
       eq(ok.what, "stacks"); eq(ok.unit, "Lumee"); eq(ok.op, "!="); eq(ok.n, 0);
+    });
+
+    test("signed operands (mt_script.c in sync): expect stacks takes -N (luck-seeded: Wengar -10), expect unit -N and expect gon -0.5 still parse; '-' alone, '--1', '- 1', '1-', a decimal stacks value and negative counts are errors", () => {
+      eq(JSON.stringify(parseDirective("expect stacks JokersLuck on 0 == -10", 3)), JSON.stringify({ line: 3, kind: "expect", what: "stacks", status: "JokersLuck", unit: "0", op: "==", n: -10 }));
+      eq(JSON.stringify(parseDirective('expect stacks JokersLuck on "Wengar The Wion" < -0', 4)), JSON.stringify({ line: 4, kind: "expect", what: "stacks", status: "JokersLuck", unit: "Wengar The Wion", op: "<", n: 0 }));
+      eq((parseDirective("expect unit 0 luck == -3", 1) as { value: number }).value, -3);
+      eq((parseDirective("expect gon 0 a.b == -0.5", 1) as { value: number }).value, -0.5);
+      for (const bad of ["expect stacks JokersLuck on 0 == -", "expect stacks JokersLuck on 0 == --1", "expect stacks JokersLuck on 0 == - 1", "expect stacks JokersLuck on 0 == 1-", "expect stacks JokersLuck on 0 == -1.5", "expect units == -1", "wait rounds -1"])
+        assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript("expect stacks JokersLuck on 0 == -10\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.body.startsWith("expect stacks JokersLuck on 0 == -10\n"), `DLL-side directive: ${JSON.stringify(p.errors)}`);
     });
 
     test("expect unit directive parses (index / bare / quoted unit; string fields name|class with == !=; integer fields faction|move|act|turnkind with every op); bad forms are line errors", () => {
@@ -180,7 +238,9 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     });
 
     test("expect unit: the GON-at-runtime fields (2026-10-22) — namekey (string), hp|shield|divineshield and the seven stats (integers, negatives allowed); UNIT_FIELDS == mt_script.c order", () => {
-      eq(script.UNIT_FIELDS.join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck");
+      eq(script.UNIT_FIELDS.join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck," +
+        "facing,dirx,diry,flip,sign," +
+        "strength.effective,dexterity.effective,constitution.effective,intelligence.effective,speed.effective,charisma.effective,luck.effective,maxhp.effective");
       const a = parseDirective("expect unit 8 hp == 12", 1) as { what: string; unit: string; field: string; op: string; value: number };
       eq(a.what, "unit"); eq(a.unit, "8"); eq(a.field, "hp"); eq(a.op, "=="); eq(a.value, 12);
       eq((parseDirective("expect unit Pooter speed >= 15", 1) as { field: string; value: number }).field, "speed");
@@ -189,6 +249,14 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(e.field, "namekey"); eq(e.op, "=="); eq(e.value, "ENEMY_POOTER_NAME");
       for (const f of ["shield", "divineshield", "strength", "dexterity", "constitution", "intelligence", "charisma"]) eq((parseDirective(`expect unit 1 ${f} > 0`, 1) as { field: string }).field, f);
       for (const bad of ['expect unit 1 hp == "x"', "expect unit 1 namekey == bare", 'expect unit 1 namekey > "x"', "expect unit 1 divine_shield == 0", "expect unit 1 hp == -"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+    });
+    test("expect unit: <stat>.effective and maxhp.effective (2026-10-22) — what Character::recompute_stats wrote (the units event's effective block); integers, any op", () => {
+      const a = parseDirective("expect unit 6 luck.effective == 8", 1) as { what: string; unit: string; field: string; op: string; value: number };
+      eq(a.what, "unit"); eq(a.unit, "6"); eq(a.field, "luck.effective"); eq(a.op, "=="); eq(a.value, 8);
+      eq((parseDirective(`expect unit "Lil' Rat" maxhp.effective > 1`, 1) as { field: string; unit: string }).field, "maxhp.effective");
+      for (const f of ["strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck"]) eq((parseDirective(`expect unit 1 ${f}.effective >= -3`, 1) as { field: string; value: number }).field, `${f}.effective`);
+      for (const bad of ["expect unit 0 luck.effectiv == 1", "expect unit 0 maxhp == 1", "expect unit 0 hp.effective == 1", 'expect unit 0 name.effective == "x"', 'expect unit 0 luck.effective == "x"', "expect unit 0 luck.effective.effective == 1"])
+        assert("error" in parseDirective(bad, 1), `${bad} is an error`);
     });
 
     test("expect gon directive parses (2026-10-22): <unit> <path> then <op> <number> | ==|!= \"<string>\" | ==|!= true|false | exists | missing; bad paths, operators and values are line errors; DLL-side", () => {
@@ -244,6 +312,29 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       }
       const p = parseScript("expect log bare\nquit\n", { owningMod: "m" });
       assert(!p.ok && p.errors[0].line === 1, JSON.stringify(p.errors));
+    });
+
+    test("expect deltas parses a quoted prefix and one or more signed integers; runner-side like expect log", () => {
+      const d = parseDirective('expect deltas "Total loaded sfx: " 35280 24000', 7) as { kind: string; what: string; prefix: string; deltas: number[] };
+      eq(d.kind, "expect"); eq(d.what, "deltas"); eq(d.prefix, "Total loaded sfx: "); eq(d.deltas.join(","), "35280,24000");
+      eq((parseDirective('expect deltas "x" -3', 1) as { deltas: number[] }).deltas.join(), "-3");
+      for (const bad of ['expect deltas "x"', 'expect deltas bare 1', 'expect deltas "x" 1.5', 'expect deltas "x" 1 within 5', 'expect deltas "unterminated 1']) {
+        assert("error" in parseDirective(bad, 2), `${bad} should be an error`);
+      }
+      const p = parseScript('cmd x\nexpect deltas "n: " 1\nquit\n', { owningMod: "m" });
+      assert(p.ok && script.isRunnerSide(p.directives[1]!), "runner-side");
+      eq(p.body.split("\n")[1], '# runner: expect deltas "n: " 1', "the DLL sees a placeholder comment");
+    });
+    test("expect fwlog parses a quoted substring (runner side, the mewframework.log window); within / bare / unterminated are line errors", () => {
+      const d = parseDirective('expect fwlog "catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)"', 4) as { kind: string; what: string; substr: string };
+      eq(d.kind, "expect"); eq(d.what, "fwlog"); eq(d.substr, "catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)");
+      for (const bad of ['expect fwlog "x" within 5', "expect fwlog bare", 'expect fwlog "unterminated', "expect fwlog"]) {
+        assert("error" in parseDirective(bad, 9), `${bad} should be an error`);
+      }
+      const p = parseScript('cmd listcmds\nexpect fwlog "catrig: "\nquit\n', { owningMod: "m" });
+      assert(p.ok, JSON.stringify(p.errors));
+      eq(p.body.split("\n")[1], '# runner: expect fwlog "catrig: "', "kept out of the DLL body like expect log");
+      assert(script.isRunnerSide(p.directives[1]!) && !script.isRunnerSide(p.directives[0]!), "isRunnerSide marks expect fwlog");
     });
 
     test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
@@ -403,6 +494,22 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       for (const c of ["listcmds", "spawn arg0", "spawntile arg0", "load arg0", "bind arg0", "bind_passive arg0", "status arg0", "passive arg0", "win", "killall", "takeover", "noui", "equip arg0", "weather arg0", "tileset arg0", "skip_tutorial", "set_day arg0"]) assert(cmds.includes(c), `TacticsTest/MewDirector command ${c} listed`);
       eq(cmds[cmds.length - 1], "Executed: listcmds");
     });
+    test("OBSERVED 2026-10-22 fixture, game speed (result-speed-1x.jsonl = luck-seeded, result-speed-8x.jsonl = luck-seeded-speed8): at `speed 8` the seeded fight is the same fight — the same expectations pass, the same 11 turns, and every unit dump (hp, stats, statuses, stacks of all 8 units, rounds 1-3) is identical — while enter -> end takes under a quarter of the 1x wall time", () => {
+      const ev = (f: string) => fixture(f).split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l) as { ev: string; t: number; [k: string]: unknown });
+      const a = ev("result-speed-1x.jsonl"), b = ev("result-speed-8x.jsonl");
+      const sp = b.filter((e) => e.ev === "speed");
+      eq(JSON.stringify(sp.map((e) => [e.arg, e.applied, e.ok])), JSON.stringify([["8", "8", true], ["off", "1", true]]), "speed 8, then off, both applied");
+      eq(a.filter((e) => e.ev === "speed").length, 0, "the 1x run has no speed directive");
+      const expects = (x: typeof a) => x.filter((e) => e.ev === "expect").map((e) => `${e.ok}:${e.detail}`);
+      eq(JSON.stringify(expects(b)), JSON.stringify(expects(a)), "the same expectation results");
+      assert(expects(a).length === 3 && expects(a).every((s) => s.startsWith("true:")), expects(a).join("; "));
+      const units = (x: typeof a) => x.filter((e) => e.ev === "units").map((e) => JSON.stringify(e.list));
+      eq(units(a).length, 3); eq(JSON.stringify(units(b)), JSON.stringify(units(a)), "identical unit dumps");
+      const end = (x: typeof a) => x.find((e) => e.ev === "end")!, enter = (x: typeof a) => x.find((e) => e.ev === "enter")!;
+      eq(end(a).turns, 11); eq(end(b).turns, 11); eq(end(a).code, 0); eq(end(b).code, 0);
+      const fightA = end(a).t - enter(a).t, fightB = end(b).t - enter(b).t;
+      assert(fightB * 4 < fightA, `8x fight ${fightB} ms vs 1x ${fightA} ms`);
+    });
     test("OBSERVED fixture: golden through dump — the vanilla and _golden-merge dumps of the same seeded fight differ only on the overlaid fields (result-golden-vanilla.jsonl / result-golden-merge.jsonl)", () => {
       type U = { i: number; name: string; class: string; faction: number };
       type R = { units: { count: number; list: U[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null };
@@ -458,6 +565,41 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(v.expects.failed, 0); eq(g.expects.failed, 0);
       eq(v.end!.code, 0); eq(g.end!.code, 0);
     });
+    test("OBSERVED 2026-10-22 fixture: effective stats — LuckUp 3 on a spawned Rat gives luck 5 / luck.effective 8; FwGlow_ff00ff (LuckUp's vtable, slot 82 replaced by #104) gives luck.effective 5; every unit carries the effective block (result-effective-stats.jsonl, mods/_effective-stats/tests/effective-luck.mewtest)", () => {
+      type Eff = { strength: number; dexterity: number; constitution: number; intelligence: number; speed: number; charisma: number; luck: number; maxhp: number };
+      type U = { i: number; name: string; namekey: string; hp: number; strength: number; constitution: number; luck: number; statuses: string[]; stacks: number[]; effective: Eff };
+      type R = { units: { count: number; list: U[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null };
+      const r = parseResults(fixture("result-effective-stats.jsonl")) as unknown as R;
+      eq(r.units!.count, 11, "seed 42: 4 cats + 4 coins + Rat + LuckyRat + FwGlowRat");
+      for (const u of r.units!.list) {
+        const keys = Object.keys(u.effective).join(",");
+        eq(keys, "strength,dexterity,constitution,intelligence,speed,charisma,luck,maxhp", `unit ${u.i}: the effective block's keys`);
+      }
+      const [rat, lucky, glow] = [8, 9, 10].map((i) => r.units!.list[i]!);
+      eq(rat.statuses.length, 0); eq(rat.luck, 5); eq(rat.effective.luck, 5, "a plain Rat: effective == base");
+      eq(rat.effective.strength, 4); eq(rat.effective.maxhp, 5, "max HP = max(1, (health 5 - 4*con 5) + 4*con 5) = 5 (Character+0x4bc)");
+      eq(lucky.statuses.join(","), "LuckUp"); eq(lucky.stacks[0], 3); eq(lucky.luck, 5, "base luck (+0x5b8) untouched by the status");
+      eq(lucky.effective.luck, 8, "LuckUp's ApplyStatModifiers added its 3 stacks to the effective luck (+0x5d4)");
+      eq(glow.statuses.join(","), "FwGlow_ff00ff"); eq(glow.effective.luck, 5, "the glow status adds no luck (its slot 82 keeps only the removal)");
+      for (const u of r.units!.list.slice(0, 8)) eq(u.effective.luck, u.luck, `${u.name}: no status, effective luck == base`);
+      for (const u of r.units!.list) if (u.namekey === "PLAYER_CAT_NAME") eq(u.effective.maxhp, u.hp, `${u.name}: a fresh cat is at full HP (hp == maxhp.effective)`);
+      eq(r.expects.failed, 0); eq(r.expects.passed, 17); eq(r.end!.code, 0);
+    });
+    test("mods/_effective-stats: LuckyRat is a Rat variant with StatusOnSpawnIn LuckUp 3; effective-luck.mewtest loads it with fw-glow and _autoplay and asserts through the .effective fields", () => {
+      const gon = readFileSync(join(MODS_DIR, "_effective-stats", "data", "characters", "enemies.gon.append"), "utf8");
+      assert(/LuckyRat\s*\{\s*variant_of Rat[\s\S]*StatusOnSpawnIn\s*\{\s*LuckUp 3\s*\}/.test(gon), "LuckyRat { variant_of Rat passives { StatusOnSpawnIn { LuckUp 3 } } }");
+      if ("__error" in script) throw new Error(script.__error);
+      const plan = script.parseScript(readFileSync(join(MODS_DIR, "_effective-stats", "tests", "effective-luck.mewtest"), "utf8"), { owningMod: "_effective-stats", name: "effective-luck" }) as { mods: string[]; directives: { kind: string; what?: string; field?: string; unit?: string; value?: unknown }[] };
+      eq(plan.mods.join(","), "_effective-stats,fw-glow,_autoplay");
+      const eff = plan.directives.filter((d) => d.kind === "expect" && d.what === "unit" && String(d.field).endsWith(".effective")).map((d) => `${d.unit} ${d.field} ${d.value}`);
+      for (const want of ["8 luck.effective 5", "9 luck.effective 8", "10 luck.effective 5", "8 maxhp.effective 5"]) assert(eff.includes(want), `${want} in ${eff.join("; ")}`);
+    });
+    test("OBSERVED 2026-10-22 fixture: hide: true run with the in-process capture -> six shot events, all source gl with a raw file at the client size, the window hidden (result-shot-gl-hidden.jsonl)", () => {
+      const r = parseResults(fixture("result-shot-gl-hidden.jsonl")) as unknown as { shots: { label: string; source?: string; file?: string; w?: number; h?: number; detail?: string }[]; end: { code: number } | null };
+      eq(r.shots.map((s) => s.label).join(","), "menu0,menu1,enter0,fight1,fight2,fight3");
+      assert(r.shots.every((s) => s.source === "gl" && /shot-\d+\.mtraw$/.test(s.file || "") && s.w === 3440 && s.h === 1440 && /window hidden/.test(s.detail || "")), JSON.stringify(r.shots[0]));
+      eq(r.end!.code, 0);
+    });
     test("OBSERVED 2026-10-20 fixture: enter Campaign house -> the real House (no intro), the campaign director's 57 commands pinned, a house command executes (result-enter-house.jsonl + console-campaign-listcmds.txt)", () => {
       const r = parseResults(fixture("result-enter-house.jsonl")) as unknown as { enter: { ok: boolean; name: string; mode: string; detail: string } | null; expects: { passed: number; failed: number }; end: { code: number } | null; popups: unknown[]; shots: unknown[] };
       assert(!!r.enter && r.enter.ok && r.enter.name === "Campaign" && r.enter.mode === "house" && /game_began set/.test(r.enter.detail), JSON.stringify(r.enter));
@@ -499,6 +641,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(r.events.some((e) => e.ev === "expect" && e.kind === "noconsole" && e.ok === true), "bind JokersGambit was accepted (no 'No command named')");
       eq(r.expects.failed, 0); eq(r.end!.code, 0);
     });
+    test("OBSERVED 2026-10-22 fixture: merge-contexts — a second JokersLuck merges into the first under both apply_status ctx shapes: 4 cats (StatusOnBattleStart) and Lil' Rat (StatusOnSpawnIn) each carry ONE JokersLuck with 1 + 2 = 3 stacks (result-merge-contexts.jsonl)", () => {
+      const r = parseResults(fixture("result-merge-contexts.jsonl")) as unknown as { events: { ev: string; kind?: string; ok?: boolean; list?: { name: string; statuses: string[]; stacks: number[] }[] }[]; expects: { passed: number; failed: number }; end: { code: number } | null };
+      const dumps = r.events.filter((e) => e.ev === "units");
+      eq(dumps.length, 2);
+      const luck = (u: { statuses: string[]; stacks: number[] }) => u.statuses.map((s, k) => s === "JokersLuck" ? u.stacks[k]! : null).filter((v) => v !== null);
+      const cats = dumps[0]!.list!.filter((u) => luck(u).length > 0);
+      eq(cats.length, 4, "the four party cats carry JokersLuck after battle start");
+      for (const c of cats) eq(JSON.stringify(luck(c)), "[3]", `${c.name}: one JokersLuck, 3 stacks (before the fix: [1,2])`);
+      const rat = dumps[1]!.list!.find((u) => u.name === "Lil' Rat");
+      assert(!!rat, "the spawned JokersLuckRat is in the second dump");
+      eq(JSON.stringify(luck(rat!)), "[3]", "Lil' Rat: one JokersLuck, 3 stacks (before the fix: [1,2])");
+      eq(r.expects.failed, 0); eq(r.expects.passed, 4); eq(r.end!.code, 0);
+    });
     test("exec and idle events are kept: result.execs (id, op, text, ok, lines) and result.idle", () => {
       const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"idle","line":2,"t":10,"frame":5}\n{"ev":"exec","id":1,"op":"exec","text":"spawn Rat","ok":true,"lines":["Spawned Rat"],"t":20,"frame":9}\n{"ev":"exec","id":2,"op":"dump","ok":true,"t":21,"frame":10}\n{"ev":"end","code":0,"reason":"quit","t":30,"frame":12}\n';
       const r = parseResults(text) as unknown as { execs: { id: number; op: string; text?: string; ok: boolean; lines?: string[]; frame: number }[]; idle: boolean };
@@ -513,6 +668,20 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const r = parseResults(text) as unknown as { seed: { line: number; seed: string; ok: boolean; detail: string } | null };
       eq(JSON.stringify(r.seed), JSON.stringify({ line: 2, seed: "42", ok: true, detail: "state at 0x1: 00… -> 11…" }));
       eq((parseResults(fixture("result-pass.jsonl")) as unknown as { seed: unknown }).seed, null);
+    });
+    test("run events are collected as result.runs (line, op, arg, ok, map/node/type/depth/level when present, detail); none -> []", () => {
+      const text = '{"ev":"start","t":0,"frame":0}\n'
+        + '{"ev":"run","line":3,"op":"start","arg":"alley.gon","ok":true,"map":"alley.gon","detail":"d1","t":10,"frame":5}\n'
+        + '{"ev":"run","line":4,"op":"travel","arg":"battle","ok":true,"node":7,"type":"battle","depth":1,"detail":"d2","t":11,"frame":6}\n'
+        + '{"ev":"run","line":5,"op":"fight","arg":"","ok":true,"level":"alley/walkprobe/wp_alley","detail":"d3","t":12,"frame":7}\n'
+        + '{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
+      const r = parseResults(text) as unknown as { runs: Record<string, unknown>[] };
+      eq(JSON.stringify(r.runs), JSON.stringify([
+        { line: 3, op: "start", arg: "alley.gon", ok: true, map: "alley.gon", detail: "d1" },
+        { line: 4, op: "travel", arg: "battle", ok: true, node: 7, type: "battle", depth: 1, detail: "d2" },
+        { line: 5, op: "fight", arg: "", ok: true, level: "alley/walkprobe/wp_alley", detail: "d3" },
+      ]));
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { runs: unknown[] }).runs.length, 0);
     });
     test("shot events are collected as result.shots (line, label, frame)", () => {
       const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"shot","line":3,"label":"round one","hold_ms":700,"t":10,"frame":5}\n{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
@@ -594,6 +763,28 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const absent = check!(null, [{ line: 2, substr: "x" }]);
       assert(!absent[0]!.ok && /debug\.log absent/.test(absent[0]!.detail), JSON.stringify(absent));
       eq(check!(text, []).length, 0);
+    });
+    test("checkDeltaExpects: the integers after the prefix in successive console lines must step by exactly the listed deltas", () => {
+      const check = (logs as unknown as { checkDeltaExpects?: (lines: string[], e: { line: number; prefix: string; deltas: number[] }[]) => { line: number; substr: string; ok: boolean; detail: string; what?: string }[] }).checkDeltaExpects;
+      assert(typeof check === "function", "checkDeltaExpects exported from logs.ts");
+      const lines = ["Executed: x", "Total loaded sfx: 403656 bytes (0 mb)", "noise", "Total loaded sfx: 438936 bytes (0 mb)", "Total loaded sfx: 462936 bytes (0 mb)"];
+      const r = check!(lines, [{ line: 3, prefix: "Total loaded sfx: ", deltas: [35280, 24000] }, { line: 4, prefix: "Total loaded sfx: ", deltas: [35280, 44714] }, { line: 5, prefix: "Total loaded sfx: ", deltas: [35280] }, { line: 6, prefix: "absent: ", deltas: [1] }]);
+      assert(r[0]!.ok && r[0]!.what === "deltas" && /403656 -> 438936 -> 462936/.test(r[0]!.detail), JSON.stringify(r[0]));
+      assert(!r[1]!.ok && /\+35280, \+24000/.test(r[1]!.detail), JSON.stringify(r[1]));
+      assert(!r[2]!.ok && /3 values/.test(r[2]!.detail), `the count must match too: ${JSON.stringify(r[2])}`);
+      assert(!r[3]!.ok && /0 values/.test(r[3]!.detail), JSON.stringify(r[3]));
+      eq(r[0]!.substr, 'deltas "Total loaded sfx: " 35280 24000');
+    });
+    test("checkFwLogExpects: plain lines of the mewframework.log window, the missing substring and line, an absent log; tagged source fwlog", () => {
+      const check = (logs as unknown as { checkFwLogExpects?: (text: string | null, e: { line: number; substr: string }[]) => { line: number; substr: string; ok: boolean; detail: string; source?: string }[] }).checkFwLogExpects;
+      assert(typeof check === "function", "checkFwLogExpects exported from logs.ts");
+      const text = "mewframework 0.5.0 starting; mewjector=yes\ncatrig: registered RigSampleCatClip for RigSampleCat (from a DLL)\ncatrig: RigSampleCat: CatTest -> RigSampleCatClip (instance 0000)\n";
+      const r = check!(text, [{ line: 3, substr: "registered RigSampleCatClip for RigSampleCat (from a DLL)" }, { line: 4, substr: "CatTest -> RigSampleCatClip" }, { line: 5, substr: "(from data" }]);
+      assert(r[0]!.ok && r[0]!.detail === "matched mewframework.log window line 2" && r[0]!.source === "fwlog", JSON.stringify(r[0]));
+      assert(r[1]!.ok && /line 3/.test(r[1]!.detail), JSON.stringify(r[1]));
+      assert(!r[2]!.ok && r[2]!.line === 5 && /not found in this launch's mewframework.log window/.test(r[2]!.detail), JSON.stringify(r[2]));
+      const absent = check!(null, [{ line: 2, substr: "x" }]);
+      assert(!absent[0]!.ok && /mewframework.log absent/.test(absent[0]!.detail), JSON.stringify(absent));
     });
     test("checkSaveSuffix: ok / missing / different", () => {
       assert(checkSaveSuffix("dev", "dev").ok, "same");
@@ -990,6 +1181,11 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(seedFail.verdict, "fail"); assert(/seed 42 failed at line 2: RNG state not reachable/.test(seedFail.reason), seedFail.reason);
       const seedUnavail = decideVerdict({ preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "seed_unavailable" }, seed: { line: 2, seed: "42", ok: false, detail: "symbol missing" } } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
       eq(seedUnavail.verdict, "harness-error"); assert(/seed_unavailable|symbol missing/.test(seedUnavail.reason), seedUnavail.reason);
+      // run: run_failed (code 1) -> fail naming the op, line and detail; run_unavailable (code 4) -> harness-error
+      const runFail = decideVerdict({ preflight: pre, exit: exit(1), result: res({ end: { code: 1, reason: "run_failed" }, expects: { passed: 0, failed: 0, failures: [] }, runs: [{ line: 4, op: "travel", arg: "battle", ok: false, detail: "no battle node reachable" }] } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(runFail.verdict, "fail"); assert(/run travel battle failed at line 4: no battle node reachable/.test(runFail.reason), runFail.reason);
+      const runUnavail = decideVerdict({ preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "run_unavailable" }, runs: [{ line: 3, op: "start", arg: "alley.gon", ok: false, detail: "symbol missing" }] } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(runUnavail.verdict, "harness-error"); assert(/run start alley\.gon unavailable at line 3: symbol missing \(run_unavailable/.test(runUnavail.reason), runUnavail.reason);
       // popups the harness dismissed are appended to a non-pass reason (they usually explain it)
       const popups = [{ title: "WARNING", text: "no saved winning teams - win at least one run first!", frame: 519 }];
       const crashWithPopup = decideVerdict({ preflight: pre, exit: exit(3), result: res({ end: { code: 3, reason: "crash" }, popups } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
@@ -1006,6 +1202,9 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(enterUnavail.verdict, "harness-error", "enter_unavailable -> harness-error");
       assert(/enter_unavailable|symbols missing/.test(enterUnavail.reason), enterUnavail.reason);
       // runner-side expect log: a miss is a fail naming line and substring; log-errors still wins; all ok -> pass
+      const missFw = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 7, substr: "CatTest -> X", ok: false, detail: "not found", source: "fwlog" } as NonNullable<VerdictInput["logExpects"]>[number]] });
+      eq(missFw.verdict, "fail", "expect fwlog miss -> fail");
+      assert(/expect fwlog failed at line 7/.test(missFw.reason) && /CatTest -> X/.test(missFw.reason), missFw.reason);
       const missLog = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 5, substr: "Luck changed", ok: false, detail: "not found in debug.log" }] });
       eq(missLog.verdict, "fail", "expect log miss -> fail");
       assert(/expect log failed at line 5/.test(missLog.reason) && /Luck changed/.test(missLog.reason), missLog.reason);
@@ -1013,6 +1212,8 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const okLog = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 5, substr: "x", ok: true, detail: "matched debug.log line 2" }] });
       eq(okLog.verdict, "pass", "expect log ok -> pass");
       assert(/1 log expectation/.test(okLog.reason), okLog.reason);
+      const missDelta = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 9, substr: 'deltas "n: " 1', ok: false, detail: "steps +2", what: "deltas" }] });
+      assert(missDelta.verdict === "fail" && /expect deltas failed at line 9/.test(missDelta.reason), missDelta.reason);
       // crash beats fail/timeout; safety beats crash
       expectV("crash > fail", { preflight: pre, exit: exit(1), result: res({ crash: { code: "x" }, end: { code: 1 } }), logs: logs({}), safety: safe }, "crash");
       expectV("safety > crash", { preflight: pre, exit: exit(3), result: res({ crash: { code: "x" }, end: { code: 3 } }), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");
@@ -1142,6 +1343,84 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(/hidden/.test(hiddenShot.reason), hiddenShot.reason);
     });
 
+    // Stale shots (2026-10-22, PR #107): with the game in front, PrintWindow came back dark and the screen fallback
+    // returned the same frozen frame (the loading screen) for every shot of a run. The DLL now reads the GL back
+    // buffer itself (shot events with source "gl" + a raw file); the runner flags runs whose shots are all identical.
+    type ShotsCheck = { status: string; detail: string };
+    type ShotMod = typeof shotMod & {
+      decodeRawShot?: (b: Uint8Array) => { width: number; height: number; rgba: Uint8Array };
+      assessShots?: (shots: { label: string; path: string | null }[]) => ShotsCheck;
+      staleShotsRefusal?: (r: { artifacts: { shotsCheck?: ShotsCheck } }) => string | null;
+    };
+    const sm = shotMod as ShotMod;
+    const { decodePng } = await import("../src/core/art/png.ts");
+    test("decodeRawShot: MTSHOT01 + LE w/h + bottom-up RGB rows -> top-down RGBA; a bad magic or short file throws", () => {
+      assert(typeof sm.decodeRawShot === "function", "decodeRawShot exported from shot.ts");
+      if (!sm.decodeRawShot) return;
+      const head = Buffer.alloc(16); head.write("MTSHOT01", 0, "latin1"); head.writeUInt32LE(2, 8); head.writeUInt32LE(1, 12);
+      const img = sm.decodeRawShot(Buffer.concat([head, Buffer.from([1, 2, 3, 4, 5, 6])]));
+      eq(img.width, 2); eq(img.height, 1);
+      eq(Array.from(img.rgba).join(","), "1,2,3,255,4,5,6,255");
+      const two = Buffer.alloc(16); two.write("MTSHOT01", 0, "latin1"); two.writeUInt32LE(1, 8); two.writeUInt32LE(2, 12);
+      eq(Array.from(sm.decodeRawShot(Buffer.concat([two, Buffer.from([9, 9, 9, 7, 7, 7])])).rgba).join(","), "7,7,7,255,9,9,9,255", "bottom row first in the file -> last in the image");
+      let threw = 0;
+      try { sm.decodeRawShot(Buffer.from("NOTASHOT00000000")); } catch { threw++; }
+      try { sm.decodeRawShot(Buffer.concat([head, Buffer.from([1, 2, 3])])); } catch { threw++; }
+      eq(threw, 2);
+    });
+    const glPlan = script.parseScript("mods: jokers-luck\ntimeout: 2s\nhide: false\nshot \"gl one\"\nshot \"fallback\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
+    const glCaptured: string[] = [];
+    const glRun = await run("shot-gl", {}, { plan: glPlan, capture: (label: string, dir: string) => { glCaptured.push(label); const p = join(dir, `shot-${label}.png`); writeFileSync(p, "png"); return { path: p, note: "window 2 x 2" }; } });
+    test("fake shot-gl -> a gl shot becomes shot-<label>.png from the DLL's raw file (no window capture); a failed one falls back to the window", () => {
+      eq(glRun.verdict, "pass", glRun.reason);
+      eq(glCaptured.join(","), "fallback", "the window capture ran only for the shot the DLL could not read");
+      const shots = (glRun.artifacts as unknown as { shots: { label: string; path: string | null; source?: string; note?: string }[] }).shots;
+      eq(shots.length, 2);
+      eq(shots[0]!.source, "gl"); eq(shots[1]!.source, "window");
+      assert(!!shots[0]!.path && /shot-gl-one\.png$/.test(shots[0]!.path), String(shots[0]!.path));
+      if (!shots[0]!.path) return;
+      const png = decodePng(readFileSync(shots[0]!.path));
+      eq(`${png.width}x${png.height}`, "2x2");
+      eq(Array.from(png.rgba.slice(0, 8)).join(","), "255,0,0,255,0,255,0,255", "top row red, green (the raw file's last row)");
+      assert(!existsSync(join(dirname(shots[0]!.path), "shot-1.mtraw")), "the raw file is removed once converted");
+      assert(/glReadPixels error 0x502/.test(shots[1]!.note || ""), `the fallback names the in-process failure: ${shots[1]!.note}`);
+    });
+    test("assessShots on a fake run dir: all byte-identical -> stale; different -> ok; one -> single; none captured -> none", () => {
+      assert(typeof sm.assessShots === "function", "assessShots exported from shot.ts");
+      if (!sm.assessShots) return;
+      const dir = mkdtempSync(join(tmpdir(), "mewshots-"));
+      const f = (n: string, body: string) => { const p = join(dir, n); writeFileSync(p, body); return p; };
+      const a = f("a.png", "same"), b = f("b.png", "same"), c = f("c.png", "same"), d = f("d.png", "other");
+      const stale = sm.assessShots([{ label: "a", path: a }, { label: "b", path: b }, { label: "c", path: c }]);
+      eq(stale.status, "stale"); assert(/3/.test(stale.detail) && /identical/.test(stale.detail), stale.detail);
+      eq(sm.assessShots([{ label: "a", path: a }, { label: "d", path: d }]).status, "ok");
+      eq(sm.assessShots([{ label: "a", path: a }]).status, "single");
+      eq(sm.assessShots([{ label: "x", path: null }]).status, "none");
+      eq(sm.assessShots([]).status, "none");
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const stalePlan = script.parseScript("mods: jokers-luck\ntimeout: 2s\nhide: false\nshot \"s1\"\nshot \"s2\"\nshot \"s3\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
+    const staleRun = await run("shot3", {}, { plan: stalePlan, capture: (label: string, dir: string) => { const p = join(dir, `shot-${label}.png`); writeFileSync(p, "the loading screen"); return { path: p, note: "screen 3440 x 1440" }; } });
+    const freshRun = await run("shot3", {}, { plan: stalePlan, capture: (label: string, dir: string) => { const p = join(dir, `shot-${label}.png`); writeFileSync(p, `frame ${label}`); return { path: p, note: "window 3440 x 1440" }; } });
+    test("runner: every shot of a run byte-identical -> artifacts.shotsCheck stale and the reason says `shots: stale`; distinct shots -> ok", () => {
+      const sc = (staleRun.artifacts as unknown as { shotsCheck?: ShotsCheck }).shotsCheck;
+      eq(sc && sc.status, "stale", JSON.stringify(sc));
+      assert(/shots: stale/.test(staleRun.reason), staleRun.reason);
+      const shots = (staleRun.artifacts as unknown as { shots: { source?: string }[] }).shots;
+      eq(shots.map((s) => s.source).join(","), "screen,screen,screen", "the screen fallback is recorded as the source");
+      const fc = (freshRun.artifacts as unknown as { shotsCheck?: ShotsCheck }).shotsCheck;
+      eq(fc && fc.status, "ok", JSON.stringify(fc));
+      assert(!/stale/.test(freshRun.reason), freshRun.reason);
+    });
+    test("staleShotsRefusal: a probe gets a refusal for stale shots and null otherwise", () => {
+      assert(typeof sm.staleShotsRefusal === "function", "staleShotsRefusal exported from shot.ts");
+      if (!sm.staleShotsRefusal) return;
+      const msg = sm.staleShotsRefusal({ artifacts: { shotsCheck: { status: "stale", detail: "all 3 shots byte-identical" } } });
+      assert(!!msg && /stale/.test(msg) && /no verdict/.test(msg), String(msg));
+      eq(sm.staleShotsRefusal({ artifacts: { shotsCheck: { status: "ok", detail: "" } } }), null);
+      eq(sm.staleShotsRefusal({ artifacts: {} }), null);
+    });
+
     const enterPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 1s\nenter TacticsTest\nwait turns 1\nexpect units >= 2\nquit\n", { owningMod: "jokers-luck", name: "enter-fight" });
     assert(enterPlan.ok, `enter plan parses: ${JSON.stringify(enterPlan.errors)}`);
     const enterPass = await run("enter-pass", {}, { plan: enterPlan });
@@ -1176,6 +1455,21 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("fake pass without the line -> fail naming the expect log line and substring", () => {
       eq(logMiss.verdict, "fail", logMiss.reason);
       assert(/expect log failed at line 5/.test(logMiss.reason) && /ZZ custom marker/.test(logMiss.reason), logMiss.reason);
+    });
+
+    const fwPlan = script.parseScript("mods: jokers-luck\ntimeout: 1s\ncmd listcmds\nexpect fwlog \"catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)\"\nexpect log \"Save File Suffix\"\nquit\n",{ owningMod: "jokers-luck", name: "smoke" });
+    const fwHit = await run("pass", { FAKE_GAME_FW_LINES: "catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)" }, { plan: fwPlan });
+    test("fake pass with FAKE_GAME_FW_LINES -> expect fwlog matched in this launch's framework log window -> pass (both runner-side kinds counted)", () => {
+      eq(fwHit.verdict, "pass", fwHit.reason);
+      const le = (fwHit as unknown as { logExpects?: { ok: boolean; line: number; source?: string }[] }).logExpects || [];
+      assert(le.length === 2 && le.every((e) => e.ok), `logExpects: ${JSON.stringify(le)}`);
+      assert(le.some((e) => e.source === "fwlog" && e.line === 4), JSON.stringify(le));
+      assert(/2 log expectation/.test(fwHit.reason), fwHit.reason);
+    });
+    const fwMiss = await run("pass", {}, { plan: fwPlan });
+    test("fake pass without the framework line -> fail naming the expect fwlog line", () => {
+      eq(fwMiss.verdict, "fail", fwMiss.reason);
+      assert(/expect fwlog failed at line 4/.test(fwMiss.reason), fwMiss.reason);
     });
 
     const pass = await run("pass");
@@ -1442,10 +1736,11 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       }
       return out;
     })();
-    test("MCP tools/list returns the 26 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools + the 9 art tools incl. bake_glow + vectorcraft_exec)", () => {
+    test("MCP tools/list returns the 31 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools + the 10 art tools incl. bake_glow + vectorcraft_exec + import_bitmap + pack_mod + install_mod + read_level / write_level)", () => {
       assert(!mcp.error, mcp.error);
       const names = mcp.list.tools.map((t: { name: string }) => t.name);
-      eq(names.length, 26, names.join(","));
+      eq(names.length, 31, names.join(","));
+      assert(names.includes("import_bitmap"), names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {

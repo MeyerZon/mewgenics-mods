@@ -68,19 +68,46 @@ typedef enum MtDirKind {
     MT_D_SEED,          /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
     MT_D_EXPECT_UNIT,   /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
     MT_D_GLOW,          /* glow <unit> <r> <g> <b> <a> | <unit> off: FW_SetUnitGlow / FW_ClearUnitGlow on a unit of the walk (API v4) */
-    MT_D_EXPECT_GON     /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
+    MT_D_EXPECT_GON,    /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
+    MT_D_FACE,          /* face <unit> <dx> <dy> | <unit> front|back: Character::Face(dir, instant) on a unit of the walk (mt_face.c) */
+    MT_D_RUN,           /* run start [<map>.gon] | run travel <node type> | run fight: the campaign walk through the host (n = MT_RUN_*) */
+    MT_D_EXPECT_LEVEL,  /* expect level "<substr>": the level path the last `run fight` reported contains substr */
+    MT_D_SPEED          /* speed <factor> | speed off: FW_SetTimeScale(factor) (API v6); dvalue = the factor, 1.0 for off; a = the argument text */
 } MtDirKind;
+/* run ops (MtDirective.n); a = the map (start, default MT_RUN_DEFAULT_MAP) or the node type name (travel, value = its id) */
+#define MT_RUN_START  1
+#define MT_RUN_TRAVEL 2
+#define MT_RUN_FIGHT  3
+#define MT_RUN_DEFAULT_MAP "alley.gon"   /* the run's first map (the dev house's Go On An Adventure button passes it) */
+const char *mt_run_op_name(int op);      /* "start" | "travel" | "fight" | "?" */
 /* expect unit: which MtUnit field; name|class|namekey compare as strings (== !=), the rest as integers (any op).
  * Order = mt_script.c UNIT_FIELDS = script.ts UNIT_FIELDS; the stat fields follow MT_STAT_* (data/characters order). */
 typedef enum MtUnitField {
     MT_F_NAME, MT_F_CLASS, MT_F_NAMEKEY, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND, MT_F_HP, MT_F_SHIELD, MT_F_DIVINESHIELD,
-    MT_F_STRENGTH, MT_F_DEXTERITY, MT_F_CONSTITUTION, MT_F_INTELLIGENCE, MT_F_SPEED, MT_F_CHARISMA, MT_F_LUCK
+    MT_F_STRENGTH, MT_F_DEXTERITY, MT_F_CONSTITUTION, MT_F_INTELLIGENCE, MT_F_SPEED, MT_F_CHARISMA, MT_F_LUCK,
+    MT_F_FACING,        /* string: the animation suffix the clip labels get (AnimStateMachine+OFF_ANIMSM_FACING: "F" / "B", four-way "LF".."RB") */
+    MT_F_DIRX, MT_F_DIRY, /* Character+OFF_CH_ORIENTATION: the grid direction Character::Face stored */
+    MT_F_FLIP,          /* AnimStateMachine+OFF_ANIMSM_FLIP: +-art_flip, negative = mirrored (two-way only) */
+    MT_F_SIGN,          /* Character+OFF_CH_FACE_SIGN: the facing sign Face multiplies the direction by */
+    /* <stat>.effective (2026-10-22): the value after Character::recompute_stats folded every passive's / status's
+     * ApplyStatModifiers in (Character+OFF_CH_STATS_EFF, what the status menu and deval read); maxhp.effective =
+     * Character+OFF_CH_MAX_HP, max(1, base health + 4 * effective constitution) */
+    MT_F_STRENGTH_EFF, MT_F_DEXTERITY_EFF, MT_F_CONSTITUTION_EFF, MT_F_INTELLIGENCE_EFF, MT_F_SPEED_EFF, MT_F_CHARISMA_EFF, MT_F_LUCK_EFF,
+    MT_F_MAXHP_EFF
 } MtUnitField;
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
+int mt_unit_field_is_string(MtUnitField f);                           /* name|class|namekey|facing: a quoted value, == / != */
 /* expect gon: how the value is compared (decided by the literal's shape at parse time) */
 typedef enum MtGonCheck { MT_G_NUM, MT_G_STR, MT_G_BOOL, MT_G_EXISTS, MT_G_MISSING } MtGonCheck;
 const char *mt_unit_field_name(MtUnitField f);
 #define MT_SHOT_HOLD_MS 700
+/* in-process shot capture (2026-10-22): the glue reads the GL back buffer at the next SDL_GL_SwapWindow into a raw
+ * file (MT_SHOT_RAW_HEADER bytes: "MTSHOT01", uint32 LE width, uint32 LE height; then height rows of width*3 RGB bytes,
+ * bottom row first, as glReadPixels returns them). The runner waits at most MT_SHOT_GL_FRAMES frames for it. */
+#define MT_SHOT_GL_FRAMES 30
+#define MT_SHOT_RAW_HEADER 16
+typedef struct MtShotResult { char path[520]; int w, h; char detail[160]; } MtShotResult;
+void mt_shot_raw_header(unsigned char out[MT_SHOT_RAW_HEADER], uint32_t w, uint32_t h);
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
 /* scenes `enter` knows; 0 = unknown. The DLL and the Node parser (script.ts KNOWN_SCENES) must agree. */
 #define MT_SCENE_TACTICS_TEST 1
@@ -116,6 +143,8 @@ typedef struct MtDirective {
     const char *c;      /* expect gon: the quoted string value (a = the path, b/n = the unit) */
     double dvalue;      /* expect gon: the numeric value; a bool value lives in value */
     MtGonCheck gonCheck;
+    int faceNamed;      /* face: MT_FACE_RAW (faceDx/faceDy given) | MT_FACE_FRONT | MT_FACE_BACK (resolved per unit, mt_face_named_dir) */
+    int faceDx, faceDy; /* face: the raw grid direction (one of (+-1,0) / (0,+-1)) */
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
@@ -124,6 +153,24 @@ typedef struct MtScript {
     size_t arenaUsed;
 } MtScript;
 int mt_script_parse(const char *text, size_t len, MtScript *out, char *err, size_t errCap, int *errLine); /* 1 ok */
+
+/* ---- mt_face.c: Character::Face (0x10ce50) as a pure rule, so the harness can say what a turn should produce ---- */
+#define MT_FACE_RAW   0
+#define MT_FACE_FRONT 1   /* the unmirrored front facing: suffix F, flip +art_flip (two-way) */
+#define MT_FACE_BACK  2   /* the unmirrored back facing:  suffix B, flip +art_flip (two-way) */
+const char *mt_face_name(int named);   /* "front" / "back" / "" */
+/* the grid direction that gives `named` on a unit whose facing sign (Character+OFF_CH_FACE_SIGN) is `sign`
+ * (0 is treated as 1): front = (0, -sign), back = (sign, 0) */
+void mt_face_named_dir(int named, int sign, int *dx, int *dy);
+/* What Character::Face(dir, instant) does to a unit, from its decompile (engine-map "Facing: Character::Face"):
+ * lock (lockX/lockY != 0) replaces dir; alwaysFront maps (1,0) -> (0,-1) and (0,1) -> (-1,0); two-way (fourWay 0):
+ * d' = sign * d, suffix "B" when d'x > 0 || d'y > 0, else "F" when d'x < 0 || d'y < 0; flipMul -1 (mirrored) when
+ * d'x < 0 || d'y > 0, +1 when d'x > 0 || d'y < 0, 0 when noHFlip; four-way: no sign, no flip, suffix
+ * (L when dx < 0 || dy > 0, else R) + (B / F as above). Writes the effective direction; returns 0 for (0,0)
+ * (Face then changes nothing), else 1. */
+typedef struct MtFaceIn { int dx, dy, lockX, lockY, sign, fourWay, noHFlip, alwaysFront; } MtFaceIn;
+typedef struct MtFaceOut { int dx, dy; char suffix[4]; int flipMul; } MtFaceOut;
+int mt_face_predict(const MtFaceIn *in, MtFaceOut *out);
 
 /* ---- mt_console.c ------------------------------------------------------ */
 typedef struct MtConsoleTrack { int seen; int windowStart; } MtConsoleTrack;
@@ -161,6 +208,25 @@ int        mt_pipe_error_reply(char *out, size_t cap, long id, const char *msg);
 #define MT_STAT_COUNT 7           /* Character+OFF_CH_STATS: strength dexterity constitution intelligence speed charisma luck */
 #define MT_STAT_SPEED 4
 const char *mt_stat_name(int k);  /* the data/characters key of stat k, "?" out of range */
+/* ---- mt_walk.c: the campaign walk's pure half (node type names, BFS over MapNode next edges) ---- */
+#define MT_NODE_TYPE_COUNT 19             /* MapNode::str_to_type 0x225680: none 0, npc 1, enter 2, exit 3, home 4, battle 5, … any 18 */
+#define MT_WALK_MAX_NODES 512
+#define MT_WALK_MAX_EDGES 4096
+int         mt_node_type_id(const char *name, size_t n);   /* -1 unknown */
+const char *mt_node_type_name(int id);                     /* "?" out of range */
+/* Nearest node of type `want` reachable from `start` (start itself excluded) along next edges, breadth first, ties in
+ * edge order. Edges of node i are adj[adjStart[i] .. adjStart[i+1]); an out-of-range target is ignored. Returns the
+ * index (depthOut = its edge distance) or -1 (depthOut = -1) when none is reachable or the input is unusable. */
+int mt_walk_nearest(int n, const int *type, const int *adjStart, const int *adj, int start, int want, int *depthOut);
+/* what a run step reports (the run event's optional fields; -1 / "" = absent) */
+typedef struct MtRunInfo {
+    char map[64];         /* start: the map file the adventure began on */
+    int node;             /* travel: the chosen node's index in MapScreen's node array */
+    int nodeType;         /* travel: its MapNodeType */
+    int depth;            /* travel: its edge distance from the marker's node */
+    char level[160];      /* fight: the level path MewDirector::StartMapBattle was given (the map pool's pick) */
+} MtRunInfo;
+
 #define MT_GON_TEXT 256
 typedef int (*MtMemRead)(void *u, const void *addr, void *out, size_t n);   /* guarded copy: 1 ok, 0 unreadable */
 typedef struct MtGonValue {
@@ -185,10 +251,20 @@ typedef struct MtUnit {
     char nameKey[MT_UNIT_NAME];            /* the display-name loc key, graphics.name (Character+OFF_CH_NAME_KEY; OBSERVED 2026-10-22, not the entry name) */
     int faction, move, act, turnKind;
     int hp, shield, divineShield;          /* Character+OFF_CH_HP / OFF_CH_SHIELD / OFF_CH_DIVINE_SHIELD */
-    int stats[MT_STAT_COUNT];              /* Character+OFF_CH_STATS, mt_stat_name order */
+    int stats[MT_STAT_COUNT];              /* Character+OFF_CH_STATS, mt_stat_name order (base: what Character::init stored) */
+    int eff[MT_STAT_COUNT];                /* Character+OFF_CH_STATS_EFF, same order (effective: after recompute_stats) */
+    int maxHp;                             /* Character+OFF_CH_MAX_HP (effective max HP, written by recompute_stats) */
     int statusCount;
     char statuses[MT_UNIT_STATUSES][MT_STATUS_NAME];
     int stacks[MT_UNIT_STATUSES];          /* parallel to statuses (Status+OFF_STATUS_STACKS) */
+    /* facing (2026-10-22, Character::Face 0x10ce50): what the units event reports and `face` changes */
+    char facing[8];                        /* AnimStateMachine(Character+OFF_CH_ANIMSM)+OFF_ANIMSM_FACING std::string: "F" / "B" (four-way "LF".."RB") */
+    int dirX, dirY;                        /* Character+OFF_CH_ORIENTATION */
+    int lockX, lockY;                      /* Character+OFF_CH_LOCK_ORIENTATION (graphics.lock_orientation; (0,0) = none) */
+    int faceSign;                          /* Character+OFF_CH_FACE_SIGN */
+    int flip;                              /* AnimStateMachine+OFF_ANIMSM_FLIP: +-art_flip */
+    int artFlip;                           /* Character+OFF_CH_ART_FLIP (graphics.art_flip, default 1) */
+    int fourWay, noHFlip, alwaysFront;     /* Character+OFF_CH_FOUR_WAY / OFF_CH_NO_HFLIP / OFF_CH_ALWAYS_FRONT (bytes) */
 } MtUnit;
 
 /* values of (unit index, status) seen by dump / expect stacks, for `expect stacks … varied` */
@@ -225,9 +301,23 @@ typedef struct MtHost {
      * NULL when the unit or the pointer is unreadable). The walker reads through mem_read only. */
     int         (*mem_read)(void *u, const void *addr, void *out, size_t n);
     const void *(*unit_gon)(void *u, int i);
+    /* face: Character::Face(unit i, (dx, dy), instant 1, 0) on the game thread. 1 done, 0 refused (detail), -1
+     * unavailable (framework without FW_SYM_Character_Face) */
+    int         (*face_unit)(void *u, int i, int dx, int dy, char *detail, size_t cap);
+    /* run <op> on the game thread (the campaign walk): 1 done, 0 refused (detail), -1 unavailable (symbols missing),
+     * 2 not ready yet (the runner retries next frame for at most MT_CONSOLE_WAIT_MS; `run fight` waits this way for
+     * the battle the node started). info: the run event's fields (the host sets what applies; the runner pre-fills -1/"") */
+    int         (*run_step)(void *u, int op, const char *arg, MtRunInfo *info, char *detail, size_t cap);
+    /* shot capture in-process (both NULL = the runner-side window capture only): arm a back-buffer read for the next
+     * present (1 armed, -1 unavailable); poll it (0 pending, 1 done: out has path/w/h, -1 failed: out->detail says why) */
+    int         (*shot_arm)(void *u, int line);
+    int         (*shot_poll)(void *u, MtShotResult *out);
+    /* speed <factor>: FW_SetTimeScale on the game thread; *applied = the factor the framework kept (clamped).
+     * 1 done, 0 refused (detail), -1 unavailable (framework without API v5) */
+    int         (*set_speed)(void *u, double factor, double *applied, char *detail, size_t cap);
 } MtHost;
 
-typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_IDLE } MtState;
+typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_WAIT_SHOT_GL, MT_S_IDLE } MtState;
 typedef struct MtRunner {
     const MtScript *s;
     int pc;
@@ -256,6 +346,7 @@ typedef struct MtRunner {
     MtQueue *queue;         /* NULL: no pipe; requests are served one per frame while idle or inside a wait */
     MtRequest *active;      /* an exec still collecting console lines */
     int activeFramesLeft;
+    char battleLevel[160];  /* the level the last successful `run fight` reported ("" = none yet), for expect level */
 } MtRunner;
 void mt_runner_init(MtRunner *r, const MtScript *s, uint64_t now);
 void mt_runner_set_interactive(MtRunner *r, int on);

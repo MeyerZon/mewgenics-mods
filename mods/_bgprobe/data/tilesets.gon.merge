@@ -1,0 +1,6 @@
+// test-only (raster probe, 2026-10-22): in the alley tileset (TacticsTest's default) the combat background is
+// _artprobe's ArtProbeBackdrop clip (raster.swf: one 2000×1500 bitmap plate scaled 0.7667 from (0,0), like vanilla's
+// AlleyBGTest) instead of AlleyBGTest
+alley {
+    combat_background ArtProbeBackdrop
+}

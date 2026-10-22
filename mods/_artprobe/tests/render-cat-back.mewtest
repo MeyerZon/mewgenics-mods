@@ -1,0 +1,72 @@
+mods: _artprobe
+timeout: 150s
+hide: false
+# Back-facing probe (2026-10-22, T3 card pr-cat-back): a cat facing AWAY plays its <anim>B frame, which places the
+# back rig the editor authors (cat-rig.ts newCatAnimation: probeBackPoseBack, facing "back" — head_back behind the
+# body, the tail in front, vanilla idleB's layout and slot matrices; seven EMPTY slot sprites). probe.swf's
+# _Append_CatTest donor carries probeBackF (the front rig, NO marker) and probeBackB (the back rig at 1.5x + the
+# checker marker at the non-slot depth 15, at clip y -220 so that at 1.5x it lands where the front rigs' marker does —
+# at -330 it sat above the window's top edge, which read as "not drawn"; engine-map "The back facing ...").
+# ArtProbeCatFacing = TomTom + alt_animations [[idle probeBack]] at the default enemy facing: first the control (F),
+# then turned away with `face <unit> back` (Character::Face 0x10ce50, instant: the suffix becomes "B" and the current
+# state replays, so idleB -> probeBackB is drawn on a genuinely back-facing unit). ArtProbeCatBack faces away from
+# DATA: properties.lock_orientation [1 0] (a back direction for facing sign +1; #105 put the keys under graphics, where
+# Character::init never reads them) — it spawns on B, and the lock replaces whatever Face is given, so `face 10 front`
+# leaves it on B. ArtProbeCatBackShown's
+# probeBackShowF / probeBackShowB both place the back rig, so its shots show the back pose whatever the facing.
+# Unit indices: the seeded TacticsTest party + opponents are units 0..7 (four cats, four coins); each spawn appends (TomTom 8,
+# ArtProbeCatFacing 9, ArtProbeCatBack 10, ArtProbeCatBackShown 11) — the expect gon lines pin which entry each index is.
+# No _autoplay: nobody acts, nothing else turns or hits. editor/scripts/art-probe.ts --cat-back reads the shots.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+wait ms 3000
+shot "baseline"
+cmd spawn TomTom
+expect console "Spawned TomTom" within 10
+wait frames 120
+shot "vanilla"
+cmd spawn ArtProbeCatFacing
+expect console "Spawned ArtProbeCatFacing" within 10
+wait frames 90
+dump
+expect gon 9 graphics.alt_animations.0.1 == "probeBack"
+expect unit 9 facing == "F"
+shot "front"
+face 9 back
+wait frames 30
+dump
+expect unit 9 facing == "B"
+expect unit 9 flip > 0
+shot "back 1"
+wait ms 200
+shot "back 2"
+wait ms 200
+shot "back 3"
+cmd spawn ArtProbeCatBack
+expect console "Spawned ArtProbeCatBack" within 10
+wait frames 90
+expect gon 10 properties.lock_orientation.0 == 1
+expect gon 10 properties.health exists
+dump
+expect unit 10 facing == "B"
+expect unit 10 dirx == 1
+shot "locked 1"
+face 10 front
+wait frames 30
+expect unit 10 facing == "B"
+expect unit 10 dirx == 1
+shot "locked 2"
+cmd spawn ArtProbeCatBackShown
+expect console "Spawned ArtProbeCatBackShown" within 10
+wait frames 90
+expect gon 11 graphics.alt_animations.0.1 == "probeBackShow"
+shot "shown 1"
+wait ms 200
+shot "shown 2"
+face 9 front
+wait frames 30
+expect unit 9 facing == "F"
+shot "turned back"
+quit

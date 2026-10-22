@@ -1,0 +1,15 @@
+GoodRat {
+    passives {
+        EliteParticle MyAura
+    }
+}
+BaseRat {
+    passives {
+        EliteParticle BaseCombo
+    }
+}
+VfxRat {
+    passives {
+        EliteParticle Nope
+    }
+}

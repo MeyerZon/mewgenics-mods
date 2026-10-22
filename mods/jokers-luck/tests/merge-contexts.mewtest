@@ -1,0 +1,24 @@
+mods: jokers-luck, _jokersluck-merge
+timeout: 120s
+# A second JokersLuck on a unit that already carries one must MERGE (the stacks add up on the one object), the way a
+# vanilla LuckUp merges, under both apply_status context shapes (docs/engine-map.md "Status effects"):
+#  - a Component ctx (the passive component): _jokersluck-merge gives every player cat StatusOnBattleStart
+#    { JokersLuck 1 JokersLuck 2 } -> one JokersLuck with 3 stacks on each cat;
+#  - the Character ctx (StatusOnSpawnIn, mid-fight): JokersLuckRat gets the same pair on spawn -> one JokersLuck with
+#    3 stacks on "Lil' Rat".
+# Before the fix both units carried TWO JokersLuck objects (1 and 2): the merge lookup walked ctx+0x20, which is the
+# Scene in both shapes, not the unit. No _autoplay: the fight waits on the player, so no turn reroll changes stacks
+# (OBSERVED with seed 42: the first cat's JokersLuck is still unrolled after `wait turns 1`).
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+dump
+expect stacks JokersLuck on 0 == 3
+expect stacks JokersLuck on 3 == 3
+cmd spawn JokersLuckRat
+expect console "Spawned JokersLuckRat" within 10
+wait frames 30
+dump
+expect stacks JokersLuck on "Lil' Rat" == 3
+quit

@@ -36,6 +36,7 @@
 #include "framework_internal.h"
 #include "fw_vtable.h"
 #include "fw_walk.h"
+#include "fw_glow_rules.h"   /* the FwGlow_ data seam: name parse, per-object names */
 
 #define MAX_DEFS FW_STATUS_MAX_DEFS
 _Static_assert(FW_STATUS_MAX_DEFS == 8, "DEF_THUNKS / THUNK_ROW below have exactly 8 rows");
@@ -76,7 +77,105 @@ static void *g_defaultSource;
 
 static CustomStatus *find_def_by_string(const MsvcString *s) {
     int i = fw_status_table_find(&g_table, msvc_str(s), s->size);
-    return i >= 0 ? &g_defs[i] : NULL;
+    return (i >= 0 && i < g_defCount) ? &g_defs[i] : NULL;   /* FW_STATUS_GLOW_SLOT is the glow status, below */
+}
+
+/* ----------------------------------------------------------------------- */
+/* the data glow seam: a status named FwGlow_<rrggbb[aa]> (fw_glow_rules.h) */
+/* ----------------------------------------------------------------------- */
+/* One extra custom status that needs no registration: fw_status_table_find answers FW_STATUS_GLOW_SLOT for any valid
+ * glow name, so the 13 lookups alias it to LuckUp like a registered name, and the apply hook below builds it. Its
+ * vtable is LuckUp's with the identity slots answering PER OBJECT (one vtable serves every colour; the object's name
+ * lives in g_glowObjs) and VT_APPLYSTATMODIFIERS replaced: LuckUp's adds the stacks to the unit's luck, the glow
+ * status keeps only the removal at 0 stacks. Applying it registers the unit with the glow engine (fromStatus); the
+ * engine's per-frame sweep asks status_engine_glow_probe whether the unit still carries one and clears the rim when
+ * not, so every vanilla way of removing a status (expiry, stacks to 0, cleanse, death) ends the glow. */
+typedef struct GlowStatus { int ready; void **vt; uintptr_t typeId; FwTypeHierarchy hier; FwVtableIdentity ident; } GlowStatus;
+static GlowStatus g_glow;              /* ready: 0 not tried, 1 built, -1 failed (never retried) */
+static FwGlowStatusObjs g_glowObjs;
+
+static FwVtableIdentity glow_ident(void *self) {
+    FwVtableIdentity id = g_glow.ident;
+    const FwGlowStatusObj *o = fw_glow_status_get(&g_glowObjs, self);
+    id.name = o ? o->name : FW_GLOW_STATUS_FALLBACK;
+    return id;
+}
+static MsvcString *glow_GetTypeName(void *self, MsvcString *out) { FwVtableIdentity id = glow_ident(self); return fw_vtable_get_type_name(&id, out); }
+static uintptr_t glow_GetTypeId(void *self) { (void)self; return g_glow.typeId; }
+static int glow_IsA(void *self, MsvcString *name) { FwVtableIdentity id = glow_ident(self); return fw_vtable_is_a(&id, self, name, g_TidyDeallocate); }
+static FwTypeHierarchy *glow_GetHier(void *self) { (void)self; return &g_glow.hier; }
+/* LuckUp's slot: luck += stacks; if (stacks == 0) Status_Remove(this). The glow keeps the removal only. */
+static void glow_ApplyStatModifiers(void *self) { if (*fw_walk_status_stacks(self) == 0) g_StatusRemove(self); }
+
+static int ensure_glow(void) {
+    if (g_glow.ready) return g_glow.ready > 0;
+    g_glow.ready = -1;
+    if (!g_luckUpVt || !g_LuckUp_ctor || !g_mj.AllocTypeIdPair) { fw_log("glow status: the status engine is not prepared; FwGlow_ names stay unknown"); return 0; }
+    g_glow.vt = (void **)HeapAlloc(GetProcessHeap(), 0, VT_SLOTS * sizeof(void *));
+    void *const thunks[FW_VTABLE_PATCHED_SLOTS] = { (void *)glow_GetTypeName, (void *)glow_GetTypeId, (void *)glow_IsA, (void *)glow_GetHier };
+    if (!g_glow.vt || fw_vtable_clone_glow(g_glow.vt, g_luckUpVt, VT_SLOTS, thunks, (void *)glow_ApplyStatModifiers) != VT_SLOTS) {
+        fw_log("glow status: vtable clone failed; FwGlow_ names stay unknown");
+        return 0;
+    }
+    g_glow.typeId = g_mj.AllocTypeIdPair(FW_OWNER);
+    FwTypeHierarchy *th = ((fn_GetHier)g_luckUpVt[VT_GETTYPEHIERARCHY])(NULL);
+    fw_vtable_make_hier(&g_glow.hier, th, g_build->luckUpTypeId, (int)g_glow.typeId);
+    g_glow.ident.name = FW_GLOW_STATUS_FALLBACK; g_glow.ident.typeId = g_glow.typeId;
+    g_glow.ident.templateVt = g_luckUpVt; g_glow.ident.hier = &g_glow.hier;
+    g_glow.ready = 1;
+    fw_log("glow status: FwGlow_<rrggbb[aa]> ready (template %s, type id 0x%llx, vtable %p, slot %d = no-luck ApplyStatModifiers)",
+           FW_STATUS_TEMPLATE, (unsigned long long)g_glow.typeId, (void *)g_glow.vt, VT_APPLYSTATMODIFIERS);
+    return 1;
+}
+
+static void *apply_glow(MsvcString *name, void *ctx, int stacks, void *src, void *p5, void *p6, char p7, char p8) {
+    float rgba[4];
+    if (!ensure_glow() || !fw_glow_parse_status_name(msvc_str(name), name->size, rgba))
+        return g_orig_ApplyByName(name, ctx, stacks, src, p5, p6, p7, p8);
+    char nm[FW_STATUS_NAME_MAX + 1];
+    memcpy(nm, msvc_str(name), name->size); nm[name->size] = 0;   /* <= 15 bytes: the parse guaranteed it */
+
+    FwApplyResolved a;
+    fw_walk_apply_resolve(ctx, src, p5, p6, g_defaultSource, &a);
+    void *result = NULL;
+    void *existing = fw_walk_apply_existing(&a, g_glow.vt);   /* the unit's entity, never ctx+0x20 (the Scene) */
+    if (fw_walk_apply_merges(existing, p7)) {
+        fw_walk_merge_stacks(existing, stacks, a.applier);
+        fw_glow_status_put(&g_glowObjs, existing, nm, strlen(nm));   /* one glow status per unit: the latest colour wins */
+        if (stacks != 0) ((fn_OnStacksChanged)g_glow.vt[VT_ONSTACKSCHANGED])(existing);
+        if (*fw_walk_status_stacks(existing) == 0) g_StatusRemove(existing);
+        result = existing;
+        fw_log("%s: +%d stacks on the existing glow status of %p (now %d)", nm, stacks, fw_walk_status_character(existing), *fw_walk_status_stacks(existing));
+    } else {
+        int st = stacks;
+        void *source = a.source, *applier = a.applier;
+        void *obj = g_LuckUp_ctor(a.scene, a.entity, &st, &source, &applier);
+        if (obj) {
+            fw_walk_adopt(obj, g_glow.vt, p7);
+            fw_glow_status_put(&g_glowObjs, obj, nm, strlen(nm));
+            result = obj;
+            fw_log("%s: glow status created on %p with %d stacks (obj %p%s)", nm, fw_walk_status_character(obj), stacks, obj, p7 ? ", temporary" : "");
+        } else {
+            fw_log("%s: template constructor returned null (scene destroyed or invalid)", nm);
+        }
+    }
+    /* the unit that glows is the status's own Character (+OFF_STATUS_CHARACTER, the one ApplyStatModifiers writes and the
+     * harness walks), never ctx+0x20; the sweep drops it again if the status went (0 stacks, a refused merge) */
+    void *unit = result ? fw_walk_status_character(result) : NULL;
+    if (unit) glow_engine_set_from_status(unit, rgba);
+    g_TidyDeallocate(name); /* by-value std::string: callee destroys */
+    return result;
+}
+
+int status_engine_glow_probe(void *character, float rgba[4], void *user) {
+    (void)user;
+    if (g_glow.ready <= 0 || !character) return 0;
+    void *s = fw_walk_find_live(character, g_glow.vt);
+    if (!s) return 0;
+    const FwGlowStatusObj *o = fw_glow_status_get(&g_glowObjs, s);
+    if (o) memcpy(rgba, o->rgba, sizeof o->rgba);
+    else fw_glow_parse_status_name(FW_GLOW_STATUS_FALLBACK, strlen(FW_GLOW_STATUS_FALLBACK), rgba);
+    return 1;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -127,6 +226,8 @@ static void *const g_thunks[MAX_DEFS][FW_VTABLE_PATCHED_SLOTS] = { THUNK_ROW(0),
 /* construction hook: apply_status(name, ...)                               */
 /* ----------------------------------------------------------------------- */
 static void *hook_ApplyByName(MsvcString *name, void *ctx, int stacks, void *src, void *p5, void *p6, char p7, char p8) {
+    if (fw_status_table_find(&g_table, msvc_str(name), name->size) == FW_STATUS_GLOW_SLOT)
+        return apply_glow(name, ctx, stacks, src, p5, p6, p7, p8);
     CustomStatus *d = find_def_by_string(name);
     if (!d) return g_orig_ApplyByName(name, ctx, stacks, src, p5, p6, p7, p8);
 
@@ -134,23 +235,23 @@ static void *hook_ApplyByName(MsvcString *name, void *ctx, int stacks, void *src
     fw_walk_apply_resolve(ctx, src, p5, p6, g_defaultSource, &a);
     void *result = NULL;
 
-    void *existing = fw_walk_find_status(a.character, d->vt);
+    void *existing = fw_walk_apply_existing(&a, d->vt);
     if (fw_walk_apply_merges(existing, p7)) {
         fw_walk_merge_stacks(existing, stacks, a.applier);
         if (stacks != 0) ((fn_OnStacksChanged)d->vt[VT_ONSTACKSCHANGED])(existing);
         if (*fw_walk_status_stacks(existing) == 0) g_StatusRemove(existing);
         result = existing;
-        fw_log("%s: +%d stacks on existing (now %d)", d->name, stacks, *fw_walk_status_stacks(existing));
+        fw_log("%s: +%d stacks on the existing status of %p (now %d)", d->name, stacks, fw_walk_status_character(existing), *fw_walk_status_stacks(existing));
     } else {
         int st = stacks;
         void *source = a.source, *applier = a.applier;
-        void *obj = g_LuckUp_ctor(a.character, a.entity, &st, &source, &applier);
+        void *obj = g_LuckUp_ctor(a.scene, a.entity, &st, &source, &applier);
         if (obj) {
             fw_walk_adopt(obj, d->vt, p7);   /* identity swap: template behavior, our name/type */
             result = obj;
-            fw_log("%s: created on %p with %d stacks (obj %p)", d->name, a.character, stacks, obj);
+            fw_log("%s: created on %p with %d stacks (obj %p)", d->name, fw_walk_status_character(obj), stacks, obj);
         } else {
-            fw_log("%s: template constructor returned null (target dead or invalid)", d->name);
+            fw_log("%s: template constructor returned null (scene destroyed or invalid)", d->name);
         }
     }
     g_TidyDeallocate(name); /* by-value std::string: callee destroys */

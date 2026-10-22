@@ -1,0 +1,31 @@
+// one bad value per key of the graphics.model block
+Crate {
+	graphics {
+		model {
+			file "models/crate.obj"
+			scale 0
+			yaw left
+			offset [1 2]
+			texture "models/none.png"
+			tint [1 2]
+			palette 3
+			double_sided "x"
+			spin 1
+		}
+	}
+}
+Rock {
+	graphics {
+		model {
+			scale 2
+		}
+	}
+}
+Tire {
+	graphics {
+		model {
+			file "models/nothere.obj"
+			yaw 30
+		}
+	}
+}

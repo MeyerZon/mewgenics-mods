@@ -1,0 +1,11 @@
+// A Rat that carries LuckUp 3 from the moment it spawns. LuckUp's ApplyStatModifiers (Status vtable slot 82) adds its
+// stacks to the unit's luck when Character::recompute_stats runs, so the harness must see luck 5 (base, Character+0x5b8)
+// and luck.effective 8 (Character+0x5d4). tests/effective-luck.mewtest; docs/ingame-testing.md "expect unit".
+LuckyRat {
+    variant_of Rat
+    passives {
+        StatusOnSpawnIn {
+            LuckUp 3
+        }
+    }
+}

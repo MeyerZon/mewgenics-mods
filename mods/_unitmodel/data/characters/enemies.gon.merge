@@ -1,0 +1,13 @@
+// _unitmodel (test-only): the vanilla Rat gets a 3D model through the block form of graphics.model, so the in-game
+// proof (tests/unit-model.mewtest) can watch a model follow a unit that walks. models/unit-box.gltf is a magenta 0.6-tile
+// box (the probe colour, which neither the arena nor the UI uses), standing on the unit's position.
+Rat {
+	graphics {
+		model {
+			file "models/unit-box.gltf"
+			scale 1
+			yaw 45
+			offset [0 0 0]
+		}
+	}
+}

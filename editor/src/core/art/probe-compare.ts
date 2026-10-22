@@ -44,6 +44,9 @@ export interface ProbeShot {
   textPixels: number;
   /** the marker's screen bbox */
   box: { x0: number; y0: number; x1: number; y1: number } | null;
+  /** the shot edge a not-found marker region touches: drawn, but cut by the frame (OBSERVED 2026-10-22: the back
+   * rig's checker at the window's top edge, engine-map "The back facing and the four-way quartet"); null otherwise */
+  clipped: "top" | "bottom" | "left" | "right" | null;
 }
 
 const near = (r: number, g: number, b: number, c: Rgb, tol: number) => Math.abs(r - c[0]) <= tol && Math.abs(g - c[1]) <= tol && Math.abs(b - c[2]) <= tol;
@@ -73,13 +76,15 @@ function classifyBlink(c: Rgb): ProbeShot["blink"] {
 }
 
 export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
-  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", blend: "unknown", blendRgb: [0, 0, 0], walkerX: NaN, text: "missing", textPixels: 0, box: null };
+  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", blend: "unknown", blendRgb: [0, 0, 0], walkerX: NaN, text: "missing", textPixels: 0, box: null, clipped: null };
   // 1. the yellow marker: the largest 8-connected region of near-yellow pixels (stray UI yellow elsewhere is ignored)
   const W = img.width, H = img.height;
   const mask = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const [r, g, b] = px(img, x, y);
-    if (near(r, g, b, YELLOW, 50) && b < 90) mask[y * W + x] = 1;
+    // near-yellow at any brightness down to ~0.6: the game tints units by the tile they stand on (OBSERVED 2026-10-22:
+    // the back-facing cat's checker border at 199,197,0)
+    if (r >= 150 && g >= 150 && Math.abs(r - g) <= 40 && b <= 0.25 * r) mask[y * W + x] = 1;
   }
   let x0 = 0, y0 = 0, x1 = -1, y1 = -1, count = 0;
   const stack: number[] = [];
@@ -105,7 +110,10 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   if (count < 30) return none;
   const w = x1 - x0 + 1, h = y1 - y0 + 1;
   const scale = w / 96;
-  if (Math.abs(h / scale - 64) > 12) return { ...none, box: { x0, y0, x1, y1 } };
+  if (Math.abs(h / scale - 64) > 12) {
+    const clipped: ProbeShot["clipped"] = y0 === 0 ? "top" : y1 === H - 1 ? "bottom" : x0 === 0 ? "left" : x1 === W - 1 ? "right" : null;
+    return { ...none, box: { x0, y0, x1, y1 }, clipped };
+  }
   // 2. orientation: where the magenta/cyan cells are inside the marker
   let mcSum = 0, mcN = 0;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -185,7 +193,7 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   const text: ProbeShot["text"] = textPixels > 40 ? "drawn" : "missing";
   return {
     gradient, gradLeft, gradRight, caps, blend, blendRgb, walkerX, text, textPixels,
-    found: true, scale, mirrored,
+    found: true, scale, mirrored, clipped: null,
     sampling: blendedRatio > 0.1 ? "smooth" : "nearest",
     blendedRatio, edge, blink,
     control: patch(img, sx(230), sy(30)),
@@ -224,7 +232,7 @@ export interface ProbeSummary {
 const parseColours = (colours: Record<string, string>) => Object.entries(colours).map(([k, hex]) => [k, [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)] as Rgb] as const);
 
 /** pixel i of img is colour c up to a uniform tint factor 0.55..1.15 (units are tinted by where they stand) and ±24 per channel */
-function matchTinted(img: RgbaImageLike, i: number, c: Rgb): boolean {
+export function matchTinted(img: RgbaImageLike, i: number, c: Rgb): boolean {
   const r = img.rgba[i * 4]!, g = img.rgba[i * 4 + 1]!, b = img.rgba[i * 4 + 2]!;
   const cc = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
   if (!cc) return r < 24 && g < 24 && b < 24;
@@ -462,4 +470,142 @@ export function renderProbeReport(shots: ProbeShot[], s: ProbeSummary, labels: s
     `- marker found in ${s.found} of ${s.shots} shot(s)`,
     "",
   ].join("\n");
+}
+
+// ---- the cat rig redirect probe (framework API v7; npm run test:artprobe -- --rig) -----------------------------------
+
+export interface CatRigLog {
+  registered: Array<{ clip: string; character: string; source: "data" | "dll" }>;
+  redirected: Array<{ character: string; clip: string }>;
+  missing: Array<{ character: string; clip: string }>;
+  refused: string[];
+}
+
+/** Read the `catrig:` lines catrig_engine.c writes to mewframework.log (any prefix before `catrig:` is ignored). */
+export function parseCatRigLog(text: string): CatRigLog {
+  const out: CatRigLog = { registered: [], redirected: [], missing: [], refused: [] };
+  for (const line of text.split(/\r?\n/)) {
+    const i = line.indexOf("catrig: ");
+    if (i < 0) continue;
+    const s = line.slice(i + "catrig: ".length);
+    let m: RegExpExecArray | null;
+    if ((m = /^registered (\S+) for (\S+) \(from (data|a DLL)/.exec(s))) out.registered.push({ clip: m[1]!, character: m[2]!, source: m[3] === "data" ? "data" : "dll" });
+    else if ((m = /^(\S+): CatTest -> (\S+) \(instance/.exec(s))) out.redirected.push({ character: m[1]!, clip: m[2]! });
+    else if ((m = /^(\S+): rig clip (\S+) not found/.exec(s))) out.missing.push({ character: m[1]!, clip: m[2]! });
+    else if (/ refused: /.test(s)) out.refused.push(s);
+  }
+  return out;
+}
+
+export interface RigSwapInput {
+  verdict: string;
+  /** the rigged character entry */
+  character: string;
+  log: CatRigLog;
+  /** the vanilla control (same parts, no rig): our marker must NOT be there; its outline is the real-parts reference */
+  vanilla: { marker: boolean; outline: number };
+  /** the rigged cat's shots: our marker (the rig's own art) and the new dark outline under it */
+  rig: Array<{ label: string; marker: boolean; outline: number }>;
+  /** when set, the registration for the entry must have come from that route (the DLL sample: "dll") */
+  source?: "data" | "dll";
+}
+export type RigSwapOutcome = "redirected" | "not-registered" | "wrong-source" | "not-redirected" | "not-scoped" | "no-marker" | "not-filled" | string;
+
+/**
+ * The swap rig's outcome: the run passed; the framework registered a rig for the entry and redirected its CatTest
+ * lookup (log); the vanilla control on the same parts shows no marker (the redirect is scoped to the entry); our
+ * marker is in at least two rig shots (the cat may be killed or mid-hit in one); every shot with our marker has real
+ * cat parts under it — new dark outline at least 30 % of the vanilla cat's (the A0 measure: colour counts and plain
+ * diffs are overlay noise).
+ */
+export function rigSwapVerdict(i: RigSwapInput): { outcome: RigSwapOutcome; markers: number; partsDrawn: number } {
+  const markers = i.rig.filter((r) => r.marker).length;
+  const partsDrawn = i.rig.filter((r) => r.marker && i.vanilla.outline > 0 && r.outline >= 0.3 * i.vanilla.outline).length;
+  const outcome: RigSwapOutcome =
+    i.verdict !== "pass" ? i.verdict
+    : !i.log.registered.some((r) => r.character === i.character) ? "not-registered"
+    : i.source && !i.log.registered.some((r) => r.character === i.character && r.source === i.source) ? "wrong-source"
+    : !i.log.redirected.some((r) => r.character === i.character) ? "not-redirected"
+    : i.vanilla.marker ? "not-scoped"
+    : markers < 2 ? "no-marker"
+    : partsDrawn < markers ? "not-filled"
+    : "redirected";
+  return { outcome, markers, partsDrawn };
+}
+
+// ---- the cat rig sample (DLL route; npm run test:catrigsample) ------------------------------------------------------
+
+/**
+ * Which pose a rig shot shows, from the size of the yellow marker: mods/catrig-sample's idle pose carries the 96x64
+ * checker at 1x, its hit pose the same checker at 2x. `idleScale` is the marker scale measured on the idle cat
+ * (rig-dll.mewtest). Within 25 % of 1x = idle, within 20 % of 2x = hit; any other size (another marker, a partial one) = other.
+ */
+export function rigMarkerKind(shot: { marker: boolean; scale: number }, idleScale: number): "idle" | "hit" | "other" | "none" {
+  if (!shot.marker) return "none";
+  if (!(idleScale > 0)) return "other";
+  const r = shot.scale / idleScale;
+  return Math.abs(r - 1) <= 0.25 ? "idle" : Math.abs(r - 2) <= 0.4 ? "hit" : "other";
+}
+
+export interface VariantRigInput {
+  verdict: string;
+  /** the game spawned the variant (the console said "Spawned <Entry>_Champion" / "_Elite") */
+  spawned: boolean;
+  /** the base entry the rig is registered for (the redirect line names it, not the variant) */
+  character: string;
+  log: CatRigLog;
+  /** shots with our marker (reported, not required: a champion / elite tint can recolour the yellow) */
+  markers: number;
+}
+/** A champion / elite spawn of a rigged entry: not-spawned first (the game refused the name), then the run verdict, then the redirect line. */
+export function variantRigVerdict(i: VariantRigInput): { outcome: string; markers: number } {
+  const outcome = !i.spawned ? "not-spawned"
+    : i.verdict !== "pass" ? i.verdict
+    : !i.log.redirected.some((r) => r.character === i.character) ? "not-redirected"
+    : "redirected";
+  return { outcome, markers: i.markers };
+}
+
+export interface RigLabelsInput {
+  verdict: string;
+  idleScale: number;
+  shots: Array<{ label: string; marker: boolean; scale: number }>;
+  /** the rig cat's HP at each dump (absent dumps skipped) */
+  hp: number[];
+  /** TurnControl's round at the first and the last dump */
+  rounds: { first: number; last: number };
+}
+/**
+ * The labels fight (rig-labels.mewtest): the rig has idleF/B (0.5x marker), hitF/B (1x) and hithardF/B, hitupF/B,
+ * knockbackF/B (0.75x, kind "other") only. hit-drawn = a shot shows the hitF/B pose (the game played OUR hit label);
+ * hit-other-drawn = only the hithard / hitup / knockback pose was seen; hit-not-caught = the cat lost HP but no shot landed in the hit;
+ * never-hit = its HP never dropped. fightAdvanced = the rounds moved on although every other label the game asked
+ * for (walk, attack, death …) is missing from the rig.
+ */
+export function rigLabelsVerdict(i: RigLabelsInput): { outcome: string; counts: Record<"idle" | "hit" | "other" | "none", number>; hpDrops: number; fightAdvanced: boolean } {
+  const counts = { idle: 0, hit: 0, other: 0, none: 0 };
+  for (const s of i.shots) counts[rigMarkerKind(s, i.idleScale)]++;
+  let hpDrops = 0;
+  for (let k = 1; k < i.hp.length; k++) if (i.hp[k]! < i.hp[k - 1]!) hpDrops++;
+  const fightAdvanced = i.rounds.last > i.rounds.first;
+  const outcome = i.verdict !== "pass" ? i.verdict : counts.hit > 0 ? "hit-drawn" : counts.other > 0 ? "hit-other-drawn" : hpDrops > 0 ? "hit-not-caught" : "never-hit";
+  return { outcome, counts, hpDrops, fightAdvanced };
+}
+
+/**
+ * A copy of the shot with every pixel whose brightest channel is at least `floor` scaled so that channel is 255
+ * (darker pixels untouched). The fight dims the arena while the AI plays (OBSERVED 2026-10-22: the probe marker's
+ * yellow at 164,161,0 and its magenta at 165,0,162 during rig-labels.mewtest), which puts the marker outside
+ * analyzeProbeShot's colour tolerance; normalised, the checker's hues are back at full strength while grey arena
+ * pixels stay grey (no channel gains on the others).
+ */
+export function normalizeBrightness(img: RgbaImageLike, floor = 90): RgbaImageLike {
+  const out = new Uint8Array(img.rgba);
+  for (let i = 0; i < out.length; i += 4) {
+    const m = Math.max(out[i]!, out[i + 1]!, out[i + 2]!);
+    if (m < floor || m >= 255) continue;
+    const k = 255 / m;
+    out[i] = Math.round(out[i]! * k); out[i + 1] = Math.round(out[i + 1]! * k); out[i + 2] = Math.round(out[i + 2]! * k);
+  }
+  return { width: img.width, height: img.height, rgba: out };
 }

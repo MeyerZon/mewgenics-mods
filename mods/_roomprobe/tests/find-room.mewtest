@@ -1,0 +1,20 @@
+mods: _roomprobe
+timeout: 90s
+# Room probe (2026-10-22): `load rp_nested_find` names no file directly. TacticsTest_cmd_load 0x888870 then lists
+# "levels" recursively for ".lvl" (FileManager_ListDir 0x9a1900, recursive) and takes the path ending in
+# "rp_nested_find.lvl" — which exists only in this mod (levels/roomprobe/deep/). So the listing walks the -modpaths
+# dirs, the same function a map's level pools use (non-recursive) for levels/<folder>/<easy|hard|…>/.
+# The layout: 2 player spawns, 3 x id 9001 (RoomProbeRat, 77 hp); the party is still 4 cats (units 0-3), the three
+# rats follow (OBSERVED 2026-10-22 run 20261022-131643: the first try asserted on units 2-4, the cats).
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+cmd load rp_nested_find
+expect console "Executed: load" within 10
+wait ms 3000
+dump
+expect gon 4 properties.health == 77
+expect gon 5 properties.health == 77
+expect gon 6 properties.health == 77
+quit

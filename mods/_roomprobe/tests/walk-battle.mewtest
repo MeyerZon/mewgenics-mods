@@ -1,0 +1,23 @@
+mods: _roomprobe
+timeout: 120s
+# Campaign walk (2026-10-22): a campaign battle node draws a mod room from a map pool. data/maps/alley.gon.merge points
+# alley's easy/hard/rare pools at levels/alley/walkprobe/, a folder only this mod has; its one room wp_alley.lvl is
+# probe.lvl again (4 player spawns, 2 x spawn id 9001 = RoomProbeRat with 77 hp, a Pooter, a Trash Bag).
+# enter Campaign house = the harness's disposable slot, day 1 in the House. run start = MewDirector::GoOnAnAdventure
+# ("alley.gon", debug: generated party, no class chooser) -> MapScreen::init. run travel battle = MapScreen::EnterNode
+# on the battle node nearest the marker (BattleInTransition -> MapLevelPool_build "easy" -> StartMapBattle).
+# run fight waits for that battle; its level path is the pool's pick, which expect level checks.
+wait frames 120
+enter Campaign house
+seed 42
+wait frames 30
+run start
+wait frames 60
+run travel battle
+run fight
+expect level "walkprobe/wp_alley"
+wait ms 2000
+dump
+expect gon 4 properties.health == 77
+expect gon 5 properties.health == 77
+quit

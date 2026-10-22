@@ -50,6 +50,7 @@ typedef void **(*fn_SavePropGet)(void *propMap, void **out16, MtMsvcString *key)
 typedef void *(*fn_AddDirectorTest)(void *scene, void *entity);   /* the test director on test00.sav (name hard-coded in the callee) */
 typedef void *(*fn_GetGame)(void *component);                       /* Component::GetGame: the MewGame object of the component's scene */
 typedef uint64_t *(*fn_RngSeedState)(uint64_t *out4, uint64_t seed); /* expands a seed into the 32-byte RNG state */
+typedef void (*fn_CharacterFace)(void *character, uint64_t dir, char instant, char forceTurnAnim); /* iVec2D by value: x low, y high */
 
 static MewjectorAPI g_mj;
 static int g_mjOk;
@@ -90,6 +91,7 @@ static fn_SavePropGet g_SavePropGet;
 static fn_AddDirectorTest g_AddDirectorTest;
 static fn_GetGame g_GetGame;
 static fn_RngSeedState g_RngSeedState;
+static fn_CharacterFace g_CharacterFace;    /* NULL when the framework predates FW_SYM_Character_Face: `face` reports face_unavailable */
 
 static void *volatile g_dc;
 static volatile LONG g_dcInits;
@@ -227,6 +229,40 @@ static void hook_DirectorInit(void *director, void *nameStr) {
     g_origDirectorInit(director, nameStr);
 }
 
+/* the campaign walk's witnesses: MapScreen::init (the map screen of the run and its map file) and
+ * MewDirector::StartMapBattle (the level path the map's pool picked). Both take a by-value std::string the callee
+ * destroys, so it is read before the original runs. */
+typedef void (*fn_GoOnAdventure)(void *director, MtMsvcString *map, int teamType, int count, char debug);
+typedef void (*fn_MapScreenInit)(void *mapScreen, MtMsvcString *map, char debug);
+typedef void (*fn_EnterNode)(void *mapScreen, void *node);
+typedef void *(*fn_StartMapBattle)(void *director, MtMsvcString *level, char a, char b);
+static fn_GoOnAdventure g_GoOnAdventure;
+static fn_EnterNode g_EnterNode;
+static fn_MapScreenInit g_origMapScreenInit;
+static fn_StartMapBattle g_origStartMapBattle;
+static int g_MapScreenHooked, g_StartMapBattleHooked;
+static void *volatile g_mapScreen;
+static volatile LONG g_mapInits, g_battles;
+static LONG g_battlesAtTravel = -1;
+static char g_mapName[64], g_battleLevel[160];
+static void hook_MapScreenInit(void *mapScreen, MtMsvcString *map, char debug) {
+    char nm[64] = "?";
+    read_msvc_string(map, nm, sizeof nm);
+    g_origMapScreenInit(mapScreen, map, debug);
+    snprintf(g_mapName, sizeof g_mapName, "%s", nm);
+    g_mapScreen = mapScreen;
+    InterlockedIncrement(&g_mapInits);
+    logf_("MapScreen::init(%p, \"%s\", debug=%d)", mapScreen, nm, (int)debug);
+}
+static void *hook_StartMapBattle(void *director, MtMsvcString *level, char a, char b) {
+    char lv[160] = "?";
+    read_msvc_string(level, lv, sizeof lv);
+    snprintf(g_battleLevel, sizeof g_battleLevel, "%s", lv);
+    InterlockedIncrement(&g_battles);
+    logf_("MewDirector::StartMapBattle(%p, \"%s\", %d, %d)", director, lv, (int)a, (int)b);
+    return g_origStartMapBattle(director, level, a, b);
+}
+
 static void maybe_hide(void) {
     if (g_hidden || !g_args.hide) return;
     void *appGlobal = (void *)g_fw.GetData(FW_DATA_App);
@@ -249,10 +285,12 @@ static void maybe_hide(void) {
 
 static void write_script_error_and_end(void);
 static void step_runner(void); /* defined after the MtHost table */
+static void maybe_hook_swap(void); /* the in-process shot capture, defined next to the MtHost table */
 static void hook_FrameBegin(void *app) {
     g_origFrameBegin(app);
     if (!g_active) return;
     maybe_hide();
+    maybe_hook_swap();
     EnterCriticalSection(&g_runLock);
     if (!g_scriptOk) {
         write_script_error_and_end();
@@ -506,7 +544,8 @@ static int h_seed_rng(void *u, unsigned long long seed, char *detail, size_t cap
     uint64_t *expanded = g_RngSeedState(tmp, (uint64_t)seed);
     if (!expanded) { snprintf(detail, cap, "Rng_SeedState returned NULL"); return 0; }
     memcpy(state, expanded, sizeof tmp);
-    snprintf(detail, cap, "state at %p: %016llx… -> %016llx…", (void *)state, (unsigned long long)before[0], (unsigned long long)state[0]);
+    g_fw.SeedRandom((uint64_t)seed);   /* the mods' FW_Random stream (API v5) restarts from the same seed */
+    snprintf(detail, cap, "state at %p: %016llx… -> %016llx…; FW_Random seeded", (void *)state, (unsigned long long)before[0], (unsigned long long)state[0]);
     logf_("seed %llu: %s", seed, detail);
     return 1;
 }
@@ -556,6 +595,25 @@ static int h_unit_info(void *u, int i, MtUnit *out) {
     read_i32(AT(ch, OFF_CH_SHIELD), &out->shield);
     read_i32(AT(ch, OFF_CH_DIVINE_SHIELD), &out->divineShield);
     if (!safe_read(AT(ch, OFF_CH_STATS), out->stats, sizeof out->stats)) memset(out->stats, 0, sizeof out->stats);
+    /* facing (2026-10-22): what Character::Face 0x10ce50 wrote (docs/engine-map.md "Facing: Character::Face") */
+    read_i32(AT(ch, OFF_CH_ORIENTATION), &out->dirX); read_i32(AT(ch, OFF_CH_ORIENTATION + 4), &out->dirY);
+    read_i32(AT(ch, OFF_CH_LOCK_ORIENTATION), &out->lockX); read_i32(AT(ch, OFF_CH_LOCK_ORIENTATION + 4), &out->lockY);
+    read_i32(AT(ch, OFF_CH_FACE_SIGN), &out->faceSign);
+    read_i32(AT(ch, OFF_CH_ART_FLIP), &out->artFlip);
+    unsigned char b = 0;
+    if (safe_read(AT(ch, OFF_CH_FOUR_WAY), &b, 1)) out->fourWay = b != 0;
+    if (safe_read(AT(ch, OFF_CH_NO_HFLIP), &b, 1)) out->noHFlip = b != 0;
+    if (safe_read(AT(ch, OFF_CH_ALWAYS_FRONT), &b, 1)) out->alwaysFront = b != 0;
+    void *sm = NULL;
+    if (read_ptr(AT(ch, OFF_CH_ANIMSM), &sm) && sm) {
+        if (!read_msvc_string(AT(sm, OFF_ANIMSM_FACING), out->facing, sizeof out->facing)) out->facing[0] = 0;
+        read_i32(AT(sm, OFF_ANIMSM_FLIP), &out->flip);
+    }
+    /* effective stats (2026-10-22): Character::recompute_stats copies the base block to +OFF_CH_STATS_EFF, lets every
+     * live passive / status add its ApplyStatModifiers (vtable slot 82; LuckUp: +stacks to luck) and derives max HP
+     * (+OFF_CH_MAX_HP) from them — the values the status menu and Character::deval read. Read, never recomputed here. */
+    if (!safe_read(AT(ch, OFF_CH_STATS_EFF), out->eff, sizeof out->eff)) memset(out->eff, 0, sizeof out->eff);
+    read_i32(AT(ch, OFF_CH_MAX_HP), &out->maxHp);
     void *ent = NULL;
     uint32_t cc = 0;
     void *comps = NULL;
@@ -646,10 +704,314 @@ static int h_set_unit_glow(void *u, int i, const float *rgba, char *detail, size
     return ok ? 1 : 0;
 }
 
+/* face <unit> …: Character::Face(unit, dir, instant 1, no forced turn animation) on the Character* of the units walk.
+ * Instant: Face stores the direction, writes the suffix and the flip (and the root node's x-scale) and replays the
+ * current animation state with _DEFAULT, so the <anim>F / <anim>B label switch is visible on the next frame. */
+static int h_face_unit(void *u, int i, int dx, int dy, char *detail, size_t cap) {
+    (void)u;
+    void *d[MAX_UNITS]; int n;
+    if (!g_CharacterFace) { snprintf(detail, cap, "symbol missing: FW_SYM_Character_Face (framework older than this harness)"); return -1; }
+    if (!char_array(d, &n) || i < 0 || i >= n || !d[i]) { snprintf(detail, cap, "unit %d is not in the units walk", i); return 0; }
+    void *sm = NULL;
+    if (!read_ptr(AT(d[i], OFF_CH_ANIMSM), &sm) || !sm) { snprintf(detail, cap, "unit %d has no animation state machine (+0x%x)", i, OFF_CH_ANIMSM); return 0; }
+    uint64_t packed = (uint64_t)(uint32_t)dx | ((uint64_t)(uint32_t)dy << 32);
+    g_CharacterFace(d[i], packed, 1, 0);
+    snprintf(detail, cap, "Character::Face(%p, [%d %d], instant) called", d[i], dx, dy);
+    return 1;
+}
+
+/* ----------------------------------------------------------------------- */
+/* the campaign walk: run start | run travel <type> | run fight              */
+/* docs/engine-map.md "Campaign walk"; the hooks below record what the game does */
+/* ----------------------------------------------------------------------- */
+#define MT_WALK_TEAM_TYPE 1   /* TeamType for DebugGenAdventureCats (the dev buttons index a {0,1,2,3} table at 0xee9700; TacticsTest_restart uses 1) */
+#define MT_WALK_CATS      4   /* party size: the dev buttons pass their widget value; a run takes four cats */
+static void walk_copy_string(char *dst, size_t cap, const char *src) { snprintf(dst, cap, "%s", src ? src : ""); }
+
+static int run_start(const char *map, MtRunInfo *info, char *detail, size_t cap) {
+    if (!g_GoOnAdventure || !g_MapScreenHooked) { snprintf(detail, cap, "symbols missing: FW_SYM_MewDirector_GoOnAnAdventure / FW_SYM_MapScreen_init hook (framework older than this harness)"); return -1; }
+    void *directorGlobal = (void *)g_fw.GetData(FW_DATA_MewDirector), *director = NULL;
+    if (!g_dc) { snprintf(detail, cap, "no debug console yet (main menu not reached)"); return 0; }
+    if (!directorGlobal || !read_ptr(directorGlobal, &director)) { snprintf(detail, cap, "cannot read the MewDirector global"); return 0; }
+    if (!director) { snprintf(detail, cap, "no MewDirector yet"); return 2; }
+    if (g_tc) { snprintf(detail, cap, "a fight is already running (TurnControl seen)"); return 0; }
+    if (g_mapScreen) { snprintf(detail, cap, "a map is already up (MapScreen %p, \"%s\"): run start runs once", g_mapScreen, g_mapName); return 0; }
+    MtMsvcString s;
+    if (!mt_msvcstr_build(&s, map, strlen(map), (MtAllocFn)g_Allocate)) { snprintf(detail, cap, "cannot build the map name"); return 0; }
+    LONG before = g_mapInits;
+    g_GoOnAdventure(director, &s, MT_WALK_TEAM_TYPE, MT_WALK_CATS, 1);   /* by-value string: the callee destroys it */
+    if (g_mapInits == before || !g_mapScreen) { snprintf(detail, cap, "GoOnAnAdventure(director %p, \"%s\", %d, %d, debug) returned but MapScreen::init never ran", director, map, MT_WALK_TEAM_TYPE, MT_WALK_CATS); return 0; }
+    void *ms = g_mapScreen, *marker = NULL, *node = NULL;
+    uint32_t n = 0;
+    int type = -1;
+    read_u32(AT(ms, OFF_MAPSCREEN_NODE_COUNT), &n);
+    read_ptr(AT(ms, OFF_MAPSCREEN_MARKER), &marker);
+    if (marker) read_ptr(AT(marker, OFF_MAPMARKER_NODE), &node);
+    if (node) read_i32(AT(node, OFF_MAPNODE_TYPE), &type);
+    walk_copy_string(info->map, sizeof info->map, g_mapName[0] ? g_mapName : map);
+    snprintf(detail, cap, "director=%p mapScreen=%p (MapScreen::init \"%s\") nodes=%u marker=%p on node %p (%s); party %d cats, TeamType %d, debug start (no class chooser)",
+             director, ms, g_mapName, n, marker, node, mt_node_type_name(type), MT_WALK_CATS, MT_WALK_TEAM_TYPE);
+    logf_("run start: %s", detail);
+    return 1;
+}
+
+static int run_travel(const char *typeName, MtRunInfo *info, char *detail, size_t cap) {
+    if (!g_EnterNode) { snprintf(detail, cap, "symbol missing: FW_SYM_MapScreen_EnterNode"); return -1; }
+    void *ms = g_mapScreen, *marker = NULL, *cur = NULL, *data = NULL;
+    if (!ms) { snprintf(detail, cap, "no map (run start first)"); return 0; }
+    if (g_tc) { snprintf(detail, cap, "a fight is already running (TurnControl seen)"); return 0; }
+    int want = mt_node_type_id(typeName, strlen(typeName));
+    uint32_t n = 0;
+    if (!read_u32(AT(ms, OFF_MAPSCREEN_NODE_COUNT), &n) || !read_ptr(AT(ms, OFF_MAPSCREEN_NODES), &data) || !data || n == 0 || n > MT_WALK_MAX_NODES) {
+        snprintf(detail, cap, "MapScreen %p: node vector unreadable (count %u, data %p)", ms, n, data); return 0;
+    }
+    if (!read_ptr(AT(ms, OFF_MAPSCREEN_MARKER), &marker) || !marker || !read_ptr(AT(marker, OFF_MAPMARKER_NODE), &cur) || !cur) {
+        snprintf(detail, cap, "MapScreen %p: no marker / marker node (marker %p)", ms, marker); return 2;   /* the marker is placed a frame later: retry */
+    }
+    static void *nodes[MT_WALK_MAX_NODES];
+    static int types[MT_WALK_MAX_NODES], adjStart[MT_WALK_MAX_NODES + 1], adj[MT_WALK_MAX_EDGES];
+    if (!safe_read(data, nodes, n * sizeof(void *))) { snprintf(detail, cap, "MapScreen %p: node array %p unreadable", ms, data); return 0; }
+    int start = -1, edges = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        types[i] = -1;
+        read_i32(AT(nodes[i], OFF_MAPNODE_TYPE), &types[i]);
+        if (nodes[i] == cur) start = (int)i;
+    }
+    for (uint32_t i = 0; i < n; i++) {
+        adjStart[i] = edges;
+        uint32_t k = 0;
+        void *next = NULL;
+        if (!read_u32(AT(nodes[i], OFF_MAPNODE_NEXT_COUNT), &k) || !read_ptr(AT(nodes[i], OFF_MAPNODE_NEXT_DATA), &next) || !next || k > 64) continue;
+        void *targets[64];
+        if (!safe_read(next, targets, k * sizeof(void *))) continue;
+        for (uint32_t j = 0; j < k && edges < MT_WALK_MAX_EDGES; j++) {
+            int t = -1;
+            for (uint32_t q = 0; q < n; q++) if (nodes[q] == targets[j]) { t = (int)q; break; }
+            adj[edges++] = t;   /* -1 (not a node of this map) is ignored by the walk */
+        }
+    }
+    adjStart[n] = edges;
+    if (start < 0) { snprintf(detail, cap, "the marker's node %p is not among the map's %u nodes", cur, n); return 0; }
+    int depth = -1;
+    int pick = mt_walk_nearest((int)n, types, adjStart, adj, start, want, &depth);
+    if (pick < 0) { snprintf(detail, cap, "no %s node reachable from node #%d (%s) over %d next edges of %u nodes", typeName, start, mt_node_type_name(types[start]), edges, n); return 0; }
+    char done = 0;
+    safe_read(AT(nodes[pick], OFF_MAPNODE_DONE), &done, 1);
+    if (done) { snprintf(detail, cap, "node #%d (%s) is already done (+0x%x set): the game would not enter it", pick, typeName, OFF_MAPNODE_DONE); return 0; }
+    LONG battlesBefore = g_battles;
+    g_EnterNode(ms, nodes[pick]);
+    g_battlesAtTravel = battlesBefore;
+    info->node = pick; info->nodeType = types[pick]; info->depth = depth;
+    snprintf(detail, cap, "mapScreen=%p %u nodes %d edges; marker on node #%d (%s) -> node #%d %p (%s, depth %d) entered with MapScreen::EnterNode",
+             ms, n, edges, start, mt_node_type_name(types[start]), pick, nodes[pick], mt_node_type_name(types[pick]), depth);
+    logf_("run travel: %s", detail);
+    return 1;
+}
+
+static int run_fight(MtRunInfo *info, char *detail, size_t cap) {
+    if (g_battlesAtTravel < 0) { snprintf(detail, cap, "no run travel yet"); return 0; }
+    if (g_battles > g_battlesAtTravel && g_tc) {
+        walk_copy_string(info->level, sizeof info->level, g_battleLevel);
+        snprintf(detail, cap, "MewDirector::StartMapBattle(\"%s\") (battle #%ld), TurnControl %p, round %d",
+                 g_battleLevel, (long)g_battles, g_tc, h_round_number(NULL));
+        logf_("run fight: %s", detail);
+        return 1;
+    }
+    snprintf(detail, cap, "waiting for the battle: StartMapBattle %s, TurnControl %s",
+             g_battles > g_battlesAtTravel ? "ran" : "not yet", g_tc ? "seen" : "not yet");
+    return 2;
+}
+
+static int h_run_step(void *u, int op, const char *arg, MtRunInfo *info, char *detail, size_t cap) {
+    (void)u;
+    if (op == MT_RUN_START) return run_start(arg && *arg ? arg : MT_RUN_DEFAULT_MAP, info, detail, cap);
+    if (op == MT_RUN_TRAVEL) return run_travel(arg ? arg : "", info, detail, cap);
+    if (op == MT_RUN_FIGHT) return run_fight(info, detail, cap);
+    snprintf(detail, cap, "unknown run op %d", op);
+    return 0;
+}
+
+/* ----------------------------------------------------------------------- */
+/* shot: read the GL back buffer in-process (2026-10-22, the stale-shot fix)  */
+/* ----------------------------------------------------------------------- */
+/* OBSERVED 2026-10-22: with the game window in front, the runner's PrintWindow(PW_RENDERFULLCONTENT) came back dark
+ * and its screen fallback returned one frozen frame (the loading screen) for every shot of a run. Both read DWM's
+ * copy of the window. The honest frame is the back buffer the game is about to present: the SDL_GL_SwapWindow DYNAPI
+ * slot is swapped for hook_SwapWindow, which on an armed shot does glReadPixels(GL_BACK) of the default framebuffer
+ * (the final composite, UI included) into <run dir>\shot-<line>.mtraw (mt_shot.c layout) and then presents. */
+#define GLX_READ_FRAMEBUFFER          0x8CA8
+#define GLX_READ_FRAMEBUFFER_BINDING  0x8CAA
+#define GLX_PIXEL_PACK_BUFFER         0x88EB
+#define GLX_PIXEL_PACK_BUFFER_BINDING 0x88ED
+#define GLX_READ_BUFFER               0x0C02
+#define GLX_PACK_ALIGNMENT            0x0D05
+#define GLX_BACK                      0x0405
+#define GLX_RGB                       0x1907
+#define GLX_UNSIGNED_BYTE             0x1401
+typedef int (*fn_SDL_GL_SwapWindow)(void *window);
+typedef void (WINAPI *fn_glReadPixels)(int x, int y, int w, int h, unsigned fmt, unsigned type, void *px);
+typedef void (WINAPI *fn_glGetIntegerv)(unsigned pname, int *v);
+typedef void (WINAPI *fn_glPixelStorei)(unsigned pname, int v);
+typedef void (WINAPI *fn_glReadBuffer)(unsigned mode);
+typedef unsigned (WINAPI *fn_glGetError)(void);
+typedef void (WINAPI *fn_glBind)(unsigned target, unsigned name);
+typedef PROC (WINAPI *fn_wglGetProcAddress)(LPCSTR name);
+typedef HDC (WINAPI *fn_wglGetCurrentDC)(void);
+static struct {
+    int loaded;   /* 0 not tried, 1 ok, -1 opengl32 missing */
+    fn_glReadPixels ReadPixels; fn_glGetIntegerv GetIntegerv; fn_glPixelStorei PixelStorei; fn_glReadBuffer ReadBuffer;
+    fn_glGetError GetError; fn_glBind BindFramebuffer; fn_glBind BindBuffer; fn_wglGetCurrentDC GetCurrentDC;
+} g_gl;
+static fn_SDL_GL_SwapWindow g_origSwap;
+static int g_swapHook;                 /* 0 not yet, 1 installed, -1 cannot (logged once) */
+static volatile LONG g_shotState;      /* 0 idle, 1 armed, 2 done, 3 failed */
+static int g_shotLine;
+static MtShotResult g_shotRes;
+static unsigned char *g_shotBuf;
+static size_t g_shotCap;
+
+static int gl_load(void) {
+    if (g_gl.loaded) return g_gl.loaded == 1;
+    HMODULE m = GetModuleHandleA("opengl32.dll");
+    fn_wglGetProcAddress gpa = m ? (fn_wglGetProcAddress)(void *)GetProcAddress(m, "wglGetProcAddress") : NULL;
+    if (m) {
+        g_gl.ReadPixels = (fn_glReadPixels)(void *)GetProcAddress(m, "glReadPixels");
+        g_gl.GetIntegerv = (fn_glGetIntegerv)(void *)GetProcAddress(m, "glGetIntegerv");
+        g_gl.PixelStorei = (fn_glPixelStorei)(void *)GetProcAddress(m, "glPixelStorei");
+        g_gl.ReadBuffer = (fn_glReadBuffer)(void *)GetProcAddress(m, "glReadBuffer");
+        g_gl.GetError = (fn_glGetError)(void *)GetProcAddress(m, "glGetError");
+        g_gl.GetCurrentDC = (fn_wglGetCurrentDC)(void *)GetProcAddress(m, "wglGetCurrentDC");
+    }
+    if (gpa) {   /* GL 3.0 entry points: only through the current context */
+        g_gl.BindFramebuffer = (fn_glBind)(void *)gpa("glBindFramebuffer");
+        g_gl.BindBuffer = (fn_glBind)(void *)gpa("glBindBuffer");
+    }
+    g_gl.loaded = (g_gl.ReadPixels && g_gl.GetIntegerv && g_gl.PixelStorei && g_gl.ReadBuffer && g_gl.GetError && g_gl.GetCurrentDC) ? 1 : -1;
+    logf_("shot: GL entry points %s (glBindFramebuffer %p, glBindBuffer %p)", g_gl.loaded == 1 ? "resolved" : "MISSING", (void *)g_gl.BindFramebuffer, (void *)g_gl.BindBuffer);
+    return g_gl.loaded == 1;
+}
+
+static void shot_fail(const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt); vsnprintf(g_shotRes.detail, sizeof g_shotRes.detail, fmt, ap); va_end(ap);
+    logf_("shot line %d: in-process capture failed: %s", g_shotLine, g_shotRes.detail);
+    InterlockedExchange(&g_shotState, 3);
+}
+
+/* on the render thread, inside SDL_GL_SwapWindow, before the present: the context is current */
+static void shot_capture(void) {
+    DWORD t0 = GetTickCount();
+    if (!gl_load()) { shot_fail("opengl32 entry points missing"); return; }
+    HDC dc = g_gl.GetCurrentDC();
+    HWND hw = dc ? WindowFromDC(dc) : NULL;
+    RECT rc;
+    if (!hw || !GetClientRect(hw, &rc)) { shot_fail("no current GL window (dc %p)", (void *)dc); return; }
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w < 8 || h < 8 || w > 16384 || h > 16384) { shot_fail("client area %d x %d", w, h); return; }
+    size_t need = (size_t)w * (size_t)h * 3;
+    if (need > g_shotCap) {
+        if (g_shotBuf) HeapFree(GetProcessHeap(), 0, g_shotBuf);
+        g_shotBuf = (unsigned char *)HeapAlloc(GetProcessHeap(), 0, need);
+        g_shotCap = g_shotBuf ? need : 0;
+        if (!g_shotBuf) { shot_fail("out of memory for %d x %d", w, h); return; }
+    }
+    for (int i = 0; i < 16 && g_gl.GetError(); i++) { /* drain errors the game left behind */ }
+    int readFb = 0, readBuf = 0, align = 4, packBuf = 0;
+    if (g_gl.BindFramebuffer) g_gl.GetIntegerv(GLX_READ_FRAMEBUFFER_BINDING, &readFb);
+    g_gl.GetIntegerv(GLX_READ_BUFFER, &readBuf);
+    g_gl.GetIntegerv(GLX_PACK_ALIGNMENT, &align);
+    if (g_gl.BindBuffer) g_gl.GetIntegerv(GLX_PIXEL_PACK_BUFFER_BINDING, &packBuf);
+    if (g_gl.BindFramebuffer) g_gl.BindFramebuffer(GLX_READ_FRAMEBUFFER, 0);
+    if (g_gl.BindBuffer && packBuf) g_gl.BindBuffer(GLX_PIXEL_PACK_BUFFER, 0);
+    g_gl.ReadBuffer(GLX_BACK);
+    g_gl.PixelStorei(GLX_PACK_ALIGNMENT, 1);
+    g_gl.ReadPixels(0, 0, w, h, GLX_RGB, GLX_UNSIGNED_BYTE, g_shotBuf);
+    unsigned err = g_gl.GetError();
+    g_gl.PixelStorei(GLX_PACK_ALIGNMENT, align);
+    g_gl.ReadBuffer((unsigned)readBuf);
+    if (g_gl.BindBuffer && packBuf) g_gl.BindBuffer(GLX_PIXEL_PACK_BUFFER, (unsigned)packBuf);
+    if (g_gl.BindFramebuffer) g_gl.BindFramebuffer(GLX_READ_FRAMEBUFFER, (unsigned)readFb);
+    if (err) { shot_fail("glReadPixels error 0x%x (read fb was %d)", err, readFb); return; }
+    /* a coarse look at what was read, for the log: how many of ~1024 samples are not black */
+    size_t px = (size_t)w * (size_t)h, step = px / 1024 ? px / 1024 : 1, lit = 0, samples = 0;
+    for (size_t i = 0; i < px; i += step, samples++) { const unsigned char *p = g_shotBuf + i * 3; if (p[0] + p[1] + p[2] > 24) lit++; }
+    char dir[520];
+    snprintf(dir, sizeof dir, "%s", g_args.out);
+    char *slash = strrchr(dir, '\\');
+    if (!slash) slash = strrchr(dir, '/');
+    if (slash) slash[1] = 0; else dir[0] = 0;
+    snprintf(g_shotRes.path, sizeof g_shotRes.path, "%sshot-%d.mtraw", dir, g_shotLine);
+    HANDLE f = CreateFileA(g_shotRes.path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) { shot_fail("cannot create %s (err %lu)", g_shotRes.path, GetLastError()); return; }
+    unsigned char head[MT_SHOT_RAW_HEADER];
+    mt_shot_raw_header(head, (uint32_t)w, (uint32_t)h);
+    DWORD n1 = 0, n2 = 0;
+    BOOL ok = WriteFile(f, head, sizeof head, &n1, NULL) && WriteFile(f, g_shotBuf, (DWORD)need, &n2, NULL) && n2 == (DWORD)need;
+    CloseHandle(f);
+    if (!ok) { shot_fail("short write to %s", g_shotRes.path); return; }
+    g_shotRes.w = w; g_shotRes.h = h;
+    snprintf(g_shotRes.detail, sizeof g_shotRes.detail, "back buffer of hwnd %p, %zu/%zu samples lit, %lu ms%s",
+             (void *)hw, lit, samples, (unsigned long)(GetTickCount() - t0), IsWindowVisible(hw) ? "" : ", window hidden");
+    logf_("shot line %d: %s -> %s", g_shotLine, g_shotRes.detail, g_shotRes.path);
+    InterlockedExchange(&g_shotState, 2);
+}
+
+static int hook_SwapWindow(void *window) {
+    if (g_shotState == 1) shot_capture();
+    return g_origSwap(window);
+}
+
+/* swap the SDL_GL_SwapWindow DYNAPI slot once the window exists (the slot holds an init stub until SDL starts) */
+static void maybe_hook_swap(void) {
+    if (g_swapHook) return;
+    void *appGlobal = (void *)g_fw.GetData(FW_DATA_App);
+    void *app = NULL, *window = NULL;
+    if (!appGlobal || !read_ptr(appGlobal, &app) || !app || !read_ptr(AT(app, OFF_APP_WINDOW), &window) || !window) return;
+    void **slot = (void **)g_fw.GetData(FW_DATA_SDL_GL_SwapWindow);
+    void *cur = NULL;
+    if (!slot || !read_ptr(slot, &cur) || !code_ptr_ok(cur)) { g_swapHook = -1; logf_("shot: SDL_GL_SwapWindow slot %p unusable (value %p); shots fall back to the runner's window capture", (void *)slot, cur); return; }
+    DWORD old = 0;
+    if (!VirtualProtect(slot, sizeof(void *), PAGE_READWRITE, &old)) { g_swapHook = -1; logf_("shot: cannot unprotect the swap slot (err %lu)", GetLastError()); return; }
+    g_origSwap = (fn_SDL_GL_SwapWindow)cur;
+    InterlockedExchangePointer(slot, (void *)hook_SwapWindow);
+    VirtualProtect(slot, sizeof(void *), old, &old);
+    g_swapHook = 1;
+    logf_("shot: SDL_GL_SwapWindow slot %p hooked at frame %ld (was %p)", (void *)slot, g_runner.frame, cur);
+}
+
+static int h_shot_arm(void *u, int line) {
+    (void)u;
+    if (g_swapHook != 1) return -1;
+    memset(&g_shotRes, 0, sizeof g_shotRes);
+    g_shotLine = line;
+    InterlockedExchange(&g_shotState, 1);
+    return 1;
+}
+static int h_shot_poll(void *u, MtShotResult *out) {
+    (void)u;
+    LONG s = g_shotState;
+    if (s != 2 && s != 3) return 0;
+    *out = g_shotRes;
+    InterlockedExchange(&g_shotState, 0);
+    return s == 2 ? 1 : -1;
+}
+
+/* speed <factor>: FW_SetTimeScale (framework API v6). The harness runs in the FrameBegin hook, on the game thread. */
+static int h_set_speed(void *u, double factor, double *applied, char *detail, size_t cap) {
+    (void)u;
+    if (!g_fw.SetTimeScale) { snprintf(detail, cap, "framework older than API v6 (no FW_SetTimeScale)"); return -1; }
+    double kept = g_fw.SetTimeScale(factor);
+    *applied = kept;
+    if (kept <= 0.0) { snprintf(detail, cap, "FW_SetTimeScale(%g) refused (framework inactive)", factor); return 0; }
+    snprintf(detail, cap, "FW_SetTimeScale(%g) -> %g", factor, kept);
+    logf_("speed: %s", detail);
+    return 1;
+}
+
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
     h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
-    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon,
+    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon, h_face_unit, h_run_step,
+    h_shot_arm, h_shot_poll, h_set_speed,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
@@ -1033,6 +1395,9 @@ static void init(void) {
     g_AddDirectorTest = (fn_AddDirectorTest)g_fw.GetSymbol(FW_SYM_AddComponent_MewDirector_test);
     g_GetGame = (fn_GetGame)g_fw.GetSymbol(FW_SYM_Component_GetGame);
     g_RngSeedState = (fn_RngSeedState)g_fw.GetSymbol(FW_SYM_Rng_SeedState);
+    g_CharacterFace = (fn_CharacterFace)g_fw.GetSymbol(FW_SYM_Character_Face);
+    g_GoOnAdventure = (fn_GoOnAdventure)g_fw.GetSymbol(FW_SYM_MewDirector_GoOnAnAdventure);
+    g_EnterNode = (fn_EnterNode)g_fw.GetSymbol(FW_SYM_MapScreen_EnterNode);
     logf_("run-entry symbols: CreateScene=%p CreateEntity=%p AddComponent<TacticsTest>=%p GetGame=%p AddComponent<MewDirector>(test, reference)=%p",
           (void *)g_CreateScene, (void *)g_CreateEntity, (void *)g_AddTacticsTest, (void *)g_GetGame, (void *)g_AddDirectorTest);
     for (int i = 0; i < FW_DATA_COUNT_; i++) {
@@ -1076,6 +1441,9 @@ static void init(void) {
     if (!install_hook(FW_SYM_ApplicationBase_FrameBegin, (void *)hook_FrameBegin, (void **)&g_origFrameBegin, 50, "ApplicationBase::FrameBegin")) return;
     if (!install_hook(FW_SYM_TurnControl_NextTurn, (void *)hook_NextTurn, (void **)&g_origNextTurn, 110, "TurnControl::NextTurn")) return;
     install_hook(FW_SYM_MewDirector_init, (void *)hook_DirectorInit, (void **)&g_origDirectorInit, 120, "MewDirector::init (diagnostic)"); /* optional */
+    /* the campaign walk (optional: without them `run` reports run_unavailable) */
+    g_MapScreenHooked = install_hook(FW_SYM_MapScreen_init, (void *)hook_MapScreenInit, (void **)&g_origMapScreenInit, 120, "MapScreen::init (run start)");
+    g_StartMapBattleHooked = install_hook(FW_SYM_MewDirector_StartMapBattle, (void *)hook_StartMapBattle, (void **)&g_origStartMapBattle, 120, "MewDirector::StartMapBattle (run fight)");
 
     AddVectoredExceptionHandler(1, veh);
     g_prevFilter = SetUnhandledExceptionFilter(top_filter);

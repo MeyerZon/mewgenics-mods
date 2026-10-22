@@ -14,8 +14,12 @@
 //  - Quoted tokens `"..."`: `\` escapes the next character and only `\n` means a newline (`\t` is a plain `t`);
 //    the quotes are dropped by the game and leave no flag — `quoted` here exists for round-tripping only.
 //  - `#` starts a comment to end of line, even in the middle of a bare token.
-//  - `//` and `/* */` are not in the game's tokenizer; 188 / 35 of the 210 vanilla .gon files use them, so an
-//    earlier pass must strip them (INFERRED, not located). The editor treats both as comments.
+//  - `//` and `/* */` are not in the game's tokenizer: the pre-pass `Gon_Preprocess` 0xa50bd0 strips them first
+//    (OBSERVED, `Gon_Pre_StripComments` 0xa4eb80; ported in ./preprocess.ts). Here both stay as trivia so editing
+//    round-trips; the rules match the pre-pass except where it interacts with `#` comments (it does not know them:
+//    a `/*` or `"` inside a `#` comment still counts to it) — the semantic readers parse preprocess() output.
+//  - `#include "x"` is a `#` comment to the tokenizer (trivia); the pre-pass inlines it before tokenizing
+//    (./preprocess.ts, ../gon-includes.ts).
 
 import type { Token, TokenType } from "./types.ts";
 
@@ -84,11 +88,10 @@ export function tokenize(src: string): Token[] {
       if (c === "/" && src[i + 1] === "*") {
         adv();
         adv();
-        while (i < n && !(src[i] === "*" && src[i + 1] === "/")) adv();
-        if (i < n) {
-          adv();
-          adv();
-        }
+        // Gon_Pre_StripComments 0xa4eb80 closes at a `/` whose previous char is `*` — the opener's `*` counts, so
+        // `/*/` closes at once; no nesting; unterminated runs to the end.
+        while (i < n && !(src[i] === "/" && src[i - 1] === "*")) adv();
+        if (i < n) adv();
         continue;
       }
       break;

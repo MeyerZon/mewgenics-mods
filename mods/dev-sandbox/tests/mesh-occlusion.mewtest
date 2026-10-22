@@ -1,0 +1,20 @@
+mods: dev-sandbox, fw-3d
+timeout: 120s
+hide: false
+# 3D phase M2 (docs/possible_3d_work.md): sprite/mesh occlusion. Launch it with MEWFW_MESH_PROBE=<col>,<row> in the
+# environment: mewframework draws the flat magenta probe cube (0.8 tiles) on that tile, interleaved into the units
+# layer's painter order (native/framework/src/fw_mesh_order.c): a cube one tile BEHIND a unit is drawn before that unit's
+# sprite (the sprite covers part of it), a cube one tile IN FRONT after it (the cube covers the sprite). It logs
+# "mesh occ ..." (the cube's projected silhouette), "mesh order ..." (where each mesh went in the item order) and the
+# units' "mesh order item ..." positions into mod_logs/mewframework.log; editor/src/core/art/mesh-measure.ts
+# judgeOcclusion compares the magenta pixels inside the silhouette with the pixels an unoccluded cube covers.
+# No spawn: the TacticsTest fight's own cats are the occluders. The shots wait for the camera ease-in and the banner.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "occ-a"
+wait frames 30
+shot "occ-b"
+wait frames 15
+quit

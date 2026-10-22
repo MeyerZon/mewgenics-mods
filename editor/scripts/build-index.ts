@@ -2,6 +2,8 @@
 // Generate the git-ignored editor/data/ caches:
 //   - component-names.json : distilled unique glaiel::<Name> class names
 //   - base-index.json      : category -> entry names (+ file) from .extracted/data
+//   - audio-index.json     : every pack audio/ path + the sound sets' groups and music_info tracks, read from the
+//                            resources.gpak index and its audio/*.gon entries (opened read-only; nothing extracted)
 // Safe to run repeatedly; it only writes under editor/data/.
 
 import { writeFileSync, existsSync } from "node:fs";
@@ -9,6 +11,9 @@ import { join } from "node:path";
 import { ensureDataCacheDir, ANALYSIS_DIR } from "../src/core/repo.ts";
 import { distillFromTsv, COMPONENT_CACHE_HINT } from "../src/core/components.ts";
 import { buildIndex, hasBaseData } from "../src/core/base-data.ts";
+import { openGpak } from "../src/core/gpak-index.ts";
+import { buildAudioIndex, audioIndexToJson, AUDIO_INDEX_FILE } from "../src/core/audio/sound-sets.ts";
+import { locateGameDir } from "../src/core/ingame/launch.ts";
 
 const dataDir = ensureDataCacheDir();
 
@@ -36,6 +41,23 @@ if (hasBaseData()) {
   console.log(`base-index.json: ${Object.keys(out).length} categories, ${total} entries`);
 } else {
   console.log("base-index.json: SKIPPED (no .extracted/data)");
+}
+
+// Audio index (sounds and music), from the installed pack.
+const gpakPath = join(locateGameDir(process.env), "resources.gpak");
+if (existsSync(gpakPath)) {
+  const g = openGpak(gpakPath);
+  try {
+    const byPath = new Map(g.entries.map((e) => [e.path, e]));
+    const ix = buildAudioIndex(g.entries.map((e) => e.path), (p) => new TextDecoder().decode(g.read(byPath.get(p)!)));
+    writeFileSync(join(dataDir, AUDIO_INDEX_FILE), JSON.stringify({ generatedAt: new Date().toISOString(), ...audioIndexToJson(ix) }));
+    const groups = [...ix.sets.values()].reduce((a, s) => a + s.events.size, 0);
+    console.log(`${AUDIO_INDEX_FILE}: ${ix.files.size} audio files, ${ix.sets.size} sound sets, ${groups} groups, ${ix.music.size} music tracks`);
+  } finally {
+    g.close();
+  }
+} else {
+  console.log(`${AUDIO_INDEX_FILE}: SKIPPED (no ${gpakPath}; set MEWGENICS_DIR to the game folder)`);
 }
 
 console.log(`done -> ${dataDir}`);

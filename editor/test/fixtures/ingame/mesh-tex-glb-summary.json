@@ -1,0 +1,233 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "mode": "glb",
+  "env": {
+    "MEWFW_MESH_PROBE": "1",
+    "MEWFW_MESH_PROBE_MODEL": "models/pillar.glb",
+    "MEWFW_MESH_PROBE_TEXTURE": "models/missing.png"
+  },
+  "targets": [
+    {
+      "name": "teal-top",
+      "rgb": [
+        23,
+        126,
+        171
+      ]
+    }
+  ],
+  "paletteTexel": null,
+  "judgement": {
+    "verdict": "match",
+    "staleChecked": true,
+    "counts": {
+      "teal-top": 2587
+    },
+    "shot": 1,
+    "anchorPx": [
+      1841.728,
+      760.104
+    ],
+    "box": {
+      "x0": 1669.728,
+      "y0": 588.104,
+      "x1": 2013.728,
+      "y1": 932.104
+    }
+  },
+  "shots": [
+    {
+      "label": "mesh-a",
+      "path": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-151149-dev-sandbox-mesh-tex-glb\\shot-mesh-a.png",
+      "note": "gl 3440 x 1440; back buffer of hwnd 00000000037d0dc6, 745/1025 samples lit, 16 ms"
+    },
+    {
+      "label": "mesh-b",
+      "path": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-151149-dev-sandbox-mesh-tex-glb\\shot-mesh-b.png",
+      "note": "gl 3440 x 1440; back buffer of hwnd 00000000037d0dc6, 730/1025 samples lit, 32 ms"
+    }
+  ],
+  "objects": [
+    {
+      "frame": 1,
+      "handle": 1,
+      "model": "models/pillar.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0557,
+        0.046
+      ],
+      "tex": null,
+      "palette": -1
+    },
+    {
+      "frame": 61,
+      "handle": 1,
+      "model": "models/pillar.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0745,
+        0.046
+      ],
+      "tex": null,
+      "palette": -1
+    },
+    {
+      "frame": 121,
+      "handle": 1,
+      "model": "models/pillar.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0558,
+        0.046
+      ],
+      "tex": null,
+      "palette": -1
+    },
+    {
+      "frame": 181,
+      "handle": 1,
+      "model": "models/pillar.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0558,
+        0.046
+      ],
+      "tex": null,
+      "palette": -1
+    },
+    {
+      "frame": 241,
+      "handle": 1,
+      "model": "models/pillar.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0558,
+        0.046
+      ],
+      "tex": null,
+      "palette": -1
+    },
+    {
+      "frame": 301,
+      "handle": 1,
+      "model": "models/pillar.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0558,
+        0.046
+      ],
+      "tex": null,
+      "palette": -1
+    },
+    {
+      "frame": 361,
+      "handle": 1,
+      "model": "models/pillar.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0558,
+        0.046
+      ],
+      "tex": null,
+      "palette": -1
+    },
+    {
+      "frame": 421,
+      "handle": 1,
+      "model": "models/pillar.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0558,
+        0.046
+      ],
+      "tex": null,
+      "palette": -1
+    }
+  ],
+  "textures": [],
+  "textureMissing": [
+    "mesh: model models/pillar.glb: model-texture-missing models/missing.png (textures/models/missing.png not on the mod path or in the gpak): base colour only"
+  ],
+  "draws": [
+    {
+      "frame": 1,
+      "fbo": 1,
+      "errors": 0,
+      "line": "mesh draw f=1 n=1 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0"
+    },
+    {
+      "frame": 2,
+      "fbo": 1,
+      "errors": 0,
+      "line": "mesh draw f=2 n=2 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0"
+    },
+    {
+      "frame": 3,
+      "fbo": 1,
+      "errors": 0,
+      "line": "mesh draw f=3 n=3 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0"
+    },
+    {
+      "frame": 4,
+      "fbo": 1,
+      "errors": 0,
+      "line": "mesh draw f=4 n=4 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=2/2 errors=0"
+    }
+  ],
+  "glErrors": [],
+  "run": {
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 2 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-151149-dev-sandbox-mesh-tex-glb"
+  }
+}

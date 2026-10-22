@@ -1,0 +1,4 @@
+{ "version": 1, "name": "dot", "frameRate": 60, "stage": { "width": 100, "height": 100, "background": "#000000" },
+  "shapes": { "dot": { "paths": [ { "d": "M-4 -4 L4 -4 L4 4 L-4 4 Z", "fill": "#ff0090" } ] } },
+  "sprites": { "DotMc": { "frames": 1, "layers": [ { "depth": 1, "keys": [ { "frame": 0, "ref": "dot", "x": 0, "y": 0 } ] } ] } },
+  "exports": { "ModDot": "DotMc" } }

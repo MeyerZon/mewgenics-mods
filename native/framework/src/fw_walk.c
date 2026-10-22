@@ -1,9 +1,7 @@
 /* Pure entity/component walks and object edits; see fw_walk.h. */
 #include "fw_walk.h"
 
-void *fw_walk_find_status(void *character, const void *vt) {
-    if (!character) return NULL;
-    void *ent = fw_walk_char_entity(character);
+void *fw_walk_entity_find_status(void *ent, const void *vt) {
     if (!ent) return NULL;
     uint32_t n = fw_walk_entity_count(ent); void **comps = fw_walk_entity_components(ent);
     for (uint32_t i = 0; i < n; i++) {
@@ -11,6 +9,10 @@ void *fw_walk_find_status(void *character, const void *vt) {
         if (c && fw_walk_status_vt(c) == vt && !fw_walk_status_removing(c) && fw_walk_status_temporary(c) == 0) return c;
     }
     return NULL;
+}
+
+void *fw_walk_find_status(void *character, const void *vt) {
+    return character ? fw_walk_entity_find_status(fw_walk_char_entity(character), vt) : NULL;
 }
 
 int fw_walk_vt_index(void *const *vts, int count, const void *vt) {
@@ -35,11 +37,14 @@ int fw_walk_each_custom(void *character, void *const *vts, int count, FwWalkVisi
 }
 
 void fw_walk_apply_resolve(const void *ctx, void *src, void *p5, const void *p6, void *defaultSource, FwApplyResolved *out) {
-    out->character = *(void *const *)((const char *)ctx + OFF_APPLYCTX_CHARACTER);
+    out->scene = *(void *const *)((const char *)ctx + OFF_APPLYCTX_SCENE);
     out->entity = *(void *const *)((const char *)ctx + OFF_APPLYCTX_ENTITY);
     out->source = src ? src : defaultSource;
     out->applier = p5 ? p5 : (p6 ? *(void *const *)((const char *)p6 + OFF_APPLYP6_APPLIER) : NULL);
 }
+
+/* the unit is ctx+0x18's entity in every ctx shape (a passive component, the Character itself); ctx+0x20 is the Scene */
+void *fw_walk_apply_existing(const FwApplyResolved *a, const void *vt) { return fw_walk_entity_find_status(a->entity, vt); }
 
 int fw_walk_merge_stacks(void *existing, int delta, void *applier) {
     *fw_walk_status_stacks(existing) += delta;
@@ -60,4 +65,16 @@ int fw_walk_touch_passives(void *status) {
     if (!ch) return 0;
     *((char *)ch + OFF_CH_TOUCHED_PASSIVES) = 1;
     return 1;
+}
+
+void *fw_walk_find_live(void *character, const void *vt) {
+    if (!character) return NULL;
+    void *ent = fw_walk_char_entity(character);
+    if (!ent) return NULL;
+    uint32_t n = fw_walk_entity_count(ent); void **comps = fw_walk_entity_components(ent);
+    for (uint32_t i = 0; i < n; i++) {
+        void *c = comps[i];
+        if (c && fw_walk_status_vt(c) == vt && !fw_walk_status_removing(c)) return c;
+    }
+    return NULL;
 }

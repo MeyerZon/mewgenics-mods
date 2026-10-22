@@ -78,3 +78,127 @@ ArtProbeLoc {
         tooltip "ENEMY_LILRAT_DESC"
     }
 }
+
+// test-only (wave probe, 2026-10-22): a real cat — TomTom's parts — whose idle is the appended `wave` animation
+// (probe.scene.json: waveF / waveB on the _Append_CatTest donor place wavePose, a parts: "game" rig made with
+// newCatAnimation whose arm1 / arm2 / head are keyed); npm run test:artprobe -- --cat-wave shows an animated pose
+// getting the cat's own parts and moving
+ArtProbeCatWave {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle wave]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (baked-glow probe, 2026-10-22): a Rat drawn by ArtProbeGlow — the marker, a square with a halo baked by
+// glow.ts bakeGlow (#ff8000, blur 24, 4 bands), the identical unglowed control square and a swatch of the colour;
+// npm run test:artprobe -- --glow-arena measures the halo in the arena
+ArtProbeGlow {
+    variant_of Rat
+    graphics {
+        movieclip ArtProbeGlow
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}
+
+// test-only (back-facing probe, 2026-10-22): a real cat — TomTom's parts — whose idle is the appended `probeBack`
+// (probe.scene.json: probeBackF places the front rig probeBackPose with NO marker, probeBackB the back rig
+// probeBackPoseBack — head_back behind, tail in front, as vanilla idleB — with the marker), so the marker in a shot
+// means the B frame plays. Facing away from data: properties.lock_orientation [1 0] — the orientation keys are read
+// from `properties` (Character::init 0xf91c6..0xf9382; #105 had put them in `graphics`, where nothing reads them), and
+// (1,0) is a back direction for facing sign +1 (Character::Face 0x10ce50); the lock also overrides every later turn.
+// npm run test:artprobe -- --cat-back
+ArtProbeCatBack {
+    variant_of TomTom
+    properties {
+        lock_orientation [1 0]
+    }
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeBack]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (back-facing probe control): the same cat and animation at the default enemy facing — it plays probeBackF
+// (the front rig, no marker), so a marker on this one would mean the default facing is already B
+ArtProbeCatFacing {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeBack]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (back-facing probe, the shown pose): TomTom whose idle is `probeBackShow` — probeBackShowF and
+// probeBackShowB BOTH place the back rig probeBackPoseBack (with the marker), so the back pose is drawn at any facing:
+// does the game fill head_back with the cat's own head seen from behind?
+ArtProbeCatBackShown {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeBackShow]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (raster + font probe, 2026-10-22): a Rat drawn by ArtProbeRaster (art/raster.scene.json → swfs/raster.swf):
+// a PNG raster sprite, smoothed / pixel-snapped / repeated bitmap fills, a 1024×768 minified "photo", a text in the
+// mod's own DefineFont3 ProbeBlocks; npm run test:artprobe -- --raster reads the shots (probe-raster.ts)
+ArtProbeRaster {
+    variant_of Rat
+    graphics {
+        movieclip ArtProbeRaster
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}
+
+// test-only (raster + font probe): a text whose font class no loaded SWF exports (art-probe.ts --raster patches the
+// built raster.swf: Peralta → Pzzzzzz) — what does the game draw for a missing font?
+ArtProbeFontMissing {
+    variant_of Rat
+    graphics {
+        movieclip ArtProbeFontMissing
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}
+
+// test-only (raster + font probe): a real cat (palette 54, custom_cats.gon.append) whose idle is raster.swf's appended
+// CatTest frame probeRaster — a gray ramp as a bitmap and as vector gray:N squares: is a bitmap's gray palette-remapped?
+ArtProbeRasterCat {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data ArtProbeRasterCat
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeRaster]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}

@@ -81,6 +81,16 @@ export interface ImportSvgResponse {
   info?: unknown;
 }
 
+/** POST /api/art/import-bitmap (api.importBitmap without a scene: the PNG checked and written to art/<id>.png) */
+export interface ImportBitmapResponse {
+  ok: boolean;
+  width?: number;
+  height?: number;
+  relPath?: string;
+  findings: Finding[];
+  error?: string;
+}
+
 export interface SwfReportExport {
   id: number;
   name: string;
@@ -135,6 +145,9 @@ export interface PaletteResponse {
   hints: Record<number, string>;
   defaultAbc: AbcMode;
 }
+
+/** GET /api/art/ghost-parts: the ghost cat's part outlines (catparts.swf when extracted, else built-in) */
+export type { GhostParts as GhostPartsResponse } from "../../../src/core/art/ghost-cat.ts";
 
 /** POST /api/art/prepare-swf-gate */
 export interface PrepareGateResponse {

@@ -98,6 +98,20 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetUniformFloat].expectedRva, 0x9bddc0u);
     CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetTexture].expectedRva, 0x9bdcd0u);
     CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Camera_AddPostProcessPass].expectedRva, 0x979880u);
+    /* campaign walk (2026-10-22): the harness's run start / run travel / run fight (docs/engine-map.md "Campaign walk") */
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MewDirector_GoOnAnAdventure].expectedRva, 0x3b01c0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MapScreen_init].expectedRva, 0x38d150u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MapScreen_EnterNode].expectedRva, 0x391c20u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MewDirector_StartMapBattle].expectedRva, 0x3b6d10u);
+    CHECK(b->symbols[FW_SYM_MapScreen_EnterNode].pattern != NULL);
+    CHECK_EQ(OFF_MAPSCREEN_NODE_COUNT, 0x7c);
+    CHECK_EQ(OFF_MAPSCREEN_NODES, 0x80);
+    CHECK_EQ(OFF_MAPSCREEN_MARKER, 0xa0);
+    CHECK_EQ(OFF_MAPMARKER_NODE, 0x50);
+    CHECK_EQ(OFF_MAPNODE_TYPE, 0x138);
+    CHECK_EQ(OFF_MAPNODE_NEXT_COUNT, 0x144);
+    CHECK_EQ(OFF_MAPNODE_NEXT_DATA, 0x148);
+    CHECK_EQ(OFF_MAPNODE_DONE, 0x168);
     CHECK_EQ(b->rva_data[FW_DATA_ShaderManager], 0x13c4a30);   /* the App global: the material map lives at +0x278 of it */
     CHECK_EQ(b->rva_TacticsTest_vftable, 0xf0f4b8);
     CHECK_EQ(OFF_TT_MASK_CAMERA, 0x58); CHECK_EQ(OFF_TT_MAIN_CAMERA, 0x68); CHECK_EQ(OFF_TT_BLUR_PASS, 0x90); CHECK_EQ(OFF_TT_COMPOSITE_PASS, 0x98);
@@ -125,6 +139,33 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(OFF_GON_NAME, 0x88);
     CHECK_EQ(OFF_GON_TYPE, 0xa8);
     CHECK_EQ(GON_NODE_SIZE, 0xb0);
+    /* effective stats (2026-10-22): what Character::recompute_stats (0x102520) writes — the harness's effective block */
+    CHECK_EQ(OFF_CH_STATS_EFF, 0x5bc);
+    CHECK_EQ(OFF_CH_MAX_HP, 0x4bc);
+    /* cat rig redirect (API v7, 2026-10-22): Character::init(name,bool,bool) scopes the clip lookup to the entry, the
+     * by-name instance lookup is where "CatTest" becomes the entry's _CatRig_ clip, the SWF post-load pass is where
+     * the _CatRig_<Entry> SymbolClass exports are found (docs/engine-map.md "Cat rig redirect") */
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Character_init].expectedRva, 0xf70f0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Swf_GetCharacterByName].expectedRva, 0x9bb890u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_ApplicationBase_ProcessAnimationMerges].expectedRva, 0x9bc070u);
+    CHECK(FW_SYMBOLS_25143593[FW_SYM_Swf_GetCharacterByName].pattern != NULL);
+    CHECK_EQ(OFF_SWF_SYMBOL_LIST, 0x78);
+    CHECK_EQ(OFF_SYMNODE_NAME, 0x10);
+    CHECK_EQ(OFF_SYMNODE_ID_FROM_NAME, 0x20);
+}
+
+/* facing (2026-10-22): Character::Face and the fields the harness's `face` / units event read (docs/engine-map.md
+ * "Facing: Character::Face") */
+TEST(build_25143593_facing_symbol_and_offsets) {
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Character_Face].expectedRva, 0x10ce50u);
+    CHECK(FW_SYMBOLS_25143593[FW_SYM_Character_Face].pattern != NULL);
+#ifdef OFF_CH_ORIENTATION
+    CHECK_EQ(OFF_CH_ANIMSM, 0x58); CHECK_EQ(OFF_ANIMSM_FACING, 0xb8); CHECK_EQ(OFF_ANIMSM_FLIP, 0x14c);
+    CHECK_EQ(OFF_CH_ORIENTATION, 0x388); CHECK_EQ(OFF_CH_LOCK_ORIENTATION, 0x3ac); CHECK_EQ(OFF_CH_FACE_SIGN, 0x3a4);
+    CHECK_EQ(OFF_CH_ART_FLIP, 0x3a0); CHECK_EQ(OFF_CH_NO_HFLIP, 0x3a8); CHECK_EQ(OFF_CH_ALWAYS_FRONT, 0x3b4); CHECK_EQ(OFF_CH_FOUR_WAY, 0x4cd);
+#else
+    CHECK(!"offsets.h carries the facing offsets (OFF_CH_ORIENTATION ...)");
+#endif
 }
 
 int main(void) { return MT_RUN_ALL(); }

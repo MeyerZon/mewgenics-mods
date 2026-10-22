@@ -12,6 +12,7 @@ GCC=${GCC:-gcc}
 CFLAGS="-std=c11 -O1 -g -Wall -Wextra -Werror -Wno-format-truncation"
 FW="$HERE/framework"
 HS="$HERE/mods/test-harness"
+JL="$HERE/mods/jokers-luck"
 
 run_suite() { # name, output, sources...
   name=$1; out=$2; shift 2
@@ -20,14 +21,31 @@ run_suite() { # name, output, sources...
   if ! "$out"; then echo "TESTS FAILED"; exit 1; fi
 }
 
-mkdir -p "$FW/build" "$HS/build"
+mkdir -p "$FW/build" "$HS/build" "$JL/build"
 run_suite "mewframework signature scanner" "$FW/build/test_sig" -I"$FW/src" "$FW/test/test_sig.c" "$FW/src/fw_sig.c"
 run_suite "mewframework build gate + generated tables" "$FW/build/test_build" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_build.c" "$FW/src/fw_build.c" "$FW/src/fw_sig.c"
-run_suite "mewframework status rules" "$FW/build/test_status_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_status_rules.c" "$FW/src/fw_status_rules.c"
-run_suite "mewframework vtable clone + thunks" "$FW/build/test_vtable" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_vtable.c" "$FW/src/fw_vtable.c" "$FW/src/fw_status_rules.c"
+run_suite "mewframework status rules" "$FW/build/test_status_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_status_rules.c" "$FW/src/fw_status_rules.c" "$FW/src/fw_glow_rules.c"
+run_suite "mewframework vtable clone + thunks" "$FW/build/test_vtable" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_vtable.c" "$FW/src/fw_vtable.c" "$FW/src/fw_status_rules.c" "$FW/src/fw_glow_rules.c"
 run_suite "mewframework entity/component walks" "$FW/build/test_walk" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_walk.c" "$FW/src/fw_walk.c"
 run_suite "mewframework resolve + hook plan" "$FW/build/test_resolve" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_resolve.c" "$FW/src/fw_resolve.c" "$FW/src/fw_sig.c"
 run_suite "mewframework per-unit glow rules" "$FW/build/test_glow_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_glow_rules.c" "$FW/src/fw_glow_rules.c"
+run_suite "mewframework random stream" "$FW/build/test_rng" -I"$FW/src" "$FW/test/test_rng.c" "$FW/src/fw_rng.c"
+run_suite "jokers_luck reroll" "$JL/build/test_roll" -I"$JL/src" -I"$FW/src" "$JL/test/test_roll.c" "$JL/src/jl_roll.c" "$FW/src/fw_rng.c"
+run_suite "mewframework game-speed rules" "$FW/build/test_speed_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_speed_rules.c" "$FW/src/fw_speed_rules.c" -lm
+run_suite "mewframework cat rig rules" "$FW/build/test_catrig_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_catrig_rules.c" "$FW/src/fw_catrig_rules.c"
+run_suite "mewframework 3D observer rules" "$FW/build/test_obs3d_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_obs3d_rules.c" "$FW/src/fw_obs3d_rules.c"
+run_suite "mewframework mesh draw (M1)" "$FW/build/test_mesh_draw" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_draw.c" "$FW/src/fw_m4.c" "$FW/src/fw_functor.c" "$FW/src/fw_gl_state.c" "$FW/src/fw_mesh_draw.c" "$FW/src/fw_mesh_rules.c" "$FW/src/fw_mesh_gltf.c" "$FW/src/fw_json.c" -lm
+run_suite "mewframework mesh rules" "$FW/build/test_mesh_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_rules.c" "$FW/src/fw_mesh_rules.c" -lm
+run_suite "mewframework 3D object registry" "$FW/build/test_obj3d_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_obj3d_rules.c" "$FW/src/fw_obj3d_rules.c" "$FW/src/fw_mesh_rules.c" -lm
+run_suite "mewframework per-unit models" "$FW/build/test_unit_model" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_unit_model.c" "$FW/src/fw_unit_model.c" "$FW/src/fw_gon.c" -lm
+run_suite "mewframework GON walker" "$FW/build/test_gon" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_gon.c" "$FW/src/fw_gon.c"
+run_suite "mewframework JSON tokenizer" "$FW/build/test_json" -I"$FW/src" "$FW/test/test_json.c" "$FW/src/fw_json.c"
+run_suite "mewframework glTF loader" "$FW/build/test_mesh_gltf" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_gltf.c" "$FW/src/fw_mesh_gltf.c" "$FW/src/fw_json.c" "$FW/src/fw_mesh_rules.c" -lm
+run_suite "mewframework mesh textures + palette" "$FW/build/test_mesh_tex" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_tex.c" "$FW/src/fw_mesh_tex.c" "$FW/src/fw_gl_state.c" "$FW/src/fw_mesh_rules.c" -lm
+run_suite "mewframework sprite/mesh order (M2)" "$FW/build/test_mesh_order" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_order.c" "$FW/src/fw_mesh_order.c" "$FW/src/fw_functor.c" -lm
 run_suite "mewtest harness pure modules" "$HS/build/test_mewtest" -DMT_HOST_TEST -I"$HS/src" -I"$FW/src" "$HS/test/test_mewtest.c" \
-  "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c"
+  "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c" "$HS/src/mt_face.c" "$HS/src/mt_walk.c" "$HS/src/mt_shot.c"
+CS="$HERE/mods/catrig-sample"
+mkdir -p "$CS/build"
+run_suite "catrig_sample pure part" "$CS/build/test_catrig_sample" -DFW_NO_WINDOWS= -I"$CS/src" -I"$FW/src" "$CS/test/test_catrig_sample.c" "$CS/src/catrig_sample_rules.c" "$FW/src/fw_catrig_rules.c"
 echo "=== all native suites passed"

@@ -50,6 +50,15 @@ npx playwright show-report              # open the last HTML report
   and the VectorCraft tab (the vendored app boots in a same-origin iframe, a
   `shape.rectangle` through `window.vectorcraft`, Apply brings it back onto the
   shape with the artboard re-origin undone; skips when not vendored).
+- **rooms** — the Room editor (Rooms mode): New room from the `room` template,
+  painting tiles by click and drag, placing a player spawn, a weighted random
+  list edited in the cell inspector, live `lvl-*` findings, Save and reload with
+  the `.lvl` bytes asserted through the editor's codec, an unedited room (and a
+  copied vanilla level, when `.extracted/levels` exists) saved byte for byte. It
+  works in a throwaway mod `mods/e2e-rooms` that it removes afterwards.
+  Tileset art: a clip-less tile/object keeps its tint swatch in the flat grid and
+  the Iso view, painting works on the iso diamonds; with `.extracted/swfs` the grid
+  shows thumbnails and the Iso view draws loaded images, objects after their tile.
 - **onboarding** — the first-run data tour, the Art tour (auto-open on first Art
   entry, persistence of seen / "don't show again" across reload, re-open from the
   Help menu), the concepts drawer (Art section + 16-swatch ramp, mode-aware

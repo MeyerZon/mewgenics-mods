@@ -1,0 +1,9 @@
+MyAura {
+    movieclip ParticlePuff
+    combo [BasePuff]
+}
+MyBadAura {
+    movieclip ParticlePuff
+    combo [MyAura, NoSuchSystem]
+    chain AlsoMissing
+}

@@ -1,0 +1,9 @@
+PinkSpin {
+    variant_of Spin
+    graphics {
+        particle NoSuchHitClip
+        affected_particle Explosion
+        center_particle none
+        area_particle ModDot
+    }
+}

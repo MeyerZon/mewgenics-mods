@@ -76,12 +76,46 @@ enter Campaign house                             the same fresh campaign, but th
 seed <N>                                         pin the game's RNG (TLS+0x178) to N (0..2^64-1) once the game's own
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every
-                                                 roll after it are then identical run to run, so assertions can be exact
+                                                 roll after it are then identical run to run, so assertions can be exact.
+                                                 It also re-seeds the native mods' FW_Random stream (framework API v5)
+                                                 with N, so a native status's rolls are pinned too (never CRT rand)
+run start [<map>.gon]                            the campaign walk (needs a director; after `enter Campaign house`):
+                                                 MewDirector::GoOnAnAdventure(<map>, default alley.gon — the run's first
+                                                 map; TeamType 1, 4 cats, debug = a generated party and no class chooser)
+                                                 -> the Map scene and MapScreen::init (hooked). Once per script
+run travel <node type>                           MapScreen::EnterNode on the nearest node of that type (breadth first over
+                                                 the map's next edges from the marker's node; the 19 MapNode::str_to_type
+                                                 names, battle OBSERVED). No path animation: the node is entered where the
+                                                 marker stands. A done node (+0x168) is refused
+run fight                                        wait (<= 30 s, like the console) until the battle that node started exists:
+                                                 MewDirector::StartMapBattle ran (hooked: its level path) and
+                                                 TurnControl::NextTurn fired; the run event carries "level"
+expect level "<substr>"                          the level path the last `run fight` reported contains substr (DLL-side)
 glow <unit> <r> <g> <b> <a>                      FW_SetUnitGlow (framework API v4) on a unit of the walk (index, bareword or
-glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; v1
-                                                 keeps one shared colour); `off` = FW_ClearUnitGlow. Needs the fight and
+glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; each
+                                                 unit its own colour since glow v2); `off` = FW_ClearUnitGlow. Needs the fight and
                                                  `mods: …, fw-glow` (the rim shader). A missing unit or a refusal ends the
                                                  script with code 1 (glow_failed); a framework without API v4 with code 4
+face <unit> <dx> <dy>                            turn a unit of the walk (index, bareword or "name"): Character::Face 0x10ce50 with
+face <unit> front|back                           the grid direction (exactly one of 1 0 | -1 0 | 0 1 | 0 -1) and instant = 1 —
+                                                 the suffix (F / B), the flip and the root x-scale change at once and the
+                                                 current state replays, so <anim>B shows on the next frame. front / back =
+                                                 the unmirrored facing for the unit's facing sign s (Character+0x3a4):
+                                                 front (0,-s), back (s,0). properties.lock_orientation replaces the direction
+                                                 (the event says so). Event kind "face" (below); a missing unit or a refusal
+                                                 ends the script with code 1 (face_failed); a framework without
+                                                 FW_SYM_Character_Face with code 4 (face_unavailable). Needs the fight
+speed <factor>                                   FW_SetTimeScale (framework API v6): the game's own time scale (combat_speed,
+speed off                                        hit pause, 1.0 elsewhere) is multiplied by factor once per rendered frame,
+                                                 so the fixed-step loop runs factor x as many identical updates: game time
+                                                 runs factor x faster, deterministically (same dt, same RNG sequence; a
+                                                 seeded script keeps its exact expectations). factor = a decimal > 0, the
+                                                 framework clamps to [1/16, 64] and the event reports what it kept; `off` =
+                                                 1 (the game's value back). `wait frames` counts rendered frames, so a
+                                                 frame wait covers factor x more game time; `wait ms` stays wall-clock.
+                                                 A refusal ends with code 1 (speed_failed), no API v6 with code 4
+                                                 (speed_unavailable). Measured ceiling: docs/engine-map.md "Frame timing
+                                                 and game speed"
 wait frames|turns|rounds|ms <N>                  N >= 1; turns = TurnControl::NextTurn calls; rounds = TurnControl's
                                                  round counter advancing by N from the directive
 expect console "<substr>" [within <frames>]      a console line since the last cmd contains substr
@@ -89,24 +123,35 @@ expect noconsole "<substr>"                      no such line since the last cmd
 expect status <Name> on <index|bareword|"name">  a unit carries the status (vanilla or framework-registered)
 expect units <==|!=|>=|<=|>|<> <N>               unit count in the current combat
 expect round <op> <N>                            TurnControl's round (0 outside combat)
-expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail)
+expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail); N is a
+                                                 signed integer (`== -10`: a leading `-` is a sign, never a flag)
 expect stacks <Status> on <unit> varied          >= 2 distinct stacks values seen for (unit, status) by earlier dump /
                                                  expect stacks directives (and this one)
 expect unit <unit> <field> <op> <value>          one field of one unit as the units event shows it: name|class|namekey
                                                  take a quoted value with == or !=; faction|move|act|turnkind|hp|shield|
                                                  divineshield|strength|dexterity|constitution|intelligence|speed|
-                                                 charisma|luck take an integer (negatives allowed) with any op. Event
+                                                 charisma|luck take an integer (negatives allowed) with any op; facing
+                                                 (2026-10-22) takes a quoted value with == / != ("F", "B", four-way
+                                                 "LF".."RB"), dirx|diry|flip|sign an integer. Event
                                                  kind "unit", arg e.g. `8 name == "Lil' Rat"`, detail `unit 8 "Lil'
                                                  Rat": name "Lil' Rat"`. Faction numbers seen: allies 1, coins 0,
                                                  enemies 2. namekey is the graphics.name loc key (ENEMY_POOTER_NAME);
                                                  hp is current HP (= properties.health right after a spawn), the seven
-                                                 stats are what Character::init stored (data value, default 5)
+                                                 stats are what Character::init stored (data value, default 5) — the BASE
+expect unit <unit> <stat>.effective <op> <N>     the EFFECTIVE stat (2026-10-22): what Character::recompute_stats wrote
+expect unit <unit> maxhp.effective <op> <N>      after folding every live passive's / status's ApplyStatModifiers (vtable
+                                                 slot 82) into a copy of the base block (Character+0x5bc.., the values the
+                                                 status menu shows); maxhp.effective = Character+0x4bc, max(1, base health
+                                                 + 4 * effective constitution). Integers, any op. Detail e.g. `unit 9
+                                                 "Lil' Rat": luck.effective 8` (LuckUp 3 on a luck-5 Rat). Read only — the
+                                                 harness never calls recompute_stats, so a value is as fresh as the game's
+                                                 last recompute (it ran for spawned units within 10 frames, OBSERVED)
 expect gon <unit> <path> <op> <number>           one node of the unit's merged data/characters entry, as the game holds
 expect gon <unit> <path> ==|!= "<string>"        it (Character+0x240; variant_of-resolved, every overlay applied): the
 expect gon <unit> <path> ==|!= true|false        DLL walks <path> (dot-separated; an all-digit segment indexes the
 expect gon <unit> <path> exists|missing          children, any other is the first child of that name) without calling
-                                                 the game. A number literal matches a number node only (compared on
-                                                 the node's double, any op), a quoted string a string node only, true/
+                                                 the game. A number literal (-?digits[.digits], e.g. `-0.5`) matches a
+                                                 number node only (compared on the node's double, any op), a quoted string a string node only, true/
                                                  false a bool node only; `exists` = present and not null, `missing` =
                                                  absent or null. Event kind "gon", arg e.g. `8 properties.health == 12`,
                                                  detail `unit 8 "Pooter" (ENEMY_POOTER_NAME): properties.health =
@@ -116,12 +161,21 @@ expect gon <unit> <path> exists|missing          children, any other is the firs
                                                  logged by the game (its own getters would log GON ERROR on a miss)
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
+expect deltas "<prefix>" <d1> [<d2> ...]         (runner side) the integers right after prefix in successive console lines (the whole
+                                                 run, from result.jsonl) step by exactly d1..dn — n+1 matching lines; for
+                                                 counters such as `debug_sfx_memory_use` ("Total loaded sfx: N bytes") whose
+                                                 absolute value varies run to run. Reported in report.logExpects (what "deltas")
+expect fwlog "<substr>"                          (runner side) a line of THIS launch's mewframework.log window contains
+                                                 substr — the framework's own lines (catrig registrations / redirects,
+                                                 hook installs, RegisterStatus) reach neither the console nor debug.log;
+                                                 like expect log: after the run, no within, report.logExpects (source
+                                                 "fwlog"), a miss = fail "expect fwlog failed at line N"
 dump                                             snapshot the units into a units event
-shot "<label>"                                   screenshot: the DLL emits a shot event and holds the scene 700 ms while
-                                                 the runner captures the game window to <run dir>/shot-<label>.png
-                                                 (artifacts.shots); needs `hide: false`, else the file shows the desktop
-                                                 and the shot is flagged hidden. Frame 0..~250 is the black loading
-                                                 screen: shoot after `wait frames 300` or after `enter`
+shot "<label>"                                   screenshot to <run dir>/shot-<label>.png (artifacts.shots): the DLL reads
+                                                 the GL back buffer at the next SDL_GL_SwapWindow (works hidden too), then
+                                                 emits the shot event and holds the scene 700 ms; when it cannot, the
+                                                 runner captures the window instead (see "Shots" below). Frame 0..~250
+                                                 is the black loading screen: shoot after `wait frames 300` or `enter`
 log "<text>"                                     echo into the result file
 quit [code]                                      no code: 0 if every expect passed, else 1; end of script == quit
 ```
@@ -142,14 +196,32 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"turn","n":N,"round":N}
 {"ev":"wait","line":N,"kind":"frames","n":N,"actual":N}
 {"ev":"expect","line":N,"kind":"console","arg":"...","ok":true,"detail":"..."}
-{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","namekey":"ENEMY_POOTER_NAME","faction":0,"move":3,"act":1,"turnkind":2,"hp":6,"shield":0,"divineshield":0,"strength":5,"dexterity":5,"constitution":5,"intelligence":5,"speed":5,"charisma":5,"luck":5,"statuses":["LuckUp"],"stacks":[2]}]}
+{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","namekey":"ENEMY_POOTER_NAME","faction":0,"move":3,"act":1,"turnkind":2,"hp":6,"shield":0,"divineshield":0,"strength":5,"dexterity":5,"constitution":5,"intelligence":5,"speed":5,"charisma":5,"luck":5,"effective":{"strength":5,"dexterity":5,"constitution":5,"intelligence":5,"speed":5,"charisma":5,"luck":7,"maxhp":6},"statuses":["LuckUp"],"stacks":[2]}]}
                                                 stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes);
                                                 namekey/hp/shield/divineshield/the seven stats (2026-10-22) read Character+0x248/+0x4b0/+0x4b4/+0x4b8/+0x5a0..+0x5b8
-                                                (docs/engine-map.md "GON at runtime"); an unreadable field reads as 0 / ""
+                                                (docs/engine-map.md "GON at runtime"); an unreadable field reads as 0 / "".
+                                                effective (2026-10-22): the seven stats after Character::recompute_stats (+0x5bc..+0x5d4,
+                                                same order) and maxhp (+0x4bc); docs/engine-map.md "Effective stats"
+                                                Each unit ends with the facing fields (2026-10-22, engine-map "Facing:
+                                                Character::Face"): ...,"stacks":[…],"facing":"F","dir":[0,-1],"lock":[0,0],
+                                                "sign":1,"flip":1,"fourway":0} — AnimStateMachine(+0x58)+0xb8 suffix,
+                                                Character+0x388 direction, +0x3ac lock_orientation, +0x3a4 facing sign,
+                                                AnimStateMachine+0x14c flip (+-art_flip, negative = mirrored), +0x4cd four_way_animations
 {"ev":"log","text":"..."}
-{"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
-{"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}
+{"ev":"shot","line":N,"label":"...","hold_ms":700,"source":"gl","file":"<run dir>\\shot-N.mtraw","w":W,"h":H,"detail":"back buffer of hwnd …, L/1025 samples lit, T ms"}
+                                                the DLL captured it; the runner converts the raw file to the PNG
+{"ev":"shot","line":N,"label":"...","hold_ms":700,"source":"window","gl":"<why not in-process>"}
+                                                the runner captures the window on seeing this (report.artifacts.shots);
+                                                a DLL from before 2026-10-22 emits neither source nor gl
+{"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>; FW_Random seeded"}
+{"ev":"run","line":N,"op":"start|travel|fight","arg":"alley.gon|battle|","ok":true,"map":"alley.gon","node":0,"type":"battle","depth":1,"level":"levels/alley/…/x.lvl","detail":"…"}
+                                                map (start), node/type/depth (travel) and level (fight) appear only when that step set them
 {"ev":"glow","line":N,"unit":N,"name":"...","arg":"<the directive's argument text>","ok":true,"detail":"FW_SetUnitGlow on 0x…: ok"}   unit -1 when no unit matched
+{"ev":"face","line":N,"unit":N,"name":"...","arg":"7 back","dir":[1,0],"effective":[1,0],"expect":"B","facing":"B","flip":1,"ok":true,"detail":"Character::Face(0x…, [1 0], instant) called"}
+                                                     dir = what was passed (front/back resolved), effective / expect = the
+                                                     decompiled rule (mt_face.c: lock, always_face_forward, sign, four-way),
+                                                     facing / flip = what the game wrote (read back); unit -1 when no unit matched
+{"ev":"speed","line":N,"arg":"<factor|off>","applied":"<the factor the framework kept, %g>","ok":true,"detail":"FW_SetTimeScale(8) -> 8"}
 {"ev":"idle","line":N}                               interactive mode: the script ran to its end; the DLL now serves the pipe
 {"ev":"exec","id":N,"op":"exec","text":"...","ok":true,"lines":["..."]}   a pipe request served (also the reply on the pipe)
 {"ev":"units","id":N,...}                            a dump requested over the pipe carries the request id
@@ -158,7 +230,7 @@ Every event carries `t` (ms since harness start) and `frame`.
                                                 closed — it would otherwise stop the frame loop for good under a hidden
                                                 window; never decides the verdict, appended to its reason
 {"ev":"crash","code":"0xC0000005","addr":"0x...","module":"Mewgenics.exe","rva":"0x...","tid":N}
-{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|seed_failed|seed_unavailable|glow_failed|glow_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
+{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|seed_failed|seed_unavailable|run_failed|run_unavailable|glow_failed|glow_unavailable|speed_failed|speed_unavailable|face_failed|face_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
 ```
 
 Harness exit codes: `0` pass, `1` an expect failed or `quit 1`, `2` script timeout, `3` crash, `4` harness error
@@ -210,6 +282,8 @@ npm run test:ingame -- jokers-luck smoke # one script
 npm run test:ingame -- --json            # machine-readable reports
 #   --timeout <ms>  --no-hide  --clean  --no-savecheck
 npm run test:unitglow                    # the per-unit glow proof: dev-sandbox/unit-glow + the shot measure (glow-measure.ts)
+npm run test:unitglow -- --data          # glow from DATA: fw-glow/data-glow (FwGlowRat, status FwGlow_ff00ff)
+npm run test:unitglow -- --data-expiry   # its removal: fw-glow/data-glow-expiry (a Temporary FwGlow_ that expires; verdict expired)
 ```
 
 Exit 0 when everything passed or was skipped, 1 on any failure, 2 on a usage error. A machine-level reason (no game,
@@ -231,6 +305,9 @@ run on demand, because they need Steam, a window and a save, and several agents 
 | `MEWTEST_RESULTS_DIR` | where run dirs go (default `editor/data/ingame-runs/`, git-ignored) |
 | `MEWTEST_SAVECHECK=0` | disable the read-only hash of the real save (default on) |
 | `MEWTEST_FAKE_GAME=<path>` | spawn `node <path>` instead of the exe (tests only) |
+| `MEWFW_OBSERVE3D=<n>` | read by `mewframework.dll` itself (passed through the environment): the phase-0 3D observer logs `obs3d …` lines for n windows of 60 world-camera frames per fight (`mods/dev-sandbox/tests/observe3d.mewtest`; parser `editor/src/core/ingame/obs3d.ts`; `docs/possible_3d_work.md`); unset or 0 = no hook installed |
+| `MEWFW_MESH_PROBE=1` / `<col>,<row>` | read by `mewframework.dll` (3D phase M): a magenta unit cube (0.8 tiles, lit per face) on tile (3,3) / that tile in every fight, drawn by the mesh engine's functor after the world camera's units layer; logs `mesh probe f=… tile=(c,r) ndc=(x y z) canvas=(x y)` and `mesh draw …` (`mods/dev-sandbox/tests/mesh-probe.mewtest`; measured by `npm run test:artprobe -- --mesh [--tile c,r]`, `editor/src/core/art/mesh-measure.ts`, which refuses a verdict on byte-identical shots) |
+| `MEWFW_MESH_PROBE_MODEL=models/<name>.obj` | with the probe on: also places that model (`.obj`/`.gltf`/`.glb`, read through `-modpaths`) one tile right of the cube through the API v8 registry (`FW_Place3DObjectOnTile`'s path); put the mod that ships it on the `mods:` line (`fw-3d` ships `models/crate.obj` and `shaders/fw_mesh.shader`) |
 
 ## Artifacts
 
@@ -238,6 +315,48 @@ Each run writes `editor/data/ingame-runs/<YYYYMMDD-HHMMSS>-<mod>-<name>/` contai
 only), `result.jsonl`, `debug.log` (copy), `mewframework.window.log` (only this launch's slice of the append-mode
 log), `chainloader.log` (copy) and `report.json` (the full report). The JSONL is written into the run dir, never
 under `mods/`.
+
+### Shots
+
+**Mechanism (2026-10-22).** Once the game window exists, `mewtest.dll` swaps the `SDL_GL_SwapWindow` DYNAPI slot
+(`FW_DATA_SDL_GL_SwapWindow`, docs/engine-map.md "SDL3 DYNAPI") for its own function. A `shot` arms a capture; at the
+next present, on the render thread with the game's context current, the DLL binds the default framebuffer for reading,
+`glReadPixels(GL_BACK, GL_RGB)` the client area (the final composite, UI included), restores the GL state it touched
+and writes `<run dir>\shot-<line>.mtraw` (`mt_shot.c`: `MTSHOT01`, u32 LE width, u32 LE height, bottom-up RGB rows).
+The shot event then carries `source: "gl"` and the file; the runner (`shot.ts` `rawShotToPng`) turns it into
+`shot-<label>.png` and deletes the raw file. The capture costs ~15–30 ms of one frame at 3440 x 1440. Because it reads
+the game's own buffer it does not depend on DWM, the window being visible, in front or covered: **hidden runs
+(`hide: true`) get real shots too** (OBSERVED 2026-10-22: six distinct fight shots with the window hidden).
+
+**Fallback.** When the slot cannot be hooked, GL entry points are missing, `glReadPixels` errors, or no present comes
+within 30 frames (`MT_SHOT_GL_FRAMES`), the event carries `source: "window"` and `gl: "<why>"` and the runner captures
+the window as before: `PrintWindow(PW_RENDERFULLCONTENT)` on the process's main window, and only when that is black and
+the game is the foreground window, the screen region (recorded as `source: "screen"`). An older `mewtest.dll` (no
+`source` field) always takes this path.
+
+**Why (the stale shots, OBSERVED 2026-10-22).** In about half of the afternoon's runs every shot of a run came back
+byte-identical, the game's loading splash, while the fight ran normally. Every one of those 13 runs had taken all or
+some of its shots through the screen fallback (`note: "screen 3440 x 1440"`), and inside each run the screen copies
+were byte-identical; none of the 26 runs with real shots used it (`note: "window …"`). In run `…-120730-…` the first
+two shots were screen copies of the splash and the third a real `PrintWindow` frame. So with the game the foreground
+window, `PrintWindow` returned a dark frame and the screen copy returned one frozen frame. The likely mechanism (not
+proven, it could not be reproduced on demand) is that the full-screen borderless window was presented outside DWM
+composition (independent flip), so both GDI paths, which read DWM's copy, saw the last frame DWM had composed: the
+splash. The diagnostics also ruled out a wrong window: the process has exactly one visible top-level window
+(`SDL_app "Mewgenics!"`, the rest are the NVIDIA GL dummy windows and IME windows), and with the game behind another
+window `PrintWindow` returned a fresh frame for every shot.
+
+**Stale check.** After every run the runner compares the captured shots (`assessShots`): when two or more were taken
+and every file is byte-identical, `artifacts.shotsCheck.status` is `stale` and the reason ends with
+`; shots: stale (…)`. `ok` = at least two distinct, `single` = one shot (nothing to compare), `none` = nothing
+captured. The verdict is not changed (the script's expectations are separate), but `npm run test:artprobe` and
+`npm run test:unitglow` refuse to measure stale shots and exit 3 (`staleShotsRefusal`). A truly static scene shot twice
+would also read as stale; a live fight never repeats a frame exactly.
+
+**Limits.** The GL read sees what the game drew into its back buffer, so anything drawn by another process on top of
+the window (overlays, the Steam overlay drawn after the present) is not in the shot, and the debug console is in it
+when open. A shot arms the capture for the next present only; a scene that stops presenting (a modal dialog) falls
+back after 30 frames.
 
 ## Safety model
 
@@ -306,6 +425,35 @@ under `mods/`.
   markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.
 - Mewjector loads mods on the first `version.dll` proxy call, which on this machine is after SDL has initialized;
   the DYNAPI slots therefore already hold their final values when `DllMain` runs.
+
+## Campaign walk (2026-10-22)
+
+`run start` / `run travel <type>` / `run fight` / `expect level` walk a campaign run from the House into a map node's
+fight without the UI. The RE is `docs/engine-map.md` "Campaign walk"; the bindings are the walk block of
+`bindings/25143593.json` (FW_SYM `MewDirector_GoOnAnAdventure`, `MapScreen_init` (hooked), `MapScreen_EnterNode`,
+`MewDirector_StartMapBattle` (hooked); offsets `OFF_MAPSCREEN_*`, `OFF_MAPMARKER_NODE`, `OFF_MAPNODE_*`). Pure parts
+(node-type names, the breadth-first pick) are `src/mt_walk.c`, host-tested.
+
+```
+mods: _roomprobe
+wait frames 120
+enter Campaign house          # the disposable slot, day 1 in the House
+seed 42                       # after enter: the director's init loads the slot's own random_seed
+run start                     # alley.gon; detail: MapScreen, node count, the marker on the enter node
+wait frames 60
+run travel battle             # the battle node nearest the start; detail: node index, depth, the edge count
+run fight                     # waits for StartMapBattle + round 1; the event's "level" is the pool's pick
+expect level "walkprobe/wp_alley"
+dump                          # the fight's units (party 0-3, then the room's objects)
+```
+
+OBSERVED 2026-10-22 (`mods/_roomprobe/tests/walk-battle.mewtest`, `mods/dev-sandbox/tests/walk-vanilla.mewtest`,
+fixture `editor/test/fixtures/ingame/walk-summary.json`): alley.gon → 22 nodes, 39 edges, the marker on the enter node
+#19, `run travel battle` → node #0 (depth 1), `run fight` → `levels/alley/walkprobe/wp_alley.lvl` with the mod's
+`alley.gon.merge`, `levels/alley/easy/ch1-82.lvl` without it; ~10 s per run. Failures end the script: `run_failed`
+(code 1, e.g. "no battle node reachable", "not ready after 30000 ms: waiting for the battle") or `run_unavailable`
+(code 4, a framework without the walk symbols). **Side effect:** starting the adventure makes the game back the slot up
+as `saves/backups/mewtest01_<date>_<time>.savbackup` (the real save stays unchanged; see TODO.md).
 
 ## Interactive mode (named pipe)
 

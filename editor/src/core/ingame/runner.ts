@@ -10,9 +10,10 @@ import { spawn } from "node:child_process";
 import { DATA_CACHE_DIR } from "../repo.ts";
 import { locateGameDir, preflight, buildLaunch, LaunchError, type Preflight, type LaunchSpec, type Env } from "./launch.ts";
 import { parseResults, type ResultSummary } from "./results.ts";
-import { collectLogs, listCrashFiles, locateAppdataLogsDir, readWindow, checkLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
+import { collectLogs, listCrashFiles, locateAppdataLogsDir, readWindow, checkLogExpects, checkDeltaExpects, checkFwLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
 import { isRunnerSide } from "./script.ts";
-import { captureWindow, type CaptureFn } from "./shot.ts";
+import { captureWindow, rawShotToPng, assessShots, type CaptureFn, type ShotsCheck } from "./shot.ts";
+import type { ShotEvent } from "./results.ts";
 import {
   snapshotFile, compareSnapshots, realSavePath, realSavesDir, snapshotSaves, compareSaveSets, devSavePattern,
   resetCampaignSlot, CAMPAIGN_SLOT_FILE, type CampaignSlotReset,
@@ -91,11 +92,33 @@ export interface IngameReport {
     frameworkLogWindow: string | null;
     chainloaderLog: string | null;
     report: string | null;
-    /** one entry per `shot` directive: the PNG the runner captured while the DLL held the scene */
-    shots: { label: string; line: number; path: string | null; hidden: boolean; note?: string }[];
+    /** one entry per `shot` directive: the PNG (source "gl": the DLL's back-buffer read; "window"/"screen": the
+     * runner's capture while the DLL held the scene) */
+    shots: ShotArtifact[];
+    /** the shots as a whole (shot.ts assessShots): `stale` = every captured shot byte-identical, a frozen capture */
+    shotsCheck?: ShotsCheck;
   };
   stdoutTail: string;
   stderrTail: string;
+}
+
+export interface ShotArtifact { label: string; line: number; path: string | null; hidden: boolean; note?: string; source?: "gl" | "window" | "screen" }
+
+/** one shot event -> its artifact: the DLL's raw file converted to PNG when it read the back buffer, else the
+ * runner's window capture (the fallback; the screen copy it may take is recorded as source "screen") */
+export function shotArtifact(s: ShotEvent, runDir: string, pid: number | null, capture: CaptureFn, hide: boolean): ShotArtifact {
+  if (s.source === "gl" && s.file) {
+    try {
+      return { label: s.label, line: s.line, path: rawShotToPng(s.file, s.label, runDir), hidden: false, source: "gl", note: `gl ${s.w} x ${s.h}${s.detail ? `; ${s.detail}` : ""}` };
+    } catch (e) {
+      s = { ...s, gl: `raw shot unreadable: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+  let cap: ReturnType<CaptureFn>;
+  try { cap = capture(s.label, runDir, pid); } catch (e) { cap = { path: null, note: e instanceof Error ? e.message : String(e) }; }
+  const c = typeof cap === "string" || cap === null ? { path: cap } : cap;
+  const note = [c.note, s.gl ? `in-process capture: ${s.gl}` : ""].filter(Boolean).join("; ");
+  return { label: s.label, line: s.line, path: c.path, hidden: hide, source: c.note && /^screen /.test(c.note) ? "screen" : "window", ...(note ? { note } : {}) };
 }
 
 export function runDirName(mod: string, name: string, nowMs: number): string {
@@ -204,6 +227,8 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
   if (code !== null && code !== 0 && code > 255) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   if (code !== null && code < 0) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   const enter = result.enter;
+  const runs = Array.isArray(result.runs) ? result.runs : [];
+  const lastRun = runs.length ? runs[runs.length - 1]! : null;
   if (code === 4 || result.scriptError || (result.end && result.end.code === 4)) {
     const fwInactive = fw && fw.present && !fw.active;
     const sigs = fw && Array.isArray(fw.signatureFailures) ? fw.signatureFailures : [];
@@ -213,6 +238,8 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
         ? `enter ${enter.name} unavailable at line ${enter.line}: ${enter.detail} (enter_unavailable; rebuild mewframework/mewtest with the run-entry symbols)`
       : result.end && result.end.reason === "seed_unavailable" && result.seed
         ? `seed ${result.seed.seed} unavailable at line ${result.seed.line}: ${result.seed.detail} (seed_unavailable; rebuild mewframework/mewtest with the RNG symbols)`
+      : result.end && result.end.reason === "run_unavailable" && lastRun
+        ? `run ${lastRun.op}${lastRun.arg ? ` ${lastRun.arg}` : ""} unavailable at line ${lastRun.line}: ${lastRun.detail} (run_unavailable; rebuild mewframework/mewtest with the campaign-walk symbols)`
       : fwInactive && sigs.length
         ? `mewframework inactive: signature ${sigs.map((s) => `${s.name} (${s.matches} matches)`).join(", ")} failed on build ${fw.build || "?"}; re-derive with tools/bindings/make-signature.ts`
         : fwInactive
@@ -226,6 +253,9 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
   }
   if (result.end && result.end.reason === "seed_failed") {
     return { verdict: "fail", reason: result.seed ? `seed ${result.seed.seed} failed at line ${result.seed.line}: ${result.seed.detail}` : "seed failed (no seed event)" };
+  }
+  if (result.end && result.end.reason === "run_failed") {
+    return { verdict: "fail", reason: lastRun ? `run ${lastRun.op}${lastRun.arg ? ` ${lastRun.arg}` : ""} failed at line ${lastRun.line}: ${lastRun.detail}` : "run failed (no run event)" };
   }
   if (code === 1 || result.expects.failed > 0 || (result.end && result.end.code === 1)) {
     const f = result.expects.failures[0];
@@ -243,7 +273,7 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
   }
   const logExpects = input.logExpects || [];
   const missedLog = logExpects.find((e) => !e.ok);
-  if (missedLog) return { verdict: "fail", reason: `expect log failed at line ${missedLog.line}: "${missedLog.substr}" ${missedLog.detail}` };
+  if (missedLog) return { verdict: "fail", reason: `expect ${missedLog.what ?? (missedLog.source === "fwlog" ? "fwlog" : "log")} failed at line ${missedLog.line}: "${missedLog.substr}" ${missedLog.detail}` };
   if (code !== 0 && code !== null) return { verdict: "fail", reason: `exit code ${code}` };
   const extra = logExpects.length ? `, ${logExpects.length} log expectation(s)` : "";
   return { verdict: "pass", reason: `all ${result.expects.passed} expectation(s) passed${extra}` };
@@ -322,10 +352,12 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     report.verdict = v.verdict;
     report.killedAfterEnd = !!exit.killedAfterEnd;
     const shots = report.artifacts.shots;
+    if (shots.length) report.artifacts.shotsCheck = assessShots(shots);
+    const staleNote = report.artifacts.shotsCheck && report.artifacts.shotsCheck.status === "stale" ? `; shots: stale (${report.artifacts.shotsCheck.detail})` : "";
     const shotNote = shots.length
       ? `; ${shots.length} shot(s)${shots.some((s) => s.hidden) ? " taken with the window hidden (set hide: false to see the game)" : ""}${shots.some((s) => !s.path) ? `, ${shots.filter((s) => !s.path).length} not captured (${[...new Set(shots.filter((s) => !s.path).map((s) => s.note || "unknown"))].join(", ")})` : ""}`
       : "";
-    report.reason = v.reason + (exit.killedAfterEnd ? "; the game lingered after its end record and was killed after the end grace" : "") + shotNote;
+    report.reason = v.reason + (exit.killedAfterEnd ? "; the game lingered after its end record and was killed after the end grace" : "") + shotNote + staleNote;
     report.ok = v.verdict === "pass";
     report.code = exit.code;
     report.signal = exit.signal;
@@ -403,13 +435,7 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
       const capture = args.capture || captureWindow;
       // `shot` events: capture as soon as one shows up in the result file (the DLL holds the scene ~700 ms)
       const takeShots = (res: ReturnType<typeof parseResults>) => {
-        for (let i = report.artifacts.shots.length; i < res.shots.length; i++) {
-          const s = res.shots[i]!;
-          let cap: ReturnType<CaptureFn>;
-          try { cap = capture(s.label, runDir, child.pid ?? null); } catch (e) { cap = { path: null, note: e instanceof Error ? e.message : String(e) }; }
-          const c = typeof cap === "string" || cap === null ? { path: cap } : cap;
-          report.artifacts.shots.push({ label: s.label, line: s.line, path: c.path, hidden: plan.hide, ...(c.note ? { note: c.note } : {}) });
-        }
+        for (let i = report.artifacts.shots.length; i < res.shots.length; i++) report.artifacts.shots.push(shotArtifact(res.shots[i]!, runDir, child.pid ?? null, capture, plan.hide));
       };
       const poll = setInterval(() => {
         if (endTimer || settled) return;
@@ -453,20 +479,18 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     // 6. evidence
     report.result = parseResults(existsSync(outPath) ? readFileSync(outPath, "utf8") : null);
     // shot events the poll did not get to (a game that ended within one poll tick): capture what is on screen now
-    for (let i = report.artifacts.shots.length; i < report.result.shots.length; i++) {
-      const s = report.result.shots[i]!;
-      let cap: ReturnType<CaptureFn>;
-      try { cap = (args.capture || captureWindow)(s.label, runDir, null); } catch (e) { cap = { path: null, note: e instanceof Error ? e.message : String(e) }; }
-      const c = typeof cap === "string" || cap === null ? { path: cap } : cap;
-      report.artifacts.shots.push({ label: s.label, line: s.line, path: c.path, hidden: plan.hide, ...(c.note ? { note: c.note } : {}) });
-    }
+    for (let i = report.artifacts.shots.length; i < report.result.shots.length; i++) report.artifacts.shots.push(shotArtifact(report.result.shots[i]!, runDir, null, args.capture || captureWindow, plan.hide));
     report.artifacts.resultFile = existsSync(outPath) ? outPath : null;
     const logs = collectLogs({ gameDir, appdataLogsDir, frameworkLogOffset, launchedAtMs, expectedSuffix, crashesBefore });
     report.logFindings = logs;
     const runnerSide = plan.directives.filter(isRunnerSide);
+    const logSide = runnerSide.flatMap((d) => (d.what === "log" ? [d] : []));
+    const deltaSide = runnerSide.flatMap((d) => (d.what === "deltas" ? [d] : []));
     if (runnerSide.length) {
-      const debugText = logs.debugLog.path && logs.debugLog.present ? readFileSync(logs.debugLog.path, "utf8") : null;
-      report.logExpects = checkLogExpects(debugText, runnerSide);
+      const debugText = logSide.length && logs.debugLog.path && logs.debugLog.present ? readFileSync(logs.debugLog.path, "utf8") : null;
+      const fwSide = runnerSide.flatMap((d) => (d.what === "fwlog" ? [d] : []));
+      const fwText = fwSide.length ? readWindow(frameworkLogPath, frameworkLogOffset) : null;
+      report.logExpects = [...checkLogExpects(debugText, logSide), ...checkFwLogExpects(fwText, fwSide), ...checkDeltaExpects(report.result.consoleLines, deltaSide)].sort((a, b) => a.line - b.line);
     }
     const saveAfter = saveBefore && savePath ? snapshotFile(savePath) : null;
     const setAfter = setBefore && savesDir ? snapshotSaves(savesDir, { allow }) : null;

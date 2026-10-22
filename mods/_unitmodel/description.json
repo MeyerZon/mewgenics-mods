@@ -1,0 +1,7 @@
+{
+  "title": "Per-unit model probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for the 3D phase M2 per-unit models: the vanilla Rat gains `graphics { model { file \"models/unit-box.gltf\" ... } }` (a magenta 0.6-tile glTF box), so mewframework draws the box on every Rat and moves it with the Rat. Load it with fw-3d (the mesh shader and the Crate's crate.obj) and _autoplay (the fight plays itself, so the Rat walks): `mods: _unitmodel, fw-3d, _autoplay`. Never for play.",
+  "requirements": []
+}

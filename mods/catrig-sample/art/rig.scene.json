@@ -1,0 +1,685 @@
+{
+  "version": 1,
+  "name": "rig",
+  "frameRate": 60,
+  "stage": {
+    "width": 1280,
+    "height": 720,
+    "background": "#000000"
+  },
+  "preview": {
+    "palette": 54
+  },
+  "shapes": {
+    "checker": {
+      "paths": [
+        {
+          "d": "M0 0 L12 0 L12 8 L0 8 Z",
+          "fill": "bitmap:checkerbmp",
+          "transform": [
+            8,
+            0,
+            0,
+            8,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  },
+  "bitmaps": {
+    "checkerbmp": {
+      "file": "art/checker.png"
+    }
+  },
+  "sprites": {
+    "RigSample_tail": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "RigSample_leg2": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "RigSample_arm2": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "RigSample_body": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "RigSample_leg1": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "RigSample_arm1": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "RigSample_head": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "RigSampleMarker": {
+      "frames": 1,
+      "layers": [
+        {
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "checker",
+              "x": 0,
+              "y": 0
+            }
+          ]
+        }
+      ]
+    },
+    "RigSamplePoseIdle": {
+      "frames": 24,
+      "labels": {
+        "idle": 0
+      },
+      "rig": "cat",
+      "parts": "game",
+      "layers": [
+        {
+          "name": "tail",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_tail",
+              "matrix": [
+                0.599639892578125,
+                0.16241455078125,
+                -0.16241455078125,
+                0.599639892578125,
+                -24.45,
+                10.05
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg2",
+          "depth": 3,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_leg2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0479583740234375,
+                0.6212615966796875,
+                -9.85,
+                23.65
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "arm2",
+          "depth": 5,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_arm2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                17.15,
+                32.45
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "body",
+          "depth": 7,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_body",
+              "matrix": [
+                0.621307373046875,
+                0.00445556640625,
+                -0.01177978515625,
+                0.6211090087890625,
+                -0.4,
+                16.35
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg1",
+          "depth": 9,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_leg1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0883636474609375,
+                0.6212615966796875,
+                -32.1,
+                27.1
+              ]
+            }
+          ]
+        },
+        {
+          "name": "arm1",
+          "depth": 11,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_arm1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                -4.7,
+                37.25
+              ]
+            }
+          ]
+        },
+        {
+          "name": "head",
+          "depth": 13,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_head",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                10.95,
+                2.3
+              ]
+            }
+          ]
+        },
+        {
+          "name": "marker",
+          "depth": 15,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSampleMarker",
+              "matrix": [
+                0.5,
+                0,
+                0,
+                0.5,
+                -24,
+                -170
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "RigSamplePoseHit": {
+      "frames": 90,
+      "labels": {
+        "hit": 0
+      },
+      "rig": "cat",
+      "parts": "game",
+      "layers": [
+        {
+          "name": "tail",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_tail",
+              "matrix": [
+                0.599639892578125,
+                0.16241455078125,
+                -0.16241455078125,
+                0.599639892578125,
+                -24.45,
+                10.05
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg2",
+          "depth": 3,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_leg2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0479583740234375,
+                0.6212615966796875,
+                -9.85,
+                23.65
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "arm2",
+          "depth": 5,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_arm2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                17.15,
+                32.45
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "body",
+          "depth": 7,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_body",
+              "matrix": [
+                0.621307373046875,
+                0.00445556640625,
+                -0.01177978515625,
+                0.6211090087890625,
+                -0.4,
+                16.35
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg1",
+          "depth": 9,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_leg1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0883636474609375,
+                0.6212615966796875,
+                -32.1,
+                27.1
+              ]
+            }
+          ]
+        },
+        {
+          "name": "arm1",
+          "depth": 11,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_arm1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                -4.7,
+                37.25
+              ]
+            }
+          ]
+        },
+        {
+          "name": "head",
+          "depth": 13,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_head",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                10.95,
+                2.3
+              ]
+            }
+          ]
+        },
+        {
+          "name": "marker",
+          "depth": 15,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSampleMarker",
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                -48,
+                -200
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "RigSampleRoot": {
+      "frames": 10,
+      "labels": {
+        "idleF": 0,
+        "idleB": 1,
+        "hitF": 2,
+        "hitB": 3,
+        "hithardF": 4,
+        "hithardB": 5,
+        "hitupF": 6,
+        "hitupB": 7,
+        "knockbackF": 8,
+        "knockbackB": 9
+      },
+      "layers": [
+        {
+          "name": "ani",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSamplePoseIdle",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 1,
+              "ref": "RigSamplePoseIdle",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 2,
+              "ref": "RigSamplePoseHit",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 3,
+              "ref": "RigSamplePoseHit",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 4,
+              "ref": "RigSamplePoseHitOther",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 5,
+              "ref": "RigSamplePoseHitOther",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 6,
+              "ref": "RigSamplePoseHitOther",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 7,
+              "ref": "RigSamplePoseHitOther",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 8,
+              "ref": "RigSamplePoseHitOther",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 9,
+              "ref": "RigSamplePoseHitOther",
+              "x": 3.85,
+              "y": -47.95
+            }
+          ]
+        }
+      ]
+    },
+    "RigSamplePoseHitOther": {
+      "frames": 90,
+      "labels": {
+        "hithard": 0
+      },
+      "rig": "cat",
+      "parts": "game",
+      "layers": [
+        {
+          "name": "tail",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_tail",
+              "matrix": [
+                0.599639892578125,
+                0.16241455078125,
+                -0.16241455078125,
+                0.599639892578125,
+                -24.45,
+                10.05
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg2",
+          "depth": 3,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_leg2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0479583740234375,
+                0.6212615966796875,
+                -9.85,
+                23.65
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "arm2",
+          "depth": 5,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_arm2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                17.15,
+                32.45
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "body",
+          "depth": 7,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_body",
+              "matrix": [
+                0.621307373046875,
+                0.00445556640625,
+                -0.01177978515625,
+                0.6211090087890625,
+                -0.4,
+                16.35
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg1",
+          "depth": 9,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_leg1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0883636474609375,
+                0.6212615966796875,
+                -32.1,
+                27.1
+              ]
+            }
+          ]
+        },
+        {
+          "name": "arm1",
+          "depth": 11,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_arm1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                -4.7,
+                37.25
+              ]
+            }
+          ]
+        },
+        {
+          "name": "head",
+          "depth": 13,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSample_head",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                10.95,
+                2.3
+              ]
+            }
+          ]
+        },
+        {
+          "name": "marker",
+          "depth": 15,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "RigSampleMarker",
+              "matrix": [
+                0.75,
+                0,
+                0,
+                0.75,
+                -36,
+                -185
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "exports": {
+    "RigSampleCatClip": "RigSampleRoot"
+  }
+}

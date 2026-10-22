@@ -75,7 +75,8 @@ web build (`scripts/vendor-vectorcraft.ts`: the ONE pinned release zip, size + S
 Node built-ins only, nothing installed; owner decision 2026-10-22) into the git-ignored `web/public/vectorcraft/`,
 skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hashes it:
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
-  list and base-data index the validator needs; regenerate after the base game updates). In a secondary git
+  list, the base-data index and `audio-index.json` (the pack's audio paths + sound groups, read from the gpak index
+  read-only) the validator needs; regenerate after the base game updates). In a secondary git
   worktree, point at the main checkout instead: one `node_modules` junction plus `MEWGENICS_EXTRACTED_DATA` (the
   whole `.extracted/`: data, swfs, textures), `MEWGENICS_EDITOR_DATA` (the caches) and `MEWGENICS_ANALYSIS_DIR` (the
   reverse-engineering store); every such path resolves in `editor/src/core/repo.ts` (`docs/tdd-procedure.md` "Running
@@ -95,16 +96,21 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
-- `npm run test:e2e` — `vite build && playwright test`: the 44-check browser suite in `editor/tests/e2e/` that pins
-  the UI's DOM and flows (Data mode, Art mode, preview, onboarding). Needs Playwright's Chromium.
+- `npm run test:e2e` — `vite build && playwright test`: the 54-check browser suite in `editor/tests/e2e/` that pins
+  the UI's DOM and flows (Data mode, Art mode, Rooms mode, preview, onboarding, Export… / Import mod…). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (26 tools, incl. the art tools
-  with `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
-  Chromium), `check_game_build` and `port_bindings`).
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (31 tools, incl. the art tools
+  with `import_bitmap` (a PNG as a raster sprite / background plate / bitmap fill), `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
+  Chromium), `check_game_build`, `port_bindings`, the room tools `read_level` / `write_level`, and `pack_mod` / `install_mod`).
+- `npm run pack -- <mod> [--force] [--init]` — ship a mod: needs `mods/<mod>/mod.json` (name, version, author,
+  description, `gameBuild` = the Steam build id; `--init` drafts it), rebuilds its SWFs, refuses on validator errors
+  unless `--force`, writes the git-ignored `editor/data/dist/<mod>-<version>.zip` (mod minus `tests/` and `art/`, plus
+  `README-INSTALL.txt` + `MANIFEST.sha256`). `npm run pack -- --install <zip> [--into <dir>] [--yes]` unpacks one into
+  `mods/<name>/` after the checks in `docs/data-mods.md` "Shipping a mod" (never overwrites, never outside the mods dir).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
 
 **Data access / tooling** (repo root):
@@ -114,12 +120,17 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
 
 **Native layer** (Windows, w64devkit GCC; set the `GCC` env var to override the default `C:\raylib\w64devkit\bin\gcc.exe`):
 - `native/framework/build.bat` builds `mewframework.dll` into `native/framework/build/`; copy it to `native/dist/`
-  (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
+  (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL,
+  `native/mods/catrig-sample/build.bat` the cat rig sample (`FW_RegisterCatRig` from a DLL; T2 `npm run test:catrigsample`);
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
-  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules, the harness's modules;
-  171 checks = 14 + 6 + 14 + 13 + 11 + 15 + 8 + 90, `-Werror`),
+  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the `FW_Random` stream, the game-speed rules,
+  the cat rig redirect rules (registry, `_CatRig_` exports, the SymbolClass list scan), Joker's Luck's reroll, the 3D observer's rules, the
+  mesh draw (4x4 maths, the C std::function, GL save/restore, shader dialect), the OBJ / glTF loaders + JSON tokenizer,
+  the 3D-object registry, per-unit models, the GON walker, the glTF loader, mesh textures + palette, the sprite/mesh
+  painter order, the harness's modules, the cat rig sample's bind loop; 441 checks = 14 + 7 + 16 + 15 + 14 + 15 + 27 + 5 + 4 + 10 + 12 + 11 + 30 + 41 + 16 + 8 + 10 + 8 + 31 + 10 + 12 + 118 + 7
+  in 23 suites, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
@@ -201,7 +212,12 @@ launches, scans the logs, hashes the real save and decides the verdict. Contract
 verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with that file. Only the engine's 11 console
 commands exist at the main menu; `enter TacticsTest` (2026-10-20) replays the dev menu's test-fight button inside the
 DLL, after which the run commands (`spawn`, `bind`, `load`, `win`, …) exist, turns fire and `dump` / `expect units` /
-`expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry").
+`expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry"); `face <unit> back` turns a unit away
+(`Character::Face` 0x10ce50, so `<anim>B` frames are testable) and `dump` reports each unit's facing. After `enter Campaign house`,
+`run start` / `run travel battle` / `run fight` walk a real run into a map node's fight (the map pool picks the level;
+`expect level` checks it; `docs/ingame-testing.md` "Campaign walk"). `speed <factor>` (API v6,
+`FW_SetTimeScale`) runs the game's fixed-step loop factor x faster with identical updates (a seeded fight is the same
+fight); keep it at <= 12x when a script samples after `wait turns|rounds` ("Frame timing and game speed").
 
 Read `docs/engine-map.md` (binary facts, build identity, function RVAs, status model), `docs/data-mods.md` (overlay
 semantics and content shapes), `docs/ingame-testing.md` (the harness), `docs/binding-port.md` (the bindings manifest and

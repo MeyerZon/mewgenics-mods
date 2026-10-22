@@ -160,3 +160,195 @@ export function summarizeLocText(shots: LocTextMeasure[]): LocTextSummary {
   }
   return { outcomes, votes, plainRenders: shots.some((s) => s.plainRenders) };
 }
+
+// ---- C. the wave probe (2026-10-22): an animated cat pose authored with newCatAnimation ------------------------------
+//
+// ArtProbeCatWave = TomTom + alt_animations [[idle wave]]; the wave frames place wavePose, a parts: "game" rig whose
+// slots are empty and whose arm1 / arm2 / head are keyed over its own timeline (mods/_artprobe/tests/render-cat-wave.mewtest).
+// The measures (scripts/art-probe.ts --cat-wave, probe-compare.ts darkPixelsNear): our marker per wave shot; the cat's
+// outline under it vs the vanilla shot (real parts, held against TomTom's own outline); the slot placeholder colours
+// (must be absent: the slots are empty); and the motion — the near-black pixels that differ between two wave shots in
+// the rig's window (both directions), the largest pair, held against the same number in the still TomTom's window
+// (whose idle breathes and whose tint the move-range overlay may change: the noise floor).
+
+export interface CatWaveFacts {
+  verdict: string;
+  /** wave shots that show our marker */
+  markers: number;
+  /** of those, the ones with real parts under the marker (outline >= 30 % of TomTom's) */
+  partsDrawn: number;
+  /** the largest count of a slot placeholder colour near the marker in any wave shot */
+  slotMax: number;
+  /** the largest outline change between two wave shots in the rig's window */
+  motion: number;
+  /** the same in the control TomTom's window */
+  controlMotion: number;
+}
+export type CatWaveOutcome = "animated" | "static" | "not-filled" | "no-marker" | "placeholder-drawn" | string;
+/** the motion must change at least this many outline px … */
+export const WAVE_MIN_MOTION = 200;
+/** … and this many times the control's */
+export const WAVE_MOTION_RATIO = 2;
+
+export function catWaveOutcome(f: CatWaveFacts): CatWaveOutcome {
+  if (f.verdict !== "pass") return f.verdict;
+  if (f.markers < 2) return "no-marker";
+  if (f.partsDrawn < f.markers) return "not-filled";
+  if (f.slotMax > 50) return "placeholder-drawn";
+  return f.motion >= WAVE_MIN_MOTION && f.motion >= WAVE_MOTION_RATIO * f.controlMotion ? "animated" : "static";
+}
+
+// ---- D. the baked glow in the arena (2026-10-22) --------------------------------------------------------------------
+//
+// The ArtProbeGlow clip (probe.scene.json): the checker marker at the origin, the cxform square at (310, 30) (the
+// orientation cue analyzeProbeShot reads), a 60 px square `glowsrc` with the halo glow.ts bakeGlow bakes under it,
+// the identical unglowed square `glowctl` and a swatch of the baked colour — the colour as the game draws it on this
+// unit (the unit tint included), so the comparison needs no model of the tint. Per pixel the halo's alpha is read
+// against the baseline shot (the arena with no unit): a = (p - bg)·(S - bg) / |S - bg|², S the swatch colour. Sampled
+// along four rays out of each square's edges (each sample the mean over a 24 clip px stretch along the edge).
+
+export const GLOW_ARENA_PROBE = {
+  glowed: { x: 150, y: 220 },
+  control: { x: 330, y: 220 },
+  /** the squares' half size, clip px */
+  half: 30,
+  swatch: { x: 480, y: 220, half: 15 },
+  blur: 24,
+  steps: 4,
+  colour: "#ff8000",
+} as const;
+
+type Rgb3 = [number, number, number];
+export interface GlowRay { dir: "right" | "left" | "down" | "up"; alpha: number[] }
+export interface GlowArenaMeasure {
+  /** the swatch as drawn */
+  swatch: Rgb3;
+  /** the innermost band's mean colour */
+  inner: Rgb3;
+  colourMatch: boolean;
+  /** mean halo alpha inside the blur around the glowed square / the control square */
+  glowAlpha: number;
+  controlAlpha: number;
+  /** mean alpha just past the blur (should be ~0) */
+  beyondAlpha: number;
+  /** mean |shot - baseline| inside the blur around the glowed square (RGB distance) */
+  glowChange: number;
+  /** alpha profiles out of the glowed square, one per clip px from GLOW_EDGE_SKIP to blur + 8 */
+  rays: GlowRay[];
+  /** rays whose alpha never rises by more than GLOW_MONO_TOL from one px to the next */
+  monotonicRays: number;
+  /** the most drops larger than GLOW_MONO_TOL in one ray (visible band steps; 0 for a smooth falloff) */
+  bandJumps: number;
+}
+/** clip px next to the square edge skipped (anti-aliasing mixes the dark square in) */
+export const GLOW_EDGE_SKIP = 3;
+export const GLOW_MONO_TOL = 0.12;
+/** per-channel tolerance between the inner band and the swatch */
+export const GLOW_COLOUR_TOL = 45;
+
+export function measureGlowArena(img: RgbaImageLike, base: RgbaImageLike, g: ShotGeometry, L: typeof GLOW_ARENA_PROBE = GLOW_ARENA_PROBE): GlowArenaMeasure {
+  const toX = (cx: number) => (g.mirrored ? g.box.x1 + 1 - cx * g.scale : g.box.x0 + cx * g.scale);
+  const toY = (cy: number) => g.box.y0 + cy * g.scale;
+  const at = (im: RgbaImageLike, cx: number, cy: number): Rgb3 | null => {
+    const x = Math.round(toX(cx)), y = Math.round(toY(cy));
+    if (x < 0 || y < 0 || x >= im.width || y >= im.height || im.width !== img.width) return null;
+    const i = (y * im.width + x) * 4;
+    return [im.rgba[i]!, im.rgba[i + 1]!, im.rgba[i + 2]!];
+  };
+  // the swatch: the mean over its inner half
+  let sn = 0;
+  const ss = [0, 0, 0];
+  for (let dy = -L.swatch.half / 2; dy <= L.swatch.half / 2; dy += 1) for (let dx = -L.swatch.half / 2; dx <= L.swatch.half / 2; dx += 1) {
+    const p = at(img, L.swatch.x + dx, L.swatch.y + dy);
+    if (p) { ss[0] += p[0]; ss[1] += p[1]; ss[2] += p[2]; sn++; }
+  }
+  const swatch: Rgb3 = sn ? [Math.round(ss[0]! / sn), Math.round(ss[1]! / sn), Math.round(ss[2]! / sn)] : [0, 0, 0];
+  const dirs: Array<[GlowRay["dir"], number, number]> = [["right", 1, 0], ["left", -1, 0], ["down", 0, 1], ["up", 0, -1]];
+  /** mean alpha, colour and change at distance d outside the square centred on c, along (ux, uy) */
+  const sample = (c: { x: number; y: number }, ux: number, uy: number, d: number) => {
+    let n = 0, a = 0, ch = 0;
+    const col = [0, 0, 0];
+    for (let t = -12; t <= 12; t += 2) {
+      const cx = c.x + ux * (L.half + d) + (uy !== 0 ? t : 0), cy = c.y + uy * (L.half + d) + (ux !== 0 ? t : 0);
+      const p = at(img, cx, cy), b = at(base, cx, cy);
+      if (!p || !b) continue;
+      const s = [swatch[0] - b[0], swatch[1] - b[1], swatch[2] - b[2]], q = [p[0] - b[0], p[1] - b[1], p[2] - b[2]];
+      const den = s[0]! ** 2 + s[1]! ** 2 + s[2]! ** 2;
+      a += den > 0 ? (q[0]! * s[0]! + q[1]! * s[1]! + q[2]! * s[2]!) / den : 0;
+      ch += Math.hypot(q[0]!, q[1]!, q[2]!);
+      col[0] += p[0]; col[1] += p[1]; col[2] += p[2];
+      n++;
+    }
+    return n ? { a: a / n, ch: ch / n, col: [col[0]! / n, col[1]! / n, col[2]! / n] as Rgb3 } : { a: 0, ch: 0, col: [0, 0, 0] as Rgb3 };
+  };
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
+  const band = L.blur / L.steps;
+  const rays: GlowRay[] = [];
+  const glowA: number[] = [], ctlA: number[] = [], beyond: number[] = [], change: number[] = [];
+  const innerCols: Rgb3[] = [];
+  for (const [dir, ux, uy] of dirs) {
+    const alpha: number[] = [];
+    for (let d = GLOW_EDGE_SKIP; d <= L.blur + 8; d++) {
+      const s = sample(L.glowed, ux, uy, d + 0.5);
+      alpha.push(s.a);
+      if (d <= L.blur - 2) { glowA.push(s.a); change.push(s.ch); ctlA.push(sample(L.control, ux, uy, d + 0.5).a); }
+      if (d >= L.blur + 4) beyond.push(s.a);
+      if (d + 0.5 <= band - 1) innerCols.push(s.col);
+    }
+    rays.push({ dir, alpha });
+  }
+  const inner: Rgb3 = innerCols.length ? ([0, 1, 2].map((k) => Math.round(mean(innerCols.map((c) => c[k]!)))) as Rgb3) : [0, 0, 0];
+  const colourMatch = innerCols.length > 0 && [0, 1, 2].every((k) => Math.abs(inner[k]! - swatch[k]!) <= GLOW_COLOUR_TOL);
+  const monotonicRays = rays.filter((r) => r.alpha.every((a, i) => i === 0 || a <= r.alpha[i - 1]! + GLOW_MONO_TOL)).length;
+  const bandJumps = Math.max(0, ...rays.map((r) => r.alpha.filter((a, i) => i > 0 && r.alpha[i - 1]! - a > GLOW_MONO_TOL).length));
+  return { swatch, inner, colourMatch, glowAlpha: mean(glowA), controlAlpha: mean(ctlA), beyondAlpha: mean(beyond), glowChange: mean(change), rays, monotonicRays, bandJumps };
+}
+
+export type GlowArenaOutcome = "halo" | "none" | "wrong-colour" | "non-monotonic" | "control-lit";
+
+/** halo: the inner band is the swatch's colour, alpha falls off outward on >= 3 of 4 rays, the control is unlit */
+export function glowArenaOutcome(m: GlowArenaMeasure): GlowArenaOutcome {
+  if (m.controlAlpha > 0.15) return "control-lit";
+  if (m.glowChange < 15) return "none";
+  if (!m.colourMatch) return "wrong-colour";
+  if (m.glowAlpha < 0.15) return "none";
+  if (m.monotonicRays < 3) return "non-monotonic";
+  return "halo";
+}
+
+// ---- E. the back-facing probe (2026-10-22): a cat facing away plays its <anim>B frame on the back rig --------------
+//
+// probe.scene.json's donor carries probeBackF (the front rig probeBackPose, as authored) and probeBackB (the back rig
+// probeBackPoseBack: head_back behind, tail in front — at 1.5x), plus probeBackShowF / probeBackShowB (both the 1.5x
+// back rig). OBSERVED 2026-10-22: the checker marker at depth 15 of the back rig is not drawn (it is in the front rigs),
+// so the probe tells our B frame apart from vanilla idleB by SIZE: each new cat's dark-blob height over TomTom's.
+// ArtProbeCatFacing (the default enemy facing) is the control, then turned away with the harness's `face 9 back` (2026-10-22, the
+// turn pair below); ArtProbeCatBack faces away from data (properties.lock_orientation [1 0]); formerly the turn attempt (start_orientation +
+// lock_orientation [0 -1]); ArtProbeCatBackShown shows the back rig at any facing (scripts/art-probe.ts --cat-back).
+
+/** a new cat at least this many times TomTom's height is our 1.5x back rig */
+export const CAT_BACK_BIG = 1.3;
+
+export interface CatBackFacts {
+  verdict: string;
+  /** the control's height ratio (null when no new cat was found) */
+  front: number | null;
+  /** the turn attempt's height ratio per back shot */
+  back: Array<number | null>;
+  /** ArtProbeCatBackShown's height ratio per shown shot */
+  shown: Array<number | null>;
+  /** the turn pair (2026-10-22): `face 9 front` swaps the turned cat's back rig for its front rig in place — the vanished
+   *  pose's height over the height of the pose that replaced it (null when not measurable) */
+  turn?: number | null;
+}
+export type CatBackOutcome = "back-facing" | "back-pose-drawn" | "front-big" | "not-drawn" | string;
+
+/** back-facing: the turned cat plays our B frame; back-pose-drawn: it did not turn, but the back rig is drawn (shown cat). */
+export function catBackOutcome(f: CatBackFacts): CatBackOutcome {
+  if (f.verdict !== "pass") return f.verdict;
+  const big = (r: number | null) => r !== null && r >= CAT_BACK_BIG;
+  if (big(f.front)) return "front-big";
+  if (f.back.filter(big).length >= 2 || big(f.turn ?? null)) return "back-facing";
+  if (f.shown.filter(big).length >= 2) return "back-pose-drawn";
+  return "not-drawn";
+}

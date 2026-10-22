@@ -9,6 +9,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSy
 import { join, dirname, relative } from "node:path";
 import { MODS_DIR, resolveModWritePath, isInside, touchesSaves, vanillaSwfDir } from "../repo.ts";
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
+import { sceneLocLookup } from "./scene-loc.ts";
 import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
 import { newCatAnimation } from "./cat-rig.ts";
 import { importSvg } from "./svg-import.ts";
@@ -18,6 +19,8 @@ import { bakeGlow } from "./glow.ts";
 import type { BakeGlowOptions, BakeGlowResult } from "./glow.ts";
 import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
+import { addBitmapToScene, pngProblems, rasterFindings } from "./raster.ts";
+import type { AddBitmapOptions } from "./raster.ts";
 import type { RgbaImage } from "./png.ts";
 import { emitSwf, minimalGateSwf } from "./swf-emitter.ts";
 import type { EmitReport } from "./swf-emitter.ts";
@@ -113,7 +116,7 @@ export function readArtScene(modName: string, relPath: string): SceneReadResult 
   } catch (e) {
     return { ok: false, relPath, findings: [{ severity: "error", code: "scene-json", message: `invalid JSON: ${errText(e)}` }], error: "invalid JSON", text };
   }
-  const v = validateScene(json);
+  const v = validateScene(json, { locKey: sceneLocLookup(join(MODS_DIR, modName)) });
   return { ok: v.ok, relPath, scene: v.scene, findings: v.findings, text };
 }
 
@@ -132,7 +135,7 @@ export interface SceneWriteResult {
  */
 export function writeArtScene(modName: string, relPath: string, sceneInput: unknown, opts: { force?: boolean } = {}): SceneWriteResult {
   if (!relPath.endsWith(SCENE_SUFFIX)) return { ok: false, error: `scene files must end with ${SCENE_SUFFIX}`, findings: [] };
-  const v = validateScene(sceneInput);
+  const v = validateScene(sceneInput, { locKey: sceneLocLookup(join(MODS_DIR, modName)) });
   if (!v.ok && !opts.force) return { ok: false, error: "scene has errors (pass force to save anyway)", findings: v.findings };
   let abs: string;
   try {
@@ -159,6 +162,8 @@ export interface NewSceneOptions {
   template?: NewSceneTemplate;
   /** the animation name for the cat-animation template (default: the scene name, which must then be an identifier) */
   animation?: string;
+  /** cat-animation template: the four-way quartet <animation>LF/RF/LB/RB instead of the F/B pair */
+  fourWay?: boolean;
 }
 
 /** Create a new scene file from the starter example (or empty), or from a template. */
@@ -175,7 +180,7 @@ export function newArtScene(modName: string, name: string, opts: NewSceneOptions
   let scene: Scene;
   if (opts.template === "cat-animation") {
     scene = newScene(name);
-    const anim = newCatAnimation(scene, opts.animation ?? name);
+    const anim = newCatAnimation(scene, opts.animation ?? name, opts.fourWay ? { fourWay: true } : {});
     const e = anim.findings.find((f) => f.severity === "error");
     if (e) return { ok: false, error: e.message + (opts.animation === undefined ? " (pass `animation` to name the animation independently of the scene)" : ""), findings: anim.findings };
     scene = anim.scene;
@@ -301,6 +306,74 @@ export function bakeGlowIntoScene(args: BakeGlowIntoSceneArgs): { ok: boolean; e
   return { ok: true, glowId: r.glowId, layersAdded: r.layersAdded, findings: r.findings };
 }
 
+export interface ImportBitmapArgs extends Partial<Omit<AddBitmapOptions, "file" | "width" | "height">> {
+  /** the mod the PNG and the scene belong to */
+  mod?: string;
+  /** a PNG already inside the mod (e.g. art/Photo.png) */
+  file?: string;
+  /** or the PNG's bytes, base64; with `mod` it is written to art/<id>.png */
+  base64?: string;
+  /** a scene file to add it to (mods/<mod>/<scenePath>); without it the PNG is only checked */
+  scenePath?: string;
+}
+
+export interface ImportBitmapResult {
+  ok: boolean;
+  error?: string;
+  width?: number;
+  height?: number;
+  /** the PNG inside the mod */
+  relPath?: string;
+  bitmapId?: string;
+  shapeId?: string;
+  spriteId?: string;
+  exportName?: string;
+  findings: Finding[];
+}
+
+/**
+ * Import a PNG as raster art (raster.ts addBitmapToScene): check it (8-bit, non-interlaced, < texture_atlas_size in both
+ * dimensions), copy it into mods/<mod>/art/<id>.png when it came as bytes, and — with scenePath — add the bitmap, its
+ * shape and (mode sprite / background) a 1-frame exported clip to the scene file. The agent-facing op behind MCP
+ * import_bitmap and the Art mode's Import PNG….
+ */
+export function importBitmap(a: ImportBitmapArgs): ImportBitmapResult {
+  let bytes: Uint8Array;
+  if (typeof a.base64 === "string") bytes = new Uint8Array(Buffer.from(a.base64, "base64"));
+  else if (a.mod && a.file) {
+    const r = readModBytes(a.mod, a.file);
+    if (!r.ok) return { ok: false, error: r.error, findings: [] };
+    bytes = r.bytes;
+  } else return { ok: false, error: "pass base64 (the PNG's bytes) or mod + file (a PNG inside the mod)", findings: [] };
+  const head = pngProblems(bytes);
+  if (head.length) return { ok: false, error: head[0]!.message, findings: head };
+  let image: RgbaImage;
+  try {
+    image = decodePng(bytes);
+  } catch (e) {
+    return { ok: false, error: errText(e), findings: [{ severity: "error", code: /not supported|not a PNG/.test(errText(e)) ? "bitmap-unsupported-format" : "bitmap-decode", message: errText(e) }] };
+  }
+  const base = (a.file || "").replace(/^.*\//, "").replace(/\.png$/i, "").replace(/[^A-Za-z0-9_]/g, "_");
+  const id = a.id || (/^[A-Za-z_]/.test(base) ? base : base ? `Bitmap_${base}` : "Bitmap");
+  const findings: Finding[] = rasterFindings(`${a.file || "the PNG"}`, image.width, image.height, a.scale ?? 1);
+  if (findings.some((f) => f.severity === "error")) return { ok: false, error: findings.find((f) => f.severity === "error")!.message, width: image.width, height: image.height, findings };
+  let relPath = a.file;
+  if (typeof a.base64 === "string" && a.mod) {
+    relPath = `${ART_DIR}/${id}.png`;
+    const w = writeModBytes(a.mod, relPath, bytes);
+    if (!w.ok) return { ok: false, error: w.error, findings };
+  }
+  if (!a.scenePath) return { ok: true, width: image.width, height: image.height, relPath, findings };
+  if (!a.mod || !relPath) return { ok: false, error: "scenePath needs mod (and the PNG inside it)", findings };
+  const rd = readArtScene(a.mod, a.scenePath);
+  if (!rd.ok || !rd.scene) return { ok: false, error: rd.error || "scene does not validate", findings: [...findings, ...(rd.findings || [])] };
+  const add = addBitmapToScene(rd.scene, { ...a, id, file: relPath, width: image.width, height: image.height });
+  if (!add.ok) return { ok: false, error: add.findings.find((f) => f.severity === "error")?.message || "could not add the bitmap", width: image.width, height: image.height, relPath, findings: add.findings };
+  const w = writeArtScene(a.mod, a.scenePath, add.scene);
+  if (!w.ok) return { ok: false, error: w.error, findings: [...add.findings, ...w.findings] };
+  return { ok: true, width: image.width, height: image.height, relPath, bitmapId: add.bitmapId, shapeId: add.shapeId, spriteId: add.spriteId, exportName: add.exportName, findings: add.findings };
+}
+
 /**
  * Export one shape of a scene as art/<shapeId>.svg inside the mod, for an external vector editor (VectorCraft,
  * Inkscape, …). Import it back with importSvgIntoScene({ …, replace: true, options: { applyViewBox: false } }).
@@ -330,7 +403,8 @@ export function loadSceneBitmaps(modName: string, scene: Scene): { bitmaps: Map<
     try {
       bitmaps.set(id, decodePng(r.bytes));
     } catch (e) {
-      findings.push({ severity: "error", code: "bitmap-decode", message: `bitmap "${id}": ${errText(e)}`, path: `bitmaps.${id}.file` });
+      // a PNG the decoder does not take (16-bit, interlaced, …) is bitmap-unsupported-format; a corrupt one bitmap-decode
+      findings.push({ severity: "error", code: /not supported|not a PNG/.test(errText(e)) ? "bitmap-unsupported-format" : "bitmap-decode", message: `bitmap "${id}": ${errText(e)}`, path: `bitmaps.${id}.file` });
     }
   }
   return { bitmaps, findings };
@@ -375,7 +449,7 @@ export function buildSwf(modName: string, relPath: string, opts: BuildSwfOptions
   let scene: Scene;
   let findings: Finding[];
   if (opts.overrideScene !== undefined) {
-    const v = validateScene(opts.overrideScene);
+    const v = validateScene(opts.overrideScene, { locKey: sceneLocLookup(join(MODS_DIR, modName)) });
     if (!v.ok) return { ok: false, error: "scene has errors", findings: v.findings };
     scene = v.scene;
     findings = v.findings;

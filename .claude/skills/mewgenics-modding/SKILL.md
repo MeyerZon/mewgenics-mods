@@ -35,20 +35,52 @@ Tools, by purpose:
   items, characters, classes, difficulties, statuses/keywords, text keys).
 - `read_base_entry` — read one base entry (e.g. ability `Spin`) as GON.
 - `search_components` — search the ~2,007 `glaiel::<Name>` C++ component class
-  names, with where-used.
+  names, with where-used; for the top matches it also returns the GON keys each
+  component reads (type, default, required, inherited base keys, decompile
+  evidence; `editor/component-schema.json`). Check it before writing a component
+  block: the game silently ignores a key the component never reads.
 - `read_mod` — read a mod's overlay files.
 - `write_overlay` — create/update an overlay file under `mods/<name>/` (writes
   are confined to the mod folder).
-- `validate_mod` — run reference, localization, and overlay-target checks;
+- `validate_mod` — run reference, localization, overlay-target and component-key
+  checks (`unknown-key`: a key the component never reads; `missing-required-key`);
   returns ok/warning/error with source locations.
+  Pass `modpaths` (every mod loaded together, in -modpaths order) to also check the mods against each other:
+  `cat-append-conflict` (two mods append the same label; the later one wins), `swf-file-conflict` (two mods ship
+  the same swfs/<name>.swf; only the later one loads). Name your labels and SWFs after your mod.
 - `preview_merge` — compute the effective merged object (base + overlay).
 - `list_registered_native_names` — list native-registered status/ability names
   from `registered-names.json` (seeded with `JokersLuck`).
 - `new_from_template` — scaffold an ability/passive/item/status-data overlay
-  plus matching localization rows.
+  plus matching localization rows; kind `room` writes a new
+  `levels/<folder>/<name>.lvl`, kind `tileset-variant` a new tileset; `particle` scaffolds a `particles.gon.append`
+  system (`options.movieclip` = the SWF clip each particle draws, no loc rows) and
+  `vfx-ability` an ability whose `graphics.particle` plays your effect clip;
+  kind `glowing-character` (`options.colour`
+  rrggbb[aa], `parent` default Rat, `trigger` StatusOnSpawnIn | StatusOnBattleStart)
+  scaffolds a character variant that glows that colour from data (a status
+  `FwGlow_<colour>`; load `fw-glow` next to the mod) plus the status text rows.
+  A Temporary { status FwGlow_… turns N } glow ends when it expires (OBSERVED);
+  docs/data-mods.md "Asking for a unit glow from data".
+- `pack_mod` — ship a mod: needs `mods/<mod>/mod.json` (`init: true` drafts
+  it), rebuilds the SWFs, refuses on validation errors unless `force`, writes
+  `editor/data/dist/<name>-<version>.zip` (+ `README-INSTALL.txt`,
+  `MANIFEST.sha256`).
+- `install_mod` — install a mod zip into `mods/<name>/` after checking it; a
+  `build-mismatch` verdict carries a `prompt` for the user — call again with
+  `acceptBuildMismatch: true` only if they agree.
+- `read_level` / `write_level` — rooms (binary `levels/**.lvl`: a 10x10 grid of
+  `tiles.gon` ids + objects placed by `spawns.gon` id, any id may be a weighted
+  random list). `read_level { mod, path?, palette? }` decodes one (or lists the
+  mod's rooms; `palette: true` adds the tile/object palettes with names and
+  classes). `write_level { mod, path, level | base64 | edits }` writes only under
+  `levels/` inside the mod, byte-identical when unedited; edits are
+  `{ op: tile|object|remove, x, y, id | object: "Rat" | random: [{id|object, weight}] }`.
+  It returns the `lvl-*` findings. See docs/data-mods.md "Maps, rooms and encounters".
 
 A web UI (`node editor/web/server.ts`, opened in a browser) browses base data
-and components and shows inline validation and merge-preview. It is for a human;
+and components and shows inline validation and merge-preview; its Rooms mode is a
+10x10 grid painter for the same `.lvl` files. It is for a human;
 as an agent, drive the MCP tools.
 
 ## How mods load
@@ -89,6 +121,14 @@ plus GON syntax rules. Read
 [references/content-shapes.md](references/content-shapes.md) before authoring,
 and confirm real field names with `read_base_entry` rather than guessing.
 
+Particles / VFX (docs/data-mods.md "Particles and VFX"): a particle SYSTEM is a
+`data/particles.gon` entry (emitter keys, `movieclip <clip>`; no colour key: draw
+the clip in the colour you want) worn by `passives { EliteParticle <system> }` or
+named by `ParticleBurst` / `global_particles`; an ability's `graphics { particle /
+affected_particle / … }` names an SWF CLIP directly. A clip your mod builds
+(`build_swf`) works wherever a vanilla clip name does. The validator reports
+`particle-missing`, `clip-missing`, `particle-unknown-key`.
+
 ## Validate and test safely
 
 Always run `validate_mod` and inspect `preview_merge` before any in-game test.
@@ -121,9 +161,19 @@ exportTo?, screenshot? }`**: the vendored VectorCraft web build starts in Playwr
 installed), the shape's SVG becomes its artboard (the viewBox moved to 0,0 — command coordinates are artboard px),
 the commands run through `window.vectorcraft.execute` (`shape.rectangle { x, y, width, height }`, `shape.ellipse`,
 `path.create { d }`, `object.move { dx, dy }`, …), the export is re-origined and replaces `exportTo` in the scene file;
-it answers `skipped: true` with the reason when the build is not vendored. The server has 26 tools; the art ones are
-`list_art_scenes`, `read_art_scene`, `write_art_scene`, `new_art_scene`, `import_svg`, `export_svg`, `bake_glow`,
-`build_swf`, `inspect_swf`, `vectorcraft_exec`.
+it answers `skipped: true` with the reason when the build is not vendored. The server has 31 tools; the art ones are
+`list_art_scenes`, `read_art_scene`, `write_art_scene`, `new_art_scene`, `import_svg`, `import_bitmap`, `export_svg`,
+`bake_glow`, `build_swf`, `inspect_swf`, `vectorcraft_exec`.
+
+**Raster art and fonts (OBSERVED 2026-10-22, `docs/art-pipeline.md` "Raster art" / "Fonts").** Not only vectors: the
+game draws PNG bitmaps natively (every vanilla combat background is a 2000×1500 bitmap plate). `import_bitmap { mod,
+base64 | file, scene, mode: sprite | background | fill, scale, repeat, smooth: false }` adds `<id>Bmp`, the shape `<id>`
+and (sprite / background) a 1-frame clip `<id>Clip` exported for `graphics.movieclip` or a tileset's
+`combat_background` (`data/tilesets.gon.merge`); keep both sides < 4096 (`bitmap-too-large`), author at ≥ 1.7 texels
+per clip px for crisp 1440p (`bitmap-upscaled`), `smooth: false` for pixel art, `repeat: true` to tile. Gray texels
+are palette-remapped on a paletted (cat) unit like `gray:N`. A mod font is `scene.fonts.<Id> = { ascent, descent,
+glyphs: { "A": { d, advance } } }` (em 1024, y down, baseline 0) and `texts[].font: "<Id>"`; a missing glyph falls back
+to another font (`font-glyph-missing`); **a font class nobody exports crashes the game** (`font-class-unknown`).
 
 What the game does with a mod's SWF (OBSERVED 2026-10-20/21, build 25143593; `editor/src/core/art/engine-behaviour.ts`):
 
@@ -157,6 +207,7 @@ report what the game's loader would do (`editor/src/core/art/swf-rules.ts`; erro
 - `morph-shape-skipped` (warning, SWF): DefineMorphShape is skipped (no shape tweens); key shapes on a timeline instead.
 - `place-cxform-ignored` (warning, SWF): a PlaceObject (v1) colour transform is ignored; use PlaceObject2.
 - `fill-rule-ignored` (warning, scene + SWF): the engine fills each fill style even-odd; a `nonzero` path whose sub-paths cross or self-overlap gets a hole in-game — set `fillRule` `evenodd` or split the overlap into separate paths.
+- `text-loc-key-html` (warning, scene; also `validate_mod` on `art/*.scene.json`): a text that is exactly a loc key (base `combined.csv` or this mod's csv overlays) but still HTML is drawn as the key; set `"html": false` (Art mode: **plain (localized)**). An **info** when the text only has the key shape `^[A-Z][A-Z0-9_]{2,}$` and no such key exists (add the key and set `html: false` if it is meant to be localized).
 - `export-shadows-vanilla` (info, scene + SWF): an export named like a vanilla export (e.g. `CatTail`) replaces it for every by-name lookup, last-loaded file first (INFERRED, untested).
 - `jpeg-bitmap` (info, SWF): JPEG bitmaps decode but the game logs a warning; prefer PNG (DefineBitsLossless2).
 - `tag-ignored` (info, SWF): a tag outside the loader's switch is skipped silently.
@@ -172,21 +223,29 @@ character the passives `CharacterLightSource { glow [r g b a] size N }` (an addi
 knobs"; neither is a rim.
 
 New cat animation (the engine's shape: `_Append_CatTest` frames `<name>F` / `<name>B` on the root, each placing a cat
-rig as the child `ani` at depth 1 — the instance the engine restarts on every play; the rig's seven slots are EMPTY
-sprites, `parts: "game"`): `new_art_scene { mod, name, template: "cat-animation", animation: "<name>" }` → pose the
+rig as the child `ani` at depth 1 — the instance the engine restarts on every play; the rigs' seven slots are EMPTY
+sprites, `parts: "game"`; the F frame places the front rig `<name>Pose`, the B frame the back rig `<name>PoseBack`
+— `facing: "back"`, vanilla idleB's layout: `head_back` (the head with the catgen face `back`, drawn from behind)
+behind the body and the tail in front; `cat-anim-back-facing` warns when a B frame places a front rig):
+`new_art_scene { mod, name, template: "cat-animation", animation: "<name>" }` (add `fourWay: true` for a character with
+`graphics { four_way_animations true }`: frames `<name>LF/RF/LB/RB`, L mirrored — such a cat plays only four-way
+labels, which vanilla CatTest has none of) → pose the
 empty slots over the frames if you want (never put art in them: the game draws the cat's own parts — palette, texture,
 face — into empty slots, and a visible non-empty slot crashes it; placeholder art is preview-only) → `build_swf` →
 refer to it bare from GON: `alt_animations [[idle <name>]]` on a character or `animation <name>` on an ability (the
 engine adds the facing suffix; a missing F or B label is a silent no-op, so keep both). `write_art_scene { dryRun: true }`
 reports the `cat-anim-*` findings (`cat-anim-slot-not-empty` when a slot holds art; the info `cat-anim-untested` says
-what the game draws, OBSERVED in PR #74 once its empty-slot run lands). Never export a clip named `CatTest` itself:
+what the game draws, OBSERVED on a static pose in PR #74 and on an animated pose with keyed slots on 2026-10-22, `npm run test:artprobe -- --cat-wave`). In the web UI the preview draws a **ghost
+cat** in the empty slots (grey part silhouettes from catparts.swf, or built-in shapes without the extracted files,
+labelled with the slot, following its keys; toggle "ghost cat"): preview only, never in the SWF. Never export a clip named `CatTest` itself:
 clips resolve through a global last-loaded-first registry and it would replace the cat for every cat
 (`cat-clip-override`).
 
 Localized text (OBSERVED 2026-10-22, `docs/data-mods.md` "Localized text for mods"): add the row with
 `combined.csv.append` (`MY_MOD_LABEL,English,notes,Spanish,…` — every column), and give the scene a text whose `text`
 is exactly `MY_MOD_LABEL` **and `"html": false`** — the game then shows the current language's string. With the default
-HTML wrapper the key is drawn literally. Other texts stay literal (same in every language).
+HTML wrapper the key is drawn literally — the validator warns `text-loc-key-html` then. Other texts stay literal
+(same in every language).
 
 Redirecting a vanilla non-cat character's art without touching its GON (OBSERVED 2026-10-22, `data-mods.md`
 "Redirecting a vanilla character's clip via tilesets.gon"): a `data/tilesets.gon.merge` with
@@ -210,6 +269,14 @@ Not for `_CAT` characters.
 5. **Human play-check, always the last step of a mod:** the PR's T3 list names
    exactly what the owner should play and judge (the ability in a fight, feel,
    pacing, balance). The owner's verdict closes the loop; nothing else needs them.
+6. **Ship it** (when the owner wants it shared): give the mod a `mod.json`
+   (`name` = folder, semver `version`, `author`, `description`, `gameBuild` =
+   the Steam build id it was tested on, `native` + `frameworkApi` for a mod
+   with DLLs, `license`; the attribution line is suggested, never required),
+   then `pack_mod` (or `npm run pack -- <mod>`). Validator codes:
+   `manifest-missing` (info), `manifest-invalid` (error),
+   `manifest-build-mismatch` (warning). Full rules: `docs/data-mods.md`
+   "Shipping a mod".
 
 ## References
 

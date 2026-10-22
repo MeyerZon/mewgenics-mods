@@ -39,12 +39,13 @@ export interface TextProblem {
   at?: string;
 }
 
-export function textProblems(t: SceneText | null | undefined): TextProblem[] {
+/** @param sceneFonts the ids of the scene's own fonts (scene.fonts), valid font classes besides GAME_FONTS */
+export function textProblems(t: SceneText | null | undefined, sceneFonts: readonly string[] = []): TextProblem[] {
   const out: TextProblem[] = [];
   if (!t || typeof t !== "object") return [{ code: "text-empty", message: "a text is an object { text, font, size, width, height }" }];
   if (typeof t.text !== "string" || !t.text.trim()) out.push({ code: "text-empty", message: "text is empty", at: "text" });
   const font = t.font ?? "Peralta";
-  if (!GAME_FONTS.includes(font)) out.push({ code: "text-font", message: `font "${font}" is not a game font class (${GAME_FONTS.join(", ")})`, at: "font" });
+  if (!GAME_FONTS.includes(font) && !sceneFonts.includes(font)) out.push({ code: "text-font", message: `font "${font}" is neither a game font class (${GAME_FONTS.join(", ")}) nor one of this scene's fonts${sceneFonts.length ? ` (${sceneFonts.join(", ")})` : " (scene.fonts)"}`, at: "font" });
   if (!(typeof t.size === "number" && t.size > 0 && t.size <= 400)) out.push({ code: "text-size", message: "size must be a number of px in (0, 400]", at: "size" });
   if (!(typeof t.width === "number" && t.width > 0 && typeof t.height === "number" && t.height > 0)) out.push({ code: "text-box", message: "width and height must be positive px", at: "width" });
   if (t.color !== undefined) {
@@ -54,6 +55,33 @@ export function textProblems(t: SceneText | null | undefined): TextProblem[] {
   if (t.html !== undefined && typeof t.html !== "boolean") out.push({ code: "text-html", message: "html must be true or false", at: "html" });
   if (t.align !== undefined && !(t.align in ALIGN)) out.push({ code: "text-box", message: "align must be left, center or right", at: "align" });
   return out;
+}
+
+/** Where a localization key comes from, as the caller's lookup knows it (the base combined.csv or the mod's own csv overlays). */
+export type LocKeySource = "base" | "mod";
+/** The cheap key test when no table is at hand: vanilla keys are ALL_CAPS_WITH_UNDERSCORES. */
+export const LOC_KEY_SHAPE = /^[A-Z][A-Z0-9_]{2,}$/;
+
+/**
+ * text-loc-key-html: the game substitutes a key only in a plain initial text (the text-box ctor 0x98d910 looks the
+ * whole string up; OBSERVED 2026-10-22, mods/_artprobe/tests/render-loctext.mewtest), so a text that is exactly a
+ * key and still carries vanilla's HTML wrapper is drawn as the key. A key the lookup confirms (base table or the mod's
+ * csv overlays) is a warning; a string that only has the key shape is an info (it may be a plain word like PROBE).
+ */
+export function locKeyHtmlProblem(t: SceneText, locKey?: (key: string) => LocKeySource | null | undefined): { severity: "warning" | "info"; message: string } | null {
+  if (!t || typeof t.text !== "string" || t.html === false) return null;
+  const key = t.text;
+  const why: string[] = [];
+  const src = locKey ? locKey(key) : null;
+  if (src === "base") why.push("in the base combined.csv");
+  if (src === "mod") why.push("added by this mod's combined.csv.append");
+  const shaped = LOC_KEY_SHAPE.test(key);
+  if (!why.length) {
+    if (!shaped) return null;
+    return { severity: "info", message: `"${key}" looks like a loc key but no such key exists in the base table or this mod's csv files; if it is meant to be localized, add the key and set html: false` };
+  }
+  if (shaped) why.push("matches the key shape ^[A-Z][A-Z0-9_]{2,}$");
+  return { severity: "warning", message: `"${key}" is a localization key (${why.join("; ")}) but the text is emitted as HTML (vanilla's <p><font> wrapper): the game substitutes a key only in a plain text, so it would draw "${key}" as written. Set "html": false on this text (Art mode: tick "plain (localized)" on its row)` };
 }
 
 function esc(s: string): string {

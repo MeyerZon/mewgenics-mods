@@ -43,6 +43,7 @@ editor/
   web/src/state.ts            the app store (S, tpl) + actions (selectMod, openFile, save, …)
   web/src/components/*.tsx    TopBar, Explorer, Center (+ Editor), RightPanel, StatusBar, Toast, modals, drawers, tours
   web/src/art/*.ts(x)         art-state.ts, ArtExplorer, ArtCenter, ArtRightPanel, NewSceneModal, preview-gl.ts
+  web/src/rooms/*.ts(x)       Rooms mode (2026-10-22): room-state.ts (store + actions), Rooms.tsx (explorer, grid, inspector, findings)
   web/art/preview-dev.html    second Vite page (the standalone preview harness) → preview-dev.ts
   web/server.ts → server.ts  static dist + /api bridge with the zod gate
   scripts/*.ts, test/*.ts     node runs them directly
@@ -78,6 +79,52 @@ See each PR body for the red → green table with the exact summary lines. End s
 `npm run typecheck` clean over the whole editor + `tools/bindings`, `npm test` 288 passed / 0 failed,
 `npm run test:e2e` 34 passed, `npm run bindings:check` current, zero JSDoc type tags left, zero `.mjs` sources
 except the MCP shim.
+
+## Rooms mode (the Room editor, 2026-10-22)
+
+A third mode beside Data and Art (top bar Data | Art | **Rooms**, deep link `?mode=rooms`; a `.lvl` clicked in the
+Data-mode explorer opens there). It follows the same split as the other two modes: the browser holds a store
+(`web/src/rooms/room-state.ts`, `S.roomMode` in the app store) and calls the `/api` bridge; every edit goes through
+the pure helpers of `src/core/level/edit.ts`, which Vite bundles into the UI and MCP `write_level` runs on the server,
+so a click and an agent edit change a level identically. The core owns the disk side (`src/core/level/level-io.ts`:
+`listLevels` / `readLevel` / `writeLevel` / `validateLevel` / `levelPalette` on `api.ts`; writes only
+`mods/<mod>/levels/**.lvl`), the routes are `GET /api/levels`, `GET /api/level`, `GET /api/level-palette`,
+`POST /api/level`, `POST /api/level/validate` (zod `LvlFileSchema` in `api-schemas.ts`). Tests:
+`test/level-editor-tests.ts` (helpers, I/O, schema, MCP tools; T1: all 2361 vanilla levels through the JSON wire path)
+and `tests/e2e/rooms.spec.ts`.
+
+### Tileset art and the Iso view (2026-10-22)
+
+The grid, the palette rows and an optional **Iso** view show the game's own art instead of the dev editor's tint
+swatches, in a tileset picked in the toolbar (default: the tileset of the map whose `levels { folder }` holds the
+room, else `default_tileset`, i.e. `alley`).
+
+- **Resolve** (`src/core/level/tile-art.ts`, pure): a tile id → its `tiles.gon` class (the heaviest of a weighted
+  list) → the clip of that name, through `TILE_CLIP_ALIASES` (`ToxicTile` → `ToxTile`, `TallGrassTile` →
+  `TallGrassBack`, …) and the tileset's `water_alt_tile`; a spawn id → its `spawns.gon` object → the character's
+  `graphics.movieclip` (`variant_of` chains, `Name_Elite` → `Name`) → the tileset's clip remap (`static_1x1_a` →
+  the alley's `Rubble`, a mod's `alley { Rat ArtProbe }`); enemy factions draw mirrored. Then the SWF that exports
+  the clip: the mod's `swfs/*.swf` first, then the vanilla SWFs in `swflist.gon` order. Everything that does not
+  resolve is a named reason (`ART_REASONS`: `empty`, `not-in-palette`, `blank-tile`, `no-tile-class`, `utility`,
+  `no-character`, `cat-rig`, `no-clip`, `no-swfs`) shown in the cell tooltip, and that cell keeps its swatch.
+- **Render** (`src/core/art/swf-library.ts` + `swf-raster.ts`): a tag-header walk indexes each SWF's exports and
+  character offsets (the vanilla files are up to 170 MB; nothing is parsed in full), then only the clip's tags are
+  parsed and frame 1 is rasterised in software (supersampled scanlines: even-odd fills, stroke polygons from
+  `stroke.ts`, padded gradients, bitmap fills, cxforms, clip layers; no text/morphs/filters, no palette remap — cats
+  are not drawn). Scale 0.5 px per clip px (a 140 px tile diamond → 70 px) times `graphics.scale`. The pure-magenta
+  `#ff00ff` surface of the shader-filled tiles (water, lava, ice, creep, oil, …) is painted in the tile's tint.
+- **Serve + cache** (`src/core/level/level-art.ts`): `GET /api/level-art?mod&tileset&path` (every palette id's
+  resolution + the tileset list), `GET /api/level-tile-art?mod&tileset&tile=<id>|object=<id>` (the PNG; `&meta=1`
+  gives its size and the clip's registration point in it). Thumbnails and the export index are cached in
+  `editor/data/level-art/` (git-ignored, keyed by the SWF's size + mtime); no game art is ever committed.
+- **Iso view** (`Rooms.tsx` `IsoGrid`, `edit.ts` `isoCellCenter` / `isoDrawOrder`): 2:1 diamonds (the engine's
+  projection: `docs/3d-rendering-feasibility.md`), cell (x, y) at ((x−y)·w/2, (x+y)·w/4), tile art on the cell centre,
+  objects feet-registered on it, drawn in x+y order (back first). Painting, erasing and selecting work on the diamonds.
+- Tests: `test/level-art-tests.ts` (T0 on a SWF built by the editor's emitter + a synthetic base: resolver, reasons,
+  rasteriser origin / mirror / scale, the cache, no-`.extracted` fallback; T1: every vanilla tile id of `alley`
+  resolves to a clip or a named reason and every clip renders non-empty, the Rat and a static) and the two
+  "tileset art and the iso view" specs in `tests/e2e/rooms.spec.ts` (the swatch fallback runs everywhere; the art
+  check skips without `.extracted/swfs`).
 
 ## Follow-ups (not in this stack)
 

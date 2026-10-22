@@ -1,0 +1,9 @@
+// Campaign-walk probe (2026-10-22): alley's level pools point at a sub-folder only this mod has. .merge merges arrays
+// element-wise by index (docs/data-mods.md), so each one-item pool's single entry "easy"/"rare" becomes "walkprobe":
+// MapLevelPool_build 0x394450 then lists levels/alley/walkprobe/*.lvl (FileManager_ListDir walks the -modpaths) and
+// the first map's battle nodes can only draw levels/alley/walkprobe/wp_alley.lvl. Boss/miniboss pools stay vanilla.
+levels {
+    easy [walkprobe]
+    hard [walkprobe]
+    rare [walkprobe]
+}
