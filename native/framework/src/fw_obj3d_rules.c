@@ -196,6 +196,8 @@ int fw_obj3d_set_facing(Fw3dRegistry *r, int handle, int facing) {
     return 1;
 }
 
+int fw_obj3d_set_face_yaw(Fw3dRegistry *r, int handle, double yawDeg) { (void)r; (void)handle; (void)yawDeg; return 0; }   /* RED STUB */
+
 int fw_obj3d_mark_gon(Fw3dRegistry *r, int handle) {
     int i = fw_obj3d_find_handle(r, handle);
     if (i < 0) return 0;

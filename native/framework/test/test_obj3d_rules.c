@@ -303,17 +303,39 @@ TEST(set_look_set_facing_mark_gon_by_handle) {
     CHECK_STR(o->texture, "models/t.png");
 }
 
-TEST(facing_minus_one_mirrors_x_and_z_about_the_anchor) {
+/* 3D phase M3 `face`: the model turns with the unit (Character::Face direction -> face yaw, fw_unit_face.h) instead of
+ * mirroring with its sprite: model = T(anchor) x Ry(faceYaw) x transform. The sprite's facing sign alone no longer
+ * changes the matrix (a mirror would turn a right-handed model inside out). */
+TEST(face_yaw_rotates_about_the_anchor_and_facing_alone_does_not_mirror) {
     Fw3dRegistry r; fw_obj3d_init(&r);
     FakeCharacter a; void *ca = make_character(&a, 1);
     int h = fw_obj3d_add_character(&r, ca, "models/crate.obj", S2T);
-    fw_obj3d_set_facing(&r, h, -1);
+    const Fw3dObject *o = fw_obj3d_at(&r, 0);
+    CHECK(o->faceYaw == 0.0f);                                   /* new objects: no turn */
     const double xz[2] = { 1.25, -2.0 };
     float out[16];
-    fw_obj3d_model_matrix(fw_obj3d_at(&r, 0), xz, out);
-    /* T(anchor) x Swap(x<->z) x S2T: columns x -> 2*e_z, z -> 2*e_x, translation (1.25, 1, -2) (S2T's own (0,1,0) has no x/z) */
-    const float want[16] = { 0,0,2,0, 0,2,0,0, 2,0,0,0, 1.25f,1,-2.0f,1 };
-    CHECK(mat_eq(out, want));
+    fw_obj3d_set_facing(&r, h, -1);
+    fw_obj3d_model_matrix(o, xz, out);
+    /* T(anchor) x S2T: S2T = scale 2 with its own translation (0, 1, 0) */
+    const float plain[16] = { 2,0,0,0, 0,2,0,0, 0,0,2,0, 1.25f,1,-2.0f,1 };
+    CHECK(mat_eq(out, plain));
+    CHECK_EQ(fw_obj3d_set_face_yaw(&r, h, 270.0), 1);
+    CHECK(o->faceYaw == 270.0f);
+    fw_obj3d_model_matrix(o, xz, out);
+    /* T(anchor) x Ry(270) x S2T: x -> 2*e_z, z -> -2*e_x (the front, world -z, turns to +x = dir (1,0), the back) */
+    const float back[16] = { 0,0,2,0, 0,2,0,0, -2,0,0,0, 1.25f,1,-2.0f,1 };
+    CHECK(mat_eq(out, back));
+    CHECK_EQ(fw_obj3d_set_face_yaw(&r, h, 90.0), 1);
+    fw_obj3d_model_matrix(o, xz, out);
+    const float left[16] = { 0,0,-2,0, 0,2,0,0, 2,0,0,0, 1.25f,1,-2.0f,1 };
+    CHECK(mat_eq(out, left));
+    CHECK_EQ(fw_obj3d_set_face_yaw(&r, h + 99, 90.0), 0);       /* unknown handle */
+    /* a tile object turns too (the yaw is per object), about its tile centre */
+    int t = fw_obj3d_add_tile(&r, 2, 3, "models/crate.obj", NULL);
+    CHECK_EQ(fw_obj3d_set_face_yaw(&r, t, 180.0), 1);
+    fw_obj3d_model_matrix(fw_obj3d_at(&r, 1), NULL, out);
+    const float tile180[16] = { -1,0,0,0, 0,1,0,0, 0,0,-1,0, 2.5f,0,3.5f,1 };
+    CHECK(mat_eq(out, tile180));
 }
 
 TEST(api_v6_version_and_fwapi_layout) {

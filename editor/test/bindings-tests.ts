@@ -489,7 +489,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 103, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures) + 3 sprite/mesh order (M2 occlusion)");
+    eq(offs.length, 104, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures) + 3 sprite/mesh order (M2 occlusion) + 1 unit facing (M3 face)");
   });
   if (exe) {
     const m = loadManifest(realPath);
@@ -1891,7 +1891,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["Texture2D_LoadFromFile", "0xa0ad40"],
     // M2 occlusion (sprite/mesh painter order): the witness host of the layer item key (the .pdata chunk of Scene_SubmitDraw
     // that stores the built item; its first chunk only computes the key)
-    ["Scene_SubmitDraw_tail", "0x989c96"]];
+    ["Scene_SubmitDraw_tail", "0x989c96"],
+    // M3 face (a unit model turns with Character::Face): the witness host of Character_orientation — the same entry PR #114
+    // adds as FW_SYM_Character_Face (here reference only: the model reads the stored direction, it never calls Face)
+    ["Character_Face", "0x10ce50"]];
   const R3D_DATA: [string, string, number][] = [["Iso", "0x12f7a00", 11], ["IsoInverse", "0x12f79c0", 12], ["RenderStateFlags", "0x12f714c", 13], ["CullDisableCounter", "0x13c5c90", 14],
     ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17], ["MatStackData", "0x13c5bd8", 18]];
   const R3D_OFFSETS: [string, string, string][] = [["Camera_rtt", "OFF_CAM_RTT", "0x80"], ["Camera_hdr", "OFF_CAM_HDR", "0x81"], ["Camera_queue", "OFF_CAM_QUEUE", "0x40"],
@@ -1905,12 +1908,14 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["Texture2D_glName", "OFF_TEX2D_GLNAME", "0x8"],
     // M2 occlusion: the camera's per-item filter std::function (impl pointer) Layer_Draw calls before every item, the layer's
     // sorted flag and the item's sort key (descending = farther first) the mesh engine interleaves its draws by
-    ["Camera_layerFilter", "OFF_CAM_LAYER_FILTER", "0x120"], ["Layer_sorted", "OFF_LAYER_SORTED", "0x20"], ["LayerItem_key", "OFF_ITEM_KEY", "0x10"]];
+    ["Camera_layerFilter", "OFF_CAM_LAYER_FILTER", "0x120"], ["Layer_sorted", "OFF_LAYER_SORTED", "0x20"], ["LayerItem_key", "OFF_ITEM_KEY", "0x10"],
+    // M3 face: the grid direction Character::Face stores (PR #114's entry, same name / macro / witness); the model's yaw follows it
+    ["Character_orientation", "OFF_CH_ORIENTATION", "0x388"]];
   const R3D_CONSTANTS: [string, string, string][] = [["LayerStride", "CONST_LAYER_STRIDE", "0xe8"], ["LayerItemShift", "CONST_LAYER_ITEM_SHIFT", "5"],
     ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
   const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",
     ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]);
-  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 25 reference functions (all signed; 3 are witness-host .pdata chunks, 1 the BinaryResource offsets' host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 25 offsets (2 BinaryResource by M2, the Texture2D GL name by M2 textures, 3 for the M2 sprite/mesh order) and 4 constants with witnesses; the generated headers expose them", () => {
+  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 26 reference functions (all signed; 3 are witness-host .pdata chunks, 1 the BinaryResource offsets' host, Character_Face the M3 face witness host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 26 offsets (2 BinaryResource by M2, the Texture2D GL name by M2 textures, 3 for the M2 sprite/mesh order, Character_orientation for the M3 unit facing) and 4 constants with witnesses; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     for (const [name, rva, index] of R3D_SYMBOLS) {
       const e = entry(m, name);

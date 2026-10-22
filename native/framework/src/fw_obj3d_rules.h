@@ -45,6 +45,10 @@ typedef struct Fw3dObject {
     int fromGon;                        /* 1 = registered from the unit's GON graphics.model (not by a mod's API call) */
     int hideSprite;                     /* M3 GON `hide_sprite true`: 1 = the unit's 2D sprite is not drawn while this model
                                          * draws (fw_mesh_hide.h); 0 = drawn as before (the default, every API object) */
+    /* 3D phase M3 `face`: degrees about the height axis, applied between the anchor and the object's own transform
+     * (fw_unit_face.h: the unit's Character::Face direction); 0 for new objects. Set every combat frame by obj3d_engine.c
+     * for GON unit models; the facing sign above is then informational (it no longer mirrors the model). */
+    float faceYaw;
 } Fw3dObject;
 
 typedef struct Fw3dRegistry { Fw3dObject objs[FW_OBJ3D_MAX]; int count; int nextHandle; } Fw3dRegistry;
@@ -69,6 +73,8 @@ int  fw_obj3d_count(const Fw3dRegistry *r);
 int  fw_obj3d_set_look(Fw3dRegistry *r, int handle, const char *texture, const float tint[4], int usePalette, int doubleSided);
 /* facing of object `handle`: < 0 -> -1, else +1; 1 set, 0 unknown handle */
 int  fw_obj3d_set_facing(Fw3dRegistry *r, int handle, int facing);
+/* face yaw of object `handle` (degrees, fw_unit_face.h); 1 set, 0 unknown handle */
+int  fw_obj3d_set_face_yaw(Fw3dRegistry *r, int handle, double yawDeg);
 int  fw_obj3d_mark_gon(Fw3dRegistry *r, int handle);   /* fromGon = 1; 1 set, 0 unknown handle */
 int  fw_obj3d_set_hide(Fw3dRegistry *r, int handle, int hideSprite);   /* hideSprite = (hideSprite == 1); 1 set, 0 unknown handle */
 const Fw3dObject *fw_obj3d_at(const Fw3dRegistry *r, int i);                     /* NULL out of range */
