@@ -16,6 +16,13 @@ import type {
   TemplateKindName,
 } from "./types.ts";
 
+export type ToastKind = "info" | "ok" | "error";
+export interface ToastMessage {
+  id: number;
+  text: string;
+  kind: ToastKind;
+}
+
 export type Tab = "validation" | "preview" | "components";
 export type OpenMenu = "" | "mod" | "help";
 
@@ -35,7 +42,10 @@ export interface AppState {
   baseView: BaseEntryView | null;
   components: ComponentSearchResult | null;
   compTotal: number;
-  message: string;
+  /** the toast queue (newest last); write through toast(), read by components/StatusBar.tsx Toast */
+  messages: ToastMessage[];
+  /** per-action in-flight flags (setBusy) */
+  busy: Record<string, boolean>;
   docBytes: number;
   docLines: number;
   openMenu: OpenMenu;
@@ -81,7 +91,8 @@ export const S = createStore<AppState>({
   baseView: null,
   components: null,
   compTotal: 0,
-  message: "",
+  messages: [],
+  busy: {},
   docBytes: 0,
   docLines: 1,
   openMenu: "",
@@ -142,12 +153,49 @@ export function lsSet(k: string, v: string): void {
 }
 
 // ---- shared helpers -------------------------------------------------------------------
-let toastTimer: ReturnType<typeof setTimeout> | undefined;
-/** Show a transient status message (5 s) in the Toast. */
-export function toast(msg: string): void {
-  S.set({ message: msg });
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => S.set({ message: "" }), 5000);
+/** How many toasts show at once (older ones drop off first). */
+export const TOAST_CAP = 4;
+
+/** Queue a message (pure): a repeat of a showing text replaces it (moves to the end, new id); capped at TOAST_CAP. */
+export function pushMessage(list: readonly ToastMessage[], msg: ToastMessage): ToastMessage[] {
+  const next = list.filter((m) => m.text !== msg.text);
+  next.push(msg);
+  return next.length > TOAST_CAP ? next.slice(next.length - TOAST_CAP) : next;
+}
+/** Drop a message by id (pure); an unknown id returns the list unchanged. */
+export function expireMessage(list: readonly ToastMessage[], id: number): ToastMessage[] {
+  return list.some((m) => m.id === id) ? list.filter((m) => m.id !== id) : (list as ToastMessage[]);
+}
+
+export interface ToastOptions {
+  kind?: ToastKind;
+  /** how long it shows (default 5 s; 8 s for errors) */
+  ms?: number;
+}
+let toastSeq = 0;
+/** Show a transient status message in the Toast queue. */
+export function toast(text: string, opts: ToastOptions = {}): void {
+  const kind = opts.kind || "info";
+  const id = ++toastSeq;
+  S.set((s) => ({ messages: pushMessage(s.messages, { id, text, kind }) }));
+  const t = setTimeout(() => dismissToast(id), opts.ms ?? (kind === "error" ? 8000 : 5000));
+  // Node (the unit tests) must not wait for a toast's timer to exit
+  (t as unknown as { unref?: () => void }).unref?.();
+}
+/** Remove one toast (its timer ran out, or the user clicked it). */
+export function dismissToast(id: number): void {
+  S.set((s) => ({ messages: expireMessage(s.messages, id) }));
+}
+
+/** Mark an action as in flight (on) or done (off). */
+export function setBusy(key: string, on: boolean): void {
+  S.set((s) => {
+    if (on === !!s.busy[key]) return {};
+    const busy = { ...s.busy };
+    if (on) busy[key] = true;
+    else delete busy[key];
+    return { busy };
+  });
 }
 
 /** Once the Art tour has been opened or deliberately suppressed, entering Art mode no longer auto-opens it. */

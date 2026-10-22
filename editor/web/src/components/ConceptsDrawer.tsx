@@ -2,7 +2,7 @@
 
 import React from "react";
 import { S } from "../state.ts";
-import { useS, sx } from "./ui.tsx";
+import { useS, sx, Drawer, Button } from "./ui.tsx";
 
 function ConceptCard({ kind, tag, title, body }: { kind: string; tag: string; title: string; body: string }): React.JSX.Element {
   return (
@@ -77,7 +77,7 @@ function DataConceptsSection(): React.JSX.Element {
           </div>
           <span className="arrow">→</span>
           <div className="box">
-            <div className="sec" style={sx("color:#ffa657")}>
+            <div className="sec" style={sx("color:var(--syn-cls)")}>
               Native layer
             </div>
             <div className="mono" style={sx("font-size:12.5px;margin-top:8px;color:var(--ink)")}>
@@ -149,7 +149,7 @@ function ArtConceptsSection(): React.JSX.Element {
       <div className="card plain" style={sx("padding:18px")}>
         <p style={sx("font-size:12.5px;color:var(--ink2);line-height:1.6;margin:0")}>
           Every vanilla SWF ships one Flash-generated{" "}
-          <span className="mono" style={sx("color:#ffa657")}>
+          <span className="mono" style={sx("color:var(--syn-cls)")}>
             DoABC
           </span>{" "}
           that declares its <span className="mono">SymbolClass</span> linkage classes. Whether <span className="mono">glaiel::swf</span> <b>requires</b> it to bind those names is the one unresolved question. Build both ways (
@@ -165,36 +165,24 @@ export function ConceptsDrawer(): React.JSX.Element {
   const artMode = useS((s) => s.artMode);
   const close = () => S.set({ conceptsOpen: false });
   return (
-    <div className="scrim right" onClick={close}>
-      <div className="drawer" onClick={(e) => e.stopPropagation()}>
-        <div className="dhead">
-          <span style={sx("font-size:20px")}>✦</span>
-          <div className="t">How modding works here</div>
-          <button className="iconbtn" aria-label="Close" onClick={close}>
-            ✕
-          </button>
-        </div>
-        {/* Both halves of the tool are explained; the current editor mode is shown first. */}
-        {artMode ? (
-          <div className="dbody">
-            <ArtConceptsSection />
-            <DataConceptsSection />
-          </div>
-        ) : (
-          <div className="dbody">
-            <DataConceptsSection />
-            <ArtConceptsSection />
-          </div>
-        )}
-        <div className="dfoot">
+    <Drawer
+      title="How modding works here"
+      icon={<span style={sx("font-size:20px")}>✦</span>}
+      onClose={close}
+      footer={
+        <>
           <span className="muted" style={sx("flex:1;font-size:12.5px")}>
             More in <span className="mono">{artMode ? "docs/art-preview-plan.md" : "docs/data-mods.md"}</span>
           </span>
-          <button className="btn primary" onClick={close}>
+          <Button variant="primary" onClick={close}>
             Got it
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </>
+      }
+    >
+      {/* Both halves of the tool are explained; the current editor mode is shown first. */}
+      {artMode ? <ArtConceptsSection key="art" /> : <DataConceptsSection key="data" />}
+      {artMode ? <DataConceptsSection key="data" /> : <ArtConceptsSection key="art" />}
+    </Drawer>
   );
 }

@@ -6,4 +6,8 @@ import { createRoot } from "react-dom/client";
 import "./app.css";
 import { App } from "./App.tsx";
 
-createRoot(document.getElementById("app")!).render(<App />);
+createRoot(document.getElementById("app")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);

@@ -18,7 +18,7 @@
     "components/TemplateModal.tsx": 1,
     "components/TopBar.tsx": 1,
     "components/Tours.tsx": 4,
-    "components/WorkedExamples.tsx": 13,
+    "components/WorkedExamples.tsx": 8,
     "rooms/Rooms.tsx": 6
   },
   "window-confirm": {},

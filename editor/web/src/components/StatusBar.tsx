@@ -1,7 +1,8 @@
-// Bottom status bar and the transient toast.
+// Bottom status bar and the transient toast queue.
 
 import React from "react";
-import { useS, sx } from "./ui.tsx";
+import { useS } from "./ui.tsx";
+import { dismissToast } from "../state.ts";
 import { currentFile, modeNote } from "../actions.ts";
 
 export function StatusBar(): React.JSX.Element {
@@ -24,16 +25,16 @@ export function StatusBar(): React.JSX.Element {
   );
 }
 
-export function Toast(): React.JSX.Element | null {
-  const message = useS((s) => s.message);
-  if (!message) return null;
+/** The toast queue (S.messages): a polite live region; click a toast to dismiss it. */
+export function Toast(): React.JSX.Element {
+  const messages = useS((s) => s.messages);
   return (
-    <div
-      style={sx(
-        "position:fixed;left:50%;bottom:44px;transform:translateX(-50%);z-index:120;background:var(--elev);border:1px solid var(--line2);border-radius:10px;padding:10px 16px;box-shadow:0 18px 50px rgba(0,0,0,.5);font-size:13px;max-width:min(620px,92vw);color:var(--ink)",
-      )}
-    >
-      {message}
+    <div className="toasts" role="status" aria-live="polite">
+      {messages.map((m) => (
+        <button key={m.id} type="button" className={`toast ${m.kind}`} title="Dismiss" onClick={() => dismissToast(m.id)}>
+          {m.text}
+        </button>
+      ))}
     </div>
   );
 }

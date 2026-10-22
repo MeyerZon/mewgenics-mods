@@ -2,7 +2,7 @@
 // to the /api bridge and write into the app store. Components call these; nothing here
 // renders. Art-mode actions live in ./art/art-state.ts.
 
-import { S, tpl, lsGet, lsSet, onboarding, type OpenMenu, type Tab } from "./state.ts";
+import { S, tpl, lsGet, lsSet, onboarding, toast, type OpenMenu, type Tab } from "./state.ts";
 import { getJson, post, url } from "./api.ts";
 import { editorCtl } from "./components/Editor.tsx";
 import { loadArtForMod } from "./art/art-state.ts";
@@ -24,12 +24,6 @@ import type {
   TemplateKindName,
   TemplateResult,
 } from "./types.ts";
-
-/** Show a status message and clear it after `ms` (app.mjs set S.message + a bare setTimeout). */
-export function flash(message: string, ms: number): void {
-  S.set({ message });
-  setTimeout(() => S.set({ message: "" }), ms);
-}
 
 // ---- live validation / preview (debounced) ----------------------------------------------
 let liveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -96,13 +90,13 @@ export async function save(): Promise<void> {
   if (!mod || !file) return;
   const r = await post<"/api/write", WriteResult>("/api/write", { mod, path: file, content: editorCtl.getValue() });
   if (r.ok) {
-    S.set({ saved: true, message: `saved ${r.path} (${r.bytes} bytes)` });
+    S.set({ saved: true });
+    toast(`saved ${r.path} (${r.bytes} bytes)`, { kind: "ok", ms: 4000 });
     await selectMod(mod);
     S.set({ file: r.path.split("/").slice(2).join("/") });
   } else {
-    S.set({ message: `write refused: ${r.error}` });
+    toast(`write refused: ${r.error}`, { kind: "error", ms: 4000 });
   }
-  setTimeout(() => S.set({ message: "" }), 4000);
 }
 export async function selectCategory(category: string): Promise<void> {
   S.set({ baseCategory: category });
@@ -220,6 +214,12 @@ export function openExample(): void {
 export function openArtExample(): void {
   S.set({ artExampleStep: 0, openMenu: "", artExampleOpen: true });
 }
+export function closeExample(): void {
+  S.set({ exampleOpen: false });
+}
+export function closeArtExample(): void {
+  S.set({ artExampleOpen: false });
+}
 /** Close the art example and land the user in the live Art UI (already onboarding → no auto-tour). */
 export function artExampleGoto(go: () => void): void {
   S.set({ artExampleOpen: false, artMode: true });
@@ -265,14 +265,18 @@ export async function scaffold(): Promise<void> {
   const res = await post<"/api/template", TemplateResult>("/api/template", { mod: t.mod, kind: t.kind, name: t.name, options });
   tpl.set({ result: res });
   if (res && res.ok) {
-    flash(`scaffolded ${t.name} in mods/${t.mod}`, 4000);
+    toast(`scaffolded ${t.name} in mods/${t.mod}`, { kind: "ok", ms: 4000 });
     await loadMods();
     await selectMod(t.mod);
   }
 }
 
 /** App startup (was the tail of app.mjs after mounting). */
+let started = false;
 export function startup(): void {
+  // once per page: StrictMode (dev) mounts App's effect twice
+  if (started) return;
+  started = true;
   editorCtl.repaintNow();
   void loadMods();
   void loadBaseCats();
@@ -320,10 +324,10 @@ export async function exportMod(): Promise<void> {
     r = await post<"/api/mod/pack", PackReply>("/api/mod/pack", { mod, force: true });
   }
   if (!r.ok || !r.zipName) {
-    flash(`export refused (${r.refused?.code ?? "error"}): ${r.refused?.message ?? ""}`, 8000);
+    toast(`export refused (${r.refused?.code ?? "error"}): ${r.refused?.message ?? ""}`, { kind: "error", ms: 8000 });
     return;
   }
-  flash(`exported ${r.zipPath} (${r.bytes} bytes)${r.forced ? " — forced" : ""}`, 8000);
+  toast(`exported ${r.zipPath} (${r.bytes} bytes)${r.forced ? " — forced" : ""}`, { kind: "ok", ms: 8000 });
   const a = document.createElement("a");
   a.href = url("/api/dist", { file: r.zipName });
   a.download = r.zipName;
@@ -339,12 +343,12 @@ export async function importModFile(file: File): Promise<void> {
   const base64 = btoa(bin);
   let r = await post<"/api/mod/install", InstallReply>("/api/mod/install", { base64, fileName: file.name });
   if (!r.ok && r.verdict === "build-mismatch") {
-    if (!window.confirm(r.prompt)) { flash("import cancelled", 4000); return; }
+    if (!window.confirm(r.prompt)) { toast("import cancelled", { ms: 4000 }); return; }
     r = await post<"/api/mod/install", InstallReply>("/api/mod/install", { base64, fileName: file.name, acceptBuildMismatch: true });
   }
   if (r.ok) {
-    flash(`installed ${r.name} ${r.version} into mods/${r.name}${r.notes.length ? ` — ${r.notes.join("; ")}` : ""}`, 8000);
+    toast(`installed ${r.name} ${r.version} into mods/${r.name}${r.notes.length ? ` — ${r.notes.join("; ")}` : ""}`, { kind: "ok", ms: 8000 });
     await loadMods();
     await selectMod(r.name);
-  } else if (r.verdict === "refused") flash(`import refused (${r.code}): ${r.reason}`, 8000);
+  } else if (r.verdict === "refused") toast(`import refused (${r.code}): ${r.reason}`, { kind: "error", ms: 8000 });
 }

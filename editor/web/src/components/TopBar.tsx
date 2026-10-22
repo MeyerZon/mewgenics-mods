@@ -2,18 +2,18 @@
 // Launch dev, and the Help (?) menu.
 
 import React from "react";
-import { S, openArtTour } from "../state.ts";
-import { useS, sx } from "./ui.tsx";
+import { S, openArtTour, toast } from "../state.ts";
+import { useS, sx, Menu } from "./ui.tsx";
 import {
   enterArtMode,
   leaveArtMode,
   enterRoomMode,
   toggleMenu,
+  closeMenu,
   selectMod,
   openTemplate,
   runLive,
   save,
-  flash,
   openTour,
   openExample,
   openArtExample,
@@ -31,11 +31,11 @@ function StatusPill(): React.JSX.Element {
   return <span className={`pill ${cls}`}>{`● ${e} error${e === 1 ? "" : "s"} · ${w} warning${w === 1 ? "" : "s"}`}</span>;
 }
 
-function ModMenu(): React.JSX.Element {
+function ModMenuItems(): React.JSX.Element {
   const mods = useS((s) => s.mods);
   const mod = useS((s) => s.mod);
   return (
-    <div className="menu" onClick={(e) => e.stopPropagation()}>
+    <>
       <div className="label">Switch mod</div>
       {mods.length ? (
         mods.map((m) => (
@@ -76,13 +76,13 @@ function ModMenu(): React.JSX.Element {
           }}
         />
       </label>
-    </div>
+    </>
   );
 }
 
-function HelpMenu(): React.JSX.Element {
+function HelpMenuItems(): React.JSX.Element {
   return (
-    <div className="menu right" onClick={(e) => e.stopPropagation()}>
+    <>
       <div className="label">Data mode</div>
       <button className="item" onClick={() => openTour()}>
         ✦ Guided tour
@@ -102,7 +102,7 @@ function HelpMenu(): React.JSX.Element {
       <button className="item" onClick={() => openConcepts()}>
         ✦ Concepts explainer
       </button>
-    </div>
+    </>
   );
 }
 
@@ -134,21 +134,20 @@ export function TopBar(): React.JSX.Element {
       </div>
       <div className="vdiv" />
       {/* mod switcher */}
-      <div className="dropdown">
-        <button
-          className="btn ghost"
-          style={sx("color:var(--ink2)")}
-          aria-haspopup="menu"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleMenu("mod");
-          }}
-        >
-          {mod || "No mod open"}
-          <span style={sx("color:var(--muted)")}> ▾</span>
-        </button>
-        {openMenu === "mod" ? <ModMenu /> : null}
-      </div>
+      <Menu
+        label={
+          <>
+            {mod || "No mod open"}
+            <span style={sx("color:var(--muted)")}> ▾</span>
+          </>
+        }
+        triggerStyle={sx("color:var(--ink2)")}
+        open={openMenu === "mod"}
+        onToggle={() => toggleMenu("mod")}
+        onClose={closeMenu}
+      >
+        <ModMenuItems />
+      </Menu>
       <div className="grow" />
       <StatusPill />
       {roomMode ? null : (
@@ -164,29 +163,16 @@ export function TopBar(): React.JSX.Element {
       <button
         className="btn ghost"
         onClick={() =>
-          flash(
-            "Launch dev is illustrative here — run launch-dev.bat (Mewgenics -modpaths mods/" + (mod || "<mod>") + " -savesuffix dev) outside the editor.",
-            6000,
-          )
+          toast("Launch dev is illustrative here — run launch-dev.bat (Mewgenics -modpaths mods/" + (mod || "<mod>") + " -savesuffix dev) outside the editor.", { ms: 6000 })
         }
       >
         Launch dev ▸
       </button>
       <div className="vdiv" />
       {/* help menu */}
-      <div className="dropdown">
-        <button
-          className="btn ghost"
-          aria-label="Help and onboarding"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleMenu("help");
-          }}
-        >
-          ?
-        </button>
-        {openMenu === "help" ? <HelpMenu /> : null}
-      </div>
+      <Menu label="?" aria-label="Help and onboarding" right open={openMenu === "help"} onToggle={() => toggleMenu("help")} onClose={closeMenu}>
+        <HelpMenuItems />
+      </Menu>
     </div>
   );
 }

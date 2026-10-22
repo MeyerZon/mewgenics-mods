@@ -4,6 +4,7 @@ import React from "react";
 import { S } from "../state.ts";
 import { useS, sx } from "./ui.tsx";
 import { closeTour, closeArtTour } from "../actions.ts";
+import { useDialog } from "../hooks/useDialog.ts";
 
 interface TourStep {
   t: string;
@@ -63,9 +64,10 @@ interface GuidedTourProps {
 function GuidedTour({ steps, step, setStep, dontShow, setDontShow, title, onClose }: GuidedTourProps): React.JSX.Element {
   const last = step >= steps.length - 1;
   const cur = steps[step]!;
+  const ref = useDialog<HTMLDivElement>(true, { onClose, kind: "tour", initialFocus: ".btn.primary" });
   return (
     <div className="scrim center">
-      <div className="tourcard">
+      <div ref={ref} className="tourcard" aria-label={title}>
         <div style={sx("display:flex;align-items:center;gap:8px;margin-bottom:10px")}>
           <span className="chip" style={sx("color:var(--acc-ink);background:var(--accbg)")}>
             {`STEP ${step + 1} OF ${steps.length}`}

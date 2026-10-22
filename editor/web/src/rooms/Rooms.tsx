@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store.ts";
 import { S } from "../state.ts";
-import { sx } from "../components/ui.tsx";
+import { sx, Modal, Button } from "../components/ui.tsx";
 import {
   R,
   isDirty,
@@ -411,28 +411,26 @@ function NewRoomModal(): React.JSX.Element {
     if (e) setErr(e);
   };
   return (
-    <div className="scrim center" onClick={close}>
-      <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <div className="mhead">
-          <span style={sx("font-size:18px")}>＋</span>
-          <div className="t">New room</div>
-          <button className="iconbtn" aria-label="Close" onClick={close}>✕</button>
-        </div>
-        <div className="mbody">
+    <Modal
+      title="New room"
+      icon="＋"
+      onClose={close}
+      initialFocus="#newroom-name"
+      footer={
+        <>
+          <div className="grow" />
+          <Button variant="ghost" onClick={close}>Cancel</Button>
+          <Button variant="primary" onClick={() => void create()}>Create</Button>
+        </>
+      }
+    >
           <p className="muted" style={sx("margin:0 0 6px")}>{`Writes mods/${mod}/levels/<folder>/<name>.lvl from the room template: 4 player spawns on the top row and 2 Rats near the bottom.`}</p>
           <label className="fld" htmlFor="newroom-folder">folder (under levels/)</label>
           <input id="newroom-folder" className="mono" value={folder} onChange={(e) => setFolder(e.target.value)} />
           <label className="fld" htmlFor="newroom-name">room name</label>
           <input id="newroom-name" className="mono" placeholder="my_room" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void create(); }} />
           {err ? <div className="finding error"><span className="mark">✕</span><div>{err}</div></div> : null}
-        </div>
-        <div className="mfoot">
-          <div className="grow" />
-          <button className="btn ghost" onClick={close}>Cancel</button>
-          <button className="btn primary" onClick={() => void create()}>Create</button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
