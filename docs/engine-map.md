@@ -311,6 +311,128 @@ character lookup with lazy init: `table = file+0x28` (`Character*[]` by id), `en
 - Pinned: `editor/test/fixtures/ingame/artprobe-cat-summary.json` `importParts`; the validator refuses any
   `scene.imports` (`import-unsupported`).
 
+### SWF loader and display path (closed, 2026-10-21)
+
+RE session `disp` (Ghidra 12.1.4, static scans, the shipped shaders in `.extracted/shaders/`); every decompile cited
+is in `.analysis/decompiled/<Name>_<0xrva>.c`, the working notes in `.analysis/notes-disp.md`. The editor turns these
+facts into rules: `editor/src/core/art/engine-behaviour.ts` (the constants), `swf-rules.ts` (the loader's rules over
+parsed bytes, behind `inspect_swf` and the build self-check), `scene.ts` (the scene-level codes) and
+`web/src/art/preview-gl.ts` (what the preview draws); `editor/test/art-engine-rules-tests.ts` pins each one.
+
+**Loader.** `glaiel::swf::SWF::load` `0x9b1d80` (dictionary at `file+0x28`; `dict+0x40` = name → id map); a second
+load of a file is FATAL `DOUBLE LOADING SWF`; `ApplicationBase::load_swf` `0x9bb9e0` is FATAL on a missing swflist
+file (`SWF File does not exist:`). The tag dispatcher `SWFTag::createTag` **`0xa2e990`** is one `switch (code)`,
+OBSERVED complete:
+
+| code | tag | decode RVA | the game does |
+|---|---|---|---|
+| 1 | ShowFrame | — | accepted |
+| 2 / 22 / 32 / 83 | DefineShape 1–4 | decode `0xb72ac0`, init `0xb72c40` (tessellates), instantiate `0xb760d0` | accepted; v4's EdgeBounds + flags are read but **UsesFillWindingRule is never used** |
+| 4 | PlaceObject | `0xb77c10` | accepted; a CXFORM is **ignored** (`Warning: color transform not supported on PlaceObject1`) → `place-cxform-ignored` |
+| 26 | PlaceObject2 | `0xb77e60` | accepted (Move, HasCharacter, HasMatrix, HasCxform, HasRatio, HasName, HasClipDepth; no ClipActions) |
+| 70 | PlaceObject3 | `0xb78210` | blend byte kept (object `+0xb`); **a filter list is FATAL** `ERROR: FILTERS NOT SUPPORTED` → `filter-unsupported` |
+| 5 / 28 | RemoveObject / 2 | `0xb78810` | accepted |
+| 6 / 21 / 35 / 90 (+8 JPEGTables) | DefineBits / DefineBitsJPEG2–4 | `0xb79d90` (stb_image `0xa8ca40`) | decoded, logs `WARNING: TEXTURE ENCODED AS JPG INSTEAD OF PNG` → `jpeg-bitmap` |
+| 20 / 36 | DefineBitsLossless / 2 | decode `0xb7a3d0`, init `0xb7a4e0` | accepted (formats 3 / 4 / 5); atlas-registered via `0xa25950` — size limit below → `bitmap-too-large` |
+| 9 | SetBackgroundColor | — | accepted |
+| 10 / 48 / 75 | DefineFont / 2 / 3 | `0xa2a4a0` | **only DefineFont3 decodes; 10 and 48 are FATAL** `ERROR: DefineFont version unsupported` → `font-tag-unsupported` |
+| 11 / 33 | DefineText / 2 | `0xb78b80` | accepted (static text) |
+| 12 | DoAction | `0xa51fd0` | AVM1 `play` / `stop` / `gotoAndPlay` / `gotoAndStop` only (else `UNKNOWN ACTION:`) |
+| 37 | DefineEditText | decode `0xb78e50`, init `0xb79410`, instantiate `0xb797e0` | accepted; font *class* string kept (`+0x68`), HTML `<p>` → newline |
+| 39 | DefineSprite | decode `0xa576a0`, init `0xa57a50`, instantiate `0xa583d0` | accepted; init compiles the child tags into 0x50-byte frame ops |
+| 43 | FrameLabel | `0xb78900` | accepted (FNV-1a label map at `def+0x80`) |
+| 56 / 76 | ExportAssets / SymbolClass | **one class**, `0xa58b30` | both write `dict+0x40[name] = id`: ExportAssets binds names exactly like SymbolClass |
+| 82 | DoABC | `0xa4a740` | accepted once; **a second DoABC is FATAL** `Multiple DoABC tags in one SWF` → `abc-count` |
+| 46 / 84 | DefineMorphShape / 2 | — | logs `WARNING: SHAPE TWEEN NOT SUPPORTED`, then skipped → `morph-shape-skipped` |
+| 78 | DefineScalingGrid | — | `default:` → skipped silently, **no 9-slice** → `scaling-grid-ignored` |
+| 57 / 71 | ImportAssets / 2 | — | skipped silently: entries never get a dictionary slot (see "Imports are not linked") → `import-unsupported` when entries > 0 |
+| everything else (69, 77, 86, 73, 74, 88, 59, 64/65, 87 …) | — | `default:` → generic `SWFTag` whose decode slot is a nop (`0x35bd0`) | skipped, no log line (the `Unknown Tag` string is only the debug tag-name table of `0xa2f4a0`) → `tag-ignored` info for the non-metadata ones |
+
+Tag vtable: 0 dtor, 1 `decode()`, 2 `init()` (lazy, run by `Swf_GetCharacter` `0xa4a190` on first use), 3
+`instantiate()` → DisplayObject.
+
+**By-name registry.** `App_FindMovieClipByName` **`0x9bb6f0`**: FNV-1a cache at `app+0x2b8`; on a miss it scans the
+loaded SWF array (`app+0x118`, count `+0x114`) **from the last loaded file backwards** through `dict+0x40`, first hit
+wins. Consequence (INFERRED, not run in-game): a mod SWF listed later (`swflist.gon.append`) shadows a vanilla
+SymbolClass / ExportAssets name of the same spelling for every by-name lookup (characters, `_Append_` targets, UI
+clips, `[img]` font icons) → validator info `export-shadows-vanilla` (vanilla names pinned in `vanilla-exports.ts`).
+
+**Render path.** `DisplayObjectContainer` slot 5 `0x998a50` → `RenderChildren` `0x998ee0` (depth order; a child with
+a clip depth opens a stencil mask `0xa35430` / `0xa354c0`) → `DisplayObject::Render` **`0x9b0a50`** per child: matrix
+stack `0x13c5bd8`, cxform stack `0x13c5be8`, concatenated Flash-style (`mul = child.mul × parent.mul`, `add =
+child.add × parent.mul + parent.add`), view-rect cull, then the blend byte dispatch (0 normal, 2 layer, 3 multiply, 8
+add, 15 erase, 13 overlay special-cased; the other SWF modes draw normally — INFERRED). Shapes: `ShapeMesh::Render`
+**`0xa31180`** (lazy `Tesselator::tesselate` `0xa2f900`, atlas / `default_full` / `default_gradient` material,
+batch draw `0xa47e50`).
+- **Fill rule: EVEN-ODD per fill style.** `Tesselator::tesselate` `0xa2f900` feeds each fill style's contours
+  (`tessAddContour` `0xa73a80`) to libtess2's `tessTesselate` **`0xa73bb0`**, which this build compiles with
+  `windingRule = TESS_WINDING_ODD` baked in (`mov [rbx+0x48], edi`, edi = 0, at `0x140a73c69`; `elementType =
+  TESS_POLYGONS`, `polySize = 3`). Overlapping sub-contours of one fill style XOR; separate fill styles are
+  tessellated and drawn in style order (INFERRED paint order). The SWF fill-winding flag is never read. The editor:
+  the emitter still resolves which sub-paths carry the fill (nesting comes out as authored), the preview fills those
+  even-odd, and `fill-rule-ignored` warns only where a `nonzero` path's sub-paths cross or self-overlap (a hole
+  in-game). `WARNING: EXTRA LARGE VERTEX BUFFER` is logged above a size threshold, not fatal.
+- **Fill styles** (`FillStyle_read` `0xb6ebc0`): 0x00 solid; gradients 0x10 linear, 0x12 radial, 0x13 focal radial
+  (records `0xb70b30`, focal `0xb70cf0`); bitmaps 0x40 (repeat) / 0x41 (clipped) smoothed, 0x42 / 0x43 their
+  pixel-snapped twins. **Gradients pad only**: `GradientAtlas::AddGradient` `0xa28500` → `RasterizeRow` `0xa27de0`
+  rasterizes 256 texels over t ∈ [0,1] (interpolation mode honoured, linear-RGB branch converts sRGB) and neither it
+  nor `default_gradient.shader` / `swf_lib.shader` has reflect/repeat arithmetic → `gradient-spread-ignored`.
+- **Line styles** (`LineStyle_read` `0xb6f220`): width, LineStyle2 caps / join / miter (8.8) / NoHScale / NoVScale
+  / PixelHinting / NoClose, HasFill strokes. Caps OBSERVED honoured in-game; **joins, miter and hairline (width 0)
+  remain unknown** (parsed, not traced through the outline builder `0xb74fb0` / `0xb748a0` / `0xb74d60`).
+- **Bitmaps / atlas** (`BitmapFillAtlas.cpp`): page size = setting **`texture_atlas_size`** (default 0x1000 = 4096,
+  read in `LoadNeededTextures` `0xa241a0`); pages are layers of a `GL_TEXTURE_2D_ARRAY` bounded by
+  `GL_MAX_ARRAY_TEXTURE_LAYERS` (`initGraphics` `0x9b5ed0`, logged `Max Texture Layers N`). `fit_texture` **`0xa24540`**
+  is FATAL `Bitmap Fill could not fit into atlas` for a bitmap whose width or height is **≥ the page**; otherwise
+  shelf-packed, `AddLayer` `0xa24bb0`, mipmapped upload `GenerateAllTextures` `0xa252a0`. Sampling (`swf_lib.shader`):
+  `textureLod` LINEAR + mip (bias −0.5) for 0x40 / 0x41, `clamp_to_nearest` mip 0 for 0x42 / 0x43; repeat =
+  `mod(uv,1)`, clipped = `clamp(uv, .5/size, 1−.5/size)`; stored premultiplied, un-premultiplied in the shader. The
+  emitter writes 0x41 → LINEAR + clamp, what the probe saw. Editor constant `TEXTURE_ATLAS_SIZE` → `bitmap-too-large`.
+- **Palette + cxform order** (`shaders/paletted_full.shader`): `out = compute_color_full(v)` → if `r≈g≈b` (±0.001)
+  `out.rgb = texelFetch(palettemap, (r·15+.5, palette))` → **`frag = out × color_xform[0] + color_xform[1]`**. The
+  concatenated PlaceObject cxform applies **after** the palette remap; `default_full` is the same minus the remap.
+  The preview's shader is this order (both renderers; pinned by `remapColor`'s test).
+- **Mirroring**: nothing in glaielswf flips by itself; a negative x-scale on an ancestor (`SetPosScale` `0x9b16c0`,
+  `SetVariable("_xscale")` `0x99b590`, `UpdateMatrix` `0x9b1750`) propagates through the matrix stack. **Autoflip**
+  (`+0xa` bit 2, set only by AS3 `SetAutoflip`) un-mirrors text / UI clips under a mirrored parent. Facing is a
+  label-suffix convention in game code (`Character_FacingSuffix` `0xf0490`).
+- **Text**: `DefineEditText::decode` `0xb78e50` keeps the font class string; `init` `0xb79410` resolves a font id via
+  `Swf_GetCharacter` and pre-parses the HTML; `instantiate` `0xb797e0` → `DynamicTextBox` `0x98d910`.
+  `data/font_remap.gon` (`0x746a80`) remaps font class names. **The exact font-class → font lookup RVA is unknown**
+  (candidates `0x9bb910`, `0x98d910`). TextBox markup (`0x994080`): `[font]`, `[size]`, `[color]`, `[outline]`,
+  `[style]`, `[animation shake|wave]`, `[img X]` → clips `FontIcon_X` / `RawFontIcon_X` / `X` by name (`0x9bb6f0`).
+
+**MovieClip model** (`0x9a8720` update / `0x9a80c0` nextFrame / `0x9a88a0` gotoFrame / `0x9a8f30` op applier).
+Every clip, nested or root, advances on its **own accumulator** (`+0x30`, `dt × timescale +0xe4`) — the OBSERVED
+own-clock nested sprites. The root clip of a character is label-driven: `Character::PlayAnimation` `0x117060` →
+`AnimStateMachine::PlayAnimation` **`0x9abda0`** (checks `hasLabel` `0x9a8e80` + the alias table `0x9acc20`) →
+`gotoAndPlay(label)` `0x9a8b30` / `gotoAndStop(label)` `0x9a8c00`; **an unknown label is a silent no-op**. Frame
+interpolation (`interpolate_movieclips`, `0x12fbb7c`, Settings `0x745b70`) only applies to clips whose DoABC calls
+`EnableInterpolation` — a no-ABC mod clip never interpolates (INFERRED default). AS3 names the engine honours in frame
+scripts (`DoABC::decode` `0xa4a740` → `AVM2Bytecode::RunObjectScript` `0xb7f2b0`): `stop`, `play`, `gotoAndPlay` /
+`gotoAndStop` (int or label), `random`, `floor`, `setRandomFrame`, `startAtRandomFrame`, `setInvisible`,
+`setCanIgnoreMasks`, `setUseDefaultShader` / `setUseShader`, `SetAutoflip`, `Enable` / `DisableInterpolation`,
+`Enable` / `DisableLoopInterpolation`, `SetTimescale`; anything else logs `PARSE ERROR CALLING FUNCTION OTHER THAN
+addFrameScript` / `UNSUPPORTED INSTRUCTION:`. Manifest-ready prologues for these functions are in
+`.analysis/notes-disp.md` "Manifest-ready rows" (the two `goto*Label` twins differ only at their tail).
+
+**Clip-name remap through `data/tilesets.gon` (INFERRED, not run in-game).** `ResolveClipName` **`0x7bdbb0`**:
+`node = tilesets[<current tileset, game+0x14f8>][name]`; a string node is returned, else `name` itself when the
+fallback is `"auto"`. `CharacterGraphics_build` `0xf1150` calls it with `(graphics.movieclip, "auto")` before the
+SymbolClass lookup `0x9bb890`, for every **non-cat** character (the `_CAT` branch does not pass through it);
+`TacticsTest::init` uses it for `battlefield_postprocess_effect`. `tilesets.gon` (loaded once in `SpawnDatabase_init`
+`0x7a74b0`, so overlays apply) holds one flat object per tileset (22 in this build: `alley`, `junkyard`, `sewers`, …,
+`house`, `tutorial`, `finalboss`) whose key namespace is shared with the slot names (`combat_background`,
+`static_*`, `debris`, `event_piece_frame`, `reverb`, `global_objects`); vanilla uses it for
+`non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. So a `data/tilesets.gon.patch` adding `<tileset>
+{ Rat MyModRat }` per tileset would redirect `graphics.movieclip Rat` to a mod SymbolClass without touching
+`enemies.gon` — see `docs/data-mods.md`; untested.
+
+**Hook seams** (for a future native "alias animation" or clip redirect): `AnimStateMachine::PlayAnimation` `0x9abda0`
+(label by `std::string*` in rdx, 7 callers, plain prologue), `gotoFrame` `0x9a88a0` (116 callers, every frame change),
+`createTag` `0xa2e990` (the one place to add a tag), `App_FindMovieClipByName` `0x9bb6f0` (the by-name seam). The
+render-side flip and the palette uniform are per-frame hot paths, not hook targets.
+
 ## Dev scenes and run entry (static decode + Ghidra, 2026-10-20)
 
 How the harness enters a fight from the main menu (`enter TacticsTest`, `docs/ingame-testing.md`). Every address is
