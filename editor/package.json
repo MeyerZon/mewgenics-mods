@@ -20,6 +20,7 @@
     "test:ingame": "node scripts/ingame.ts",
     "test:swfgate": "node scripts/swf-gate.ts",
     "test:artprobe": "node scripts/art-probe.ts",
+    "test:unitglow": "node scripts/unit-glow-probe.ts",
     "test:e2e": "node scripts/vendor-ruffle.ts && node scripts/vendor-vectorcraft.ts && vite build && playwright test",
     "bindings:gen": "node ../tools/bindings/gen-headers.ts",
     "bindings:check": "node ../tools/bindings/gen-headers.ts --check"

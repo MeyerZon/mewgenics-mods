@@ -1,0 +1,7 @@
+{
+  "title": "Framework glow (data half)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "The data half of mewframework's per-unit glow (API v4, FW_SetUnitGlow): shaders/fw_unit_glow.shader, the rim shader the glow engine loads as material fw_unit_glow through the game's own ShaderManager. It reads the combat outline mask (one channel) and paints glow_color in a band of glow_radius texels outside the masked units. Load it next to any mod that calls FW_SetUnitGlow: `mods: <mod>, fw-glow` / -modpaths. No game content is changed.",
+  "requirements": []
+}

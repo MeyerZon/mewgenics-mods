@@ -45,3 +45,8 @@ const FwTypeHierarchy *fw_vtable_get_hier(const FwVtableIdentity *id);
 /* MSVC std::string helpers: construct an SSO string (text truncated to FW_STATUS_NAME_MAX), exact compare. */
 void fw_msvc_init_sso(MsvcString *s, const char *text);
 int  fw_msvc_eq(const MsvcString *s, const char *lit);
+/* A by-value std::string argument the game destroys (string_TidyDeallocate): SSO for <= 15 bytes, else `alloc`
+ * (the game's std::_Allocate, so the deallocator matches) with MSVC's rule cap = len | 15, cap + 1 bytes asked.
+ * 1 on success; 0 when a heap string is needed and alloc is NULL or fails (s is left untouched). */
+typedef void *(*FwStringAlloc)(size_t bytes);
+int  fw_msvc_init(MsvcString *s, const char *text, FwStringAlloc alloc);

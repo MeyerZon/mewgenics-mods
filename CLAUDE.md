@@ -115,8 +115,8 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
-  walks + apply/merge writes, symbol resolution + the hook plan, the harness's modules;
-  158 checks = 14 + 6 + 14 + 12 + 11 + 15 + 86, `-Werror`),
+  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules, the harness's modules;
+  171 checks = 14 + 6 + 14 + 13 + 11 + 15 + 8 + 90, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
@@ -187,7 +187,10 @@ fewer than all of them is the cause of a past divide-by-zero crash — `native/f
 
 **The data/native pairing (sample).** Joker's Luck shows the full loop: `mods/jokers-luck/` defines the ability,
 tooltip, and localization (data), and `native/mods/jokers-luck/` supplies the per-turn behavior (native), joined by the
-registered name `JokersLuck`. See `docs/data-mods.md` "Pairing data with a native status".
+registered name `JokersLuck`. See `docs/data-mods.md` "Pairing data with a native status". The per-unit glow (API v4,
+`FW_SetUnitGlow`, `native/framework/src/glow_engine.c` + the host-tested `fw_glow_rules.c`) is the other pairing: the
+framework draws the rim through the game's outline mask and `mods/fw-glow/` ships the rim shader it loads
+(`docs/engine-map.md` "Per-unit glow"); the harness directive `glow` exercises it.
 
 **The in-game harness is the T2 tier.** `mewtest.dll` (`native/mods/test-harness/`) runs `.mewtest` scripts inside the
 game through the real console dispatcher and writes a JSON-lines result; the editor's runner (`editor/src/core/ingame/`)

@@ -160,6 +160,28 @@ TEST(msvc_helpers_init_and_compare) {
     free(heap);
 }
 
+/* a by-value std::string argument the game destroys: SSO for <= 15 bytes, else the game's allocator with MSVC's
+ * capacity rule (len | 15, cap + 1 bytes asked) so _Tidy_deallocate frees it with the matching deallocator */
+static int g_allocCalls; static size_t g_allocBytes;
+static void *counting_alloc(size_t n) { g_allocCalls++; g_allocBytes = n; return malloc(n); }
+static void *failing_alloc(size_t n) { (void)n; return NULL; }
+TEST(msvc_init_builds_sso_or_a_heap_string_with_the_games_allocator) {
+    MsvcString s; memset(&s, 0xCC, sizeof s);
+    g_allocCalls = 0;
+    CHECK_EQ(fw_msvc_init(&s, "glow_strength", counting_alloc), 1);   /* 13 bytes: SSO, no allocation */
+    CHECK_EQ(g_allocCalls, 0);
+    CHECK_STR(msvc_str(&s), "glow_strength"); CHECK_EQ(s.size, (size_t)13); CHECK_EQ(s.cap, (size_t)15);
+    CHECK_EQ(fw_msvc_init(&s, "composite_glow.shader", counting_alloc), 1);   /* 21 bytes: heap, cap 31, 32 asked */
+    CHECK_EQ(g_allocCalls, 1); CHECK_EQ(g_allocBytes, (size_t)32);
+    CHECK_STR(msvc_str(&s), "composite_glow.shader"); CHECK_EQ(s.size, (size_t)21); CHECK_EQ(s.cap, (size_t)31);
+    CHECK_EQ(s.u.ptr[21], 0);
+    free(s.u.ptr);
+    CHECK_EQ(fw_msvc_init(&s, "composite_glow.shader", failing_alloc), 0);   /* no memory: refused, not a dangling SSO */
+    CHECK_EQ(fw_msvc_init(&s, "composite_glow.shader", NULL), 0);
+    CHECK_EQ(fw_msvc_init(&s, "", counting_alloc), 1);
+    CHECK_EQ(s.size, (size_t)0); CHECK_EQ(s.cap, (size_t)15);
+}
+
 /* ---- T1: the real LuckUp vtable dump (.analysis/luckup-vtable.hex, git-ignored; 172 little-endian qwords) ---- */
 static int load_dump(void *slots[VT_SLOTS]) {
     char path[1024];

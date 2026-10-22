@@ -5035,7 +5035,183 @@
       "anchors": {
         "strings": [],
         "note": "void (TacticsTest* this, std::string* levelName, int, int, int) — registers the run console commands (bind, load, win, spawn, battle, …); reference only, never called by the harness.",
-        "callees": [],
+        "callees": [
+          {
+            "ordinal": 35,
+            "name": "Camera_SetRenderToTexture",
+            "target": "0x979d50"
+          },
+          {
+            "ordinal": 38,
+            "name": "Camera_SetRenderToTexture",
+            "target": "0x979d50"
+          },
+          {
+            "ordinal": 41,
+            "name": "Camera_SetRenderToTexture",
+            "target": "0x979d50"
+          },
+          {
+            "ordinal": 45,
+            "name": "Camera_SetRenderToTexture",
+            "target": "0x979d50"
+          },
+          {
+            "ordinal": 48,
+            "name": "Camera_SetRenderToTexture",
+            "target": "0x979d50"
+          },
+          {
+            "ordinal": 52,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 60,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 95,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 102,
+            "name": "Material_SetTexture",
+            "target": "0x9bdcd0"
+          },
+          {
+            "ordinal": 186,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 187,
+            "name": "Camera_AddPostProcessPass",
+            "target": "0x979880"
+          },
+          {
+            "ordinal": 191,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 192,
+            "name": "Camera_AddPostProcessPass",
+            "target": "0x979880"
+          },
+          {
+            "ordinal": 196,
+            "name": "Material_SetTexture",
+            "target": "0x9bdcd0"
+          },
+          {
+            "ordinal": 199,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 202,
+            "name": "Material_SetTexture",
+            "target": "0x9bdcd0"
+          },
+          {
+            "ordinal": 207,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 210,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 215,
+            "name": "Material_SetUniformFloat",
+            "target": "0x9bddc0"
+          },
+          {
+            "ordinal": 217,
+            "name": "Material_SetUniformFloat",
+            "target": "0x9bddc0"
+          },
+          {
+            "ordinal": 224,
+            "name": "Material_SetUniformFloat",
+            "target": "0x9bddc0"
+          },
+          {
+            "ordinal": 226,
+            "name": "Material_SetUniformFloat",
+            "target": "0x9bddc0"
+          },
+          {
+            "ordinal": 236,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 238,
+            "name": "Material_SetTexture",
+            "target": "0x9bdcd0"
+          },
+          {
+            "ordinal": 240,
+            "name": "Material_SetUniformVec4",
+            "target": "0x9bde70"
+          },
+          {
+            "ordinal": 242,
+            "name": "Material_SetUniformFloat",
+            "target": "0x9bddc0"
+          },
+          {
+            "ordinal": 243,
+            "name": "Camera_AddPostProcessPass",
+            "target": "0x979880"
+          },
+          {
+            "ordinal": 248,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 250,
+            "name": "Material_SetUniformFloat",
+            "target": "0x9bddc0"
+          },
+          {
+            "ordinal": 251,
+            "name": "Camera_AddPostProcessPass",
+            "target": "0x979880"
+          },
+          {
+            "ordinal": 256,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 258,
+            "name": "Material_SetTexture",
+            "target": "0x9bdcd0"
+          },
+          {
+            "ordinal": 259,
+            "name": "Camera_AddPostProcessPass",
+            "target": "0x979880"
+          },
+          {
+            "ordinal": 295,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 305,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          }
+        ],
         "cfgLite": {
           "bytes": 345763,
           "calls": 6459,
@@ -5954,6 +6130,1423 @@
       ]
     },
     {
+      "name": "TacticsTest_LateRender",
+      "kind": "function",
+      "rva": "0x88d780",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 20 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 C8 FE FF FF 48 81 EC 00 02 00 00 0F 29 70 B8 0F 29 78 A8 44 0F 29 40 98 44",
+        "exactLen": 46,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (TacticsTest* this) — glaiel::TacticsTest vftable slot 19 (late render / submit phase): syncs the side cameras +0x40/+0x48/+0x50/+0x58/+0x70 from the main camera +0x68, sizes the outline pass rects from the StatusMenu's hovered unit and flips the pass enable bytes by mode +0xa0 (1 = jump-flood, else blur + composite_outlines). The glow engine hooks it (MJ_InstallHook, trampoline) and runs its plan after the original so its writes win.",
+        "callees": [
+          {
+            "ordinal": 8,
+            "name": "Scene_SubmitDraw",
+            "target": "0x989be0"
+          },
+          {
+            "ordinal": 27,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 30,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 34,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 38,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 41,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 44,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 8B C4 48 89 58 20 55 56 57 41 54",
+        "cfgLite": {
+          "bytes": 5975,
+          "calls": 46,
+          "ripRefs": 54,
+          "resyncs": 2
+        }
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:hook_TacticsTest_LateRender"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_TacticsTest_LateRender",
+          "index": 28
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c",
+        ".analysis/decompiled/TacticsTest_ctor_0x31c5f0.c"
+      ],
+      "verify": {
+        "runtime": "glow_engine_hook_step: TacticsTest_vftable[19] == the resolved address, else the glow hook is refused (the symbol is not the slot it claims to be)"
+      }
+    },
+    {
+      "name": "vec_u32_AddUnique",
+      "kind": "function",
+      "rva": "0x72cd0",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 74 24 20 57 41 54 41 56 48 83 EC 20 8B 59 04 48 8D 79 04 45 33 C0 48 8D 71 08 4C 8B E2 4C 8B F1 85 DB 74 19",
+        "exactLen": 43,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "bool (vec_u32* v {+0 cap, +4 count, +8 data}, const uint32_t* value): false when present, else push_back (CRT _realloc_base, growth x1.5). StatusMenu::update pushes layer 0x18 onto the hovered unit's renderer with it; the glow engine does the same for every registered unit, every frame.",
+        "callees": [],
+        "prologue": "48 89 5C 24 18 48 89 74 24 20 57 41",
+        "cfgLite": {
+          "bytes": 86,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:glow_engine_frame"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_vec_u32_AddUnique",
+          "index": 29
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/vec_u32_AddUnique_0x72cd0.c",
+        ".analysis/decompiled/StatusMenu_update_0x81aee0.c"
+      ]
+    },
+    {
+      "name": "ShaderManager_GetOrCreateMaterial",
+      "kind": "function",
+      "rva": "0x9bb5d0",
+      "signature": {
+        "pattern": "4C 89 44 24 18 48 89 54 24 10 53 55 56 57 41 56 48 83 EC 40",
+        "exactLen": 20,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Material* (ShaderManager* mgr, std::string name, std::string shaderFile) — both strings by value (the callee destroys them with string_TidyDeallocate); FNV-1a map at mgr+0x278; an existing name is returned as-is (the shader file is then ignored), else the shader is loaded (0x9bb220) and a 0x88-byte Material constructed (0x9bcfc0). Materials live in the map for the process lifetime.",
+        "callees": [
+          {
+            "ordinal": 5,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 6,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 8,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "4C 89 44 24 18 48 89 54 24 10 53 55",
+        "cfgLite": {
+          "bytes": 284,
+          "calls": 9,
+          "ripRefs": 0,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:ensure_material"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_ShaderManager_GetOrCreateMaterial",
+          "index": 30
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ShaderManager_GetOrCreateMaterial_0x9bb5d0.c",
+        ".analysis/notes-glow.md"
+      ]
+    },
+    {
+      "name": "Material_SetUniformVec4",
+      "kind": "function",
+      "rva": "0x9bde70",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 08 48 89 50 10 57",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Material*, std::string name, float x (xmm2), float y (xmm3), float z (stack), float w (stack)): copies the name, SetUniform(mat, copy, &xyzw, 16), then destroys the by-value name (jmp string_TidyDeallocate).",
+        "callees": [],
+        "prologue": "48 8B C4 48 89 58 08 48 89 50 10 57",
+        "cfgLite": {
+          "bytes": 110,
+          "calls": 2,
+          "ripRefs": 0,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:glow_engine_frame"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Material_SetUniformVec4",
+          "index": 31
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Material_SetUniform_0x9bdbf0.c",
+        ".analysis/notes-glow.md"
+      ]
+    },
+    {
+      "name": "Material_SetUniformFloat",
+      "kind": "function",
+      "rva": "0x9bddc0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 54 24 10 57 48 83 EC 40 48 8B FA 48 8B D9 F3",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Material*, std::string name, float v (xmm2)): copies the name, SetUniform(mat, copy, &v, 4), destroys the by-value name.",
+        "callees": [],
+        "prologue": "48 89 5C 24 08 48 89 54 24 10 57 48",
+        "cfgLite": {
+          "bytes": 78,
+          "calls": 2,
+          "ripRefs": 0,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:ensure_material"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Material_SetUniformFloat",
+          "index": 32
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Material_SetUniform_0x9bdbf0.c",
+        ".analysis/notes-glow.md"
+      ]
+    },
+    {
+      "name": "Material_SetTexture",
+      "kind": "function",
+      "rva": "0x9bdcd0",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 74 24 20 48 89 54 24 10 57 48 83 EC 40 49",
+        "exactLen": 21,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Material*, std::string name, Texture* tex, int slot): mat+0x81 = 1, (mat+0x38)[slot].tex (+8) = tex, then SetUniformInt(name, slot); destroys the by-value name. The composites bind the mask camera's texture as `framebuf` in slot 6.",
+        "callees": [],
+        "prologue": "48 89 5C 24 18 48 89 74 24 20 48 89",
+        "cfgLite": {
+          "bytes": 99,
+          "calls": 2,
+          "ripRefs": 0,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:ensure_pass"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Material_SetTexture",
+          "index": 33
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Material_SetTexture_0x9bdcd0.c"
+      ]
+    },
+    {
+      "name": "Camera_AddPostProcessPass",
+      "kind": "function",
+      "rva": "0x979880",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 30 41",
+        "exactLen": 21,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Pass* (Camera*, Material*, int layer): allocates a 0xa0-byte pass (+0x10 enabled = 1, +0x14 = layer, full-screen rects at +0x18/+0x38, +0x58 flags = 1, +0x98 predicate impl = null = always enabled) with one {Material*, 1} entry and pushes it into (camera+0xb0)[layer]; layer -1 = the last one. The pass is owned by the camera (freed by Camera_dtor): never cache a Pass* across frames.",
+        "callees": [],
+        "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89",
+        "cfgLite": {
+          "bytes": 376,
+          "calls": 4,
+          "ripRefs": 1,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:ensure_pass"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Camera_AddPostProcessPass",
+          "index": 34
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Renderer_AddPostProcessPass_0x979880.c",
+        ".analysis/decompiled/Camera_dtor_body_0x978470.c"
+      ]
+    },
+    {
+      "name": "Scene_SubmitDraw",
+      "kind": "function",
+      "rva": "0x989be0",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 40 8B 44",
+        "exactLen": 17,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (RenderQueue* queue, renderable, Position*, int layer, uint32 flags): appends a 0x20-byte {renderable, Position*, double sortKey, u32 flags} item to the layer's draw list (layer table queue+0x38, 0xe8 bytes per layer). Reference only: every renderer submits itself with it, once per extra layer.",
+        "callees": [],
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 57 48",
+        "cfgLite": {
+          "bytes": 119,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "docs/engine-map.md"
+      ],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Scene_SubmitDraw_0x989be0.c"
+      ]
+    },
+    {
+      "name": "MaskedRendererIso_Submit",
+      "kind": "function",
+      "rva": "0x78d4c0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 80 B9",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (MaskedRendererIso* this) — vftable 0x140ed81e8 slot 19 (per-frame submit): optional y-lift, Scene_SubmitDraw(this+0x38, this, this+0x40, this+0x54 layer, this+0x58 flags) and once more for every entry of the extra-layer vector +0x68 cap / +0x6c count / +0x70 data. That vector is how a unit lands in the outline mask (layer 0x18): there is no re-draw call anywhere. Witness of OFF_RND_EXTRA_COUNT / OFF_RND_EXTRA_DATA.",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Scene_SubmitDraw",
+            "target": "0x989be0"
+          },
+          {
+            "ordinal": 1,
+            "name": "Scene_SubmitDraw",
+            "target": "0x989be0"
+          }
+        ],
+        "prologue": "48 89 5C 24 08 48 89 6C 24 10 48 89",
+        "cfgLite": {
+          "bytes": 184,
+          "calls": 2,
+          "ripRefs": 0,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "docs/engine-map.md"
+      ],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/MaskedRendererIso_Submit_0x78d4c0.c"
+      ]
+    },
+    {
+      "name": "StatusMenu_update",
+      "kind": "function",
+      "rva": "0x81aee0",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 08 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 B8",
+        "exactLen": 22,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (StatusMenu* this) — StatusMenu vftable 0x141120ff8 slot 11: resolves the hovered unit (TacticsGrid_GetUnitAtTile) into +0xe8, swap-removes every 0x18 from the previously outlined unit's (+0xf8, validated by the pool generation at Character-8 against +0x100) renderer extra layers, pushes 0x18 onto the new one's with vec_u32_AddUnique, then +0xf8 = +0xe8. Witness of CONST_MASK_LAYER, OFF_CH_RENDERER, OFF_RND_EXTRA_LAYERS, OFF_CH_GENERATION.",
+        "callees": [
+          {
+            "ordinal": 13,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 18,
+            "name": "vec_u32_AddUnique",
+            "target": "0x72cd0"
+          },
+          {
+            "ordinal": 35,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 36,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 44,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 45,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 46,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 111,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 112,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 114,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 121,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 122,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 129,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 130,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 161,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 178,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 185,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 192,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 199,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 215,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 221,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 226,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 232,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 248,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 254,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 260,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 266,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 272,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 278,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 284,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 293,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 301,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 309,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 319,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 330,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 331,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 336,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 339,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 342,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 346,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 349,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 352,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 356,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 369,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 384,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 388,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 394,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 406,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 421,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 438,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 441,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "prologue": "48 8B C4 48 89 58 08 55 56 57 41 54",
+        "cfgLite": {
+          "bytes": 14849,
+          "calls": 456,
+          "ripRefs": 172,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "docs/engine-map.md"
+      ],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/StatusMenu_update_0x81aee0.c"
+      ]
+    },
+    {
+      "name": "Camera_SetRenderToTexture",
+      "kind": "function",
+      "rva": "0x979d50",
+      "signature": {
+        "pattern": "40 53 48 83 EC 20 48 83 79 50 00 48 8B D9 F2",
+        "exactLen": 15,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Camera*, double scale -> +0x88, int unit -> +0x98, byte -> +0x81): +0x80 = 1 and lazily allocates the glaiel::Texture2D at camera+0x50 (the texture the composites read as `framebuf`). Witness of OFF_CAM_RTT_TEXTURE.",
+        "callees": [],
+        "prologue": "40 53 48 83 EC 20 48 83 79 50 00 48",
+        "cfgLite": {
+          "bytes": 103,
+          "calls": 1,
+          "ripRefs": 1,
+          "resyncs": 0
+        }
+      },
+      "consumers": [
+        "docs/engine-map.md"
+      ],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Camera_SetRenderToTexture_0x979d50.c"
+      ]
+    },
+    {
+      "name": "ShaderManager_global",
+      "kind": "data",
+      "rva": "0x13c4a30",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_init",
+          "kind": "rip-mov",
+          "needsHarvest": false,
+          "ripRefOrdinal": 17
+        },
+        "note": "the ShaderManager every material creation site loads (`mov rcx,[rip+…]` right before each GetOrCreateMaterial call in TacticsTest::init, e.g. 0x83541c before the composite_outlines call at 0x835423): the SAME object as App_global — the material map (FNV-1a, +0x278/+0x280) lives inside the ApplicationBase. Kept as its own entry so the glow engine names what it reads."
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:ensure_material"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_ShaderManager",
+          "index": 10
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-glow.md",
+        ".analysis/decompiled/ShaderManager_GetOrCreateMaterial_0x9bb5d0.c"
+      ],
+      "verify": {
+        "layout": "+0x278 material map; the pointer stored at the global is the manager (load it, do not pass its address)"
+      }
+    },
+    {
+      "name": "TacticsTest_vftable",
+      "kind": "vtable",
+      "rva": "0xf0f4b8",
+      "slots": 28,
+      "anchors": {
+        "rtti": {
+          "typeDescriptorName": ".?AVTacticsTest@glaiel@@",
+          "method": "typedesc-col-vftable"
+        },
+        "slotChecks": [
+          {
+            "slot": 2,
+            "note": "TacticsTest_IsA 0x31add0 (the 171-byte IsA every dev-scene driver has)"
+          },
+          {
+            "slot": 10,
+            "note": "update 0x88d290"
+          },
+          {
+            "slot": 19,
+            "target": "TacticsTest_LateRender"
+          }
+        ],
+        "note": "glaiel::TacticsTest (TypeDescriptor 0x134fc50, COL 0x1167810; written by TacticsTest_ctor 0x31c5f0 at 0x31c632/0x31c639). The glow notes first attributed this vftable to ImmediateModeGameUI; session rim corrected it. 28 consecutive code pointers; slots 6-9, 11-18 and 20-27 are the no-op 0x35bd0."
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:glow_engine_hook_step"
+      ],
+      "exposure": [
+        {
+          "field": "rva_TacticsTest_vftable"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/TacticsTest_ctor_0x31c5f0.c",
+        ".analysis/decompiled/TacticsTest_IsA_0x31add0.c"
+      ],
+      "verify": {
+        "runtime": "glow_engine_hook_step: slot 19 == FW_SYM_TacticsTest_LateRender, else the hook is refused"
+      }
+    },
+    {
+      "name": "TacticsTest_maskCamera",
+      "kind": "offset",
+      "struct": "TacticsTest",
+      "value": "0x58",
+      "ctype": "Camera*",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "48 8B 46 58 48 8B 50 38 48 8B 46 68 48 8B 48 38",
+          "dispAt": 3
+        },
+        "note": "mov rax,[rsi+0x58] (0x88d9db): the RTT camera that draws only layer 0x18 — the outline MASK — into its texture +0x50; LateRender syncs its transform from the main camera (+0x68, the next load)"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TT_MASK_CAMERA"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c",
+        ".analysis/decompiled/TacticsTest_init_lambda_DoCall_0x8967b0.c"
+      ]
+    },
+    {
+      "name": "TacticsTest_mainCamera",
+      "kind": "offset",
+      "struct": "TacticsTest",
+      "value": "0x68",
+      "ctype": "Camera*",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "48 8B 46 58 48 8B 50 38 48 8B 46 68 48 8B 48 38",
+          "dispAt": 11
+        },
+        "note": "mov rax,[rsi+0x68] (0x88d9e3): the world camera; its layer-0x1a passes (composite_outlines, jumpflood_composite, our fw_unit_glow) composite the outline over the scene"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TT_MAIN_CAMERA"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ]
+    },
+    {
+      "name": "TacticsTest_blurPass",
+      "kind": "offset",
+      "struct": "TacticsTest",
+      "value": "0x90",
+      "ctype": "Pass*",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_init",
+          "pattern": "48 89 81 90 00 00 00 48 8B 84 24 ?? ?? ?? ?? 48 8B 80 90 00 00 00 C6 40 59 10",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov [rcx+0x90],rax (0x835329) right after AddPostProcessPassList(maskCamera, [ol_blur_x, ol_blur_y], 0x18); the next instruction sets the pass's +0x59 = 0x10. The glow engine forces this pass on with full-screen rects after LateRender narrowed/disabled it"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TT_BLUR_PASS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/notes-glow.md"
+      ]
+    },
+    {
+      "name": "TacticsTest_compositePass",
+      "kind": "offset",
+      "struct": "TacticsTest",
+      "value": "0x98",
+      "ctype": "Pass*",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_init",
+          "pattern": "E8 ?? ?? ?? ?? 48 8B 8C 24 ?? ?? ?? ?? 48 89 81 98 00 00 00",
+          "dispAt": 16,
+          "dispSize": 4
+        },
+        "note": "mov [rcx+0x98],rax (0x835597) right after AddPostProcessPass(mainCamera, composite_outlines, 0x1a) at 0x83558a: the game's white outline composite. It starts enabled with full-screen rects and its predicate (the mask had content) is true whenever a glowing unit is in the mask, so it would wash every glowing unit's body white ((1 - luminance) of the mask): the glow engine disables it while units are registered, exactly what LateRender does on every hovered frame in jump-flood mode"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TT_COMPOSITE_PASS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/notes-glow.md"
+      ]
+    },
+    {
+      "name": "Camera_rttTexture",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0x50",
+      "ctype": "Texture2D*",
+      "anchors": {
+        "witness": {
+          "function": "Camera_SetRenderToTexture",
+          "pattern": "48 83 79 50 00 48 8B D9",
+          "dispAt": 3
+        },
+        "note": "cmp qword [rcx+0x50],0: the render-to-texture target, allocated lazily by SetRenderToTexture; the composites bind maskCamera->+0x50 as `framebuf`"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_RTT_TEXTURE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Camera_SetRenderToTexture_0x979d50.c",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "Camera_passes",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0xb0",
+      "ctype": "vector<Pass*>[layer] (0x18-byte {begin,end,cap} per layer index)",
+      "anchors": {
+        "witness": {
+          "function": "Camera_AddPostProcessPass",
+          "pattern": "48 8B 85 B0 00 00 00 48 8B 54 C8 08",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rax,[rbp+0xb0] (0x9799b6): the per-layer pass vectors a pass is pushed into; Camera_render runs (camera+0xb0)[i] after drawing layer i. The glow engine re-scans (mainCamera+0xb0)[0x1a] every frame for its own pass instead of caching the Pass*"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_PASSES"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Renderer_AddPostProcessPass_0x979880.c",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "Character_renderer",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x40",
+      "ctype": "MaskedRendererIso*",
+      "anchors": {
+        "witness": {
+          "function": "StatusMenu_update",
+          "pattern": "48 8B 49 40 48 83 C1 68 C7 85",
+          "dispAt": 3
+        },
+        "note": "mov rcx,[rcx+0x40] (0x81b241): the hovered Character's renderer component (vftable 0x140ed81e8, main layer +0x54 = 0x19), whose extra-layer vector (+0x68, the next add) receives layer 0x18"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_RENDERER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/StatusMenu_update_0x81aee0.c"
+      ]
+    },
+    {
+      "name": "Character_generation",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "-0x8",
+      "ctype": "uint64 pool generation (read at Character - 8)",
+      "anchors": {
+        "witness": {
+          "function": "StatusMenu_update",
+          "pattern": "48 8B 43 08 49 39 40 F8 75",
+          "dispAt": 7
+        },
+        "note": "cmp [r8-0x8],rax (0x81b1ce): StatusMenu validates its remembered unit +0xf8 by comparing the pool generation at Character-8 with the copy it took (+0x100) before touching it. The glow engine validates its registry the same way, every frame"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_GENERATION"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/StatusMenu_update_0x81aee0.c"
+      ]
+    },
+    {
+      "name": "Renderer_extraLayers",
+      "kind": "offset",
+      "struct": "MaskedRendererIso",
+      "value": "0x68",
+      "ctype": "vec_u32 {+0 cap, +4 count, +8 data}: extra draw layers",
+      "anchors": {
+        "witness": {
+          "function": "StatusMenu_update",
+          "pattern": "48 8B 49 40 48 83 C1 68 C7 85",
+          "dispAt": 7
+        },
+        "note": "add rcx,0x68 (0x81b245): the vector vec_u32_AddUnique(…, &0x18) pushes onto; MaskedRendererIso_Submit submits the unit once more per entry"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RND_EXTRA_LAYERS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/StatusMenu_update_0x81aee0.c",
+        ".analysis/decompiled/MaskedRendererIso_Submit_0x78d4c0.c"
+      ]
+    },
+    {
+      "name": "Renderer_extraCount",
+      "kind": "offset",
+      "struct": "MaskedRendererIso",
+      "value": "0x6c",
+      "ctype": "uint32",
+      "anchors": {
+        "witness": {
+          "function": "MaskedRendererIso_Submit",
+          "pattern": "48 8B 7B 70 8B 43 6C 48 8D 2C 87",
+          "dispAt": 6
+        },
+        "note": "mov eax,[rbx+0x6c] (0x78d52f): the extra-layer count; the submit loop runs data..data+count*4"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RND_EXTRA_COUNT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/MaskedRendererIso_Submit_0x78d4c0.c"
+      ]
+    },
+    {
+      "name": "Renderer_extraData",
+      "kind": "offset",
+      "struct": "MaskedRendererIso",
+      "value": "0x70",
+      "ctype": "uint32*",
+      "anchors": {
+        "witness": {
+          "function": "MaskedRendererIso_Submit",
+          "pattern": "48 8B 7B 70 8B 43 6C 48 8D 2C 87",
+          "dispAt": 3
+        },
+        "note": "mov rdi,[rbx+0x70] (0x78d52b): the extra-layer data pointer"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RND_EXTRA_DATA"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/MaskedRendererIso_Submit_0x78d4c0.c"
+      ]
+    },
+    {
+      "name": "Pass_materialCount",
+      "kind": "offset",
+      "struct": "Pass",
+      "value": "0x4",
+      "ctype": "uint32",
+      "anchors": {
+        "witness": {
+          "function": "Camera_AddPostProcessPass",
+          "pattern": "8B 73 04 48 89 5C 24 40",
+          "dispAt": 2
+        },
+        "note": "mov esi,[rbx+0x4] (0x979945): the material vector's count (the pass is {cap, count, data} at +0)"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_PASS_MAT_COUNT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Renderer_AddPostProcessPass_0x979880.c"
+      ]
+    },
+    {
+      "name": "Pass_materials",
+      "kind": "offset",
+      "struct": "Pass",
+      "value": "0x8",
+      "ctype": "{Material*, int}[] (0x10 stride)",
+      "anchors": {
+        "witness": {
+          "function": "Camera_AddPostProcessPass",
+          "pattern": "48 89 43 08 8B 43 04 89 33",
+          "dispAt": 3
+        },
+        "note": "mov [rbx+0x8],rax (0x979983): the material entries; the glow engine recognises its pass by entry 0's Material*"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_PASS_MATERIALS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Renderer_AddPostProcessPass_0x979880.c",
+        ".analysis/decompiled/PostProcessEffect_process_0x9776a0.c"
+      ]
+    },
+    {
+      "name": "Pass_enabled",
+      "kind": "offset",
+      "struct": "Pass",
+      "value": "0x10",
+      "ctype": "char",
+      "anchors": {
+        "witness": {
+          "function": "Camera_AddPostProcessPass",
+          "pattern": "C6 43 10 01 C7 43 14 FF FF FF FF",
+          "dispAt": 2
+        },
+        "note": "mov byte [rbx+0x10],1 (0x97990b): a new pass starts enabled; PostProcessEffect_process returns at once when it is 0; LateRender flips it on the outline passes every hovered frame"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_PASS_ENABLED"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Renderer_AddPostProcessPass_0x979880.c",
+        ".analysis/decompiled/PostProcessEffect_process_0x9776a0.c"
+      ]
+    },
+    {
+      "name": "Pass_rectA",
+      "kind": "offset",
+      "struct": "Pass",
+      "value": "0x18",
+      "ctype": "double[4] x0,x1,y0,y1 (normalized; 0,1,0,1 = full screen, skips the scissor)",
+      "anchors": {
+        "witness": {
+          "function": "Camera_AddPostProcessPass",
+          "pattern": "48 89 4B 18 48 89 43 20",
+          "dispAt": 3
+        },
+        "note": "mov [rbx+0x18],rcx (0x979916) with rcx = 0.0 and rax = 1.0 following: the first rect, full screen by default; LateRender narrows it to the hovered unit's rect"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_PASS_RECT_A"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Renderer_AddPostProcessPass_0x979880.c",
+        ".analysis/decompiled/PostProcessEffect_process_0x9776a0.c"
+      ]
+    },
+    {
+      "name": "Pass_rectB",
+      "kind": "offset",
+      "struct": "Pass",
+      "value": "0x38",
+      "ctype": "double[4] x0,x1,y0,y1 (normalized)",
+      "anchors": {
+        "witness": {
+          "function": "Camera_AddPostProcessPass",
+          "pattern": "48 89 4B 38 48 89 43 40",
+          "dispAt": 3
+        },
+        "note": "mov [rbx+0x38],rcx (0x979926): the second rect (the scissor), full screen by default"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_PASS_RECT_B"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Renderer_AddPostProcessPass_0x979880.c"
+      ]
+    },
+    {
+      "name": "Pass_flags",
+      "kind": "offset",
+      "struct": "Pass",
+      "value": "0x58",
+      "ctype": "uint16 ping-pong/flags (+0x58 ping-pong byte, +0x59 blur-chain byte 0x10)",
+      "anchors": {
+        "witness": {
+          "function": "Camera_AddPostProcessPass",
+          "pattern": "66 C7 43 58 01 00",
+          "dispAt": 3
+        },
+        "note": "mov word [rbx+0x58],1 (0x979936): a new pass ping-pongs; the game's composites run with it zeroed and so does ours"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_PASS_FLAGS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/Renderer_AddPostProcessPass_0x979880.c",
+        ".analysis/decompiled/PostProcessEffect_process_0x9776a0.c"
+      ]
+    },
+    {
+      "name": "MaskLayer",
+      "kind": "constant",
+      "value": "0x18",
+      "anchors": {
+        "witness": {
+          "function": "StatusMenu_update",
+          "callee": "vec_u32_AddUnique",
+          "pattern": "C7 85 ?? ?? ?? ?? 18 00 00 00",
+          "imm32At": 6,
+          "maxBack": 8
+        },
+        "note": "mov dword [rbp+0x568],0x18 (0x81b249) right before the only vec_u32_AddUnique call in StatusMenu_update: the draw layer the outline mask camera (TacticsTest+0x58, mode 3 = flat white) renders — a unit whose renderer lists it is drawn into the mask"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_MASK_LAYER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/StatusMenu_update_0x81aee0.c"
+      ],
+      "note": "combat draw layer 0x18: the outline mask (TacticsTest::init sets its draw mode to 3 = MovieClip_DrawFlat white)"
+    },
+    {
+      "name": "CompositeLayer",
+      "kind": "constant",
+      "value": "0x1a",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_init",
+          "pattern": "41 B8 1A 00 00 00 48 8B 94 24 ?? ?? ?? ?? 48 8B 8C 24 ?? ?? ?? ?? E8",
+          "dispAt": 2,
+          "dispSize": 4,
+          "nth": 0
+        },
+        "note": "mov r8d,0x1a (0x835574) before AddPostProcessPass(mainCamera, composite_outlines, 0x1a) at 0x83558a (the jumpflood_composite pass at 0x8358c8 is the second match). Not a call-arg witness: the first AddPostProcessPass call in init is the battlefield effect at pass 0x22 (0x834b82)"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_COMPOSITE_LAYER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/notes-glow.md"
+      ],
+      "note": "the main camera's pass index the outline composites run after (pass index == layer index)"
+    },
+    {
+      "name": "GlowFramebufSlot",
+      "kind": "constant",
+      "value": "6",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_init",
+          "pattern": "41 B9 06 00 00 00 4C 8B 84 24 ?? ?? ?? ?? 48 8B 94 24 ?? ?? ?? ?? 48 8B 8C 24 ?? ?? ?? ?? E8",
+          "dispAt": 2,
+          "dispSize": 4,
+          "nth": 0
+        },
+        "note": "mov r9d,6 (0x835484) before Material_SetTexture(composite_outlines, \"framebuf\", maskCamera->+0x50, 6) at 0x8354a2: the texture slot the composite shaders sample the mask from"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_GLOW_FRAMEBUF_SLOT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-glow.md",
+        ".analysis/decompiled/Material_SetTexture_0x9bdcd0.c"
+      ],
+      "note": "material texture slot of `framebuf` on the outline composites (the blur passes use the int 4 = the pass runner's input convention instead)"
+    },
+    {
+      "name": "VT_TacticsTest_LateRender",
+      "kind": "constant",
+      "value": "19",
+      "anchors": {
+        "derive": {
+          "vtable": "TacticsTest_vftable",
+          "slotSearch": {
+            "bodyPattern": "48 8B C4 48 89 58 20 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 C8 FE FF FF 48 81 EC 00 02 00 00",
+            "expect": 1
+          }
+        },
+        "note": "the only TacticsTest slot whose body starts with LateRender's prologue (mov rax,rsp; mov [rax+0x20],rbx; push rbp/rsi/rdi/r12-r15; lea rbp,[rax-0x138]; sub rsp,0x200): slot 19 = 0x88d780. The glow engine checks vftable[VT_TT_LATERENDER] == the signature-resolved FW_SYM_TacticsTest_LateRender before installing its hook"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:glow_engine_hook_step"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_TT_LATERENDER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ],
+      "note": "TacticsTest vftable slot of the late render / submit-phase method the glow engine hooks"
+    },
+    {
       "name": "Character_init",
       "kind": "function",
       "rva": "0xf70f0",
@@ -5977,6 +7570,11 @@
           }
         ],
         "callees": [
+          {
+            "ordinal": 325,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
           {
             "ordinal": 732,
             "name": "GonObject_Int",
