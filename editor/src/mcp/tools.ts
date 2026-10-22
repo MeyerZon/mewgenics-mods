@@ -167,6 +167,20 @@ export const TOOL_INPUT = {
     resolve: z.record(z.string(), z.string()).describe("name -> 0xRVA answers for ambiguous/failed entries").optional(),
     dryRun: bool("default true; false writes bindings/<build>.json + the report").optional(),
   }),
+  vectorcraft_exec: z.object({
+    mod: str(),
+    scene: str("scene file inside the mod, e.g. art/my_rat.scene.json"),
+    shapeId: str("the shape to open in VectorCraft first (its SVG, as export_svg writes it); omit to start from a blank artboard of the stage size").optional(),
+    commands: z.array(z.object({
+      command: str("an engine command id, e.g. shape.rectangle, shape.ellipse, path.create, object.move, object.setProps (the app lists all ~1,090 with their params; coordinates are artboard px = the shape's SVG viewBox moved to 0,0)"),
+      params: anyObject.describe("the command's params, e.g. { x, y, width, height } or { d: 'M0 0 L10 0 …' }").optional(),
+    })).describe("run in order through window.vectorcraft.execute; a failure stops the rest unless continueOnError"),
+    exportTo: str("the shape the exported drawing replaces (default shapeId). Omit together with shapeId to only run the commands and get the SVG text back").optional(),
+    screenshot: bool("also save a PNG of the canvas under editor/data/vectorcraft/ and return screenshotPath").optional(),
+    continueOnError: bool("keep running after a failed command (default false)").optional(),
+    timeoutMs: num("how long to wait for the app to start in headless Chromium (default 120000)").optional(),
+    webgl: bool("force the WebGL2 backend (?webgl; default true in headless)").optional(),
+  }),
 };
 
 export type ToolName = keyof typeof TOOL_INPUT;
@@ -365,6 +379,11 @@ export const TOOLS: ToolDef[] = [
         dryRun: a.dryRun,
       });
     },
+  ),
+  def(
+    "vectorcraft_exec",
+    "Draw on a scene shape headlessly in VectorCraft (the vendored web build, github.com/storytold/vectorcraft, started in Playwright's headless Chromium; nothing is installed). Opens the shape as the SVG export_svg writes (an artboard of its viewBox moved to 0,0), runs the engine commands in order through window.vectorcraft.execute (shape.rectangle { x, y, width, height }, shape.ellipse, path.create { d }, object.move { dx, dy }, …), exports the document as SVG (presentation attributes, text outlined), undoes the artboard re-origin and replaces exportTo (default shapeId) in the scene file through import_svg's path — returns { ok, opened, results: [{ command, ok, result | error }], applied: { shapeId, paths, findings }, reorigin: { dx, dy }, documents, screenshotPath?, ms }. Without shapeId it starts from a blank artboard of the stage size; without shapeId and exportTo it only runs the commands and returns the SVG text. Refuses with skipped:true + reason when the build is not vendored (cd editor && npm run build, online once) or Playwright's Chromium is absent. Static drawing only — animation stays in the scene's sprites.",
+    (a) => api.vectorcraftExec({ mod: a.mod, scenePath: a.scene, shapeId: a.shapeId, commands: a.commands, exportTo: a.exportTo, screenshot: a.screenshot, continueOnError: a.continueOnError, timeoutMs: a.timeoutMs, webgl: a.webgl }),
   ),
 ];
 

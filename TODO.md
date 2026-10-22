@@ -55,9 +55,10 @@ these without a decision (status per bullet below; the PR map follows).
       **2026-10-22, owner's YES to a build-time download (nothing installed):** the pinned web build is vendored at
       `npm run build` (hash-verified, `scripts/vendor-vectorcraft.ts`) and Art mode's **VectorCraft** sub-tab draws on
       a shape in place — VectorCraft on a Shapes row → draw → Apply to shape, the artboard re-origin undone by
-      `svg-reorigin.ts` (`docs/art-preview-plan.md` "VectorCraft in-editor"). Remaining: the agent channel itself, a
-      `vectorcraft_exec` MCP tool driving the same `window.vectorcraft` API in headless Chromium (next PR); the native
-      `vectorcraft-cli mcp --headless` route needs an install and stays unasked. T3: the owner's look at the tab.
+      `svg-reorigin.ts` (`docs/art-preview-plan.md` "VectorCraft in-editor"). The agent channel is MCP
+      `vectorcraft_exec` (the same `window.vectorcraft` API in Playwright's headless Chromium, ~0.5–4 s to boot;
+      skips when not vendored). The native `vectorcraft-cli mcp --headless` route needs an install and stays unasked.
+      Remaining: T3 — the owner's look at the tab and at a `vectorcraft_exec` drawing in game.
 - [ ] **T3 looks** (owner, 2026-10-21: he will do these later) still unticked from the art PRs — the shots are in
       `editor/data/ingame-runs/` (`npm run test:artprobe`, `-- --cat`, `-- --cat-append` rebuild them):
       gradient square red → black (#63); top green line shorter than the bottom one (#64); the add square a lightened

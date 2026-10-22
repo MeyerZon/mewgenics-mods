@@ -208,6 +208,18 @@ Verified by Playwright (`tests/e2e/art-mode.spec.ts` "VectorCraft panel", skips 
 Chromium under SwiftShader WebGL2 takes ~0.5–4 s, `shape.rectangle` through the API, Apply → 3 paths with the
 transform above, no request leaves the editor's origin.
 
+*Agent channel (2026-10-22):* MCP **`vectorcraft_exec { mod, scene, shapeId?, commands: [{ command, params }],
+exportTo?, screenshot?, continueOnError?, timeoutMs?, webgl? }`** (`src/core/art/vectorcraft-headless.ts` +
+`vectorcraft-exec.ts`): serves the vendored folder from a throwaway loopback server, boots it in Playwright's headless
+Chromium (the devDependency, SwiftShader WebGL2; nothing installed), opens the shape's SVG (or a blank artboard of
+the stage size without `shapeId`), runs the commands through `window.vectorcraft.execute` with one `page.evaluate`
+per call, exports, re-origins and replaces `exportTo` through `importSvgIntoScene` — the same path as the tab's
+Apply — and returns `{ ok, opened, results, applied: { shapeId, paths, findings }, reorigin, documents,
+screenshotPath?, ms }` (`skipped: true` + reason when not vendored or Chromium is absent). The command pipeline
+(`runVectorcraftPlan`) is browser-agnostic and unit-tested over a fake driver; one integration test runs the real
+thing on a throwaway scene and skips without the build. The PNG is Playwright's `page.screenshot` (the web build's
+own `ui.screenshot` answers only `{ width, height }`).
+
 Tool-agnostic import (`svg-import.ts`): accepts an SVG document (VectorCraft,
 Inkscape, Illustrator export…) and produces `shapes[<id>].paths[]`: `<path d>`,
 `<rect>`, `<circle>`, `<ellipse>`, `<polygon>`, `<polyline>`, `<line>` and `<g>`
