@@ -1888,7 +1888,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     // witness hosts: .pdata chunks of functions whose first chunk is only the prologue (chained unwind)
     ["Camera_render_body", "0x9787dc"], ["Swf_DisplayObject_Render_cull", "0x9b0b78"],
     // M2 (model bytes): the witness host of the BinaryResource data/size offsets (it reads both right after GetBinaryResource)
-    ["Texture2D_LoadFromFile", "0xa0ad40"]];
+    ["Texture2D_LoadFromFile", "0xa0ad40"],
+    // M2 occlusion (sprite/mesh painter order): the witness host of the layer item key (the .pdata chunk of Scene_SubmitDraw
+    // that stores the built item; its first chunk only computes the key)
+    ["Scene_SubmitDraw_tail", "0x989c96"]];
   const R3D_DATA: [string, string, number][] = [["Iso", "0x12f7a00", 11], ["IsoInverse", "0x12f79c0", 12], ["RenderStateFlags", "0x12f714c", 13], ["CullDisableCounter", "0x13c5c90", 14],
     ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17], ["MatStackData", "0x13c5bd8", 18]];
   const R3D_OFFSETS: [string, string, string][] = [["Camera_rtt", "OFF_CAM_RTT", "0x80"], ["Camera_hdr", "OFF_CAM_HDR", "0x81"], ["Camera_queue", "OFF_CAM_QUEUE", "0x40"],
@@ -1899,12 +1902,15 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["App_clearStencil", "OFF_APP_CLEAR_STENCIL", "0xd9a"], ["RenderTarget_samples", "OFF_RT_SAMPLES", "0x50"],
     ["BinaryResource_data", "OFF_BINRES_DATA", "0x28"], ["BinaryResource_size", "OFF_BINRES_SIZE", "0x30"],
     // M2 textures: the GL texture name App_GetTexture's Texture2D carries (read by the mesh draw functor at replay)
-    ["Texture2D_glName", "OFF_TEX2D_GLNAME", "0x8"]];
+    ["Texture2D_glName", "OFF_TEX2D_GLNAME", "0x8"],
+    // M2 occlusion: the camera's per-item filter std::function (impl pointer) Layer_Draw calls before every item, the layer's
+    // sorted flag and the item's sort key (descending = farther first) the mesh engine interleaves its draws by
+    ["Camera_layerFilter", "OFF_CAM_LAYER_FILTER", "0x120"], ["Layer_sorted", "OFF_LAYER_SORTED", "0x20"], ["LayerItem_key", "OFF_ITEM_KEY", "0x10"]];
   const R3D_CONSTANTS: [string, string, string][] = [["LayerStride", "CONST_LAYER_STRIDE", "0xe8"], ["LayerItemShift", "CONST_LAYER_ITEM_SHIFT", "5"],
     ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
   const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",
     ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]);
-  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 24 reference functions (all signed; 2 are witness-host .pdata chunks, 1 the BinaryResource offsets' host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 22 offsets (2 BinaryResource by M2, the Texture2D GL name by M2 textures) and 4 constants with witnesses; the generated headers expose them", () => {
+  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 25 reference functions (all signed; 3 are witness-host .pdata chunks, 1 the BinaryResource offsets' host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 25 offsets (2 BinaryResource by M2, the Texture2D GL name by M2 textures, 3 for the M2 sprite/mesh order) and 4 constants with witnesses; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     for (const [name, rva, index] of R3D_SYMBOLS) {
       const e = entry(m, name);
