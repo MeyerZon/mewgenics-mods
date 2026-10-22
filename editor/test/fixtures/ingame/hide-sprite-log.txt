@@ -1,0 +1,24 @@
+unit model: Rat 000002ef75db7708 -> models/unit-box.gltf (block scale=0.4 yaw=0 offset=(0 0 0))
+Register3DObject(000002ef75db7708, models/unit-box.gltf): ok handle 1 (1 object(s))
+unit model: Rat: hide_sprite: the 2D sprite is not drawn while the model draws
+unit model at: Rat handle=1 world=(8.500 0.500) screen=(7.155 4.025) facing=-1 m0=-1 ms=1792684672680
+mesh: models/unit-box.gltf: loaded 24 vertices, 12 triangles, bounds x -0.30..0.30 h 0.00..0.60 z -0.30..0.30
+mesh object f=1 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50) ndc=(0.761 -0.0992 0.0545) tex=none palette=-1
+mesh order f=1 items=11 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 5 key=8.000
+mesh hide f=1 units=1 items=11 skipped=1
+mesh draw f=1 n=1 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=2 n=2 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=3 n=3 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=4 n=4 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh object f=61 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50) ndc=(0.761 -0.062 0.0545) tex=none palette=-1
+mesh order f=61 items=11 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 5 key=8.000
+mesh hide f=61 units=1 items=11 skipped=1
+mesh object f=121 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50) ndc=(0.761 -0.062 0.0545) tex=none palette=-1
+mesh order f=121 items=11 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 5 key=8.000
+mesh hide f=121 units=1 items=11 skipped=1
+mesh object f=181 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50) ndc=(0.761 -0.062 0.0545) tex=none palette=-1
+mesh order f=181 items=11 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 5 key=8.000
+mesh hide f=181 units=1 items=11 skipped=1
+mesh object f=241 handle=1 model=models/unit-box.gltf unit world=(8.50 0.00 0.50) ndc=(0.761 -0.062 0.0545) tex=none palette=-1
+mesh order f=241 items=11 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 5 key=8.000
+mesh hide f=241 units=1 items=11 skipped=1

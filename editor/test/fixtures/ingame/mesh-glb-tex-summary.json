@@ -1,0 +1,182 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "mode": "embedded",
+  "env": {
+    "MEWFW_MESH_PROBE": "1",
+    "MEWFW_MESH_PROBE_MODEL": "models/totem.glb",
+    "MEWFW_MESH_PROBE_TEXTURE": null
+  },
+  "conventionPngPresent": false,
+  "targets": [
+    {
+      "name": "purple-top",
+      "rgb": [
+        134,
+        36,
+        188
+      ]
+    },
+    {
+      "name": "lime-top",
+      "rgb": [
+        134,
+        202,
+        27
+      ]
+    }
+  ],
+  "judgement": {
+    "verdict": "match",
+    "staleChecked": true,
+    "counts": {
+      "purple-top": 1060,
+      "lime-top": 1080
+    },
+    "shot": 1,
+    "anchorPx": [
+      1841.728,
+      760.104
+    ],
+    "box": {
+      "x0": 1669.728,
+      "y0": 588.104,
+      "x1": 2013.728,
+      "y1": 932.104
+    }
+  },
+  "otherTargets": [
+    {
+      "name": "orange-top",
+      "rgb": [
+        206,
+        108,
+        18
+      ]
+    },
+    {
+      "name": "grey-top",
+      "rgb": [
+        86,
+        86,
+        86
+      ]
+    }
+  ],
+  "otherJudgement": {
+    "verdict": "absent",
+    "staleChecked": true,
+    "counts": {
+      "orange-top": 0,
+      "grey-top": 152
+    },
+    "shot": 0,
+    "anchorPx": [
+      1841.728,
+      776.736
+    ],
+    "box": {
+      "x0": 1669.728,
+      "y0": 604.736,
+      "x1": 2013.728,
+      "y1": 948.736
+    }
+  },
+  "objects": [
+    {
+      "frame": 1,
+      "handle": 1,
+      "model": "models/totem.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0557,
+        0.046
+      ],
+      "tex": "embedded:models/totem.glb",
+      "palette": -1
+    },
+    {
+      "frame": 61,
+      "handle": 1,
+      "model": "models/totem.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0788,
+        0.046
+      ],
+      "tex": "embedded:models/totem.glb",
+      "palette": -1
+    },
+    {
+      "frame": 121,
+      "handle": 1,
+      "model": "models/totem.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0558,
+        0.046
+      ],
+      "tex": "embedded:models/totem.glb",
+      "palette": -1
+    },
+    {
+      "frame": 181,
+      "handle": 1,
+      "model": "models/totem.glb",
+      "anchor": "tile",
+      "world": [
+        4.5,
+        0,
+        3.5
+      ],
+      "ndc": [
+        0.0951,
+        -0.0558,
+        0.046
+      ],
+      "tex": "embedded:models/totem.glb",
+      "palette": -1
+    }
+  ],
+  "glErrors": [],
+  "textureMissing": [],
+  "shots": [
+    {
+      "label": "mesh-a",
+      "path": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-161002-dev-sandbox-mesh3-glb-embedded\\shot-mesh-a.png",
+      "note": "gl 3440 x 1440; back buffer of hwnd 00000000003712ce, 738/1025 samples lit, 15 ms"
+    },
+    {
+      "label": "mesh-b",
+      "path": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-161002-dev-sandbox-mesh3-glb-embedded\\shot-mesh-b.png",
+      "note": "gl 3440 x 1440; back buffer of hwnd 00000000003712ce, 727/1025 samples lit, 0 ms"
+    }
+  ],
+  "shotsCheck": {
+    "status": "ok",
+    "detail": "2 distinct of 2"
+  },
+  "run": {
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 2 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-161002-dev-sandbox-mesh3-glb-embedded"
+  }
+}

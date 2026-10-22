@@ -1,0 +1,17 @@
+mods: dev-sandbox, fw-3d, _unithide
+timeout: 150s
+hide: false
+# 3D phase M3: hide_sprite. The Rat wears a magenta box (models/unit-box.gltf) at scale 0.4 (_unithide) with hide_sprite true, so its
+# 2D sprite is left out of the units layer (native/framework/src/fw_mesh_hide.c) while the box draws. mewframework logs
+# "unit model: Rat: hide_sprite: ..." at discovery and "mesh hide f=.. units=1 items=.. skipped=1" in the plan windows.
+# The judge (editor/src/core/art/mesh-measure.ts measureHideRegion) counts the Rat's dark outline pixels around the box:
+# none here, many in the control (unit-hide-control.mewtest, hide_sprite false).
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 150
+shot "hide"
+quit

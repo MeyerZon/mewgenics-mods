@@ -1,0 +1,15 @@
+# 3D phase M3 face, T2 run 20261022-160300-_unitface-unit-face (build 25143593): mewframework.window.log 'unit model' lines, then result.jsonl face/end events
+unit model: Rat 00000288779a7708 -> models/face-box.obj (block scale=1 yaw=0 offset=(0 0 0))
+unit model face: Rat handle=1 dir=(-1 0) yaw=90 src=dir ms=1792684988162
+unit model at: Rat handle=1 world=(8.500 0.500) screen=(7.155 4.025) facing=-1 m0=-1 ms=1792684988162
+unit model face: Rat handle=1 dir=(0 -1) yaw=0 src=dir ms=1792684988802
+unit model face: Rat handle=1 dir=(-1 0) yaw=90 src=dir ms=1792684989754
+unit model face: Rat handle=1 dir=(1 0) yaw=270 src=dir ms=1792684990705
+unit model face: Rat handle=1 dir=(0 1) yaw=180 src=dir ms=1792684991656
+unit model face: Rat handle=1 dir=(0 -1) yaw=0 src=dir ms=1792684992596
+{"ev":"face","line":10,"unit":8,"name":"Lil' Rat","arg":"8 0 -1","dir":[0,-1],"effective":[0,-1],"expect":"F","facing":"F","flip":1,"ok":true,"detail":"Character::Face(00000288779a7708, [0 -1], instant) called","t":6907,"frame":449}
+{"ev":"face","line":15,"unit":8,"name":"Lil' Rat","arg":"8 -1 0","dir":[-1,0],"effective":[-1,0],"expect":"F","facing":"F","flip":-1,"ok":true,"detail":"Character::Face(00000288779a7708, [-1 0], instant) called","t":7860,"frame":585}
+{"ev":"face","line":19,"unit":8,"name":"Lil' Rat","arg":"8 1 0","dir":[1,0],"effective":[1,0],"expect":"B","facing":"B","flip":1,"ok":true,"detail":"Character::Face(00000288779a7708, [1 0], instant) called","t":8813,"frame":721}
+{"ev":"face","line":24,"unit":8,"name":"Lil' Rat","arg":"8 0 1","dir":[0,1],"effective":[0,1],"expect":"B","facing":"B","flip":-1,"ok":true,"detail":"Character::Face(00000288779a7708, [0 1], instant) called","t":9766,"frame":857}
+{"ev":"face","line":28,"unit":8,"name":"Lil' Rat","arg":"8 front","dir":[0,-1],"effective":[0,-1],"expect":"F","facing":"F","flip":1,"ok":true,"detail":"Character::Face(00000288779a7708, [0 -1], instant) called","t":10703,"frame":991}
+{"ev":"end","code":0,"reason":"quit","frames":1125,"turns":1,"elapsed_ms":11641,"expect_pass":9,"expect_fail":0,"t":11641,"frame":1125}

@@ -1,0 +1,20 @@
+mods: dev-sandbox, fw-3d
+timeout: 120s
+hide: false
+# 3D phase M3 items 6 + 7 (docs/possible_3d_work.md): per-band mesh slices. Launch it with
+#   MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/<slab2x1|slab3x3|backpost>.obj@<col>,<row> MEWFW_MESH_PROBE_TINT=1
+# (and MEWFW_MESH_ORDER=m2 for the M2 control): mewframework places that dev-sandbox model on the tile, cuts it into
+# one slice per sort band of world x + z (native/framework/src/fw_mesh_slice.c), draws band i blue/cyan/magenta, puts
+# each slice at its own place in the units layer's painter order and logs "mesh slice ..." (each band's key and its
+# unoccluded screen area) and "mesh order ..." (where each slice went) into mod_logs/mewframework.log;
+# editor/src/core/art/mesh-slices.ts judgeSlices measures every band's coverage on the last shot. No spawn: the
+# TacticsTest fight's own cats (on (2,6), (2,5), (1,5), (1,4) with seed 42) are the occluders.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "slices-a"
+wait frames 30
+shot "slices-b"
+wait frames 15
+quit

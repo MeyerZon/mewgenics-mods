@@ -1,0 +1,19 @@
+// a reference in the string form, a reference in the block form with an override, and a name fw-3d declares (FwBase)
+Crate {
+	graphics {
+		model "@RatBox"
+	}
+}
+Rock {
+	graphics {
+		model {
+			file "@Pillar"
+			scale 2
+		}
+	}
+}
+Tire {
+	graphics {
+		model "@FwBase"
+	}
+}

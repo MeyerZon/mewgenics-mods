@@ -1,0 +1,20 @@
+# T2 2026-10-22, build 25143593: mods/_modelnames/tests/model-names.mewtest (mods fw-3d, _modelnames, dev-sandbox), run 20261022-160724;
+# the harness console events of result.jsonl (spawns), then the named-model lines of mod_logs/mewframework.log (window of this run), verbatim,
+# filtered to model names / unit model / Register3DObject / mesh: (model, shader, program, upload, @ref) / the first mesh object lines
+console: Spawned Rat
+console: Spawned Pooter
+console: Spawned Pooter
+model names: data/models.gon: 2 entries: FwCrate, NameBox (GonResource 000001d0d5428270)
+unit model: Rat: @NameBox -> data/models.gon entry NameBox
+unit model: Rat 000001daf9397708 -> models/name-box.gltf (block scale=1.25 yaw=45 offset=(0 0 0))
+Register3DObject(000001daf9397708, models/name-box.gltf): ok handle 1 (1 object(s))
+unit model at: Rat handle=1 world=(8.500 0.500) screen=(7.155 4.025) facing=-1 m0=-1 ms=1792685250494
+mesh: shaders/fw_mesh.shader found on the mod path
+mesh: models/name-box.gltf: loaded 24 vertices, 12 triangles, bounds x -0.30..0.30 h 0.00..0.60 z -0.30..0.30
+mesh: model models/name-box.gltf: untextured (no textures/models/name-box.png): base colour
+mesh object f=1 handle=1 model=models/name-box.gltf unit world=(8.50 0.00 0.50) ndc=(0.761 -0.0484 0.0532) tex=none palette=-1
+mesh: program 102 ready (mods/fw-3d/shaders/fw_mesh.shader; fw_mvp 9, fw_base_color 2, fw_light_dir 7)
+mesh: uploaded models/name-box.gltf: 24 verts / 36 indices (vao 81)
+mesh: @NoSuchModel: model-name-unknown: no data/models.gon entry named NoSuchModel (unit Pooter; 2 named models) — drawing the 2D clip
+mesh object f=61 handle=1 model=models/name-box.gltf unit world=(8.50 0.00 0.50) ndc=(0.761 -0.0138 0.0532) tex=none palette=-1
+mesh object f=121 handle=1 model=models/name-box.gltf unit world=(8.50 0.00 0.50) ndc=(0.761 -0.0138 0.0532) tex=none palette=-1

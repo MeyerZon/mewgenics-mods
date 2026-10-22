@@ -1,0 +1,8 @@
+// The base of the named-model registry (3D phase M3, "@Name"; docs/data-mods.md "Named models").
+// A unit refers to an entry with graphics { model "@FwCrate" } or model { file "@FwCrate"  scale 2 }; its own keys
+// override the entry's. Mods add entries with data/models.gon.append (or .merge / .patch), never a plain copy of this
+// file: the game's GON loader applies every mod's overlay to this base in mod-path order, and an overlay without a
+// base on the mod path is not loaded at all. So keep mods/fw-3d on the mod path next to any mod that declares models.
+// An entry is a model value: "models/<...>.obj|.gltf|.glb", or a block with that file and the graphics.model keys
+// (scale yaw offset texture tint palette double_sided). An entry cannot name another @Name.
+FwCrate "models/crate.obj"

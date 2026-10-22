@@ -168,4 +168,14 @@ TEST(build_25143593_facing_symbol_and_offsets) {
 #endif
 }
 
+/* 3D phase M3 `face`: the unit model's yaw follows the direction Character::Face stores (fw_unit_face.c); the entry
+ * name and witness are PR #114's Character_orientation (docs/engine-map.md "Facing: Character::Face") */
+TEST(build_25143593_unit_face_orientation_offset) {
+#ifdef OFF_CH_ORIENTATION
+    CHECK_EQ(OFF_CH_ORIENTATION, 0x388);
+#else
+    CHECK(!"offsets.h carries OFF_CH_ORIENTATION (manifest entry Character_orientation)");
+#endif
+}
+
 int main(void) { return MT_RUN_ALL(); }

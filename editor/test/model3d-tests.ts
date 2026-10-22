@@ -88,13 +88,14 @@ export function runModel3dTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     for (const h of hits) eq(h.severity, "error");
     eq(only(r, "model-file-missing").length, 0, "an invalid path is not also missing");
   });
-  test("model3d: model-unregistered is an error for an @name no native mod registers (kind model)", () => {
+  test("model3d: an @name no native mod registers and no data/models.gon declares is model-name-unknown (M3; was model-unregistered)", () => {
     const r = v("model-unregistered");
-    const hits = only(r, "model-unregistered");
+    const hits = only(r, "model-name-unknown");
     eq(hits.length, 1, codes(r));
     eq(hits[0]!.severity, "error");
     assert(/NotRegistered/.test(hits[0]!.message), hits[0]!.message);
-    eq(only(v("model-clean", { registeredModels: [] }), "model-unregistered").length, 1, "@Crate3D without the registration");
+    eq(only(r, "model-unregistered").length, 0, "the M2 code is no longer raised");
+    eq(only(v("model-clean", { registeredModels: [] }), "model-name-unknown").length, 1, "@Crate3D without the registration");
   });
   test("model3d: a `model` key outside a character's graphics block is not a model reference", () => {
     const r = validateMod("model-clean", { relPath: "data/characters/inanimate_objects.gon.merge", text: "Crate {\n\tproperties {\n\t\tmodel \"../nope\"\n\t}\n}\n" }, {
@@ -124,9 +125,11 @@ export function runModel3dTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     eq(at("model-yaw"), "error@Crate.graphics.model.yaw,warning@Tire.graphics.model.yaw", codes(r));   // "left" / 30 (not a multiple of 45)
     eq(at("model-offset"), "error@Crate.graphics.model.offset", codes(r));
     eq(at("model-tint"), "error@Crate.graphics.model.tint", codes(r));
-    eq(at("model-flag"), "error@Crate.graphics.model.double_sided,error@Crate.graphics.model.palette", codes(r));
+    eq(at("model-flag"), "error@Crate.graphics.model.double_sided,error@Crate.graphics.model.hide_sprite,error@Crate.graphics.model.palette", codes(r));
+    assert(/hide_sprite must be true or false/.test(only(r, "model-flag").map((f) => f.message).join("\n")), "the hide_sprite flag message");
     eq(at("model-texture-missing"), "warning@Crate.graphics.model.texture", codes(r));
     eq(at("model-key-unknown"), "warning@Crate.graphics.model.spin", codes(r));
+    assert(/hide_sprite/.test(only(r, "model-key-unknown")[0]!.message), "the known-key list names hide_sprite: " + only(r, "model-key-unknown")[0]!.message);
     eq(at("model-path-invalid"), "error@Rock.graphics.model", codes(r));                               // a block without file
     eq(at("model-file-missing"), "error@Tire.graphics.model.file", codes(r));                          // the file rule still applies
     assert(/mods\/model-block-bad\/textures\/models\/none\.png/.test(only(r, "model-texture-missing")[0]!.message), only(r, "model-texture-missing")[0]!.message);

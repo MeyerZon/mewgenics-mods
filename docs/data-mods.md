@@ -370,8 +370,12 @@ returns it for the top matches; the web UI's component search shows it when you 
   that is `open` (its key set may be incomplete) is never flagged; a component whose `children` are `effects` or
   `passives` also accepts status / effect / passive names as children (`AddStatusToBasicAttack { Bleed 1 }`), and
   `children: any` accepts every key (an arbitrary map: `FormChanger { 0 {…} 1 {…} }`, element names, part names).
+  A child of such a map is a map key even when it is named like a class (a FormChanger form called `Rain`, an
+  ElementalAttunement element `Shadow`): it is not checked as that class's block (`forEachComponentBlock(…, isMap)`).
+  `ignored-key` (info): a key marked `unread` — vanilla writes it, but no code reads it (typos such as `theshold`);
+  it is never `unknown-key` (so vanilla stays clean) and never required.
 - **Proof on vanilla (T1).** Every vanilla component block passes with zero findings (`editor/test/
-  component-schema-tests.ts`: 210 files, 7728 component blocks, 2204 object blocks checked, 0 findings; and four
+  component-schema-tests.ts`: 210 files, 7722 component blocks, 2198 object blocks checked, 0 findings; and four
   vanilla files copied as renamed `.append` mods give 0 `unknown-key` / `missing-required-key`). The generator
   enforces it by construction: a key vanilla writes that RE did not find **opens** the component and is listed in its
   `vanillaMissed`; a `required` key some vanilla block omits is demoted.
@@ -387,18 +391,36 @@ returns it for the top matches; the web UI's component search shows it when you 
   is a status application — scalar = stacks, `[stacks chance]`, or `{ stacks chance }`), `@BrainGon` (0x134400:
   `decision_weights move_weights animate_choice auto_orient`), `@FormChangerForm`, `@Passive_QueueAbility`
   (`even_if_stunned`, `force_display_name`, which every ability-casting passive reads).
-- **Vanilla quirks it surfaced** (the game ignores these vanilla values): `LowHealthAllyDodgeChanceAura { theshold … }`
-  (the engine reads `threshold`, default 5), `AbilityOnRoundEndOnce { even_of_stunned … }` (reads `even_if_stunned`),
-  `TourettesMeows { cooldown … }` (reads `pool`, `duration`), `DamageReductionAura { allies_only … }` (hard-coded),
-  `MoveTowardsDamageSource { ability … }` (reads `move_ability`). They stay `open` so vanilla stays clean.
-- **Coverage (build 25143593).** 1741 classes with a vftable (of the 2007 `glaiel::` names; the other 266 are not
-  components: templates, lambdas, helpers): 473 mapped from decompiles, 898 read no keys of their own, 369 carry only
-  the objdump seed keys (engine / UI / ability-hierarchy classes that never appear as a block; `confidence:
-  inferred`), 1 unresolved (`AddAdvantageToEvent`). 1314 keys: 767 observed with a decompile, 547 inferred. Vanilla:
-  of 384 components vanilla writes as object blocks, 345 are closed (unknown keys flagged), 39 open; vanilla literal
-  keys found 589 / 635 (+188 keys of arbitrary maps).
+- **Vanilla quirks it surfaced** (the game ignores these vanilla values; marked `unread`, reported as `ignored-key`):
+  `LowHealthAllyDodgeChanceAura { theshold … }` (the engine reads `threshold`, default 5; `theshold` exists nowhere in
+  the binary), `AbilityOnRoundEndOnce { even_of_stunned … }` (reads `even_if_stunned`), `TourettesMeows { cooldown … }`
+  (reads `pool`, `duration`), `DamageReductionAura { allies_only … }` (hard-coded), `MoveTowardsDamageSource { ability … }`
+  (reads `move_ability`), `SpawnThingOnDamage { number … }` (spawns one), `AbilityHealthThreshold { aux … }` (an item-entry
+  key), and `AddAdvantageToEvent { type options add }` (nothing reads that block: INFERRED not implemented).
+- **Vanilla typos: documented, not fixed** (owner, 2026-10-22: no fix mod). What each one means in play: `theshold`
+  changes nothing (`threshold` has the same default 5); `even_of_stunned` has no key behind it; `TourettesMeows` reads
+  `duration`, so its `cooldown [8 15]` is ignored and the default of 10 s applies; `DamageReductionAura` reads no keys;
+  `MoveTowardsDamageSource`'s `ability` is not read.
+- **Coverage (build 25143593, after the compclose follow-up).** 1741 classes with a vftable (of the 2007 `glaiel::`
+  names; the other 266 are not components: templates, lambdas, helpers): 504 mapped from decompiles, 987 read no keys
+  of their own, 250 carry only the objdump seed keys (engine / UI / ability-hierarchy classes that never appear as a
+  `passives` block; `confidence: inferred`), 0 unresolved. 1324 keys: 837 observed with a decompile, 487 inferred.
+  Vanilla: **all 393 components vanilla writes as object blocks are closed** (unknown keys flagged; was 356 closed /
+  38 open); vanilla literal keys read 603 / 613 and the other 10 are `unread` (+205 keys of arbitrary maps). Every
+  Passive / Status / GlobalModifier class a mod can name has been decompiled (the compclose2 pass verified the 110 that
+  were seed-only).
+- **Defaults are read off the disassembly.** Each key's `default` is what the code uses when the key is absent;
+  `defaultEvidence: "disasm"` marks the ones read from the instruction that produces it (328 audited: 42 corrected,
+  e.g. `GlobalSpawnOnRoundEnd { chance }` defaults to 1, not 0; `AuraBase { aura_effects_allies }` to true;
+  `Autism { innate }` to -2), `"pseudo"` the few taken from Ghidra's pseudo-code only (which drops hoisted
+  `PercentOr` defaults and prints 0). The method is in `docs/engine-map.md` "Component GON keys" (Defaults audit).
 - **Regenerating.** Fragments are `.analysis/component-schema-<tag>.json` (one per RE session, shape checked by
-  `validateFragment` in `editor/src/core/component-schema-build.ts`; `.analysis/compmap/` holds the work lists and
+  `validateFragment` in `editor/src/core/component-schema-build.ts`; a follow-up session writes an `amend` section
+  instead of redefining a component: `keys` add / replace (`null` deletes), `keyPatches` merge fields into a key it
+  already has (`{ default, defaultEvidence, note }`), `includes` added, `notes` appended, other
+  fields replace, and `open: false` clears the old `vanillaMissed` so the cross-check re-opens it only for a vanilla key
+  still unaccounted for; an amend named `@Shared` takes `keys` / `keyPatches` / `notes` for a shared key set;
+  `.analysis/compmap/` holds the work lists and
   `dispatch-names.json`, the names the by-name dispatch chains accept). `cd editor && npm run build:component-schema`
   merges them, runs the vanilla cross-check and writes the file; `-- --check` fails when the tracked file is stale.
   After a game update the keys are string literals and usually survive; re-run the RE for classes whose vftable
@@ -883,8 +905,8 @@ Since phase M2 (below): per-unit GON models, sorting with the sprites, textures 
 **Loading.** Needs a framework built with API v8 (mewframework 0.6) on a known build, and `mods/fw-3d` on the mod
 path next to the mod that uses it (`mods: <mod>, fw-3d` in a `.mewtest` header, `-modpaths … mods/fw-3d` in a
 launch): `mods/fw-3d` ships `models/crate.obj` (a hand-written 0.8-unit crate with normals and UVs) and gives the
-vanilla `Crate` its `graphics.model`. The API version is v6 because two open PRs (#109 CatRig, #111 `FW_Random`)
-each claim v5; their `FwApi` fields go before the v6 ones when they merge (the owner settles the order).
+vanilla `Crate` its `graphics.model`. The 3D objects are API v8 (`FW_API_VERSION 8`: v5 `FW_Random`, v6 game speed
+and v7 cat rigs came first); the M3/M5 features (hide_sprite, `@Name`, palette rows, facing, slices) add no export.
 
 ### The block form (phase M2)
 
@@ -902,7 +924,7 @@ Rat {
             offset [0 0 0]             // (x, height, z) in tiles, applied after scale and yaw
             texture "models/rat.png"   // under the mod's textures/ (default: textures/models/<model name>.png)
             tint [1 1 1 1]             // multiplies the base colour (3 numbers = alpha 1)
-            palette true               // stored; a palette row source for GON units is not wired yet
+            palette true               // a cat's own palette row (phase M3, see below); no row on non-cats
             double_sided false         // stored
         }
     }
@@ -918,8 +940,8 @@ Validator codes for the block: `model-path-invalid` (also a block without `file`
 
 - **Per unit from GON:** every unit of the fight whose entry has `graphics.model` (string or block) gets its model,
   anchored at the unit's position on the floor and following it as it moves (the position is interpolated, so the
-  model slides with the sprite); it mirrors with the unit's sprite. Units present at the start of a fight are picked
-  up at the first turn, units spawned later on the next frame. The 2D sprite still draws next to the model for now.
+  model slides with the sprite); it turns with the unit (phase M3: the yaw follows Character::Face, see "Facing" below). Units present at the start of a fight are picked
+  up at the first turn, units spawned later on the next frame. The 2D sprite still draws next to the model unless the block says `hide_sprite true` (phase M3).
   Try it: `mods/_unitmodel` (the vanilla Rat with a magenta box), `npm run test:ingame -- _unitmodel unit-model`.
 - **Sorting with the sprites:** a model takes its place in the units layer like a unit standing at its origin — a
   model on a tile is hidden behind units nearer to the camera and drawn over units farther away; a model on a unit is
@@ -1009,6 +1031,128 @@ Warnings / info (the model loads):
 mewframework.log until PR #128's full reader lands. Note: a refused model reports its error only — warnings are not
 listed for it (the log has one line).
 
+
+### 3D models: phase M3 (2026-10-22)
+
+#### hide_sprite — the model replaces the 2D sprite
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `hide_sprite` | bool | false | `true`: the unit's 2D sprite is not drawn while its model is drawn (the mesh replaces the sprite). The shadow, HUD (health bar, status icons) stay. If the model fails to load (any `model-*` error code in the log) the sprite draws as usual. A value that is not `true`/`false` is the validator's `model-flag` error and the DLL logs `model-flag hide_sprite` and keeps the sprite. |
+
+Modder notes: only the unit's own body sprite is hidden; the hover outline and a native glow still trace the sprite's
+silhouette (a known limit), and hit flashes do not reach the mesh yet. Tile objects (`FW_Place3DObjectOnTile`) have no
+sprite, so the flag does nothing there; API-registered unit models (`FW_Register3DObject`) never hide the sprite (no
+API for it in v8 — GON only).
+
+Example:
+```
+Rat { graphics { model { file "models/rat.glb"  hide_sprite true } } }
+```
+
+#### Palette row for `palette true` — a cat's own row
+
+- In the block: `palette true   // grey pixels take the unit's palette row: a cat's own row (as its 2D body); none on
+  a non-cat unit`.
+- **Which row (M3):** with `palette true` on a **cat** (any unit with the `_CAT` clip: player cats, enemy cats such as
+  TomTom or Mangy) the model's grey pixels take exactly the palette row the cat's 2D body uses — its `custom_cats` /
+  class `graphics.palette`, or an `OverridePalette` passive's row while it is active (the row follows changes live,
+  e.g. the Jester's cycling). A cat with the multi-palette sentinel (−69, the rainbow cats) uses its base row on the
+  model. On a **non-cat** unit (a Rat, a Crate) `palette true` has no row: the game never palette-remaps those units,
+  so the model's greys stay grey (use `tint` to recolour it, as `graphics.tint` does for the sprite). `palette false`
+  or no `palette` key = colours as authored. A row set by a native mod (`fw_obj3d_set_material`) is kept unless the
+  block says `palette true`.
+- Try it: `mods/_unitpal` (test-only: TomTom, Mangy and the Rat wear a grey box with `palette true`),
+  `npm run test:ingame -- _unitpal unit-palette` (`mods: dev-sandbox, fw-3d, _unitpal`).
+
+#### Named models (`@Name`, data/models.gon)
+
+##### Named models ("@Name")
+
+Declare a model once by name and use it on any number of units:
+
+```
+// mods/<mod>/data/models.gon.append
+Crate   { file "models/crate.obj"  scale 0.8  yaw 45  texture "models/crate.png" }
+Pillar  "models/pillar.glb"
+```
+
+```
+// mods/<mod>/data/characters/enemies.gon.merge
+Rat    { graphics { model "@Crate" } }                       // the entry as declared
+Pooter { graphics { model { file "@Crate"  scale 1.5 } } }   // the entry, with this unit's scale
+```
+
+- An entry is a model value: a `models/<...>.obj|.gltf|.glb` path, or a block with that `file` and any graphics.model keys
+  (`scale yaw offset texture tint palette double_sided`). A unit's block keys override the entry's. `file "@Name"` in the unit names the entry.
+- An entry cannot name another `@Name`, so there are no chains.
+- **mods/fw-3d ships the base `data/models.gon`.** The game only loads overlays of a file whose plain base exists on the mod path.
+  Declare your models with `data/models.gon.append` (or `.merge` / `.patch`), never a plain copy. The validator warns
+  `whole-file-replace` on a plain copy, because it replaces the base and everything merged before it.
+- **List fw-3d before your mod** in `-modpaths` / a `.mewtest`'s `mods:`, e.g. `mods: fw-3d, <your mod>`. The loader drops overlays
+  from mod paths listed before the one that holds the base (observed). With fw-3d listed after your mod, your names are unknown in game.
+- Codes (one list with the DLL):
+  - `model-name-unknown` (error): the name is declared in no data/models.gon entry and registered by no native mod. In game, the unit
+    keeps its 2D clip and one line per reference is logged.
+  - `model-registry-entry` (error): the entry is not a model. Causes: no string file, an `@` chain, not a models/ path, or neither a
+    string nor a block.
+  - The entry's other keys get the block codes (`model-scale`, …). Its file gets the path, file and reader codes.
+  - `model-unregistered` is no longer raised.
+- The validator resolves `@Name` against this mod's registry, mods/fw-3d's, and `editor/registered-names.json` kind model. In game,
+  any mod on the path counts.
+
+#### A .glb's embedded image as the model texture
+
+##### A model's own texture (`.glb` with an embedded image)
+
+A `.glb` exported with its texture packed in (Blender: *glTF Binary*, Images = Automatic / PNG) now draws with that
+texture with nothing else to do — no `textures/models/<name>.png` needed. Which texture a model draws with:
+
+1. `texture "models/<file>.png"` in the GON `model { }` block (or a native mod's `FW_Set3DObjectMaterial`) — always wins;
+2. otherwise the image embedded in the model file (the base-colour texture of the first material, a PNG in the
+   `.glb`'s binary chunk or a `data:image/png;base64,` URI in a `.gltf`);
+3. otherwise `textures/models/<model name>.png` in your mod, when it exists.
+
+The DLL decodes the PNG itself, in memory (nothing is written anywhere). It reads 8-bit PNGs: RGB, RGBA, palette,
+grey, grey+alpha; not interlaced; up to 2048 px a side. JPEG textures are not read (`model-image-format`): export PNG.
+Problems with the embedded image never stop the model from drawing: you get one warning in `mewframework.log` and the
+convention file (or the base colour) is used:
+
+| code | meaning |
+| --- | --- |
+| `model-image-embedded-invalid` (warning) | the image cannot be read: a broken bufferView, bad base64, or a corrupt PNG |
+| `model-image-embedded-unsupported` (warning) | 16-bit, interlaced, an unknown critical chunk, or larger than 2048 px — re-export |
+
+To edit the texture as a file: MCP `extract_model_texture { mod, path: "models/<name>.glb" }` writes it to
+`mods/<mod>/textures/models/<name>.png` (it refuses to overwrite unless `overwrite: true`; `dryRun: true` only checks).
+Because the embedded image wins over that file, name it explicitly to draw your edited copy:
+`model { file "models/<name>.glb"  texture "models/<name>.png" }` (or re-export the .glb).
+
+#### Facing — the model turns with Character::Face
+
+- **Facing (M3):** a unit's model turns with the unit. When the game turns the unit (moving, attacking, the harness's
+  `face`), the model rotates about its origin so its **front** (glTF +Z / Blender −Y, the side `yaw 0` puts to the
+  lower right) points the way the unit faces: lower right, lower left, upper left or upper right on screen. Author
+  the model facing +Z (Blender: facing −Y) and leave `yaw` at 0; `yaw` and `offset` are still applied, on top of the
+  turn (e.g. `yaw 180` for a model authored facing backwards). Units that never turned (direction (0,0)) follow their
+  sprite's mirror instead. Try it: `mods/_unitface` (a box with a cyan front and a yellow back on the vanilla Rat),
+  `npm run test:ingame -- _unitface unit-face` once PR #114 (the `face` directive) is merged.
+
+
+#### Multi-tile meshes (per-band slices) and the mesh/unit tie
+
+- A model placed on a tile is drawn row by row: the engine cuts it along the board's depth (x + z) into one slice per
+  diagonal row of tiles it covers and slots each slice into the sprites' painter order at that row, so a model larger
+  than one tile (a 2x1 wall, a 3x3 platform) hides the cats standing behind each of its rows and is hidden by the cats
+  standing in front of them. No GON setting is needed: the footprint is the model's bounds (the `model-footprint`
+  warning stays a warning: a big model is now supported, the warning says it overlaps neighbouring tiles).
+- A unit standing on the same tile as a model: the part of the model behind the unit's feet is drawn under the unit,
+  the part in front over it. Put props meant to stand behind a unit on the back half of their tile (+x / +z in game
+  axes; an OBJ file's z is negated on load, so that is -z in the file).
+- Models attached to a unit (per-unit models) are not cut: they are drawn right after their unit.
+- Requires `mods/fw-3d` (its `fw_mesh.shader` declares `uniform vec2 fw_clip`); a mod's own `fw_mesh.shader` must
+  declare it too (validator `shader-uniform-missing`), and keep the clip: `if (fw_clip.y > fw_clip.x && (d < fw_clip.x
+  || d >= fw_clip.y)) discard;` with `d` = world x + z.
 
 ## Limits of the data layer
 
