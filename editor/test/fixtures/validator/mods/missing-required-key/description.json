@@ -1,0 +1,7 @@
+{
+  "title": "missing-required-key",
+  "author": "fixture",
+  "version": "0",
+  "description": "validator fixture: triggers missing-required-key",
+  "requirements": []
+}

@@ -239,6 +239,8 @@ a:hover { color: #b9ccff; text-decoration: underline; }
 .mergecode { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: auto; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; max-height: 300px; white-space: pre; margin: 0; color: var(--ink2); }
 .muted { color: var(--muted); }
 
+.compkeys { display: flex; flex-direction: column; gap: 2px; margin: 8px 0; padding: 8px; border-radius: 6px; background: var(--panel2); }
+.compkeys .ck code { font-family: var(--mono); font-size: 12px; }
 .complist { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
 .complist .ci { font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 5px 8px; border-radius: 6px; cursor: pointer; border: 0; background: transparent; text-align: left; width: 100%; }
 .complist .ci:hover { background: var(--panel2); color: var(--ink); }

@@ -221,7 +221,7 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "search_components",
-    "Search the ~2,007 glaiel::<Name> C++ behavior component class names by substring. With `whereUsed: true`, also returns which base .gon files reference the top matches.",
+    "Search the ~2,007 glaiel::<Name> C++ behavior component class names by substring. Also returns, for the top 15 matches, the GON keys each component reads from its block (type, default, required, inherited base keys, the decompile that witnesses it; editor/component-schema.json). With `whereUsed: true`, also returns which base .gon files reference the top matches.",
     (a) => api.searchComponents(a.query, { whereUsed: a.whereUsed, limit: a.limit }),
   ),
   def(

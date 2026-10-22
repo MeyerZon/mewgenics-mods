@@ -27,6 +27,7 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
       components: COMPONENTS,
       registeredNames: REGISTERED,
       nativeBuild: null,
+      componentSchema: null, // the component key checks have their own suite (component-schema-tests.ts)
       ...opts,
     });
   const codes = (r: Report): string => r.findings.map((f) => f.code).join(",") || "(none)";

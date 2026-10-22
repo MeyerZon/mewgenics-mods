@@ -4,6 +4,7 @@ import React from "react";
 import { useS, sx, CodeView } from "./ui.tsx";
 import { setTab, scheduleComponentSearch, searchComponents } from "../actions.ts";
 import type { Tab } from "../state.ts";
+import type { ComponentSearchResult } from "../types.ts";
 
 function ValidationPanel(): React.JSX.Element {
   const rep = useS((s) => s.report);
@@ -101,6 +102,26 @@ function PreviewPanel(): React.JSX.Element {
   );
 }
 
+/** The keys a component reads, shown when the search is exactly one class name (click a name to get there). */
+function ComponentKeys({ components }: { components: ComponentSearchResult }): React.JSX.Element | null {
+  const c = (components.schema || []).find((x) => x.name === components.query);
+  if (!c) return null;
+  const keys = Object.entries(c.keys);
+  return (
+    <div className="compkeys" data-testid="component-keys">
+      <div className="sec">{`${c.name} reads`}</div>
+      {keys.length === 0 ? <small className="muted">no keys of its own (scalar form = stacks)</small> : null}
+      {keys.map(([k, v]) => (
+        <div key={k} className="ck">
+          <code>{k}</code> <small className="muted">{`${v.type}${v.default !== null ? ` = ${String(v.default)}` : ""}${v.required ? " (required)" : ""}${v.from !== c.name ? ` · from ${v.from}` : ""}`}</small>
+        </div>
+      ))}
+      {c.children ? <small className="muted">{`also takes ${c.children} names as children`}</small> : null}
+      {c.open ? <small className="muted">key list may be incomplete: unknown keys are not flagged</small> : null}
+    </div>
+  );
+}
+
 export function ComponentSearch(): React.JSX.Element {
   const components = useS((s) => s.components);
   return (
@@ -112,6 +133,7 @@ export function ComponentSearch(): React.JSX.Element {
       {components ? (
         <div>
           <small className="muted">{`${components.count} match`}</small>
+          <ComponentKeys components={components} />
           <div className="complist">
             {(components.names || []).map((n) => (
               <button key={n} className="ci" onClick={() => void searchComponents(n)}>
