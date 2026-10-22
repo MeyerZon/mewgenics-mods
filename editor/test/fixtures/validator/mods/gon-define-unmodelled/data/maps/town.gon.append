@@ -1,9 +1,0 @@
-// #define / #end macros are expanded by the game but not modelled by the editor
-#define NODE
-	shop1 {
-		type shop
-	}
-#end
-morestuff {
-	#NODE
-}

@@ -1,0 +1,7 @@
+// test-only: included by IncProbe (enemies.gon.append) — a fragment, not an entry of its own
+properties {
+    tag rat
+    faction enemies
+    movement 1
+    health 77
+}

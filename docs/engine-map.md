@@ -88,9 +88,23 @@ up to the next blank; a `"` toggles a quoted part that is not copied and a closi
 0x140a4f32b, `CALL 0x140a50bd0` 0x140a4f340): the included text gets passes 1–2 with the **same** resolver; text
 after the name on the line stays; no separator is added; **no depth limit and no cycle guard** (a self-include
 recurses until the stack overflows — INFERRED crash). (3/4, top level only) **`Gon_Pre_CollectDefines` 0xa4f4a0 /
-`Gon_Pre_ExpandMacros` 0xa501c0** — `#define NAME(a, b) … #end` macros (strings 0x141134ce8 `#end` / `#define` /
-`#include`), uses expanded up to 256 (`0x100`) passes (argument syntax INFERRED); unused by vanilla (0 of 210 files);
-each `Gon_Preprocess` call has its own macro table, so a base file's macros are invisible to its overlays. Nothing
+`Gon_Pre_ExpandMacros` 0xa501c0** — `#define NAME(a, b) … #end` macros (strings at 0x141134ce4: `#`, `#end`,
+`#define`, `#include`); unused by vanilla (0 of 210 files); each `Gon_Preprocess` call has its own macro table, so a
+base file's macros are invisible to its overlays. Syntax (OBSERVED in the decompiles 2026-10-22, `notes-inc2.md`;
+in-game for a 2-argument macro, `mods/_incprobe`): one delimiter set throughout — blanks (mask 0x100002601) and
+`( ) , : = [ ] { }` (`Gon_Pre_ReadBraced` 0xa4e880 masks 0x28000000240013 over `c-0x28` + `{` `}`;
+`Gon_Pre_SubstituteArgs` 0xa4e0b0 0x2400130100002601 + 0x500000005 over `c-0x5b`). CollectDefines: outside strings, a
+`#`-word exactly `#define`; the name = ReadBraced (delimiters skipped, read to a delimiter); blanks skipped; if the next
+char is `(` a parameter list (repeat: `)` ends it; else skip blanks, skip delimiters, read a token, skip blanks, an
+optional `,` + blanks — an unterminated list reads past the text, undefined); the body runs from right after `)` (no
+parameters: from the first non-blank) up to the `#`-word `#end` (consumed; may sit mid-word); the definition is
+dropped from the text and stored under `String_ConcatParts` 0x51d00`("#", name)` (call 0x140a4ffc6, `R9 =
+0x141134ce4`, length 1) via 0xa510c0 (operator[]-shaped: a later definition replaces). ExpandMacros, looped by
+`Gon_Preprocess` while it returns true, at most `0x100` rounds: outside strings, at a `#` whose word (to a blank) is a
+key, ReadWord consumes it, one token per parameter is read (delimiters skipped, read to a delimiter; text after the
+last argument stays — `#NAME (a, b)` leaves `)`), and the output gets SubstituteArgs(body): body tokens are cut at
+each delimiter and a token equal to a parameter name becomes the argument; the final token (no delimiter after it) is
+flushed unsubstituted. The editor ports all four passes. Nothing
 else is rewritten: no BOM, `\r\n` or TAB handling (vanilla has no BOM / CRLF file).
 **Where an include resolves:** the resolver is a lambda (`GonResource::decode::<lambda_1>` 0x9a7610,
 `combined_decode::<lambda_1>` 0x9a7490 — the files `.analysis/decompiled/GonResource_{decode_0x9a7610,
@@ -106,8 +120,18 @@ path exists, `0x9a1790` (path or `path.append/.merge/.patch` exists) → `FileMa
 mode**; otherwise `FileManager_GetFile` 0x99ff50 → `TextResource::decode` 0x9a59b0. So a mod's full copy of an
 included file replaces it, and an overlay **on the included name** is pasted after the base text (never merged; a
 `.patch` suffix arrives literally); the includer's own overlays apply normally after inlining (they see the included
-entries as base); a mod can include a file it ships at the mirrored path (INFERRED for a mod-only path — the loose
-`-modpaths` lookup every data file uses). The editor ports passes 1–2 in `editor/src/core/gon/preprocess.ts` and the
+entries as base); a mod can include a file it ships at the mirrored path (**OBSERVED in-game 2026-10-22**,
+`mods/_incprobe/tests/include-probe.mewtest`: a `data/characters/enemies.gon.append` entry `#include`s
+`incprobe_props.gon`, shipped only in the mod's `data/characters/`, and the spawned unit holds its `health 77`).
+**The joined path is never normalised** (OBSERVED, `notes-inc2.md`): the pack test `Pak_HasFile` 0xa4d7b0 /
+`Pak_ReadFile` 0xa4d670 looks up `String_ToLower` 0x949320(path) — a per-char `tolower`, nothing else — in the
+`std::set` at `pak+0x180` (exact, case-insensitive); a loose file is `<modpath> + path` through `std::filesystem::exists`
+(`FileManager_FileExists` 0x9a14c0) and a binary `std::ifstream` (`File_ctor_ReadLoose` 0x99ec60, called per mod path by
+`FileManager_GetFile` 0x99ff50). So `..`, `.`, empty segments, a backslash and a leading `/` never match the pack (→ the fatal
+miss) and are resolved by the OS for loose files (`..` can leave the mod folder); the validator's
+`include-path-unsafe`. `FileManager_enumerate` 0x15e960's three callers (0x15e6f0, `MewApplication::OnLoad` 0x745f60,
+0x912150) all list `data/text/*.csv`; nothing enumerates `data/characters`, so a helper there is read only through its
+include. The editor ports the pre-pass in `editor/src/core/gon/preprocess.ts` and the
 resolver in `editor/src/core/gon-includes.ts` (pinned by `editor/test/gon-tests.ts` "gon pre-pass" / "gon include",
 fixtures `editor/test/fixtures/gon-include/`); the validator and the merge preview parse the pre-passed text.
 

@@ -20,7 +20,7 @@ import { COMPONENT_CACHE_HINT } from "../components.ts";
 import { loadComponentSchema, resolveComponent, checkComponentBlock, forEachComponentBlock } from "../component-schema.ts";
 import type { ComponentSchema } from "../component-schema.ts";
 import { parse, GonParseError } from "../gon/parser.ts";
-import { preprocessFile, locateInclude } from "../gon-includes.ts";
+import { preprocessFile, locateInclude, includeDir } from "../gon-includes.ts";
 import { toValue } from "../gon/value.ts";
 import { parseOverlayName } from "../overlay/overlay.ts";
 import { parseCsv } from "../overlay/csv.ts";
@@ -248,13 +248,14 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   // Union of localization keys available: base + mod-added.
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
 
+  const fragments = includeFragments(overlays, root, modDir);
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
     if (o.relPath.endsWith(SCENE_SUFFIX)) {
       // an art scene is a source the editor builds into a SWF, not a game file: run the scene validator on it
       validateSceneFile(o, rb, fileLoc.file, (k) => (local.locRows.has(k) ? "mod" : loc.rows.has(k) ? "base" : null));
     } else if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, componentSchema, modDir);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, componentSchema, modDir, fragments);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -301,6 +302,24 @@ function checkManifest(modDir: string, modName: string, nativeBuild: NativeBuild
   }
 }
 
+/**
+ * Pack paths of the files this mod ships that its own GON files `#include` (found as the mod's copy). Such a file
+ * that is not in the base data is an include fragment, read only through the include, not a whole-file replacement.
+ */
+function includeFragments(overlays: OverlayFile[], dataRoot: string, modDir: string): Set<string> {
+  const out = new Set<string>();
+  for (const o of overlays) {
+    if (o.fileType !== "gon") continue;
+    const ctx = { resource: o.baseName, dataRoot, modDir };
+    for (const inc of preprocessFile(o.text, ctx).includes) {
+      if (!inc.found || inc.cycle) continue;
+      const t = locateInclude(ctx, inc.name);
+      if (t.source === "mod") out.add(t.packPath);
+    }
+  }
+  return out;
+}
+
 /** @param nativeBuild installed-exe identity; null = no exe */
 function validateGonOverlay(
   o: OverlayFile,
@@ -313,6 +332,7 @@ function validateGonOverlay(
   dataRoot: string,
   componentSchema: ComponentSchema | null,
   modDir: string,
+  fragments: Set<string> = new Set(),
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
   const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
@@ -328,7 +348,8 @@ function validateGonOverlay(
     }
     return;
   }
-  if (o.mode === "replace") {
+  const fragment = o.mode === "replace" && fragments.has(o.baseName) && !existsSync(packPath(o.baseName, dataRoot));
+  if (o.mode === "replace" && !fragment) {
     rb.warn("whole-file-replace", `${o.relPath} replaces the whole base file; prefer .append/.merge/.patch`, { file });
   }
   if (!root) return;
@@ -537,8 +558,10 @@ function validateGonOverlay(
  * The GON the game actually parses for an overlay: the text after its pre-pass (Gon_Preprocess 0xa50bd0: comments
  * stripped, `#include` inlined against the base resource's directory with this mod's files taking part). Reports
  * includes that resolve nowhere (`include-missing`: the game shows an error box "Could not locate include file" and
- * exits), a `/*` that is never closed (`comment-unclosed`: the game drops the rest of the file)
- * and `#define` macros (`gon-define-unmodelled`: the game expands them, the editor does not).
+ * exits), names that are not literal pack paths (`include-path-unsafe`: `..`, `./`, a leading `/`, a drive letter or a
+ * backslash; the game never normalises them), a `/*` that is never closed (`comment-unclosed`: the game drops the
+ * rest of the file) and a macro still expanding after the game's 256 rounds (`gon-macro-runaway`). `#define`
+ * macros are expanded exactly as the game does (Gon_Pre_CollectDefines 0xa4f4a0 / Gon_Pre_ExpandMacros 0xa501c0).
  * @returns the parsed root, or null after a `gon-parse-error` the pre-pass introduced
  */
 function semanticParse(o: OverlayFile, rb: ReportBuilder, file: string, dataRoot: string, modDir: string) {
@@ -552,13 +575,17 @@ function semanticParse(o: OverlayFile, rb: ReportBuilder, file: string, dataRoot
       ? `resolves to ${t.packPath}, outside data/: the editor does not read it and the game would not find it in the pack`
       : `resolves to ${t.packPath}, which exists neither in this mod nor in the base data: when the game loads this file it shows an error message box "Could not locate include file: ${inc.name}" and exits`;
     const at = inc.depth === 0 ? { file, line: inc.line, col: inc.col } : { file };
+    if (t.unsafe) {
+      rb.error("include-path-unsafe", `#include "${inc.name}"${via} is not a literal pack path: the game joins it to ${includeDir(o.baseName)} without normalising "..", "./", a leading "/", a drive letter or a backslash, so it never matches a file in the pack (the game then shows "Could not locate include file" and exits) and a loose mod file is looked up by the OS, which may leave the mod folder. Write the path relative to ${includeDir(o.baseName)} with plain "/"-separated names (the editor does not read it)`, at);
+      continue;
+    }
     rb.error("include-missing", `#include "${inc.name}"${via} ${why}`, at);
   }
   if (pre.unclosedComment) {
     rb.warn("comment-unclosed", `a /* block comment is never closed: the game silently drops everything after it to the end of the file (add the missing */)`, { file, line: pre.unclosedComment.line, col: pre.unclosedComment.col });
   }
-  if (pre.defines.length > 0) {
-    rb.warn("gon-define-unmodelled", `${o.relPath} uses #define (${pre.defines.join(", ")}): the game expands these macros before parsing, the editor does not — checks and previews of this file see the unexpanded text`, { file });
+  if (pre.macroRunaway) {
+    rb.warn("gon-macro-runaway", `${o.relPath}: a #define macro (${pre.defines.join(", ")}) still expands after the game's 256 expansion rounds (it uses itself): the game stops there and parses what is left, with the remaining #NAME read as a # comment`, { file });
   }
   try {
     return parse(pre.text);

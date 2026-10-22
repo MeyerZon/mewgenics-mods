@@ -245,9 +245,28 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     const r = v("include-missing");
     eq(only(r, "include-missing").length, 1, "only nope_nodes.gon");
   });
-  test("validator fixture: gon-define-unmodelled warns for #define (game macros the editor does not expand)", () => {
-    const f = expectCode(v("gon-define-unmodelled"), "gon-define-unmodelled", "warning");
-    assert(/NODE/.test(f.message), f.message);
+  test("validator fixture: a file the mod ships only to be #included (not in the base) is an include fragment — no whole-file-replace, no include-missing", () => {
+    const r = v("include-mod-file");
+    eq(codes(r), "(none)");
+  });
+  test("validator fixture: #define macros are expanded like the game (no gon-define-unmodelled; the append sees morestuff.shop1)", () => {
+    const r = v("gon-define");
+    eq(only(r, "gon-define-unmodelled").length, 0, `no unmodelled warning (all: ${codes(r)})`);
+    assert(r.ok, `valid: ${codes(r)}`);
+  });
+  test("validator fixture: gon-macro-runaway warns when a macro still expands after the game's 256 passes", () => {
+    const f = expectCode(v("gon-macro-runaway"), "gon-macro-runaway", "warning");
+    assert(/256/.test(f.message), f.message);
+  });
+  test("validator fixture: include-path-unsafe is an error at the #include for `..` / `./` / absolute / drive / backslash names (and not include-missing)", () => {
+    const r = v("include-path-unsafe");
+    const hits = only(r, "include-path-unsafe");
+    eq(hits.length, 3, `three unsafe names (all: ${codes(r)})`);
+    for (const h of hits) eq(h.severity, "error");
+    eq(`${hits[0]!.location?.line}:${hits[0]!.location?.col}`, "3:2");
+    assert(/\.\.\/maps\/std_nodes\.gon/.test(hits[0]!.message) && /pack/.test(hits[0]!.message), hits[0]!.message);
+    eq(only(r, "include-missing").length, 0, "not reported as missing");
+    assert(!r.ok, "an error makes the mod invalid");
   });
   test("validator fixture: comment-unclosed warns at the /* line (the game silently drops everything after it)", () => {
     const f = expectCode(v("comment-unclosed"), "comment-unclosed", "warning");
