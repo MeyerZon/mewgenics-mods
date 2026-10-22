@@ -62,6 +62,11 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     for (const h of hits) eq(h.severity, "warning");
     assert(r.ok, "warnings only");
   });
+  test("validator fixture: files the game never loads are not overlays: tests/*.mewtest (harness scripts), art/ (editor scene sources) and dotfiles get no finding at all", () => {
+    const r = v("whole-file-replace");
+    const stray = r.findings.filter((f) => /\/(tests|art)\/|\/\.gitignore$/.test(f.location?.file ?? "") || /^(tests|art)\/|\.gitignore/.test(f.message));
+    eq(stray.map((f) => `${f.code} ${f.location?.file ?? ""}`).join(", "), "", "nothing reported for tests/smoke.mewtest, art/probe.scene.json, .gitignore");
+  });
   test("validator fixture: gon-parse-error is an error carrying line and col", () => {
     const r = v("gon-parse-error");
     const f = expectCode(r, "gon-parse-error", "error");
