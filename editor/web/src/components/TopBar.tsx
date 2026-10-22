@@ -3,7 +3,8 @@
 // Save), the Launch… popover and the Help (?) menu.
 
 import React from "react";
-import { openArtTour } from "../state.ts";
+import { openArtTour, openRoomTour } from "../state.ts";
+import { TOUR } from "../tour-anchors.ts";
 import { useStore } from "../store.ts";
 import { useS, sx, Menu, Segmented, Button } from "./ui.tsx";
 import { A } from "../art/art-state.ts";
@@ -20,7 +21,6 @@ import {
   openExample,
   openArtExample,
   openConcepts,
-  openRoomTour,
   exportMod,
   importModFile,
   validateCurrent,
@@ -139,6 +139,9 @@ function HelpMenuItems(): React.JSX.Element {
       <div className="sep" />
       <div className="label">Rooms mode</div>
       <button className="item" onClick={() => openRoomTour()}>
+        ▦ Rooms mode tour
+      </button>
+      <button className="item" onClick={() => openConcepts("rooms")}>
         ▦ Rooms concepts
       </button>
       <div className="sep" />
@@ -208,8 +211,8 @@ export function TopBar(): React.JSX.Element {
         value={mode}
         options={[
           { id: "data", label: label("Data", "data") },
-          { id: "art", label: label("Art", "art") },
-          { id: "rooms", label: label("Rooms", "rooms") },
+          { id: "art", label: label("Art", "art"), tour: TOUR.artSwitch },
+          { id: "rooms", label: label("Rooms", "rooms"), tour: TOUR.roomsSwitch },
         ]}
         onChange={(m) => (m === "art" ? enterArtMode() : m === "rooms" ? enterRoomMode() : leaveArtMode())}
       />
@@ -239,7 +242,7 @@ export function TopBar(): React.JSX.Element {
         Save
         {target && dirty[mode] ? <span className="dot unsaved" /> : null}
       </Button>
-      <Menu label="Launch…" open={openMenu === "launch"} onToggle={() => toggleMenu("launch")} onClose={closeMenu} right>
+      <Menu label="Launch…" triggerTour={TOUR.launch} open={openMenu === "launch"} onToggle={() => toggleMenu("launch")} onClose={closeMenu} right>
         <LaunchPopover />
       </Menu>
       <div className="vdiv" />

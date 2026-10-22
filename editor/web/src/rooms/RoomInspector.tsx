@@ -7,6 +7,7 @@ import { useStore, useStoreShallow } from "../store.ts";
 import { sx, Tabs, Summary, FindingsList, Button, IconButton, Checkbox } from "../components/ui.tsx";
 import { R, setCellTile, setObject, removeObjectAt, addObjectAt, setRightTab, findingsLevel, type PaletteEntry, type RoomRightTab } from "./room-state.ts";
 import { entryLabel } from "./RoomBits.tsx";
+import { TOUR } from "../tour-anchors.ts";
 import { asChoices, addChoice, updateChoice, removeChoice, firstId, objectsAt, cellAt } from "../../../src/core/level/edit.ts";
 import type { LvlPick } from "../../../src/core/level/lvl.ts";
 
@@ -153,13 +154,13 @@ function Findings(): React.JSX.Element {
 export function RoomRightPanel(): React.JSX.Element {
   const tab = useStore(R, (r) => r.rightTab);
   const n = useStore(R, (r) => (r.level && r.report ? r.report.findings.length : 0));
-  const items: { id: RoomRightTab; label: string }[] = [
+  const items: { id: RoomRightTab; label: string; tour?: string }[] = [
     { id: "inspector", label: "Inspector" },
-    { id: "findings", label: n ? `Findings · ${n}` : "Findings" },
+    { id: "findings", label: n ? `Findings · ${n}` : "Findings", tour: TOUR.roomsFindings },
   ];
   return (
     <div className="rightpanel">
-      <Tabs aria-label="Room panel" items={items} value={tab} onChange={setRightTab} />
+      <Tabs aria-label="Room panel" items={items} value={tab} onChange={setRightTab} tour={TOUR.roomsInspector} />
       <div className="panelbody">{tab === "findings" ? <Findings /> : <Inspector />}</div>
     </div>
   );

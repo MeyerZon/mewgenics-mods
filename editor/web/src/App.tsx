@@ -13,10 +13,7 @@ import { Center } from "./components/Center.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { StatusBar, Toast } from "./components/StatusBar.tsx";
 import { TemplateModal } from "./components/TemplateModal.tsx";
-import { ConceptsDrawer } from "./components/ConceptsDrawer.tsx";
 import { BaseEntryDrawer, ComponentsDrawer } from "./components/Drawers.tsx";
-import { TourModal, ArtTourModal } from "./components/Tours.tsx";
-import { WorkedExample, ArtWorkedExample } from "./components/WorkedExamples.tsx";
 import { initArtUi } from "./art/art-state.ts";
 import { startup, closeMenu, saveCurrent, loadStatus } from "./actions.ts";
 import { initShortcuts, setSaveHandler } from "./shortcuts.ts";
@@ -37,6 +34,15 @@ const roomPanes = () => import("./rooms/RoomPanes.tsx");
 const RoomExplorer = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomExplorer })));
 const RoomCenter = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomCenter })));
 const RoomRightPanel = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomRightPanel })));
+
+// Onboarding (the tours, the worked examples, the concepts drawer) is a chunk too, fetched the first time one opens.
+const onboardingChunk = () => import("./components/Onboarding.tsx");
+const TourModal = React.lazy(() => onboardingChunk().then((m) => ({ default: m.TourModal })));
+const ArtTourModal = React.lazy(() => onboardingChunk().then((m) => ({ default: m.ArtTourModal })));
+const RoomTourModal = React.lazy(() => onboardingChunk().then((m) => ({ default: m.RoomTourModal })));
+const WorkedExample = React.lazy(() => onboardingChunk().then((m) => ({ default: m.WorkedExample })));
+const ArtWorkedExample = React.lazy(() => onboardingChunk().then((m) => ({ default: m.ArtWorkedExample })));
+const ConceptsDrawer = React.lazy(() => onboardingChunk().then((m) => ({ default: m.ConceptsDrawer })));
 
 function PaneLoading({ mode }: { mode: "Art" | "Rooms" }): React.JSX.Element {
   return (
@@ -110,17 +116,19 @@ function Overlays(): React.JSX.Element {
   const exampleOpen = useS((s) => s.exampleOpen);
   const artTourOpen = useS((s) => s.artTourOpen);
   const artExampleOpen = useS((s) => s.artExampleOpen);
+  const roomTourOpen = useS((s) => s.roomTourOpen);
   return (
     <>
       <Toast />
       {templateOpen ? <PaneBoundary name="Template dialog" overlay><TemplateModal /></PaneBoundary> : null}
-      {conceptsOpen ? <PaneBoundary name="Concepts" overlay><ConceptsDrawer /></PaneBoundary> : null}
+      {conceptsOpen ? <PaneBoundary name="Concepts" overlay><React.Suspense fallback={null}><ConceptsDrawer /></React.Suspense></PaneBoundary> : null}
       {baseDrawer ? <PaneBoundary name="Base entry" overlay><BaseEntryDrawer /></PaneBoundary> : null}
       {compDrawer ? <PaneBoundary name="Components" overlay><ComponentsDrawer /></PaneBoundary> : null}
-      {tourOpen ? <PaneBoundary name="Guided tour" overlay><TourModal /></PaneBoundary> : null}
-      {exampleOpen ? <PaneBoundary name="Worked example" overlay><WorkedExample /></PaneBoundary> : null}
-      {artTourOpen ? <PaneBoundary name="Art tour" overlay><ArtTourModal /></PaneBoundary> : null}
-      {artExampleOpen ? <PaneBoundary name="Art worked example" overlay><ArtWorkedExample /></PaneBoundary> : null}
+      {tourOpen ? <PaneBoundary name="Guided tour" overlay><React.Suspense fallback={null}><TourModal /></React.Suspense></PaneBoundary> : null}
+      {exampleOpen ? <PaneBoundary name="Worked example" overlay><React.Suspense fallback={null}><WorkedExample /></React.Suspense></PaneBoundary> : null}
+      {artTourOpen ? <PaneBoundary name="Art tour" overlay><React.Suspense fallback={null}><ArtTourModal /></React.Suspense></PaneBoundary> : null}
+      {artExampleOpen ? <PaneBoundary name="Art worked example" overlay><React.Suspense fallback={null}><ArtWorkedExample /></React.Suspense></PaneBoundary> : null}
+      {roomTourOpen ? <PaneBoundary name="Rooms tour" overlay><React.Suspense fallback={null}><RoomTourModal /></React.Suspense></PaneBoundary> : null}
       <PaneBoundary name="Unsaved changes" overlay><ConfirmModal /></PaneBoundary>
     </>
   );

@@ -1,18 +1,10 @@
 {
-  "store-set-in-view": {
-    "components/ConceptsDrawer.tsx": 1,
-    "components/Editor.tsx": 2,
-    "components/Tours.tsx": 4,
-    "components/WorkedExamples.tsx": 8
-  },
+  "store-set-in-view": {},
   "window-confirm": {},
   "clickable-span-div": {},
   "uncontrolled-default": {},
   "effect-deps": {},
   "index-key": {
-    "art/SceneTabs.tsx": 1,
-    "components/ConceptsDrawer.tsx": 1,
-    "components/Tours.tsx": 2,
-    "components/WorkedExamples.tsx": 1
+    "art/SceneTabs.tsx": 1
   }
 }

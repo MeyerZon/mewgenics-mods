@@ -1,8 +1,9 @@
-// The concepts explainer drawer: Data-mode and Art-mode sections, current mode first.
+// The concepts explainer drawer: Data-mode, Art-mode and Rooms-mode sections, the current mode first (Help ▸ Rooms
+// concepts scrolls to the Rooms section).
 
 import React from "react";
-import { S } from "../state.ts";
 import { useS, sx, Drawer, Button } from "./ui.tsx";
+import { closeConcepts } from "../actions.ts";
 
 function ConceptCard({ kind, tag, title, body }: { kind: string; tag: string; title: string; body: string }): React.JSX.Element {
   return (
@@ -32,7 +33,7 @@ function CheckCard({ title, body }: { title: string; body: string }): React.JSX.
 // Art-mode section below/above it.
 function DataConceptsSection(): React.JSX.Element {
   return (
-    <div style={sx("margin-bottom:30px")}>
+    <div data-section="data" style={sx("margin-bottom:30px")}>
       <div style={sx("font-weight:700;font-size:15px;color:var(--ink);margin:0 0 14px")}>Data mode — GON/CSV overlays</div>
       <div className="sec" style={sx("margin-bottom:12px")}>
         Overlay kinds — how a mod file changes base data
@@ -94,11 +95,11 @@ function DataConceptsSection(): React.JSX.Element {
   );
 }
 
-// Art-mode concepts: grayscale→palette recolor, the minimal SWF subset, the faithful
-// preview, and the open DoABC/SymbolClass gate (docs/art-preview-plan.md §2–3, §7).
+// Art-mode concepts: grayscale→palette recolor, the SWF subset, the faithful preview, and how the export names bind
+// (docs/art-preview-plan.md §2–3, §7).
 function ArtConceptsSection(): React.JSX.Element {
   return (
-    <div style={sx("margin-bottom:8px")}>
+    <div data-section="art" style={sx("margin-bottom:30px")}>
       <div style={sx("font-weight:700;font-size:15px;color:var(--ink);margin:0 0 14px")}>Art mode — vector scenes the engine recolors</div>
       <div className="sec" style={sx("margin-bottom:12px")}>
         Grayscale art, recolored at runtime
@@ -114,7 +115,7 @@ function ArtConceptsSection(): React.JSX.Element {
         </p>
         <div className="ramp big" role="img" aria-label="a 16-step gray ramp becomes a 16-colour palette row" style={sx("margin-bottom:6px")}>
           {Array.from({ length: 16 }, (_, i) => (
-            <span key={i} style={{ background: `rgb(${i * 17},${i * 17},${i * 17})` }} />
+            <span key={`gray-${i}`} style={{ background: `rgb(${i * 17},${i * 17},${i * 17})` }} />
           ))}
         </div>
         <div style={sx("font-size:11.5px;color:var(--muted)")}>authored gray:0 → gray:15 — the Preview shows the real palette row in these 16 slots</div>
@@ -130,7 +131,7 @@ function ArtConceptsSection(): React.JSX.Element {
           kind="append"
           tag=".swf v17"
           title="The minimal subset"
-          body="Build emits an uncompressed FWS v17 with exactly what glaiel::swf reads — DefineShape3 + DefineSprite + PlaceObject2 + SymbolClass — plus a swflist.gon.append. No gradients/filters/text yet."
+          body="Build emits an uncompressed FWS v17 with exactly what glaiel::swf reads — DefineShape3 + DefineSprite + PlaceObject2 + SymbolClass, with gradient fills, text and PNG bitmaps — plus a swflist.gon.append. SymbolClass binds the export names; the DoABC stub is optional."
         />
       </div>
       <div className="sec" style={sx("margin-bottom:12px")}>
@@ -141,48 +142,78 @@ function ArtConceptsSection(): React.JSX.Element {
           title="Same code as the emitter"
           body="The preview bakes frames and normalizes paths with the same pure modules the SWF emitter uses, then runs a literal port of paletted_full.shader — so what you see is what the engine draws."
         />
-        <CheckCard title="Scrub, recolor, inspect" body="Timeline scrubber with frame-label ticks, a palette-row picker, and a 'show raw grayscale' toggle to see the authored levels before the remap." />
-      </div>
-      <div className="sec" style={sx("margin-bottom:12px")}>
-        The open gate — DoABC / SymbolClass
-      </div>
-      <div className="card plain" style={sx("padding:18px")}>
-        <p style={sx("font-size:12.5px;color:var(--ink2);line-height:1.6;margin:0")}>
-          Every vanilla SWF ships one Flash-generated{" "}
-          <span className="mono" style={sx("color:var(--syn-cls)")}>
-            DoABC
-          </span>{" "}
-          that declares its <span className="mono">SymbolClass</span> linkage classes. Whether <span className="mono">glaiel::swf</span> <b>requires</b> it to bind those names is the one unresolved question. Build both ways (
-          <span className="mono">no DoABC</span> / <span className="mono">stub DoABC</span>) and run the dev-save gate test from the Build tab; the default flips once it's answered. Until then the emitter defaults to{" "}
-          <span className="mono">none</span> and the toggle stays visible.
-        </p>
+        <CheckCard title="Scrub, recolor, inspect" body="Timeline scrubber with frame-label ticks, Browse rows… for the palette row, and the View options: show raw gray (the authored levels before the remap), the background and a ghost cat." />
       </div>
     </div>
   );
 }
 
+// Rooms-mode concepts: the .lvl grid, where tiles and objects come from, random lists, the checks, where it saves
+// (docs/data-mods.md "Maps, rooms and encounters").
+function RoomsConceptsSection(): React.JSX.Element {
+  return (
+    <div data-section="rooms" style={sx("margin-bottom:8px")}>
+      <div style={sx("font-weight:700;font-size:15px;color:var(--ink);margin:0 0 14px")}>Rooms mode — 10×10 .lvl grids</div>
+      <div className="grid2" style={sx("margin-bottom:22px")}>
+        <ConceptCard kind="append" tag="tiles.gon" title="Tiles" body="Each cell holds a tile id from data/tiles.gon (ground, water, mud…): the base game's tiles plus any your mod adds with a tiles.gon.append." />
+        <ConceptCard kind="append" tag="spawns.gon" title="Objects" body="Enemies, props and the PlayerSpawn cells are spawns.gon ids placed on cells; base and mod overlays both show in the Palette." />
+        <ConceptCard kind="merge" tag="random" title="Weighted random lists" body="Any tile or object id can instead be a weighted list; the game picks one each time the room loads. The Inspector edits the weights." />
+        <ConceptCard kind="patch" tag=".lvl" title="The binary file" body="A room is levels/<folder>/<name>.lvl. Saves only ever land under mods/<mod>/levels/; play one in a test fight with the console command load <folder>/<name>." />
+      </div>
+      <div className="sec" style={sx("margin-bottom:12px")}>
+        What the room checks catch
+      </div>
+      <div className="grid2">
+        <CheckCard title="lvl-no-player-spawn" body="A room the cats cannot enter: no PlayerSpawn cell." />
+        <CheckCard title="lvl-unknown-tile-id / lvl-unknown-spawn-id" body="An id neither the base data nor your mod defines." />
+        <CheckCard title="lvl-bad-format" body="A file that does not decode as a 10×10 level." />
+        <CheckCard title="lvl-outside-levels" body="A .lvl that is not under levels/, where the game never looks." />
+      </div>
+    </div>
+  );
+}
+
+const ORDER: Record<"data" | "art" | "rooms", ("data" | "art" | "rooms")[]> = {
+  data: ["data", "art", "rooms"],
+  art: ["art", "data", "rooms"],
+  rooms: ["rooms", "data", "art"],
+};
+const SECTION = { data: DataConceptsSection, art: ArtConceptsSection, rooms: RoomsConceptsSection };
+const DOCS = { data: "docs/data-mods.md", art: "docs/art-preview-plan.md", rooms: "docs/data-mods.md" };
+
 export function ConceptsDrawer(): React.JSX.Element {
   const artMode = useS((s) => s.artMode);
-  const close = () => S.set({ conceptsOpen: false });
+  const roomMode = useS((s) => s.roomMode);
+  const mode = roomMode ? "rooms" : artMode ? "art" : "data";
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  // Help ▸ Rooms concepts opens the drawer on the Rooms section
+  const section = useS((s) => s.conceptsSection);
+  React.useEffect(() => {
+    if (!section) return;
+    const el = ref.current?.closest(".drawer")?.querySelector<HTMLElement>(`[data-section="${section}"]`);
+    el?.scrollIntoView({ block: "start" });
+  }, [section]);
   return (
     <Drawer
       title="How modding works here"
       icon={<span style={sx("font-size:20px")}>✦</span>}
-      onClose={close}
+      onClose={closeConcepts}
       footer={
         <>
-          <span className="muted" style={sx("flex:1;font-size:12.5px")}>
-            More in <span className="mono">{artMode ? "docs/art-preview-plan.md" : "docs/data-mods.md"}</span>
+          <span ref={ref} className="muted" style={sx("flex:1;font-size:12.5px")}>
+            More in <span className="mono">{DOCS[mode]}</span>
           </span>
-          <Button variant="primary" onClick={close}>
+          <Button variant="primary" onClick={closeConcepts}>
             Got it
           </Button>
         </>
       }
     >
-      {/* Both halves of the tool are explained; the current editor mode is shown first. */}
-      {artMode ? <ArtConceptsSection key="art" /> : <DataConceptsSection key="data" />}
-      {artMode ? <DataConceptsSection key="data" /> : <ArtConceptsSection key="art" />}
+      {/* All three modes are explained; the current one is shown first. */}
+      {ORDER[mode].map((m) => {
+        const Section = SECTION[m];
+        return <Section key={m} />;
+      })}
     </Drawer>
   );
 }

@@ -8,6 +8,7 @@ import { useStore } from "../store.ts";
 import { S, openArtTour } from "../state.ts";
 import { A, getScene, bump, scheduleValidate, build, requestCloseScene, openNewSceneModal, setArtSubtab, setArtRightTab } from "./art-state.ts";
 import { SubTabs } from "../components/ui.tsx";
+import { TOUR } from "../tour-anchors.ts";
 import { sx, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
 import { ShapesTab, SpritesTab, ExportsTab, JsonTab } from "./SceneTabs.tsx";
@@ -38,6 +39,8 @@ export function ArtCenter() {
 
 function ArtEmpty() {
   const mod = useStore(S, (s) => s.mod);
+  // "Don't show again" on the Art tour also retires its nudge here
+  const tourDontShow = useStore(S, (s) => s.artTourDontShow);
   return (
     <div className="emptycenter">
       <div style={sx("max-width:680px;width:100%")}>
@@ -54,7 +57,7 @@ function ArtEmpty() {
           <DropZone text="Import an SVG (Inkscape, VectorCraft, Illustrator) or a PNG — creates a scene if none is open." />
         </div>
         <div style={sx("display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap")}>
-          <button className="btn ghost sm" onClick={() => openArtTour()}>▲ Take the Art tour</button>
+          {!tourDontShow ? <button className="btn ghost sm" onClick={() => openArtTour()}>▲ Take the Art tour</button> : null}
           {!mod ? <span className="muted" style={sx("font-size:12.5px")}>No mod open — pick one from the top-bar mod switcher first.</span> : null}
         </div>
       </div>
@@ -122,16 +125,16 @@ function ScenePanel() {
             {`● ${e} error${e === 1 ? "" : "s"} · ${w} warning${w === 1 ? "" : "s"}`}
           </button>
         </div>
-        <SubTabs items={SUBTABS} value={subtab} onChange={setArtSubtab} aria-label="Scene sections" />
+        <SubTabs items={SUBTABS} value={subtab} onChange={setArtSubtab} aria-label="Scene sections" tour={TOUR.artSubtabs} />
         {tab}
       </div>
     </div>
   );
 }
 
-const SUBTABS: { id: ArtSubtab; label: string }[] = [
+const SUBTABS: { id: ArtSubtab; label: string; tour?: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "shapes", label: "Shapes" },
+  { id: "shapes", label: "Shapes", tour: TOUR.artShapes },
   { id: "sprites", label: "Sprites" },
   { id: "timeline", label: "Timeline" },
   { id: "rig", label: "Rig" },

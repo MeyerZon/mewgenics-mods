@@ -42,11 +42,12 @@ import { Tabs, Checkbox, Select, Summary } from "../components/ui.tsx";
 import { usePref } from "../hooks/usePref.ts";
 import type { ArtRightTab, PrepareGateResponse } from "./types.ts";
 import { RufflePanel } from "./RufflePanel.tsx";
+import { TOUR } from "../tour-anchors.ts";
 
-const RIGHT_TABS: { id: ArtRightTab; label: string }[] = [
-  { id: "preview", label: "Preview" },
+const RIGHT_TABS: { id: ArtRightTab; label: string; tour?: string }[] = [
+  { id: "preview", label: "Preview", tour: TOUR.artPreview },
   { id: "findings", label: "Findings" },
-  { id: "build", label: "Build" },
+  { id: "build", label: "Build", tour: TOUR.artBuild },
   { id: "ruffle", label: "Ruffle" },
 ];
 

@@ -402,9 +402,10 @@ stall the boot — the proof the merge ran) · `control` (removes the gate files
 Art mode has first-run guidance that mirrors the data-mode tour, reusing the same
 components, tokens, and `localStorage` key family (`mewged.onboard.*`):
 
-- **Art-mode tour** — a dedicated 6-step tour (switch Data→Art, the scenes/shapes
-  explorer, import SVG, grayscale→palette, the in-game-faithful preview, Build + the
-  gate test). It opens automatically the first time the user enters Art mode (unless
+- **Art-mode tour** — a dedicated 7-step anchored tour (UX PR 6: switch to Art on the
+  Data | Art | Rooms switch, the scenes explorer, import an SVG or PNG, grayscale→palette,
+  the in-game-faithful preview, Build — SymbolClass binds the export names, the DoABC stub
+  is optional —, then Timeline, Rig, VectorCraft on the sub-tab bar). It opens automatically the first time the user enters Art mode (unless
   dismissed), persisted under `mewged.onboard.artTourSeen` / `artTourDontShow`, and is
   re-openable from the Help (`?`) menu. The data and art tours render through one shared
   `GuidedTour` component so they stay identical in look and behavior. A `?mode=art`

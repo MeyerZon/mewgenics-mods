@@ -323,6 +323,16 @@ test.describe("Onboarding — Rooms tour (UX PR 6)", () => {
   });
 });
 
+test("Help → Rooms concepts opens the Concepts drawer scrolled to the Rooms section", async ({ page }) => {
+  await seedToursSeen(page);
+  await openApp(page);
+  await openHelp(page);
+  await page.getByRole("button", { name: /Rooms concepts/ }).click();
+  const drawer = page.locator(".drawer");
+  await expect(drawer.locator(".dbody > div").first()).toContainText("Data mode — GON/CSV overlays");
+  await expect(drawer.locator('[data-section="rooms"]')).toBeInViewport();
+});
+
 test.describe("Onboarding — the Data worked example's step list (UX PR 6)", () => {
   test.beforeEach(async ({ page }) => {
     await seedToursSeen(page);

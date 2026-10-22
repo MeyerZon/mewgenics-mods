@@ -114,6 +114,8 @@ export interface TabItem<T extends string> {
   id: T;
   label: React.ReactNode;
   title?: string;
+  /** a guided-tour anchor id (tour-anchors.ts) rendered as data-tour on this tab / segment */
+  tour?: string;
 }
 
 export interface TabsProps<T extends string> {
@@ -124,10 +126,12 @@ export interface TabsProps<T extends string> {
   /** "subtabs" renders the Art center's `.subtabs` row of `btn sm ghost` buttons with `.on` */
   variant?: "tabs" | "subtabs";
   className?: string;
+  /** a guided-tour anchor id on the tablist itself */
+  tour?: string;
 }
 
 /** A tablist: `.tabs > button.tab[role=tab][aria-selected]` (`.active` on the current one); ←/→ move the selection. */
-export function Tabs<T extends string>({ items, value, onChange, variant = "tabs", className, ...aria }: TabsProps<T>): React.JSX.Element {
+export function Tabs<T extends string>({ items, value, onChange, variant = "tabs", className, tour, ...aria }: TabsProps<T>): React.JSX.Element {
   const ref = React.useRef<HTMLDivElement | null>(null);
   const sub = variant === "subtabs";
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -142,7 +146,7 @@ export function Tabs<T extends string>({ items, value, onChange, variant = "tabs
     btn?.focus();
   };
   return (
-    <div ref={ref} className={cx(sub ? "subtabs" : "tabs", className)} role="tablist" aria-label={aria["aria-label"]} onKeyDown={onKeyDown}>
+    <div ref={ref} className={cx(sub ? "subtabs" : "tabs", className)} role="tablist" aria-label={aria["aria-label"]} data-tour={tour} onKeyDown={onKeyDown}>
       {items.map((t) => {
         const on = t.id === value;
         return (
@@ -153,6 +157,7 @@ export function Tabs<T extends string>({ items, value, onChange, variant = "tabs
             aria-selected={on}
             tabIndex={on ? 0 : -1}
             title={t.title}
+            data-tour={t.tour}
             className={sub ? cx("btn sm ghost", on && "on") : cx("tab", on && "active")}
             onClick={() => onChange(t.id)}
           >
@@ -185,7 +190,7 @@ export function Segmented<T extends string>({ options, value, onChange, size, cl
       {options.map((o) => {
         const on = o.id === value;
         return (
-          <button key={o.id} type="button" className={cx("btn", size, on && "on")} aria-pressed={on} title={o.title} onClick={() => onChange(o.id)}>
+          <button key={o.id} type="button" className={cx("btn", size, on && "on")} aria-pressed={on} title={o.title} data-tour={o.tour} onClick={() => onChange(o.id)}>
             {o.label}
           </button>
         );
@@ -464,6 +469,8 @@ export interface MenuProps {
   triggerClassName?: string;
   triggerStyle?: React.CSSProperties;
   "aria-label"?: string;
+  /** a guided-tour anchor id on the trigger button */
+  triggerTour?: string;
   /** the `.item`s (buttons), `.label`s and `.sep`s */
   children?: React.ReactNode;
 }
@@ -473,7 +480,7 @@ export interface MenuProps {
  * click-outside closer; Esc closes (the overlay stack); ↑/↓ move focus between the enabled `.item` buttons; on
  * close, focus that was inside the menu (or lost with it) goes back to the trigger.
  */
-export function Menu({ label, open, onToggle, onClose, right, triggerClassName, triggerStyle, children, ...aria }: MenuProps): React.JSX.Element {
+export function Menu({ label, open, onToggle, onClose, right, triggerClassName, triggerStyle, triggerTour, children, ...aria }: MenuProps): React.JSX.Element {
   const trigger = React.useRef<HTMLButtonElement | null>(null);
   const menu = React.useRef<HTMLDivElement | null>(null);
   const closeRef = React.useRef(onClose);
@@ -512,6 +519,7 @@ export function Menu({ label, open, onToggle, onClose, right, triggerClassName, 
         type="button"
         className={triggerClassName ?? "btn ghost"}
         style={triggerStyle}
+        data-tour={triggerTour}
         aria-label={aria["aria-label"]}
         aria-haspopup="menu"
         aria-expanded={open}

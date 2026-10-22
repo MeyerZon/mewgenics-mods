@@ -5,6 +5,7 @@
 import React, { useRef } from "react";
 import { useStoreShallow } from "../store.ts";
 import { sx } from "../components/ui.tsx";
+import { TOUR, tourAttr } from "../tour-anchors.ts";
 import { R, artUrl, brushLabel } from "./room-state.ts";
 import { usePaletteMaps, artOf, artLine, entryLabel, ArtImg } from "./RoomBits.tsx";
 import { cellPointerDown, cellPointerEnter, gridKeyDown, useRovingFocus, isTabStop } from "./grid-input.ts";
@@ -121,7 +122,7 @@ export function RoomGrid(): React.JSX.Element | null {
     );
   }
   return (
-    <div className="roomgridwrap">
+    <div className="roomgridwrap" {...tourAttr(TOUR.roomsGrid)}>
       <div
         ref={ref}
         className="roomgrid"

@@ -6,6 +6,7 @@ import React from "react";
 import { useStore } from "../store.ts";
 import { A, importIntoSceneOrNew, setDropOver } from "./art-state.ts";
 import { sx } from "./Bits.tsx";
+import { TOUR, tourAttr } from "../tour-anchors.ts";
 
 export function DropZone({ text, title = "Import SVG or PNG", compact }: { text: string; title?: string; compact?: boolean }) {
   const over = useStore(A, (a) => a.dropOver);
@@ -13,6 +14,14 @@ export function DropZone({ text, title = "Import SVG or PNG", compact }: { text:
     <label
       className={"dropzone" + (compact ? " compact" : "") + (over ? " over" : "")}
       htmlFor="art-svg-file"
+      {...tourAttr(TOUR.artImport)}
+      tabIndex={0}
+      onKeyDown={(e: React.KeyboardEvent<HTMLLabelElement>) => {
+        // the label is focusable (the Art example lands here): Enter / Space opens the file picker
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.currentTarget.querySelector<HTMLInputElement>("input[type=file]")?.click();
+      }}
       onDragOver={(e: React.DragEvent) => {
         e.preventDefault();
         setDropOver(true);

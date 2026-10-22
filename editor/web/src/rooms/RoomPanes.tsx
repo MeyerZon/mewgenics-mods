@@ -4,7 +4,7 @@
 
 import React from "react";
 import { useStore, useStoreShallow } from "../store.ts";
-import { S } from "../state.ts";
+import { S, openRoomTour } from "../state.ts";
 import { Button, EmptyState } from "../components/ui.tsx";
 import { R, openNewRoom } from "./room-state.ts";
 import { RoomToolbar } from "./RoomToolbar.tsx";
@@ -18,6 +18,13 @@ export { RoomRightPanel } from "./RoomInspector.tsx";
 
 function RoomsEmpty(): React.JSX.Element {
   const mod = useStore(S, (s) => s.mod);
+  // "Don't show again" on the Rooms tour also retires its nudge here
+  const tourDontShow = useStore(S, (s) => s.roomTourDontShow);
+  const tour = !tourDontShow ? (
+    <Button variant="ghost" size="sm" onClick={() => openRoomTour()}>
+      ▦ Take the Rooms tour
+    </Button>
+  ) : null;
   return (
     <div className="emptycenter">
       <EmptyState
@@ -32,13 +39,16 @@ function RoomsEmpty(): React.JSX.Element {
           </>
         }
         actions={
-          mod ? (
-            <Button variant="primary" onClick={() => openNewRoom()}>
-              + New room
-            </Button>
-          ) : (
-            <span className="muted">No mod open — pick one from the top-bar mod switcher first.</span>
-          )
+          <>
+            {mod ? (
+              <Button variant="primary" onClick={() => openNewRoom()}>
+                + New room
+              </Button>
+            ) : (
+              <span className="muted">No mod open — pick one from the top-bar mod switcher first.</span>
+            )}
+            {tour}
+          </>
         }
       />
     </div>
