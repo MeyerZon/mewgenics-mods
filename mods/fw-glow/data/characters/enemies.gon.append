@@ -12,3 +12,29 @@ FwGlowRat {
         }
     }
 }
+
+// The removal half (mods/fw-glow/tests/data-glow-expiry.mewtest): the same magenta glow granted as a Temporary that
+// runs out at the end of the rat's first turn (the vanilla timed-status shape: Temporary { status … stacks … turns …
+// expires_on_end_turn true }, e.g. passives/disorders.gon's Uncontrollable). When it expires the status is removed and
+// the rim goes with it. 999 HP (the whole vanilla Rat properties block, health raised) so the autoplayed cats in the
+// test fight cannot kill it before the check; spawn-only, no vanilla entry changed.
+FwGlowTempRat {
+    variant_of Rat
+    properties {
+        tag rat
+        faction enemies
+        movement 1
+        health 999
+        base_mana_regen 999
+    }
+    passives {
+        StatusOnSpawnIn {
+            Temporary {
+                status FwGlow_ff00ff
+                stacks 1
+                turns 1
+                expires_on_end_turn true
+            }
+        }
+    }
+}

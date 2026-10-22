@@ -60,9 +60,9 @@ export const TOOL_INPUT = {
   list_registered_native_names: z.object({}),
   new_from_template: z.object({
     mod: str(),
-    kind: z.enum(["ability", "passive", "item", "status-data", "room", "tileset-variant", "particle", "vfx-ability"]),
+    kind: z.enum(["ability", "passive", "item", "status-data", "room", "tileset-variant", "particle", "vfx-ability", "glowing-character"]),
     name: str("the new entry's GON key, e.g. MyCoolSpin"),
-    options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, movieclip (particle / vfx-ability: the SWF clip), dryRun, ...)").optional(),
+    options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, movieclip (particle / vfx-ability: the SWF clip), dryRun, ...; glowing-character: colour (rrggbb or rrggbbaa, required), parent (default Rat), trigger (StatusOnSpawnIn | StatusOnBattleStart))").optional(),
   }),
   list_ingame_tests: z.object({
     mod: str("optional mod folder to restrict to").optional(),
@@ -301,7 +301,7 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "new_from_template",
-    "Scaffold a new content entry (kind: ability | passive | item | status-data) plus matching localization rows, writing them as .append overlays under mods/<name>/. Pass `options.dryRun: true` to return the content without writing. `options` may include displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations. Map kinds (no localization rows): `room` writes a NEW level file levels/<options.folder or custom>/<name>.lvl (options.objects: [{x,y,id|object|random}], options.tiles: [{x,y,id|random}], width/height default 10; no objects = 4 player spawns + 2 Rats); `tileset-variant` copies vanilla tileset options.parent (default alley) under the new name into data/tilesets.gon.append. Both return a `hint` with the console command that plays the result (docs/data-mods.md, Maps, rooms and encounters).",
+    "Scaffold a new content entry (kind: ability | passive | item | status-data | room | tileset-variant | particle | vfx-ability | glowing-character) plus matching localization rows, writing them as .append overlays under mods/<name>/. glowing-character: a character variant (options.parent, default Rat) whose passives grant the status FwGlow_<options.colour> (rrggbb or rrggbbaa; a malformed colour is refused by the invalid-glow-name rule) on spawn (options.trigger StatusOnSpawnIn, or StatusOnBattleStart), plus the status's keyword_tooltips entry and its text rows; the unit glows that colour while it carries the status (load fw-glow next to the mod; docs/data-mods.md \"Asking for a unit glow from data\"). Pass `options.dryRun: true` to return the content without writing. `options` may include displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations.",
     (a) => api.newFromTemplate(a.mod, a.kind, a.name, a.options ?? {}),
   ),
   def(

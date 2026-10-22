@@ -5,7 +5,7 @@
 
 export type OverlayMode = "append" | "merge" | "patch" | "replace";
 export type FileType = "gon" | "csv" | "txt" | "other";
-export type TemplateKindName = "ability" | "passive" | "item" | "status-data" | "room" | "tileset-variant" | "particle" | "vfx-ability";
+export type TemplateKindName = "ability" | "passive" | "item" | "status-data" | "room" | "tileset-variant" | "particle" | "vfx-ability" | "glowing-character";
 
 /** One file of a mod (mod-io ModFileInfo). */
 export type ModFileInfo = {

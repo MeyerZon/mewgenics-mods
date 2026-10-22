@@ -109,3 +109,38 @@ export function compareTwoColourShot(two: { a: GlowMeasure; b: GlowMeasure }, no
   const apart = !!(a.glowRegion && b.glowRegion) && !overlaps(a.glowRegion!, b.glowRegion!);
   return { verdict: a.verdict === "glow" && b.verdict === "glow" && apart ? "two-colour" : "none", a, b, apart };
 }
+
+// ---- glow v3, the removal half: a Temporary FwGlow_ status expires and takes the rim with it ----
+
+/** one unit's status as a units event (the harness `dump`) shows it */
+export interface StatusInDump { found: boolean; carries: boolean }
+
+/** does the units event list the unit (by name) and does it carry the status? A missing event or unit: found false. */
+export function statusInDump(ev: { [k: string]: unknown } | null | undefined, unit: string, status: string): StatusInDump {
+  const list = ev && Array.isArray(ev.list) ? (ev.list as { name?: unknown; statuses?: unknown }[]) : [];
+  const u = list.find((x) => x && x.name === unit);
+  if (!u) return { found: false, carries: false };
+  return { found: true, carries: Array.isArray(u.statuses) && u.statuses.includes(status) };
+}
+
+export interface ExpiryComparison {
+  /** expired: rim + status first, then neither on the still-living unit. stuck: the rim outlived the status.
+   * status-kept: the status had not gone yet (inconclusive). unit-gone: the unit died / left (inconclusive).
+   * no-glow: no rim or no status at the first check (the grant itself failed). */
+  verdict: "expired" | "stuck" | "status-kept" | "unit-gone" | "no-glow";
+  /** the "glow" shot (status live) against the pre-spawn shot */
+  glow: GlowComparison;
+  /** the "expired" shot (after the Temporary ran out) against the pre-spawn shot */
+  expired: GlowComparison;
+  status: { atGlow: StatusInDump; atExpired: StatusInDump };
+}
+
+export function compareExpiry(shots: { glow: GlowMeasure; expired: GlowMeasure; noglow: GlowMeasure }, status: { atGlow: StatusInDump; atExpired: StatusInDump }): ExpiryComparison {
+  const glow = compareGlowShots(shots.glow, shots.noglow), expired = compareGlowShots(shots.expired, shots.noglow);
+  let verdict: ExpiryComparison["verdict"];
+  if (glow.verdict !== "glow" || !status.atGlow.carries) verdict = "no-glow";
+  else if (!status.atExpired.found) verdict = "unit-gone";
+  else if (status.atExpired.carries) verdict = "status-kept";
+  else verdict = expired.verdict === "glow" ? "stuck" : "expired";
+  return { verdict, glow, expired, status };
+}

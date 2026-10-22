@@ -261,6 +261,8 @@ npm run test:ingame -- jokers-luck smoke # one script
 npm run test:ingame -- --json            # machine-readable reports
 #   --timeout <ms>  --no-hide  --clean  --no-savecheck
 npm run test:unitglow                    # the per-unit glow proof: dev-sandbox/unit-glow + the shot measure (glow-measure.ts)
+npm run test:unitglow -- --data          # glow from DATA: fw-glow/data-glow (FwGlowRat, status FwGlow_ff00ff)
+npm run test:unitglow -- --data-expiry   # its removal: fw-glow/data-glow-expiry (a Temporary FwGlow_ that expires; verdict expired)
 ```
 
 Exit 0 when everything passed or was skipped, 1 on any failure, 2 on a usage error. A machine-level reason (no game,

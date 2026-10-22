@@ -691,6 +691,10 @@ await mcpSmoke();
   let la: typeof import("./level-art-tests.ts") | null = null;
   try { la = await import("./level-art-tests.ts"); } catch (e) { test("level-art-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (la) await la.runLevelArtTests(test, assert, eq);
+  // new_from_template (editor/src/core/templates.ts): the glowing-character template
+  let tt: typeof import("./templates-tests.ts") | null = null;
+  try { tt = await import("./templates-tests.ts"); } catch (e) { test("templates-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (tt) tt.runTemplatesTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----

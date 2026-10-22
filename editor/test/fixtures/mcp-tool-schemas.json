@@ -186,7 +186,8 @@
             "room",
             "tileset-variant",
             "particle",
-            "vfx-ability"
+            "vfx-ability",
+            "glowing-character"
           ]
         },
         "name": {
@@ -199,7 +200,7 @@
             "type": "string"
           },
           "additionalProperties": {},
-          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, movieclip (particle / vfx-ability: the SWF clip), dryRun, ...)"
+          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, movieclip (particle / vfx-ability: the SWF clip), dryRun, ...; glowing-character: colour (rrggbb or rrggbbaa, required), parent (default Rat), trigger (StatusOnSpawnIn | StatusOnBattleStart))"
         }
       },
       "required": [

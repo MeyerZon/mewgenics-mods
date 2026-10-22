@@ -55,7 +55,13 @@ Tools, by purpose:
   plus matching localization rows; kind `room` writes a new
   `levels/<folder>/<name>.lvl`, kind `tileset-variant` a new tileset; `particle` scaffolds a `particles.gon.append`
   system (`options.movieclip` = the SWF clip each particle draws, no loc rows) and
-  `vfx-ability` an ability whose `graphics.particle` plays your effect clip.
+  `vfx-ability` an ability whose `graphics.particle` plays your effect clip;
+  kind `glowing-character` (`options.colour`
+  rrggbb[aa], `parent` default Rat, `trigger` StatusOnSpawnIn | StatusOnBattleStart)
+  scaffolds a character variant that glows that colour from data (a status
+  `FwGlow_<colour>`; load `fw-glow` next to the mod) plus the status text rows.
+  A Temporary { status FwGlow_… turns N } glow ends when it expires (OBSERVED);
+  docs/data-mods.md "Asking for a unit glow from data".
 - `pack_mod` — ship a mod: needs `mods/<mod>/mod.json` (`init: true` drafts
   it), rebuilds the SWFs, refuses on validation errors unless `force`, writes
   `editor/data/dist/<name>-<version>.zip` (+ `README-INSTALL.txt`,

@@ -7,18 +7,48 @@
 // magenta rim and a cyan rim lying apart (compareTwoColourShot), 1 otherwise, 2 when the game cannot run.
 //   node scripts/unit-glow-probe.ts [--json]
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as api from "../src/core/api.ts";
 import { decodePng } from "../src/core/art/png.ts";
-import { measureGlow, compareGlowShots, compareTwoColourShot, GLOW_PROBE_COLOUR, GLOW_PROBE_COLOUR_B, type GlowMeasure } from "../src/core/art/glow-measure.ts";
+import { parseResults } from "../src/core/ingame/results.ts";
+import { measureGlow, compareGlowShots, compareTwoColourShot, compareExpiry, statusInDump, GLOW_PROBE_COLOUR, GLOW_PROBE_COLOUR_B, type GlowMeasure } from "../src/core/art/glow-measure.ts";
 
 //   node scripts/unit-glow-probe.ts --data [--json]
 // glow v3, the DATA seam: run mods/fw-glow/tests/data-glow.mewtest instead (no harness `glow` directive: the spawned
 // FwGlowRat carries the status FwGlow_ff00ff from its character entry) and compare its "glow" shot with the pre-spawn
 // "noglow" shot; writes data-glow-summary.json (fixture editor/test/fixtures/ingame/data-glow-summary.json).
+//   node scripts/unit-glow-probe.ts --data-expiry [--json]
+// the removal half: run mods/fw-glow/tests/data-glow-expiry.mewtest (FwGlowTempRat gets FwGlow_ff00ff as a Temporary
+// that runs out after its first turn) and decide with compareExpiry: a rim in "glow", none in "expired", the status in
+// the first dump and not in the last while the rat still lives; writes data-glow-expiry-summary.json (fixture
+// editor/test/fixtures/ingame/data-glow-expiry-summary.json). Exit 0 only on verdict "expired".
 
 const json = process.argv.includes("--json");
+if (process.argv.includes("--data-expiry")) {
+  const report = await api.runIngameTest({ mod: "fw-glow", test: "data-glow-expiry", hide: false });
+  if (!("verdict" in report)) { console.error(report.error); process.exit(2); }
+  if (report.verdict === "skipped" || report.verdict === "cannot-run") { console.log(`skipped: ${report.reason}`); process.exit(2); }
+  const shot = (label: string) => report.artifacts.shots.find((s) => s.label === label && s.path) || null;
+  const none: GlowMeasure = { pixels: 0, region: null };
+  const m = (s: ReturnType<typeof shot>) => (s ? measureGlow(decodePng(readFileSync(s.path!)), GLOW_PROBE_COLOUR) : none);
+  const g = shot("glow"), e = shot("expired"), n = shot("noglow");
+  const dir = report.artifacts.runDir!;
+  const resultPath = join(dir, "result.jsonl");
+  const events = existsSync(resultPath) ? parseResults(readFileSync(resultPath, "utf8")).events : [];
+  const dumps = events.filter((x) => x.ev === "units" && x.available === true);
+  const UNIT = "Lil' Rat", STATUS = "FwGlow_ff00ff";
+  const atGlow = statusInDump(dumps[0] ?? null, UNIT, STATUS), atExpired = statusInDump(dumps.length > 1 ? dumps[dumps.length - 1]! : null, UNIT, STATUS);
+  const perDump = dumps.map((d) => statusInDump(d, UNIT, STATUS));
+  const cmp = compareExpiry({ glow: m(g), expired: m(e), noglow: m(n) }, { atGlow, atExpired });
+  const saveUnchanged = (report.safety.saveCheck ? report.safety.saveCheck.unchanged : true) && (report.safety.saveSet ? report.safety.saveSet.unchanged : true);
+  const summary = { ...cmp, perDump, colour: GLOW_PROBE_COLOUR, verdictRun: report.verdict, reason: report.reason, saveUnchanged, shots: { glow: g ? g.path : null, expired: e ? e.path : null, noglow: n ? n.path : null } };
+  writeFileSync(join(dir, "data-glow-expiry-summary.json"), JSON.stringify({ summary, observed: new Date().toISOString().slice(0, 10), script: "mods/fw-glow/tests/data-glow-expiry.mewtest" }, null, 2) + "\n");
+  const patch = (c: typeof cmp.glow) => (c.glowRegion ? `${c.glowRegion.count} px at (${c.glowRegion.x0},${c.glowRegion.y0})-(${c.glowRegion.x1},${c.glowRegion.y1})` : "none");
+  if (json) console.log(JSON.stringify({ verdict: report.verdict, runDir: dir, summary }));
+  else console.log(`data glow expiry (FwGlowTempRat: FwGlow_ff00ff as a Temporary, turns 1):\nglow shot: ${cmp.glow.glowPixels} magenta px, largest patch ${patch(cmp.glow)} -> ${cmp.glow.verdict}\nexpired shot: ${cmp.expired.glowPixels} magenta px, largest patch ${patch(cmp.expired)} -> ${cmp.expired.verdict}\nnoglow (pre-spawn) shot: ${cmp.glow.noglowPixels} magenta px\nstatus per dump (${UNIT} carries ${STATUS}): ${perDump.map((d) => (d.found ? String(d.carries) : "unit missing")).join(", ")}\nexpiry verdict: ${cmp.verdict}\nrun: ${report.verdict} — ${report.reason}\nreal save unchanged: ${saveUnchanged}\nartifacts: ${dir}`);
+  process.exit(report.verdict === "pass" && cmp.verdict === "expired" ? 0 : 1);
+}
 if (process.argv.includes("--data")) {
   const report = await api.runIngameTest({ mod: "fw-glow", test: "data-glow", hide: false });
   if (!("verdict" in report)) { console.error(report.error); process.exit(2); }

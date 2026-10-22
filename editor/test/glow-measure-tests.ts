@@ -111,4 +111,42 @@ export function runGlowMeasureTests(test: TestFn, assert: AssertFn, eq: EqFn, fi
     eq(j.summary.verdictRun, "pass");
     eq(j.summary.saveUnchanged, true);
   });
+
+  // ---- the removal half of the data seam: a Temporary FwGlow_ status that expires must take the rim with it ----
+  const units = (list: { name: string; statuses: string[] }[]) => ({ ev: "units", available: true, count: list.length, list });
+  test("statusInDump: finds the unit by name in a units event and says whether it carries the status (absent unit / no event: found false)", () => {
+    const ev = units([{ name: "Wengar", statuses: [] }, { name: "Lil' Rat", statuses: ["FwGlow_ff00ff", "Brace"] }]);
+    const a = gm.statusInDump(ev, "Lil' Rat", "FwGlow_ff00ff");
+    eq(a.found, true); eq(a.carries, true);
+    const b = gm.statusInDump(units([{ name: "Lil' Rat", statuses: ["Brace"] }]), "Lil' Rat", "FwGlow_ff00ff");
+    eq(b.found, true); eq(b.carries, false);
+    const c = gm.statusInDump(units([{ name: "Wengar", statuses: ["FwGlow_ff00ff"] }]), "Lil' Rat", "FwGlow_ff00ff");
+    eq(c.found, false); eq(c.carries, false);
+    const d = gm.statusInDump(null, "Lil' Rat", "FwGlow_ff00ff");
+    eq(d.found, false); eq(d.carries, false);
+  });
+  test("compareExpiry: rim + status while the Temporary lasts, then no rim and no status on the still-living unit = expired; a rim that outlives the status = stuck; a status not yet gone = status-kept; a dead/missing unit = unit-gone; no rim at first = no-glow", () => {
+    const ring = gm.measureGlow(shot({ ring: [255, 0, 255] })), plain = gm.measureGlow(shot({}));
+    const on = { found: true, carries: true }, off = { found: true, carries: false }, gone = { found: false, carries: false };
+    const ok = gm.compareExpiry({ glow: ring, expired: plain, noglow: plain }, { atGlow: on, atExpired: off });
+    eq(ok.verdict, "expired"); eq(ok.glow.verdict, "glow"); eq(ok.expired.verdict, "none");
+    eq(gm.compareExpiry({ glow: ring, expired: ring, noglow: plain }, { atGlow: on, atExpired: off }).verdict, "stuck");
+    eq(gm.compareExpiry({ glow: ring, expired: ring, noglow: plain }, { atGlow: on, atExpired: on }).verdict, "status-kept");
+    eq(gm.compareExpiry({ glow: ring, expired: plain, noglow: plain }, { atGlow: on, atExpired: gone }).verdict, "unit-gone");
+    eq(gm.compareExpiry({ glow: plain, expired: plain, noglow: plain }, { atGlow: on, atExpired: off }).verdict, "no-glow");
+    eq(gm.compareExpiry({ glow: ring, expired: plain, noglow: plain }, { atGlow: off, atExpired: off }).verdict, "no-glow", "no status at the glow dump: the Temporary never landed");
+  });
+  test("OBSERVED fixture, glow EXPIRY (data-glow-expiry-summary.json, `npm run test:unitglow -- --data-expiry`): FwGlowTempRat's FwGlow_ff00ff, granted as a Temporary (turns 1), gave a rim that was gone, with the status, once the Temporary expired; the unit was still alive; the run passed with the real save untouched", () => {
+    const j = JSON.parse(fixture("data-glow-expiry-summary.json")) as { script: string; summary: { verdict: string; glow: { verdict: string; delta: number; glowRegion: { count: number } | null }; expired: { verdict: string }; status: { atGlow: { carries: boolean }; atExpired: { found: boolean; carries: boolean } }; verdictRun: string; saveUnchanged: boolean; colour: number[] } };
+    eq(j.script, "mods/fw-glow/tests/data-glow-expiry.mewtest");
+    eq(j.summary.verdict, "expired");
+    eq(j.summary.glow.verdict, "glow");
+    assert(j.summary.glow.delta >= 200 && !!j.summary.glow.glowRegion && j.summary.glow.glowRegion.count >= 100, `glow ${JSON.stringify(j.summary.glow)}`);
+    eq(j.summary.expired.verdict, "none");
+    eq(j.summary.status.atGlow.carries, true);
+    eq(j.summary.status.atExpired.found, true); eq(j.summary.status.atExpired.carries, false);
+    eq(JSON.stringify(j.summary.colour), JSON.stringify(gm.GLOW_PROBE_COLOUR));
+    eq(j.summary.verdictRun, "pass");
+    eq(j.summary.saveUnchanged, true);
+  });
 }

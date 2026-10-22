@@ -23,6 +23,8 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr99-glow-colours` (#99) — In shot-two, does the cat carry a cyan rim and the Rat a magenta one, each hugging its own sprite (no cross-colour bleed), and is the cat's rim whole among the other cats (no straight scissor edge)?
 - [ ] `pr104-data-glow` (#104) — In shot-glow, does FwGlowRat (glowing from DATA: the status FwGlow_ff00ff, no DLL) carry the same magenta band hugging its sprite as the native-API Rat, with nothing over its body (and none in shot-noglow)?
 - [ ] `pr104-glow-icon` (#104) — The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip "Glowing"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?
+- [ ] `glow-decide-icon` (glow v3) — **Decide:** a FwGlow_ status shows LuckUp's four-leaf clover on the unit's status bar (see shot-glow of `*-fw-glow-data-glow`). Keep the clover, or ask for a follow-up that hides the icon (or gives the glow status its own)?
+- [ ] `glow-decide-hover` (glow v3) — **Decide:** while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
@@ -133,9 +135,15 @@ these without a decision (status per bullet below; the PR map follows).
       granted by any vanilla mechanism (StatusOnSpawnIn, an ability's effects, …) glows its carrier while it lasts, no DLL;
       `registered-names.json` kind `glow` (a pattern) + validator `invalid-glow-name`; sample `FwGlowRat` in
       `mods/fw-glow`, proven in-game (`npm run test:unitglow -- --data`; `docs/data-mods.md` "Asking for a unit glow from
-      data") — and per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
+      data"); its **removal** too: a Temporary `FwGlow_` that expires ends the rim, OBSERVED (`--data-expiry`), and
+      `new_from_template` kind `glowing-character` scaffolds one) — and per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
       scissored to its screen rect (LateRender's hovered-unit math), proven in-game (magenta Rat + cyan cat); (b)
       whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
+- [ ] **Stale shots (seen 2026-10-22, glowexp):** in about half of the `hide: false` runs that afternoon every `shot` of a run
+      came back byte-identical, the game's loading screen (PrintWindow dark, then the screen region showing the splash
+      although the game was foreground and the fight ran: dumps, turns and expects all fine). Re-running gave real shots.
+      The probes then measure 0 px and say `no-glow`. Follow-up: have the runner flag a run whose shots are identical
+      (or match the splash) as `stale` instead of measuring them.
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
       **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly).
