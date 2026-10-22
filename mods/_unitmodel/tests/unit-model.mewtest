@@ -1,0 +1,25 @@
+mods: dev-sandbox, fw-3d, _autoplay, _unitmodel
+timeout: 150s
+hide: false
+# 3D phase M2 item 4 (docs/possible_3d_work.md): a unit's GON graphics.model is drawn on the unit and follows it.
+# _unitmodel gives the vanilla Rat a model block (models/unit-box.gltf, a magenta box); fw-3d gives the vanilla Crate
+# models/crate.obj; _autoplay makes the party uncontrollable so the fight plays itself and the Rat walks on its turns.
+# mewframework logs "unit model: <Entry> <Character*> -> <file> ..." once per unit it registers and "unit model at: ..."
+# each time the unit's world position changes (with the wall clock, to line a shot up with a position);
+# editor/src/core/art/mesh-measure.ts judgeUnitModelFollows checks the magenta patch moved the way the Rat did.
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+cmd spawn Crate
+wait frames 120
+shot "unit-a"
+wait rounds 1
+wait frames 60
+shot "unit-m"
+wait rounds 1
+wait frames 90
+shot "unit-b"
+quit

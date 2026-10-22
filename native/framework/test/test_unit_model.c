@@ -134,7 +134,7 @@ TEST(model_log_line_string_and_block_forms) {
     char buf[256];
     void *ch = (void *)(uintptr_t)0x1234;
     int n = fw_unit_fmt_model(buf, sizeof buf, "Crate", ch, &m);
-    char want[128];
+    char want[256];
     snprintf(want, sizeof want, "unit model: Crate %p -> models/crate.obj", ch);
     CHECK_STR(buf, want);
     CHECK_EQ(n, (int)strlen(want));

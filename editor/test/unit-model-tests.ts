@@ -65,6 +65,7 @@ export function runUnitModelTests(test: TestFn, assert: AssertFn, eq: EqFn, fixt
   test("judgeUnitModelFollows: a patch moving the other way is wrong-direction; a still patch with a moved unit is not-following", () => {
     eq(mm.judgeUnitModelFollows(B, A, at0.world, at1.world).verdict, "wrong-direction");
     const A2 = img(400, 300, [[200, 100, 239, 139]]);
+    A2.rgba[0] = 91;                                                       // one pixel off: not a stale capture
     eq(mm.judgeUnitModelFollows(A, A2, at0.world, at1.world).verdict, "not-following");
   });
   test("judgeUnitModelFollows: refusals — identical shots (stale), the unit did not move, no patch", () => {

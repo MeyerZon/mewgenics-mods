@@ -50,3 +50,8 @@ const Fw3dObject *obj3d_engine_get(int i);                  /* NULL out of range
 void obj3d_engine_on_fight(void *tacticsTest);
 /* the unit's GON graphics.model (its live entry at Character+OFF_CH_GON_ENTRY, guarded reads): 1 found, 0 none, -1 unreadable */
 int obj3d_engine_unit_model(const void *character, char *out, size_t cap);
+/* per-unit models from GON (3D phase M2 item 4): framework.c's NextTurn hook hands over the fight's TurnControl; the
+ * mesh engine calls units_frame once per combat frame (after on_fight): a new unit with a graphics.model is registered
+ * once; registered GON objects get their facing and a position line when they moved */
+void obj3d_engine_on_turn_control(void *turnControl);
+void obj3d_engine_units_frame(void);

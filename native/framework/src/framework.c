@@ -116,6 +116,7 @@ static volatile long g_turnCounter = 0;
 static void hook_TurnControl_NextTurn(void *turnControl) {
     long n = InterlockedIncrement(&g_turnCounter);
     if (n <= 20 || (n % 50) == 0) fw_log("TurnControl::NextTurn #%ld (tc=%p)", n, turnControl);
+    obj3d_engine_on_turn_control(turnControl);   /* the per-unit models walk this fight's units from it */
     if (g_next_TurnControl_NextTurn) g_next_TurnControl_NextTurn(turnControl);
 }
 

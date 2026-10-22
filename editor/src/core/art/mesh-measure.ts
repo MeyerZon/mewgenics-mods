@@ -182,3 +182,82 @@ export function judgeColourPatch(shots: RgbaImageLike[], objects: MeshObjectLine
   });
   return best!;
 }
+
+// ---- 3D phase M2 item 4: per-unit models (a unit's GON graphics.model drawn on it, following it) ----------------
+// The framework logs "unit model: <entry> <Character*> -> <file>[ (block ...)]" once per unit it registers and
+// "unit model at: <entry> handle=<h> world=(x z) screen=(m12 m13)|(none) facing=±1 m0=<g> ms=<epoch ms>" whenever that
+// unit's raw world position changes (native/framework/src/fw_unit_model.c, pinned by test_unit_model.c). A shot's file
+// time picks the position it shows (positionAt); two shots prove the model follows when its patch moves the way the iso
+// projection of the unit's world move says (judgeUnitModelFollows). The camera is not followed: a camera pan between
+// the shots shows up as a wrong direction, never as a pass.
+export interface UnitModelLine { entry: string; character: string; file: string; block: string | null }
+export interface UnitModelAt { entry: string; handle: number; world: [number, number]; screen: [number, number] | null; facing: number; m0: number; ms: number }
+export interface UnitMeshObjectLine { frame: number; handle: number; model: string; kind: "unit" | "tile"; world: [number, number, number] }
+export interface UnitModelLog { units: UnitModelLine[]; positions: UnitModelAt[]; objects: UnitMeshObjectLine[] }
+
+const UNIT_RE = /^unit model: (\S+) (\S+) -> (\S+)(?: \(block (.*)\))?$/;
+const AT_RE = new RegExp(String.raw`^unit model at: (\S+) handle=(\d+) world=\(${NUM} ${NUM}\) screen=(?:\(${NUM} ${NUM}\)|\(none\)) facing=([-+]1) m0=${NUM} ms=(\d+)`);
+const OBJ_RE = new RegExp(String.raw`^mesh object f=(\d+) handle=(\d+) model=(\S+) (unit|tile) world=\(${NUM} ${NUM} ${NUM}\)`);
+
+export function parseUnitModelLog(text: string): UnitModelLog {
+  const out: UnitModelLog = { units: [], positions: [], objects: [] };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/^.*?(?=(?:unit model|mesh object)[ :])/, "");
+    let m = AT_RE.exec(line);
+    if (m) {
+      out.positions.push({ entry: m[1]!, handle: +m[2]!, world: [+m[3]!, +m[4]!], screen: m[5] !== undefined ? [+m[5]!, +m[6]!] : null, facing: +m[7]!, m0: +m[8]!, ms: +m[9]! });
+      continue;
+    }
+    m = UNIT_RE.exec(line);
+    if (m) { out.units.push({ entry: m[1]!, character: m[2]!, file: m[3]!, block: m[4] ?? null }); continue; }
+    m = OBJ_RE.exec(line);
+    if (m) out.objects.push({ frame: +m[1]!, handle: +m[2]!, model: m[3]!, kind: m[4] as "unit" | "tile", world: [+m[5]!, +m[6]!, +m[7]!] });
+  }
+  return out;
+}
+
+/** the last position of `entry` logged at or before `ms`; null before the first */
+export function positionAt(positions: UnitModelAt[], entry: string, ms: number): UnitModelAt | null {
+  let best: UnitModelAt | null = null;
+  for (const p of positions) if (p.entry === entry && p.ms <= ms && (!best || p.ms >= best.ms)) best = p;
+  return best;
+}
+
+/** a world move (dx, dz) on screen, y up, in tile units: the observer's ISO columns x -> (0.894, 0.447), z -> (-0.894, 0.447)
+ * (editor/test/fixtures/ingame/observe3d-log.txt) */
+export function isoScreenDelta(dx: number, dz: number): [number, number] {
+  return [0.894 * dx - 0.894 * dz, 0.447 * dx + 0.447 * dz];
+}
+
+export type FollowVerdict = "follows" | "wrong-direction" | "not-following" | "unit-not-moved" | "no-patch" | "stale-shots";
+export interface FollowJudgement { verdict: FollowVerdict; patchA: GlowRegion | null; patchB: GlowRegion | null; deltaPx: [number, number] | null; predicted: [number, number] | null; angleDeg: number | null }
+/** the unit must move at least this far (tiles) for the shots to say anything */
+export const FOLLOW_MIN_UNIT_MOVE = 0.5;
+/** the patch must move at least this far (pixels) */
+export const FOLLOW_MIN_PATCH_MOVE = 10;
+/** the patch's move may point this far (degrees) from the projected move */
+export const FOLLOW_MAX_ANGLE = 25;
+
+const centre = (r: GlowRegion): [number, number] => [(r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2];
+
+/** shots A (unit at worldA) and B (at worldB), each holding the model as a patch of `colour` */
+export function judgeUnitModelFollows(a: RgbaImageLike, b: RgbaImageLike, worldA: [number, number], worldB: [number, number], colour = MESH_PROBE_COLOUR): FollowJudgement {
+  const out: FollowJudgement = { verdict: "no-patch", patchA: null, patchB: null, deltaPx: null, predicted: null, angleDeg: null };
+  if (sameBytes(a, b)) return { ...out, verdict: "stale-shots" };
+  const ma = measureGlow(a, colour), mb = measureGlow(b, colour);
+  out.patchA = ma.region; out.patchB = mb.region;
+  const big = (r: GlowRegion | null, img: RgbaImageLike) => !!r && r.count >= Math.max(50, MESH_MIN_SHARE * img.width * img.height * 0.1);
+  if (!big(ma.region, a) || !big(mb.region, b)) return out;
+  const dxw = worldB[0] - worldA[0], dzw = worldB[1] - worldA[1];
+  const [px, py] = isoScreenDelta(dxw, dzw);
+  out.predicted = [px, -py];                                   // image rows grow downward
+  const ca = centre(ma.region!), cb = centre(mb.region!);
+  out.deltaPx = [cb[0] - ca[0], cb[1] - ca[1]];
+  if (Math.hypot(dxw, dzw) < FOLLOW_MIN_UNIT_MOVE) return { ...out, verdict: "unit-not-moved" };
+  const len = Math.hypot(out.deltaPx[0], out.deltaPx[1]);
+  if (len < FOLLOW_MIN_PATCH_MOVE) return { ...out, verdict: "not-following" };
+  const dot = out.deltaPx[0] * out.predicted[0] + out.deltaPx[1] * out.predicted[1];
+  const cos = dot / (len * Math.hypot(out.predicted[0], out.predicted[1]));
+  out.angleDeg = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
+  return { ...out, verdict: out.angleDeg <= FOLLOW_MAX_ANGLE ? "follows" : "wrong-direction" };
+}

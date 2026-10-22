@@ -401,13 +401,77 @@ function validateGonOverlay(
     checkNative(name, at);
   };
 
-  /** graphics.model: "@Name" against the registered models, else a models/<...>.obj file in this mod */
+  /** graphics.model: "@Name" against the registered models, else a models/<...>.obj file in this mod; or the block form
+   *  model { file scale yaw offset texture tint palette double_sided } (3D phase M2 item 4; native fw_gon_model_block) */
   const checkModel = (value: VNode, at: SourceLocation): void => {
-    if (value.t !== "str") {
-      rb.error("model-path-invalid", `graphics.model must be a string ("models/<name>.obj" or "@RegisteredModel")`, at);
+    if (value.t === "obj") {
+      checkModelBlock(value, at);
       return;
     }
-    const raw = value.raw;
+    if (value.t !== "str") {
+      rb.error("model-path-invalid", `graphics.model must be a string ("models/<name>.obj" or "@RegisteredModel") or a model { file ... } block`, at);
+      return;
+    }
+    checkModelFile(value.raw, at);
+  };
+
+  const checkModelBlock = (block: VObject, at: SourceLocation): void => {
+    const here = (k: string): SourceLocation => ({ file: at.file, path: `${at.path}.${k}` });
+    const num = (v: VNode): number | null => (v.t === "str" && v.type === "number" && v.num !== null ? v.num : null);
+    const nums = (v: VNode): number[] | null => (v.t === "arr" && v.items.every((it) => num(it) !== null) ? v.items.map((it) => num(it)!) : null);
+    const fileEntry = block.entries.find((e) => e.key === "file");
+    if (!fileEntry || fileEntry.value.t !== "str" || fileEntry.value.type !== "string") {
+      rb.error("model-path-invalid", `a graphics.model block needs file "models/<name>.obj" (or "@RegisteredModel"); without it no model is drawn`, fileEntry ? here("file") : at);
+    } else checkModelFile(fileEntry.value.raw, here("file"));
+    for (const { key, value: v } of block.entries) {
+      const loc = here(key);
+      switch (key) {
+        case "file":
+          break;
+        case "scale": {
+          const n = num(v);
+          if (n === null || !(n > 0)) rb.error("model-scale", `model scale must be a number > 0 (1 = one model unit per tile)`, loc);
+          break;
+        }
+        case "yaw": {
+          const n = num(v);
+          if (n === null) rb.error("model-yaw", `model yaw must be a number of degrees about the height axis`, loc);
+          else if (n % 45 !== 0) rb.warn("model-yaw", `model yaw ${n} is not a multiple of 45: the iso view's natural steps are 0, 45, 90, ... (the model will look skewed against the tiles)`, loc);
+          break;
+        }
+        case "offset": {
+          const a = nums(v);
+          if (!a || a.length !== 3) rb.error("model-offset", `model offset must be 3 numbers [x height z] in tiles`, loc);
+          break;
+        }
+        case "tint": {
+          const a = nums(v);
+          if (!a || (a.length !== 3 && a.length !== 4)) rb.error("model-tint", `model tint must be 3 or 4 numbers [r g b (a)], 0..1`, loc);
+          break;
+        }
+        case "palette":
+        case "double_sided":
+          if (v.t !== "str" || v.type !== "bool") rb.error("model-flag", `model ${key} must be true or false`, loc);
+          break;
+        case "texture": {
+          if (v.t !== "str" || v.type !== "string") {
+            rb.error("model-texture-missing", `model texture must be a string: a path under the mod's textures/ folder`, loc);
+            break;
+          }
+          const t = v.raw;
+          const bad = t === "" || t.includes("\\") || t.startsWith("/") || t.includes(":") || t.split("/").some((seg) => seg === ".." || seg === "");
+          const abs = join(modDir, "textures", ...t.split("/"));
+          if (bad) rb.warn("model-texture-missing", `model texture "${t}" is not a relative path under textures/`, loc);
+          else if (!existsSync(abs) || !statSync(abs).isFile()) rb.warn("model-texture-missing", `model texture "${t}" not found: mods/${modName}/textures/${t} is not a file (the model draws with its base colour only)`, loc);
+          break;
+        }
+        default:
+          rb.warn("model-key-unknown", `"${key}" is not a key of the graphics.model block (file, scale, yaw, offset, texture, tint, palette, double_sided); the framework ignores it`, loc);
+      }
+    }
+  };
+
+  const checkModelFile = (raw: string, at: SourceLocation): void => {
     if (isRegisteredModelRef(raw)) {
       if (!sets.models.has(raw.slice(1))) {
         rb.error("model-unregistered", `model "${raw}" is not a native-registered model (editor/registered-names.json, kind "model")`, at);

@@ -492,6 +492,7 @@ void mesh_engine_on_late_render(void *tt) {
             if (h && (g_probeTexture[0] || g_probePalette >= 0)) obj3d_engine_set_material(h, g_probeTexture, g_probePalette);
         }
     }
+    obj3d_engine_units_frame();   /* per-unit models from GON (obj3d_engine.c): discovery + facing, once per combat frame */
 }
 
 int mesh_engine_wants_layer_hook(void) {
