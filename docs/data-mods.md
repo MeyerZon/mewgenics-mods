@@ -248,6 +248,30 @@ itself (`mods: <mod>, fw-glow` in a `.mewtest` header, `-modpaths … mods/fw-gl
 `glow <unit> <r> <g> <b> <a>` exercises it (`mods/dev-sandbox/tests/unit-glow.mewtest`). Static halos that need no
 native code remain the editor's baked glow (PR #80).
 
+### Mod-shipped shaders (validator, 2026-10-22)
+
+A file `mods/<mod>/shaders/<name>.shader` is compiled by the game when native code asks for it by name
+(`ShaderManager_GetOrCreateMaterial(mgr, "<material>", "<name>.shader")`; `fw-glow`'s `fw_unit_glow.shader`, `fw-3d`'s
+`fw_mesh.shader`). It is not a data overlay, so the validator checks it against the game's shader dialect
+(`editor/src/core/shader/dialect.ts`, from `Shader::compile` 0xa55470; `docs/engine-map.md`) instead of warning
+`whole-file-replace`:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `shader-version-first` | error | the first non-comment line is not `#version` (the engine adds none) |
+| `shader-entry-missing` | error | no `" vert()"` / `" frag()"`: that stage gets no `main()` |
+| `shader-entry-shadowed` | error | the first `" vert()"` / `" frag()"` (e.g. in a comment) is not the `void vert() {` definition; only the first is renamed |
+| `shader-guard-missing` | error | no `#if`/`#elif COMPILING_VERTEX_PROGRAM` (or `..._FRAGMENT_...`) guard |
+| `shader-include-missing` | error | an `#include` that is neither in the mod's `shaders/` nor a base shader |
+| `shader-include-unchecked` | info | no `.extracted/shaders` to look in (CI) |
+| `shader-uniform-missing` / `shader-uniform-type` | error | a uniform native code sets by name is undeclared / of another type (`EXPECTED_UNIFORMS`: `fw_mesh.shader` → `FW_MESH_UNIFORMS`) |
+| `shader-attribute-unbound` | warning | a vertex `in` not named `position`/`color`/`texcoord`/`mvp`/`color_xform`/`depth_bias` (the engine binds locations by those names only) |
+| `whole-file-replace` | warning | the name is a base shader: the mod replaces it for every material |
+
+A shader that another shader in the same mod `#include`s is a library: it needs no `#version`, entry points or
+guards. Not settled: whether the loader resolves an `#include` against the `-modpaths` as well as the pack (the
+validator accepts both); `fw_mesh.shader` avoids the question by including nothing.
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses

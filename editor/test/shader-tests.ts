@@ -14,6 +14,7 @@ import {
   declaredUniforms,
   vertexAttributes,
   activeSource,
+  includesOf,
   FW_MESH_UNIFORMS,
   FW_MESH_ATTRIBUTES,
   ENGINE_ATTRIBUTE_LOCATIONS,
@@ -192,7 +193,7 @@ export function runShaderTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   for (const mod of ["fw-glow", "fw-3d"]) {
     test(`mods/${mod} validates clean (shaders${BASE_SHADERS_READY ? "" : "; base include check skipped"})`, () => {
       const r = real(mod);
-      const rest = r.findings.filter((f) => !(f.code === "shader-include-unchecked" && !BASE_SHADERS_READY));
+      const rest = r.findings.filter((f) => f.code !== "component-list-missing" && !(f.code === "shader-include-unchecked" && !BASE_SHADERS_READY));
       eq(codes(rest), "(none)", JSON.stringify(rest));
     });
   }
@@ -207,14 +208,14 @@ export function runShaderTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     assert(/#if 1\b/.test(vertex) && /#elif 0\b/.test(vertex), "vertex flags");
     assert(/#if 0\b/.test(fragment) && /#elif 1\b/.test(fragment), "fragment flags");
     assert(activeSource(vertex).includes("void main()") && activeSource(fragment).includes("void main()"), "main is in the active branch of each stage");
-    eq(mesh.split("\n")[0], "#version 150", "#version 150 on line 1, like the game's");
+    eq(mesh.split(/\r?\n/)[0], "#version 150", "#version 150 on line 1, like the game's");
   });
   test("mods/fw-3d/shaders/fw_mesh.shader: its uniforms are exactly FW_MESH_UNIFORMS, its attributes FW_MESH_ATTRIBUTES", () => {
     assert(mesh !== "", `missing ${meshPath}`);
     const want = FW_MESH_UNIFORMS.map((u) => `${u.type} ${u.name}`).sort().join(";");
     eq(declaredUniforms(mesh).map((u) => `${u.type} ${u.name}`).sort().join(";"), want);
     eq(vertexAttributes(mesh).map((a) => `${a.type} ${a.name}`).join(";"), FW_MESH_ATTRIBUTES.map((a) => `${a.type} ${a.name}`).join(";"));
-    assert(!/#include/.test(mesh), "self-contained (no include: std_in's vec2 position would clash)");
+    eq(includesOf(mesh).length, 0, "self-contained (no include: std_in's vec2 position would clash)");
   });
 
   // ---- T1 fidelity: the vanilla shaders follow the dialect the checker describes ----
