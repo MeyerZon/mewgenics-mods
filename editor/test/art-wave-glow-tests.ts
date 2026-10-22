@@ -112,7 +112,7 @@ export async function runArtWaveGlowTests(test: TestFn, assert: AssertFn, eq: Eq
     assert(j.vanilla.outline > 1500, `vanilla outline ${j.vanilla.outline}`);
     for (const w of ours) {
       assert(w.outline >= 0.3 * j.vanilla.outline, `${w.label}: outline ${w.outline} vs vanilla ${j.vanilla.outline}`);
-      assert(Math.max(0, ...Object.values(w.slots as Record<string, number>)) <= 50, `${w.label}: slot colours ${JSON.stringify(w.slots)}`);
+      assert(Math.max(0, ...Object.values(w.slotsExcess as Record<string, number>)) <= 50, `${w.label}: slot colours beyond 2x the control TomTom (whose fur matches the head peach) ${JSON.stringify(w.slotsExcess)}`);
     }
     assert(j.motion.max >= 200 && j.motion.max >= 2 * j.motion.controlMax, JSON.stringify(j.motion));
   });
@@ -132,7 +132,7 @@ export async function runArtWaveGlowTests(test: TestFn, assert: AssertFn, eq: Eq
     assert(!!src && src.k.x === g.glowed.x && src.k.y === g.glowed.y, "glowsrc at the glowed centre");
     assert(!!ctl && ctl.k.x === g.control.x && ctl.k.y === g.control.y, "glowctl at the control centre");
     assert(!!sw && sw.k.x === g.swatch.x && sw.k.y === g.swatch.y, "swatch");
-    assert(!!halo && halo.k.x === g.glowed.x && halo.k.y === g.glowed.y && halo.l.depth < src.l.depth, "halo under glowsrc");
+    assert(!!halo && halo.k.x === g.glowed.x && halo.k.y === g.glowed.y && halo.l.depth < src!.l.depth, "halo under glowsrc");
     eq(JSON.stringify(scene.shapes.glowsrc.paths.map((p: any) => p.d)), JSON.stringify(scene.shapes.glowctl.paths.map((p: any) => p.d)), "identical squares");
     eq(scene.shapes.glowswatch.paths[0].fill, g.colour);
     assert(!sp.layers.some((l: any) => l.keys.some((k: any) => k.ref === "glowctl_glow")) && !scene.shapes.glowctl_glow, "no halo on the control");

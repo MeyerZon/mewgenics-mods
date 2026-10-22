@@ -78,3 +78,33 @@ ArtProbeLoc {
         tooltip "ENEMY_LILRAT_DESC"
     }
 }
+
+// test-only (wave probe, 2026-10-22): a real cat — TomTom's parts — whose idle is the appended `wave` animation
+// (probe.scene.json: waveF / waveB on the _Append_CatTest donor place wavePose, a parts: "game" rig made with
+// newCatAnimation whose arm1 / arm2 / head are keyed); npm run test:artprobe -- --cat-wave shows an animated pose
+// getting the cat's own parts and moving
+ArtProbeCatWave {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle wave]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (baked-glow probe, 2026-10-22): a Rat drawn by ArtProbeGlow — the marker, a square with a halo baked by
+// glow.ts bakeGlow (#ff8000, blur 24, 4 bands), the identical unglowed control square and a swatch of the colour;
+// npm run test:artprobe -- --glow-arena measures the halo in the arena
+ArtProbeGlow {
+    variant_of Rat
+    graphics {
+        movieclip ArtProbeGlow
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}

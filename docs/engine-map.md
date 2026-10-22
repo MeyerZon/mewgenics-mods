@@ -495,6 +495,15 @@ probeIdle]]`.
 - Conclusion: **the game fills a mod-appended cat frame's slots by name; the only requirement is that each slot is an
   empty (or hidden) sprite.** A native hook is needed only for scoped standalone rig clips (a non-`_CAT` character
   that should get a cat's parts), not for appended cat animations.
+- **Animated poses too (OBSERVED 2026-10-22, `npm run test:artprobe -- --cat-wave`, run 20261022-101117; fixture
+  `editor/test/fixtures/ingame/artprobe-cat-wave-summary.json`).** `wave` authored with `newCatAnimation` (`waveF` /
+  `waveB` on the same donor, placing `wavePose`: a `parts: "game"` rig whose empty `arm1` / `arm2` / `head` slots are
+  keyed over its own 30-frame timeline, linear tweens) on `ArtProbeCatWave` = TomTom + `alt_animations [[idle wave]]`,
+  no `_autoplay` (nobody acts, so the cat is not hit or moved): our marker in 5/5 shots, the cat's outline under it
+  ~10.7k px (TomTom's 11.0k), no slot colour beyond what TomTom's own fur matches, and the outline changes by up to
+  10773 px between shots ~130 ms apart vs 4380 for the idle TomTom. The slot sprites' timeline matrices drive the
+  game's parts: the arm visibly swings and the head bobs. The nested `ani` plays its own timeline on the held root
+  label.
 
 ### SWF loader and display path (closed, 2026-10-21)
 
@@ -820,6 +829,14 @@ shape under the source, which every one of these facts allows.
   Everything but the mask draw is reachable through the functions above; being pursued as session `rim`. Until then
   the data-level answers are the baked halo (sprite-shaped, static colour, no engine cost), `CharacterLightSource.glow`
   (ground disc) and `AdvancedTint` (brightness lift).
+- **The baked halo in the arena (OBSERVED 2026-10-22, `npm run test:artprobe -- --glow-arena`, run 20261022-101249;
+  fixture `editor/test/fixtures/ingame/artprobe-glow-arena-summary.json`).** `ArtProbeGlow` (a Rat's
+  `graphics.movieclip`): a 60 px square with a `bakeGlow` halo (#ff8000, blur 24, 4 bands), the identical unglowed
+  square and a swatch of the colour (`probe-outcomes.ts` `GLOW_ARENA_PROBE` / `measureGlowArena`: per-pixel halo alpha
+  against a pre-spawn baseline along four rays). The halo is drawn under the unit's tint like its other fills: inner
+  band ≈ the swatch (196,99,1 vs 235,119,0), alpha falling off outward on 4/4 rays (~.86 → .66 → .44 → .21 → 0), the
+  control square's ring unchanged (alpha 0.00). The bands are visible as plateaus at game scale (1.72 screen px per
+  clip px); the lower ray is cut early where the arena's foreground props overdraw the clip.
 
 Manifest-ready rows (for `bindings/25143593.json` when the native route lands): `ShaderManager_GetOrCreateMaterial`
 0x9bb5d0 (pin by the FNV-1a constants `0xcbf29ce484222325`/`0x100000001b3` + the `+0x278/+0x280` map offsets; callees

@@ -128,7 +128,7 @@ export function RigTab() {
         on a donor sprite exported as <span className="mono">{CAT_ANIM_EXPORT}</span>; each frame places a cat rig (<span className="mono">{"<name>Pose"}</span>)
         as the layer <span className="mono">ani</span> at depth 1 — the shape of every vanilla CatTest frame; the engine restarts the child
         <span className="mono"> ani</span> on every play. The pose's seven slots stay empty — the game draws the cat's own parts into them
-        (OBSERVED in PR #74 once its empty-slot run lands). Pose the slots in the Timeline tab, build the SWF, then refer to it bare from GON:
+        (OBSERVED in the game, a still pose and an animated one alike). Pose the slots in the Timeline tab, build the SWF, then refer to it bare from GON:
         <span className="mono"> alt_animations [[idle {animName.trim() || "<name>"}]]</span> on a character or
         <span className="mono"> animation {animName.trim() || "<name>"}</span> on an ability (a missing F or B label is a silent no-op in-game).
       </p>

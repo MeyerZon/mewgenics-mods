@@ -599,8 +599,8 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     hidden or has no children; a visible, non-empty slot is taken for an already-converted one and `children[0]` (a
     depth hole) is dereferenced — the A0 crash (`+0x741f5d`, PR #74). Vanilla hides its placeholders with a frame-1
     ActionScript `setInvisible()` the emitter cannot express, so a mod's slot sprites are **empty 1-frame sprites**;
-    placeholder art is preview-only (and on a non-cat character it is simply drawn). OBSERVED in PR #74 once its
-    empty-slot run lands.
+    placeholder art is preview-only (and on a non-cat character it is simply drawn). OBSERVED in PR #74 (a static pose)
+    and 2026-10-22 (`npm run test:artprobe -- --cat-wave`: an animated pose with keyed slots moves with the cat's parts).
     Built: `cat-rig.ts` `addCatRig(scene, name, { parts: "game" })` → a `rig: "cat"` sprite with `parts: "game"` whose
     seven slots reference empty sprites `<name>_<slot>` (validator `rig-slot-not-empty`, error, when such a slot holds
     art; `sprite-parts` for a bad value). `newCatAnimation(scene, name, { rig?, frames? })` → a `parts: "game"` rig

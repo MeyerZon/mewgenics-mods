@@ -21,7 +21,11 @@
     "CatProbeColours_body": { "paths": [ { "d": "M-40 -40 C-40 -62 40 -62 40 -40 C40 -16 -40 -16 -40 -40 Z", "fill": "#2080ff", "fillRule": "nonzero" } ] },
     "CatProbeColours_leg1": { "paths": [ { "d": "M-34 -22 L-22 -22 L-20 0 L-34 0 Z", "fill": "#ff60a0", "fillRule": "nonzero" } ] },
     "CatProbeColours_arm1": { "paths": [ { "d": "M24 -22 L36 -22 L38 0 L24 0 Z", "fill": "#a0ff40", "fillRule": "nonzero" } ] },
-    "CatProbeColours_head": { "paths": [ { "d": "M22 -78 C22 -100 70 -100 70 -78 C70 -56 22 -56 22 -78 Z M26 -92 L30 -112 L42 -96 Z M50 -96 L62 -112 L66 -92 Z", "fill": "#ffd0a0", "fillRule": "nonzero" } ] }
+    "CatProbeColours_head": { "paths": [ { "d": "M22 -78 C22 -100 70 -100 70 -78 C70 -56 22 -56 22 -78 Z M26 -92 L30 -112 L42 -96 Z M50 -96 L62 -112 L66 -92 Z", "fill": "#ffd0a0", "fillRule": "nonzero" } ] },
+    "glowsrc": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "gray:3" } ] },
+    "glowsrc_glow": { "paths": [ { "d": "M-54 -54 L54 -54 L54 54 L-54 54 Z M-48 48 L48 48 L48 -48 L-48 -48 Z", "fill": "#ff800040" }, { "d": "M-48 -48 L48 -48 L48 48 L-48 48 Z M-42 42 L42 42 L42 -42 L-42 -42 Z", "fill": "#ff800080" }, { "d": "M-42 -42 L42 -42 L42 42 L-42 42 Z M-36 36 L36 36 L36 -36 L-36 -36 Z", "fill": "#ff8000bf" }, { "d": "M-36 -36 L36 -36 L36 36 L-36 36 Z", "fill": "#ff8000ff" } ], "baked": { "kind": "glow", "of": "glowsrc", "color": "#ff8000", "blur": 24, "strength": 1, "steps": 4 } },
+    "glowctl": { "paths": [ { "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z", "fill": "gray:3" } ] },
+    "glowswatch": { "paths": [ { "d": "M-15 -15 L15 -15 L15 15 L-15 15 Z", "fill": "#ff8000" } ] }
   },
   "bitmaps": { "checkerbmp": { "file": "art/checker.png" } },
   "texts": {
@@ -68,6 +72,13 @@
     "CatProbe_leg1": { "frames": 1, "labels": {}, "layers": [] },
     "CatProbe_arm1": { "frames": 1, "labels": {}, "layers": [] },
     "CatProbe_head": { "frames": 1, "labels": {}, "layers": [] },
+    "wavePose_tail": { "frames": 1, "labels": {}, "layers": [] },
+    "wavePose_leg2": { "frames": 1, "labels": {}, "layers": [] },
+    "wavePose_arm2": { "frames": 1, "labels": {}, "layers": [] },
+    "wavePose_body": { "frames": 1, "labels": {}, "layers": [] },
+    "wavePose_leg1": { "frames": 1, "labels": {}, "layers": [] },
+    "wavePose_arm1": { "frames": 1, "labels": {}, "layers": [] },
+    "wavePose_head": { "frames": 1, "labels": {}, "layers": [] },
     "CatProbe": {
       "frames": 24,
       "labels": { "idle": 0 },
@@ -100,9 +111,41 @@
       ]
     },
     "CatAppendRoot": {
-      "frames": 2,
-      "labels": { "probeIdleF": 0, "probeIdleB": 1 },
-      "layers": [ { "name": "ani", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe", "x": 3.85, "y": -47.95 }, { "frame": 1, "ref": "CatProbe", "x": 3.85, "y": -47.95 } ] } ]
+      "frames": 4,
+      "labels": { "probeIdleF": 0, "probeIdleB": 1, "waveF": 2, "waveB": 3 },
+      "layers": [ { "name": "ani", "depth": 1, "keys": [
+        { "frame": 0, "ref": "CatProbe", "x": 3.85, "y": -47.95 },
+        { "frame": 1, "ref": "CatProbe", "x": 3.85, "y": -47.95 },
+        { "frame": 2, "ref": "wavePose", "x": 3.85, "y": -47.95 },
+        { "frame": 3, "ref": "wavePose", "x": 3.85, "y": -47.95 }
+      ] } ]
+    },
+    "wavePose": {
+      "frames": 30,
+      "labels": { "idle": 0 },
+      "rig": "cat",
+      "parts": "game",
+      "layers": [
+        { "name": "tail", "depth": 1, "keys": [ { "frame": 0, "ref": "wavePose_tail", "matrix": [0.599639892578125, 0.16241455078125, -0.16241455078125, 0.599639892578125, -24.45, 10.05] } ] },
+        { "name": "leg2", "depth": 3, "keys": [ { "frame": 0, "ref": "wavePose_leg2", "matrix": [0.6212615966796875, 0, -0.0479583740234375, 0.6212615966796875, -9.85, 23.65], "cxform": { "mul": [0.84765625, 0.84765625, 0.84765625, 1] } } ] },
+        { "name": "arm2", "depth": 5, "keys": [ { "frame": 0, "ref": "wavePose_arm2", "x": 17.15, "y": 32.45, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0, "cxform": { "mul": [0.84765625, 0.84765625, 0.84765625, 1] }, "tween": "linear" }, { "frame": 15, "ref": "wavePose_arm2", "x": 17.15, "y": 32.45, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 60, "cxform": { "mul": [0.84765625, 0.84765625, 0.84765625, 1] }, "tween": "linear" }, { "frame": 29, "ref": "wavePose_arm2", "x": 17.15, "y": 32.45, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0, "cxform": { "mul": [0.84765625, 0.84765625, 0.84765625, 1] } } ] },
+        { "name": "body", "depth": 7, "keys": [ { "frame": 0, "ref": "wavePose_body", "matrix": [0.621307373046875, 0.00445556640625, -0.01177978515625, 0.6211090087890625, -0.4, 16.35] } ] },
+        { "name": "leg1", "depth": 9, "keys": [ { "frame": 0, "ref": "wavePose_leg1", "matrix": [0.6212615966796875, 0, -0.0883636474609375, 0.6212615966796875, -32.1, 27.1] } ] },
+        { "name": "arm1", "depth": 11, "keys": [ { "frame": 0, "ref": "wavePose_arm1", "x": -4.7, "y": 37.25, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0, "tween": "linear" }, { "frame": 15, "ref": "wavePose_arm1", "x": -4.7, "y": 37.25, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": -110, "tween": "linear" }, { "frame": 29, "ref": "wavePose_arm1", "x": -4.7, "y": 37.25, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0 } ] },
+        { "name": "head", "depth": 13, "keys": [ { "frame": 0, "ref": "wavePose_head", "x": 10.95, "y": 2.3, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0, "tween": "linear" }, { "frame": 15, "ref": "wavePose_head", "x": 10.95, "y": -5.7, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0, "tween": "linear" }, { "frame": 29, "ref": "wavePose_head", "x": 10.95, "y": 2.3, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0 } ] },
+        { "name": "marker", "depth": 15, "keys": [ { "frame": 0, "ref": "CatProbeMc_marker", "x": -48, "y": -330 } ] }
+      ]
+    },
+    "ArtProbeGlow": {
+      "frames": 1,
+      "layers": [
+        { "name": "marker", "depth": 1, "keys": [ { "frame": 0, "ref": "checker", "x": 0, "y": 0 } ] },
+        { "name": "cx", "depth": 2, "keys": [ { "frame": 0, "ref": "sq", "x": 310, "y": 30, "cxform": { "mul": [1, 0, 0, 1] } } ] },
+        { "name": "glowed", "depth": 4, "keys": [ { "frame": 0, "ref": "glowsrc", "x": 150, "y": 220 } ] },
+        { "name": "control", "depth": 5, "keys": [ { "frame": 0, "ref": "glowctl", "x": 330, "y": 220 } ] },
+        { "name": "swatch", "depth": 6, "keys": [ { "frame": 0, "ref": "glowswatch", "x": 480, "y": 220 } ] },
+        { "depth": 3, "keys": [ { "frame": 0, "ref": "glowsrc_glow", "x": 150, "y": 220 } ] }
+      ]
     },
     "ArtProbeLoc": {
       "frames": 1,
@@ -137,5 +180,5 @@
       ]
     }
   },
-  "exports": { "ArtProbe": "ArtProbe", "CatProbeColours": "CatProbeColours", "_Append_CatTest": "CatAppendRoot", "ArtProbeLoc": "ArtProbeLoc" }
+  "exports": { "ArtProbe": "ArtProbe", "CatProbeColours": "CatProbeColours", "_Append_CatTest": "CatAppendRoot", "ArtProbeLoc": "ArtProbeLoc", "ArtProbeGlow": "ArtProbeGlow" }
 }

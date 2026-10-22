@@ -154,17 +154,17 @@
   {
     "id": "pr76-wave-in-game",
     "pr": 76,
-    "question": "In a run, does a `wave` animation played from alt_animations [[idle wave]] show the cat's own parts (then the cat-anim-untested wording can be trimmed)?",
-    "shots": [],
-    "regenerate": "no probe script yet — needs a .mewtest that plays the authored wave (agent work); until then check by playing a dev run with the mod",
+    "question": "Measured animated (run 20261022-101117: our marker, a TomTom-sized outline under it, the arm/head outline change 2.5x the idle control). shot-wave-1 vs shot-wave-3: does the cat under the yellow marker (the lower TomTom) wave its front arm with its own parts, and does it read as a wave rather than a twitch?",
+    "shots": ["ingame-runs/*-_artprobe-render-cat-wave/shot-wave-1.png", "ingame-runs/*-_artprobe-render-cat-wave/shot-wave-3.png", "ingame-runs/*-_artprobe-render-cat-wave/shot-vanilla.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --cat-wave",
     "status": "open"
   },
   {
     "id": "pr80-glow-in-game",
     "pr": 80,
-    "question": "A baked glow placed as a character's graphics.movieclip via _artprobe: is the rim over the arena right — bands not visible, no colour bleeding onto the palette?",
-    "shots": [],
-    "regenerate": "bake_glow on a mod scene, build, place it via mods/_artprobe, then cd editor && npm run test:artprobe (no dedicated probe yet)",
+    "question": "Measured halo (run 20261022-101249: inner band = the #ff8000 swatch, alpha falling off outward on 4/4 rays, the control square unlit), but the four bands show as four plateaus (alpha ~.86/.66/.44/.21). In shot-glow-1, the dark square with the orange rim (bottom right of the clip): does it read as a glow at game scale, or are the bands too visible (then the default bake needs more steps)?",
+    "shots": ["ingame-runs/*-_artprobe-render-glow-arena/shot-glow-1.png", "ingame-runs/*-_artprobe-render-glow-arena/shot-baseline.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --glow-arena",
     "status": "open"
   },
   {

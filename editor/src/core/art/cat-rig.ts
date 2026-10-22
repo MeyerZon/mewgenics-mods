@@ -115,8 +115,9 @@ export function assignSlot(scene: Scene, spriteId: string, slot: string, ref: st
 // on the early frames is an authoring leftover the engine never reads. `alt_animations [[from to]]` registers
 // from+"F" → to+"F" and from+"B" → to+"B" (0x103da0), and a missing label is a silent no-op (no log), so the validator's
 // facing check is the only guard. catanis2.swf extends the clip with an export `_Append_CatTest` of the same shape (296
-// frames, 239 labels like `crawlingIdleF`). Experiment A0 (PR #74): a mod-appended frame currently crashes a _CAT unit
-// on spawn — this authoring is ahead of the engine until the native swap fix lands.
+// frames, 239 labels like `crawlingIdleF`). With EMPTY slot sprites a mod-appended frame works on a
+// _CAT unit: a static pose (experiment A0, PR #74) and an animated one with keyed slots (the wave probe, 2026-10-22,
+// mods/_artprobe render-cat-wave) both get the cat's own parts.
 
 export const CAT_ANIM_EXPORT = "_Append_CatTest";
 /** the child instance PlayAnimation restarts after GotoLabel on the root (the engine reads no other name) */
@@ -273,7 +274,7 @@ export function catAnimFindings(scene: Scene): Finding[] {
       if (p.l.depth !== CAT_ANIM_DEPTH) out.push({ severity: "warning", code: "cat-anim-depth", message: `labeled frame "${label}" places its pose at depth ${p.l.depth}; every vanilla CatTest frame places it at depth ${CAT_ANIM_DEPTH}`, path: `${lat}.depth` });
     }
   }
-  out.push({ severity: "info", code: "cat-anim-untested", message: `${CAT_ANIM_EXPORT} frames are in the engine's shape (labeled F/B frames on the root, the pose as the child "${CAT_ANIM_LAYER}" at depth ${CAT_ANIM_DEPTH}, empty slot sprites): the game draws the cat's own parts — palette, texture, face — into the empty slots; placeholder art is preview-only (OBSERVED in PR #74 once its empty-slot run lands; docs/engine-map.md "CatTest and the cat animation clips")`, path: at });
+  out.push({ severity: "info", code: "cat-anim-untested", message: `${CAT_ANIM_EXPORT} frames are in the engine's shape (labeled F/B frames on the root, the pose as the child "${CAT_ANIM_LAYER}" at depth ${CAT_ANIM_DEPTH}, empty slot sprites): the game draws the cat's own parts — palette, texture, face — into the empty slots; on a static pose (OBSERVED in PR #74, run 20261022-063637) and on an animated pose whose slots are keyed (OBSERVED 2026-10-22, mods/_artprobe render-cat-wave run 20261022-101117: the arm and head move with the cat's own parts); placeholder art is preview-only (docs/engine-map.md "CatTest and the cat animation clips")`, path: at });
   return out;
 }
 

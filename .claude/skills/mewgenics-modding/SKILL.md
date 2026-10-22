@@ -179,7 +179,7 @@ face — into empty slots, and a visible non-empty slot crashes it; placeholder 
 refer to it bare from GON: `alt_animations [[idle <name>]]` on a character or `animation <name>` on an ability (the
 engine adds the facing suffix; a missing F or B label is a silent no-op, so keep both). `write_art_scene { dryRun: true }`
 reports the `cat-anim-*` findings (`cat-anim-slot-not-empty` when a slot holds art; the info `cat-anim-untested` says
-what the game draws, OBSERVED in PR #74 once its empty-slot run lands). Never export a clip named `CatTest` itself:
+what the game draws, OBSERVED on a static pose in PR #74 and on an animated pose with keyed slots on 2026-10-22, `npm run test:artprobe -- --cat-wave`). Never export a clip named `CatTest` itself:
 clips resolve through a global last-loaded-first registry and it would replace the cat for every cat
 (`cat-clip-override`).
 
