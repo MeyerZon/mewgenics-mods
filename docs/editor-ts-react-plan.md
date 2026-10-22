@@ -153,6 +153,18 @@ PR 1 of the UX overhaul adds the shared building blocks; later PRs move the scre
   shrinks:** a file over its allowance fails, and so does an allowance above the real count, so fixing a violation
   means lowering its number in the same PR. It never grows; the goal is an empty list.
 - e2e: `tests/e2e/a11y.spec.ts` pins the dialog, menu, toast and Ctrl+S behaviour.
+- **The shell (PR 2)**: one command bar. The top bar's Validate / Save (`.topbar-validate` / `.topbar-save`) and
+  Ctrl+S act on what the current mode has open (`actions.ts` `currentMode` / `saveCurrent` / `validateCurrent`:
+  the overlay, the scene, the room); the scene tab bar keeps only Build SWF and the room toolbar has no Save. The
+  status pill counts the current mode's findings and opens them. `web/src/dirty.ts` is the unsaved-work registry
+  (scopes `data`, `art`, `vc`, `rooms`, registered by `actions.ts`, `art-state.ts`, `room-state.ts`); `guard(scopes,
+  action)` opens the ConfirmModal (`S.confirm`: Cancel / Discard / Save and continue) before a mod switch, another
+  file / scene / room, a close or a new scene / room, and `beforeunload` asks on reload. Mode switches never ask
+  (nothing is lost). Saving a GON file only re-lists the mod's files (`refreshModFiles`) and a build only re-lists the
+  art (`refreshArtListings`), so neither closes an open scene or room. `GET /api/status` (`editorStatus` in
+  `src/core/api.ts`: PE headers only via the validator's memoized `installedNativeBuild`, `existsSync` checks) feeds
+  the status bar; `web/src/deeplink.ts` reads and writes `?mode=&mod=&file=` (`history.replaceState`). Launch… shows
+  the `launch-dev.bat mods\<mod>` command with Copy; the editor never starts the game. e2e: `tests/e2e/shell.spec.ts`.
 
 ## Follow-ups (not in this stack)
 

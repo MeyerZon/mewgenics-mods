@@ -1,10 +1,9 @@
 // Left pane in Data mode: the mod's overlay files (as a tree) and the read-only base data.
 
 import React from "react";
-import { S } from "../state.ts";
-import { useS, sx } from "./ui.tsx";
+import { useS, sx, Pill } from "./ui.tsx";
 import { buildTree, type TreeNode } from "../tree.ts";
-import { openTemplate, openFile, selectCategory, viewBaseEntry, setBaseFilter } from "../actions.ts";
+import { openTemplate, openFile, selectCategory, viewBaseEntry, setBaseFilter, openComponents } from "../actions.ts";
 
 function TreeRows({ node, depth, collapsed, toggleDir }: { node: TreeNode; depth: number; collapsed: Record<string, boolean>; toggleDir: (p: string) => void }): React.JSX.Element {
   const file = useS((s) => s.file);
@@ -32,6 +31,11 @@ function TreeRows({ node, depth, collapsed, toggleDir }: { node: TreeNode; depth
           {f.leaf}
         </span>
         {f.mode && f.mode !== "replace" ? <span className={`pill ${f.mode} chip`}>{"." + f.mode}</span> : null}
+        {/\.lvl$/i.test(f.relPath) ? (
+          <Pill kind="muted" chip title="Opens in Rooms mode">
+            room ↗
+          </Pill>
+        ) : null}
       </button>,
     );
   }
@@ -124,10 +128,7 @@ function ComponentsRow(): React.JSX.Element {
   return (
     <button
       className="srow acc"
-      onClick={() => {
-        if (S.get().mod) S.set({ tab: "components" });
-        else S.set({ compDrawer: true });
-      }}
+      onClick={() => openComponents()}
     >
       <span style={sx("flex:1")}>components</span>
       <span className="count">{compTotal ? compTotal.toLocaleString() : "search"}</span>

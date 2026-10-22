@@ -103,7 +103,7 @@ function ExampleBody({ step }: { step: number }): React.JSX.Element {
             ? "The overlay file carries a .append suffix so it adds a new entry without touching the base table. See step 2's code for the shape."
             : step === 3
               ? "A native mod registers JokersLuck in registered-names.json. The validator reads that list, so the data overlay's reference resolves. (Illustrative — editing registered-names.json is a native-mod task.)"
-              : "Re-run Validate, then launch the dev save with -modpaths/-savesuffix outside the editor (Launch dev shows the exact command). Bind JokersGambit in battle to see JokersLuck reroll luck."}
+              : "Re-run Validate, then launch the dev save with -modpaths/-savesuffix outside the editor (Launch… in the top bar shows the exact command). Bind JokersGambit in battle to see JokersLuck reroll luck."}
       </p>
       <div style={sx("display:flex;gap:12px;margin-top:10px")}>
         {step > 0 ? (

@@ -117,6 +117,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     if (method === "GET" && url.pathname === "/api/mod-file") {
       return sendJson(res, 200, api.readModFile(q.get("mod") || "", q.get("path") || ""));
     }
+    if (method === "GET" && url.pathname === "/api/status") {
+      return sendJson(res, 200, api.editorStatus({ mod: q.get("mod") || undefined }));
+    }
     if (method === "GET" && url.pathname === "/api/registered") {
       return sendJson(res, 200, api.listRegisteredNativeNames());
     }

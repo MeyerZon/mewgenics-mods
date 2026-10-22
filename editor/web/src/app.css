@@ -505,3 +505,14 @@ textarea.scenejson { width: 100%; min-height: 320px; resize: vertical; font-fami
 .roomiso .icell .tl { font-size: 9px; text-shadow: 0 0 2px #000; }
 .roomiso .icell .obj { position: absolute; left: 34%; right: 34%; top: 14%; bottom: 14%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; border: 1px solid rgba(0,0,0,.45); }
 .roomiso .isoart { position: absolute; pointer-events: none; }
+
+/* ---- the shell (UX PR 2): clickable pills, unsaved dots, the Launch… popover, the status bar's warn chip ---- */
+button.pill { border: 0; font-family: inherit; cursor: pointer; }
+button.pill:focus-visible { outline: 2px solid var(--acc-ink); outline-offset: 2px; }
+.dot.unsaved { display: inline-block; width: 7px; height: 7px; margin-left: 6px; vertical-align: middle; background: currentColor; }
+.modeswitch .btn .dot.unsaved { background: var(--warn); }
+.launchpop { width: min(420px, 86vw); padding: 4px 6px 6px; }
+.launchpop .launchrow { display: flex; gap: 8px; align-items: center; padding: 4px; }
+.launchpop input { flex: 1; min-width: 0; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line2); border-radius: var(--r-sm); background: var(--panel2); color: var(--ink); }
+.launchpop .launchnote { margin: 4px; font-size: 12px; line-height: 1.5; color: var(--ink2); white-space: normal; }
+.statusbar .warn { color: var(--warn); }

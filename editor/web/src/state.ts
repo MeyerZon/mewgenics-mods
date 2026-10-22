@@ -14,6 +14,7 @@ import type {
   BaseEntryView,
   TemplateResult,
   TemplateKindName,
+  EditorStatus,
 } from "./types.ts";
 
 export type ToastKind = "info" | "ok" | "error";
@@ -24,7 +25,15 @@ export interface ToastMessage {
 }
 
 export type Tab = "validation" | "preview" | "components";
-export type OpenMenu = "" | "mod" | "help";
+export type OpenMenu = "" | "mod" | "help" | "launch";
+
+/** The unsaved-work dialog (dirty.ts guard → App.tsx ConfirmModal); null when closed. */
+export interface ConfirmState {
+  title: string;
+  body: string;
+  /** offer "Save and continue" (every dirty scope can save) */
+  canSave: boolean;
+}
 
 export interface AppState {
   mods: string[];
@@ -68,6 +77,11 @@ export interface AppState {
   artTourDontShow: boolean;
   artExampleOpen: boolean;
   artExampleStep: number;
+  confirm: ConfirmState | null;
+  /** GET /api/status (null until it answers) */
+  status: EditorStatus | null;
+  /** the last /api/status fetch reached the server */
+  serverOk: boolean;
 }
 
 // ---- response shapes the app reads: see ./types.ts (kept under these names for callers) ----
@@ -112,6 +126,9 @@ export const S = createStore<AppState>({
   artTourDontShow: false,
   artExampleOpen: false,
   artExampleStep: 0,
+  confirm: null,
+  status: null,
+  serverOk: true,
 });
 
 // template-scaffolder fields (module-level so onboarding can prefill them)

@@ -132,3 +132,28 @@ export interface ComponentKeyInfo {
 export type TemplateResult =
   | { ok: true; kind?: string; name?: string; written?: string[]; localizationKeys?: string[]; dryRun?: boolean; hint?: string }
   | { ok: false; error: string; partial?: string[] };
+
+// ---- editor status (GET /api/status: src/core/api.ts editorStatus) --------------------------
+export interface BuildComparison {
+  status: "match" | "mismatch" | "unknown";
+  modBuild: string;
+  installedBuild: string | null;
+  installedKnown: boolean | null;
+  installedTimeDateStamp?: string;
+}
+export interface EditorStatus {
+  gameDir: string;
+  exeFound: boolean;
+  known: boolean;
+  gameBuild: string | null;
+  timeDateStamp: string | null;
+  knownBuilds: string[];
+  extracted: boolean;
+  extractedSwfs: boolean;
+  frameworkDll: boolean;
+  mewtestDll: boolean;
+  mewjector: boolean;
+  saveSuffix: string;
+  modsDir: string;
+  mod?: { name: string; gameBuild: string | null; compare: BuildComparison | null };
+}
