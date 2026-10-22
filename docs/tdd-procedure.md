@@ -96,12 +96,16 @@ worktree has none of the git-ignored inputs the main checkout accumulated — `e
 2. **Env vars, for every `npm` command run in the worktree:**
    - `MEWGENICS_EXTRACTED_DATA=<main>\.extracted\data` — the base data (T1 tests, the validator, the merge preview).
    - `MEWGENICS_EDITOR_DATA=<main>\editor\data` — the caches: `component-names.json` (the component class list;
-     `build:index` can only rebuild it from `.analysis/list_names.tsv`, which is not on disk since the 2026-10-19
-     wipe) and `base-index.json`. Without it the component-dependent check logs
+     `build:index` can only rebuild it from `.analysis/list_names.tsv`, wiped 2026-10-19 and regenerated
+     2026-10-22) and `base-index.json`. Without it the component-dependent check logs
      `(skipped: editor/data/component-names.json missing …)`, the validator reports one `component-list-missing`
      info instead of an `unknown-component` warning per passive, and `npm run build:index` writes a fresh
      `base-index.json` into the worktree's own `editor/data/` (and says why it kept or skipped the component list).
      An override under any `saves/` path is refused at load.
+   - `MEWGENICS_ANALYSIS_DIR=<main>\.analysis` — the reverse-engineering store (read only): `build:index` and the
+     component loader distill the component list from its `list_names.tsv`, and it also lets a worktree see the main
+     checkout's decompile store (the bindings "evidence paths exist" check resolves `.analysis/...` under it and
+     skips without it).
    - `MEWGENICS_VANILLA_SWF_DIR=<main>\.extracted\swfs` — the vanilla SWF reads (art T1 tests; they skip without
      it). The palette textures (`.extracted/textures/`) still resolve against the worktree root and skip there.
 3. **Before removing the worktree:** `cmd /c rmdir "<worktree>\editor\node_modules"` (unlinks the junction without

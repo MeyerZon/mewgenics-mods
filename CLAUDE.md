@@ -77,7 +77,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates). In a secondary git
   worktree, point at the main checkout instead: one `node_modules` junction plus `MEWGENICS_EXTRACTED_DATA` /
-  `MEWGENICS_EDITOR_DATA` (`docs/tdd-procedure.md` "Running the editor from a git worktree").
+  `MEWGENICS_EDITOR_DATA` / `MEWGENICS_ANALYSIS_DIR` (`docs/tdd-procedure.md` "Running the editor from a git worktree").
 - `npm test` — the full unit suite (`node test/run-tests.ts`: GON, overlays, validator, art, the in-game runner
   against a fake game, an MCP spawn smoke, the bindings library against fake PE images and the installed exe;
   ~250 checks). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
