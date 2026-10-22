@@ -237,7 +237,7 @@ static void *hook_ApplyByName(MsvcString *name, void *ctx, int stacks, void *src
     fw_walk_apply_resolve(ctx, src, p5, p6, g_defaultSource, &a);
     void *result = NULL;
 
-    void *existing = fw_walk_find_status(a.character, d->vt);
+    void *existing = fw_walk_apply_existing(&a, d->vt);
     if (fw_walk_apply_merges(existing, p7)) {
         fw_walk_merge_stacks(existing, stacks, a.applier);
         if (stacks != 0) ((fn_OnStacksChanged)d->vt[VT_ONSTACKSCHANGED])(existing);

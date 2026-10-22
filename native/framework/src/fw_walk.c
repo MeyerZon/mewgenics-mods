@@ -43,6 +43,8 @@ void fw_walk_apply_resolve(const void *ctx, void *src, void *p5, const void *p6,
     out->applier = p5 ? p5 : (p6 ? *(void *const *)((const char *)p6 + OFF_APPLYP6_APPLIER) : NULL);
 }
 
+void *fw_walk_apply_existing(const FwApplyResolved *a, const void *vt) { return fw_walk_find_status(a->character, vt); }
+
 int fw_walk_merge_stacks(void *existing, int delta, void *applier) {
     *fw_walk_status_stacks(existing) += delta;
     *(void **)((char *)existing + OFF_STATUS_APPLIER) = applier;

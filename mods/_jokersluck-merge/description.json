@@ -1,0 +1,7 @@
+{
+  "title": "Joker's Luck merge test (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for mods/jokers-luck/tests/merge-contexts.mewtest: JokersLuck is applied twice to the same unit under both apply_status context shapes (StatusOnBattleStart on every player cat: ctx = the passive component; StatusOnSpawnIn on JokersLuckRat: ctx = the Character), so the harness can check the second application merges. Load it with jokers-luck. Never for play.",
+  "requirements": []
+}

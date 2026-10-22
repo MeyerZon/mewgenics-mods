@@ -42,6 +42,9 @@ int fw_walk_each_custom(void *character, void *const *vts, int count, FwWalkVisi
 typedef struct FwApplyResolved { void *character; void *entity; void *source; void *applier; } FwApplyResolved;
 /* character/entity from ctx; source = src or defaultSource; applier = p5, else p6->applier, else NULL */
 void fw_walk_apply_resolve(const void *ctx, void *src, void *p5, const void *p6, void *defaultSource, FwApplyResolved *out);
+/* The instance of vt an apply_status with this resolution merges into (fw_walk_apply_merges decides whether it does):
+ * the first non-removing, non-temporary one among the components of the unit the apply targets; NULL if none. */
+void *fw_walk_apply_existing(const FwApplyResolved *a, const void *vt);
 /* an existing instance is merged into unless the apply is temporary; otherwise a new object is constructed */
 static inline int fw_walk_apply_merges(const void *existing, char temporary) { return existing != NULL && temporary == 0; }
 /* the merge writes: stacks += delta, applier, applierOwner (= *(applier + OFF_APPLIER_OWNER), NULL without an applier);

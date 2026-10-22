@@ -119,6 +119,38 @@ TEST(entity_find_status_walks_the_apply_entity_directly_not_ctx_plus_0x20s_entit
     CHECK(fw_walk_find_status(f.character, VT_A) == fw_walk_entity_find_status(f.entity, VT_A));   /* the character form is a wrapper */
 }
 
+TEST(apply_existing_finds_the_units_status_under_both_ctx_shapes_never_through_ctx_plus_0x20) {
+    /* OBSERVED 2026-10-22 (mods/jokers-luck/tests/merge-contexts.mewtest, red run 20261022-115757): apply_status's
+     * ctx is a Component in every shape — the passive component under StatusOnBattleStart, the Character itself under
+     * StatusOnSpawnIn — whose +0x18 is the unit's entity and whose +0x20 is the Scene (the framework logged "created on
+     * <p>" with p = the `enter` event's scene= for all 6 applies). A second JokersLuck therefore never found the first
+     * through ctx+0x20 and each unit carried two objects (1 and 2) instead of one with 3 stacks. */
+    Fakes f; make_character(&f, 2);
+    make_status(f.status[0], VT_GAME, 1, 0, 0, f.character);
+    make_status(f.status[1], VT_A, 1, 0, 0, f.character);
+    f.comps[0] = f.status[0]; f.comps[1] = f.status[1];
+    unsigned char sceneEntity[FAKE_ENTITY_BYTES]; memset(sceneEntity, 0, sizeof sceneEntity);   /* holds no components */
+    unsigned char scene[FAKE_CHARACTER_BYTES]; memset(scene, 0, sizeof scene);
+    *(void **)(scene + OFF_CH_ENTITY) = sceneEntity;
+    FwApplyResolved a;
+    /* shape 1, StatusOnSpawnIn: ctx = the Character (its +0x18 = entity), ctx+0x20 = the scene */
+    *(void **)(f.character + OFF_APPLYCTX_CHARACTER) = scene;
+    fw_walk_apply_resolve(f.character, NULL, NULL, NULL, NULL, &a);
+    CHECK(fw_walk_apply_existing(&a, VT_A) == f.status[1]);
+    /* shape 2, StatusOnBattleStart: ctx = the passive component (its +0x18 = the unit's entity), ctx+0x20 = the scene */
+    unsigned char passive[FAKE_CTX_BYTES]; memset(passive, 0, sizeof passive);
+    *(void **)(passive + OFF_APPLYCTX_ENTITY) = f.entity;
+    *(void **)(passive + OFF_APPLYCTX_CHARACTER) = scene;
+    fw_walk_apply_resolve(passive, NULL, NULL, NULL, NULL, &a);
+    CHECK(fw_walk_apply_existing(&a, VT_A) == f.status[1]);
+    CHECK(fw_walk_apply_existing(&a, VT_B) == NULL);
+    f.status[1][OFF_STATUS_TEMPORARY] = 1;                          /* a temporary is never the merge target */
+    CHECK(fw_walk_apply_existing(&a, VT_A) == NULL);
+    *(void **)(passive + OFF_APPLYCTX_ENTITY) = NULL;               /* no entity: nothing to merge into */
+    fw_walk_apply_resolve(passive, NULL, NULL, NULL, NULL, &a);
+    CHECK(fw_walk_apply_existing(&a, VT_A) == NULL);
+}
+
 TEST(vt_index_finds_a_registered_vtable) {
     void *vts[3] = { VT_A, VT_B, NULL };
     CHECK_EQ(fw_walk_vt_index(vts, 2, VT_A), 0);

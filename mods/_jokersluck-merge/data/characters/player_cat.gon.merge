@@ -1,0 +1,11 @@
+// Test-only (mods/jokers-luck/tests/merge-contexts.mewtest): every player cat gets JokersLuck TWICE at battle start,
+// both through StatusOnBattleStart, i.e. two apply_status calls whose ctx is the passive component (the
+// Component-shaped context). Merged, each cat carries ONE JokersLuck with 1 + 2 = 3 stacks. Never ship or play with it.
+PlayerCat {
+	passives {
+		StatusOnBattleStart {
+			JokersLuck 1
+			JokersLuck 2
+		}
+	}
+}
