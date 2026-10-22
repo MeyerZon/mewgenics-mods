@@ -440,6 +440,7 @@ typedef struct Fake {
     int shotArmResult; int shotArmCalls; int shotArmLine;           /* shot_arm: programmable result (1 armed / -1 unavailable) */
     int shotPollResults[8]; int shotPollCount; int shotPollCalls;   /* shot_poll: results returned in order (then the last one again) */
     MtShotResult shotRes;                                           /* what a finished poll hands back */
+    int speedResult; int speedCalls; double speedFactor; double speedApplied;   /* set_speed: programmable result; speedApplied = what the fake framework keeps */
 } Fake;
 static Fake fk;
 
@@ -492,6 +493,14 @@ static int fk_set_unit_glow(void *u, int i, const float *rgba, char *detail, siz
     return fk.glowResult;
 }
 
+static int fk_set_speed(void *u, double factor, double *applied, char *detail, size_t cap) {
+    (void)u;
+    fk.speedCalls++; fk.speedFactor = factor;
+    *applied = fk.speedApplied ? fk.speedApplied : factor;
+    snprintf(detail, cap, "fake speed");
+    return fk.speedResult;
+}
+
 static int fk_run_step(void *u, int op, const char *arg, MtRunInfo *info, char *detail, size_t cap) {
     (void)u;
     fk.runCalls++; fk.runOp = op; snprintf(fk.runArg, sizeof fk.runArg, "%s", arg ? arg : "");
@@ -506,6 +515,7 @@ static const MtHost HOST = {
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
     fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, NULL, fk_run_step,   /* face_unit: the facing tests use FACE_HOST */
     NULL, NULL,                                                     /* no in-process capture: the legacy window path */
+    fk_set_speed,
 };
 
 static int fk_shot_arm(void *u, int line) { (void)u; fk.shotArmCalls++; fk.shotArmLine = line; return fk.shotArmResult; }
@@ -522,7 +532,7 @@ static const MtHost HOST_GL = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
     fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, NULL, NULL,   /* no face / run step: the shot tests */
-    fk_shot_arm, fk_shot_poll,
+    fk_shot_arm, fk_shot_poll, NULL,
 };
 
 static MtRunner rr;
@@ -1709,7 +1719,7 @@ static int fk_face_unit(void *u, int i, int dx, int dy, char *detail, size_t cap
 static const MtHost FACE_HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
-    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, fk_face_unit, NULL, NULL, NULL,   /* run_step: the walk tests use HOST; no in-process shots */
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, fk_face_unit, NULL, NULL, NULL, NULL,   /* run_step: the walk tests use HOST; no in-process shots; no speed */
 };
 static int face_steps(int max) { int n = 0; while (n < max && mt_runner_step(&rr, &FACE_HOST)) n++; return n; }
 static void fk_two_facing_units(void) {
@@ -1944,6 +1954,56 @@ TEST(runner_expect_unit_effective_stats_and_maxhp) {
     fk_reset("expect unit 0 luck.effective == 5\nquit\n");      /* no combat */
     steps_until_done(5);
     CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
+}
+
+
+/* ====================================================================== */
+/* speed <factor> | speed off (2026-10-22): FW_SetTimeScale, API v6       */
+/* ====================================================================== */
+TEST(script_speed_parses_a_positive_factor_or_off_and_rejects_bad_forms) {
+    char err[256]; int line;
+    const char *s = "speed 4\nspeed 0.5\nspeed off\nspeed 16.25\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 5);
+    CHECK_EQ(g_s.d[0].kind, MT_D_SPEED); CHECK(g_s.d[0].dvalue == 4.0); CHECK_STR(g_s.d[0].a, "4");
+    CHECK_EQ(g_s.d[1].kind, MT_D_SPEED); CHECK(g_s.d[1].dvalue == 0.5);
+    CHECK_EQ(g_s.d[2].kind, MT_D_SPEED); CHECK(g_s.d[2].dvalue == 1.0); CHECK_STR(g_s.d[2].a, "off");
+    CHECK_EQ(g_s.d[3].kind, MT_D_SPEED); CHECK(g_s.d[3].dvalue == 16.25);
+    const char *bad[] = { "speed\n", "speed 0\n", "speed -2\n", "speed x\n", "speed 4 extra\n", "speed 4x\n", "speed off now\n", "speed .\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+        CHECK_EQ(line, 1);
+    }
+}
+
+TEST(runner_speed_calls_the_host_and_emits_a_speed_event_with_the_applied_factor) {
+    fk_reset("speed 8\nspeed off\nquit\n");
+    fk.speedResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.speedCalls, 1); CHECK(fk.speedFactor == 8.0);
+    CHECK(has(ev(0), "{\"ev\":\"speed\"")); CHECK(has(ev(0), "\"line\":1")); CHECK(has(ev(0), "\"arg\":\"8\""));
+    CHECK(has(ev(0), "\"applied\":\"8\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"detail\":\"fake speed\""));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.speedCalls, 2); CHECK(fk.speedFactor == 1.0);
+    CHECK(has(ev(1), "\"arg\":\"off\"")); CHECK(has(ev(1), "\"applied\":\"1\""));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":0"));
+}
+
+TEST(runner_speed_reports_the_clamped_factor_and_fails_with_1_or_4) {
+    fk_reset("speed 1000\nquit\n");
+    fk.speedResult = 1; fk.speedApplied = 64.0;                          /* the framework clamped */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK(has(ev(0), "\"arg\":\"1000\"")); CHECK(has(ev(0), "\"applied\":\"64\""));
+    fk_reset("speed 4\nquit\n");                                        /* refused */
+    fk.speedResult = 0;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"speed_failed\""));
+    fk_reset("speed 4\nquit\n");                                        /* a framework older than API v6 */
+    fk.speedResult = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"speed_unavailable\""));
 }
 
 int main(void) { return MT_RUN_ALL(); }

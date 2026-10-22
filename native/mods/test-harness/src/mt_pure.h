@@ -71,7 +71,8 @@ typedef enum MtDirKind {
     MT_D_EXPECT_GON,    /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
     MT_D_FACE,          /* face <unit> <dx> <dy> | <unit> front|back: Character::Face(dir, instant) on a unit of the walk (mt_face.c) */
     MT_D_RUN,           /* run start [<map>.gon] | run travel <node type> | run fight: the campaign walk through the host (n = MT_RUN_*) */
-    MT_D_EXPECT_LEVEL   /* expect level "<substr>": the level path the last `run fight` reported contains substr */
+    MT_D_EXPECT_LEVEL,  /* expect level "<substr>": the level path the last `run fight` reported contains substr */
+    MT_D_SPEED          /* speed <factor> | speed off: FW_SetTimeScale(factor) (API v6); dvalue = the factor, 1.0 for off; a = the argument text */
 } MtDirKind;
 /* run ops (MtDirective.n); a = the map (start, default MT_RUN_DEFAULT_MAP) or the node type name (travel, value = its id) */
 #define MT_RUN_START  1
@@ -311,6 +312,9 @@ typedef struct MtHost {
      * present (1 armed, -1 unavailable); poll it (0 pending, 1 done: out has path/w/h, -1 failed: out->detail says why) */
     int         (*shot_arm)(void *u, int line);
     int         (*shot_poll)(void *u, MtShotResult *out);
+    /* speed <factor>: FW_SetTimeScale on the game thread; *applied = the factor the framework kept (clamped).
+     * 1 done, 0 refused (detail), -1 unavailable (framework without API v5) */
+    int         (*set_speed)(void *u, double factor, double *applied, char *detail, size_t cap);
 } MtHost;
 
 typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_WAIT_SHOT_GL, MT_S_IDLE } MtState;

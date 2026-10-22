@@ -246,6 +246,60 @@ in-game test harness (`docs/ingame-testing.md`). Absolute addresses, image base 
   `FW_SYM_ApplicationBase_FrameBegin`, `FW_SYM_string_Allocate` and the data addresses as `FW_DATA_*`
   (`FW_GetData`, API v3).
 
+## Frame timing and game speed (2026-10-22)
+
+Ghidra session `speed` (`.analysis/notes-speed.md`, decompiles `TurnControl_Update_0x8e2a30.c`,
+`HitPause_Update_0x7942b0.c`, `HitPause_GetOrCreate_0x122d70.c`, `PauseMenu_SetupGameSettings_0x28eee0.c`,
+`PauseMenu_SetCombatSpeed_lambda8_0x29c3f0.c`, `PauseMenu_Open_0x289d90.c`, `Settings_GetFloat_0x9d3b40.c`,
+`Settings_GetOrCreate_0x9d34c0.c`, `FastTestMode_*`, `App_UpdateTimed_0x9bb110.c`, `App_RenderFrame_fast_0x9bb1a0.c`)
+plus objdump of `appmain` / `Step`.
+
+- **Fixed-step loop (OBSERVED).** appmain reads `update_rate` (float, default 60) → fixed dt `App+0xe08` = 1/rate and
+  step `App+0xe00` = perf-frequency/rate; `update_multiplicity` (default 1) `App+0xe18`; `unlock_framerate` (default
+  true) `App+0xe1c`; `framerate_cap` (default 0) `App+0xe10`. Per loop iteration: a smoothed frame delta `d` (perf
+  ticks); `App+0x11` pauses (`App+0x12` single-steps), `App+0x13` multiplies `d` by 0.25, `App+0x14` by 4 (no writer of
+  either found: debug-only); then **`accumulator App+0xdf8 += d × App+0xdc0`** (`movsd xmm2,[rsi+0xdc0]` at
+  `0x1409ba895`) — `App+0xdc0` (`App_timescale`, double) is the global time scale, `App+0xdc8` a copy of it. A
+  catch-up guard drops time when the accumulator exceeds `max(scale,1) × 8` steps (it scales with the time scale, so
+  it does not clamp speed). `Step` then runs `while (acc > mult × step) { acc -= step; App_UpdateTimed(dt) }` —
+  **every update gets the same dt** — then FrameBegin, render, FrameEnd. Speed therefore = how many identical updates
+  run per rendered frame; the logic, the RNG sequence and the turn order do not depend on it (OBSERVED below).
+- **Who writes the time scale (OBSERVED).** `HitPause_Update` `0x7942b0` (glaiel::HitPause, component type 0x440,
+  vtable `0x140ede408` slot 16) on every update: `App+0xdc0 = hp+0x50` (× `hp+0x48` during a hit pause).
+  `TurnControl_Update` `0x8e2a30` (TurnControl vtable slot 10) on every update: `speed = TC+0x180 ? 1.0 :
+  Settings_GetFloat("combat_speed", 1.0)`, stored to `TC+0x178` and `HitPause+0x50`; `TC+0x180` is set by
+  `Ability_trigger` `0x320a0` for abilities with `graphics { bypass_combatspeed true }` (they animate at 1x).
+  `PauseMenu_Open` `0x289d90` and HitPause's reset write 1.0.
+- **The vanilla speed-up and its limit (OBSERVED, static).** The `combat_speed` setting (settings.txt; the owner's is
+  2). `PauseMenu::SetupGameSettings` `0x28eee0` builds its dropdown from exactly four options `"1"`..`"4"`; the setter
+  lambda `0x29c3f0` stores the string. **The limit is only the UI list**: the reader is an unclamped float. So
+  `combat_speed 8` in settings.txt, or `-combat_speed 8` on the command line, should run combat at 8x. The command
+  line form does not persist: `Settings_GetOrCreate` `0x9d34c0` looks the key up first in `App+0x3b8`, the map
+  `ProcessCmds` fills from every `-key value` pair, and only then in the persistent map (INFERRED: the settings.txt
+  writer reads only the latter). Not run in-game here (the harness runner passes no extra flags); it affects combat
+  only (TurnControl exists only in a fight) and keeps `bypass_combatspeed` animations at 1x.
+- **The dev fast mode (OBSERVED).** `App+0xe1d`: set by the TacticsTest dev menu's `fuzz_test_fast` /
+  `replay_test_fast` / `stress_test_fast` (`FastTestMode_Enable` `0x368980` / `0x36bda0`, with
+  `SDL_GL_SetSwapInterval(0)` and movieclip interpolation off), cleared by `0x3690c0`. In that mode `Step` runs one
+  update per loop iteration and renders at most once per step of wall time — the simulation runs CPU-bound. Not
+  exposed by the framework (yet).
+- **Framework lever (API v6, `FW_SetTimeScale(double)` / `FW_GetTimeScale`, `native/framework/src/speed_engine.c` over
+  the host-tested `fw_speed_rules.c`).** A FrameBegin hook (hook plan, last row) multiplies whatever the game left in
+  `App+OFF_APP_TIMESCALE` once per rendered frame — after that frame's updates, before the next accumulation — so it
+  composes with combat_speed and hit pauses, and works outside combat too. The value written is nudged up one ulp so
+  the next frame can tell its own write (multiply nothing) from a game rewrite (multiply the new base); factor 1
+  restores the game's base. Clamp [1/16, 64]; NaN / ≤ 0 → 1. Harness: `speed <factor>` / `speed off`.
+- **Measured (T2, 2026-10-22, `mods/jokers-luck/tests/luck-seeded*.mewtest`, seed 42, autoplay fight of 11 turns,
+  hidden window = vsync off, this machine).** Wall time from `enter TacticsTest` to `end`: 1x 11968 / 11859 ms;
+  4x 3329 ms (3.6x); 8x 1922 / 2687 / 2141 ms (~5x); 12x 1625 ms (7.3x); 16x 1406 ms (8.5x); 32x 1516 ms (no gain:
+  CPU-bound, ~500 updates/s). Whole run (boot is loading, not scaled) 19.3 s → 8.9–11.3 s at 8x. At 1x, 4x, 8x and
+  12x every expectation held and at 8x the three unit dumps (hp, stats, statuses, stacks of all 8 units) are
+  byte-identical to 1x (fixtures `result-speed-1x.jsonl` / `result-speed-8x.jsonl`). **What broke: at 16x and 32x
+  the expectations after `wait rounds` failed** — several turns now resolve inside one rendered frame and the harness
+  samples once per frame, so it observed a later turn (16x: the round-2 sample saw round 3's value; the turn count
+  at the end was still 11). That is the harness's observation granularity, not a different fight; scripts that
+  sample after `wait turns|rounds` should stay at ≤ 12x. Audio pitch was not measured (harness runs are muted).
+
 ## REA / Ghidra sessions
 
 The only decompiler available here is Ghidra inside the Docker image `rea-ghidra:12.1.4` (the REA MCP server built

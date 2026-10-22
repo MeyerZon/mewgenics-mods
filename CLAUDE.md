@@ -124,7 +124,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
-  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the `FW_Random` stream, Joker's Luck's
+  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the `FW_Random` stream, the game-speed rules, Joker's Luck's
   reroll, the harness's modules; NATIVECOUNT checks, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
@@ -210,7 +210,9 @@ DLL, after which the run commands (`spawn`, `bind`, `load`, `win`, …) exist, t
 `expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry"); `face <unit> back` turns a unit away
 (`Character::Face` 0x10ce50, so `<anim>B` frames are testable) and `dump` reports each unit's facing. After `enter Campaign house`,
 `run start` / `run travel battle` / `run fight` walk a real run into a map node's fight (the map pool picks the level;
-`expect level` checks it; `docs/ingame-testing.md` "Campaign walk").
+`expect level` checks it; `docs/ingame-testing.md` "Campaign walk"). `speed <factor>` (API v6,
+`FW_SetTimeScale`) runs the game's fixed-step loop factor x faster with identical updates (a seeded fight is the same
+fight); keep it at <= 12x when a script samples after `wait turns|rounds` ("Frame timing and game speed").
 
 Read `docs/engine-map.md` (binary facts, build identity, function RVAs, status model), `docs/data-mods.md` (overlay
 semantics and content shapes), `docs/ingame-testing.md` (the harness), `docs/binding-port.md` (the bindings manifest and

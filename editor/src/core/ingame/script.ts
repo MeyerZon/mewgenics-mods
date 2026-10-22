@@ -74,7 +74,9 @@ export type Directive =
    *  node of type arg, fight = wait for the battle that node started (its level path feeds `expect level`) */
   | { line: number; kind: "run"; op: "start" | "travel" | "fight"; arg: string }
   /** the level path the last `run fight` reported contains substr (DLL-side) */
-  | { line: number; kind: "expect"; what: "level"; substr: string };
+  | { line: number; kind: "expect"; what: "level"; substr: string }
+  /** game speed (framework API v6): FW_SetTimeScale(factor); `off` = 1 (the game's own scale back) */
+  | { line: number; kind: "speed"; factor: number };
 
 /** MapNode::str_to_type 0x225680's names in enum order; must agree with mt_walk.c NODE_TYPES. */
 export const NODE_TYPES = [
@@ -340,6 +342,12 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
     case "seed": {
       if (!/^\d{1,20}$/.test(rest) || BigInt(rest) > 18446744073709551615n) return { error: "seed needs one unsigned integer (0..18446744073709551615)" };
       return { line: lineNo, kind: "seed", seed: BigInt(rest).toString() };
+    }
+    case "speed": {
+      // same shape as mt_script.c: one -?digits[.digits] factor > 0, or `off` (= 1); the framework clamps to [1/16, 64]
+      if (rest === "off") return { line: lineNo, kind: "speed", factor: 1 };
+      if (!/^-?\d*(\.\d*)?$/.test(rest) || !/\d/.test(rest) || !(Number(rest) > 0)) return { error: "speed needs one factor > 0 (e.g. 4, 0.5) or off" };
+      return { line: lineNo, kind: "speed", factor: Number(rest) };
     }
     case "glow": {
       const usage = "glow needs: <unit> <r> <g> <b> <a> | <unit> off";

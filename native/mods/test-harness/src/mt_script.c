@@ -353,6 +353,14 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
         for (size_t i = 0; i < nl; i++) if (rest[i] < '0' || rest[i] > '9') return fail(err, errCap, errLine, lineNo, "seed needs one unsigned integer (0..18446744073709551615)");
         d.kind = MT_D_SEED;
         d.seed = strtoull(rest, NULL, 10);
+    } else if (wl == 5 && !strncmp(p, "speed", 5)) {
+        /* speed <factor> | speed off: FW_SetTimeScale (API v6); the framework clamps, the event reports what it kept */
+        size_t nl = tok_len(rest);
+        if (!nl || *skip_ws(rest + nl)) return fail(err, errCap, errLine, lineNo, "speed needs one factor > 0 (e.g. 4, 0.5) or off");
+        d.kind = MT_D_SPEED;
+        if (nl == 3 && !strncmp(rest, "off", 3)) d.dvalue = 1.0;
+        else if (!parse_number(rest, nl, &d.dvalue) || !(d.dvalue > 0)) return fail(err, errCap, errLine, lineNo, "speed needs one factor > 0 (e.g. 4, 0.5) or off");
+        if (!(d.a = arena_add(s, rest, nl))) return fail(err, errCap, errLine, lineNo, "script too large");
     } else if (wl == 4 && !strncmp(p, "shot", 4)) {
         const char *after = parse_quoted(rest, q, sizeof q, &qn);
         if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "shot needs one quoted label");

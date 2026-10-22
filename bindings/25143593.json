@@ -9054,6 +9054,38 @@
       "note": "sizeof(GonObject): the children vector's element stride"
     },
     {
+      "name": "App_timescale",
+      "kind": "offset",
+      "struct": "ApplicationBase",
+      "value": "0xdc0",
+      "ctype": "double",
+      "anchors": {
+        "witness": {
+          "function": "ApplicationBase_appmain",
+          "pattern": "F2 0F 10 96 ?? ?? ?? ??",
+          "dispAt": 4,
+          "dispSize": 4
+        },
+        "note": "movsd xmm2,[rsi+0xdc0] at 0x9ba895: the main loop reads the time scale it multiplies the frame delta by before the fixed-step accumulator (the only movsd xmm2,[rsi+disp32] in appmain)"
+      },
+      "consumers": [
+        "native/framework/src/speed_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APP_TIMESCALE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#frame-timing-and-game-speed",
+        ".analysis/decompiled/ApplicationBase_appmain_0x9b9970.c",
+        ".analysis/decompiled/HitPause_Update_0x7942b0.c",
+        ".analysis/decompiled/TurnControl_Update_0x8e2a30.c",
+        ".analysis/notes-speed.md"
+      ],
+      "note": "global time scale: HitPause_Update 0x7942b0 writes combat_speed (x the hit-pause factor) every update in combat, PauseMenu_Open 0x289d90 writes 1.0; FW_SetTimeScale multiplies it once per rendered frame"
+    },
+    {
       "name": "Character_Face",
       "kind": "function",
       "rva": "0x10ce50",

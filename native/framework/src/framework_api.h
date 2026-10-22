@@ -13,7 +13,7 @@
 #define FW_VERSION_MAJOR 0
 #define FW_VERSION_MINOR 5
 #define FW_VERSION_PATCH 0
-#define FW_API_VERSION 5   /* bumped when functions are added; existing signatures never change */
+#define FW_API_VERSION 6   /* bumped when functions are added; existing signatures never change */
 
 /* Code symbols located by byte signature (see signatures.h). APPEND ONLY: mods compiled against an
  * older header keep working because the existing values never move. */
@@ -142,6 +142,13 @@ FW_EXPORT int FW_ClearUnitGlow(void *character);   /* 1 when it was registered *
  * framework too. */
 FW_EXPORT uint32_t FW_Random(uint32_t bound);   /* uniform in [0, bound); 0 when bound == 0 */
 FW_EXPORT void FW_SeedRandom(uint64_t seed);    /* restart the stream from seed (the harness `seed` directive) */
+/* --- API v6: game speed. Multiplies the game's own time scale (App+0xdc0: combat_speed, hit pause, 1.0 elsewhere)
+ * once per rendered frame, so the fixed-step main loop runs factor x as many identical updates per frame: the
+ * simulation runs factor x faster in wall-clock time, deterministically (same dt, same RNG sequence). 1.0 = off
+ * (the game's value is restored); NaN / <= 0 -> 1.0; clamped to [1/16, 64]. Returns the factor kept, 0 if inactive.
+ * Call on the main thread. docs/engine-map.md "Frame timing and game speed". */
+FW_EXPORT double FW_SetTimeScale(double factor);
+FW_EXPORT double FW_GetTimeScale(void);   /* the current factor (1.0 = off), 0 if inactive */
 
 typedef int (*FW_fn_GetVersion)(void);
 typedef int (*FW_fn_IsActive)(void);
@@ -155,6 +162,8 @@ typedef int (*FW_fn_SetUnitGlow)(void *, float, float, float, float);
 typedef int (*FW_fn_ClearUnitGlow)(void *);
 typedef uint32_t (*FW_fn_Random)(uint32_t);
 typedef void (*FW_fn_SeedRandom)(uint64_t);
+typedef double (*FW_fn_SetTimeScale)(double);
+typedef double (*FW_fn_GetTimeScale)(void);
 
 typedef struct FwApi {
     FW_fn_GetVersion GetVersion;
@@ -168,7 +177,9 @@ typedef struct FwApi {
     FW_fn_SetUnitGlow SetUnitGlow;    /* v4 */
     FW_fn_ClearUnitGlow ClearUnitGlow; /* v4 */
     FW_fn_Random Random;              /* v5 */
-    FW_fn_SeedRandom SeedRandom;      /* v5; new fields are appended so older layouts stay valid prefixes */
+    FW_fn_SeedRandom SeedRandom;      /* v5 */
+    FW_fn_SetTimeScale SetTimeScale;   /* v6 */
+    FW_fn_GetTimeScale GetTimeScale;   /* v6; new fields are appended so older layouts stay valid prefixes */
 } FwApi;
 
 /* Resolve the framework's exports from the loaded module. Returns 1 when every function of
@@ -184,7 +195,7 @@ static inline int FW_Resolve(FwApi *api) {
     FW__R(RegisterStatus) FW__R(SetStatusStacks) FW__R(CharacterHasStatus)
     FW__R(GetData)
     FW__R(SetUnitGlow) FW__R(ClearUnitGlow)
-    FW__R(Random) FW__R(SeedRandom)
+    FW__R(Random) FW__R(SeedRandom) FW__R(SetTimeScale) FW__R(GetTimeScale)
 #undef FW__R
     return 1;
 }

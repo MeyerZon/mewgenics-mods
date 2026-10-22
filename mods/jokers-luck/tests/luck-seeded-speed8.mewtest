@@ -1,0 +1,25 @@
+mods: jokers-luck, _autoplay, _jokersluck-test
+timeout: 120s
+# Game speed (framework API v6, FW_SetTimeScale): luck-seeded.mewtest at 8x. The time scale only changes how many
+# identical fixed updates run per rendered frame, so the seeded fight is the same fight and the exact expectations of
+# the 1x script hold. OBSERVED 2026-10-22 (build 25143593): the fight (enter -> end) took 11968 ms at 1x and 1922 ms
+# at 8x with the same three JokersLuck values (1 -> 10 -> 7) and the same 11 turns. Above ~8x several turns resolve
+# inside one rendered frame, so frame-sampled waits (`wait turns|rounds` then `expect`) can observe a later turn
+# (16x: the round-2 sample saw round 3's 7); docs/engine-map.md "Frame timing and game speed".
+# INTEGRATION (not yet observed in-game): since FW_Random (API v5, #111) the seed-42 rerolls are 5 then -10
+# (luck-seeded.mewtest); the 1 -> 10 -> 7 above were the CRT-rand values. Re-run at 8x to confirm.
+wait frames 120
+seed 42
+speed 8
+enter TacticsTest
+wait turns 1
+expect stacks JokersLuck on "Wengar The Wion" == 1
+dump
+wait rounds 1
+expect stacks JokersLuck on 0 == 5
+dump
+wait rounds 1
+expect stacks JokersLuck on 0 == -10
+speed off
+dump
+quit

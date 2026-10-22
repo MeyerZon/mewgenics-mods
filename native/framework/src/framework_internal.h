@@ -31,3 +31,8 @@ int glow_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_TacticsTest_L
 int glow_engine_set(void *character, const float rgba[4]);
 int glow_engine_clear(void *character);
 int glow_engine_set_from_status(void *character, const float rgba[4]);   /* a FwGlow_ status was applied (status_engine.c) */
+
+/* speed_engine.c (API v6) */
+int speed_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_ApplicationBase_FrameBegin step of FW_HOOK_PLAN */
+double speed_engine_set(double factor);                /* returns the clamped factor kept */
+double speed_engine_get(void);

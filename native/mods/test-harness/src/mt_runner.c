@@ -444,6 +444,26 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, 1);
             return 0;
         }
+        case MT_D_SPEED: {
+            double applied = 0.0;
+            detail[0] = 0;
+            int rc = h->set_speed ? h->set_speed(h->user, d->dvalue, &applied, detail, sizeof detail) : -1;
+            char num[32];
+            snprintf(num, sizeof num, "%g", applied);
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "speed");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_str(&w, "arg", d->a);
+            mt_jw_str(&w, "applied", num);
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "speed_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "speed_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
         case MT_D_SHOT: {
             if (h->shot_arm && h->shot_poll) {
                 if (h->shot_arm(h->user, d->line) == 1) {   /* the glue reads the back buffer at the next present */
