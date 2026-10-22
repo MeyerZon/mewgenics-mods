@@ -193,6 +193,47 @@ export function runLevelTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     assert(!clash.ok && /already/.test(clash.error), JSON.stringify(clash));
   });
 
+  // ---- the validator's map rules (data/maps/*.gon: node types, next_map, tileset, level pools, chapter_id) ----
+  mkdirSync(join(base, "maps"), { recursive: true });
+  writeFileSync(join(base, "maps", "standard_nodes.gon"), "battle {\n    type battle\n}\nstart {\n    type enter\n}\n");
+  writeFileSync(join(base, "maps", "alley.gon"), "chapter_id alley\ntileset alley\nlevels {\n    folder alley\n    easy [easy]\n}\nnodes {\n    #include \"standard_nodes.gon\"\n    exit0 {\n        type exit\n        next_map sewers.gon\n    }\n}\n");
+  writeFileSync(join(base, "maps", "sewers.gon"), "chapter_id sewers\ntileset alley\nnodes {\n}\n");
+  writeFileSync(join(base, "chapter_id_enum.gon"), "chapter_id_enum [\n    debug\n    alley\n    sewers\n]\n");
+  mkdirSync(join(base, "..", "levels", "alley", "easy"), { recursive: true });
+  writeFileSync(join(base, "..", "levels", "alley", "easy", "101.lvl"), sample());
+  const mapCodes = (files: Record<string, Uint8Array | string>): string[] => codes(mkMod(files));
+
+  test("validator (maps): a new map that reuses vanilla names is clean", () => {
+    const c = mapCodes({ "data/maps/mymap.gon": "chapter_id alley\ntileset alley\nlevels {\n    folder alley\n    easy [easy]\n}\nnodes {\n    #include \"standard_nodes.gon\"\n    exit0 {\n        type exit\n        next_map sewers.gon\n    }\n}\n" });
+    assert(!c.some((x) => x.startsWith("error") || x.includes(":map-")), c.join(", "));
+    assert(!c.includes("warning:whole-file-replace"), `a NEW map file replaces nothing (data/maps is listed, mod files included): ${c.join(", ")}`);
+  });
+
+  test("validator (maps): an unknown node type is the game's fatal 'No node type named' (MapNode::str_to_type 0x225680)", () => {
+    const c = mapCodes({ "data/maps/mymap.gon": "chapter_id alley\nnodes {\n    weird {\n        type casino\n    }\n}\n" });
+    assert(c.includes("error:map-node-type-unknown"), c.join(", "));
+  });
+
+  test("validator (maps): next_map must name a map file in the base or the mod", () => {
+    const bad = mapCodes({ "data/maps/alley.gon.merge": "nodes {\n    exit0 {\n        next_map nowhere.gon\n    }\n}\n" });
+    assert(bad.includes("error:map-next-map-missing"), bad.join(", "));
+    const good = mapCodes({ "data/maps/alley.gon.merge": "nodes {\n    exit0 {\n        next_map mymap.gon\n    }\n}\n", "data/maps/mymap.gon": "chapter_id alley\nnodes {\n}\n" });
+    assert(!good.includes("error:map-next-map-missing"), good.join(", "));
+  });
+
+  test("validator (maps): tileset, chapter_id and empty level pools are checked against base + mod", () => {
+    const c = mapCodes({ "data/maps/mymap.gon": "chapter_id atlantis\ntileset nope\nlevels {\n    folder mymap\n    easy [easy]\n}\nnodes {\n}\n" });
+    assert(c.includes("warning:map-tileset-unknown"), c.join(", "));
+    assert(c.includes("warning:map-chapter-id-unknown"), c.join(", "));
+    assert(c.includes("warning:map-level-pool-empty"), c.join(", "));
+    const ok = mapCodes({
+      "data/maps/mymap.gon": "chapter_id alley\ntileset my_yard\nlevels {\n    folder mymap\n    easy [easy]\n}\nnodes {\n}\n",
+      "data/tilesets.gon.append": "my_yard {\n    combat_background JunkyardBG\n}\n",
+      "levels/mymap/easy/r1.lvl": sample(),
+    });
+    assert(!ok.some((x) => x.includes(":map-")), ok.join(", "));
+  });
+
   // ---- T1: every vanilla level round-trips ----
   const root = extractedPath("levels");
   if (!existsSync(root)) {
