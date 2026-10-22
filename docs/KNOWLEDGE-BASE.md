@@ -81,13 +81,18 @@ the linked docs; this page is the map.
   build 25143593 (no code reads it besides `ProcessCmds`); save names come from the slot list / test director
   (`engine-map.md` "Save safety"), so the harness now hashes every `*.sav` in the saves dir and allows only the
   local/test families to change.
-- **Ruffle (WASM)** as an optional dep to preview *vanilla* SWFs in-editor — approved by the owner (install go
-  2026-10-20); lands through the dep-gate in the art build-out (`TODO.md` "Larger build-out").
-- Not built: **animation-clip authoring** (DefineSprite timelines end-to-end), a **cat-rig** (part-indexed) UI, art MCP tools.
+- **Ruffle (WASM)** — done 2026-10-20 (PR #59): `@ruffle-rs/ruffle@0.7.1` (exact pin, dep-gate passed) is vendored by
+  `npm run build` / `dev` into the git-ignored `editor/web/public/ruffle/`; Art mode's **Ruffle tab** plays built mod
+  SWFs and extracted vanilla SWFs from bytes, networking off. A reference player, not the game: what the game does
+  differently is pinned in `editor/src/core/art/engine-behaviour.ts`. Owner's look at the tab is still an unticked T3.
+- Built since 2026-10-20: art MCP tools (#62), clip authoring / Timeline tab (#66), the cat rig / Rig tab (#67), text
+  (#69), the SVG round trip (#70). Not possible: PlaceObject3 filters (#65) and `ImportAssets2` imports (#71) — see
+  `docs/art-preview-plan.md` §8 item 10.
 - **Per-build fragility** (now a procedure, not a dead end): everything native is pinned to build `25143593` through
   `bindings/25143593.json`; a game update disables the framework (fails closed, so it won't crash/corrupt) until the
-  manifest is ported — `docs/binding-port.md` / the `port-bindings` skill. The real cross-build run still needs an
-  older depot (`download_depot`) to prove the anchors on a genuine recompile.
+  manifest is ported — `docs/binding-port.md` / the `port-bindings` skill. The cross-build run onto the older build
+  23372843 was clean (2026-10-19, `docs/binding-port.md` "T1 cross-build result"), but it was a relink around
+  unchanged bodies; a body-changing build is still wanted.
 - Whether an **official Workshop/launcher** ships (the dev intends to; not yet).
 
 ---

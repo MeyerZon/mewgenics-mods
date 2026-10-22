@@ -4,7 +4,7 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { REPO_ROOT, MODS_DIR, resolveReadPath } from "./repo.ts";
+import { EXTRACTED_DATA, MODS_DIR, resolveReadPath, packPath } from "./repo.ts";
 import { parseOverlayName, applyGonOverlay, applyCsvOverlay } from "./overlay/overlay.ts";
 import { parsePolicy } from "./overlay/policy.ts";
 import { pretty, findLastIndex } from "./gon/value.ts";
@@ -36,6 +36,8 @@ function sameText(a: VNode | null, b: VNode | null): boolean {
 export interface PreviewMergeOptions {
   overrideText?: string;
   includeFullGon?: boolean;
+  /** the base-data root in the `.extracted/data` layout (tests/fixtures); default EXTRACTED_DATA */
+  extractedData?: string;
 }
 
 export interface CsvAppendPreview {
@@ -132,7 +134,7 @@ export function previewMerge(modName: string, relPath: string, opts: PreviewMerg
   const fileName = relPath.split("/").pop() || relPath;
   const { baseName: baseLeaf, mode, fileType } = parseOverlayName(fileName);
   const baseRel = relPath.slice(0, relPath.length - fileName.length) + baseLeaf;
-  const baseAbs = resolveReadPath(join(REPO_ROOT, ".extracted", baseRel));
+  const baseAbs = resolveReadPath(packPath(baseRel, opts.extractedData ?? EXTRACTED_DATA));
   const baseText = existsSync(baseAbs) ? readFileSync(baseAbs, "utf8") : null;
 
   if (fileType === "csv") {

@@ -13,16 +13,32 @@ import { existsSync, mkdirSync } from "node:fs";
 const here = dirname(fileURLToPath(import.meta.url)); // <repo>/editor/src/core
 export const REPO_ROOT = resolve(here, "..", "..", "..");
 export const EDITOR_DIR = join(REPO_ROOT, "editor");
-// MEWGENICS_EXTRACTED_DATA exists for the test runner only (T0 without game data: run-tests.ts points it at an
-// empty dir); it is not a user-facing setting. Default: <repo>/.extracted/data.
+// The two git-ignored inputs a checkout accumulates can be redirected, so a secondary git worktree (which has
+// neither) reads the main checkout's copies (docs/tdd-procedure.md "Running the editor from a git worktree"):
+//   MEWGENICS_EXTRACTED_DATA  the extracted `data/` tree; default <repo>/.extracted/data. The test runner also
+//                             points it at an empty dir for the T0-without-game-data nested run.
+//   MEWGENICS_EDITOR_DATA     the editor's cache dir (component-names.json, base-index.json, ingame-runs/);
+//                             default <repo>/editor/data. Refused under any `saves/` path (the editor writes here).
 export const EXTRACTED_DATA = process.env.MEWGENICS_EXTRACTED_DATA
   ? resolve(process.env.MEWGENICS_EXTRACTED_DATA)
   : join(REPO_ROOT, ".extracted", "data");
 export const MODS_DIR = join(REPO_ROOT, "mods");
-export const DATA_CACHE_DIR = join(EDITOR_DIR, "data");
+export const DATA_CACHE_DIR = process.env.MEWGENICS_EDITOR_DATA
+  ? resolve(process.env.MEWGENICS_EDITOR_DATA)
+  : join(EDITOR_DIR, "data");
 export const REGISTERED_NAMES_PATH = join(EDITOR_DIR, "registered-names.json");
 export const ANALYSIS_DIR = join(REPO_ROOT, ".analysis");
 export const COMBINED_CSV = join(EXTRACTED_DATA, "text", "combined.csv");
+
+/**
+ * Where a pack-relative base file (`data/characters/enemies.gon`, `swfs/catparts.swf`) lives on disk. `root` is
+ * the extracted `data/` tree, so `data/<x>` maps straight under it; any other pack directory is a sibling of it
+ * (with the default root `.extracted/data` that is `.extracted/<packRel>`).
+ */
+export function packPath(packRel: string, root: string = EXTRACTED_DATA): string {
+  const p = packRel.replace(/\\/g, "/");
+  return p.startsWith("data/") ? join(root, p.slice("data/".length)) : join(root, "..", p);
+}
 
 /** True if `child` is the same as or located inside `parent`. */
 export function isInside(parent: string, child: string): boolean {
@@ -43,6 +59,11 @@ export class SafetyError extends Error {
     super(message);
     this.name = "SafetyError";
   }
+}
+
+// The cache dir is the one place outside mods/ the editor writes; an override must never point near a save.
+if (touchesSaves(DATA_CACHE_DIR)) {
+  throw new SafetyError(`MEWGENICS_EDITOR_DATA points under a saves/ directory (${DATA_CACHE_DIR}); the editor writes its caches there and never near a save`);
 }
 
 /**

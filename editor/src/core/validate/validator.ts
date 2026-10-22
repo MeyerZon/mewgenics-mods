@@ -12,7 +12,8 @@
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA } from "../repo.ts";
+import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, packPath } from "../repo.ts";
+import { COMPONENT_CACHE_HINT } from "../components.ts";
 import { parse, GonParseError } from "../gon/parser.ts";
 import { toValue } from "../gon/value.ts";
 import { parseOverlayName } from "../overlay/overlay.ts";
@@ -213,6 +214,10 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   const local = modLocalNames(overlays);
   const loc = loadLocalization(root);
   const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
+  if (!sets.componentListKnown) {
+    // Without a list every component would be "unknown": say once why they are not checked instead.
+    rb.info("component-list-missing", `no component class names are known, so passives / ai brains / classes are not checked: ${COMPONENT_CACHE_HINT}`);
+  }
 
   // Union of localization keys available: base + mod-added.
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
@@ -242,6 +247,7 @@ function validateGonOverlay(
   dataRoot: string,
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
+  const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
   let root;
   try {
     root = parse(o.text);
@@ -284,7 +290,7 @@ function validateGonOverlay(
     if (key === "passives") {
       if (value.t === "obj") {
         for (const pe of value.entries) {
-          if (!sets.components.has(pe.key)) {
+          if (hasComponentList && !sets.components.has(pe.key)) {
             rb.warn("unknown-component", `unknown component class "${pe.key}" in passives`, { file, path: [...here, pe.key].join(".") });
           }
           if (/Status/.test(pe.key) && pe.value.t === "obj") {
@@ -315,7 +321,7 @@ function validateGonOverlay(
       return;
     }
     if (key === "brain") {
-      if (value.t === "str" && !sets.components.has(value.raw)) {
+      if (value.t === "str" && hasComponentList && !sets.components.has(value.raw)) {
         rb.warn("unknown-component", `ai brain "${value.raw}" is not a known component class`, at);
       }
       return;
@@ -327,7 +333,7 @@ function validateGonOverlay(
           if (sets.classes.size > 0 && !sets.classes.has(value.raw)) {
             rb.warn("unknown-class", `class "${value.raw}" is not a known cat class`, at);
           }
-        } else if (!sets.components.has(value.raw)) {
+        } else if (hasComponentList && !sets.components.has(value.raw)) {
           rb.warn("unknown-component", `class "${value.raw}" is not a known component`, at);
         } else checkNative(value.raw, at);
       }
@@ -402,7 +408,7 @@ function validateGonOverlay(
   }
 
   // ---- Overlay-target existence --------------------------------------------
-  const baseAbs = basePath(dataRoot, o.baseName);
+  const baseAbs = packPath(o.baseName, dataRoot);
   const baseExists = existsSync(baseAbs);
   if ((o.mode === "merge" || o.mode === "patch") && !baseExists) {
     rb.warn("base-missing", `${o.relPath} is a ${o.mode} overlay but base file ${o.baseName} was not found in the extracted base data (cannot verify targets)`, { file });
@@ -428,16 +434,6 @@ function validateGonOverlay(
       }
     }
   }
-}
-
-/**
- * Where a pack-relative base file lives on disk. `root` is the extracted `data/` tree, so
- * `data/<x>` maps straight under it; any other pack directory (`swfs/…`) is a sibling of it
- * (with the default root `.extracted/data` that is the old `.extracted/<baseName>` path).
- */
-function basePath(root: string, baseName: string): string {
-  const p = baseName.replace(/\\/g, "/");
-  return p.startsWith("data/") ? join(root, p.slice("data/".length)) : join(root, "..", p);
 }
 
 /**

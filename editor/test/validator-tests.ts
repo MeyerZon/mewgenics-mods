@@ -75,6 +75,15 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     eq(hits.map((f) => f.location?.path).sort().join("|"), "PlayerCat.ai.brain|PlayerCat.passives.NotAComponent");
     for (const h of hits) eq(h.severity, "warning");
   });
+  test("validator fixture: component-list-missing is one info naming the cache and build:index when no component names are known; nothing is then unknown-component", () => {
+    const r = v("component-list-missing", { components: [] });
+    const f = r.findings.filter((x) => x.code === "component-list-missing");
+    eq(f.length, 1, `one finding, got ${codes(r)}`);
+    eq(f[0]!.severity, "info");
+    assert(/component-names\.json/.test(f[0]!.message) && /build:index/.test(f[0]!.message) && /MEWGENICS_EDITOR_DATA/.test(f[0]!.message), f[0]!.message);
+    eq(only(r, "unknown-component").length, 0, "a known component is not flagged for want of a list");
+    assert(r.ok, "an info keeps the mod valid");
+  });
   test("validator fixture: unknown-parent is an error at Foo.variant_of", () => {
     const r = v("unknown-parent");
     const f = expectCode(r, "unknown-parent", "error");

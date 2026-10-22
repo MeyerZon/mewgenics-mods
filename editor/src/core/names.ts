@@ -73,6 +73,8 @@ export interface ResolutionSets {
   classes: Set<string>;
   templates: Set<string>;
   components: Set<string>;
+  /** false when no component class list was available at all (the editor/data cache is missing or empty) */
+  componentListKnown: boolean;
   registered: Set<string>;
 }
 
@@ -95,6 +97,7 @@ export function resolutionSets(src: ResolutionSources = {}): ResolutionSets {
     classes: entryNameSet("classes", root),
     templates: entryNameSet("ability_templates", root),
     components: new Set([...components, ...registered]),
+    componentListKnown: components.size > 0,
     registered,
   };
 }
