@@ -617,6 +617,10 @@ await mcpSmoke();
   let o3t: typeof import("./obs3d-tests.ts") | null = null;
   try { o3t = await import("./obs3d-tests.ts"); } catch (e) { test("obs3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (o3t) o3t.runObs3dTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  // 3D model readers (OBJ / glTF 2.0 subset), game axes, budgets, iso wireframe (docs/3d-importer-design.md)
+  let mrt: typeof import("./model-read-tests.ts") | null = null;
+  try { mrt = await import("./model-read-tests.ts"); } catch (e) { test("model-read-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mrt) mrt.runModelReadTests(test, assert, eq);
   let dt: typeof import("./deps-tests.ts") | null = null;
   try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (dt) await dt.runDepsTests(test, assert, eq);
