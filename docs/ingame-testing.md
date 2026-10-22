@@ -77,6 +77,18 @@ seed <N>                                         pin the game's RNG (TLS+0x178) 
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every
                                                  roll after it are then identical run to run, so assertions can be exact
+run start [<map>.gon]                            the campaign walk (needs a director; after `enter Campaign house`):
+                                                 MewDirector::GoOnAnAdventure(<map>, default alley.gon — the run's first
+                                                 map; TeamType 1, 4 cats, debug = a generated party and no class chooser)
+                                                 -> the Map scene and MapScreen::init (hooked). Once per script
+run travel <node type>                           MapScreen::EnterNode on the nearest node of that type (breadth first over
+                                                 the map's next edges from the marker's node; the 19 MapNode::str_to_type
+                                                 names, battle OBSERVED). No path animation: the node is entered where the
+                                                 marker stands. A done node (+0x168) is refused
+run fight                                        wait (<= 30 s, like the console) until the battle that node started exists:
+                                                 MewDirector::StartMapBattle ran (hooked: its level path) and
+                                                 TurnControl::NextTurn fired; the run event carries "level"
+expect level "<substr>"                          the level path the last `run fight` reported contains substr (DLL-side)
 glow <unit> <r> <g> <b> <a>                      FW_SetUnitGlow (framework API v4) on a unit of the walk (index, bareword or
 glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; v1
                                                  keeps one shared colour); `off` = FW_ClearUnitGlow. Needs the fight and
@@ -165,6 +177,8 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"log","text":"..."}
 {"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
 {"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}
+{"ev":"run","line":N,"op":"start|travel|fight","arg":"alley.gon|battle|","ok":true,"map":"alley.gon","node":0,"type":"battle","depth":1,"level":"levels/alley/…/x.lvl","detail":"…"}
+                                                map (start), node/type/depth (travel) and level (fight) appear only when that step set them
 {"ev":"glow","line":N,"unit":N,"name":"...","arg":"<the directive's argument text>","ok":true,"detail":"FW_SetUnitGlow on 0x…: ok"}   unit -1 when no unit matched
 {"ev":"face","line":N,"unit":N,"name":"...","arg":"7 back","dir":[1,0],"effective":[1,0],"expect":"B","facing":"B","flip":1,"ok":true,"detail":"Character::Face(0x…, [1 0], instant) called"}
                                                      dir = what was passed (front/back resolved), effective / expect = the
@@ -178,7 +192,7 @@ Every event carries `t` (ms since harness start) and `frame`.
                                                 closed — it would otherwise stop the frame loop for good under a hidden
                                                 window; never decides the verdict, appended to its reason
 {"ev":"crash","code":"0xC0000005","addr":"0x...","module":"Mewgenics.exe","rva":"0x...","tid":N}
-{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|seed_failed|seed_unavailable|glow_failed|glow_unavailable|face_failed|face_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
+{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|seed_failed|seed_unavailable|run_failed|run_unavailable|glow_failed|glow_unavailable|face_failed|face_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
 ```
 
 Harness exit codes: `0` pass, `1` an expect failed or `quit 1`, `2` script timeout, `3` crash, `4` harness error
@@ -326,6 +340,35 @@ under `mods/`.
   markers (`NO_*_NAMED`, `GON_ERROR:`) are written long before, so the `log-errors` check still works.
 - Mewjector loads mods on the first `version.dll` proxy call, which on this machine is after SDL has initialized;
   the DYNAPI slots therefore already hold their final values when `DllMain` runs.
+
+## Campaign walk (2026-10-22)
+
+`run start` / `run travel <type>` / `run fight` / `expect level` walk a campaign run from the House into a map node's
+fight without the UI. The RE is `docs/engine-map.md` "Campaign walk"; the bindings are the walk block of
+`bindings/25143593.json` (FW_SYM `MewDirector_GoOnAnAdventure`, `MapScreen_init` (hooked), `MapScreen_EnterNode`,
+`MewDirector_StartMapBattle` (hooked); offsets `OFF_MAPSCREEN_*`, `OFF_MAPMARKER_NODE`, `OFF_MAPNODE_*`). Pure parts
+(node-type names, the breadth-first pick) are `src/mt_walk.c`, host-tested.
+
+```
+mods: _roomprobe
+wait frames 120
+enter Campaign house          # the disposable slot, day 1 in the House
+seed 42                       # after enter: the director's init loads the slot's own random_seed
+run start                     # alley.gon; detail: MapScreen, node count, the marker on the enter node
+wait frames 60
+run travel battle             # the battle node nearest the start; detail: node index, depth, the edge count
+run fight                     # waits for StartMapBattle + round 1; the event's "level" is the pool's pick
+expect level "walkprobe/wp_alley"
+dump                          # the fight's units (party 0-3, then the room's objects)
+```
+
+OBSERVED 2026-10-22 (`mods/_roomprobe/tests/walk-battle.mewtest`, `mods/dev-sandbox/tests/walk-vanilla.mewtest`,
+fixture `editor/test/fixtures/ingame/walk-summary.json`): alley.gon → 22 nodes, 39 edges, the marker on the enter node
+#19, `run travel battle` → node #0 (depth 1), `run fight` → `levels/alley/walkprobe/wp_alley.lvl` with the mod's
+`alley.gon.merge`, `levels/alley/easy/ch1-82.lvl` without it; ~10 s per run. Failures end the script: `run_failed`
+(code 1, e.g. "no battle node reachable", "not ready after 30000 ms: waiting for the battle") or `run_unavailable`
+(code 4, a framework without the walk symbols). **Side effect:** starting the adventure makes the game back the slot up
+as `saves/backups/mewtest01_<date>_<time>.savbackup` (the real save stays unchanged; see TODO.md).
 
 ## Interactive mode (named pipe)
 

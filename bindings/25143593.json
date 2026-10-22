@@ -8853,6 +8853,846 @@
         ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
       ],
       "note": "graphics.four_way_animations (read once in 0xf1150)"
+    },
+    {
+      "name": "MewDirector_GoOnAnAdventure",
+      "kind": "function",
+      "rva": "0x3b01c0",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 20 44 89 40 18 48 89 50 10 55",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "MewDirector::GoOnAnAdventure(std::string map, TeamType, int, bool) (RTTI lambda names .?AV<lambda_1>@?1??GoOnAnAdventure@MewDirector@glaiel@@QEAAXV?$basic_string…W4TeamType@3@H_N@Z@). debug=false: destroy-next House, generate the strays, CreateScene(\"ClassChooser\") (interactive). debug=true: DebugGenAdventureCats(TeamType, n) then the start lambda 0x3b0550 (House destroyed, StartAdventure 0x3b38c0 = CreateScene(\"Map\") + MapTest -> MapScreen::init, save prop adventure_started). Callers: the house-test dev buttons 0x317230 / 0x318db0 (\"alley.gon\", debug 0), the event-debug button 0x32efc0 (\"eventdebug.gon\", debug 1).",
+        "callees": [
+          {
+            "ordinal": 10,
+            "name": "SceneManager_CreateScene",
+            "target": "0x9d4950"
+          },
+          {
+            "ordinal": 12,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 14,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 17,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 898,
+          "calls": 21,
+          "ripRefs": 8,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 48 89 58 20 44 89 40 18 48"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_MewDirector_GoOnAnAdventure",
+          "index": 36
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MewDirector_StartDebugAdventure_0x3b01c0.c"
+      ]
+    },
+    {
+      "name": "MapScreen_init",
+      "kind": "function",
+      "rva": "0x38d150",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E0",
+        "exactLen": 26,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\MapScreen.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::MapScreen::init(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,bool)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "note": "glaiel::MapScreen::init(std::string, bool) (__FUNCSIG__ at 0xf14040, MapScreen.cpp): load_map + generate_map 0x21ca60, \"Map generated without a start node somehow\" when no node has type 2, the marker component at +0xa0 (its +0x80 std::function is the on-arrive lambda 0x39b180 -> EnterNode). Called by AddComponent<MapScreen> 0x39e570 <- MapTest::init 0x39df90 <- AddComponent<MapTest> 0x3c5210 <- StartAdventure 0x3b38c0.",
+        "callees": [
+          {
+            "ordinal": 8,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 12,
+            "name": "MapScreen_generate_map",
+            "target": "0x21ca60"
+          },
+          {
+            "ordinal": 14,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 16,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 24,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 25,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 26,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 33,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 38,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 39,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 42,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 82,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 86,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 91,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 92,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 93,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 96,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 98,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 100,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 104,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 105,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 106,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 108,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 112,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 113,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 114,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 118,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 119,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 120,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 124,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 125,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 126,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 130,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 131,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 6166,
+          "calls": 138,
+          "ripRefs": 99,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:hook_MapScreenInit"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_MapScreen_init",
+          "index": 37
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_init_0x38d150.c"
+      ]
+    },
+    {
+      "name": "MapScreen_EnterNode",
+      "kind": "function",
+      "rva": "0x391c20",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 08 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 E8 FE FF FF 48 81 EC E0 01 00 00 0F 29 70 B8 0F 29 78 A8 48",
+        "exactLen": 41,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "glaiel::MapScreen::EnterNode(MapNode*) (RTTI lambda names …EnterNode@MapScreen@glaiel@@QEAAXPEAUMapNode@3@@Z@): reseeds the RNG from node+0x118..0x130, copies node+0xf0 into the current tileset, then switches on node+0x138: 5 battle -> AddComponent 0x39b8e0 (\"BattleInTransition\", its lambda 0x3929e0 = MapLevelPool_build 0x394450(\"easy\"|\"hard\") + StartMapBattle), 6 hard, 7/8 miniboss/boss (0x395930), 9/10 event, 0xb special, 0xd treasure, 0xc shop, 0xe furniturebox, 0xf foodbox, 3 exit, 4 home. Sole direct caller: the marker's on-arrive lambda 0x39b180.",
+        "callees": [
+          {
+            "ordinal": 5,
+            "name": "Component_GetGame",
+            "target": "0x908e0"
+          },
+          {
+            "ordinal": 7,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 16,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 18,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 22,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 23,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 24,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 33,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 35,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 36,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 39,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 40,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 41,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 44,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 47,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 54,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 55,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 56,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 58,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 61,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 3519,
+          "calls": 76,
+          "ripRefs": 28,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 48 89 58 08 55 56 57 41 54"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_MapScreen_EnterNode",
+          "index": 38
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_EnterNode_0x391c20.c"
+      ]
+    },
+    {
+      "name": "MewDirector_StartMapBattle",
+      "kind": "function",
+      "rva": "0x3b6d10",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 20 44 88 40 18 48 89 50 10 48 89 48 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 68",
+        "exactLen": 33,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "MewDirector start-a-map-battle (std::string levelPath by value, bool, bool): registers the level in the played-levels registry (+0x590, 0x8dda40), team bookkeeping, hides the Map scene (0x9d4c80), CreateScene(\"Battle\") + AddComponent<TacticsTest>(level) 0x31e6e0, +0x710 = 1. Callers: the battle/hard/nemesis lambdas 0x3929e0 / 0x39dc90 / 0x39d510 / 0x39db60 / 0x39dd90 of MapScreen, and 0x93eae0.",
+        "callees": [
+          {
+            "ordinal": 3,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 14,
+            "name": "SceneManager_CreateScene",
+            "target": "0x9d4950"
+          },
+          {
+            "ordinal": 15,
+            "name": "Scene_CreateEntity",
+            "target": "0x96b3e0"
+          },
+          {
+            "ordinal": 28,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1516,
+          "calls": 29,
+          "ripRefs": 18,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 48 89 58 20 44 88 40 18 48"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:hook_StartMapBattle"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_MewDirector_StartMapBattle",
+          "index": 39
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MewDirector_StartMapBattle_0x3b6d10.c"
+      ]
+    },
+    {
+      "name": "MapScreen_onArriveNode",
+      "kind": "function",
+      "rva": "0x39b180",
+      "signature": {
+        "pattern": "48 89 5C 24 08 57 48 83 EC 20 48 8B 1A 48 8B F9 48 8B 49",
+        "exactLen": 19,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "MapScreen::init lambda_2 bool(MapNode*) (vftable slot at 0xf14d98): unless the nemesis check 0x392ed0 fires or node+0x168 is set, EnterNode(mapScreen, node); returns 1. Witness host for MapNode_done.",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "MapScreen_nemesisCheck",
+            "target": "0x392ed0"
+          },
+          {
+            "ordinal": 1,
+            "name": "MapScreen_EnterNode",
+            "target": "0x391c20"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 75,
+          "calls": 2,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 57 48 83 EC 20 48 8B"
+      },
+      "consumers": [
+        "docs only: witness host for the campaign-walk offsets"
+      ],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_EnterNode_caller_0x39b180.c"
+      ]
+    },
+    {
+      "name": "MapScreen_nemesisCheck",
+      "kind": "function",
+      "rva": "0x392ed0",
+      "signature": {
+        "pattern": "40 53 48 83 EC 50 48 8B 81 A8 00 00",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "MapScreen nemesis check (0x392ed0, called first by the on-arrive lambda 0x39b180): when a nemesis marker exists (+0xa8) and stands on the marker node (+0xa0 -> +0x50 == +0xa8 -> +0x50) it starts the nemesis fight (BattleInTransition lambda 0x39cae0) and returns 1. Witness host for MapMarker_node.",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 46,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "40 53 48 83 EC 50 48 8B 81 A8 00 00"
+      },
+      "consumers": [
+        "docs only: witness host for the campaign-walk offsets"
+      ],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_busy_0x392ed0.c"
+      ]
+    },
+    {
+      "name": "MapScreen_generate_map",
+      "kind": "function",
+      "rva": "0x21ca60",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC C0 00 00 00 48 8B F1",
+        "exactLen": 39,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\MapGeneration.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::MapScreen::generate_map(void)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "note": "glaiel::MapScreen::generate_map (__FUNCSIG__ 0xeff8f8, MapGeneration.cpp): walks node->next (+0x140 glaiel vector: +0x144 count, +0x148 data). Witness host for MapNode_nextCount / MapNode_nextData.",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 3,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 10,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1572,
+          "calls": 30,
+          "ripRefs": 17,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+      },
+      "consumers": [
+        "docs only: witness host for the campaign-walk offsets"
+      ],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_generate_map_0x21ca60.c"
+      ]
+    },
+    {
+      "name": "MapScreen_nodeCount",
+      "kind": "offset",
+      "struct": "MapScreen",
+      "value": "0x7c",
+      "ctype": "uint32",
+      "anchors": {
+        "witness": {
+          "function": "MapScreen_init",
+          "pattern": "48 8B 8E 80 00 00 00 8B 46 7C",
+          "dispAt": 9
+        },
+        "note": "mov rcx,[rsi+0x80]; mov eax,[rsi+0x7c] (0x38d55a): the start-node scan"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_MAPSCREEN_NODE_COUNT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_init_0x38d150.c"
+      ],
+      "note": "the map's nodes: a glaiel vector {u32 cap +0x78, u32 count +0x7c, MapNode** data +0x80}; MapScreen::init scans it for the type-2 (enter) node"
+    },
+    {
+      "name": "MapScreen_nodes",
+      "kind": "offset",
+      "struct": "MapScreen",
+      "value": "0x80",
+      "ctype": "MapNode**",
+      "anchors": {
+        "witness": {
+          "function": "MapScreen_init",
+          "pattern": "48 8B 8E 80 00 00 00 8B 46 7C",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rcx,[rsi+0x80] (0x38d55a)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_MAPSCREEN_NODES"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_init_0x38d150.c"
+      ],
+      "note": "data pointer of the node vector"
+    },
+    {
+      "name": "MapScreen_marker",
+      "kind": "offset",
+      "struct": "MapScreen",
+      "value": "0xa0",
+      "ctype": "Component*",
+      "anchors": {
+        "witness": {
+          "function": "MapScreen_init",
+          "pattern": "48 89 86 A0 00 00 00 48 8D 90 80 00 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov [rsi+0xa0],rax; lea rdx,[rax+0x80] (0x38d5bd): the marker is stored, its on-arrive callback set"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_MAPSCREEN_MARKER"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_init_0x38d150.c"
+      ],
+      "note": "the player's map marker (created on the map scene by 0x39b2f0); +0x50 its current node, +0x80 its on-arrive std::function"
+    },
+    {
+      "name": "MapMarker_node",
+      "kind": "offset",
+      "struct": "MapMarker",
+      "value": "0x50",
+      "ctype": "MapNode*",
+      "anchors": {
+        "witness": {
+          "function": "MapScreen_nemesisCheck",
+          "pattern": "48 8B 91 A0 00 00 00 48 8B 40 50 48 39 42 50",
+          "dispAt": 10
+        },
+        "note": "mov rdx,[rcx+0xa0]; mov rax,[rax+0x50]; cmp [rdx+0x50],rax (0x392ef9): the nemesis node vs the marker node"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_MAPMARKER_NODE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_busy_0x392ed0.c"
+      ],
+      "note": "the node the marker stands on (the start node right after MapScreen::init)"
+    },
+    {
+      "name": "MapNode_type",
+      "kind": "offset",
+      "struct": "MapNode",
+      "value": "0x138",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "MapScreen_EnterNode",
+          "pattern": "83 BF ?? ?? ?? ?? 05 0F",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "cmp dword [rdi+0x138],5 (0x391d74): EnterNode's battle branch"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_MAPNODE_TYPE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_EnterNode_0x391c20.c"
+      ],
+      "note": "MapNodeType (MapNode::str_to_type 0x225680 order; 5 = battle); MapNode_load 0x21dbc0 may re-roll it from the node's options"
+    },
+    {
+      "name": "MapNode_nextCount",
+      "kind": "offset",
+      "struct": "MapNode",
+      "value": "0x144",
+      "ctype": "uint32",
+      "anchors": {
+        "witness": {
+          "function": "MapScreen_generate_map",
+          "pattern": "48 8B 90 48 01 00 00 8B 80 44 01 00 00",
+          "dispAt": 9,
+          "dispSize": 4
+        },
+        "note": "mov rdx,[rax+0x148]; mov eax,[rax+0x144] (0x21cf0f)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_MAPNODE_NEXT_COUNT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_generate_map_0x21ca60.c"
+      ],
+      "note": "count of the node's next edges (glaiel vector at +0x140; load_connections 0x227df0 adds the \"next\" targets there with 0x21aac0 and the reverse edge at +0x150)"
+    },
+    {
+      "name": "MapNode_nextData",
+      "kind": "offset",
+      "struct": "MapNode",
+      "value": "0x148",
+      "ctype": "MapNode**",
+      "anchors": {
+        "witness": {
+          "function": "MapScreen_generate_map",
+          "pattern": "48 8B 90 48 01 00 00 8B 80 44 01 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rdx,[rax+0x148] (0x21cf0f)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_MAPNODE_NEXT_DATA"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_generate_map_0x21ca60.c"
+      ],
+      "note": "data pointer of the node's next edges"
+    },
+    {
+      "name": "MapNode_done",
+      "kind": "offset",
+      "struct": "MapNode",
+      "value": "0x168",
+      "ctype": "char",
+      "anchors": {
+        "witness": {
+          "function": "MapScreen_onArriveNode",
+          "pattern": "38 83 ?? ?? ?? ?? 75",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "cmp [rbx+0x168],al; jnz (0x39b19d)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_run_step"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_MAPNODE_DONE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#campaign-walk-2026-10-22",
+        ".analysis/decompiled/MapScreen_EnterNode_caller_0x39b180.c"
+      ],
+      "note": "set once a node has been entered; the on-arrive lambda does not enter such a node again (INFERRED: cleared/visited)"
     }
   ]
 }

@@ -204,6 +204,8 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
   if (code !== null && code !== 0 && code > 255) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   if (code !== null && code < 0) return { verdict: "crash", reason: `abnormal exit code ${code} (0x${(code >>> 0).toString(16)})` };
   const enter = result.enter;
+  const runs = Array.isArray(result.runs) ? result.runs : [];
+  const lastRun = runs.length ? runs[runs.length - 1]! : null;
   if (code === 4 || result.scriptError || (result.end && result.end.code === 4)) {
     const fwInactive = fw && fw.present && !fw.active;
     const sigs = fw && Array.isArray(fw.signatureFailures) ? fw.signatureFailures : [];
@@ -213,6 +215,8 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
         ? `enter ${enter.name} unavailable at line ${enter.line}: ${enter.detail} (enter_unavailable; rebuild mewframework/mewtest with the run-entry symbols)`
       : result.end && result.end.reason === "seed_unavailable" && result.seed
         ? `seed ${result.seed.seed} unavailable at line ${result.seed.line}: ${result.seed.detail} (seed_unavailable; rebuild mewframework/mewtest with the RNG symbols)`
+      : result.end && result.end.reason === "run_unavailable" && lastRun
+        ? `run ${lastRun.op}${lastRun.arg ? ` ${lastRun.arg}` : ""} unavailable at line ${lastRun.line}: ${lastRun.detail} (run_unavailable; rebuild mewframework/mewtest with the campaign-walk symbols)`
       : fwInactive && sigs.length
         ? `mewframework inactive: signature ${sigs.map((s) => `${s.name} (${s.matches} matches)`).join(", ")} failed on build ${fw.build || "?"}; re-derive with tools/bindings/make-signature.ts`
         : fwInactive
@@ -226,6 +230,9 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
   }
   if (result.end && result.end.reason === "seed_failed") {
     return { verdict: "fail", reason: result.seed ? `seed ${result.seed.seed} failed at line ${result.seed.line}: ${result.seed.detail}` : "seed failed (no seed event)" };
+  }
+  if (result.end && result.end.reason === "run_failed") {
+    return { verdict: "fail", reason: lastRun ? `run ${lastRun.op}${lastRun.arg ? ` ${lastRun.arg}` : ""} failed at line ${lastRun.line}: ${lastRun.detail}` : "run failed (no run event)" };
   }
   if (code === 1 || result.expects.failed > 0 || (result.end && result.end.code === 1)) {
     const f = result.expects.failures[0];

@@ -404,7 +404,7 @@ decompiles (engine-map "Maps, rooms and level files").
 | Thing | Extendable? | How / why |
 |---|---|---|
 | New room `levels/<path>.lvl` | **Yes — OBSERVED** | the file manager reads `levels/<name>.lvl` from every mod path; `load <path>` plays it |
-| New room picked by a map's pool | **Yes (decompiled)** | the pool lists `levels/<folder>/<pool>/` with FileManager_ListDir 0x9a1900, which walks the mod paths; drop a `.lvl` into `levels/alley/easy/` or point a pool at your own sub-folder |
+| New room picked by a map's pool | **Yes — OBSERVED** | the pool lists `levels/<folder>/<pool>/` with FileManager_ListDir 0x9a1900, which walks the mod paths; drop a `.lvl` into `levels/alley/easy/` or point a pool at your own sub-folder (`alley.gon.merge` → `levels { easy [walkprobe] }`: alley's first battle node drew `levels/alley/walkprobe/wp_alley.lvl`) |
 | New spawn id (`data/spawns.gon.append`) | **Yes — OBSERVED** | id 9001 → `object RoomProbeRat` placed by the mod's `.lvl` |
 | New tileset name (`data/tilesets.gon.append`) | **Yes — OBSERVED** | `tileset roomprobe_yard` then `load …` builds the fight in it |
 | New map file `data/maps/<x>.gon` | **Yes (decompiled)** | loaded as `"data/maps/" + next_map`; reach it from an exit node's `next_map` (a `.merge` on a vanilla map) |
@@ -454,8 +454,14 @@ The validator checks rooms (`lvl-bad-format`, `lvl-unknown-spawn-id`, `lvl-unkno
 - `new-tileset.mewtest` (run `20261022-131707`): `cmd tileset roomprobe_yard` + `load` — the junkyard art around the
   probe room (shot `roomprobe_yard`) where TacticsTest's default is alley.
 - Pinned in `editor/test/fixtures/ingame/roomprobe-summary.json` (`level-tests.ts`).
-- Not reached: a campaign battle node drawing the new room from a pool. `enter Campaign` stops at the intro / the
-  house; walking a run needs UI input the harness does not have yet (TODO).
+- `walk-battle.mewtest` (run `20261022-141225`): a **campaign** battle node draws the mod room from a map pool.
+  `data/maps/alley.gon.merge` sets `levels { easy [walkprobe] hard [walkprobe] rare [walkprobe] }` (`.merge` merges
+  arrays by index, so each one-item pool's entry is replaced); `enter Campaign house`, `seed 42`, `run start` (the
+  adventure on alley.gon), `run travel battle` (the battle node next to the start), `run fight` — the level the pool
+  handed to the battle is `levels/alley/walkprobe/wp_alley.lvl` (`expect level`), and units 4 and 5 are the 77-hp
+  RoomProbeRats. The vanilla control `dev-sandbox/walk-vanilla.mewtest` (run `20261022-141324`, no overlay) drew
+  `levels/alley/easy/ch1-82.lvl`. Pinned in `editor/test/fixtures/ingame/walk-summary.json`. The walk directives:
+  `docs/ingame-testing.md` "Campaign walk".
 
 ## Limits of the data layer
 

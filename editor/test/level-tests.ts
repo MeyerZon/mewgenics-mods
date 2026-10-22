@@ -254,6 +254,27 @@ export function runLevelTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     same(by("new-tileset").cmds, ["tileset roomprobe_yard", "load roomprobe/probe"]);
   });
 
+  // ---- T2 evidence: the campaign walk (run start / run travel battle / run fight) draws the mod room from the map pool ----
+  test("campaign walk (T2 fixture): alley's first battle node drew levels/alley/walkprobe/wp_alley.lvl (only the mod has it) with its 77-hp rats; the vanilla control drew levels/alley/easy/", () => {
+    const fx = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", "ingame", "walk-summary.json"), "utf8")) as {
+      runs: Array<{ mod: string; test: string; verdict: string; saveUnchanged: boolean; expects: Array<{ ok: boolean }>; runs: Array<{ op: string; ok: boolean; map?: string; type?: string; depth?: number; level?: string }>; units: Array<{ i: number; namekey: string; hp: number }>; gon77: number[] }>;
+    };
+    for (const r of fx.runs) {
+      same([r.verdict, r.saveUnchanged, r.expects.every((e) => e.ok)], ["pass", true, true], r.test);
+      same(r.runs.map((x) => [x.op, x.ok]), [["start", true], ["travel", true], ["fight", true]], `${r.test}: start, travel, fight`);
+      same(r.runs[0]!.map, "alley.gon", `${r.test}: the run's first map`);
+      same([r.runs[1]!.type, (r.runs[1]!.depth ?? 0) >= 1], ["battle", true], `${r.test}: a battle node reached over next edges`);
+    }
+    const walk = fx.runs.find((r) => r.mod === "_roomprobe" && r.test === "walk-battle")!;
+    const control = fx.runs.find((r) => r.mod === "dev-sandbox" && r.test === "walk-vanilla")!;
+    same(walk.runs[2]!.level, "levels/alley/walkprobe/wp_alley.lvl", "the map pool's pick at MewDirector::StartMapBattle");
+    assert(/^levels\/alley\/easy\/[^/]+\.lvl$/.test(control.runs[2]!.level ?? ""), `vanilla control level: ${control.runs[2]!.level}`);
+    const modRoot = join(import.meta.dirname, "..", "..", "mods", "_roomprobe");
+    const room = decodeLvl(readFileSync(join(modRoot, "levels", "alley", "walkprobe", "wp_alley.lvl")));
+    same(walk.gon77.length, room.objects.filter((o) => o.id === 9001).length, "one 77-hp RoomProbeRat per id-9001 object of wp_alley.lvl");
+    assert(/easy \[walkprobe\]/.test(readFileSync(join(modRoot, "data", "maps", "alley.gon.merge"), "utf8")), "alley.gon.merge points the easy pool at walkprobe");
+  });
+
   // ---- T1: every vanilla level round-trips ----
   const root = extractedPath("levels");
   if (!existsSync(root)) {

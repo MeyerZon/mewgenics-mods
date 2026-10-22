@@ -59,6 +59,11 @@ typedef enum FwSymbol {
     FW_SYM_Camera_AddPostProcessPass,   /* Pass* (Camera*, Material*, int layer) — owned by the camera; never cache the Pass* */
     /* facing (2026-10-22): the test harness's `face` directive (docs/engine-map.md "Facing: Character::Face") */
     FW_SYM_Character_Face,              /* void (Character*, iVec2D dir (packed: x low, y high, by value in rdx), bool instant, bool forceTurnAnim) */
+    /* the campaign walk (mewtest's run start / run travel / run fight; docs/engine-map.md "Campaign walk") */
+    FW_SYM_MewDirector_GoOnAnAdventure, /* void (MewDirector*, std::string map, TeamType, int cats, bool debug) — by-value map, callee destroys; debug = generate the party, skip the class chooser */
+    FW_SYM_MapScreen_init,              /* void (MapScreen*, std::string map, bool debug) — hooked: the map screen of the run; by-value map, callee destroys */
+    FW_SYM_MapScreen_EnterNode,         /* void (MapScreen*, MapNode*) — what arriving at a node does (battle: BattleInTransition, then the pool pick + StartMapBattle) */
+    FW_SYM_MewDirector_StartMapBattle,  /* void* (MewDirector*, std::string levelPath, bool, bool) — hooked: the level the map pool picked; by-value, callee destroys */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 

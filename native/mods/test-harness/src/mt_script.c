@@ -197,6 +197,12 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
                 d.within = (int)w;
             }
             if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
+        } else if (kl == 5 && !strncmp(rest, "level", 5)) {
+            d.kind = MT_D_EXPECT_LEVEL;
+            const char *after = parse_quoted(arg, q, sizeof q, &qn);
+            if (!after) return fail(err, errCap, errLine, lineNo, "expect level needs a quoted substring");
+            if (*skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect level: unexpected text after the quoted substring");
+            if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
         } else if (kl == 6 && !strncmp(rest, "status", 6)) {
             d.kind = MT_D_EXPECT_STATUS;
             size_t sl = tok_len(arg);
@@ -374,6 +380,37 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             if (*skip_ws(modeTok + ml)) return fail(err, errCap, errLine, lineNo, "enter takes a scene name and at most one mode word");
             d.enterMode = MT_ENTER_HOUSE;
         }
+    } else if (wl == 3 && !strncmp(p, "run", 3)) {
+        /* run start [<map>.gon] | run travel <node type> | run fight — the campaign walk */
+        size_t ol = tok_len(rest);
+        const char *arg = skip_ws(rest + ol);
+        size_t al = tok_len(arg);
+        int extra = al && *skip_ws(arg + al);
+        d.kind = MT_D_RUN;
+        if (ol == 5 && !strncmp(rest, "start", 5)) {
+            d.n = MT_RUN_START;
+            if (extra) return fail(err, errCap, errLine, lineNo, "run start takes at most one map file name");
+            if (!al) { arg = MT_RUN_DEFAULT_MAP; al = strlen(arg); }
+            int okName = al > 4 && al < 64 && !strncmp(arg + al - 4, ".gon", 4);
+            for (size_t i = 0; okName && i < al; i++) {
+                char c = arg[i];
+                if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.')) okName = 0;
+            }
+            if (okName && strstr(arg, "..")) okName = 0;
+            if (!okName) return fail(err, errCap, errLine, lineNo, "run start: the map is a data/maps file name like alley.gon ([A-Za-z0-9_.-], ends in .gon, no ..)");
+        } else if (ol == 6 && !strncmp(rest, "travel", 6)) {
+            d.n = MT_RUN_TRAVEL;
+            if (!al || extra) return fail(err, errCap, errLine, lineNo, "run travel needs one node type (battle, hard, event, treasure, shop, ...)");
+            d.value = mt_node_type_id(arg, al);
+            if (d.value < 0) return fail(err, errCap, errLine, lineNo, "run travel: unknown node type (the 19 names of MapNode::str_to_type: none npc enter exit home battle hard miniboss boss event optional_event special_event shop treasure furniturebox foodbox bonus empty any)");
+        } else if (ol == 5 && !strncmp(rest, "fight", 5)) {
+            d.n = MT_RUN_FIGHT;
+            if (al) return fail(err, errCap, errLine, lineNo, "run fight takes no arguments");
+            arg = ""; al = 0;
+        } else {
+            return fail(err, errCap, errLine, lineNo, "run needs an op: start [<map>.gon] | travel <node type> | fight");
+        }
+        if (!(d.a = arena_add(s, arg, al))) return fail(err, errCap, errLine, lineNo, "script too large");
     } else if (wl == 4 && !strncmp(p, "glow", 4)) {
         /* glow <idx|bareword|"name"> (<r> <g> <b> <a> | off) */
         d.kind = MT_D_GLOW;

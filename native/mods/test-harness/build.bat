@@ -10,7 +10,7 @@ if not exist "%OUT%" mkdir "%OUT%"
 "%GCC%" -std=c11 -O2 -Wall -Wextra -Wno-cast-function-type -shared -static -static-libgcc ^
   -I"%HERE%src" -I"%NATIVE%\framework\src" -I"%NATIVE%\third_party\mewjector" ^
   "%HERE%src\mewtest.c" ^
-  "%HERE%src\mt_jsonl.c" "%HERE%src\mt_args.c" "%HERE%src\mt_msvcstr.c" "%HERE%src\mt_script.c" "%HERE%src\mt_console.c" "%HERE%src\mt_runner.c" "%HERE%src\mt_exit.c" "%HERE%src\mt_queue.c" "%HERE%src\mt_gon.c" "%HERE%src\mt_face.c" ^
+  "%HERE%src\mt_jsonl.c" "%HERE%src\mt_args.c" "%HERE%src\mt_msvcstr.c" "%HERE%src\mt_script.c" "%HERE%src\mt_console.c" "%HERE%src\mt_runner.c" "%HERE%src\mt_exit.c" "%HERE%src\mt_queue.c" "%HERE%src\mt_gon.c" "%HERE%src\mt_face.c" "%HERE%src\mt_walk.c" ^
   -o "%OUT%\mewtest.dll"
 if errorlevel 1 ( echo BUILD FAILED & exit /b 1 )
 echo built %OUT%\mewtest.dll

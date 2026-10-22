@@ -69,8 +69,16 @@ typedef enum MtDirKind {
     MT_D_EXPECT_UNIT,   /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
     MT_D_GLOW,          /* glow <unit> <r> <g> <b> <a> | <unit> off: FW_SetUnitGlow / FW_ClearUnitGlow on a unit of the walk (API v4) */
     MT_D_EXPECT_GON,    /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
-    MT_D_FACE           /* face <unit> <dx> <dy> | <unit> front|back: Character::Face(dir, instant) on a unit of the walk (mt_face.c) */
+    MT_D_FACE,          /* face <unit> <dx> <dy> | <unit> front|back: Character::Face(dir, instant) on a unit of the walk (mt_face.c) */
+    MT_D_RUN,           /* run start [<map>.gon] | run travel <node type> | run fight: the campaign walk through the host (n = MT_RUN_*) */
+    MT_D_EXPECT_LEVEL   /* expect level "<substr>": the level path the last `run fight` reported contains substr */
 } MtDirKind;
+/* run ops (MtDirective.n); a = the map (start, default MT_RUN_DEFAULT_MAP) or the node type name (travel, value = its id) */
+#define MT_RUN_START  1
+#define MT_RUN_TRAVEL 2
+#define MT_RUN_FIGHT  3
+#define MT_RUN_DEFAULT_MAP "alley.gon"   /* the run's first map (the dev house's Go On An Adventure button passes it) */
+const char *mt_run_op_name(int op);      /* "start" | "travel" | "fight" | "?" */
 /* expect unit: which MtUnit field; name|class|namekey compare as strings (== !=), the rest as integers (any op).
  * Order = mt_script.c UNIT_FIELDS = script.ts UNIT_FIELDS; the stat fields follow MT_STAT_* (data/characters order). */
 typedef enum MtUnitField {
@@ -187,6 +195,25 @@ int        mt_pipe_error_reply(char *out, size_t cap, long id, const char *msg);
 #define MT_STAT_COUNT 7           /* Character+OFF_CH_STATS: strength dexterity constitution intelligence speed charisma luck */
 #define MT_STAT_SPEED 4
 const char *mt_stat_name(int k);  /* the data/characters key of stat k, "?" out of range */
+/* ---- mt_walk.c: the campaign walk's pure half (node type names, BFS over MapNode next edges) ---- */
+#define MT_NODE_TYPE_COUNT 19             /* MapNode::str_to_type 0x225680: none 0, npc 1, enter 2, exit 3, home 4, battle 5, … any 18 */
+#define MT_WALK_MAX_NODES 512
+#define MT_WALK_MAX_EDGES 4096
+int         mt_node_type_id(const char *name, size_t n);   /* -1 unknown */
+const char *mt_node_type_name(int id);                     /* "?" out of range */
+/* Nearest node of type `want` reachable from `start` (start itself excluded) along next edges, breadth first, ties in
+ * edge order. Edges of node i are adj[adjStart[i] .. adjStart[i+1]); an out-of-range target is ignored. Returns the
+ * index (depthOut = its edge distance) or -1 (depthOut = -1) when none is reachable or the input is unusable. */
+int mt_walk_nearest(int n, const int *type, const int *adjStart, const int *adj, int start, int want, int *depthOut);
+/* what a run step reports (the run event's optional fields; -1 / "" = absent) */
+typedef struct MtRunInfo {
+    char map[64];         /* start: the map file the adventure began on */
+    int node;             /* travel: the chosen node's index in MapScreen's node array */
+    int nodeType;         /* travel: its MapNodeType */
+    int depth;            /* travel: its edge distance from the marker's node */
+    char level[160];      /* fight: the level path MewDirector::StartMapBattle was given (the map pool's pick) */
+} MtRunInfo;
+
 #define MT_GON_TEXT 256
 typedef int (*MtMemRead)(void *u, const void *addr, void *out, size_t n);   /* guarded copy: 1 ok, 0 unreadable */
 typedef struct MtGonValue {
@@ -262,6 +289,10 @@ typedef struct MtHost {
     /* face: Character::Face(unit i, (dx, dy), instant 1, 0) on the game thread. 1 done, 0 refused (detail), -1
      * unavailable (framework without FW_SYM_Character_Face) */
     int         (*face_unit)(void *u, int i, int dx, int dy, char *detail, size_t cap);
+    /* run <op> on the game thread (the campaign walk): 1 done, 0 refused (detail), -1 unavailable (symbols missing),
+     * 2 not ready yet (the runner retries next frame for at most MT_CONSOLE_WAIT_MS; `run fight` waits this way for
+     * the battle the node started). info: the run event's fields (the host sets what applies; the runner pre-fills -1/"") */
+    int         (*run_step)(void *u, int op, const char *arg, MtRunInfo *info, char *detail, size_t cap);
 } MtHost;
 
 typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_IDLE } MtState;
@@ -293,6 +324,7 @@ typedef struct MtRunner {
     MtQueue *queue;         /* NULL: no pipe; requests are served one per frame while idle or inside a wait */
     MtRequest *active;      /* an exec still collecting console lines */
     int activeFramesLeft;
+    char battleLevel[160];  /* the level the last successful `run fight` reported ("" = none yet), for expect level */
 } MtRunner;
 void mt_runner_init(MtRunner *r, const MtScript *s, uint64_t now);
 void mt_runner_set_interactive(MtRunner *r, int on);

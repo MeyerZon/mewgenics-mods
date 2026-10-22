@@ -885,7 +885,7 @@ RE session `rooms` (Ghidra 12.1.4, build 25143593); decompiles in `.analysis/dec
   the boss / miniboss paths): reads the map GON (`map+0xb8`): `levels.folder`, then `levels.<pool>` (`easy`, `rare`,
   …) as sub-folder names, builds `"levels/" + folder + "/" + sub` and lists it with 0x9a1900 (`".lvl"`, recursive 0);
   candidates go through the director's level registry (`director+0x590`, 0x8dda40 / 0x8ddec0; INFERRED: "already
-  played"), and the `easy` path also reads the map's `chapter_id` and a random roll (not decoded further). INFERRED (not run): a `.lvl` a mod drops in `levels/alley/easy/` joins alley's easy pool.
+  played"), and the `easy` path also reads the map's `chapter_id` and a random roll (not decoded further). OBSERVED 2026-10-22 ("Campaign walk" below): a pool that names a mod-only sub-folder hands the battle that folder's `.lvl` (`levels/alley/walkprobe/wp_alley.lvl`).
 - **Map files**: SpawnDatabase_init 0x7a74b0 lists `data/maps` (0x7c0cb0) but only folds each map's
   `enemy_pools.medium` into a global list (`+0x13c0`); a run loads a map by path, `"data/maps/" + name` →
   `Gon_LoadFile` 0x611a0 (`MewDirector_maps_3b0d20` 0x3b0d20), name = an exit node's `next_map`. `data/maps/alley.gon`
@@ -915,6 +915,63 @@ RE session `rooms` (Ghidra 12.1.4, build 25143593); decompiles in `.analysis/dec
   belongs to the map screen / CatParts UI (`MapScreen_init_0x38d150.c`), not to tiles. Pinned by the T1 test in
   `editor/test/level-art-tests.ts` (every `alley` tile id resolves to a clip or a named reason; the clips render).
 - `"No room named: "` (0x2e8d50) belongs to `FurnitureGrid::init` (the house's rooms), not to combat levels.
+
+## Campaign walk (2026-10-22)
+
+RE session `walk` (Ghidra 12.1.4, build 25143593); decompiles in `.analysis/decompiled/` (file names below), notes in
+`.analysis/notes-walk.md`. The harness drives it with `run start` / `run travel <type>` / `run fight` / `expect level`
+(`docs/ingame-testing.md` "Campaign walk"); bindings: the walk block at the end of `bindings/25143593.json`.
+
+- **`MewDirector::GoOnAnAdventure(std::string map, TeamType, int, bool debug)` 0x3b01c0** (OBSERVED name: RTTI lambda
+  `.?AV<lambda_1>@?1??GoOnAnAdventure@MewDirector@glaiel@@QEAAXV?$basic_string…W4TeamType@3@H_N@Z@`;
+  `MewDirector_StartDebugAdventure_0x3b01c0.c`). `debug = false` (the House's door / the house-test dev buttons
+  0x317230 / 0x318db0 with `"alley.gon"`): destroy-next the House, generate the strays, `CreateScene("ClassChooser")` —
+  the interactive class pick. `debug = true` (the event-debug dev button 0x32efc0 with `"eventdebug.gon"`):
+  `DebugGenAdventureCats(TeamType, n)` 0x3b24c0 (a generated party, no popup while `+0x78c` is 0) and then the start lambda
+  0x3b0550 directly: destroy-next `House` (0x9d4e00), **`StartAdventure` 0x3b38c0(director, map, debug)** =
+  `CreateScene("Map")` + `AddComponent<MapTest>` 0x3c5210 → `MapTest::init` 0x39df90 → `AddComponent<MapScreen>`
+  0x39e570 → `MapScreen::init`, then `Gon_LoadFile("data/maps/" + map)` for `innate_weather` / `chapter`, save prop
+  `adventure_started`. The map string is by value (callee destroys). TeamType comes from a `{0,1,2,3}` table at
+  `.rdata` 0xee9700 indexed by the dev widget; the harness passes 1 (INFERRED meaning; the party is generated either way).
+- **`MapScreen::init(std::string map, bool)` 0x38d150** (`__FUNCSIG__` 0xf14040; `MapScreen_init_0x38d150.c`):
+  0x21ae00 (INFERRED: `load_map`), `generate_map` 0x21ca60 (`__FUNCSIG__` 0xeff8f8), then the start node = the first node of type
+  2 (enter) — else the fatal "Map generated without a start node somehow"; the marker component (0x39b2f0) goes to
+  **`+0xa0`**, its `+0x80` std::function is the on-arrive lambda **0x39b180** (`MapScreen_EnterNode_caller_0x39b180.c`):
+  unless the nemesis check 0x392ed0 fires (a nemesis marker at `+0xa8` on the same node) or **`node+0x168`** is set,
+  `EnterNode(mapScreen, node)`. Nodes: glaiel vector **`+0x78` cap, `+0x7c` count, `+0x80` MapNode** data**. Map GON at
+  `+0xb8` (`levels`, `groups`, …). OBSERVED: alley.gon generates 22 nodes / 39 next edges; the marker starts on the
+  enter node (#19).
+- **MapNode** (`MapNode_load_0x21dbc0.c`, `MapNode_load_connections_0x227df0.c`): `+0x50` std::string `level`
+  (a fixed level, e.g. the treasure nodes' `level TreasureHard`; MapLevelPool_build's `param_4+0x50`), `+0xf0` a
+  tileset override EnterNode copies into the current tileset, `+0x114` music layer (-1 = default; INFERRED from its use at 0x151d00), `+0x118..+0x137`
+  the node's own 32-byte RNG state (EnterNode copies it into TLS+0x178 — every node rolls the same way for the same
+  map), **`+0x138` MapNodeType** (str_to_type order; `MapNode_load` re-rolls typed options), **`+0x140` next edges**
+  (glaiel vector: `+0x144` count, `+0x148` data; `load_connections` adds a GON `next` target there with 0x21aac0
+  and the reverse edge at `+0x150`; generate_map walks `+0x148`/`+0x144`), `+0x160` the node's display object
+  (position `+0x70/+0x74`), `+0x168` done flag. The marker's current node is `marker+0x50`.
+- **`MapScreen::EnterNode(MapNode*)` 0x391c20** (RTTI lambda names `…EnterNode@MapScreen@glaiel@@QEAAXPEAUMapNode@3@@Z@`;
+  `MapScreen_EnterNode_0x391c20.c`): does nothing while a key is held (SDL keycode 0x400000e1, INFERRED left shift); reseeds the RNG from the node; then by type:
+  **5 battle** / 6 hard → `mapScreen+0x1e8 = 1` and, when the transition host `DAT_1413c5ba8` is live, the
+  `BattleInTransition` component 0x39b8e0 / 0x39bd20 whose lambda (0x3929e0 battle, 0x39dc90 hard) runs
+  **`MapLevelPool_build(mapScreen, out, "easy"|"hard", node, 1)` 0x394450** (`"hard"` when the save flag
+  `upgrade_basic_combats_to_hard` is set) and **`MewDirector::StartMapBattle(director, out, …)` 0x3b6d10**; 7/8 miniboss
+  /boss → `select_boss_level` 0x395930; 9/10 event, 0xb special event, 0xc shop, 0xd treasure, 0xe furniturebox, 0xf
+  foodbox, 3 exit, 4 home (`return` / `return_early` cutscene). Nothing in EnterNode needs a mouse: the harness calls it
+  on a node it picks (no path animation; the marker stays where it was).
+- **`StartMapBattle(director, std::string levelPath, bool, bool)` 0x3b6d10** (`MewDirector_StartMapBattle_0x3b6d10.c`):
+  registers the level in the played registry (`director+0x590`, 0x8dda40), team bookkeeping, hides the Map scene
+  (0x9d4c80), `CreateScene("Battle")` + `AddComponent<TacticsTest>(battle, e, level)` 0x31e6e0 (→ `TacticsTest::init(level)`),
+  `+0x710 = 1`. The path is the pool's full file path. OBSERVED 2026-10-22: `"levels/alley/walkprobe/wp_alley.lvl"` with
+  `mods/_roomprobe`'s `alley.gon.merge` (run `20261022-141225`), `"levels/alley/easy/ch1-82.lvl"` without (run
+  `20261022-141324`, `seed 42`); the battle starts ~280 frames after EnterNode (the transition), round 1 fires.
+- **Side effect (OBSERVED):** starting the adventure makes the game write a backup of the slot,
+  `saves/backups/mewtest01_<date>_<time>.savbackup` (only after `run start`; earlier `enter Campaign` runs left none).
+  The real save and every other file are untouched; the backups accumulate (one per minute of runs) — an owner
+  decision (TODO.md) whether the runner may move them into the run dir like the slot itself.
+- Not driven: the class chooser (debug start skips it), walking the marker along a path, node rewards after the fight,
+  exits to the next map. The pool pick itself (`MapLevelPool_build` 0x394450): `levels.<pool>` entries are filtered by
+  0x232aa0(`director+0x38` save props, entry) (INFERRED: an unlock check), listed with `ListDir`, run through the
+  played registry; the `easy` pool may swap to `rare` on a roll scaled by a director setting (≤ 1/60).
 
 ## Glow and outline passes (2026-10-21)
 

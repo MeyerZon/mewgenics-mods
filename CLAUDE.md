@@ -124,7 +124,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
   walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules, the harness's modules;
-  180 checks = 14 + 7 + 14 + 13 + 11 + 15 + 8 + 98, `-Werror`),
+  NATIVECOUNT checks, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
@@ -207,7 +207,9 @@ verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with tha
 commands exist at the main menu; `enter TacticsTest` (2026-10-20) replays the dev menu's test-fight button inside the
 DLL, after which the run commands (`spawn`, `bind`, `load`, `win`, …) exist, turns fire and `dump` / `expect units` /
 `expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry"); `face <unit> back` turns a unit away
-(`Character::Face` 0x10ce50, so `<anim>B` frames are testable) and `dump` reports each unit's facing.
+(`Character::Face` 0x10ce50, so `<anim>B` frames are testable) and `dump` reports each unit's facing. After `enter Campaign house`,
+`run start` / `run travel battle` / `run fight` walk a real run into a map node's fight (the map pool picks the level;
+`expect level` checks it; `docs/ingame-testing.md` "Campaign walk").
 
 Read `docs/engine-map.md` (binary facts, build identity, function RVAs, status model), `docs/data-mods.md` (overlay
 semantics and content shapes), `docs/ingame-testing.md` (the harness), `docs/binding-port.md` (the bindings manifest and
