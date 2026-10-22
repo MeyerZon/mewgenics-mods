@@ -742,9 +742,9 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
       for API objects; the validator seeing other mods' `@Name`s and checking that fw-3d is listed first on the mod path
       (`launch-dev.bat` too); the validator decoding a .glb's embedded image (`model-image-embedded-*` before launch);
       JPEG embedded images; rainbow-cat per-material rows and an explicit `palette <n>` for non-cats; smooth model
-      turning over the sprite's turn animations; slicing unit-attached multi-tile models; after PR #114 merges:
-      `git mv mods/_unitface/tests/unit-face.mewtest.after-114 mods/_unitface/tests/unit-face.mewtest` and fold the
-      duplicate `Character_Face` / `Character_orientation` manifest entries into #114's FACING block. Planned UI items
+      turning over the sprite's turn animations; slicing unit-attached multi-tile models; a T2 re-run of
+      `_unitface/unit-face` on the integrated tree (integration 2026-10-22b enabled the script and folded the duplicate
+      `Character_Face` / `Character_orientation` entries into the facing block). Planned UI items
       (NOT built — the owner's rule for this batch: no `editor/web/` changes): a `hide_sprite` checkbox in the model
       block editor; an `@Name` picker on graphics.model listing the mod's + fw-3d's named models; an "Extract texture"
       button next to a .glb model; a 4-facing model preview; showing a model's sort bands / footprint in the preview.

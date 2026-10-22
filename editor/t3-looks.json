@@ -471,7 +471,7 @@
     "pr": 138,
     "question": "mods/_unitface: the Rat's box has a cyan front, yellow back, magenta sides. Facing (0,-1) and (-1,0) show the cyan front, (1,0) and (0,1) the yellow back (the mesh turns with Character::Face, not a mirror). Does each shot read that way, and does the snap at a turn look acceptable?",
     "shots": ["ingame-runs/*-_unitface-unit-face/shot-front.png","ingame-runs/*-_unitface-unit-face/shot-front-mirrored.png","ingame-runs/*-_unitface-unit-face/shot-back.png","ingame-runs/*-_unitface-unit-face/shot-back-mirrored.png"],
-    "regenerate": "after PR #114: git mv mods/_unitface/tests/unit-face.mewtest.after-114 mods/_unitface/tests/unit-face.mewtest; npm run test:ingame -- _unitface unit-face",
+    "regenerate": "npm run test:ingame -- _unitface unit-face",
     "status": "open"
   },
   {

@@ -1,9 +1,6 @@
 mods: _unitface, fw-3d
 timeout: 150s
 hide: false
-# MERGE ORDER: the `face` directive is PR #114's (feat/harness-facing). Until #114 is merged this file carries the
-# .after-114 suffix so the script discovery (listIngameTests: every committed *.mewtest must parse) stays green; after the
-# merge, `git mv` it to unit-face.mewtest. The T2 run that produced the fixtures used a local merge of both branches.
 # 3D phase M3 `face`: a unit model turns with Character::Face. _unitface gives the vanilla Rat models/face-box.obj
 # (a box with a cyan FRONT face and a yellow BACK face). The harness's `face <unit> ...` (PR #114) calls
 # Character::Face(dir, instant); mewframework reads the stored direction (Character+0x388) every combat frame, turns
