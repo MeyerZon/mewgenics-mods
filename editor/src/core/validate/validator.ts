@@ -7,6 +7,9 @@
 //   3. Overlay-target existence - .merge/.patch target existing paths; .append
 //      adds non-colliding keys; positional CSV .merge is flagged fragile.
 //   4. (Merge preview is provided separately by preview-merge.ts.)
+//   5. Component keys - a key under a component block that the component never
+//      reads (unknown-key, warning) or a required key missing from a new block
+//      (missing-required-key, error), per editor/component-schema.json.
 //
 // Findings are returned as a tagged Report (ok/warning/error with location).
 
@@ -14,6 +17,8 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, packPath } from "../repo.ts";
 import { COMPONENT_CACHE_HINT } from "../components.ts";
+import { loadComponentSchema, resolveComponent, checkComponentBlock, forEachComponentBlock } from "../component-schema.ts";
+import type { ComponentSchema } from "../component-schema.ts";
 import { parse, GonParseError } from "../gon/parser.ts";
 import { toValue } from "../gon/value.ts";
 import { parseOverlayName } from "../overlay/overlay.ts";
@@ -185,6 +190,8 @@ export interface ValidateOptions {
   components?: Iterable<string>;
   /** native-registered names (tests/fixtures); default editor/registered-names.json */
   registeredNames?: Iterable<string>;
+  /** the component key schema (tests/fixtures); undefined = the tracked editor/component-schema.json, null = none */
+  componentSchema?: ComponentSchema | null;
 }
 
 /**
@@ -214,6 +221,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   const local = modLocalNames(overlays);
   const loc = loadLocalization(root);
   const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
+  const componentSchema = opts.componentSchema !== undefined ? opts.componentSchema : loadComponentSchema();
   if (!sets.componentListKnown) {
     // Without a list every component would be "unknown": say once why they are not checked instead.
     rb.info("component-list-missing", `no component class names are known, so passives / ai brains / classes are not checked: ${COMPONENT_CACHE_HINT}`);
@@ -225,7 +233,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
     if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, componentSchema);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -245,6 +253,7 @@ function validateGonOverlay(
   modName: string,
   nativeBuild: NativeBuild | null,
   dataRoot: string,
+  componentSchema: ComponentSchema | null,
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
   const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
@@ -386,6 +395,33 @@ function validateGonOverlay(
 
   for (const e of overlay.entries) handleField(e.key, e.value, []);
 
+  // ---- Component keys (editor/component-schema.json; docs/data-mods.md "Component keys") ----------------
+  // A key under a component block that the component never reads is silently ignored by the game (the #1 silent
+  // mod bug): warn. A required key missing from a complete (.append / new-file) block: error. Partial overlays
+  // (.merge / .patch) are not checked for required keys: the base block may supply them.
+  if (componentSchema && hasComponentList) {
+    const effect = new Set(componentSchema.effectNames ?? []);
+    const isDyn = (n: string): boolean => sets.components.has(n) || statusSet.has(n) || effect.has(n);
+    const tree = o.mode === "patch" ? stripSuffixes(overlay) : overlay;
+    const complete = o.mode === "append" || o.mode === "replace";
+    forEachComponentBlock(tree, (n) => sets.components.has(n), (name, value, path) => {
+      if (value.t !== "obj") return;
+      const r = resolveComponent(componentSchema, name);
+      if (!r) return;
+      const res = checkComponentBlock(r, value, { patch: false, requireComplete: complete, isDynamicChild: isDyn });
+      const reads = Object.keys(r.keys).sort();
+      const readsText = reads.length ? `it reads: ${reads.join(", ")}` : "it reads no keys of its own (the scalar form sets its stacks)";
+      const kids = r.children ? `; children: ${r.children} names` : "";
+      for (const k of res.unknown) {
+        rb.warn("unknown-key", `${name} never reads "${k}", so the game ignores it (${readsText}${kids})`, { file, path: [...path, k].join(".") });
+      }
+      for (const k of res.missing) {
+        const ks = r.keys[k]!;
+        rb.error("missing-required-key", `${name} requires "${k}" (${ks.type}, read by ${ks.from} with ${ks.accessor ?? "a logging getter"}, no default)`, { file, path: path.join(".") });
+      }
+    });
+  }
+
   // ---- Literal suffixes outside .patch ------------------------------------------
   // Only the `.patch` engine (0x946680) reads key suffixes. A `.merge` file runs Gon_DeepMerge_plain 0x945c30 under
   // the constant MERGE policy (Gon_DefaultMergeMode 0x9451c0 returns 2) and `.append` runs Gon_Append 0x945410: in
@@ -495,4 +531,11 @@ function validateCsvOverlay(o: OverlayFile, rb: ReportBuilder, loc: LocTable, mo
 
 export function repoRelative(p: string): string {
   return relative(REPO_ROOT, p).replace(/\\/g, "/");
+}
+
+/** A copy of a .patch tree with every key's policy suffix stripped (the names the game merges under). */
+function stripSuffixes(v: VNode): VNode {
+  if (v.t === "obj") return { t: "obj", entries: v.entries.map((e) => ({ key: parsePolicy(e.key).name, value: stripSuffixes(e.value) })) };
+  if (v.t === "arr") return { t: "arr", items: v.items.map(stripSuffixes) };
+  return v;
 }

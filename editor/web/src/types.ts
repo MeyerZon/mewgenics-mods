@@ -116,6 +116,16 @@ export interface ComponentSearchResult {
   count: number;
   names: string[];
   whereUsed?: { name: string; usedIn: ComponentUsage[] }[];
+  /** the GON keys the top matches read (editor/component-schema.json) */
+  schema?: ComponentKeyInfo[];
+}
+export interface ComponentKeyInfo {
+  name: string;
+  chain: string[];
+  open: boolean;
+  children: string | null;
+  required: string[];
+  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string }>;
 }
 
 // ---- template scaffolder (templates) -------------------------------------------------------

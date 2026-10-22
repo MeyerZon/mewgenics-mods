@@ -3,6 +3,7 @@
 
 import * as baseData from "./base-data.ts";
 import * as components from "./components.ts";
+import { loadComponentSchema, describeComponent } from "./component-schema.ts";
 import * as modio from "./mod-io.ts";
 import { validateMod } from "./validate/validator.ts";
 import { previewMerge } from "./preview-merge.ts";
@@ -62,14 +63,32 @@ export interface ComponentSearchResult {
   count: number;
   names: string[];
   whereUsed?: Array<{ name: string; usedIn: WhereUsedHit[] }>;
+  /** the GON keys each of the top 15 matches reads (editor/component-schema.json; base keys inherited) */
+  schema?: ComponentKeyInfo[];
+}
+
+/** One component's resolved key schema (component-schema.ts describeComponent). */
+export interface ComponentKeyInfo {
+  name: string;
+  chain: string[];
+  status: string;
+  open: boolean;
+  children: string | null;
+  scalar: string | null;
+  required: string[];
+  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string; confidence: string; evidence?: string; note?: string }>;
 }
 
 /** Search C++ component class names, optionally with where-used. */
 export function searchComponents(query: string, opts: { whereUsed?: boolean; limit?: number } = {}): ComponentSearchResult {
   const names = components.searchComponentNames(query, opts.limit ?? 50);
-  if (!opts.whereUsed) return { query, count: names.length, names };
+  const cs = loadComponentSchema();
+  // an exact match first, so searching a full class name always describes that class
+  const top = [...names.filter((n) => n === query), ...names.filter((n) => n !== query)].slice(0, 15);
+  const schema = cs ? (top.map((n) => describeComponent(cs, n)).filter((x) => x !== null) as unknown as ComponentKeyInfo[]) : [];
+  if (!opts.whereUsed) return { query, count: names.length, names, schema };
   const detailed = names.slice(0, 15).map((name) => ({ name, usedIn: components.whereUsed(name, 20) }));
-  return { query, count: names.length, names, whereUsed: detailed };
+  return { query, count: names.length, names, whereUsed: detailed, schema };
 }
 
 export function listMods(): { mods: string[] } {

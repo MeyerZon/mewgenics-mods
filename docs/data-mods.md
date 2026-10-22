@@ -248,9 +248,59 @@ itself (`mods: <mod>, fw-glow` in a `.mewtest` header, `-modpaths … mods/fw-gl
 `glow <unit> <r> <g> <b> <a>` exercises it (`mods/dev-sandbox/tests/unit-glow.mewtest`). Static halos that need no
 native code remain the editor's baked glow (PR #80).
 
+## Component keys (2026-10-22)
+
+A component block is `passives { <Component> { key value … } }` (also `bonus_passives` / `additional_passives`, a
+component nested inside another, and a status under `effects` / `temporary_effects`). The game has no schema: a key
+the component never reads is **silently ignored** — the commonest silent mod bug. `editor/component-schema.json`
+(tracked) maps, per `glaiel::` class, the keys it reads from its own block: type as read, default when absent,
+whether it is required, inherited base keys, and the decompile that witnesses each one. MCP `search_components`
+returns it for the top matches; the web UI's component search shows it when you click a class name.
+
+- **What the validator does with it.** `unknown-key` (warning): a child of a component block that the component (or
+  its base classes, or a shared parser it includes) never reads. `missing-required-key` (error): a required key absent
+  from a complete block — `.append` files and new files only; `.merge` / `.patch` blocks are partial and the base may
+  supply the key. `.patch` keys are checked without their policy suffix (`chance.multiply` → `chance`). A component
+  that is `open` (its key set may be incomplete) is never flagged; a component whose `children` are `effects` or
+  `passives` also accepts status / effect / passive names as children (`AddStatusToBasicAttack { Bleed 1 }`), and
+  `children: any` accepts every key (an arbitrary map: `FormChanger { 0 {…} 1 {…} }`, element names, part names).
+- **Proof on vanilla (T1).** Every vanilla component block passes with zero findings (`editor/test/
+  component-schema-tests.ts`: 210 files, 7728 component blocks, 2204 object blocks checked, 0 findings; and four
+  vanilla files copied as renamed `.append` mods give 0 `unknown-key` / `missing-required-key`). The generator
+  enforces it by construction: a key vanilla writes that RE did not find **opens** the component and is listed in its
+  `vanillaMissed`; a `required` key some vanilla block omits is demoted.
+- **Patterns the RE found (OBSERVED; `docs/engine-map.md` "Component GON keys").** A Passive's data node is
+  `this+0x68`; most classes read keys lazily in event slots or in `std::function` lambdas, not in an init. The
+  scalar form `Comp N` is the stacks for most components (`Passive` reads `stacks`, the logging `Int` on a number
+  node), but many inline lookups are **child-or-self**: `ChanceToBlock 0.3` is `chance`, `DeathRattle X` is
+  `ability`, `MovementReaction X` is its ability (the `scalar` field says which). `statuses` / `passives` /
+  `damage_instance` / `pattern` sub-blocks are optional: absent, the component's own node is used, so
+  `MeleeRevengeDamage { damage 2 type melee }` and `MeleeRevengeDamage { damage_instance { … } }` are both valid.
+  Shared parsers (`shared` in the schema): `@DamageInstance` (`DamageInstance::FromGon` 0x2ba080, 30+ keys),
+  `@StatusesBlock` / `@StatusList` (`Passive_ApplyStatusChildren` 0x76a160: every child except the class's own keys
+  is a status application — scalar = stacks, `[stacks chance]`, or `{ stacks chance }`), `@BrainGon` (0x134400:
+  `decision_weights move_weights animate_choice auto_orient`), `@FormChangerForm`, `@Passive_QueueAbility`
+  (`even_if_stunned`, `force_display_name`, which every ability-casting passive reads).
+- **Vanilla quirks it surfaced** (the game ignores these vanilla values): `LowHealthAllyDodgeChanceAura { theshold … }`
+  (the engine reads `threshold`, default 5), `AbilityOnRoundEndOnce { even_of_stunned … }` (reads `even_if_stunned`),
+  `TourettesMeows { cooldown … }` (reads `pool`, `duration`), `DamageReductionAura { allies_only … }` (hard-coded),
+  `MoveTowardsDamageSource { ability … }` (reads `move_ability`). They stay `open` so vanilla stays clean.
+- **Coverage (build 25143593).** 1741 classes with a vftable (of the 2007 `glaiel::` names; the other 266 are not
+  components: templates, lambdas, helpers): 473 mapped from decompiles, 898 read no keys of their own, 369 carry only
+  the objdump seed keys (engine / UI / ability-hierarchy classes that never appear as a block; `confidence:
+  inferred`), 1 unresolved (`AddAdvantageToEvent`). 1314 keys: 767 observed with a decompile, 547 inferred. Vanilla:
+  of 384 components vanilla writes as object blocks, 345 are closed (unknown keys flagged), 39 open; vanilla literal
+  keys found 589 / 635 (+188 keys of arbitrary maps).
+- **Regenerating.** Fragments are `.analysis/component-schema-<tag>.json` (one per RE session, shape checked by
+  `validateFragment` in `editor/src/core/component-schema-build.ts`; `.analysis/compmap/` holds the work lists and
+  `dispatch-names.json`, the names the by-name dispatch chains accept). `cd editor && npm run build:component-schema`
+  merges them, runs the vanilla cross-check and writes the file; `-- --check` fails when the tracked file is stale.
+  After a game update the keys are string literals and usually survive; re-run the RE for classes whose vftable
+  changed and regenerate.
+
 ## Limits of the data layer
 
-Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses
+Data recombines ~1,750 existing C++ behavior components (the keys each one reads: "Component keys" above). A mechanic that no component expresses
 (new status tick logic, new systems, new UI) needs the native layer (`native/`).
 
 ## Test-only overlays

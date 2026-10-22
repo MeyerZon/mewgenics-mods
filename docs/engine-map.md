@@ -931,6 +931,43 @@ nodes; `yes` / `True` / `1` are not bools (`Bool()` on them logs `is not a bool`
 `health.multiply 2` → int 12, double 12, text `"12"`). The editor-side parser's typing is another PR's concern;
 these are the facts it must mirror.
 
+## Component GON keys (2026-10-22)
+
+RE run `compmap` (lead) + `compA`..`compE` (Ghidra 12.1.4, build 25143593; notes `.analysis/notes-comp{A..E}.md`,
+decompiles `.analysis/decompiled/<Class>_<slotN|callee|lambda>_0x<rva>.c`, work lists `.analysis/compmap/`). The result
+is `editor/component-schema.json` (data-mods.md "Component keys"), pinned by `editor/test/component-schema-tests.ts`
+(shape + T1 vanilla zero findings).
+
+- **Work list (OBSERVED, objdump over `.analysis/exe/25143593/Mewgenics.exe`).** Each class's base and type id come
+  from the RTTI name `DeriveComponentWithBoilerplate<glaiel::X, glaiel::Base, id>`; its slots from the vftable in
+  `list_names.tsv`. "Own" slots = where X's vftable differs from its base's at the same index; slots 0/1/2/3/5 are the
+  boilerplate (name, id, IsA, hierarchy, dtor). 1741 vftables; `Passive` has 170 slots, `Status` 172.
+- **Init slots (OBSERVED).** Status: slot 30 `OnInit(stacks, data, applier)` 0x8104b0 (`tickdown_this_turn` bool →
+  +0x76, `stacks` int → +0x5c, then `Passive_init_full` 0x767b30). Passive: slot 31 (`+0xf8`) `Passive_init_gon`
+  0x767cd0, devirtualised in every passive ctor (`cmp r8, 0x140767cd0`), reads only `stacks` from the node; Passive
+  slot 30 is a "not implemented" assert. Data node = `this+0x68`.
+- **Lookups.** Besides `Get` / `Get_const` / `Contains`, most reads are an inlined lookup: the key built inline as a
+  `std::string` (length store + `movups`/`movabs` from `.rdata`), an FNV-1a loop (`0xcbf29ce484222325`,
+  `0x100000001b3`) and `GonObject_NameIndex_Find` 0x124df0. When the node is a scalar or the key is missing the inline
+  pattern falls back to the node itself ("child-or-self"), which is how scalar forms carry a value.
+- **Children walks.** The `/0xb0` magic `0x2e8ba2e8ba2e8ba3` over `[node+0x38]/[node+0x40]` iterates children.
+  `Passive_ApplyStatusChildren` 0x76a160 (via 0x76a0c0) applies every child except a passed list of the class's own
+  keys; each child decodes through `DamageInstance::DecodeStatusApplication` 0x2bbab0 (scalar = stacks, `[stacks
+  chance]`, `{stacks (1) chance (percent or expression, 1)}`). `ConditionalPassive` slot 33 0x1520b0 (the base of the
+  `Passive{At,When,While,If}*` family) reads `passives` (child-or-self) and sends each child to
+  `Status_NameExists` 0x492e80 → 0x2bbab0 or to `attach_passive` 0x494080. `GonObject_IsPercentString` 0x9429e0.
+- **Shared parsers.** `DamageInstance::FromGon` 0x2ba080; `Brain_InitFromGon` 0x134400 (from `Brain_CreateByName`
+  0x3d5880); `Passive::QueueAbility` 0x76b4a0 (lambda body 0x76b650 reads `even_if_stunned`, `force_display_name`;
+  the cast helpers 0x76ad70 / 0x76b290 / 0x76bb20 likewise); FormChanger forms in slot 33 0x199010.
+- **Keys in lambdas.** Many keys are read only in `std::function` bodies: the RTTI-named
+  `_Func_impl_no_alloc<…lambda…>::vftable` rows in `list_names.tsv`, `vftable+0x10` = `_Do_call` → the body (compB
+  followed 309 of them across 75 classes). INFERRED: classes whose vanilla keys were not found (`vanillaMissed` in
+  the schema) mostly hide them in a lambda not yet located.
+- **Dispatch names.** The names `apply_status` 0x483120, `attach_passive` 0x494080 and 0x4ccb20 compare against
+  (`lea rdx,[rip+str]` before `std::string == const char*` 0x52560): 1923 names, 386 of them not `glaiel::` classes
+  (`HealthGain`, `Conditional_*`, `TakeExtraTurn`, …) — `.analysis/compmap/dispatch-names.json` →
+  `effectNames` in the schema (the scan ranges are approximate, so the list is permissive).
+
 ## Save safety
 
 Backups: `%USERPROFILE%\Documents\Mewgenics-save-backups\<timestamp>\` (first: 2026-10-17_1911, 24 files, hashes verified;

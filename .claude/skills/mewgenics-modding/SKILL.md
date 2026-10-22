@@ -35,11 +35,15 @@ Tools, by purpose:
   items, characters, classes, difficulties, statuses/keywords, text keys).
 - `read_base_entry` — read one base entry (e.g. ability `Spin`) as GON.
 - `search_components` — search the ~2,007 `glaiel::<Name>` C++ component class
-  names, with where-used.
+  names, with where-used; for the top matches it also returns the GON keys each
+  component reads (type, default, required, inherited base keys, decompile
+  evidence; `editor/component-schema.json`). Check it before writing a component
+  block: the game silently ignores a key the component never reads.
 - `read_mod` — read a mod's overlay files.
 - `write_overlay` — create/update an overlay file under `mods/<name>/` (writes
   are confined to the mod folder).
-- `validate_mod` — run reference, localization, and overlay-target checks;
+- `validate_mod` — run reference, localization, overlay-target and component-key
+  checks (`unknown-key`: a key the component never reads; `missing-required-key`);
   returns ok/warning/error with source locations.
 - `preview_merge` — compute the effective merged object (base + overlay).
 - `list_registered_native_names` — list native-registered status/ability names

@@ -113,6 +113,8 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(checkComponentBlock(resolveComponent(s, "Mystery")!, block("Mystery { anything 1 }"), o).unknown.length, 0, "open: never flagged");
     const r = checkComponentBlock(resolveComponent(s, "OnHitEffects")!, block("OnHitEffects { Bleed 1 HealthGain 2 Conditional_Enemy { Bleed 1 } chance 3 }"), o);
     eq(r.unknown.join(","), "chance", "effect names accepted, a non-effect literal is not");
+    s.components.FormMap = spec({ base: "Passive", children: "any" });
+    eq(checkComponentBlock(resolveComponent(s, "FormMap")!, block("FormMap { 0 { form A } 1 { form B } }"), o).unknown.length, 0, "children any: an arbitrary map, every key accepted");
     const closed = checkComponentBlock(resolveComponent(s, "CatchProjectiles")!, block("CatchProjectiles { Bleed 1 }"), o);
     eq(closed.unknown.join(","), "Bleed", "a component without children does not take effect names");
   });
