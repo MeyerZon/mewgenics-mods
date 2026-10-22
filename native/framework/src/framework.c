@@ -132,7 +132,7 @@ static void hook_Character_BeginTurn(void *character, int kind) {
 static int install_step(const FwHookSpec *spec, int ordinal, int failuresSoFar, void *user) {
     (void)ordinal; (void)failuresSoFar; (void)user;
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_TacticsTest_LateRender) return glow_engine_hook_step(spec);
-    if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Camera_render) return obs3d_engine_hook_step(spec);
+    if (spec->step == FW_HOOK_SYMBOL && (spec->index == FW_SYM_Camera_render || spec->index == FW_SYM_Camera_RenderOneLayer)) return obs3d_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Character_BeginTurn) {
         uintptr_t rva = g_sym[spec->index] - g_base;
         void *tramp = NULL;

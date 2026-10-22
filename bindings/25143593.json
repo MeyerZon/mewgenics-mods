@@ -9054,6 +9054,44 @@
       ]
     },
     {
+      "name": "Camera_RenderOneLayer",
+      "kind": "function",
+      "rva": "0x979210",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 08 57 48 81 EC A0 00 00 00 83",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Camera*, int layer): unless +0x58 == 1, sets the current camera, pushes the stack top x Camera_GetViewProjection, draws that one layer (Layer_Draw) and its passes, pops. RenderCore 0x989020 calls it (0x140989316) for every layer index x every camera of its second list: the world camera TacticsTest+0x68 and the UI camera (OBSERVED T2 2026-10-22: Camera_render, the first list, never sees +0x68)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 31,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 48 89 58 08 57 48 81 EC A0"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Camera_RenderOneLayer",
+          "index": 39
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_RenderOneLayer_0x979210.c",
+        ".analysis/notes-r3dB.md"
+      ]
+    },
+    {
       "name": "Layer_Draw",
       "kind": "function",
       "rva": "0x9896f0",

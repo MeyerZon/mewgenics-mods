@@ -1,0 +1,17 @@
+mods: dev-sandbox
+timeout: 90s
+hide: true
+# Phase-0 3D observer (docs/possible_3d_work.md "Phase 0"): a log-only run. Launch it with MEWFW_OBSERVE3D=3 in the
+# environment (`MEWFW_OBSERVE3D=3 npm run test:ingame -- dev-sandbox observe3d`); the framework then hooks
+# Camera_render and logs "obs3d ..." lines for world-camera frames 1, 61 and 121 of the fight into
+# mod_logs/mewframework.log. Without the variable the hook is not installed and this script is a plain fight smoke.
+# The lines of the 2026-10-22 run are pinned in editor/test/fixtures/ingame/observe3d-log.txt (parsed by
+# editor/src/core/ingame/obs3d.ts). No shots: nothing is drawn differently.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 30
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 200
+quit

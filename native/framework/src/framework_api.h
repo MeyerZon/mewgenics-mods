@@ -63,6 +63,7 @@ typedef enum FwSymbol {
     /* the 3D block (docs/possible_3d_work.md): the phase-0 observer's hook, and the view-projection a perspective camera replaces */
     FW_SYM_Camera_render,               /* void (Camera*) — binds the RT (RTT cameras), stack top *= Camera_GetViewProjection, draws the enabled layers + passes */
     FW_SYM_Camera_GetViewProjection,    /* float* (Camera*, float out[16]) — K x inverse(view): zoom +0x168, y-flip int +0x170, 1280x720 canvas centre 640,360 */
+    FW_SYM_Camera_RenderOneLayer,       /* void (Camera*, int layer) — how the world (TacticsTest+0x68) and UI cameras draw: one layer, own VP push */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 

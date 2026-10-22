@@ -1,8 +1,9 @@
 /*
  * obs3d_engine.c — the phase-0 3D observer (docs/possible_3d_work.md "Phase 0"). Log-only: it never writes game
  * memory and changes no behaviour. OFF unless the environment variable MEWFW_OBSERVE3D holds a positive number N
- * (fw_obs3d_budget); then the hook on Camera_render (0x9787c0, FW_SYM_Camera_render) is installed and, during a
- * fight, the world camera's render #1, #1+60, #1+120, ... (N windows, fw_obs3d_should_log) are observed:
+ * (fw_obs3d_budget); then the hooks on Camera_render (0x9787c0, the RTT cameras: RenderCore 0x989020's first list) and
+ * Camera_RenderOneLayer (0x979210, every layer of the world and UI cameras: its second list; the T2 run of 2026-10-22
+ * showed Camera_render never sees TacticsTest+0x68) are installed and, during a fight, the world camera's render #1, #1+60, #1+120, ... (N windows, fw_obs3d_should_log) are observed:
  *   - "obs3d globals ..."  ISO / ISO^-1, the render-state flags, the cull-disable counter, the depth bias, the matrix
  *                          stack top (once per observed frame, read right before the world camera renders);
  *   - "obs3d cam ..."      every camera that renders in that frame (world flag = TacticsTest+OFF_TT_MAIN_CAMERA):
@@ -25,15 +26,20 @@
 #include "fw_obs3d_rules.h"
 
 typedef void   (*fn_CameraRender)(void *cam);
+typedef void   (*fn_CameraRenderOneLayer)(void *cam, int layer);
 typedef float *(*fn_GetVP)(void *cam, float out[16]);
 typedef float *(*fn_GetScreenMatrix)(void *renderer, float out[16]);
 
 static fn_CameraRender g_orig;
+static fn_CameraRenderOneLayer g_origOneLayer;
 static int g_budget;           /* MEWFW_OBSERVE3D, read once at install */
 static void *g_tt;             /* the fight's TacticsTest (from LateRender) */
 static int g_worldFrame;       /* world-camera renders in this fight */
 static int g_logging;          /* the current frame (since the last world render) is an observed one */
 static int g_windows;          /* observed frames so far (all fights) */
+static long g_calls;           /* Camera_render calls seen (the RTT cameras) */
+static long g_layerCalls;      /* Camera_RenderOneLayer calls seen (world + UI cameras, once per layer) */
+static int g_lateLogged;       /* "obs3d late" lines written this fight */
 
 static void *data_ptr(int id) {
     uintptr_t a = fw_resolve_data_addr(1, g_build, g_base, id);
@@ -41,8 +47,14 @@ static void *data_ptr(int id) {
 }
 
 void obs3d_on_late_render(void *tt) {
-    if (!g_orig) return;
-    if (tt != g_tt) { g_tt = tt; g_worldFrame = 0; g_logging = 0; fw_log("obs3d fight tt=%p", tt); }
+    if (!g_orig && !g_origOneLayer) return;
+    if (tt != g_tt) { g_tt = tt; g_worldFrame = 0; g_logging = 0; g_lateLogged = 0; fw_log("obs3d fight tt=%p", tt); }
+    /* the first late frames of a fight: is Camera_render reached, and for the world camera? */
+    if (g_lateLogged < 3) {
+        g_lateLogged++;
+        void *world = tt ? *(void **)((unsigned char *)tt + OFF_TT_MAIN_CAMERA) : NULL;
+        fw_log("obs3d late n=%d tt=%p world=%p camcalls=%ld layercalls=%ld worldframes=%d", g_lateLogged, tt, world, g_calls, g_layerCalls, g_worldFrame);
+    }
 }
 
 static void log_item(int frame, void *cam, int from, int below) {
@@ -99,21 +111,31 @@ static void observe(void *cam) {
 }
 
 static void hook_Camera_render(void *cam) {
+    g_calls++;
     if (cam && g_windows <= g_budget) observe(cam);
     g_orig(cam);
 }
 
-/* the FW_SYM_Camera_render step of FW_HOOK_PLAN: a no-op success when the observer is off */
+/* RenderCore's second list: every layer index x every camera (the world camera TacticsTest+0x68 and the UI camera);
+ * a camera's layer-0 call opens its frame */
+static void hook_Camera_RenderOneLayer(void *cam, int layer) {
+    g_layerCalls++;
+    if (cam && layer == 0 && g_windows <= g_budget) observe(cam);
+    g_origOneLayer(cam, layer);
+}
+
+/* the FW_SYM_Camera_render / FW_SYM_Camera_RenderOneLayer steps of FW_HOOK_PLAN: a no-op success when the observer is off */
 int obs3d_engine_hook_step(const FwHookSpec *spec) {
     g_budget = fw_obs3d_budget(getenv("MEWFW_OBSERVE3D"));
     if (g_budget <= 0) return 1;
+    int one = spec->index == FW_SYM_Camera_RenderOneLayer;
     void *tramp = NULL;
     uintptr_t rva = g_sym[spec->index] - g_base;
-    if (!g_mj.InstallHook(rva, 0, (void *)hook_Camera_render, &tramp, spec->priority, FW_OWNER)) {
+    if (!g_mj.InstallHook(rva, 0, one ? (void *)hook_Camera_RenderOneLayer : (void *)hook_Camera_render, &tramp, spec->priority, FW_OWNER)) {
         fw_log("MJ_InstallHook failed for %s (rva 0x%llx)", spec->label, (unsigned long long)rva);
         return 0;
     }
-    g_orig = (fn_CameraRender)tramp;
+    if (one) g_origOneLayer = (fn_CameraRenderOneLayer)tramp; else g_orig = (fn_CameraRender)tramp;
     fw_log("hook installed: %s rva 0x%llx (observe3d: %d window(s) of %d world frames)", spec->label, (unsigned long long)rva, g_budget, FW_OBS3D_EVERY);
     return 1;
 }
