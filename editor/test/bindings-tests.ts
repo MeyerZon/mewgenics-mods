@@ -387,7 +387,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (35, incl. the v4 run-entry symbols and the 7 glow symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 35);
+    eq(want.length, 39);
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");
@@ -1823,6 +1823,56 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const left = m.entries.filter((e) => e.anchors.unanchored).length;
     assert(left <= 46 - WITNESSED_OFFSETS_BATCH1.length, `unanchored count dropped by at least the batch: ${left}`);
   });
+  // ---- campaign walk (2026-10-22): run start / run travel / run fight (docs/engine-map.md "Campaign walk") ----
+  /** FwSymbol functions the harness calls or hooks: name, rva, enumerator index (appended after Camera_AddPostProcessPass = 34) */
+  const WALK_SYMBOLS: [string, string, number][] = [
+    ["MewDirector_GoOnAnAdventure", "0x3b01c0", 35], ["MapScreen_init", "0x38d150", 36], ["MapScreen_EnterNode", "0x391c20", 37], ["MewDirector_StartMapBattle", "0x3b6d10", 38],
+  ];
+  /** reference-only functions (witness carriers): name, rva */
+  const WALK_REFERENCE: [string, string][] = [["MapScreen_onArriveNode", "0x39b180"], ["MapScreen_tickLambda", "0x229030"], ["MapScreen_generate_map", "0x21ca60"]];
+  /** struct offsets: name, macro, value, the function whose bytes witness it */
+  const WALK_OFFSETS: [string, string, string, string][] = [
+    ["MapScreen_nodeCount", "OFF_MAPSCREEN_NODE_COUNT", "0x7c", "MapScreen_init"],
+    ["MapScreen_nodes", "OFF_MAPSCREEN_NODES", "0x80", "MapScreen_init"],
+    ["MapScreen_marker", "OFF_MAPSCREEN_MARKER", "0xa0", "MapScreen_init"],
+    ["MapMarker_node", "OFF_MAPMARKER_NODE", "0x50", "MapScreen_tickLambda"],
+    ["MapNode_type", "OFF_MAPNODE_TYPE", "0x138", "MapScreen_EnterNode"],
+    ["MapNode_nextCount", "OFF_MAPNODE_NEXT_COUNT", "0x144", "MapScreen_generate_map"],
+    ["MapNode_nextData", "OFF_MAPNODE_NEXT_DATA", "0x148", "MapScreen_generate_map"],
+    ["MapNode_done", "OFF_MAPNODE_DONE", "0x168", "MapScreen_onArriveNode"],
+  ];
+  const WALK_NAMES = new Set([...WALK_SYMBOLS.map((x) => x[0]), ...WALK_REFERENCE.map((x) => x[0]), ...WALK_OFFSETS.map((x) => x[0])]);
+  test("the committed manifest carries the campaign-walk bindings (2026-10-22) as one contiguous block at its end: 4 FwSymbol functions (GoOnAnAdventure, MapScreen::init, MapScreen::EnterNode, StartMapBattle), 3 reference functions, 8 witnessed offsets; the generated headers expose them", () => {
+    const m = loadManifest(realPath);
+    eq(enumerators("FW_SYM_").length, 39);
+    for (const [name, rva, index] of WALK_SYMBOLS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ enum: `FW_SYM_${name}`, index }]), `${name} enumerator`);
+      eq(enumerators("FW_SYM_")[index], `FW_SYM_${name}`, `${name} sits at index ${index} of framework_api.h`);
+    }
+    for (const [name, rva] of WALK_REFERENCE) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(e!.exposure.length, 0, `${name} is reference only`);
+    }
+    for (const [name, macro, value, fn] of WALK_OFFSETS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset", `${name} is an offset entry`);
+      eq(e!.value, value, `${name} value`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      const w = e!.anchors.witness;
+      assert(!!w && w.function === fn && typeof w.pattern === "string" && Number.isInteger(w.dispAt), `${name}: witness {function ${fn}, pattern, dispAt}: ${JSON.stringify(w)}`);
+    }
+    const names = m.entries.map((e) => e.name);
+    const idx = names.map((n, i) => (WALK_NAMES.has(n) ? i : -1)).filter((i) => i >= 0);
+    eq(idx.length, WALK_NAMES.size, "every walk entry is present");
+    eq(idx[0], names.length - WALK_NAMES.size, "the walk block is the manifest's tail (eases the 3-way merge by entry name)");
+    const oh = genOffsetsH([m]);
+    for (const [, macro, value] of WALK_OFFSETS) assert(new RegExp(`^#define ${macro}\\s+\\(?${value}\\)?\\s`, "m").test(oh), `${macro} ${value} in offsets.h`);
+    const sh = genSignaturesH([m]);
+    for (const [name, rva] of WALK_SYMBOLS) assert(sh.includes(`0x${rva.slice(2)}u },  /* FW_SYM_${name} */`), `the ${name} row in signatures.h`);
+  });
   // ---- per-unit glow bindings (2026-10-22): the combat outline mask mewframework's glow engine rides ----
   /** FwSymbol functions the glow engine calls or hooks: name, rva, enumerator index (appended after SaveProps_GetOrCreate = 27) */
   const GLOW_SYMBOLS: [string, string, number][] = [
@@ -1857,7 +1907,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const GLOW_NAMES = new Set([...GLOW_SYMBOLS.map((x) => x[0]), ...GLOW_REFERENCE.map((x) => x[0]), "ShaderManager_global", "TacticsTest_vftable", ...GLOW_OFFSETS.map((x) => x[0]), ...GLOW_CONSTANTS.map((x) => x[0])]);
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block");
+    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + WALK_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the campaign-walk block");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);

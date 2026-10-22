@@ -136,6 +136,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.ok && p.body.startsWith("seed 7\n"), "DLL-side directive");
     });
 
+    test("run directives (campaign walk): run start [<map>.gon] (default alley.gon), run travel <node type> (MapNode::str_to_type's 19 names), run fight, expect level \"<substr>\"; bad forms are line errors; all pass through to the DLL", () => {
+      eq(JSON.stringify(parseDirective("run start", 2)), JSON.stringify({ line: 2, kind: "run", op: "start", arg: "alley.gon" }));
+      eq(JSON.stringify(parseDirective("run start sewers.gon", 3)), JSON.stringify({ line: 3, kind: "run", op: "start", arg: "sewers.gon" }));
+      eq(JSON.stringify(parseDirective("run travel battle", 4)), JSON.stringify({ line: 4, kind: "run", op: "travel", arg: "battle" }));
+      eq(JSON.stringify(parseDirective("run travel optional_event", 4)), JSON.stringify({ line: 4, kind: "run", op: "travel", arg: "optional_event" }));
+      eq(JSON.stringify(parseDirective("run fight", 5)), JSON.stringify({ line: 5, kind: "run", op: "fight", arg: "" }));
+      eq(JSON.stringify(parseDirective('expect level "walkprobe/"', 6)), JSON.stringify({ line: 6, kind: "expect", what: "level", substr: "walkprobe/" }));
+      eq(script.NODE_TYPES.length, 19); eq(script.NODE_TYPES[5], "battle");
+      for (const bad of ["run", "run walk", "run start alley", "run start a b.gon", "run start ../x.gon", "run travel", "run travel castle", "run travel battle now", "run fight now", "expect level", "expect level walkprobe", 'expect level "x" more']) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript('enter Campaign house\nrun start\nrun travel battle\nrun fight\nexpect level "walkprobe/"\nquit\n', { owningMod: "m" });
+      assert(p.ok && p.body.startsWith('enter Campaign house\nrun start\nrun travel battle\nrun fight\nexpect level "walkprobe/"\n'), `DLL-side directives: ${JSON.stringify(p.errors)}`);
+    });
+
     test("shot directive parses a quoted label; bare or missing label is a line error; it passes through to the DLL", () => {
       const d = parseDirective('shot "round one"', 4) as { kind: string; label: string };
       eq(d.kind, "shot"); eq(d.label, "round one");
@@ -513,6 +526,20 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const r = parseResults(text) as unknown as { seed: { line: number; seed: string; ok: boolean; detail: string } | null };
       eq(JSON.stringify(r.seed), JSON.stringify({ line: 2, seed: "42", ok: true, detail: "state at 0x1: 00… -> 11…" }));
       eq((parseResults(fixture("result-pass.jsonl")) as unknown as { seed: unknown }).seed, null);
+    });
+    test("run events are collected as result.runs (line, op, arg, ok, map/node/type/depth/level when present, detail); none -> []", () => {
+      const text = '{"ev":"start","t":0,"frame":0}\n'
+        + '{"ev":"run","line":3,"op":"start","arg":"alley.gon","ok":true,"map":"alley.gon","detail":"d1","t":10,"frame":5}\n'
+        + '{"ev":"run","line":4,"op":"travel","arg":"battle","ok":true,"node":7,"type":"battle","depth":1,"detail":"d2","t":11,"frame":6}\n'
+        + '{"ev":"run","line":5,"op":"fight","arg":"","ok":true,"level":"alley/walkprobe/wp_alley","detail":"d3","t":12,"frame":7}\n'
+        + '{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
+      const r = parseResults(text) as unknown as { runs: Record<string, unknown>[] };
+      eq(JSON.stringify(r.runs), JSON.stringify([
+        { line: 3, op: "start", arg: "alley.gon", ok: true, map: "alley.gon", detail: "d1" },
+        { line: 4, op: "travel", arg: "battle", ok: true, node: 7, type: "battle", depth: 1, detail: "d2" },
+        { line: 5, op: "fight", arg: "", ok: true, level: "alley/walkprobe/wp_alley", detail: "d3" },
+      ]));
+      eq((parseResults(fixture("result-pass.jsonl")) as unknown as { runs: unknown[] }).runs.length, 0);
     });
     test("shot events are collected as result.shots (line, label, frame)", () => {
       const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"shot","line":3,"label":"round one","hold_ms":700,"t":10,"frame":5}\n{"ev":"end","code":0,"reason":"quit","t":20,"frame":9}\n';
@@ -990,6 +1017,11 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(seedFail.verdict, "fail"); assert(/seed 42 failed at line 2: RNG state not reachable/.test(seedFail.reason), seedFail.reason);
       const seedUnavail = decideVerdict({ preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "seed_unavailable" }, seed: { line: 2, seed: "42", ok: false, detail: "symbol missing" } } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
       eq(seedUnavail.verdict, "harness-error"); assert(/seed_unavailable|symbol missing/.test(seedUnavail.reason), seedUnavail.reason);
+      // run: run_failed (code 1) -> fail naming the op, line and detail; run_unavailable (code 4) -> harness-error
+      const runFail = decideVerdict({ preflight: pre, exit: exit(1), result: res({ end: { code: 1, reason: "run_failed" }, expects: { passed: 0, failed: 0, failures: [] }, runs: [{ line: 4, op: "travel", arg: "battle", ok: false, detail: "no battle node reachable" }] } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(runFail.verdict, "fail"); assert(/run travel battle failed at line 4: no battle node reachable/.test(runFail.reason), runFail.reason);
+      const runUnavail = decideVerdict({ preflight: pre, exit: exit(4), result: res({ end: { code: 4, reason: "run_unavailable" }, runs: [{ line: 3, op: "start", arg: "alley.gon", ok: false, detail: "symbol missing" }] } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });
+      eq(runUnavail.verdict, "harness-error"); assert(/run start alley\.gon unavailable at line 3: symbol missing \(run_unavailable/.test(runUnavail.reason), runUnavail.reason);
       // popups the harness dismissed are appended to a non-pass reason (they usually explain it)
       const popups = [{ title: "WARNING", text: "no saved winning teams - win at least one run first!", frame: 519 }];
       const crashWithPopup = decideVerdict({ preflight: pre, exit: exit(3), result: res({ end: { code: 3, reason: "crash" }, popups } as DeepPartial<ResultSummary>), logs: logs({}), safety: safe });

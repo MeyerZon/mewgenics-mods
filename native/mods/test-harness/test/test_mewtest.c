@@ -435,6 +435,8 @@ typedef struct Fake {
     char pipeReply[8192]; int pipeReplies;                          /* pipe_reply: the last reply the runner handed to the glue */
     int glowResult; int glowCalls; int glowUnit; int glowCleared; float glowRgba[4];   /* set_unit_glow: programmable result (1 ok / 0 refused / -1 unavailable) */
     const void *gon[8];                                             /* unit_gon: the unit's entry node (NULL = unreadable) */
+    int runResult; int runCalls; int runOp; char runArg[64]; MtRunInfo runInfo;   /* run_step: programmable result + the info it reports */
+    int runReadyAfter;                                              /* run_step answers 2 (not ready) this many times first */
 } Fake;
 static Fake fk;
 
@@ -487,10 +489,19 @@ static int fk_set_unit_glow(void *u, int i, const float *rgba, char *detail, siz
     return fk.glowResult;
 }
 
+static int fk_run_step(void *u, int op, const char *arg, MtRunInfo *info, char *detail, size_t cap) {
+    (void)u;
+    fk.runCalls++; fk.runOp = op; snprintf(fk.runArg, sizeof fk.runArg, "%s", arg ? arg : "");
+    if (fk.runReadyAfter > 0) { fk.runReadyAfter--; snprintf(detail, cap, "fake not ready"); return 2; }
+    *info = fk.runInfo;
+    snprintf(detail, cap, "fake run %d", op);
+    return fk.runResult;
+}
+
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
-    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon,
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, fk_run_step,
 };
 
 static MtRunner rr;
@@ -1491,6 +1502,126 @@ TEST(runner_expect_gon_number_string_bool_exists_missing_no_entry_unreadable_and
     fk_reset("expect gon 0 stats exists\nquit\n");      /* no combat */
     steps_until_done(5);
     CHECK(has(ev(0), "\"kind\":\"gon\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
+}
+
+
+/* ====================================================================== */
+/* mt_walk: the campaign walk (run start | run travel <type> | run fight, expect level)                    */
+/* ====================================================================== */
+TEST(walk_node_type_names_match_mapnode_str_to_type) {
+    /* MapNode::str_to_type 0x225680: none 0 ... any 18 */
+    const char *names[] = { "none", "npc", "enter", "exit", "home", "battle", "hard", "miniboss", "boss", "event", "optional_event",
+                            "special_event", "shop", "treasure", "furniturebox", "foodbox", "bonus", "empty", "any" };
+    CHECK_EQ((int)(sizeof names / sizeof names[0]), MT_NODE_TYPE_COUNT);
+    for (int i = 0; i < MT_NODE_TYPE_COUNT; i++) { CHECK_EQ(mt_node_type_id(names[i], strlen(names[i])), i); CHECK_STR(mt_node_type_name(i), names[i]); }
+    CHECK_EQ(mt_node_type_id("battl", 5), -1); CHECK_EQ(mt_node_type_id("Battle", 6), -1); CHECK_EQ(mt_node_type_id("", 0), -1);
+    CHECK_STR(mt_node_type_name(-1), "?"); CHECK_STR(mt_node_type_name(19), "?");
+}
+
+TEST(walk_nearest_is_breadth_first_over_next_edges_and_skips_the_start) {
+    /* 0 enter -> 1 empty -> 3 battle ; 0 -> 2 event -> 4 battle -> 5 battle ; 0 -> 6 battle (depth 1 wins) */
+    int type[] = { 2, 17, 9, 5, 5, 5, 5 };
+    int adjStart[] = { 0, 3, 4, 5, 5, 6, 6, 6 };
+    int adj[] = { 1, 2, 6, 3, 4, 5 };
+    int depth = -1;
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart, adj, 0, 5, &depth), 6); CHECK_EQ(depth, 1);
+    /* without the direct edge: edge order decides between equal depths (1 before 2 -> node 3) */
+    int adjStart2[] = { 0, 2, 3, 4, 4, 5, 5, 5 };
+    int adj2[] = { 1, 2, 3, 4, 5 };
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart2, adj2, 0, 5, &depth), 3); CHECK_EQ(depth, 2);
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart2, adj2, 0, 9, &depth), 2); CHECK_EQ(depth, 1);   /* event */
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart2, adj2, 3, 5, &depth), -1);                      /* 3 has no next node */
+    CHECK_EQ(mt_walk_nearest(7, type, adjStart2, adj2, 0, 8, &depth), -1);                      /* no boss */
+    CHECK_EQ(depth, -1);
+}
+
+TEST(walk_nearest_survives_cycles_bad_edges_and_bad_input) {
+    int type[] = { 2, 17, 17, 5 };
+    int adjStart[] = { 0, 1, 3, 4, 4 };
+    int adj[] = { 1, 0, 99, 3 };          /* 1 -> 0 is a cycle, 99 is out of range and ignored, 2 -> 3 is never reached */
+    int depth = 0;
+    CHECK_EQ(mt_walk_nearest(4, type, adjStart, adj, 0, 5, &depth), -1);
+    adj[2] = 2;                           /* 1 -> 2 -> 3 */
+    CHECK_EQ(mt_walk_nearest(4, type, adjStart, adj, 0, 5, &depth), 3); CHECK_EQ(depth, 3);
+    CHECK_EQ(mt_walk_nearest(4, type, adjStart, adj, 7, 5, &depth), -1);   /* start out of range */
+    CHECK_EQ(mt_walk_nearest(0, type, adjStart, adj, 0, 5, &depth), -1);
+    CHECK_EQ(mt_walk_nearest(MT_WALK_MAX_NODES + 1, type, adjStart, adj, 0, 5, &depth), -1);
+}
+
+TEST(script_run_directives_parse_and_bad_forms_are_line_errors) {
+    char err[256]; int line = 0;
+    const char *s = "run start\nrun start sewers.gon\nrun travel battle\nrun travel optional_event\nrun fight\nexpect level \"walkprobe/\"\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 7);
+    CHECK_EQ(g_s.d[0].kind, MT_D_RUN); CHECK_EQ(g_s.d[0].n, MT_RUN_START); CHECK_STR(g_s.d[0].a, "alley.gon");   /* the default map: the run's first */
+    CHECK_EQ(g_s.d[1].n, MT_RUN_START); CHECK_STR(g_s.d[1].a, "sewers.gon");
+    CHECK_EQ(g_s.d[2].n, MT_RUN_TRAVEL); CHECK_STR(g_s.d[2].a, "battle"); CHECK_EQ(g_s.d[2].value, 5);
+    CHECK_EQ(g_s.d[3].n, MT_RUN_TRAVEL); CHECK_EQ(g_s.d[3].value, 10);
+    CHECK_EQ(g_s.d[4].kind, MT_D_RUN); CHECK_EQ(g_s.d[4].n, MT_RUN_FIGHT);
+    CHECK_EQ(g_s.d[5].kind, MT_D_EXPECT_LEVEL); CHECK_STR(g_s.d[5].a, "walkprobe/");
+    CHECK_STR(mt_run_op_name(MT_RUN_START), "start"); CHECK_STR(mt_run_op_name(MT_RUN_TRAVEL), "travel"); CHECK_STR(mt_run_op_name(MT_RUN_FIGHT), "fight");
+    const char *bad[] = { "run\n", "run walk\n", "run start alley\n", "run start a b.gon\n", "run start ../x.gon\n", "run travel\n", "run travel castle\n",
+                          "run travel battle now\n", "run fight now\n", "expect level\n", "expect level walkprobe\n", "expect level \"x\" more\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) { line = 0; CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line)); CHECK_EQ(line, 1); }
+}
+
+TEST(runner_run_calls_the_host_with_op_and_arg_and_emits_a_run_event) {
+    fk_reset("run start\nrun travel battle\nquit\n");
+    fk.runResult = 1;
+    snprintf(fk.runInfo.map, sizeof fk.runInfo.map, "alley.gon"); fk.runInfo.node = -1; fk.runInfo.nodeType = -1; fk.runInfo.depth = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.runCalls, 1); CHECK_EQ(fk.runOp, MT_RUN_START); CHECK_STR(fk.runArg, "alley.gon");
+    CHECK(has(last_ev(), "{\"ev\":\"run\"")); CHECK(has(last_ev(), "\"line\":1")); CHECK(has(last_ev(), "\"op\":\"start\""));
+    CHECK(has(last_ev(), "\"arg\":\"alley.gon\"")); CHECK(has(last_ev(), "\"ok\":true")); CHECK(has(last_ev(), "\"map\":\"alley.gon\""));
+    CHECK(!has(last_ev(), "\"node\"")); CHECK(!has(last_ev(), "\"level\""));                      /* unset fields add no key */
+    CHECK(has(last_ev(), "\"detail\":\"fake run 1\""));
+    fk.runInfo.node = 7; fk.runInfo.nodeType = 5; fk.runInfo.depth = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.runOp, MT_RUN_TRAVEL); CHECK_STR(fk.runArg, "battle");
+    CHECK(has(last_ev(), "\"op\":\"travel\"")); CHECK(has(last_ev(), "\"node\":7")); CHECK(has(last_ev(), "\"type\":\"battle\"")); CHECK(has(last_ev(), "\"depth\":1"));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":0"));
+}
+
+TEST(runner_run_fight_waits_while_not_ready_then_records_the_level_for_expect_level) {
+    fk_reset("run fight\nexpect level \"walkprobe/wp_\"\nexpect level \"alley/easy\"\nquit\n");
+    fk.runResult = 1; fk.runReadyAfter = 2;
+    snprintf(fk.runInfo.level, sizeof fk.runInfo.level, "alley/walkprobe/wp_alley"); fk.runInfo.node = -1; fk.runInfo.nodeType = -1; fk.runInfo.depth = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(count_ev("run"), 0); CHECK_EQ(rr.pc, 0);                                   /* retrying: no event yet */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.runCalls, 3); CHECK_EQ(count_ev("run"), 1);
+    CHECK(has(last_ev(), "\"op\":\"fight\"")); CHECK(has(last_ev(), "\"level\":\"alley/walkprobe/wp_alley\""));
+    steps_until_done(5);
+    CHECK(has(ev(1), "{\"ev\":\"expect\"")); CHECK(has(ev(1), "\"kind\":\"level\"")); CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "\"arg\":\"walkprobe/wp_\""));
+    CHECK(has(ev(1), "\"detail\":\"battle level \\\"alley/walkprobe/wp_alley\\\"\""));
+    CHECK(has(ev(2), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"expect_pass\":1")); CHECK(has(last_ev(), "\"expect_fail\":1"));
+}
+
+TEST(runner_expect_level_without_a_fight_fails_and_run_failures_end_the_script) {
+    fk_reset("expect level \"x\"\nquit\n");
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"kind\":\"level\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no battle level yet (run fight first)"));
+    fk_reset("run travel battle\nquit\n");
+    fk.runResult = 0; fk.runInfo.node = -1; fk.runInfo.nodeType = -1; fk.runInfo.depth = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "{\"ev\":\"run\"")); CHECK(has(ev(0), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"run_failed\"")); CHECK_EQ(fk.exitCode, 1);
+    fk_reset("run start\nquit\n");
+    fk.runResult = -1; fk.runInfo.node = -1; fk.runInfo.nodeType = -1; fk.runInfo.depth = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"run_unavailable\"")); CHECK_EQ(fk.exitCode, 4);
+    fk_reset("run fight\nquit\n");
+    fk.runResult = 2; fk.now = 1000; fk.runReadyAfter = 0;
+    mt_runner_step(&rr, &HOST);
+    fk.now = 1000 + MT_CONSOLE_WAIT_MS + 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "not ready")); CHECK(has(last_ev(), "\"reason\":\"run_failed\""));
+    fk_reset("run start\nquit\n");
+    fk.ready = 0; fk.runResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1); CHECK_EQ(fk.runCalls, 0);                 /* like enter: waits for the console */
 }
 
 int main(void) { return MT_RUN_ALL(); }

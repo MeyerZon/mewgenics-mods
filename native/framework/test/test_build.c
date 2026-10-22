@@ -98,6 +98,20 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetUniformFloat].expectedRva, 0x9bddc0u);
     CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetTexture].expectedRva, 0x9bdcd0u);
     CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Camera_AddPostProcessPass].expectedRva, 0x979880u);
+    /* campaign walk (2026-10-22): the harness's run start / run travel / run fight (docs/engine-map.md "Campaign walk") */
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MewDirector_GoOnAnAdventure].expectedRva, 0x3b01c0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MapScreen_init].expectedRva, 0x38d150u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MapScreen_EnterNode].expectedRva, 0x391c20u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_MewDirector_StartMapBattle].expectedRva, 0x3b6d10u);
+    CHECK(b->symbols[FW_SYM_MapScreen_EnterNode].pattern != NULL);
+    CHECK_EQ(OFF_MAPSCREEN_NODE_COUNT, 0x7c);
+    CHECK_EQ(OFF_MAPSCREEN_NODES, 0x80);
+    CHECK_EQ(OFF_MAPSCREEN_MARKER, 0xa0);
+    CHECK_EQ(OFF_MAPMARKER_NODE, 0x50);
+    CHECK_EQ(OFF_MAPNODE_TYPE, 0x138);
+    CHECK_EQ(OFF_MAPNODE_NEXT_COUNT, 0x144);
+    CHECK_EQ(OFF_MAPNODE_NEXT_DATA, 0x148);
+    CHECK_EQ(OFF_MAPNODE_DONE, 0x168);
     CHECK_EQ(b->rva_data[FW_DATA_ShaderManager], 0x13c4a30);   /* the App global: the material map lives at +0x278 of it */
     CHECK_EQ(b->rva_TacticsTest_vftable, 0xf0f4b8);
     CHECK_EQ(OFF_TT_MASK_CAMERA, 0x58); CHECK_EQ(OFF_TT_MAIN_CAMERA, 0x68); CHECK_EQ(OFF_TT_BLUR_PASS, 0x90); CHECK_EQ(OFF_TT_COMPOSITE_PASS, 0x98);
