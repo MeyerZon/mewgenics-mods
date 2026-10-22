@@ -364,7 +364,10 @@ static int fg_heapUsed;
 static int fg_mem_read(void *u, const void *addr, void *out, size_t n) {
     (void)u;
     const unsigned char *a = (const unsigned char *)addr;
-    if (a < fg_arena || a + n > fg_arena + sizeof fg_arena) return 0;
+    const unsigned char *heap = (const unsigned char *)fg_heap;
+    int inArena = a >= fg_arena && a + n <= fg_arena + sizeof fg_arena;
+    int inHeap = a >= heap && a + n <= heap + sizeof fg_heap;      /* the heap buffers of the long std::strings */
+    if (!inArena && !inHeap) return 0;
     memcpy(out, a, n);
     return 1;
 }
@@ -1305,7 +1308,7 @@ TEST(gon_walker_by_name_and_index_scalars_containers_missing_and_unreadable) {
     CHECK_EQ(v.type, 1); CHECK_STR(v.text, "Fireball");
     CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "spells.1", &v, why, sizeof why), 1);
     CHECK_EQ(v.type, 2); CHECK_EQ(v.i, 2);
-    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "4.1", &v, why, sizeof why), 1);                                  /* indices work on objects too */
+    CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "3.1", &v, why, sizeof why), 1);                                  /* indices work on objects too (spells is the root's 4th child) */
     CHECK_EQ(v.type, 2); CHECK_EQ(v.i, 2);
     CHECK_EQ(mt_gon_get(fg_mem_read, NULL, fg_node(0), "stats", &v, why, sizeof why), 1);
     CHECK_EQ(v.type, 3); CHECK_EQ(v.childCount, 2);

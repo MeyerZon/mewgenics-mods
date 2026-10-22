@@ -62,7 +62,9 @@ static int parse_op(const char *p, size_t n, MtOp *out) {
     return 1;
 }
 
-static const char *const UNIT_FIELDS[] = { "name", "class", "faction", "move", "act", "turnkind" };
+/* MtUnitField order; the units event's keys; script.ts UNIT_FIELDS */
+static const char *const UNIT_FIELDS[] = { "name", "class", "entry", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
+                                           "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck" };
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out) {
     for (size_t i = 0; i < sizeof UNIT_FIELDS / sizeof UNIT_FIELDS[0]; i++) {
         if (strlen(UNIT_FIELDS[i]) == n && !strncmp(p, UNIT_FIELDS[i], n)) { *out = (MtUnitField)i; return 1; }
@@ -76,6 +78,48 @@ static int parse_uint(const char *p, size_t n, long *out) {
     for (size_t i = 0; i < n; i++) if (p[i] < '0' || p[i] > '9') return 0;
     *out = strtol(p, NULL, 10);
     return 1;
+}
+/* an optionally negative integer (hp / stat fields can go below 0 in play) */
+static int parse_int(const char *p, size_t n, long *out) {
+    int neg = n > 1 && p[0] == '-';
+    if (!parse_uint(p + neg, n - neg, out)) return 0;
+    if (neg) *out = -*out;
+    return 1;
+}
+/* -?digits[.digits]: the shape of an expect gon numeric literal (strtod does the value) */
+static int parse_number(const char *p, size_t n, double *out) {
+    size_t i = 0, digits = 0;
+    if (i < n && p[i] == '-') i++;
+    while (i < n && p[i] >= '0' && p[i] <= '9') { i++; digits++; }
+    if (i < n && p[i] == '.') { i++; while (i < n && p[i] >= '0' && p[i] <= '9') { i++; digits++; } }
+    if (i != n || !digits) return 0;
+    char tmp[40];
+    if (n >= sizeof tmp) return 0;
+    memcpy(tmp, p, n); tmp[n] = 0;
+    *out = strtod(tmp, NULL);
+    return 1;
+}
+/* a GON path: non-empty dot-separated segments, none empty ("a.b.0"; not ".a", "a.", "a..b") */
+static int path_ok(const char *p, size_t n) {
+    if (!n || p[0] == '.' || p[n - 1] == '.') return 0;
+    for (size_t i = 1; i < n; i++) if (p[i] == '.' && p[i - 1] == '.') return 0;
+    return 1;
+}
+/* <idx|bareword|"name"> at p: fills d (unitIsIndex/n or b); returns the char after it, NULL on a bad quoted name / arena */
+static const char *parse_unit(MtScript *s, const char *p, MtDirective *d, char *q, size_t qcap, int *arenaFull) {
+    size_t qn = 0;
+    *arenaFull = 0;
+    if (*p == '"') {
+        const char *after = parse_quoted(p, q, qcap, &qn);
+        if (!after) return NULL;
+        if (!(d->b = arena_add(s, q, qn))) { *arenaFull = 1; return NULL; }
+        return after;
+    }
+    size_t ul = tok_len(p);
+    long idx;
+    if (parse_uint(p, ul, &idx)) { d->unitIsIndex = 1; d->n = idx; }
+    else if (!(d->b = arena_add(s, p, ul))) { *arenaFull = 1; return NULL; }
+    return p + ul;
 }
 
 static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, char *err, size_t errCap, int *errLine) {
@@ -212,23 +256,65 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             }
             const char *field = skip_ws(tail);
             size_t fl = tok_len(field);
-            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|faction|move|act|turnkind)");
+            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|entry|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck)");
             const char *opp = skip_ws(field + fl);
             size_t ol = tok_len(opp);
             const char *val = skip_ws(opp + ol);
             if (!ol || !*val) return fail(err, errCap, errLine, lineNo, "expect unit needs: <unit> <field> <op> <value>");
             if (!parse_op(opp, ol, &d.op)) return fail(err, errCap, errLine, lineNo, "expect unit: bad operator (== != >= <= > <)");
-            if (d.field == MT_F_NAME || d.field == MT_F_CLASS) {
-                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class take == or != and a quoted value");
+            if (d.field == MT_F_NAME || d.field == MT_F_CLASS || d.field == MT_F_ENTRY) {
+                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/entry take == or != and a quoted value");
                 const char *after = parse_quoted(val, q, sizeof q, &qn);
-                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class take == or != and a quoted value");
+                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/entry take == or != and a quoted value");
                 if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
             } else {
                 size_t nl = tok_len(val);
-                if (!parse_uint(val, nl, &d.value) || *skip_ws(val + nl)) return fail(err, errCap, errLine, lineNo, "expect unit: faction/move/act/turnkind take one integer");
+                if (!parse_int(val, nl, &d.value) || *skip_ws(val + nl)) return fail(err, errCap, errLine, lineNo, "expect unit: the integer fields take one integer");
+            }
+        } else if (kl == 3 && !strncmp(rest, "gon", 3)) {
+            /* expect gon <idx|bareword|"name"> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing) */
+            static const char *const usage = "expect gon needs: <unit> <path> (<op> <number> | ==|!= \"<string>\" | ==|!= true|false | exists | missing)";
+            d.kind = MT_D_EXPECT_GON;
+            if (!*arg) return fail(err, errCap, errLine, lineNo, usage);
+            int full = 0;
+            const char *tail = parse_unit(s, arg, &d, q, sizeof q, &full);
+            if (!tail) return fail(err, errCap, errLine, lineNo, full ? "script too large" : "expect gon: bad quoted unit name");
+            const char *path = skip_ws(tail);
+            size_t pl = tok_len(path);
+            if (!pl) return fail(err, errCap, errLine, lineNo, usage);
+            if (!path_ok(path, pl)) return fail(err, errCap, errLine, lineNo, "expect gon: the path is dot-separated segments, none empty (properties.health, abilities.spells.0)");
+            if (!(d.a = arena_add(s, path, pl))) return fail(err, errCap, errLine, lineNo, "script too large");
+            const char *word = skip_ws(path + pl);
+            size_t wl2 = tok_len(word);
+            if (!wl2) return fail(err, errCap, errLine, lineNo, usage);
+            if ((wl2 == 6 && !strncmp(word, "exists", 6)) || (wl2 == 7 && !strncmp(word, "missing", 7))) {
+                d.gonCheck = wl2 == 6 ? MT_G_EXISTS : MT_G_MISSING;
+                if (*skip_ws(word + wl2)) return fail(err, errCap, errLine, lineNo, "expect gon: unexpected text after exists/missing");
+            } else {
+                if (!parse_op(word, wl2, &d.op)) return fail(err, errCap, errLine, lineNo, "expect gon: bad operator (== != >= <= > <) or exists/missing");
+                const char *val = skip_ws(word + wl2);
+                if (!*val) return fail(err, errCap, errLine, lineNo, usage);
+                if (*val == '"') {
+                    d.gonCheck = MT_G_STR;
+                    if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect gon: a quoted string takes == or !=");
+                    const char *after = parse_quoted(val, q, sizeof q, &qn);
+                    if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect gon: bad quoted value or text after it");
+                    if (!(d.c = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
+                } else {
+                    size_t vl = tok_len(val);
+                    if (*skip_ws(val + vl)) return fail(err, errCap, errLine, lineNo, "expect gon: unexpected text after the value");
+                    if ((vl == 4 && !strncmp(val, "true", 4)) || (vl == 5 && !strncmp(val, "false", 5))) {
+                        d.gonCheck = MT_G_BOOL;
+                        d.value = vl == 4;
+                        if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect gon: true/false take == or !=");
+                    } else {
+                        d.gonCheck = MT_G_NUM;
+                        if (!parse_number(val, vl, &d.dvalue)) return fail(err, errCap, errLine, lineNo, "expect gon: the value is a number (-?digits[.digits]), a quoted string or true/false");
+                    }
+                }
             }
         } else {
-            return fail(err, errCap, errLine, lineNo, "expect needs a kind (console|noconsole|status|units|round|stacks|unit)");
+            return fail(err, errCap, errLine, lineNo, "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon)");
         }
     } else if (wl == 4 && !strncmp(p, "dump", 4)) {
         if (*rest) return fail(err, errCap, errLine, lineNo, "dump takes no arguments");
