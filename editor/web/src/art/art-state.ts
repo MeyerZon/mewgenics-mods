@@ -227,7 +227,7 @@ export function scheduleValidate(): void {
 }
 async function runValidate(): Promise<void> {
   if (!scene) return;
-  const r = await post<"/api/art/validate", SceneValidateResponse>("/api/art/validate", { scene: sceneBody(scene) });
+  const r = await post<"/api/art/validate", SceneValidateResponse>("/api/art/validate", { scene: sceneBody(scene), mod: mod() });
   A.set({ findings: r.findings || [] });
   pushSceneToPreview(r.scene);
   bump();

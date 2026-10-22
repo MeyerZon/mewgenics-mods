@@ -22,7 +22,8 @@ import { portManifest, renderPortReport } from "./bindings/port.ts";
 import { loadManifest, saveManifest, listManifests, BINDINGS_DIR } from "./bindings/manifest.ts";
 import { parsePe, PeError } from "./bindings/pe.ts";
 import { locateGameDir } from "./ingame/launch.ts";
-import { isInside, touchesSaves, SafetyError } from "./repo.ts";
+import { isInside, touchesSaves, SafetyError, MODS_DIR } from "./repo.ts";
+import { sceneLocLookup } from "./art/scene-loc.ts";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import type { TextOverride } from "./validate/validator.ts";
@@ -136,9 +137,9 @@ export function newCatAnimation(scene: unknown, name: string, opts?: NewCatAnima
   const r = catAnim(v.scene, name, opts);
   return { ok: !r.findings.some((f) => f.severity === "error"), scene: r.scene, findings: r.findings, rig: r.rig, donor: r.donor };
 }
-/** Validate a scene object without touching disk (live editing). */
-export function validateArtScene(scene: unknown) {
-  const v = validateScene(scene);
+/** Validate a scene object without touching disk (live editing); with `modName` its own loc keys count for text-loc-key-html too. */
+export function validateArtScene(scene: unknown, modName?: string) {
+  const v = validateScene(scene, { locKey: sceneLocLookup(modName ? join(MODS_DIR, modName) : null) });
   return { ok: v.ok, findings: v.findings, scene: v.scene };
 }
 export function importSvgShape(args: Parameters<typeof artio.importSvgShape>[0]) {

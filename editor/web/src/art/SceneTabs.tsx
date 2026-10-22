@@ -183,6 +183,10 @@ function TextsSection() {
               <option value="center">center</option>
               <option value="right">right</option>
             </select>
+            <label className="muted" title="no HTML flag: the game substitutes a localization key only in a plain text (text-loc-key-html)">
+              <input type="checkbox" aria-label={`plain (localized) of ${id}`} checked={t.html === false} onChange={(e) => set(id, { html: e.target.checked ? false : undefined })} />
+              {" plain (localized)"}
+            </label>
             <button className="btn ghost sm" style={sx("color:var(--err)")} aria-label={`Delete text ${id}`} onClick={() => { const next = { ...texts }; delete next[id]; sc.texts = next; scheduleValidate(); bump(); }}>Delete</button>
           </div>
         );

@@ -151,7 +151,7 @@ export async function runArtTextTests(test: TestFn, assert: AssertFn, eq: EqFn):
     assert(/base combined\.csv/.test(by["texts.a"]!) && /key shape/.test(by["texts.a"]!), by["texts.a"]!);
     assert(/combined\.csv\.append/.test(by["texts.b"]!) && !/key shape/.test(by["texts.b"]!), by["texts.b"]!);
     assert(/key shape/.test(by["texts.c"]!) && !/base combined/.test(by["texts.c"]!) && !/csv\.append/.test(by["texts.c"]!), by["texts.c"]!);
-    for (const m of Object.values(by)) assert(/"html": false/.test(m) && /plain \(localized\)/.test(m) && /plain text/.test(m), m);
+    for (const m of Object.values(by) as string[]) assert(/"html": false/.test(m) && /plain \(localized\)/.test(m) && /plain text/.test(m), m);
   });
   test("text-loc-key-html without a loc lookup (pure / live editing): only the key shape ^[A-Z][A-Z0-9_]{2,}$ fires", () => {
     const f = lkFindings(keyScene({ a: { text: "KEYWORD_POISON", ...box }, b: { text: "mymod_hello", ...box }, c: { text: "HP", ...box }, d: { text: "Ab_C", ...box } }));

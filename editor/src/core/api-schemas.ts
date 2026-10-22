@@ -58,7 +58,7 @@ export const ArtNewSceneBody = z.object({
   animation: str.optional(),
 });
 
-export const ArtValidateBody = z.object({ scene: anyObject });
+export const ArtValidateBody = z.object({ scene: anyObject, mod: str.optional() });
 
 export const ArtExportSvgBody = z.object({
   mod: str,
