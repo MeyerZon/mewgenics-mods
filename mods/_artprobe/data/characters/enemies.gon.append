@@ -112,11 +112,15 @@ ArtProbeGlow {
 // test-only (back-facing probe, 2026-10-22): a real cat — TomTom's parts — whose idle is the appended `probeBack`
 // (probe.scene.json: probeBackF places the front rig probeBackPose with NO marker, probeBackB the back rig
 // probeBackPoseBack — head_back behind, tail in front, as vanilla idleB — with the marker), so the marker in a shot
-// means the B frame plays. The turn attempt: start_orientation + lock_orientation [0 -1] (OBSERVED 2026-10-22:
-// lock_orientation [1 0] and [0 -1] alone left the spawned cat facing the camera, only mirrored or not);
+// means the B frame plays. Facing away from data: properties.lock_orientation [1 0] — the orientation keys are read
+// from `properties` (Character::init 0xf91c6..0xf9382; #105 had put them in `graphics`, where nothing reads them), and
+// (1,0) is a back direction for facing sign +1 (Character::Face 0x10ce50); the lock also overrides every later turn.
 // npm run test:artprobe -- --cat-back
 ArtProbeCatBack {
     variant_of TomTom
+    properties {
+        lock_orientation [1 0]
+    }
     graphics {
         movieclip _CAT
         name "ENEMY_TOMTOM_NAME"
@@ -124,8 +128,6 @@ ArtProbeCatBack {
         scale 1.1
         shadow_size 1.1
         alt_animations [[idle probeBack]]
-        start_orientation [0 -1]
-        lock_orientation [0 -1]
         tooltip "ENEMY_TOMTOM_DESC"
     }
 }

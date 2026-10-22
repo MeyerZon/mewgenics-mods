@@ -322,7 +322,8 @@ export function glowArenaOutcome(m: GlowArenaMeasure): GlowArenaOutcome {
 // probeBackPoseBack: head_back behind, tail in front — at 1.5x), plus probeBackShowF / probeBackShowB (both the 1.5x
 // back rig). OBSERVED 2026-10-22: the checker marker at depth 15 of the back rig is not drawn (it is in the front rigs),
 // so the probe tells our B frame apart from vanilla idleB by SIZE: each new cat's dark-blob height over TomTom's.
-// ArtProbeCatFacing (the default enemy facing) is the control; ArtProbeCatBack the turn attempt (start_orientation +
+// ArtProbeCatFacing (the default enemy facing) is the control, then turned away with the harness's `face 9 back` (2026-10-22, the
+// turn pair below); ArtProbeCatBack faces away from data (properties.lock_orientation [1 0]); formerly the turn attempt (start_orientation +
 // lock_orientation [0 -1]); ArtProbeCatBackShown shows the back rig at any facing (scripts/art-probe.ts --cat-back).
 
 /** a new cat at least this many times TomTom's height is our 1.5x back rig */
@@ -336,6 +337,9 @@ export interface CatBackFacts {
   back: Array<number | null>;
   /** ArtProbeCatBackShown's height ratio per shown shot */
   shown: Array<number | null>;
+  /** the turn pair (2026-10-22): `face 9 front` swaps the turned cat's back rig for its front rig in place — the vanished
+   *  pose's height over the height of the pose that replaced it (null when not measurable) */
+  turn?: number | null;
 }
 export type CatBackOutcome = "back-facing" | "back-pose-drawn" | "front-big" | "not-drawn" | string;
 
@@ -344,7 +348,7 @@ export function catBackOutcome(f: CatBackFacts): CatBackOutcome {
   if (f.verdict !== "pass") return f.verdict;
   const big = (r: number | null) => r !== null && r >= CAT_BACK_BIG;
   if (big(f.front)) return "front-big";
-  if (f.back.filter(big).length >= 2) return "back-facing";
+  if (f.back.filter(big).length >= 2 || big(f.turn ?? null)) return "back-facing";
   if (f.shown.filter(big).length >= 2) return "back-pose-drawn";
   return "not-drawn";
 }

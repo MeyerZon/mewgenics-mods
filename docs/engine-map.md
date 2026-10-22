@@ -539,10 +539,17 @@ probeIdle]]`.
   the A0 and wave front rigs at the same depth) never appears on the back rig (runs 20261022-114440, -114637, -114912).
   INFERRED: the `head_<face>` / `back true` path hides the rest; not decompiled. A back-pose overlay therefore cannot
   ride inside the rig yet.
-- **Turning a unit away in a test fight is not solved.** `graphics { lock_orientation [1 0] }` (run 20261022-113746),
-  `[0 -1]` (-113911) and `start_orientation [0 -1]` + `lock_orientation [0 -1]` (-114912) all left the spawned TomTom
-  variant facing the camera (only its mirror changed with `[1 0]`); the harness has no command that turns a unit, so
-  the B frame on a genuinely back-facing unit (a move away, a turn) stays a T3 item.
+- ~~Turning a unit away in a test fight is not solved~~ — **solved 2026-10-22** ("Facing: Character::Face"): the
+  #105 runs put `lock_orientation` / `start_orientation` under `graphics`, where `Character::init` never reads them
+  (they are `properties` keys). OBSERVED (run 20261022-124301, fixture `artprobe-cat-back-summary.json`, all 16
+  expects ok, real save unchanged): `face 9 back` turns the spawned ArtProbeCatFacing to `B`, dir (1,0), flip +1,
+  and **our 1.5x back rig is drawn on that genuinely back-facing unit** (`face 9 front` afterwards swaps it for the 1x
+  front rig: the vanished pose is 1.438x the height of the one that replaced it); ArtProbeCatBack with
+  `properties { lock_orientation [1 0] }` spawns on `B` and `face 10 front` leaves it on `B` (effective (1,0)).
+- OBSERVED (same run, `shot-shown-2`, a window capture with three back-facing cats on our back rig): the depth-15
+  marker is **not drawn on a genuinely back-facing unit either**, so its absence belongs to the back rig itself
+  (INFERRED: the `head_<face>` path of the slot visitor 0x742bd0 or what it does to the rig's other children), not
+  to the shown cat's F label. Still undecompiled.
 
 ### SWF loader and display path (closed, 2026-10-21)
 
@@ -1074,7 +1081,12 @@ matter (no hook needed: `_Append_CatTest` frames with empty slots, `docs/art-pip
   `tactical_view_frame` (`+0x330`, default `auto`), `projectile_spawn_offset` (`+0xdd8`), `uifloaters_offset`,
   `shadow_occluded`, `shade_occluded_objects`, `visually_spiky`, `use_turn_animations`, `static`,
   `start_orientation`, `lock_orientation`, `size` (`1x1`/`2x2`/`3x3`/`5x10`), `type` (`normal`/`small`/`boss`/`cat`
-  /`object` → `+0xcf4` = 0..4). 0xf1150 reads: `custom_cat_data` (+ nested `default_face`, `class_anis`),
+  /`object` → `+0xcf4` = 0..4). **Correction (2026-10-22, session facing, OBSERVED):** `type`, `lock_orientation`,
+  `always_face_forward`, `start_orientation`, `two_fronts`, `two_fronts_switch`, `size`, `static` and
+  `visually_spiky` are read from the entry's **`properties`** node (r15 = `entry["properties"]`, 0xf79f0), not from
+  `graphics`; vanilla data agrees (`bosses.gon`, `inanimate_objects.gon`: `properties { lock_orientation [-1 0] }`).
+  `art_flip`, `no_horizontal_flip`, `use_turn_animations` and the portrait / tint / shadow keys are `graphics`.
+  0xf1150 reads: `custom_cat_data` (+ nested `default_face`, `class_anis`),
   `override_portrait` (else `<name>Portrait` / `<name>ChampionPortrait` through 0x9bb890 ×6 → `+0x400`), `scale` (→
   `+0x3c8`, ×1.15 / ×1.1 unless `type == 2`, copied to the root node `*(+0x38)+0x98`), `water_mask` (→ `+0x310`,
   default `default`), `four_way_animations` (→ `+0x4cd`), `alt_animations` (own entry and, for cats,
@@ -1336,8 +1348,15 @@ witnessed inside it) and host-tested as a pure rule in `native/mods/test-harness
   0x9aa360 replays the current state (`sm+0x148`) with `_DEFAULT`, so the new `<anim>F` / `<anim>B` label is drawn on
   the next frame.
 - So, for a unit with sign +1: **(0,−1) and (−1,0) face the camera** (F; (−1,0) mirrored), **(1,0) and (0,1) face away**
-  (B; (0,1) mirrored). PR #105's `lock_orientation [0 -1]` and `start_orientation [0 -1]` therefore asked for a front
-  facing, and a lock overrides every later turn.
+  (B; (0,1) mirrored). A lock overrides every later turn. The orientation keys live under **`properties`** (below);
+  PR #105 had them under `graphics`, which is why they did nothing.
+- OBSERVED in the game (T2 run 20261022-124301, `mods/_artprobe/tests/render-cat-back.mewtest`): every unit of the
+  seeded TacticsTest fight dumps sign 1; spawned units start at (−1,0) (F, flip −1) or (0,−1) (F, flip +1); `face 9
+  back` → `facing "B"`, dir (1,0), flip 1, and the B frame is drawn on the next frame; `properties.lock_orientation
+  [1 0]` spawns a unit on `B` that `face … front` cannot turn; the decompiled rule (`mt_face.c`) predicted every one
+  of the three face events. Real save unchanged on every run.
+- OBSERVED (0xf91c6..0xf9382, `Character::init`, all on `entry["properties"]`): `lock_orientation` → `+0x3ac/+0x3b0`,
+  `always_face_forward` → `+0x3b4`, `start_orientation`, `two_fronts` → `+0xc85`, `two_fronts_switch` → `+0xc86`.
 - OBSERVED (0xf92b6..0xf93c8, `Character::init`): `start_orientation [x y]` defaults to the lock (`IntOr(…, +0x3ac)`),
   is stored at `+0x388`, and a non-zero one is applied with `Face(+0x388, instant = 1, 0)` — the one `Character_init`
   call the manifest's `callers` anchor pins.

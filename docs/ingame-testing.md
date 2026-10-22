@@ -87,7 +87,7 @@ face <unit> front|back                           the grid direction (exactly one
                                                  the suffix (F / B), the flip and the root x-scale change at once and the
                                                  current state replays, so <anim>B shows on the next frame. front / back =
                                                  the unmirrored facing for the unit's facing sign s (Character+0x3a4):
-                                                 front (0,-s), back (s,0). graphics.lock_orientation replaces the direction
+                                                 front (0,-s), back (s,0). properties.lock_orientation replaces the direction
                                                  (the event says so). Event kind "face" (below); a missing unit or a refusal
                                                  ends the script with code 1 (face_failed); a framework without
                                                  FW_SYM_Character_Face with code 4 (face_unavailable). Needs the fight

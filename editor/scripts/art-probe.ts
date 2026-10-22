@@ -28,7 +28,7 @@
 // bakeGlow halo, an unglowed control square, a colour swatch) and write glow-arena-summary.json (measureGlowArena /
 // glowArenaOutcome; exit 0 on `halo`). Both take `--from <runDir>` too. --cat-back (2026-10-22): run
 // render-cat-back.mewtest (TomTom; ArtProbeCatFacing, the probeBack animation at the default facing — the F frame, no
-// marker; ArtProbeCatBack, the turn attempt with start/lock_orientation [0 -1]; ArtProbeCatBackShown, the back rig on both labels;
+// marker, then turned away with the harness's `face 9 back`; ArtProbeCatBack, facing away from data with properties.lock_orientation [1 0]; ArtProbeCatBackShown, the back rig on both labels;
 // our B frames place the back rig at 1.5x, so each new cat is measured by its height over TomTom's) and
 // write cat-back-summary.json (probe-outcomes.ts catBackOutcome; exit 0 on `back-facing` / `back-pose-drawn`; `--from <runDir>` too).
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
@@ -154,8 +154,8 @@ if (process.argv.includes("--cat-wave")) {
 }
 if (process.argv.includes("--cat-back")) {
   // the back-facing probe (2026-10-22): render-cat-back.mewtest — baseline, vanilla (TomTom), front (the control
-  // ArtProbeCatFacing: probeBack at the default facing), back 1..3 (ArtProbeCatBack, the turn attempt: start_orientation
-  // + lock_orientation [0 -1]), shown 1..2 (ArtProbeCatBackShown: the back rig on both labels). Our B frames place the
+  // ArtProbeCatFacing: probeBack at the default facing), back 1..3 (ArtProbeCatFacing after `face 9 back`), locked 1..2
+  // (ArtProbeCatBack, properties.lock_orientation [1 0]), shown 1..2 (ArtProbeCatBackShown: the back rig on both labels). Our B frames place the
   // back rig at 1.5x (its marker is not drawn, OBSERVED), so each new cat is measured by its height over TomTom's.
   const r = await runOrReread("render-cat-back");
   const byLabel = new Map(r.artifacts.shots.filter((s) => s.path).map((s) => [s.label, decodePng(readFileSync(s.path!))]));
@@ -172,17 +172,38 @@ if (process.argv.includes("--cat-back")) {
     return { label, region, ratio: region && vH ? Math.round(((region.y1 - region.y0 + 1) / vH) * 1000) / 1000 : null };
   };
   const frontM = measure("front", front, vanilla);
-  const back = backLabels.map((l) => measure(l, byLabel.get(l), front || vanilla));
+  // back 1..3: the same ArtProbeCatFacing after `face 9 back` (Character::Face), so it is new against the vanilla shot
+  const back = backLabels.map((l) => measure(l, byLabel.get(l), vanilla));
   const lastBack = byLabel.get(backLabels[backLabels.length - 1] || "") || front || vanilla;
-  const shown = shownLabels.map((l) => measure(l, byLabel.get(l), lastBack));
+  // locked 1..2: ArtProbeCatBack (properties.lock_orientation [1 0]) spawns facing away, and `face 10 front` cannot turn
+  // it (the lock replaces the direction): our 1.5x back rig both times, new against the last back shot
+  const lockedLabels = [...byLabel.keys()].filter((l) => /^locked \d$/.test(l));
+  const locked = lockedLabels.map((l) => measure(l, byLabel.get(l), lastBack));
+  const lastLocked = byLabel.get(lockedLabels[lockedLabels.length - 1] || "") || lastBack;
+  const shown = shownLabels.map((l) => measure(l, byLabel.get(l), lastLocked));
+  // the turn pair (needs no vanilla shot): `face 9 front` between "shown 2" and "turned back" swaps unit 9's 1.5x back
+  // rig for its 1x front rig in place — the height of what vanished over the height of what appeared
+  const s2 = byLabel.get("shown 2"), tb = byLabel.get("turned back");
+  const goneB = s2 && tb ? largestChangedRegion(s2, tb, { dark: 40, within: arena }) : null;
+  const cameF = s2 && tb ? largestChangedRegion(tb, s2, { dark: 40, within: arena }) : null;
+  const turnRatio = goneB && cameF ? Math.round(((goneB.y1 - goneB.y0 + 1) / (cameF.y1 - cameF.y0 + 1)) * 1000) / 1000 : null;
+  const capture = r.artifacts.shots.map((s) => `${s.label}: ${(s as { note?: string }).note ?? "?"}`);
   const markers = [...byLabel.keys()].filter((l) => l !== "baseline" && analyzeProbeShot(byLabel.get(l)!).found);
-  const outcome = catBackOutcome({ verdict: r.verdict, front: frontM.ratio, back: back.map((s) => s.ratio), shown: shown.map((s) => s.ratio) });
-  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, outcome, big: CAT_BACK_BIG, turnAttempt: "ArtProbeCatBack: start_orientation [0 -1] + lock_orientation [0 -1] (earlier runs: lock_orientation [1 0] 20261022-113746 and [0 -1] 20261022-113911 left the spawned cat facing the camera)", markerShots: markers, shots: [...byLabel.keys()], vanilla: { region: vRegion, height: vH }, front: frontM, back, shown };
+  // what the harness saw: the face events and the facing of the turned units (units events)
+  const evs = (r.result.events || []) as Array<Record<string, unknown>>;
+  const faces = evs.filter((e) => e.ev === "face").map((e) => ({ line: e.line, unit: e.unit, arg: e.arg, dir: e.dir, effective: e.effective, expect: e.expect, facing: e.facing, flip: e.flip, ok: e.ok }));
+  const facingOf = (i: number) => evs.filter((e) => e.ev === "units").map((e) => ((e.list as Array<Record<string, unknown>>) || []).find((u) => u.i === i)).filter(Boolean).map((u) => ({ facing: u!.facing, dir: u!.dir, lock: u!.lock, sign: u!.sign, flip: u!.flip }));
+  const expects = evs.filter((e) => e.ev === "expect").map((e) => `${e.ok ? "ok" : "FAIL"} line ${e.line}: ${e.kind} ${e.arg} (${e.detail})`);
+  const outcome = catBackOutcome({ verdict: r.verdict, front: frontM.ratio, back: back.map((s) => s.ratio), shown: shown.map((s) => s.ratio), turn: turnRatio });
+  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, outcome, big: CAT_BACK_BIG, turn: "face 9 back (Character::Face 0x10ce50, instant) on ArtProbeCatFacing; ArtProbeCatBack faces away from data (properties.lock_orientation [1 0]) and face 10 front leaves it on B (the lock replaces the direction); #105's runs had the keys under graphics, which Character::init never reads", faces, facing: { 9: facingOf(9), 10: facingOf(10) }, expects, markerShots: markers, shots: [...byLabel.keys()], vanilla: { region: vRegion, height: vH }, front: frontM, back, locked, shown, turnPair: { backGone: goneB, frontCame: cameF, ratio: turnRatio }, capture };
   writeFileSync(join(r.artifacts.runDir || ".", "cat-back-summary.json"), JSON.stringify(out, null, 2) + "\n");
   const line = (s: { label: string; region: { cx: number; cy: number; n: number } | null; ratio: number | null }) => `${s.label}: ${s.region ? `new cat at ${s.region.cx},${s.region.cy} (${s.region.n} px), height ${s.ratio}x TomTom's${s.ratio !== null && s.ratio >= CAT_BACK_BIG ? " — OUR 1.5x back rig" : ""}` : "no new cat found"}`;
   console.log([
     `vanilla TomTom: ${vRegion ? `dark region ${vRegion.n} px at ${vRegion.cx},${vRegion.cy}, height ${vH}` : "not found"}`,
-    line(frontM), ...back.map(line), ...shown.map(line),
+    line(frontM), ...back.map(line), ...locked.map(line), ...shown.map(line),
+    ...faces.map((f) => `face line ${f.line}: unit ${f.unit} "${f.arg}" dir ${JSON.stringify(f.dir)} effective ${JSON.stringify(f.effective)} -> facing ${f.facing} (rule: ${f.expect}), flip ${f.flip}, ok ${f.ok}`),
+    ...expects,
+    `turn pair (face 9 front between shown 2 and turned back): ${turnRatio === null ? "not measurable" : `the vanished B pose is ${turnRatio}x the height of the F pose that replaced it${turnRatio >= CAT_BACK_BIG ? " — OUR 1.5x back rig was drawn on the back-facing unit" : ""}`}`,
     `checker marker in: ${markers.join(", ") || "no shot"}`,
     `outcome: ${outcome}`,
     `run: ${r.verdict} — ${r.reason}; ${out.save}`,
