@@ -434,6 +434,10 @@ nodes { exit0 { next_map mymap.gon } }
 tile and objects, each as an id or a weighted random list; the `lvl-*` findings update as you paint; **+ New room**
 uses the `room` template; Save writes only `mods/<mod>/levels/**.lvl` and an unedited room byte for byte. Agents use
 MCP `read_level` / `write_level` (edit ops) for the same thing (`editor/src/core/level/edit.ts`, `level-io.ts`).
+With the game files extracted, the grid and the palettes show each tile's and object's own clip (frame 1) in the
+tileset chosen in the toolbar (default: the room's map, else `alley`), and **Iso** draws the room as the game's 2:1
+diamonds with the sprites standing on their cells; anything without a clip keeps its swatch, the tooltip saying why
+(`docs/editor-ts-react-plan.md` "Tileset art and the Iso view").
 
 The validator checks rooms (`lvl-bad-format`, `lvl-unknown-spawn-id`, `lvl-unknown-tile-id`, `lvl-no-player-spawn`,
 `lvl-outside-levels`, `whole-file-replace` when a room shadows a vanilla one) and maps (`map-node-type-unknown`,

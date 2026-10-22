@@ -20,6 +20,7 @@ import * as ingame from "./ingame/index.ts";
 import * as vcHeadless from "./art/vectorcraft-headless.ts";
 import * as pack from "./pack.ts";
 import * as levelio from "./level/level-io.ts";
+import * as levelart from "./level/level-art.ts";
 import type { LvlFile } from "./level/lvl.ts";
 export { listVanillaSwfs, readVanillaSwf, vanillaSwfDir } from "./art/art-io.ts";
 import { checkInstalledBuild } from "./bindings/check.ts";
@@ -488,4 +489,17 @@ export function validateLevel(modName: string, relPath: string, level: LvlFile, 
 /** The tile (tiles.gon) and object (spawns.gon) palettes for the mod: base + its overlays, with swatch colours. */
 export function levelPalette(modName: string, opts?: levelio.LevelIoOptions) {
   return levelio.levelPalette(modName, opts);
+}
+
+// ---- the Room editor's tileset art (src/core/level/tile-art.ts resolves, level-art.ts renders + caches) ----
+export type { ArtResolution, ArtReason } from "./level/tile-art.ts";
+export type { LevelArtInfo, LevelArtImage, LevelArtMeta } from "./level/level-art.ts";
+
+/** Which clip draws each tile / spawn id of the mod's palette in a tileset (default: the room's map, else default_tileset). */
+export function levelArtInfo(modName: string, q: levelart.LevelArtQuery = {}, opts?: levelart.LevelArtOptions) {
+  return levelart.levelArtInfo(modName, q, opts);
+}
+/** The PNG thumbnail (frame 1) of one tile or spawn id's clip, cached under editor/data/level-art/. */
+export function levelArtImage(modName: string, q: levelart.LevelArtQuery & { tile?: number; object?: number }, opts?: levelart.LevelArtOptions) {
+  return levelart.levelArtImage(modName, q, opts);
 }

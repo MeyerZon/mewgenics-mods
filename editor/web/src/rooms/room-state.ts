@@ -8,6 +8,7 @@ import { S, toast } from "../state.ts";
 import { getJson, post, url } from "../api.ts";
 import { paintTiles, placeObject, removeObjects, setObjectPick, objectsAt, firstId } from "../../../src/core/level/edit.ts";
 import type { LvlFile, LvlPick } from "../../../src/core/level/lvl.ts";
+import type { ArtResolution } from "../../../src/core/level/tile-art.ts";
 import type { Report, TemplateResult } from "../types.ts";
 
 export interface LevelInfo {
@@ -40,6 +41,27 @@ type ReadLevelResult = { ok: true; relPath: string; level: LvlFile; bytes: numbe
 type WriteLevelResult = { ok: true; path: string; bytes: number; findings: Report["findings"] } | { ok: false; error: string };
 
 export type RoomTool = "select" | "tile" | "object" | "erase";
+export type RoomView = "flat" | "iso";
+
+/** GET /api/level-art: which clip draws each palette id in the tileset (src/core/level/level-art.ts) */
+export interface LevelArtInfo {
+  ok: true;
+  tileset: string;
+  tilesetSource: string;
+  tilesets: string[];
+  hasSwfs: boolean;
+  tiles: Record<string, ArtResolution>;
+  objects: Record<string, ArtResolution>;
+}
+/** GET /api/level-tile-art?meta=1: the thumbnail's size and the clip's registration point in it */
+export interface ArtMeta {
+  width: number;
+  height: number;
+  originX: number;
+  originY: number;
+  scale: number;
+}
+export type ArtKind = "tile" | "object";
 
 export interface RoomState {
   levels: LevelInfo[];
@@ -56,6 +78,12 @@ export interface RoomState {
   newOpen: boolean;
   tileFilter: string;
   objectFilter: string;
+  view: RoomView;
+  /** the tileset the art is shown in ("" until /api/level-art answers with the room's default) */
+  tileset: string;
+  art: LevelArtInfo | null;
+  /** `${tileset}:${kind}:${id}` → the thumbnail's metadata (null: failed) */
+  artMeta: Record<string, ArtMeta | null>;
 }
 
 export const R = createStore<RoomState>({
@@ -72,6 +100,10 @@ export const R = createStore<RoomState>({
   newOpen: false,
   tileFilter: "",
   objectFilter: "",
+  view: "flat",
+  tileset: "",
+  art: null,
+  artMeta: {},
 });
 
 export function isDirty(s: RoomState): boolean {
@@ -80,9 +112,9 @@ export function isDirty(s: RoomState): boolean {
 
 /** Mod switched (or Rooms mode entered): the level list and the palette for that mod; closes the open level. */
 export async function loadRoomsForMod(mod: string): Promise<void> {
-  R.set({ levels: [], path: "", level: null, loadedJson: "", sel: null, report: null, palette: null });
+  R.set({ levels: [], path: "", level: null, loadedJson: "", sel: null, report: null, palette: null, art: null, tileset: "" });
   if (!mod) return;
-  await Promise.all([refreshLevels(mod), loadPalette(mod)]);
+  await Promise.all([refreshLevels(mod), loadPalette(mod), loadArt(mod)]);
 }
 
 export async function refreshLevels(mod = S.get().mod): Promise<void> {
@@ -104,8 +136,9 @@ export async function openLevel(relPath: string): Promise<void> {
     toast(`could not open ${relPath}: ${r.error}`);
     return;
   }
-  R.set({ path: relPath, level: r.level, loadedJson: JSON.stringify(r.level), sel: null, report: null });
+  R.set({ path: relPath, level: r.level, loadedJson: JSON.stringify(r.level), sel: null, report: null, tileset: "" });
   void runValidate();
+  void loadArt(mod);
 }
 
 export function closeLevel(): void {
@@ -215,4 +248,46 @@ export async function newRoom(folder: string, name: string): Promise<string | nu
   await openLevel(`levels/${folder || "custom"}/${name}.lvl`);
   toast(`created levels/${folder || "custom"}/${name}.lvl${res.hint ? " — " + res.hint : ""}`);
   return null;
+}
+
+// ---- tileset art (the grid's thumbnails; tint swatches stay the fallback) ----
+
+/** Resolve the palette's art in R.tileset ("" = the room's default: its map's tileset, else default_tileset). */
+let artSeq = 0;
+export async function loadArt(mod = S.get().mod): Promise<void> {
+  if (!mod) return;
+  const { tileset, path } = R.get();
+  const seq = ++artSeq;
+  try {
+    const a = await getJson<LevelArtInfo>(url("/api/level-art", { mod, tileset, path }));
+    if (seq === artSeq && a && a.ok) R.set({ art: a, tileset: a.tileset });
+  } catch {
+    if (seq === artSeq) R.set({ art: null });
+  }
+}
+
+export async function chooseTileset(tileset: string): Promise<void> {
+  R.set({ tileset });
+  await loadArt();
+}
+
+export function artUrl(kind: ArtKind, id: number, meta = false): string {
+  return url("/api/level-tile-art", { mod: S.get().mod, tileset: R.get().tileset, [kind]: id, meta: meta ? 1 : undefined });
+}
+
+const metaPending = new Set<string>();
+/** Fetch (once) the thumbnail metadata the iso view positions an image with. */
+export function ensureArtMeta(kind: ArtKind, id: number): void {
+  const key = `${R.get().tileset}:${kind}:${id}`;
+  if (key in R.get().artMeta || metaPending.has(key)) return;
+  metaPending.add(key);
+  void (async () => {
+    let m: ArtMeta | null = null;
+    try {
+      const r = await fetch(artUrl(kind, id, true));
+      if (r.ok) m = (await r.json()) as ArtMeta;
+    } catch { /* stays a swatch */ }
+    metaPending.delete(key);
+    R.set({ artMeta: { ...R.get().artMeta, [key]: m } });
+  })();
 }

@@ -232,6 +232,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     if (method === "GET" && url.pathname === "/api/level-palette") {
       return sendJson(res, 200, api.levelPalette(q.get("mod") || ""));
     }
+    if (method === "GET" && url.pathname === "/api/level-art") {
+      return sendJson(res, 200, api.levelArtInfo(q.get("mod") || "", { tileset: q.get("tileset") || undefined, path: q.get("path") || undefined }));
+    }
+    if (method === "GET" && url.pathname === "/api/level-tile-art") {
+      // tile=<id> or object=<id>; meta=1 answers the PNG's size and registration point as JSON instead of the PNG
+      const num = (k: string) => (q.get(k) !== null && /^\d+$/.test(q.get(k)!) ? Number(q.get(k)) : undefined);
+      const r = api.levelArtImage(q.get("mod") || "", { tileset: q.get("tileset") || undefined, path: q.get("path") || undefined, tile: num("tile"), object: num("object") });
+      if (!r.ok) return sendJson(res, 404, r);
+      if (q.get("meta")) return sendJson(res, 200, { ok: true, ...r.meta, resolution: r.resolution });
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
+      res.end(Buffer.from(r.png));
+      return;
+    }
     if (method === "POST" && url.pathname === "/api/level") {
       const b = await body("/api/level", req);
       return sendJson(res, 200, api.writeLevel(b.mod, b.path, b.level, { dryRun: !!b.dryRun }));
