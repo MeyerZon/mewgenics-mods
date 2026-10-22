@@ -199,6 +199,164 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     eq(g.data.variant, "flat", "gate: variant defaults to flat");
   });
 
+  // ---- UI foundations (docs/editor-ts-react-plan.md "UI primitives and conventions") ----
+  test("store.shallowEqual: same keys with Object.is-equal values are equal; arrays compare element-wise; anything else is not", () => {
+    const se = store.shallowEqual;
+    assert(typeof se === "function", "store.ts exports shallowEqual");
+    const arr = [1, 2];
+    assert(se({ a: 1, b: arr }, { a: 1, b: arr }), "same refs");
+    assert(!se({ a: 1, b: [1, 2] }, { a: 1, b: [1, 2] }), "a nested fresh array is a different value (shallow)");
+    assert(se([1, "x", arr], [1, "x", arr]), "arrays element-wise");
+    assert(!se([1, 2], [1, 2, 3]), "array length");
+    assert(!se({ a: 1 }, { a: 1, b: undefined }), "key count");
+    assert(se(NaN, NaN), "Object.is for primitives");
+    assert(!se({ a: 1 }, null), "null");
+    assert(typeof store.useStoreShallow === "function", "store.ts exports useStoreShallow");
+  });
+
+  const sc = await load("../web/src/shortcuts.ts");
+  test("web/src/shortcuts.ts loads", () => assert(!sc.__error, sc.__error ?? ""));
+  test("matchShortcut: Ctrl+S / Cmd+S (any case, repeats too) is save; Esc is escape; Alt or a bare key is nothing", () => {
+    const k = (key: string, o: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; repeat: boolean }> = {}) =>
+      sc.matchShortcut({ key, ctrlKey: false, metaKey: false, altKey: false, repeat: false, ...o });
+    eq(k("s", { ctrlKey: true }), "save");
+    eq(k("S", { metaKey: true }), "save");
+    eq(k("s", { ctrlKey: true, repeat: true }), "save", "a held Ctrl+S still matches, so the browser dialog stays suppressed");
+    eq(k("s", { ctrlKey: true, altKey: true }), null);
+    eq(k("s"), null);
+    eq(k("Escape"), "escape");
+    eq(k("Escape", { repeat: true }), null, "a held Esc closes one overlay, not the whole stack");
+    eq(k("Enter", { ctrlKey: true }), null);
+  });
+  test("overlay stack: Esc closes menu > tour > modal > drawer, newest first within a kind; popOverlay removes an entry", () => {
+    const log: string[] = [];
+    const d = sc.pushOverlay(() => log.push("drawer"), "drawer");
+    const m = sc.pushOverlay(() => log.push("modal"), "modal");
+    const menu = sc.pushOverlay(() => log.push("menu"), "menu");
+    const m2 = sc.pushOverlay(() => log.push("modal2"), "modal");
+    assert(sc.closeTopOverlay() === true, "something closed");
+    eq(log.join(","), "menu");
+    sc.popOverlay(menu);
+    sc.closeTopOverlay();
+    eq(log.join(","), "menu,modal2");
+    sc.popOverlay(m2);
+    sc.popOverlay(m);
+    sc.closeTopOverlay();
+    eq(log.join(","), "menu,modal2,drawer");
+    sc.popOverlay(d);
+    assert(sc.closeTopOverlay() === false, "an empty stack closes nothing");
+  });
+
+  const st = await load("../web/src/state.ts");
+  test("web/src/state.ts loads", () => assert(!st.__error, st.__error ?? ""));
+  test("pushMessage / expireMessage: a queue, newest last; a repeated text replaces its older copy; expiry removes by id; inputs never mutate", () => {
+    const a = { id: 1, text: "one", kind: "info" };
+    const b = { id: 2, text: "two", kind: "error" };
+    const l0: unknown[] = [];
+    const l1 = st.pushMessage(l0, a);
+    const l2 = st.pushMessage(l1, b);
+    eq(l0.length, 0, "input untouched");
+    eq(l2.map((m: { text: string }) => m.text).join(","), "one,two");
+    const l3 = st.pushMessage(l2, { id: 3, text: "one", kind: "ok" });
+    eq(l3.map((m: { id: number }) => m.id).join(","), "2,3", "the repeat moved to the end with its new id");
+    eq(st.expireMessage(l3, 2).map((m: { id: number }) => m.id).join(","), "3");
+    eq(st.expireMessage(l3, 99).length, 2, "an unknown id changes nothing");
+    let many: unknown[] = [];
+    for (let i = 0; i < 20; i++) many = st.pushMessage(many, { id: 100 + i, text: `m${i}`, kind: "info" });
+    assert(many.length <= 6, `the queue is capped (${many.length})`);
+    eq((many[many.length - 1] as { text: string }).text, "m19", "the newest survives the cap");
+  });
+  test("toast(): queues {id, text, kind} in S.messages (kind defaults to info) and S.message is gone", () => {
+    const before = (st.S.get().messages || []).length;
+    st.toast("hello from the test", { ms: 1 });
+    st.toast("an error", { kind: "error", ms: 1 });
+    const msgs = st.S.get().messages as { id: number; text: string; kind: string }[];
+    assert(Array.isArray(msgs), "S.messages is an array");
+    eq(msgs.length, before + 2);
+    eq(msgs[msgs.length - 2].kind, "info");
+    eq(msgs[msgs.length - 1].kind, "error");
+    assert(msgs[msgs.length - 2].id !== msgs[msgs.length - 1].id, "ids are unique");
+    assert(!("message" in st.S.get()), "no S.message left");
+  });
+  test("S.busy + setBusy(key, on): a per-action in-flight map", () => {
+    eq(JSON.stringify(st.S.get().busy), "{}");
+    st.setBusy("save", true);
+    eq(st.S.get().busy.save, true);
+    st.setBusy("save", false);
+    eq(st.S.get().busy.save, undefined, "off removes the key");
+  });
+
+  const apiMod = await load("../web/src/api.ts");
+  test("web/src/api.ts loads", () => assert(!apiMod.__error, apiMod.__error ?? ""));
+  const realFetch = globalThis.fetch;
+  const fakeFetch = (status: number, body: unknown, reject = false) =>
+    (async () => {
+      if (reject) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    }) as unknown as typeof fetch;
+  const outcomes: Record<string, { value?: unknown; error?: any }> = {};
+  const cases: [string, typeof fetch][] = [
+    ["ok", fakeFetch(200, { ok: true, n: 1 })],
+    ["bad", fakeFetch(400, { error: "body: mod: Required", issues: [{ path: ["mod"], message: "Required" }] })],
+    ["down", fakeFetch(0, null, true)],
+  ];
+  for (const [name, f] of cases) {
+    globalThis.fetch = f;
+    try {
+      outcomes[name] = { value: apiMod.__error ? undefined : await apiMod.getJson("/api/x") };
+    } catch (e) {
+      outcomes[name] = { error: e };
+    }
+  }
+  let postOutcome: { value?: unknown; error?: any } = {};
+  globalThis.fetch = fakeFetch(404, { error: "no route: POST /api/nope" });
+  try { postOutcome = { value: apiMod.__error ? undefined : await apiMod.postJson("/api/nope", {}) }; } catch (e) { postOutcome = { error: e }; }
+  globalThis.fetch = realFetch;
+  test("apiFetch: a 2xx returns the parsed JSON", () => eq(JSON.stringify(outcomes.ok?.value), '{"ok":true,"n":1}'));
+  test("apiFetch: a non-2xx throws ApiError {status, message, issues} and toasts the message as an error", () => {
+    const e = outcomes.bad?.error;
+    assert(!!apiMod.ApiError && e instanceof apiMod.ApiError, `ApiError thrown (${String(e)})`);
+    eq(e.status, 400);
+    eq(e.message, "body: mod: Required");
+    eq(e.issues?.[0]?.path?.[0], "mod");
+    const msgs = (st.S.get().messages || []) as { text: string; kind: string }[];
+    assert(msgs.some((m) => m.kind === "error" && m.text === "body: mod: Required"), JSON.stringify(msgs));
+    const p = postOutcome.error;
+    assert(p instanceof apiMod.ApiError && p.status === 404, "postJson goes through apiFetch too");
+  });
+  test("apiFetch: a network failure throws ApiError with status 0", () => {
+    const e = outcomes.down?.error;
+    assert(!!apiMod.ApiError && e instanceof apiMod.ApiError, String(e));
+    eq(e.status, 0);
+  });
+
+  // PaneBoundary lives in a JSX-free module so Node can load it (ui.tsx re-exports it). React's server renderer does
+  // not run error boundaries, so this covers the two halves the boundary is made of: the static
+  // getDerivedStateFromError (error → state) and render() for both states, rendered to HTML; reset() clears it.
+  const bd = await load("../web/src/components/boundary.ts");
+  test("web/src/components/boundary.ts loads", () => assert(!bd.__error, bd.__error ?? ""));
+  let rds: Record<string, any> = {};
+  let rc: Record<string, any> = {};
+  try { rds = await import("react-dom/server"); rc = await import("react"); } catch { /* asserted below */ }
+  test("PaneBoundary: getDerivedStateFromError keeps the error; render shows an EmptyState with the message and Reload pane; reset() clears it", () => {
+    const PB = bd.PaneBoundary;
+    assert(typeof PB === "function", "PaneBoundary exported");
+    const st1 = PB.getDerivedStateFromError(new Error("boom in pane"));
+    eq(st1.error.message, "boom in pane");
+    const child = rc.createElement("p", null, "child ok");
+    const inst = new PB({ name: "Explorer", children: child });
+    eq(rds.renderToString(inst.render()), "<p>child ok</p>", "no error → the children");
+    inst.state = { ...inst.state, ...st1 };
+    const html = rds.renderToString(inst.render());
+    assert(/emptystate/.test(html), html);
+    assert(/boom in pane/.test(html), html);
+    assert(/Reload pane/.test(html), html);
+    assert(/Explorer/.test(html), "names the pane");
+    inst.setState = (s: object) => { inst.state = { ...inst.state, ...s }; };
+    inst.reset();
+    eq(inst.state.error, null);
+  });
+
   // ---- server request gate (spawns web/server.ts on an OS-chosen port) --------------
   let srv: ServerHandle | null = null;
   try {

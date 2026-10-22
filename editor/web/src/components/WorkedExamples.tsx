@@ -5,8 +5,9 @@
 import React from "react";
 import { S } from "../state.ts";
 import { useS, sx, CodeView } from "./ui.tsx";
-import { openTemplate, artExampleGoto } from "../actions.ts";
+import { openTemplate, artExampleGoto, closeExample, closeArtExample } from "../actions.ts";
 import { openNewSceneModal, setArtSubtab, setArtRightTab } from "../art/art-state.ts";
+import { useDialog } from "../hooks/useDialog.ts";
 
 interface ExampleStep {
   t: string;
@@ -39,7 +40,7 @@ function ExampleBody({ step }: { step: number }): React.JSX.Element {
         <h1 style={sx("margin:0 0 10px;font-size:24px")}>Add the ability overlay</h1>
         <p style={sx(BODY_P)}>
           We append a new ability to the fighters' table.{" "}
-          <span className="mono" style={sx("color:#79c0ff")}>
+          <span className="mono" style={sx("color:var(--syn-kw)")}>
             variant_of Spin
           </span>{" "}
           inherits everything from the base Spin attack, then we point its on-hit <span className="mono">effects</span> at our status. Because this is an{" "}
@@ -61,7 +62,7 @@ function ExampleBody({ step }: { step: number }): React.JSX.Element {
           </span>
           <span style={sx("font-size:13px;color:var(--ink2)")}>
             Validates now — except{" "}
-            <span className="mono" style={sx("color:#ffa657")}>
+            <span className="mono" style={sx("color:var(--syn-cls)")}>
               JokersLuck
             </span>{" "}
             is still unknown. You'll register it in step 4.
@@ -74,7 +75,7 @@ function ExampleBody({ step }: { step: number }): React.JSX.Element {
           <button
             className="btn primary"
             onClick={() => {
-              S.set({ exampleOpen: false });
+              closeExample();
               openTemplate({ mod: S.get().mod || "jokers-luck-tutorial", kind: "ability", name: "JokersGambit", display: "Joker's Gambit", desc: "A Spin variant that applies JokersLuck", parent: "Spin", status: "JokersLuck" });
             }}
           >
@@ -115,7 +116,7 @@ function ExampleBody({ step }: { step: number }): React.JSX.Element {
             Next →
           </button>
         ) : (
-          <button className="btn primary" onClick={() => S.set({ exampleOpen: false })}>
+          <button className="btn primary" onClick={() => closeExample()}>
             Finish
           </button>
         )}
@@ -157,14 +158,15 @@ function Stepper({ steps, step, onPick, blurb }: { steps: ExampleStep[]; step: n
 
 export function WorkedExample(): React.JSX.Element {
   const step = useS((s) => s.exampleStep);
+  const ref = useDialog<HTMLDivElement>(true, { onClose: closeExample });
   return (
-    <div className="example">
+    <div ref={ref} className="example" aria-label="Worked example — build Joker's Luck">
       <div className="exhdr">
         <span style={sx("font-size:18px")}>★</span>
         <div style={sx("font-weight:700;font-size:15px")}>Worked example — build Joker's Luck</div>
         <span className="pill append chip">tutorial</span>
         <div className="grow" />
-        <button className="btn ghost" onClick={() => S.set({ exampleOpen: false })}>
+        <button className="btn ghost" onClick={() => closeExample()}>
           Exit example
         </button>
       </div>
@@ -285,7 +287,7 @@ function ArtExampleBody({ step }: { step: number }): React.JSX.Element {
             Next →
           </button>
         ) : (
-          <button className="btn ghost" onClick={() => S.set({ artExampleOpen: false })}>
+          <button className="btn ghost" onClick={() => closeArtExample()}>
             Finish
           </button>
         )}
@@ -296,14 +298,15 @@ function ArtExampleBody({ step }: { step: number }): React.JSX.Element {
 
 export function ArtWorkedExample(): React.JSX.Element {
   const step = useS((s) => s.artExampleStep);
+  const ref = useDialog<HTMLDivElement>(true, { onClose: closeArtExample });
   return (
-    <div className="example">
+    <div ref={ref} className="example" aria-label="Art worked example — SVG → preview → SWF">
       <div className="exhdr">
         <span style={sx("font-size:18px")}>▲</span>
         <div style={sx("font-weight:700;font-size:15px")}>Art worked example — SVG → preview → SWF</div>
         <span className="pill append chip">tutorial</span>
         <div className="grow" />
-        <button className="btn ghost" onClick={() => S.set({ artExampleOpen: false })}>
+        <button className="btn ghost" onClick={() => closeArtExample()}>
           Exit example
         </button>
       </div>

@@ -1,8 +1,10 @@
 // The editor shell: top bar, the three panes (Data or Art mode), status bar, toast, and the
 // overlays (modals, drawers, tours, worked examples) in the same order app.mjs mounted them.
+// Each pane and each overlay sits in its own PaneBoundary, so a render error blanks only that
+// part; the one keyboard listener (shortcuts.ts) is installed here.
 
 import React from "react";
-import { useS } from "./components/ui.tsx";
+import { useS, PaneBoundary } from "./components/ui.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { Explorer } from "./components/Explorer.tsx";
 import { Center } from "./components/Center.tsx";
@@ -19,6 +21,9 @@ import { ArtRightPanel } from "./art/ArtRightPanel.tsx";
 import { initArtUi } from "./art/art-state.ts";
 import { RoomExplorer, RoomCenter, RoomRightPanel } from "./rooms/Rooms.tsx";
 import { startup, closeMenu } from "./actions.ts";
+import { initShortcuts } from "./shortcuts.ts";
+
+let artUiReady = false;
 
 function Shell(): React.JSX.Element {
   const mod = useS((s) => s.mod);
@@ -29,9 +34,9 @@ function Shell(): React.JSX.Element {
     <div className="shell">
       <TopBar />
       <div className="body" style={{ gridTemplateColumns: columns }}>
-        {roomMode ? <RoomExplorer /> : artMode ? <ArtExplorer /> : <Explorer />}
-        {roomMode ? <RoomCenter /> : artMode ? <ArtCenter /> : <Center />}
-        {mod ? roomMode ? <RoomRightPanel /> : artMode ? <ArtRightPanel /> : <RightPanel /> : null}
+        <PaneBoundary name="Explorer">{roomMode ? <RoomExplorer /> : artMode ? <ArtExplorer /> : <Explorer />}</PaneBoundary>
+        <PaneBoundary name="Editor">{roomMode ? <RoomCenter /> : artMode ? <ArtCenter /> : <Center />}</PaneBoundary>
+        {mod ? <PaneBoundary name="Right panel">{roomMode ? <RoomRightPanel /> : artMode ? <ArtRightPanel /> : <RightPanel />}</PaneBoundary> : null}
       </div>
       <StatusBar />
     </div>
@@ -50,14 +55,14 @@ function Overlays(): React.JSX.Element {
   return (
     <>
       <Toast />
-      {templateOpen ? <TemplateModal /> : null}
-      {conceptsOpen ? <ConceptsDrawer /> : null}
-      {baseDrawer ? <BaseEntryDrawer /> : null}
-      {compDrawer ? <ComponentsDrawer /> : null}
-      {tourOpen ? <TourModal /> : null}
-      {exampleOpen ? <WorkedExample /> : null}
-      {artTourOpen ? <ArtTourModal /> : null}
-      {artExampleOpen ? <ArtWorkedExample /> : null}
+      {templateOpen ? <PaneBoundary name="Template dialog" overlay><TemplateModal /></PaneBoundary> : null}
+      {conceptsOpen ? <PaneBoundary name="Concepts" overlay><ConceptsDrawer /></PaneBoundary> : null}
+      {baseDrawer ? <PaneBoundary name="Base entry" overlay><BaseEntryDrawer /></PaneBoundary> : null}
+      {compDrawer ? <PaneBoundary name="Components" overlay><ComponentsDrawer /></PaneBoundary> : null}
+      {tourOpen ? <PaneBoundary name="Guided tour" overlay><TourModal /></PaneBoundary> : null}
+      {exampleOpen ? <PaneBoundary name="Worked example" overlay><WorkedExample /></PaneBoundary> : null}
+      {artTourOpen ? <PaneBoundary name="Art tour" overlay><ArtTourModal /></PaneBoundary> : null}
+      {artExampleOpen ? <PaneBoundary name="Art worked example" overlay><ArtWorkedExample /></PaneBoundary> : null}
     </>
   );
 }
@@ -66,9 +71,16 @@ export function App(): React.JSX.Element {
   React.useEffect(() => {
     // any click outside a menu closes it (menus stopPropagation on their own clicks)
     window.addEventListener("click", closeMenu);
-    initArtUi();
+    const offKeys = initShortcuts();
+    if (!artUiReady) {
+      artUiReady = true;
+      initArtUi();
+    }
     startup();
-    return () => window.removeEventListener("click", closeMenu);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      offKeys();
+    };
   }, []);
   return (
     <>

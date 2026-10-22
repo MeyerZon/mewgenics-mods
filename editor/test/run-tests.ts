@@ -665,6 +665,13 @@ await mcpSmoke();
   if (wt) await wt.runWebTests(test, assert, eq);
 }
 
+// ---- 9b2. web conventions: source-text rules over web/src with a shrink-only allow-list ----
+{
+  let wc: typeof import("./web-conventions-tests.ts") | null = null;
+  try { wc = await import("./web-conventions-tests.ts"); } catch (e) { test("web-conventions-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (wc) wc.runWebConventionsTests(test, assert, eq);
+}
+
 // ---- 9c. TypeScript migration: structural + MCP schemas from zod ----
 {
   let mt: typeof import("./ts-migration-tests.ts") | null = null;
