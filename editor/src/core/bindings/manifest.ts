@@ -316,6 +316,37 @@ export function validateManifest(input: unknown): { ok: boolean; problems: strin
       if (anchors.witness && e.kind === "offset" && anchors.witness.pattern !== undefined && !Number.isInteger(anchors.witness.dispAt)) bad(`${n}: an offset witness with a pattern needs dispAt`);
       if (anchors.witness && anchors.witness.callee !== undefined) ref("witness.callee", anchors.witness.callee, "function");
       if (Array.isArray(anchors.callees)) for (const c of anchors.callees) ref("callee", c && c.name, "function");
+      const pattern = (what: string, p: unknown) => {
+        if (typeof p !== "string") { bad(`${n}: ${what} needs a pattern`); return; }
+        try { parsePattern(p, sigCap); } catch (err) { if (err instanceof PatternError) bad(`${n}: ${what} pattern invalid (${err.message})`); else throw err; }
+      };
+      if (anchors.vtableStore) { ref("vtableStore.vtable", anchors.vtableStore.vtable, "vtable"); pattern("vtableStore", anchors.vtableStore.pattern); }
+      if (anchors.imm32Witness) {
+        const w = anchors.imm32Witness;
+        ref("imm32Witness.equals", w.equals, "constant");
+        ref("imm32Witness.callee", w.callee, "function");
+        pattern("imm32Witness", w.pattern);
+        if (!Number.isInteger(w.imm32At) || w.imm32At < 0) bad(`${n}: imm32Witness needs an integer imm32At`);
+        if (w.maxForward !== undefined && !(Number.isInteger(w.maxForward) && w.maxForward > 0)) bad(`${n}: imm32Witness.maxForward must be a positive integer`);
+      }
+      if (anchors.callers !== undefined) {
+        if (!Array.isArray(anchors.callers)) bad(`${n}: callers must be an array`);
+        else for (const c of anchors.callers) {
+          ref("callers[].function", c && c.function, "function");
+          if (c && c.ordinal !== undefined && !(Number.isInteger(c.ordinal) && c.ordinal >= 0)) bad(`${n}: callers[].ordinal must be a non-negative integer`);
+          if (c && c.afterStringLea !== undefined && (typeof c.afterStringLea !== "string" || !c.afterStringLea)) bad(`${n}: callers[].afterStringLea must be a non-empty string`);
+        }
+      }
+      if (anchors.after) ref("after.function", anchors.after.function, "function");
+      if (anchors.before) ref("before.function", anchors.before.function, "function");
+      if (anchors.sharedDataRef) {
+        ref("sharedDataRef.with", anchors.sharedDataRef.with, "function");
+        if (!(Number.isInteger(anchors.sharedDataRef.ripRefOrdinal) && anchors.sharedDataRef.ripRefOrdinal >= 0)) bad(`${n}: sharedDataRef needs a non-negative integer ripRefOrdinal`);
+      }
+      if (anchors.dataRefs !== undefined) {
+        if (!Array.isArray(anchors.dataRefs)) bad(`${n}: dataRefs must be an array`);
+        else for (const d of anchors.dataRefs) if (!d || typeof d.rva !== "string" || !RVA_RE.test(d.rva)) bad(`${n}: dataRefs[].rva must be a 0x hex string`);
+      }
       if (anchors.derive) {
         if (anchors.derive.vtable !== undefined) ref("derive.vtable", anchors.derive.vtable, "vtable");
         if (anchors.derive.table !== undefined) ref("derive.table", anchors.derive.table, "data");

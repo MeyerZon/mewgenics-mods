@@ -1521,7 +1521,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     { name: "GV", code: [...pro, { mov: "glob:MAP" }, { lea: "str:GV" }, 0x48, 0x8b, 0xd0, ...EPI] },
     { name: "Caller", code: [...pro, { lea: "str:CALLER" }, { leaRdx: "str:LIT" }, { call: "Cmp" }, 0x84, 0xc0, 0x74, 0x05, { call: "Target" }, ...nops(60), ...EPI] },
     { name: "Target", code: [...pro, { leaRdx: "str:LIT" }, { call: "Cmp" }, 0x84, 0xc0, 0x74, 0x10, 0x41, 0xb8, 0xd6, 0x04, 0x00, 0x00, 0x48, 0x8b, 0xcb, { call: "FindBy" }, { call: "Ctor" }, 0x48, 0x8b, 0xd8, ...EPI] },
-    ...(withDecoy ? [{ name: "Decoy", code: [...PRO, { leaRdx: "str:LIT" }, ...nops(60), ...EPI] as CodeItem[] }] : []),
+    ...(withDecoy ? [{ name: "Decoy", code: [...pro, { leaRdx: "str:LIT" }, ...nops(60), ...EPI] as CodeItem[] }] : []),
     { name: "Ctor", code: [...pro, { leaRax: "vt:Foo" }, 0x48, 0x89, 0x03, { mov: "glob:POOL" }, ...EPI] },
     { name: "Ctor2", code: [...pro, { leaRax: "vt:Bar" }, 0x48, 0x89, 0x03, { mov: "glob:POOL2" }, ...EPI] },
     { name: "NE", code: [...pro, { mov: "glob:MAP" }, 0x48, 0x8b, 0xc8, ...EPI] },
@@ -1533,7 +1533,8 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   });
   const rv1 = link(rungSpec(PRO, false, { stamp: 0x61616161 }));
   const rungManifest = (anchors: Record<string, Record<string, unknown>> = {}) => {
-    const sig = (rva: number) => { const r = makeSignature(rv1.pe, rv1.img.buf, rva, { minLen: 8 }); return r.ok ? r.signature : null; };
+    // prologue-anchored signatures only (maxOffset 0), so v2's recompiled prologues break every one of them
+    const sig = (rva: number) => { const r = makeSignature(rv1.pe, rv1.img.buf, rva, { minLen: 12, maxOffset: 0 }); return r.ok ? r.signature : null; };
     const fn = (name: string, a: Record<string, unknown> = {}) => ({ name, kind: "function", rva: hex(rv1.fnAt[name]!), signature: sig(rv1.fnAt[name]!), anchors: { ...a, ...(anchors[name] || {}) }, consumers: [], exposure: [], evidence: [] });
     const m = parseManifest({
       format: 1,
@@ -1618,7 +1619,8 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     patched.img.buf[patched.pe.rvaToOff(patched.fnAt.SlotFoo!) + 1] = 0xd7;
     const r2 = portManifest(stripAnchors(rungOld(), "Target", ["callers", "strings"]), parsePe(patched.img.buf), patched.img.buf, { steamBuildId: "602", gameVersion: "6.0.2" });
     assert(row(r2, "Target").status !== "ported-anchor" || row(r2, "Target").method !== "imm32-witness", `must not port by a stale immediate: ${row(r2, "Target").detail}`);
-    assert(/imm32 0x4d7/.test(row(r2, "Target").detail), `the detail names the value it looked for: ${row(r2, "Target").detail}`);
+    eq(row(r2, "Target").method, "caller-ordinal", `the next rung (the caller's call #1) takes over: ${row(r2, "Target").detail}`);
+    eq(entry(r2.manifest, "Target")!.rva, hex(patched.fnAt.Target!));
   });
   test("port: caller-after-lea rung — the first in-tolerance E8 after `lea rdx,[rip+\"LuckUp\"]` inside a ported caller (the compare call before it is skipped by the size tolerance); the caller ordinal is refreshed", () => {
     const r = portRung(stripAnchors(rungOld(), "Target", ["imm32Witness"]));
