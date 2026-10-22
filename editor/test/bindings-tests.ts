@@ -381,10 +381,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (22, incl. the v4 run-entry symbols), each with a signature", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (35, incl. the v4 run-entry symbols and the 7 glow symbols), each with a signature", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 28);
+    eq(want.length, 35);
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");
@@ -404,10 +404,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "TurnControl_NextTurn")!.rva, "0x8e3c60");
     eq(entry(m, "Status_GetCategory")!.signature!.exactLen, 126);
   });
-  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (10, incl. the MewDirector global); App_global first", () => {
+  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (11, incl. the MewDirector and ShaderManager globals); App_global first", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_DATA_");
-    eq(want.length, 10);
+    eq(want.length, 11);
     eq(entry(m, "MewDirector_global")!.rva, "0x13dac30");
     const got = dataTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
@@ -1490,9 +1490,9 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["Pass_flags", "OFF_PASS_FLAGS", "0x58", "Camera_AddPostProcessPass"],
   ];
   /** layer / slot constants: name, macro, value */
-  const GLOW_CONSTANTS: [string, string, string][] = [["MaskLayer", "CONST_MASK_LAYER", "0x18"], ["CompositeLayer", "CONST_COMPOSITE_LAYER", "0x1a"], ["GlowFramebufSlot", "CONST_GLOW_FRAMEBUF_SLOT", "6"]];
+  const GLOW_CONSTANTS: [string, string, string][] = [["MaskLayer", "CONST_MASK_LAYER", "0x18"], ["CompositeLayer", "CONST_COMPOSITE_LAYER", "0x1a"], ["GlowFramebufSlot", "CONST_GLOW_FRAMEBUF_SLOT", "6"], ["VT_TacticsTest_LateRender", "VT_TT_LATERENDER", "19"]];
   const GLOW_NAMES = new Set([...GLOW_SYMBOLS.map((x) => x[0]), ...GLOW_REFERENCE.map((x) => x[0]), "ShaderManager_global", "TacticsTest_vftable", ...GLOW_OFFSETS.map((x) => x[0]), ...GLOW_CONSTANTS.map((x) => x[0])]);
-  test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 16 witnessed offsets, 3 witnessed constants; the generated headers expose them", () => {
+  test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 16 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     eq(m.entries.length, 121 + GLOW_NAMES.size, "121 pre-existing entries + the glow block");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
@@ -1528,7 +1528,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       assert(!!e && e.kind === "constant", `${name} is a constant entry`);
       eq(e!.value, value, `${name} value`);
       eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
-      assert(hv.constantHasSources(e!.anchors), `${name} carries a witness the harvest can verify`);
+      assert(hv.constantHasSources(e!.anchors) || !!e!.anchors.derive?.slotSearch, `${name} carries a witness or a slot search the harvest can verify`);
     }
     const names = m.entries.map((e) => e.name);
     const start = names.indexOf("DevMenu_TacticsTest_lambda") + 1;
@@ -1538,7 +1538,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     for (const [, macro, value] of [...GLOW_OFFSETS, ...GLOW_CONSTANTS]) assert(new RegExp(`^#define ${macro}\\s+\\(?${value.replace(/[-]/g, "\\-")}\\)?\\s`, "m").test(oh), `${macro} ${value} in offsets.h`);
     const sh = genSignaturesH([m]);
     assert(sh.includes("uint32_t rva_TacticsTest_vftable;") && sh.includes("0x00f0f4b8u"), "BuildInfo.rva_TacticsTest_vftable in signatures.h");
-    assert(/0x013c4a30u,?\s*\/\* FW_DATA_ShaderManager \*\//.test(sh), "rva_data[FW_DATA_ShaderManager]");
+    assert(/0x013c4a30u(?: \},)?,?\s*\/\* FW_DATA_ShaderManager \*\//.test(sh), "rva_data[FW_DATA_ShaderManager] (the last FwData row closes the array)");
     assert(sh.includes('"TacticsTest_LateRender", "') && sh.includes("0x88d780u },  /* FW_SYM_TacticsTest_LateRender */"), "the hook symbol's signature row");
   });
   if (exe) {

@@ -49,6 +49,14 @@ typedef enum FwSymbol {
     FW_SYM_AddComponent_MewDirector_named, /* MewDirector* (Scene*, Entity*, std::string* saveName) — caller keeps the string */
     FW_SYM_MewDirector_start,           /* void (MewDirector*) — new game / resume from the save's properties */
     FW_SYM_SaveProps_GetOrCreate,       /* Node** (PropMap* map, Node** out, std::string* key) — the save's property node (value at +0x30), created when absent */
+    /* API v4: per-unit glow (glow_engine.c rides the combat outline mask; docs/engine-map.md "Per-unit glow") */
+    FW_SYM_TacticsTest_LateRender,      /* void (TacticsTest*) — vftable slot 19, hooked; the plan runs after the original */
+    FW_SYM_vec_u32_AddUnique,           /* bool (vec_u32* {cap,count,data}, const uint32_t*) — push_back unless present */
+    FW_SYM_ShaderManager_GetOrCreateMaterial, /* Material* (ShaderManager*, std::string name, std::string shaderFile) — by-value strings, callee destroys */
+    FW_SYM_Material_SetUniformVec4,     /* void (Material*, std::string name, float x, float y, float z, float w) — callee destroys name */
+    FW_SYM_Material_SetUniformFloat,    /* void (Material*, std::string name, float v) — callee destroys name */
+    FW_SYM_Material_SetTexture,         /* void (Material*, std::string name, Texture*, int slot) — callee destroys name */
+    FW_SYM_Camera_AddPostProcessPass,   /* Pass* (Camera*, Material*, int layer) — owned by the camera; never cache the Pass* */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -65,6 +73,7 @@ typedef enum FwData {
     FW_DATA_SDL_CreateWindow,
     FW_DATA_SDL_CreateWindowWithProperties,
     FW_DATA_MewDirector,                       /* MewDirector* global; non-null at the main menu of a dev launch (test director) */
+    FW_DATA_ShaderManager,                     /* ShaderManager* global (API v4): the App object itself, material map at +0x278 */
     FW_DATA_COUNT_
 } FwData;
 
