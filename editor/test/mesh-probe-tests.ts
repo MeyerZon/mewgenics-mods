@@ -5,7 +5,7 @@
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 import * as mm from "../src/core/art/mesh-measure.ts";
 
-export function runMeshProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
+export function runMeshProbeTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture?: (name: string) => string | null): void {
   console.log("\n# mesh probe (3D phase M1): reading the probe cube from shots + the framework log");
   const LOG = [
     "hook installed: Camera::RenderOneLayer (observe3d) rva 0x979210 (observe3d: 0 window(s) of 60 world frames; meshes: on)",
@@ -29,6 +29,10 @@ export function runMeshProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
   test("ndcToShotPixel: NDC (-1,+1) is the top-left pixel, (0,0) the centre; scales with the shot", () => {
     eq(mm.ndcToShotPixel([-1, 1], 1280, 720).join(","), "0,0");
     eq(mm.ndcToShotPixel([0, 0], 1920, 1080).join(","), "960,540");
+    // an ultrawide window (OBSERVED 3440x1440, main RT viewport 2560x1440): the game letterboxes 16:9 in the middle
+    eq(mm.ndcToShotPixel([-1, 1], 3440, 1440).join(","), "440,0");
+    eq(mm.ndcToShotPixel([1, -1], 3440, 1440).join(","), "3000,1440");
+    eq(mm.ndcToShotPixel([-1, 1], 1440, 1440).join(","), "0,315", "a tall window: bars top and bottom");
   });
   type Px = [number, number, number];
   const shot = (o: { cube?: { x: number; y: number; r: number; c?: Px }; seed?: number }) => {
@@ -61,5 +65,19 @@ export function runMeshProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
   });
   test("judgeMeshShots: a few stray magenta pixels (UI) are not a cube", () => {
     eq(mm.judgeMeshShots([shot({ cube: { x: 320, y: 220, r: 2 } }), shot({ seed: 2, cube: { x: 320, y: 220, r: 2 } })], probes).verdict, "no-cube");
+  });
+  test("OBSERVED (T2 2026-10-22, mesh-probe-log.txt + mesh-probe-summary.json): the probe cube drew on tile (3,3) in a real fight — GL ready, no GL errors, every draw into FBO 1 (the main RT) with the replay's depth test off / GL_LESS / blend on, a 31 097 px magenta patch at the projected centre, two distinct shots", () => {
+    const log = fixture ? fixture("mesh-probe-log.txt") : null;
+    const sum = fixture ? fixture("mesh-probe-summary.json") : null;
+    assert(!!log && !!sum, "fixtures present");
+    const p = mm.parseMeshProbeLog(log!);
+    eq(p.glReady, true); eq(p.glErrors.length, 0);
+    assert(p.probes.length >= 5 && p.probes.every((x) => x.tile.join(",") === "3,3"), "probe lines on tile 3,3");
+    assert(p.draws.length >= 1 && p.draws.every((d) => d.fbo === 1 && d.errors === 0 && /depthTest=0 depthFunc=0x201 blend=1/.test(d.line)), "the state the functor found");
+    const j = JSON.parse(sum!);
+    eq(j.judgement.verdict, "cube"); eq(j.judgement.staleChecked, true);
+    assert(j.judgement.patch.count > 20000, "a sizeable patch");
+    eq(j.run.verdict, "pass");
+    assert(/1 real save file\(s\) unchanged/.test(j.run.save), "save guard");
   });
 }

@@ -1,0 +1,65 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "script": "mods/dev-sandbox/tests/mesh-probe.mewtest",
+  "probe": "1",
+  "judgement": {
+    "verdict": "cube",
+    "staleChecked": true,
+    "patch": {
+      "count": 31097,
+      "x0": 1622,
+      "y0": 745,
+      "x1": 1817,
+      "y1": 950
+    },
+    "distancePx": 0,
+    "expectedPx": [
+      [
+        1720.0000256279998,
+        848.16
+      ],
+      [
+        1720.0000256279998,
+        864.72
+      ],
+      [
+        1720.0000256279998,
+        848.16
+      ],
+      [
+        1720.0000256279998,
+        848.16
+      ],
+      [
+        1720.0000256279998,
+        848.16
+      ],
+      [
+        1720.0000256279998,
+        848.16
+      ]
+    ],
+    "shot": 1
+  },
+  "shots": [
+    {
+      "label": "mesh-a",
+      "note": "gl 3440 x 1440; back buffer of hwnd 0000000000231148, 741/1025 samples lit, 16 ms"
+    },
+    {
+      "label": "mesh-b",
+      "note": "gl 3440 x 1440; back buffer of hwnd 0000000000231148, 730/1025 samples lit, 31 ms"
+    }
+  ],
+  "shotsCheck": {
+    "status": "ok",
+    "detail": "2 distinct of 2"
+  },
+  "glReady": true,
+  "glErrors": [],
+  "run": {
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 2 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+  }
+}
