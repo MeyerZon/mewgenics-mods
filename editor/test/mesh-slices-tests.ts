@@ -6,7 +6,7 @@
 // unit's sprite ("under"); a band in front of a unit keeps all of it ("over").
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 import * as ms from "../src/core/art/mesh-slices.ts";
-import * as mm from "../src/core/art/mesh-measure.ts";
+import type { RgbaImageLike } from "../src/core/art/glow-measure.ts";
 
 export function runMeshSlicesTests(test: TestFn, assert: AssertFn, eq: EqFn, fixture?: (name: string) => string | null): void {
   console.log("\n# mesh slices (3D phase M3): multi-tile meshes per sort band + the mesh/unit tie, from shots + the framework log");
@@ -37,7 +37,7 @@ export function runMeshSlicesTests(test: TestFn, assert: AssertFn, eq: EqFn, fix
   const line: ms.MeshSliceLine = { frame: 61, obj: 1, band: 0, bands: 2, depth: [6, 7], key: 6.5, vis: [-0.25, -0.25, 0.25, 0.25], area: 0.25, tint: "blue" };
   const line1: ms.MeshSliceLine = { ...line, band: 1, depth: [7, 8], key: 7.5, vis: [-0.25, 0.3, 0.25, 0.55], area: 0.125, tint: "cyan" };
   // band 0: x 240..400, y 135..225 (= 0.25 x 320 x 180 = 14400 px), band 1: x 240..400, y 81..126 (7200 px)
-  const shot = (cover0: number, cover1: number, seed = 0): mm.RgbaImageLike => {
+  const shot = (cover0: number, cover1: number, seed = 0): RgbaImageLike => {
     const img = new Uint8Array(W * H * 4);
     img[0] = seed;
     for (let y = 135; y < 225; y++) for (let x = 240; x < 400; x++) img.set(x < 240 + cover0 * 160 ? [200, 200, 200, 255] : [0, 0, 200, 255], (y * W + x) * 4);
