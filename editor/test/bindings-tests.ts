@@ -384,10 +384,15 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face, the 4 campaign-walk symbols and the 2 glow-v2 screen-matrix symbols); each has a signature except the three with no relocation-free unique window", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face, the 4 campaign-walk symbols the 2 glow-v2 screen-matrix symbols and the 3 v7 cat-rig hook targets); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 42);
+    eq(want.length, 45);
+    // API v7 (2026-10-22): the cat rig redirect hooks the entry scope, the by-name clip lookup and the SWF post-load pass
+    eq(want.slice(42).join(","), "FW_SYM_Character_init,FW_SYM_Swf_GetCharacterByName,FW_SYM_ApplicationBase_ProcessAnimationMerges");
+    eq(entry(m, "Character_init")!.rva, "0xf70f0");
+    eq(entry(m, "Swf_GetCharacterByName")!.rva, "0x9bb890");
+    eq(entry(m, "ApplicationBase_ProcessAnimationMerges")!.rva, "0x9bc070");
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");
@@ -489,7 +494,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 99, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects) + 2 effective stats + App_timescale (game speed)");
+    eq(offs.length, 102, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects) + 2 effective stats + App_timescale (game speed) + 3 cat rig (the SymbolClass list: SwfFile_symbolList, SymNode_name, SymNode_idFromName)");
   });
   test("25143593.json: effective stats (2026-10-22) — Character::recompute_stats (RTTI of its std::function lambdas) is a signed function entry; the effective stat block +0x5bc and max HP +0x4bc are offsets witnessed in it", () => {
     const m = loadManifest(realPath);
@@ -1919,7 +1924,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const WALK_NAMES = new Set([...WALK_SYMBOLS.map((x) => x[0]), ...WALK_REFERENCE.map((x) => x[0]), ...WALK_OFFSETS.map((x) => x[0])]);
   test("the committed manifest carries the campaign-walk bindings (2026-10-22) as one contiguous block at its end: 4 FwSymbol functions (GoOnAnAdventure, MapScreen::init, MapScreen::EnterNode, StartMapBattle), 3 reference functions, 8 witnessed offsets; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(enumerators("FW_SYM_").length, 42);
+    eq(enumerators("FW_SYM_").length, 45);
     for (const [name, rva, index] of WALK_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
@@ -2028,7 +2033,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   }
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1 + 3 + 1 + FACING_NAMES.size + WALK_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam) + the effective stats (3) + App_timescale (game speed) + the facing block + the campaign-walk block");
+    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1 + 3 + 1 + 5 + FACING_NAMES.size + WALK_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam) + the effective stats (3) + App_timescale (game speed) + the cat rig block (5) + the facing block + the campaign-walk block");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);

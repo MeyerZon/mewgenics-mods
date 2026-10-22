@@ -1,0 +1,1 @@
+{ "title": "fixture: cat-rig-target-unknown", "author": "tests", "version": "0.0.0", "description": "A _CatRig_<Entry> export whose entry is no character (NoSuchCat), next to one for a base character (PlayerCat) and one for the mod's own (ModCat).", "requirements": [] }

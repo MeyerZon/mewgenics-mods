@@ -326,5 +326,21 @@
     "shots": [],
     "regenerate": "cd editor && npm run web → Art mode → a scene → Shapes",
     "status": "open"
+  },
+  {
+    "id": "pr109-rig-cat",
+    "pr": 109,
+    "question": "In shot-rig-1, does the cat under the yellow checker marker (ArtProbeRigCat, drawn by our _CatRig_ clip) look like a real cat — Mangy's parts: body, head with face, tail, four limbs — in the idle pose, mirrored like the other enemies, and like the same cat as the control ArtProbeVanillaCat in shot-vanilla (which must have NO marker)?",
+    "shots": ["ingame-runs/*-_artprobe-render-rig/shot-rig-1.png","ingame-runs/*-_artprobe-render-rig/shot-vanilla.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --rig",
+    "status": "open"
+  },
+  {
+    "id": "pr109-rig-labels",
+    "pr": 109,
+    "question": "A swap rig replaces CatTest wholesale, so an animation it has no label for (hits, attack, …) leaves the cat on its frame (silent, no crash). Acceptable for now, or should a follow-up make a swap rig fall back to the vanilla labels it lacks?",
+    "shots": ["ingame-runs/*-_artprobe-render-rig/shot-rig-3.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --rig",
+    "status": "open"
   }
 ]

@@ -36,3 +36,8 @@ int glow_engine_set_from_status(void *character, const float rgba[4]);   /* a Fw
 int speed_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_ApplicationBase_FrameBegin step of FW_HOOK_PLAN */
 double speed_engine_set(double factor);                /* returns the clamped factor kept */
 double speed_engine_get(void);
+/* catrig_engine.c (API v7) */
+int catrig_engine_is_step(const FwHookSpec *spec);     /* the three cat rig steps of FW_HOOK_PLAN */
+int catrig_engine_hook_step(const FwHookSpec *spec);
+int catrig_engine_register(const FwCatRigDef *def);
+const char *catrig_engine_for(const char *character);

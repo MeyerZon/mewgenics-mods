@@ -39,6 +39,10 @@
 // --multi-append (2026-10-22): build the _catappendA / _catappendB / _catappendSame probe SWFs, run A alone, B alone,
 // A+B, B+A and A+Same, count each marker colour per shot (probe-multiappend.ts) and write multi-append-summary.json
 // (pinned as test/fixtures/ingame/multi-append-summary.json).
+// --rig (2026-10-22, framework API v7): run render-rig.mewtest (ArtProbeVanillaCat, then ArtProbeRigCat — the same parts, the
+// latter drawn by probe.swf's _CatRig_ArtProbeRigCat through the framework's CatTest redirect) and write rig-summary.json:
+// the framework log's catrig lines, the vanilla cat's marker (must be absent) and outline, per rig shot our marker and the
+// new dark outline under it, and the outcome (probe-compare.ts rigSwapVerdict). `--rig --from <runDir>` re-reads a run.
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run, 3 when the run's shots are stale (all byte-identical: no verdict).
 //   node scripts/art-probe.ts [--json]
 
@@ -54,7 +58,7 @@ import { writeModBytes } from "../src/core/art/art-io.ts";
 import { MODS_DIR, extractedPath } from "../src/core/repo.ts";
 import { RASTER_PROBE, rasterProbeImages, patchMissingFontClass, measureRasterShot, measureCatRamp, backdropShare } from "../src/core/art/probe-raster.ts";
 import { MULTI_APPEND_MOD, measureMultiAppendShot, multiAppendOutcome } from "../src/core/art/probe-multiappend.ts";
-import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
+import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS, parseCatRigLog, rigSwapVerdict } from "../src/core/art/probe-compare.ts";
 
 /** the CatProbe rig's slot colours (mods/_artprobe/art/probe.scene.json) */
 export const CAT_PROBE_COLOURS: Record<string, string> = { tail: "#ff8000", leg2: "#8000ff", arm2: "#00a080", body: "#2080ff", leg1: "#ff60a0", arm1: "#a0ff40", head: "#ffd0a0" };
@@ -362,7 +366,45 @@ if (process.argv.includes("--glow-arena")) {
   ].join("\n"));
   process.exit(outcome === "halo" ? 0 : 1);
 }
-const report = await api.runIngameTest({ mod: "_artprobe", test: catAppend ?"render-cat-append" : cat ? "render-cat" : "render-probe", hide: false });
+if (process.argv.includes("--rig")) {
+  // the cat rig redirect (framework API v7): ArtProbeRigCat drawn by _CatRig_ArtProbeRigCat, ArtProbeVanillaCat the control
+  const RADIUS = 350;
+  const fromAt = process.argv.indexOf("--from");
+  const r = fromAt > 0 ? (JSON.parse(readFileSync(join(process.argv[fromAt + 1]!, "report.json"), "utf8")) as Awaited<ReturnType<typeof api.runIngameTest>>) : await api.runIngameTest({ mod: "_artprobe", test: "render-rig", hide: false });
+  if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
+  if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
+  const dirR = r.artifacts.runDir!;
+  const fwPath = r.artifacts.frameworkLogWindow;
+  const log = parseCatRigLog(fwPath ? readFileSync(fwPath, "utf8") : "");
+  const byLabel = new Map(r.artifacts.shots.filter((s) => s.path).map((s) => [s.label, decodePng(readFileSync(s.path!))]));
+  const baseline = byLabel.get("baseline"), vanilla = byLabel.get("vanilla");
+  const arena = vanilla ? { x0: Math.round(vanilla.width * 0.15), y0: Math.round(vanilla.height * 0.1), x1: Math.round(vanilla.width * 0.85), y1: Math.round(vanilla.height * 0.7) } : undefined;
+  const vRegion = baseline && vanilla ? largestChangedRegion(vanilla, baseline, { dark: 40, within: arena }) : null;
+  const vMarker = vanilla ? geomOf(analyzeProbeShot(vanilla)) : null;
+  const vanillaOut = { label: "vanilla", marker: vMarker, region: vRegion, outline: vRegion && baseline && vanilla ? darkPixelsNear(vanilla, baseline, { x: vRegion.cx, y: vRegion.cy }, RADIUS) : null };
+  const rig = vanilla ? ["rig 1", "rig 2", "rig 3"].filter((l) => byLabel.has(l)).map((label) => {
+    const img = byLabel.get(label)!;
+    const a = analyzeProbeShot(img);
+    const marker = geomOf(a);
+    const ours = !!marker && marker.found;
+    // the marker sits at clip (-48, -330) above the frame origin: the cat's body centre is 266 clip px below it (A0)
+    const centre = ours ? { x: (a.box!.x0 + a.box!.x1) / 2, y: (a.box!.y0 + a.box!.y1) / 2 + 266 * a.scale } : null;
+    return { label, marker, ours, centre, outline: centre ? darkPixelsNear(img, vanilla, centre, RADIUS) : 0 };
+  }) : [];
+  const v = rigSwapVerdict({ verdict: r.verdict, character: "ArtProbeRigCat", log, vanilla: { marker: !!(vMarker && vMarker.found), outline: vanillaOut.outline || 0 }, rig: rig.map((x) => ({ label: x.label, marker: x.ours, outline: x.outline })) });
+  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: dirR, outcome: v.outcome, markers: v.markers, partsDrawn: v.partsDrawn, radius: RADIUS, log, shots: [...byLabel.keys()], vanilla: vanillaOut, rig };
+  writeFileSync(join(dirR, "rig-summary.json"), JSON.stringify(out, null, 2) + "\n");
+  console.log([
+    `framework log: registered ${log.registered.map((x) => `${x.clip} for ${x.character} (${x.source})`).join(", ") || "none"}; redirected ${log.redirected.map((x) => `${x.character} -> ${x.clip}`).join(", ") || "none"}${log.missing.length ? `; missing ${log.missing.map((x) => x.clip).join(", ")}` : ""}${log.refused.length ? `; refused ${log.refused.length}` : ""}`,
+    `vanilla cat: marker ${vMarker && vMarker.found ? "FOUND (not scoped!)" : "none"}; new dark region ${vRegion ? `${vRegion.n} px at ${vRegion.cx},${vRegion.cy}` : "none"}; outline ${vanillaOut.outline ?? "-"}`,
+    ...rig.map((x) => `${x.label}: marker ${x.ours ? `found (scale ${x.marker!.scale.toFixed(2)}, ${x.marker!.mirrored ? "mirrored" : "as authored"})` : "not found"}; outline ${x.outline}`),
+    `outcome: ${v.outcome} (our marker in ${v.markers}/${rig.length} rig shots; real parts under it in ${v.partsDrawn}/${v.markers})`,
+    `run: ${r.verdict} — ${r.reason}; ${out.save}`,
+    `artifacts: ${dirR}`,
+  ].join("\n"));
+  process.exit(v.outcome === "redirected" ? 0 : 1);
+}
+const report = await api.runIngameTest({ mod: "_artprobe", test: catAppend ? "render-cat-append" : cat ? "render-cat" : "render-probe", hide: false });
 if (!("verdict" in report)) { console.error(report.error); process.exit(2); }
 if (report.verdict === "skipped" || report.verdict === "cannot-run") { console.log(`skipped: ${report.reason}`); process.exit(2); }
 { const stale = staleShotsRefusal(report); if (stale) { console.log(stale); process.exit(3); } }

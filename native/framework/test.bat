@@ -7,6 +7,7 @@ REM policy: symbol resolution, the launch gate, API bounds and the hook plan (te
 REM per-unit glow rules: registry, pruning, layer vector, pass lookup and writes (test_glow_rules) and the
 REM FW_Random stream: splitmix64, seeding, the bounded draw (test_rng).
 REM game-speed rules: clamp, default, no compounding, restore on disable (test_speed_rules).
+REM cat rig redirect rules: registry, entry lookup, _CatRig_ export parser, SymbolClass list scan (test_catrig_rules).
 REM Builds build\test_*.exe with w64devkit GCC and runs them; exit code = failures.
 setlocal
 if not defined GCC set "GCC=C:\raylib\w64devkit\bin\gcc.exe"
@@ -60,9 +61,17 @@ if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
   -o "%OUT%\test_rng.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_rng.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_speed_rules.c" "%HERE%src\fw_speed_rules.c" ^
   -o "%OUT%\test_speed_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_speed_rules.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_catrig_rules.c" "%HERE%src\fw_catrig_rules.c" ^
+  -o "%OUT%\test_catrig_rules.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_catrig_rules.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal

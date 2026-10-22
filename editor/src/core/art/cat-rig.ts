@@ -395,3 +395,55 @@ export function rigFindings(sp: SceneSprite, at: string, scene?: Scene): Finding
   }
   return out;
 }
+
+// ---- swap rigs (framework API v7, native/framework/src/fw_catrig_rules.h) --------------------------------------------
+
+/** the export-name prefix that declares a swap rig for one character entry: `_CatRig_<Entry>` (FW_CATRIG_EXPORT_PREFIX) */
+export const CAT_RIG_EXPORT_PREFIX = "_CatRig_";
+/** the longest entry name the framework's registry takes (FW_CATRIG_NAME_MAX) */
+export const CAT_RIG_NAME_MAX = 63;
+/** the labels a swap rig needs so the cat is not frozen: the idle the state machine plays first, both facings */
+export const CAT_RIG_IDLE_LABELS: ReadonlyArray<string> = ["idleF", "idleB"];
+
+/** The entry a `_CatRig_<Entry>` export names ("" when nothing follows the prefix), or null for any other export. */
+export function catRigEntry(linkage: string): string | null {
+  return linkage.startsWith(CAT_RIG_EXPORT_PREFIX) ? linkage.slice(CAT_RIG_EXPORT_PREFIX.length) : null;
+}
+
+/**
+ * Swap-rig checks for every `_CatRig_<Entry>` export: the entry name (cat-rig-export-name), a labeled frame that
+ * places a rig: "cat" sprite carrying all seven slots (cat-rig-slot-missing: CatParts fills slots by instance name and
+ * the rig replaces the whole CatTest clip, so a missing slot is a missing body part), and the idle labels
+ * (cat-rig-idle-missing: the state machine starts in idle; a missing label is a silent no-op that freezes the cat).
+ * The frames themselves (ani at depth 1, empty slots) get the same checks as `_Append_CatTest` donors via rigFindings.
+ */
+export function catRigFindings(scene: Scene): Finding[] {
+  const out: Finding[] = [];
+  for (const [linkage, id] of Object.entries(scene.exports || {})) {
+    const entry = catRigEntry(linkage);
+    if (entry === null) continue;
+    const at = `exports.${linkage}`;
+    const bytes = new TextEncoder().encode(entry).length;
+    if (!bytes || bytes > CAT_RIG_NAME_MAX) out.push({ severity: "error", code: "cat-rig-export-name", message: bytes ? `${linkage}: the entry name is ${bytes} bytes; the framework's rig registry takes at most ${CAT_RIG_NAME_MAX}` : `${linkage} names no character entry: write ${CAT_RIG_EXPORT_PREFIX}<CharacterEntry>`, path: at });
+    const sp = typeof id === "string" ? scene.sprites[id] : undefined;
+    if (!sp || !Array.isArray(sp.layers)) continue;   // export-ref already reports a bad target
+    const labels = sp.labels || {};
+    const missingIdle = CAT_RIG_IDLE_LABELS.filter((l) => !(l in labels));
+    if (missingIdle.length) out.push({ severity: "warning", code: "cat-rig-idle-missing", message: `${linkage} root "${id}" has no ${missingIdle.join(" / ")} label${missingIdle.length > 1 ? "s" : ""}; the cat starts in idle (idleF / idleB) and a missing label is a silent no-op, so it stays frozen on frame 0`, path: `sprites.${id}.labels` });
+    let best: { rig: string; missing: string[] } | null = null;
+    for (const frame of Object.values(labels)) {
+      if (!Number.isInteger(frame)) continue;
+      for (const l of sp.layers) {
+        const ref = placedAt(l, frame);
+        const target = ref ? scene.sprites[ref] : undefined;
+        if (!target || target.rig !== "cat") continue;
+        const names = new Set((target.layers || []).map((x) => x.name || ""));
+        const missing = CAT_SLOT_NAMES.filter((s) => !names.has(s));
+        if (!best || missing.length < best.missing.length) best = { rig: ref!, missing };
+      }
+    }
+    if (!best) out.push({ severity: "error", code: "cat-rig-slot-missing", message: `${linkage} root "${id}" places no rig: "cat" sprite on any labeled frame; a swap rig replaces the whole CatTest clip, and CatParts draws the cat's parts only into the named slots (${CAT_SLOT_NAMES.join(" ")}) of a pose placed as "${CAT_ANIM_LAYER}"`, path: `sprites.${id}` });
+    else if (best.missing.length) out.push({ severity: "error", code: "cat-rig-slot-missing", message: `${linkage}: the rig "${best.rig}" has no ${best.missing.join(", ")} slot; CatParts fills slots by instance name, so the cat would be drawn without that part`, path: `sprites.${best.rig}` });
+  }
+  return out;
+}

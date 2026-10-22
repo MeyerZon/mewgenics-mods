@@ -2176,3 +2176,45 @@ header); the modder-facing summary is `docs/data-mods.md` "Sounds and music". OB
   as `<path>.rawpak` (pak) or `<modpath>/<path>.<mode>.raw` (loose), sounds as their pack path;
   `debug_sfx_memory_use`; `play_sound <Group>` (TacticsTest). The harness reads them with `expect console` and the
   runner-side `expect deltas` (`docs/ingame-testing.md`). Pinned by `editor/test/fixtures/ingame/result-audioprobe-sounds.jsonl`.
+
+## Cat rig redirect (native S1, 2026-10-22)
+
+Strategy S1 of the cat-parts plan, built on catA's entry path ("Cat parts: entry path, palette, faces, mirroring"
+above; `.analysis/notes-catA.md`): a WHOLE custom cat clip for one `movieclip _CAT` character entry, the game's cat
+path otherwise untouched. `native/framework/src/catrig_engine.c` (hooks) + `fw_catrig_rules.c` (pure, host-tested),
+framework API v7 (`FW_RegisterCatRig`, `FW_CatRigFor`); data seam: a SymbolClass export `_CatRig_<Entry>`
+(`docs/data-mods.md` "A whole cat rig for one character"). Bytes re-read from the installed exe (objdump) on
+2026-10-22; decompiles on disk: `Swf_GetCharacterByName_0x9bb890.c`, `Swf_SymbolLookup_0x9bb6f0.c`,
+`Renderer_SetClip_0x97a900.c`, `CharacterGraphics_build_0xf1150.c`, `Character_init_0xf70f0.c`,
+`process_animation_merges_0x9bc070.c`, `process_animation_merges_caller_0x9baaa0.c`.
+
+- **Hook sites (OBSERVED, prologues relocatable):** `Character::init(name, bool, bool)` **0xf70f0** (`mov rax,rsp;
+  mov [rax+0x20],r9b; …` — rcx this, rdx the by-value `std::string*` entry name the callee destroys, r8b/r9b);
+  `Swf_GetCharacterByName` **0x9bb890** (`mov [rsp+0x10],rdx; mov [rsp+8],rcx; push rbx/rsi/rdi; sub rsp,0x60` — rcx
+  unused, rdx the by-value name; copies it twice, `ApplicationBase::FindCharacter` 0x9bb6f0, `def->vtable[3]`, destroys
+  both copies and the argument; returns the instance or NULL); `ApplicationBase::process_animation_merges` **0x9bc070**
+  (`mov [rsp+0x20],rbx; …` — rcx app, rdx the SWF file; called once per loaded file by 0x9baaa0's loop over
+  `app+0x118[0..app+0x114)`).
+- **SymbolClass list (OBSERVED in 0x9bc070, the manifest witnesses):** `mov rdi,[rdx+0x78]; mov rbx,[rdi]; cmp rbx,rdi`
+  → `SWF+0x78` = the `std::list` sentinel (`OFF_SWF_SYMBOL_LIST`); `lea r14,[rbx+0x10]` → node+0x10 = the export name
+  `std::string` (`OFF_SYMNODE_NAME`); `cmp dword [r14+0x20],0` → the int id 0x20 after the name (node+0x30,
+  `OFF_SYMNODE_ID_FROM_NAME`), entries with id 0 skipped. The framework walks the same list after the original ran.
+- **The redirect.** The `Character::init` hook keeps the entry's rig (registry lookup: exact, then `_Champion` /
+  `_Elite` stripped) in a thread-local for the call, saved and restored. The by-name hook, while that is set and the
+  name is exactly `CatTest`, calls the original with the rig name (a new by-value string, game allocator) — the
+  creation chain 0xf1150 → 0x12c960 → 0x78ceb0 → `Renderer::init` 0x97a900 → 0x9bb890 is synchronous on the same
+  thread, so only that entry's cat clip is affected; the portrait lookups (`<entry>Portrait`) and CatParts' part
+  symbols pass through. A NULL from the rig name (no loaded SWF exports it) falls back to the original `CatTest`
+  call (logged once), because `Renderer::init` is fatal on NULL. The `app+0x2b8` cache is keyed by the requested name,
+  so the vanilla `CatTest` entry is never touched.
+- **OBSERVED in game (run 20261022-121534, `render-rig.mewtest`; fixture `artprobe-rig-summary.json`):** the log shows
+  `catrig: registered _CatRig_ArtProbeRigCat for ArtProbeRigCat (from data, …)` at load and `catrig: ArtProbeRigCat:
+  CatTest -> _CatRig_ArtProbeRigCat` at the spawn; ArtProbeRigCat (`movieclip _CAT`, `custom_cat_data ArtProbeParts`)
+  is drawn by our clip — the rig's yellow marker above a real cat (new dark outline 16998 / 22256 / 17537 px under it
+  vs 10628 for the vanilla control), in all three shots, scale 1.91, mirrored like every enemy; ArtProbeVanillaCat on
+  the same parts shows no marker (scoped). No crash; `real save file(s) unchanged`. So CatParts, CatData and the state
+  machine accept a non-CatTest clip of CatTest's shape (root `idleF`/`idleB`/…, pose as `ani`, empty slots).
+- **Limits.** The rig replaces CatTest wholesale: every animation the rig has no label for is a silent no-op (the cat
+  keeps its frame) — a full rig needs the labels the cat plays (`idle`, `walk`, hits, `attack`, … × F/B); one rig per
+  entry, 16 entries, names ≤ 63 bytes (clips ≤ 71: `_CatRig_` + entry); dev launches with a known build only (the
+  framework's gate) — elsewhere the export is inert.

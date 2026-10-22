@@ -142,6 +142,16 @@ TEST(build_25143593_values_match_the_manifest) {
     /* effective stats (2026-10-22): what Character::recompute_stats (0x102520) writes — the harness's effective block */
     CHECK_EQ(OFF_CH_STATS_EFF, 0x5bc);
     CHECK_EQ(OFF_CH_MAX_HP, 0x4bc);
+    /* cat rig redirect (API v7, 2026-10-22): Character::init(name,bool,bool) scopes the clip lookup to the entry, the
+     * by-name instance lookup is where "CatTest" becomes the entry's _CatRig_ clip, the SWF post-load pass is where
+     * the _CatRig_<Entry> SymbolClass exports are found (docs/engine-map.md "Cat rig redirect") */
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Character_init].expectedRva, 0xf70f0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Swf_GetCharacterByName].expectedRva, 0x9bb890u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_ApplicationBase_ProcessAnimationMerges].expectedRva, 0x9bc070u);
+    CHECK(FW_SYMBOLS_25143593[FW_SYM_Swf_GetCharacterByName].pattern != NULL);
+    CHECK_EQ(OFF_SWF_SYMBOL_LIST, 0x78);
+    CHECK_EQ(OFF_SYMNODE_NAME, 0x10);
+    CHECK_EQ(OFF_SYMNODE_ID_FROM_NAME, 0x20);
 }
 
 /* facing (2026-10-22): Character::Face and the fields the harness's `face` / units event read (docs/engine-map.md

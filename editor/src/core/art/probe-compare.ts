@@ -471,3 +471,61 @@ export function renderProbeReport(shots: ProbeShot[], s: ProbeSummary, labels: s
     "",
   ].join("\n");
 }
+
+// ---- the cat rig redirect probe (framework API v7; npm run test:artprobe -- --rig) -----------------------------------
+
+export interface CatRigLog {
+  registered: Array<{ clip: string; character: string; source: "data" | "dll" }>;
+  redirected: Array<{ character: string; clip: string }>;
+  missing: Array<{ character: string; clip: string }>;
+  refused: string[];
+}
+
+/** Read the `catrig:` lines catrig_engine.c writes to mewframework.log (any prefix before `catrig:` is ignored). */
+export function parseCatRigLog(text: string): CatRigLog {
+  const out: CatRigLog = { registered: [], redirected: [], missing: [], refused: [] };
+  for (const line of text.split(/\r?\n/)) {
+    const i = line.indexOf("catrig: ");
+    if (i < 0) continue;
+    const s = line.slice(i + "catrig: ".length);
+    let m: RegExpExecArray | null;
+    if ((m = /^registered (\S+) for (\S+) \(from (data|a DLL)/.exec(s))) out.registered.push({ clip: m[1]!, character: m[2]!, source: m[3] === "data" ? "data" : "dll" });
+    else if ((m = /^(\S+): CatTest -> (\S+) \(instance/.exec(s))) out.redirected.push({ character: m[1]!, clip: m[2]! });
+    else if ((m = /^(\S+): rig clip (\S+) not found/.exec(s))) out.missing.push({ character: m[1]!, clip: m[2]! });
+    else if (/ refused: /.test(s)) out.refused.push(s);
+  }
+  return out;
+}
+
+export interface RigSwapInput {
+  verdict: string;
+  /** the rigged character entry */
+  character: string;
+  log: CatRigLog;
+  /** the vanilla control (same parts, no rig): our marker must NOT be there; its outline is the real-parts reference */
+  vanilla: { marker: boolean; outline: number };
+  /** the rigged cat's shots: our marker (the rig's own art) and the new dark outline under it */
+  rig: Array<{ label: string; marker: boolean; outline: number }>;
+}
+export type RigSwapOutcome = "redirected" | "not-registered" | "not-redirected" | "not-scoped" | "no-marker" | "not-filled" | string;
+
+/**
+ * The swap rig's outcome: the run passed; the framework registered a rig for the entry and redirected its CatTest
+ * lookup (log); the vanilla control on the same parts shows no marker (the redirect is scoped to the entry); our
+ * marker is in at least two rig shots (the cat may be killed or mid-hit in one); every shot with our marker has real
+ * cat parts under it — new dark outline at least 30 % of the vanilla cat's (the A0 measure: colour counts and plain
+ * diffs are overlay noise).
+ */
+export function rigSwapVerdict(i: RigSwapInput): { outcome: RigSwapOutcome; markers: number; partsDrawn: number } {
+  const markers = i.rig.filter((r) => r.marker).length;
+  const partsDrawn = i.rig.filter((r) => r.marker && i.vanilla.outline > 0 && r.outline >= 0.3 * i.vanilla.outline).length;
+  const outcome: RigSwapOutcome =
+    i.verdict !== "pass" ? i.verdict
+    : !i.log.registered.some((r) => r.character === i.character) ? "not-registered"
+    : !i.log.redirected.some((r) => r.character === i.character) ? "not-redirected"
+    : i.vanilla.marker ? "not-scoped"
+    : markers < 2 ? "no-marker"
+    : partsDrawn < markers ? "not-filled"
+    : "redirected";
+  return { outcome, markers, partsDrawn };
+}

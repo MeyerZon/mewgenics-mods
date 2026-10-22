@@ -134,6 +134,7 @@ static int install_step(const FwHookSpec *spec, int ordinal, int failuresSoFar, 
     (void)ordinal; (void)failuresSoFar; (void)user;
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_ApplicationBase_FrameBegin) return speed_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_TacticsTest_LateRender) return glow_engine_hook_step(spec);
+    if (catrig_engine_is_step(spec)) return catrig_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Character_BeginTurn) {
         uintptr_t rva = g_sym[spec->index] - g_base;
         void *tramp = NULL;
@@ -233,6 +234,17 @@ FW_EXPORT double FW_SetTimeScale(double factor) {
 FW_EXPORT double FW_GetTimeScale(void) {
     if (!g_active) return 0.0;
     return speed_engine_get();
+}
+
+/* --- API v7: cat rigs (catrig_engine.c) --- */
+FW_EXPORT int FW_RegisterCatRig(const FwCatRigDef *def) {
+    if (!g_active) return 0;
+    return catrig_engine_register(def);
+}
+
+FW_EXPORT const char *FW_CatRigFor(const char *character) {
+    if (!g_active) return NULL;
+    return catrig_engine_for(character);
 }
 
 /* ----------------------------------------------------------------------- */

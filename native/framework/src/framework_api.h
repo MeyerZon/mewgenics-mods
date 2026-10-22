@@ -13,7 +13,7 @@
 #define FW_VERSION_MAJOR 0
 #define FW_VERSION_MINOR 5
 #define FW_VERSION_PATCH 0
-#define FW_API_VERSION 6   /* bumped when functions are added; existing signatures never change */
+#define FW_API_VERSION 7   /* bumped when functions are added; existing signatures never change */
 
 /* Code symbols located by byte signature (see signatures.h). APPEND ONLY: mods compiled against an
  * older header keep working because the existing values never move. */
@@ -67,6 +67,10 @@ typedef enum FwSymbol {
     /* glow v2: a unit's screen rect, as TacticsTest::LateRender computes the hovered unit's (per-unit colours) */
     FW_SYM_Renderer_GetScreenMatrix,    /* float* (Renderer*, float out[16]) — the renderer's world-to-canvas matrix */
     FW_SYM_Position_GetViewMatrix,      /* float* (Position*, float out[16], double interp) — a camera's view matrix (LateRender inverts it) */
+    /* API v7: cat rig redirect (catrig_engine.c; docs/engine-map.md "Cat rig redirect") */
+    FW_SYM_Character_init,              /* void (Character*, std::string* name, bool, bool) — by-value string, callee destroys; hooked (entry scope) */
+    FW_SYM_Swf_GetCharacterByName,      /* MovieClip* (void* unused, std::string* name) — by-value string, callee destroys; NULL when unknown; hooked */
+    FW_SYM_ApplicationBase_ProcessAnimationMerges, /* void (ApplicationBase*, SWF* file) — once per loaded SWF; post-hooked (the _CatRig_ scan) */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -149,6 +153,21 @@ FW_EXPORT void FW_SeedRandom(uint64_t seed);    /* restart the stream from seed 
  * Call on the main thread. docs/engine-map.md "Frame timing and game speed". */
 FW_EXPORT double FW_SetTimeScale(double factor);
 FW_EXPORT double FW_GetTimeScale(void);   /* the current factor (1.0 = off), 0 if inactive */
+/* --- API v7: cat rigs. A `movieclip _CAT` character entry with a registered rig is drawn by the rig clip instead of
+ * the vanilla CatTest: the game keeps its whole cat path (CatData, CatParts, palette, face, shadow, the animation state
+ * machine) and CatParts fills the rig's named EMPTY slot sprites (tail leg2 arm2 body leg1 arm1 head) with the cat's
+ * own parts, as it does for any clip. The rig clip is a SymbolClass export of a loaded SWF whose root has the labels
+ * the game plays (<anim>F / <anim>B: idleF / idleB at least) placing the pose as the child `ani`. Data mods declare a
+ * rig with no DLL by exporting it as `_CatRig_<CharacterEntry>` (registered when the SWF loads); a DLL may register any
+ * export name for an entry. A rig clip that no loaded SWF exports leaves the vanilla CatTest in place (logged). One rig
+ * per entry (first registration wins), up to 16, names up to 63 bytes; `<Entry>_Champion` / `_Elite` use the entry's
+ * rig unless they have their own. 1 on success (also when the same pair is registered again). */
+typedef struct FwCatRigDef {
+    const char *character;   /* the data/characters entry name, e.g. "TomTom" */
+    const char *rig_clip;    /* the SymbolClass export that replaces CatTest for it */
+} FwCatRigDef;
+FW_EXPORT int FW_RegisterCatRig(const FwCatRigDef *def);
+FW_EXPORT const char *FW_CatRigFor(const char *character);   /* the rig clip registered for that entry, NULL if none */
 
 typedef int (*FW_fn_GetVersion)(void);
 typedef int (*FW_fn_IsActive)(void);
@@ -164,6 +183,8 @@ typedef uint32_t (*FW_fn_Random)(uint32_t);
 typedef void (*FW_fn_SeedRandom)(uint64_t);
 typedef double (*FW_fn_SetTimeScale)(double);
 typedef double (*FW_fn_GetTimeScale)(void);
+typedef int (*FW_fn_RegisterCatRig)(const FwCatRigDef *);
+typedef const char *(*FW_fn_CatRigFor)(const char *);
 
 typedef struct FwApi {
     FW_fn_GetVersion GetVersion;
@@ -179,7 +200,9 @@ typedef struct FwApi {
     FW_fn_Random Random;              /* v5 */
     FW_fn_SeedRandom SeedRandom;      /* v5 */
     FW_fn_SetTimeScale SetTimeScale;   /* v6 */
-    FW_fn_GetTimeScale GetTimeScale;   /* v6; new fields are appended so older layouts stay valid prefixes */
+    FW_fn_GetTimeScale GetTimeScale;   /* v6 */
+    FW_fn_RegisterCatRig RegisterCatRig; /* v7 */
+    FW_fn_CatRigFor CatRigFor;           /* v7; new fields are appended so older layouts stay valid prefixes */
 } FwApi;
 
 /* Resolve the framework's exports from the loaded module. Returns 1 when every function of
@@ -195,7 +218,7 @@ static inline int FW_Resolve(FwApi *api) {
     FW__R(RegisterStatus) FW__R(SetStatusStacks) FW__R(CharacterHasStatus)
     FW__R(GetData)
     FW__R(SetUnitGlow) FW__R(ClearUnitGlow)
-    FW__R(Random) FW__R(SeedRandom) FW__R(SetTimeScale) FW__R(GetTimeScale)
+    FW__R(Random) FW__R(SeedRandom) FW__R(SetTimeScale) FW__R(GetTimeScale) FW__R(RegisterCatRig) FW__R(CatRigFor)
 #undef FW__R
     return 1;
 }

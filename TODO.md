@@ -25,6 +25,8 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr104-glow-icon` (#104) — The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip "Glowing"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?
 - [ ] `glow-decide-icon` (glow v3) — **Decide:** a FwGlow_ status shows LuckUp's four-leaf clover on the unit's status bar (see shot-glow of `*-fw-glow-data-glow`). Keep the clover, or ask for a follow-up that hides the icon (or gives the glow status its own)?
 - [ ] `glow-decide-hover` (glow v3) — **Decide:** while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?
+- [ ] `pr109-rig-cat` (#109) — In shot-rig-1, does the cat under the yellow marker (our _CatRig_ clip) look like a real cat with Mangy's parts in the idle pose, the same cat as the marker-less control in shot-vanilla?
+- [ ] `pr109-rig-labels` (#109) — A swap rig without a label for an animation (hits, attack) keeps the cat on its frame: acceptable, or should a swap rig fall back to the vanilla labels it lacks?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
@@ -101,7 +103,10 @@ these without a decision (status per bullet below; the PR map follows).
       shape — `new_art_scene template cat-animation`, `parts: "game"` rigs, `cat-anim-*` validator codes, the Rig tab).
       The import route stays closed (#71). What remains native or copied: a non-`_CAT` character wearing a cat's parts
       (hook seam S1 in engine-map "Cat parts: entry path, palette, faces, mirroring" — parked, optional) and new part
-      art in catparts.swf. 2026-10-22: the back facing's `head_back` layout (`<name>PoseBack`, `facing: "back"`)
+      art in catparts.swf. **S1 built 2026-10-22 (framework API v7, `feat/native-catrig-redirect`):** a SWF export
+      `_CatRig_<Entry>` (or `FW_RegisterCatRig`) gives one `movieclip _CAT` entry its own whole cat clip; T2
+      `render-rig.mewtest` redirected (engine-map "Cat rig redirect", data-mods "A whole cat rig for one character").
+      Next: an editor "swap rig for <entry>" control / MCP template (plan A3) and the sample pairing (plan A2.4). 2026-10-22: the back facing's `head_back` layout (`<name>PoseBack`, `facing: "back"`)
       and the four-way `LF/RF/LB/RB` quartet (`newCatAnimation { fourWay }`, Rig tab checkbox) are authored and
       validated (engine-map "The back facing and the four-way quartet"; probe `render-cat-back`: the back rig drawn with the cat's own parts, OBSERVED run 20261022-114912). Turning a unit away is
       solved (2026-10-22, #105 stack): the harness's `face <unit> back` calls `Character::Face` 0x10ce50 (engine-map

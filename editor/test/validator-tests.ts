@@ -175,6 +175,27 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     for (const ok of ["FwGlow_ff00ff", "FwGlow_00FFFF80", "FwGlow_336699", "FwGlow_ffffffff"]) assert(p[0]!.re.test(ok), `accepts ${ok}`);
     for (const bad of ["FwGlow_", "FwGlow_ff00f", "FwGlow_ff00ff0", "FwGlow_ff00ff00f", "FwGlow_gg00ff", "FwGlow_ff 0ff", "fwglow_ff00ff", "FwGlowff00ff", "XFwGlow_ff00ff", "FwGlow_-f00ff", "FwGlow_0xff00", "LuckUp", ""]) assert(!p[0]!.re.test(bad), `refuses ${JSON.stringify(bad)}`);
   });
+  // The cat rig redirect (framework API v7): a SWF export _CatRig_<Entry> replaces the cat clip of that one character
+  // entry, so <Entry> must be a character the base game or the mod defines.
+  test("validator fixture: cat-rig-target-unknown is an error per _CatRig_<Entry> export whose entry is no character in the base or the mod (base PlayerCat and the mod's own ModCat resolve)", () => {
+    const r = v("cat-rig-target-unknown");
+    const f = expectCode(r, "cat-rig-target-unknown", "error");
+    eq(f.location?.file, "mods/cat-rig-target-unknown/art/rig.scene.json");
+    eq(f.location?.path, "exports._CatRig_NoSuchCat");
+    assert(/NoSuchCat/.test(f.message) && /characters/.test(f.message), f.message);
+    assert(!r.ok, "error");
+  });
+  test("registered-names.json: the catrig entry (kind catrig, prefix = native FW_CATRIG_EXPORT_PREFIX) is neither a literal name nor a status pattern", () => {
+    const entries = loadRegisteredNames();
+    const rig = entries.filter((e) => e.kind === "catrig");
+    eq(rig.length, 1, "one catrig entry");
+    const header = readFileSync(join(HERE, "..", "..", "native", "framework", "src", "fw_catrig_rules.h"), "utf8");
+    const m = /#define FW_CATRIG_EXPORT_PREFIX\s+"([^"]+)"/.exec(header);
+    assert(!!m, "FW_CATRIG_EXPORT_PREFIX in fw_catrig_rules.h");
+    eq(rig[0]!.prefix, m![1]);
+    assert(!registeredNameSet().has(rig[0]!.name), "not a literal (status/ability) name");
+    assert(!registeredPatterns(entries).some((p) => p.kind === "catrig"), "not a status-name pattern");
+  });
   test("validator fixture: unknown-status is an error at Foo.damage_instance.effects.NotAStatus", () => {
     const r = v("unknown-status");
     const f = expectCode(r, "unknown-status", "error");

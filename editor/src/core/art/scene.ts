@@ -14,7 +14,7 @@ import { gradientProblems } from "./gradient.ts";
 import { fillRuleProblems } from "./shape.ts";
 import { vanillaExportSource, exportShadowsMessage } from "./swf-rules.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
-import { rigFindings, catAnimFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
+import { rigFindings, catAnimFindings, catRigFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
 import { textProblems, locKeyHtmlProblem, GAME_FONTS } from "./text.ts";
 import { fontProblems, missingGlyphs } from "./font.ts";
 import type { SceneFont } from "./font.ts";
@@ -600,6 +600,8 @@ export function validateScene(input: unknown, opts: SceneValidateOptions = {}): 
   }
   // a cat animation donor (exports._Append_CatTest): facing pairs, a rig per labeled frame, depth 1 (cat-rig.ts)
   findings.push(...catAnimFindings(scene));
+  // a swap rig (exports._CatRig_<Entry>, framework API v7): the entry name, the seven slots, the idle labels (cat-rig.ts)
+  findings.push(...catRigFindings(scene));
   scene.stage_instances.forEach((si, i) => {
     if (!si || typeof si.ref !== "string" || !(scene.shapes[si.ref] || scene.sprites[si.ref] || (scene.texts || {})[si.ref] || (scene.imports || {})[si.ref])) err("stage-ref", `stage_instances[${i}].ref is not a shape or sprite`, [`stage_instances[${i}]`]);
   });

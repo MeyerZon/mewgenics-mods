@@ -17,6 +17,19 @@ export interface RegisteredName {
   prefix?: string;
 }
 
+/**
+ * kind "catrig" (framework API v7): a SWF export name the framework recognises by shape (`_CatRig_<CharacterEntry>`
+ * replaces that entry's cat clip; fw_catrig_rules.h). It is no GON reference, so it is neither a literal name nor a
+ * status pattern; the validator checks the entry (cat-rig-target-unknown) and the scene checks the rig (cat-rig-*).
+ */
+export const NON_NAME_KIND = "catrig";
+
+/** The catrig entry's prefix (default _CatRig_). */
+export function catRigPrefix(entries: RegisteredName[] = loadRegisteredNames()): string {
+  const e = entries.find((x) => x.kind === NON_NAME_KIND && typeof x.prefix === "string" && x.prefix);
+  return e ? e.prefix! : "_CatRig_";
+}
+
 /** A compiled pattern entry of registered-names.json. */
 export interface RegisteredPattern {
   re: RegExp;
@@ -33,7 +46,7 @@ export interface RegisteredPattern {
 export function registeredPatterns(entries: RegisteredName[] = loadRegisteredNames()): RegisteredPattern[] {
   const out: RegisteredPattern[] = [];
   for (const e of entries) {
-    if (typeof e.pattern !== "string") continue;
+    if (typeof e.pattern !== "string" || e.kind === NON_NAME_KIND) continue;
     let re: RegExp;
     try {
       re = new RegExp(e.pattern);
@@ -84,7 +97,7 @@ export function loadRegisteredNames(): RegisteredName[] {
 }
 
 export function registeredNameSet(): Set<string> {
-  return new Set(loadRegisteredNames().filter((e) => typeof e.pattern !== "string").map((e) => e.name));
+  return new Set(loadRegisteredNames().filter((e) => typeof e.pattern !== "string" && e.kind !== NON_NAME_KIND).map((e) => e.name));
 }
 
 /** Clear cached registered names (after editing the file). */
