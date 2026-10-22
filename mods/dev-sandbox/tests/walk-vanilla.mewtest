@@ -1,0 +1,18 @@
+mods: dev-sandbox
+timeout: 120s
+# Campaign walk, vanilla control (2026-10-22): the same walk as _roomprobe/walk-battle without any map overlay. The
+# first map's nearest battle node draws from alley's own easy pool (levels/alley/easy/*.lvl), so the level path the
+# harness reads at MewDirector::StartMapBattle names a vanilla room — the mod's walkprobe room there is the overlay's doing.
+wait frames 120
+enter Campaign house
+seed 42
+wait frames 30
+run start
+wait frames 60
+run travel battle
+run fight
+expect level "levels/alley/easy/"
+wait ms 1500
+dump
+expect units >= 5
+quit
