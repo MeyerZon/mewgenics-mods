@@ -53,6 +53,13 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 Owner: "we will decide on it later". Everything through PR #72 is merged; the 2026-10-21/22 run answered most of
 these without a decision (status per bullet below; the PR map follows).
 
+- [ ] **Campaign-walk save backups (2026-10-22, branch `feat/harness-campaign-walk`).** Starting an adventure
+      (`run start`) makes the game back the disposable slot up as `saves/backups/mewtest01_<date>_<time>.savbackup`
+      (one per minute of runs; two exist from the T2 runs of 2026-10-22). The real save is never touched. Options:
+      leave them (they are the harness slot's own backups), or extend the owner-approved slot exception so the runner
+      also moves `backups/mewtest01_*.savbackup` into the run dir (a rename, never a delete). Agents may not touch
+      `saves/` beyond the existing exception, so this needs your say-so.
+
 - [x] **Cat parts in a rig — which route, if any?** **Resolved 2026-10-22 as data-only for cat animations** (PR #74:
       experiment A0 — a `_Append_CatTest` frame placing a rig whose seven slots are EMPTY 1-frame sprites is filled by
       the game with the cat's own parts, palette, texture and face; the 2026-10-21 crash at `+0x741f5d` was a visible
@@ -262,8 +269,14 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   vanilla levels round-trip), validator rules for a mod's levels and maps, `new_from_template` kinds `room` and
   `tileset-variant`, `mods/_roomprobe` proven in-game (new room + new spawn id, nested-name search, new tileset). Docs:
   `data-mods.md` "Maps, rooms and encounters", `engine-map.md` "Maps, rooms and level files".
-  - [ ] Open: prove a **campaign** battle node drawing a mod room from a map pool (needs the harness to walk a run
-    from the House to a map node; decompiled, not run). Then a new map behind alley's exit (`next_map`).
+  - [x] A **campaign** battle node draws a mod room from a map pool — OBSERVED 2026-10-22 (branch
+    `feat/harness-campaign-walk`): the harness walks a run with `run start` / `run travel battle` / `run fight`
+    (MewDirector::GoOnAnAdventure debug start → MapScreen::EnterNode → StartMapBattle), `_roomprobe/walk-battle` drew
+    `levels/alley/walkprobe/wp_alley.lvl` (the vanilla control `levels/alley/easy/ch1-82.lvl`). Docs: `engine-map.md`
+    "Campaign walk", `ingame-testing.md` "Campaign walk".
+  - [ ] Open: a new map behind alley's exit (`next_map`) — needs a `run travel exit` + the next map's load (EnterNode
+    type 3 runs a cutscene lambda 0x39c8f0, not decoded); node rewards after the fight; the class chooser (the debug
+    start skips it).
 
 ### Foundations
 - [x] Review, validate (no injection, 0 vuln deps) and install REA from reviewed source (Docker-based)
