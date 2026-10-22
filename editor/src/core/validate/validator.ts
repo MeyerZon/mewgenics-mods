@@ -11,7 +11,8 @@
 //      the vert()/frag() entry points and COMPILING_* guards, #includes that resolve, uniforms native code sets.
 //   6. The 3D data seam: a character's graphics.model is a mod file models/<...>.obj (model-path-invalid,
 //      model-file-missing) or a native-registered "@Name" (model-unregistered); files under models/ are assets,
-//      not overlays (model3d.ts, docs/data-mods.md "3D models in a mod (preview)").
+//      not overlays (model3d.ts, docs/data-mods.md "3D models in a mod (preview)"). A model file that exists is read
+//      by model-check.ts and its loader codes (model-codes.ts = the DLL's FW_MESH_CODES) reported at the same key.
 //
 // Findings are returned as a tagged Report (ok/warning/error with location).
 
@@ -27,6 +28,8 @@ import { parsePolicy } from "../overlay/policy.ts";
 import { findIndex } from "../gon/value.ts";
 import { resolutionSets } from "../names.ts";
 import { MODEL_KEY, MODEL_PARENT, modelPathProblem, isRegisteredModelRef } from "../model3d.ts";
+import { checkModelBytes } from "../model-check.ts";
+import { modelCodeInfo } from "../model-codes.ts";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.ts";
 import { ReportBuilder } from "./result.ts";
 import { identifyExe } from "../bindings/check.ts";
@@ -418,6 +421,15 @@ function validateGonOverlay(
     const abs = join(modDir, ...raw.split("/"));
     if (!existsSync(abs) || !statSync(abs).isFile()) {
       rb.error("model-file-missing", `model "${raw}" not found: mods/${modName}/${raw} is not a file (models are mod-only; the base game has none)`, at);
+      return;
+    }
+    // what the DLL would say about the file (one code list with mewframework.log; header-level until PR #128)
+    for (const issue of checkModelBytes(raw, readFileSync(abs))) {
+      const sev = modelCodeInfo(issue.code)?.severity ?? "error";
+      const msg = `model "${raw}": ${issue.message}`;
+      if (sev === "error") rb.error(issue.code, msg, at);
+      else if (sev === "warning") rb.warn(issue.code, msg, at);
+      else rb.info(issue.code, msg, at);
     }
   };
 

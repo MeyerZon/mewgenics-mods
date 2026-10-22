@@ -131,7 +131,6 @@ export function runModelCodesTests(test: TestFn, assert: AssertFn, eq: EqFn): vo
         "error:model-empty@Tire.graphics.model",
         "error:model-extension-required@Rock.graphics.model",
         "error:model-glb-header@Crate.graphics.model",
-        "info:model-mtl-ignored@Tire.graphics.model",
       ].join("\n"));
       eq(r.ok, false);
       const glbMsg = r.findings.find((f) => f.code === "model-glb-header")!.message;

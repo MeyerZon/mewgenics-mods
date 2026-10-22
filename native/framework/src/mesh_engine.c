@@ -95,7 +95,8 @@ static FwMeshRegistry g_models;
 static struct { uint32_t vao, vbo, ibo; int nindices; int uploaded; } g_gpu[MESH_SLOTS];
 static FwMesh g_cube;
 static int g_cubeBuilt;
-static char g_failed[8][FW_MESH_NAME_MAX + 1];   /* paths that failed to load (never retried) */
+#define MESH_FAILED_MAX FW_MESH_MAX_MODELS
+static char g_failed[MESH_FAILED_MAX][FW_MESH_NAME_MAX + 1];   /* paths that failed to load (never retried, logged once) */
 static int g_nfailed;
 
 static char *g_modShader;        /* fw_mesh.shader's text, read at record time once (NULL: not on the mod path) */
@@ -262,12 +263,29 @@ static const uint8_t *read_resource(const char *path, size_t *len) {
     return data;
 }
 
-/* record time: a model path -> mesh slot (loaded once), -1 when it cannot be drawn */
+/* a failed model is remembered (never re-read, never re-logged); 1 = newly remembered, so log it */
+static int remember_failed(const char *path) {
+    for (int i = 0; i < g_nfailed; i++) if (!strcmp(g_failed[i], path)) return 0;
+    if (g_nfailed >= MESH_FAILED_MAX) return 0;   /* full: stay quiet rather than log every frame */
+    snprintf(g_failed[g_nfailed++], sizeof g_failed[0], "%s", path);
+    return 1;
+}
+
+/* record time: a model path -> mesh slot (loaded once), -1 when it cannot be drawn. Logs exactly one line per model
+ * per process, in the design §2.6 shape (fw_mesh_fmt_load_result): "mesh: <path>: <code>: <text> — drawing the 2D
+ * clip" or "mesh: <path>: loaded N vertices, M triangles, bounds ...[; <warning codes>]". */
 static int resolve_model(const char *path) {
-    char p[FW_MESH_NAME_MAX + 1];
+    char p[FW_MESH_NAME_MAX + 1], line[512];
+    FwMeshError e;
+    fw_mesh_err_reset(&e);
     if (!path || !fw_mesh_model_path(path, p, sizeof p)) {
         for (int i = 0; i < g_nfailed; i++) if (!strcmp(g_failed[i], path ? path : "")) return -1;
-        if (g_nfailed < 8) { snprintf(g_failed[g_nfailed++], sizeof g_failed[0], "%s", path ? path : ""); fw_log("mesh: model \"%s\" is not a models/<name>.obj|.gltf|.glb path (\"@Name\" models are not resolved yet)", path ? path : "(null)"); }
+        if (remember_failed(path ? path : "")) {
+            e.code = fw_mesh_code(FW_MC_PATH_INVALID);
+            snprintf(e.text, sizeof e.text, "not a models/<name>.obj|.gltf|.glb path (\"@Name\" models are not resolved yet)");
+            fw_mesh_fmt_load_result(line, sizeof line, path ? path : "(null)", 0, NULL, &e);
+            fw_log("%s", line);
+        }
         return -1;
     }
     int i = fw_mesh_reg_find(&g_models, p);
@@ -276,23 +294,26 @@ static int resolve_model(const char *path) {
     size_t len = 0;
     const uint8_t *bytes = read_resource(p, &len);
     FwMesh m;
-    FwMeshError e;
-    memset(&e, 0, sizeof e);
-    int ok = bytes && fw_mesh_load_bytes(p, bytes, len, &m, &e);
+    memset(&m, 0, sizeof m);
+    int ok = 0;
+    if (!bytes) {
+        e.code = fw_mesh_code(FW_MC_FILE_MISSING);
+        snprintf(e.text, sizeof e.text, "not found on the mod path (mods/<mod>/%s) nor in the game's resources, or empty", p);
+    } else ok = fw_mesh_load_bytes(p, bytes, len, &m, &e);
     if (ok) {
         i = fw_mesh_reg_add(&g_models, p, &m);
-        if (i < 0) { fw_mesh_free(&m); ok = 0; snprintf(e.text, sizeof e.text, "model registry full (%d)", FW_MESH_MAX_MODELS); }
+        if (i < 0) {
+            fw_mesh_free(&m); ok = 0;
+            e.code = fw_mesh_code(FW_MC_LIMIT);
+            snprintf(e.text, sizeof e.text, "the model registry is full (%d models per process)", FW_MESH_MAX_MODELS);
+        }
     }
     if (!ok) {
-        if (g_nfailed < 8) snprintf(g_failed[g_nfailed++], sizeof g_failed[0], "%s", p);
-        fw_log("mesh: model %s not loaded: %s%s", p, bytes ? e.text : "not found on the mod path", e.line ? " (see the line number)" : "");
-        if (e.line) fw_log("mesh: model %s: error at line %d", p, e.line);
+        if (remember_failed(p)) { fw_mesh_fmt_load_result(line, sizeof line, p, 0, NULL, &e); fw_log("%s", line); }
         return -1;
     }
-    const FwMesh *mm = fw_mesh_reg_get(&g_models, i);
-    fw_log("mesh: model %s loaded: %u verts, %u indices, bounds (%.2f %.2f %.2f)-(%.2f %.2f %.2f)%s", p, mm->nverts, mm->nindices,
-           (double)mm->bmin[0], (double)mm->bmin[1], (double)mm->bmin[2], (double)mm->bmax[0], (double)mm->bmax[1], (double)mm->bmax[2],
-           mm->bmin[1] < -0.01f ? " — below the floor (origin = the ground point)" : "");
+    fw_mesh_fmt_load_result(line, sizeof line, p, 1, fw_mesh_reg_get(&g_models, i), &e);
+    fw_log("%s", line);
     return i + 1;
 }
 
