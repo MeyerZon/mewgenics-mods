@@ -55,6 +55,9 @@ export type Directive =
   /** runner-side: the integers right after `prefix` in successive console lines (the whole run) step by exactly
    *  `deltas` (n deltas = n+1 matching lines); evaluated after the run from result.jsonl, never sent to the DLL */
   | { line: number; kind: "expect"; what: "deltas"; prefix: string; deltas: number[] }
+  /** runner-side: this launch's mewframework.log window has a line containing substr (the framework's own lines —
+   *  catrig registrations / redirects, hook installs — reach neither the console nor debug.log) */
+  | { line: number; kind: "expect"; what: "fwlog"; substr: string }
   | { line: number; kind: "dump" }
   | { line: number; kind: "log"; text: string }
   | { line: number; kind: "quit"; code: number | null }
@@ -282,12 +285,13 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (!/^-?\d+(\.\d+)?$/.test(val)) return { error: "expect gon: the value is a number (-?digits[.digits]), a quoted string or true/false" };
         return { line: lineNo, kind: "expect", what: "gon", unit, path, op: word, value: Number(val) };
       }
-      if (what === "log") {
+      if (what === "log" || what === "fwlog") {
+        const file = what === "log" ? "debug.log" : "mewframework.log";
         const q = parseQuoted(arg, 0);
-        if (!q) return { error: arg ? "expect log: unterminated or missing quoted string" : "expect log needs a quoted substring" };
+        if (!q) return { error: arg ? `expect ${what}: unterminated or missing quoted string` : `expect ${what} needs a quoted substring` };
         const tail = arg.slice(q.end).trim();
-        if (tail) return { error: `expect log: unexpected trailing text "${tail}" (no within: debug.log is read once, after the run)` };
-        return { line: lineNo, kind: "expect", what: "log", substr: q.value };
+        if (tail) return { error: `expect ${what}: unexpected trailing text "${tail}" (no within: ${file} is read once, after the run)` };
+        return { line: lineNo, kind: "expect", what, substr: q.value };
       }
       if (what === "level") {
         const q = parseQuoted(arg, 0);
@@ -304,7 +308,7 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (bad) return { error: `expect deltas: "${bad}" is not an integer (no within: the console is read once, after the run)` };
         return { line: lineNo, kind: "expect", what: "deltas", prefix: q.value, deltas: nums.map(Number) };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|level|log|deltas)" };
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|level|log|deltas|fwlog)" };
     }
     case "run": {
       const words = rest ? rest.split(/\s+/) : [];
@@ -416,8 +420,8 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
 }
 
 /** Directives the Node runner evaluates itself (the DLL gets a comment placeholder instead). */
-export function isRunnerSide(d: Directive): d is Extract<Directive, { what: "log" | "deltas" }> {
-  return d.kind === "expect" && (d.what === "log" || d.what === "deltas");
+export function isRunnerSide(d: Directive): d is Extract<Directive, { what: "log" | "deltas" | "fwlog" }> {
+  return d.kind === "expect" && (d.what === "log" || d.what === "deltas" || d.what === "fwlog");
 }
 
 export interface ParseScriptOptions {

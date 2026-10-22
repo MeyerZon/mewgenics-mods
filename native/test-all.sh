@@ -35,4 +35,7 @@ run_suite "mewframework game-speed rules" "$FW/build/test_speed_rules" -DFW_NO_W
 run_suite "mewframework cat rig rules" "$FW/build/test_catrig_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_catrig_rules.c" "$FW/src/fw_catrig_rules.c"
 run_suite "mewtest harness pure modules" "$HS/build/test_mewtest" -DMT_HOST_TEST -I"$HS/src" -I"$FW/src" "$HS/test/test_mewtest.c" \
   "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c" "$HS/src/mt_face.c" "$HS/src/mt_walk.c" "$HS/src/mt_shot.c"
+CS="$HERE/mods/catrig-sample"
+mkdir -p "$CS/build"
+run_suite "catrig_sample pure part" "$CS/build/test_catrig_sample" -DFW_NO_WINDOWS= -I"$CS/src" -I"$FW/src" "$CS/test/test_catrig_sample.c" "$CS/src/catrig_sample_rules.c" "$FW/src/fw_catrig_rules.c"
 echo "=== all native suites passed"

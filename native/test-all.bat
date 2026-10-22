@@ -14,5 +14,10 @@ if exist "%HERE%mods\test-harness\test.bat" (
   call "%HERE%mods\test-harness\test.bat"
   if errorlevel 1 exit /b 1
 )
+if exist "%HERE%mods\catrig-sample\test.bat" (
+  echo === catrig_sample pure part
+  call "%HERE%mods\catrig-sample\test.bat"
+  if errorlevel 1 exit /b 1
+)
 echo === all native suites passed
 endlocal

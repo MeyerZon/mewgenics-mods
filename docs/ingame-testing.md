@@ -165,6 +165,11 @@ expect deltas "<prefix>" <d1> [<d2> ...]         (runner side) the integers righ
                                                  run, from result.jsonl) step by exactly d1..dn — n+1 matching lines; for
                                                  counters such as `debug_sfx_memory_use` ("Total loaded sfx: N bytes") whose
                                                  absolute value varies run to run. Reported in report.logExpects (what "deltas")
+expect fwlog "<substr>"                          (runner side) a line of THIS launch's mewframework.log window contains
+                                                 substr — the framework's own lines (catrig registrations / redirects,
+                                                 hook installs, RegisterStatus) reach neither the console nor debug.log;
+                                                 like expect log: after the run, no within, report.logExpects (source
+                                                 "fwlog"), a miss = fail "expect fwlog failed at line N"
 dump                                             snapshot the units into a units event
 shot "<label>"                                   screenshot to <run dir>/shot-<label>.png (artifacts.shots): the DLL reads
                                                  the GL back buffer at the next SDL_GL_SwapWindow (works hidden too), then

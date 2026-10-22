@@ -342,5 +342,21 @@
     "shots": ["ingame-runs/*-_artprobe-render-rig/shot-rig-3.png"],
     "regenerate": "cd editor && npm run test:artprobe -- --rig",
     "status": "open"
+  },
+  {
+    "id": "pr118-rig-sample",
+    "pr": 118,
+    "question": "In shot-rig-1 (rig-dll), is the cat beside the small yellow checker marker (RigSampleCat, drawn by RigSampleCatClip which only catrig_sample.dll binds) a real cat with Mangy's parts in the idle pose, the same cat as the marker-less control in shot-vanilla?",
+    "shots": ["ingame-runs/*-catrig-sample-rig-dll/shot-rig-1.png","ingame-runs/*-catrig-sample-rig-dll/shot-vanilla.png"],
+    "regenerate": "cd editor && npm run test:catrigsample",
+    "status": "open"
+  },
+  {
+    "id": "pr118-rig-dead",
+    "pr": 118,
+    "question": "In rig-labels shot-l20 the killed rig cat (a swap rig with no death label) still STANDS in its idle pose, while in rig-labels-ctl shot-l20 the vanilla cat lies dead. Acceptable for a swap rig that ships no death labels, or should a swap rig fall back to the vanilla labels it lacks (the pr109-rig-labels decision)?",
+    "shots": ["ingame-runs/*-catrig-sample-rig-labels/shot-l20.png","ingame-runs/*-catrig-sample-rig-labels-ctl/shot-l20.png"],
+    "regenerate": "cd editor && npm run test:catrigsample",
+    "status": "open"
   }
 ]

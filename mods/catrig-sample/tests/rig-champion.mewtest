@@ -1,0 +1,30 @@
+mods: catrig-sample
+timeout: 120s
+hide: false
+# The cat rig sample: does RigSampleCat_Champion get RigSampleCat's rig? The console's spawn refuses a name that is no
+# entry (OBSERVED: "No enemy named RigSampleCat_Champion"), so the game's own champion / elite path (the level spawner
+# appends the suffix, Character::init strips it and sets the flags) is out of a harness's reach. The mod declares
+# RigSampleCat_Champion { variant_of RigSampleCat }: Character::init then receives exactly the string that path hands it,
+# no rig is registered under it, and the framework's lookup (fw_catrig_find: exact, then _Champion / _Elite stripped)
+# must find RigSampleCat's. Only RigSampleCat_Champion is spawned, so the redirect line (it names the BASE entry the rig
+# is registered for) can only be this spawn's. Shots: baseline, then the variant three times.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+wait ms 1500
+cmd spawn RigSampleCat_Champion
+expect console "Spawned RigSampleCat_Champion" within 10
+wait frames 120
+shot "variant 1"
+wait ms 1500
+wait frames 20
+shot "variant 2"
+wait ms 1500
+wait frames 20
+shot "variant 3"
+wait ms 1500
+expect fwlog "catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)"
+expect fwlog "catrig: RigSampleCat: CatTest -> RigSampleCatClip"
+quit

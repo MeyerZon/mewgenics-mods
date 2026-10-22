@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
 import { DATA_CACHE_DIR } from "../repo.ts";
 import { locateGameDir, preflight, buildLaunch, LaunchError, type Preflight, type LaunchSpec, type Env } from "./launch.ts";
 import { parseResults, type ResultSummary } from "./results.ts";
-import { collectLogs, listCrashFiles, locateAppdataLogsDir, readWindow, checkLogExpects, checkDeltaExpects, type LogFindings, type LogExpect } from "./logs.ts";
+import { collectLogs, listCrashFiles, locateAppdataLogsDir, readWindow, checkLogExpects, checkDeltaExpects, checkFwLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
 import { isRunnerSide } from "./script.ts";
 import { captureWindow, rawShotToPng, assessShots, type CaptureFn, type ShotsCheck } from "./shot.ts";
 import type { ShotEvent } from "./results.ts";
@@ -273,7 +273,7 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
   }
   const logExpects = input.logExpects || [];
   const missedLog = logExpects.find((e) => !e.ok);
-  if (missedLog) return { verdict: "fail", reason: `expect ${missedLog.what ?? "log"} failed at line ${missedLog.line}: "${missedLog.substr}" ${missedLog.detail}` };
+  if (missedLog) return { verdict: "fail", reason: `expect ${missedLog.what ?? (missedLog.source === "fwlog" ? "fwlog" : "log")} failed at line ${missedLog.line}: "${missedLog.substr}" ${missedLog.detail}` };
   if (code !== 0 && code !== null) return { verdict: "fail", reason: `exit code ${code}` };
   const extra = logExpects.length ? `, ${logExpects.length} log expectation(s)` : "";
   return { verdict: "pass", reason: `all ${result.expects.passed} expectation(s) passed${extra}` };
@@ -488,7 +488,9 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     const deltaSide = runnerSide.flatMap((d) => (d.what === "deltas" ? [d] : []));
     if (runnerSide.length) {
       const debugText = logSide.length && logs.debugLog.path && logs.debugLog.present ? readFileSync(logs.debugLog.path, "utf8") : null;
-      report.logExpects = [...checkLogExpects(debugText, logSide), ...checkDeltaExpects(report.result.consoleLines, deltaSide)].sort((a, b) => a.line - b.line);
+      const fwSide = runnerSide.flatMap((d) => (d.what === "fwlog" ? [d] : []));
+      const fwText = fwSide.length ? readWindow(frameworkLogPath, frameworkLogOffset) : null;
+      report.logExpects = [...checkLogExpects(debugText, logSide), ...checkFwLogExpects(fwText, fwSide), ...checkDeltaExpects(report.result.consoleLines, deltaSide)].sort((a, b) => a.line - b.line);
     }
     const saveAfter = saveBefore && savePath ? snapshotFile(savePath) : null;
     const setAfter = setBefore && savesDir ? snapshotSaves(savesDir, { allow }) : null;

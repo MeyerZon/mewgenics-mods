@@ -27,6 +27,8 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `glow-decide-hover` (glow v3) — **Decide:** while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?
 - [ ] `pr109-rig-cat` (#109) — In shot-rig-1, does the cat under the yellow marker (our _CatRig_ clip) look like a real cat with Mangy's parts in the idle pose, the same cat as the marker-less control in shot-vanilla?
 - [ ] `pr109-rig-labels` (#109) — A swap rig without a label for an animation (hits, attack) keeps the cat on its frame: acceptable, or should a swap rig fall back to the vanilla labels it lacks?
+- [ ] `pr118-rig-sample` (#118) — In shot-rig-1 (rig-dll), is the cat beside the small yellow marker (bound only by catrig_sample.dll) a real cat with Mangy's parts, the same as the marker-less control?
+- [ ] `pr118-rig-dead` (#118) — A killed swap-rig cat with no death label stays STANDING (rig-labels shot-l20) where the vanilla cat lies dead (rig-labels-ctl shot-l20): acceptable, or should a swap rig fall back to the vanilla labels it lacks?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
@@ -106,7 +108,11 @@ these without a decision (status per bullet below; the PR map follows).
       art in catparts.swf. **S1 built 2026-10-22 (framework API v7, `feat/native-catrig-redirect`):** a SWF export
       `_CatRig_<Entry>` (or `FW_RegisterCatRig`) gives one `movieclip _CAT` entry its own whole cat clip; T2
       `render-rig.mewtest` redirected (engine-map "Cat rig redirect", data-mods "A whole cat rig for one character").
-      Next: an editor "swap rig for <entry>" control / MCP template (plan A3) and the sample pairing (plan A2.4). 2026-10-22: the back facing's `head_back` layout (`<name>PoseBack`, `facing: "back"`)
+      **Sample pairing (plan A2.4) done 2026-10-22** (`native/mods/catrig-sample` + `mods/catrig-sample`, `npm run
+      test:catrigsample`, data-mods "Pairing a cat rig with a DLL"): `FW_RegisterCatRig` from a mod DLL redirected an
+      export with no `_CatRig_` prefix; `<Entry>_Champion` / `_Elite` names get the entry's rig; a rig's `hitF/B` plays on
+      a non-lethal hit and every label it lacks is a silent no-op — a killed rig cat with no death label stays STANDING.
+      Next: an editor "swap rig for <entry>" control / MCP template (plan A3). 2026-10-22: the back facing's `head_back` layout (`<name>PoseBack`, `facing: "back"`)
       and the four-way `LF/RF/LB/RB` quartet (`newCatAnimation { fourWay }`, Rig tab checkbox) are authored and
       validated (engine-map "The back facing and the four-way quartet"; probe `render-cat-back`: the back rig drawn with the cat's own parts, OBSERVED run 20261022-114912). Turning a unit away is
       solved (2026-10-22, #105 stack): the harness's `face <unit> back` calls `Character::Face` 0x10ce50 (engine-map
