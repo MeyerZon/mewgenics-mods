@@ -7,9 +7,11 @@
  * MASK by its own renderer when the renderer's extra-layer vector (+OFF_RND_EXTRA_LAYERS) lists layer
  * CONST_MASK_LAYER; the mask camera (TacticsTest+OFF_TT_MASK_CAMERA) renders that layer (the sprite multiplied by
  * white: rgb = its luminance, alpha = its coverage) into its texture (+OFF_CAM_RTT_TEXTURE), and composite passes on
- * the main camera (+OFF_TT_MAIN_CAMERA, layer CONST_COMPOSITE_LAYER) read it. The engine owns one such composite
- * (material fw_unit_glow / mods/fw-glow/shaders/fw_unit_glow.shader, which computes the band from the mask's alpha
- * by itself), re-finds its pass in the camera's per-layer vector every frame (passes die with the camera) and keeps
+ * the main camera (+OFF_TT_MAIN_CAMERA, layer CONST_COMPOSITE_LAYER) read it. The engine owns such composites
+ * (materials fw_unit_glow[_<k>] / mods/fw-glow/shaders/fw_unit_glow.shader, which computes the band from the mask's
+ * alpha by itself; v2: one material per colour group, one pass per draw of fw_glow_plan, scissored to a unit's screen
+ * rect when colours differ), re-finds its passes in the camera's per-layer vector every frame (they die with the
+ * camera) and keeps
  * the game's own white composite (TacticsTest+OFF_TT_COMPOSITE_PASS) off while units glow. The game's blur chain
  * (+OFF_TT_BLUR_PASS) is only read for tests. Every field is reached through the generated offsets.h macros. */
 #pragma once
@@ -32,13 +34,64 @@ int  fw_glow_clear(FwGlowRegistry *r, const void *character);                   
 /* drop every entry whose Character's pool generation no longer matches the one captured (the slot was reused or
  * freed: the game validates its remembered unit the same way); returns the number dropped */
 int  fw_glow_prune(FwGlowRegistry *r);
-/* v1 has ONE composite, hence one shared colour: the first registered unit's rgba (white when empty) */
+/* the first registered unit's rgba (white when empty): v1's shared colour, v2's colour group 0 */
 void fw_glow_colour(const FwGlowRegistry *r, float out[4]);
 int  fw_glow_colour_eq(const float a[4], const float b[4]);
 
-/* the per-frame decision over the registry */
-typedef struct FwGlowFrame { int active; float colour[4]; } FwGlowFrame;
+/* ---- v2: per-unit colours ----
+ * A Material holds ONE value per uniform at draw time (the composite passes run later, in the main camera's render),
+ * so each distinct colour needs its own material: colour group k draws with material slot k (fw_glow_material_name).
+ * The mask holds every glowing unit at once and carries no identity, so with two or more colours each unit gets its
+ * own composite pass scissored (pass rect B) to the unit's screen rect, computed as TacticsTest::LateRender computes
+ * the hovered unit's (fw_glow_unit_rect); with one colour the v1 path stays: one full-screen pass. */
+#define FW_GLOW_MAX_GROUPS FW_GLOW_MAX_UNITS
+typedef struct FwGlowGroup { float colour[4]; int count; int units[FW_GLOW_MAX_UNITS]; } FwGlowGroup;   /* units = registry indices */
+typedef struct FwGlowGroups { int count; FwGlowGroup g[FW_GLOW_MAX_GROUPS]; } FwGlowGroups;
+/* the distinct colours (exact rgba equality) in order of first appearance in the registry; stable for a stable registry */
+void fw_glow_groups(const FwGlowRegistry *r, FwGlowGroups *out);
+int  fw_glow_group_of(const FwGlowGroups *g, int unit);                         /* group index of a registry index, -1 if none */
+/* one draw = one composite pass: material slot `group`, scissored to registry unit `unit` (-1 = full screen) */
+typedef struct FwGlowDraw { int group; int unit; } FwGlowDraw;
+/* 0 draws when empty; ONE full-screen draw of group 0 when every unit shares a colour (v1); else one draw per unit in
+ * registry order. Returns the count (<= FW_GLOW_MAX_UNITS). */
+int  fw_glow_plan(const FwGlowRegistry *r, const FwGlowGroups *g, FwGlowDraw out[FW_GLOW_MAX_UNITS]);
+/* the material of colour slot k: "fw_unit_glow" for 0 (the v1 name), "fw_unit_glow_<k>" after; NULL if it does not fit */
+const char *fw_glow_material_name(int slot, char *buf, size_t cap);
+
+/* the per-frame decision over the registry: groups + draws (colour = group 0's, white when empty) */
+typedef struct FwGlowFrame { int active; float colour[4]; FwGlowGroups groups; int ndraws; FwGlowDraw draws[FW_GLOW_MAX_UNITS]; } FwGlowFrame;
 void fw_glow_frame(const FwGlowRegistry *r, FwGlowFrame *out);
+
+/* ---- v2: a unit's screen rect, LateRender's hovered-unit math (0x88e24e..0x88e4a0, OBSERVED in the disassembly) ----
+ * bounds = clip vtable slot VT_CLIP_BOUNDS -> {x0, x1, y0, y1}; fw_glow_clip_bounds (a replica of the leaf 0x9d46d0)
+ * by the clip matrix at clip+OFF_CLIP_MATRIX; fw_glow_matrix_bounds by Renderer_GetScreenMatrix(renderer);
+ * fw_glow_view_rect by C = inverse(Position_GetViewMatrix(maskCamera+OFF_CAM_POSITION, interp)) (fw_glow_mat4_inverse
+ * replaces the leaf 0xa07c70) times the zoom matrix {zoom, 0 / 0, zoom*zoomY / 0,0,1,0 / 640,360,0,1}, divided by the
+ * 1280x720 canvas, y flipped. Normalized like the pass rects (0..1, x0 < x1, y0 < y1). */
+/* the game's virtual canvas, from the generated offsets.h (manifest constants GlowCanvasWidth/Height, read back from the
+ * .rdata floats 1/1280 (0x14113f47c) and 1/720 (0x14113f488) LateRender multiplies by); the centre (640, 360) is half */
+#define FW_GLOW_CANVAS_W ((double)CONST_GLOW_CANVAS_W)
+#define FW_GLOW_CANVAS_H ((double)CONST_GLOW_CANVAS_H)
+typedef struct FwGlowRect { double x0, x1, y0, y1; } FwGlowRect;
+void fw_glow_clip_bounds(float b[4], const float m[6]);
+void fw_glow_matrix_bounds(float b[4], const float M[16]);
+int  fw_glow_mat4_inverse(const float m[16], float out[16]);                   /* 0 when singular */
+void fw_glow_view_rect(const float b[4], const float C[16], double zoom, int zoomY, FwGlowRect *out);
+/* the chain + `margin` canvas px on every side, clamped to 0..1: 1 ok, -1 wholly off screen, 0 singular view / NaN */
+int  fw_glow_unit_rect(const float rawBounds[4], const float clipM[6], const float screenM[16], const float viewM[16],
+                       double zoom, int zoomY, double margin, FwGlowRect *out);
+/* the renderer's clip (+OFF_RND_CLIP) when its vtable slot 0 reports CONST_CLIP_KIND_A or _B (LateRender's check), else NULL */
+void *fw_glow_unit_clip(const void *renderer);
+void  fw_glow_clip_raw_bounds(void *clip, float out[4]);                        /* vtable slot VT_CLIP_BOUNDS */
+const float *fw_glow_clip_matrix(const void *clip);                             /* clip+OFF_CLIP_MATRIX, 6 floats */
+static inline void  *fw_glow_camera_position(const void *camera) { return *(void *const *)((const char *)camera + OFF_CAM_POSITION); }
+/* the scene manager's frame interpolation factor (Component+OFF_COMPONENT_SCENEMANAGER -> +OFF_SCENEMANAGER_INTERP); 1.0 without one */
+static inline double fw_glow_camera_interp(const void *camera) {
+    const char *sm = *(const char *const *)((const char *)camera + OFF_COMPONENT_SCENEMANAGER);
+    return sm ? *(const double *)(sm + OFF_SCENEMANAGER_INTERP) : 1.0;
+}
+static inline double fw_glow_camera_zoom(const void *camera) { return *(const double *)((const char *)camera + OFF_CAM_ZOOM); }
+static inline int    fw_glow_camera_zoom_y(const void *camera) { return *(const int *)((const char *)camera + OFF_CAM_ZOOM_Y); }
 
 /* ---- accessors (generated offsets) ---- */
 static inline void     *fw_glow_renderer(const void *character) { return *(void *const *)((const char *)character + OFF_CH_RENDERER); }
@@ -64,3 +117,9 @@ void *fw_glow_find_pass(const void *camera, int layer, const void *material);
 void  fw_glow_pass_force(void *pass, int enabled, int fullScreen);
 /* a pass the engine just added: enabled, flags zeroed like the game's own composites */
 void  fw_glow_pass_adopt(void *pass);
+/* v2: every pass in (camera+OFF_CAM_PASSES)[layer] whose first material is one of mats[0..nmats), in vector order (<= max) */
+int   fw_glow_collect_passes(const void *camera, int layer, void *const *mats, int nmats, void **out, int max);
+void *fw_glow_pass_first_material(const void *pass);
+void  fw_glow_pass_set_material(void *pass, void *material);                    /* the first {Material*, int} entry */
+/* the scissor (rect B) to r; NULL = full screen {0,1,0,1}. Rect A is left alone, as the game's composites leave it */
+void  fw_glow_pass_set_rect(void *pass, const FwGlowRect *r);

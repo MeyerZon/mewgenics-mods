@@ -20,6 +20,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr80-glow-preview` (#80) — Before → after: does the banded orange 6 px halo around the starter's gray square read as a glow at game scale (No = the default needs more bands or a wider blur)?
 - [ ] `pr86-unit-glow` (#86) — In shot-glow, does the Rat at the right of the arena carry a magenta band hugging its sprite, with no wash over its body (and none in shot-noglow)?
 - [ ] `pr86-glow-width` (#86) — Is glow_radius 12 the band width you want for the per-unit rim (and is the white hover rim being off while a unit glows acceptable)?
+- [ ] `pr99-glow-colours` (#99) — In shot-two, does the cat carry a cyan rim and the Rat a magenta one, each hugging its own sprite (no cross-colour bleed), and is the cat's rim whole among the other cats (no straight scissor edge)?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
@@ -50,7 +51,6 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr-room-editor` (#125) — Rooms mode on `_roomprobe` → `probe.lvl`: does the grid read as the room, can you paint / place a spawn / edit a random list unaided, and are the tint swatches (not tileset art) enough?
 - [ ] `pr130-room-tile-art` (#130) — Rooms mode on `_roomprobe` → `probe.lvl`, Flat and **Iso**: do the tile/object thumbnails read as the game's (water/lava drawn in their tint, not magenta), is the Iso view the room as the in-game shot shows it (which corner is row 0?), and is painting on the diamonds comfortable?
 - [ ] **Listen to the audio probe** (`feat/audio-mods`; no test can hear): `cd editor && node scripts/audio-probe-tones.ts`, then launch with `-modpaths <repo>/mods/_audioprobe` (or `npm run test:ingame -- _audioprobe sounds` with `hide: false`): in a fight, does a coin pickup / `play_sound PickupCoin` give a short high beep (1320 Hz) instead of the coin jingle, and `play_sound AudioProbe_New` a lower 660 Hz tone, at a sane volume?
-- [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 - [ ] **Ship a mod end to end** (PR feat/mod-packaging): `cd editor && npm run pack -- jokers-luck` (review the
       committed `mods/jokers-luck/mod.json`: license, description), then read the zip's `README-INSTALL.txt` as a player
       would — clear enough? — and install it on another folder (`npm run pack -- --install <zip> --into <dir>`) and
@@ -63,6 +63,11 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr124-raster-look` (#124) — In the raster shot, do the PNG sprite, the photo blocks and the orange block-font text look right at game scale, and is the soft 0x41 stripe acceptable next to the crisp 0x43 one?
 - [ ] `pr124-backdrop` (#124) — In the backdrop shot, does the purple / teal mod plate read as the arena background, with the tileset foreground on top?
 - [ ] `pr124-import-png` (#124) — Art mode → Shapes → Import PNG…: is the row clear, and does the preview show the PNG where the game would?
+- [ ] **Look at the unit-glow shots** — produced 2026-10-22 by the glow v2 agent (`cd editor && npm run test:unitglow`,
+      run `20261022-102435-dev-sandbox-unit-glow`: shot-glow, shot-noglow and the v2 shot-two); `npm run t3` fills the
+      gallery's `pr86-unit-glow` / `pr86-glow-width` / `pr99-glow-colours` cards. In shot-two, does the cat carry a cyan rim and the
+      Rat a magenta one, each hugging its own sprite (no cyan on the Rat, no magenta on the cat), and is the cat's rim
+      whole where it stands among the other cats (a scissor cut would show as a straight edge)?
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
@@ -121,9 +126,10 @@ these without a decision (status per bullet below; the PR map follows).
       rim** (a mask + the game's blur/composite passes with a per-unit colour) is in PR (branch
       `feat/native-unit-glow`, session rim).
 - [ ] **Native per-unit glow — what next?** The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
-      draws a rim through the game's outline mask (one shared colour, combat only, the rim shader shipped by
-      `mods/fw-glow`). Decide: (a) a data-level way to ask for it (a `registered-names.json` kind `glow` a
-      status/passive names?) and per-unit colours (v2: one material + pass per unit, or a camera per colour); (b)
+      draws a rim through the game's outline mask (combat only, the rim shader shipped by `mods/fw-glow`). Decide: (a)
+      a data-level way to ask for it (a `registered-names.json` kind `glow` a status/passive names?) — still open — and
+      per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
+      scissored to its screen rect (LateRender's hovered-unit math), proven in-game (magenta Rat + cyan cat); (b)
       whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?

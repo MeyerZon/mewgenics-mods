@@ -84,6 +84,11 @@ export interface WitnessAnchor {
   dispSize?: number;
   /** divide the displacement by this (a vtable-slot call `call [reg+8*slot]` witnesses the slot index); default 1 */
   scale?: number;
+  /** rdata witness (constants): the byte index, inside the matched pattern, of a rip-relative disp32 whose target holds
+   * the constant as a float (`rdata` "f32") or as its reciprocal ("f32-recip"); `lane` picks a later float of a vector */
+  ripAt?: number;
+  rdata?: string;
+  lane?: number;
   ripRefOrdinal?: number;
   kind?: string;
   needsHarvest?: boolean;

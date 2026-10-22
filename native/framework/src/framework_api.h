@@ -64,6 +64,9 @@ typedef enum FwSymbol {
     FW_SYM_MapScreen_init,              /* void (MapScreen*, std::string map, bool debug) — hooked: the map screen of the run; by-value map, callee destroys */
     FW_SYM_MapScreen_EnterNode,         /* void (MapScreen*, MapNode*) — what arriving at a node does (battle: BattleInTransition, then the pool pick + StartMapBattle) */
     FW_SYM_MewDirector_StartMapBattle,  /* void* (MewDirector*, std::string levelPath, bool, bool) — hooked: the level the map pool picked; by-value, callee destroys */
+    /* glow v2: a unit's screen rect, as TacticsTest::LateRender computes the hovered unit's (per-unit colours) */
+    FW_SYM_Renderer_GetScreenMatrix,    /* float* (Renderer*, float out[16]) — the renderer's world-to-canvas matrix */
+    FW_SYM_Position_GetViewMatrix,      /* float* (Position*, float out[16], double interp) — a camera's view matrix (LateRender inverts it) */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -125,9 +128,10 @@ FW_EXPORT int FW_CharacterHasStatus(void *character, const char *statusName);
 /* --- API v3: data addresses --- */
 FW_EXPORT uintptr_t FW_GetData(int dataId);   /* absolute address of a FwData entry, 0 if inactive/unknown */
 /* --- API v4: per-unit glow (combat scenes only; call on the game's main thread, e.g. from a turn callback or the
- * harness). Draws a coloured rim around the unit through the game's own outline-mask pipeline. v1 keeps ONE shared
- * colour (the first registered unit's); up to 16 units; registrations belong to the current fight scene and a unit
- * whose pool slot is reused is dropped. 1 on success. */
+ * harness). Draws a coloured rim around the unit through the game's own outline-mask pipeline, in the unit's own
+ * colour (glow v2: one material per distinct colour; with several colours each rim is scissored to its unit's screen
+ * rect, so units whose rects overlap share both colours there); up to 16 units; registrations belong to the current
+ * fight scene and a unit whose pool slot is reused is dropped. Same ABI as v4's first release. 1 on success. */
 FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a);
 FW_EXPORT int FW_ClearUnitGlow(void *character);   /* 1 when it was registered */
 

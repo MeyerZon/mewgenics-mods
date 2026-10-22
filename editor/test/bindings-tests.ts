@@ -384,10 +384,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face and the 4 campaign-walk symbols); each has a signature except the three with no relocation-free unique window", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face, the 4 campaign-walk symbols and the 2 glow-v2 screen-matrix symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 40);
+    eq(want.length, 42);
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");
@@ -489,7 +489,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 90, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk");
+    eq(offs.length, 96, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects)");
   });
   if (exe) {
     const m = loadManifest(realPath);
@@ -948,6 +948,17 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     return;
   }
   const { findString, findStringXrefs, harvestFunction, findRtti, vtableSlotTarget, deriveFromVtableSlot, harvestManifest } = hv;
+  test("rdataWitnessValue: f32 reads the float as an integer constant, f32-recip its rounded reciprocal (1/1280 -> 1280, the float 1/720 -> 720), anything not integral within 1e-3 is null", () => {
+    const bits = (f: number) => { const b = Buffer.alloc(4); b.writeFloatLE(f, 0); return b.readUInt32LE(0); };
+    eq(hv.rdataWitnessValue(0x3a4ccccd, "f32-recip"), 1280);
+    eq(hv.rdataWitnessValue(0x3ab60b61, "f32-recip"), 720);
+    eq(hv.rdataWitnessValue(bits(640), "f32"), 640);
+    eq(hv.rdataWitnessValue(bits(0.3), "f32-recip"), null);
+    eq(hv.rdataWitnessValue(bits(2.5), "f32"), null);
+    eq(hv.rdataWitnessValue(0, "f32-recip"), null);
+    eq(hv.rdataWitnessValue(bits(640), "other"), null);
+    assert(hv.constantHasSources({ witness: { function: "F", pattern: "F3 0F 59 0D", ripAt: 4, rdata: "f32-recip" } } as never), "an rdata witness is a source");
+  });
 
   /**
    * A fake image: .text at 0x1000, .hvRdata at 0x2000, .hvData at 0x3000 (builder layout, each section < 1 page).
@@ -1889,7 +1900,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const WALK_NAMES = new Set([...WALK_SYMBOLS.map((x) => x[0]), ...WALK_REFERENCE.map((x) => x[0]), ...WALK_OFFSETS.map((x) => x[0])]);
   test("the committed manifest carries the campaign-walk bindings (2026-10-22) as one contiguous block at its end: 4 FwSymbol functions (GoOnAnAdventure, MapScreen::init, MapScreen::EnterNode, StartMapBattle), 3 reference functions, 8 witnessed offsets; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(enumerators("FW_SYM_").length, 40);
+    eq(enumerators("FW_SYM_").length, 42);
     for (const [name, rva, index] of WALK_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
@@ -1949,10 +1960,27 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   ];
   /** layer / slot constants: name, macro, value */
   const GLOW_CONSTANTS: [string, string, string][] = [["MaskLayer", "CONST_MASK_LAYER", "0x18"], ["CompositeLayer", "CONST_COMPOSITE_LAYER", "0x1a"], ["GlowFramebufSlot", "CONST_GLOW_FRAMEBUF_SLOT", "6"], ["VT_TacticsTest_LateRender", "VT_TT_LATERENDER", "19"]];
+  // ---- glow v2 (2026-10-22): per-unit colours scissor one composite pass per unit to the unit's screen rect, computed exactly
+  // as TacticsTest::LateRender computes the hovered unit's (0x88e24e..0x88e4a0): clip bounds (slot 16) -> clip matrix
+  // (+0x60) -> Renderer_GetScreenMatrix -> inverse(Position_GetViewMatrix(maskCamera+0x38, interp)) x zoom -> 1280x720.
+  const GLOW2_SYMBOLS: [string, string, number][] = [["Renderer_GetScreenMatrix", "0x78d600", 40], ["Position_GetViewMatrix", "0x9b4c90", 41]];
+  const GLOW2_OFFSETS: [string, string, string, string][] = [
+    ["Renderer_clip", "OFF_RND_CLIP", "0x80", "TacticsTest_LateRender"],
+    ["MovieClip_matrix", "OFF_CLIP_MATRIX", "0x60", "TacticsTest_LateRender"],
+    ["Camera_position", "OFF_CAM_POSITION", "0x38", "TacticsTest_LateRender"],
+    ["SceneManager_interp", "OFF_SCENEMANAGER_INTERP", "0x30", "TacticsTest_LateRender"],
+    ["Camera_zoom", "OFF_CAM_ZOOM", "0x168", "TacticsTest_LateRender"],
+    ["Camera_zoomY", "OFF_CAM_ZOOM_Y", "0x170", "TacticsTest_LateRender"],
+  ];
+  const GLOW2_CONSTANTS: [string, string, string][] = [["VT_Clip_Bounds", "VT_CLIP_BOUNDS", "16"], ["ClipKind_A", "CONST_CLIP_KIND_A", "1"], ["ClipKind_B", "CONST_CLIP_KIND_B", "2"],
+    // the 1280x720 virtual canvas: LateRender multiplies by the .rdata floats 1/1280 (0x14113f47c) and 1/720 (0x14113f488);
+    // an rdata witness (rip-relative operand -> float -> reciprocal) reads them back from the exe
+    ["GlowCanvasWidth", "CONST_GLOW_CANVAS_W", "1280"], ["GlowCanvasHeight", "CONST_GLOW_CANVAS_H", "720"]];
+  const GLOW2_NAMES = new Set([...GLOW2_SYMBOLS.map((x) => x[0]), ...GLOW2_OFFSETS.map((x) => x[0]), ...GLOW2_CONSTANTS.map((x) => x[0])]);
   const GLOW_NAMES = new Set([...GLOW_SYMBOLS.map((x) => x[0]), ...GLOW_REFERENCE.map((x) => x[0]), "ShaderManager_global", "TacticsTest_vftable", ...GLOW_OFFSETS.map((x) => x[0]), ...GLOW_CONSTANTS.map((x) => x[0])]);
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + FACING_NAMES.size + WALK_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the facing block + the campaign-walk block");
+    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + FACING_NAMES.size + WALK_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + the facing block + the campaign-walk block");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
@@ -2004,6 +2032,49 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(/0x013c4a30u(?: \},)?,?\s*\/\* FW_DATA_ShaderManager \*\//.test(sh), "rva_data[FW_DATA_ShaderManager] (the last FwData row closes the array)");
     assert(sh.includes('"TacticsTest_LateRender", "') && sh.includes("0x88d780u },  /* FW_SYM_TacticsTest_LateRender */"), "the hook symbol's signature row");
   });
+  test("the committed manifest carries the glow v2 bindings (per-unit screen rects) as one contiguous block right after the glow block: 2 FwSymbol functions, 6 offsets and 3 constants witnessed in TacticsTest_LateRender; the generated headers expose them", () => {
+    const m = loadManifest(realPath);
+    for (const [name, rva, index] of GLOW2_SYMBOLS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ enum: `FW_SYM_${name}`, index }]), `${name} enumerator`);
+    }
+    for (const [name, macro, value, fn] of GLOW2_OFFSETS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset", `${name} is an offset entry`);
+      eq(e!.value, value, `${name} value`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      const w = e!.anchors.witness;
+      assert(!!w && w.function === fn && typeof w.pattern === "string" && Number.isInteger(w.dispAt), `${name}: witness {function ${fn}, pattern, dispAt}: ${JSON.stringify(w)}`);
+    }
+    for (const [name, macro, value] of GLOW2_CONSTANTS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "constant", `${name} is a constant entry`);
+      eq(e!.value, value, `${name} value`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      assert(hv.constantHasSources(e!.anchors), `${name} carries a witness the harvest can verify`);
+    }
+    const names = m.entries.map((e) => e.name);
+    const idx = names.map((n, i) => (GLOW2_NAMES.has(n) ? i : -1)).filter((i) => i >= 0);
+    eq(idx.length, GLOW2_NAMES.size, "every glow v2 entry is present");
+    eq(idx[idx.length - 1]! - idx[0]! + 1, GLOW2_NAMES.size, "the glow v2 entries are one contiguous block");
+    const lastGlow = Math.max(...names.map((n, i) => (GLOW_NAMES.has(n) ? i : -1)));
+    assert(idx[0]! > lastGlow, "the glow v2 block comes after the glow block");
+    const oh = genOffsetsH([m]);
+    for (const [, macro, value] of [...GLOW2_OFFSETS, ...GLOW2_CONSTANTS]) assert(new RegExp(`^#define ${macro}\\s+${value}\\s`, "m").test(oh), `${macro} ${value} in offsets.h`);
+    const sh = genSignaturesH([m]);
+    for (const [name, rva] of GLOW2_SYMBOLS) assert(sh.includes(`${rva}u },  /* FW_SYM_${name} */`), `the ${name} signature row`);
+  });
+  if (exe) {
+    test("T1 real exe: the glow v2 block verifies on the installed exe (harvest): every offset and constant witness reads its value in TacticsTest_LateRender", () => {
+      const m = loadManifest(realPath);
+      const rep = harvestManifest(parsePe(exe), exe, m).report;
+      for (const n of [...GLOW2_OFFSETS.map((x) => x[0]), ...GLOW2_CONSTANTS.map((x) => x[0])]) {
+        const x = rep.find((r) => r.name === n);
+        eq(x?.status, "verified", `${n}: ${x?.detail}`);
+      }
+    });
+  }
   if (exe) {
     test("T1 real exe: the glow block verifies on the installed exe (harvest): the TacticsTest vftable by RTTI, the three constants by their witnesses, the ShaderManager global by its rip ref; every glow offset witness reads its value", () => {
       const m = loadManifest(realPath);

@@ -88,6 +88,14 @@
     "status": "open"
   },
   {
+    "id": "pr99-glow-colours",
+    "pr": 99,
+    "question": "In shot-two, does the cat carry a cyan rim and the Rat a magenta one, each hugging its own sprite (no cross-colour bleed), and is the cat's rim whole among the other cats (no straight scissor edge)?",
+    "shots": ["ingame-runs/*-dev-sandbox-unit-glow/shot-two.png"],
+    "regenerate": "cd editor && npm run test:unitglow",
+    "status": "open"
+  },
+  {
     "id": "pr59-ruffle-tab",
     "pr": 59,
     "question": "Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?",

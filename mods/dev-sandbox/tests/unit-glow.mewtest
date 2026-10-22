@@ -7,6 +7,8 @@ hide: false
 # must add a connected magenta patch the no-glow shot lacks. Magenta rather than red because the arena and the UI
 # already hold reds. No _autoplay: the fight waits for the player's input, so the scene is still between the shots.
 # fw-glow ships the rim shader the glow engine loads (mods/fw-glow/shaders/fw_unit_glow.shader).
+# v2 (per-unit colours): then the Rat magenta AND unit 0 (a cat) cyan at once, one shot "two": the probe asserts a
+# magenta rim and a cyan rim, each over the no-glow shot, lying apart (compareTwoColourShot) — v1 drew both magenta.
 wait frames 120
 seed 42
 enter TacticsTest
@@ -20,4 +22,10 @@ shot "glow"
 glow "Lil' Rat" off
 wait frames 60
 shot "noglow"
+glow "Lil' Rat" 1 0 1 1
+glow 0 0 1 1 1
+wait frames 60
+shot "two"
+glow "Lil' Rat" off
+glow 0 off
 quit

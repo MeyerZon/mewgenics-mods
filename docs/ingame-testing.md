@@ -90,8 +90,8 @@ run fight                                        wait (<= 30 s, like the console
                                                  TurnControl::NextTurn fired; the run event carries "level"
 expect level "<substr>"                          the level path the last `run fight` reported contains substr (DLL-side)
 glow <unit> <r> <g> <b> <a>                      FW_SetUnitGlow (framework API v4) on a unit of the walk (index, bareword or
-glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; v1
-                                                 keeps one shared colour); `off` = FW_ClearUnitGlow. Needs the fight and
+glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; each
+                                                 unit its own colour since glow v2); `off` = FW_ClearUnitGlow. Needs the fight and
                                                  `mods: …, fw-glow` (the rim shader). A missing unit or a refusal ends the
                                                  script with code 1 (glow_failed); a framework without API v4 with code 4
 face <unit> <dx> <dy>                            turn a unit of the walk (index, bareword or "name"): Character::Face 0x10ce50 with
