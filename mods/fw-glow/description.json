@@ -1,7 +1,7 @@
 {
   "title": "Framework glow (data half)",
   "author": "mewgenics-mods",
-  "version": "0.1.0",
-  "description": "The data half of mewframework's per-unit glow (API v4, FW_SetUnitGlow): shaders/fw_unit_glow.shader, the rim shader the glow engine loads as material fw_unit_glow through the game's own ShaderManager. It reads the combat outline mask (one channel) and paints glow_color in a band of glow_radius texels outside the masked units. Load it next to any mod that calls FW_SetUnitGlow: `mods: <mod>, fw-glow` / -modpaths. No game content is changed.",
+  "version": "0.2.0",
+  "description": "The data half of mewframework's per-unit glow. shaders/fw_unit_glow.shader is the rim shader the glow engine loads as material fw_unit_glow through the game's own ShaderManager (it reads the combat outline mask and paints glow_color in a band of glow_radius texels outside the masked units); load it next to any mod that asks for a glow: `mods: <mod>, fw-glow` / -modpaths. Since glow v3 a DATA mod can ask too, with no DLL: give a unit a status named FwGlow_<rrggbb> or FwGlow_<rrggbbaa> (StatusOnSpawnIn / StatusOnBattleStart, an ability's effects, a Temporary) and it glows that colour while it carries the status. The sample FwGlowRat (characters/enemies.gon.append, spawn-only, no vanilla entry changed) glows magenta; keyword_tooltips + text name the sample status. No vanilla content is changed.",
   "requirements": []
 }

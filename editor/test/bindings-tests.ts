@@ -1883,9 +1883,19 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["GlowCanvasWidth", "CONST_GLOW_CANVAS_W", "1280"], ["GlowCanvasHeight", "CONST_GLOW_CANVAS_H", "720"]];
   const GLOW2_NAMES = new Set([...GLOW2_SYMBOLS.map((x) => x[0]), ...GLOW2_OFFSETS.map((x) => x[0]), ...GLOW2_CONSTANTS.map((x) => x[0])]);
   const GLOW_NAMES = new Set([...GLOW_SYMBOLS.map((x) => x[0]), ...GLOW_REFERENCE.map((x) => x[0]), "ShaderManager_global", "TacticsTest_vftable", ...GLOW_OFFSETS.map((x) => x[0]), ...GLOW_CONSTANTS.map((x) => x[0])]);
+  test("glow v3 (the data seam): VT_ApplyStatModifiers is LuckUp vtable slot 82, derived by a slot search for the luck adder's body (add [character+luck], stacks; je Status_Remove), exposed as VT_APPLYSTATMODIFIERS for the FwGlow_ status's no-luck override", () => {
+    const m = loadManifest(realPath);
+    const e = entry(m, "VT_ApplyStatModifiers");
+    assert(!!e && e.kind === "constant" && e.value === "82", "a constant 82");
+    eq(e!.anchors.derive?.vtable, "LuckUp_vftable");
+    assert((e!.anchors.derive?.slotSearch?.bodyPattern ?? "").startsWith("48 8B 51 ?? 8B 41 ?? 01 82 "), "the slot-search body pattern");
+    eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro: "VT_APPLYSTATMODIFIERS" }]));
+    const oh = readFileSync(join(REPO_ROOT, "native", "framework", "src", "offsets.h"), "utf8");
+    assert(/^#define VT_APPLYSTATMODIFIERS\s+82\s/m.test(oh), "offsets.h exposes it");
+  });
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block");
+    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam)");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);

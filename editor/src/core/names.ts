@@ -26,9 +26,33 @@ export interface RegisteredPattern {
   mod?: string;
 }
 
-/** The pattern entries (red stub). */
-export function registeredPatterns(_entries: RegisteredName[] = loadRegisteredNames()): RegisteredPattern[] {
-  return [];
+/**
+ * The pattern entries of registered-names.json, compiled: a name the native layer recognises by its SHAPE rather than
+ * by registration (glow v3: `FwGlow_<rrggbb[aa]>`, fw_glow_rules.h). An entry whose pattern does not compile is skipped.
+ */
+export function registeredPatterns(entries: RegisteredName[] = loadRegisteredNames()): RegisteredPattern[] {
+  const out: RegisteredPattern[] = [];
+  for (const e of entries) {
+    if (typeof e.pattern !== "string") continue;
+    let re: RegExp;
+    try {
+      re = new RegExp(e.pattern);
+    } catch {
+      continue;
+    }
+    out.push({ re, prefix: typeof e.prefix === "string" ? e.prefix : "", label: e.name, kind: e.kind, mod: e.mod });
+  }
+  return out;
+}
+
+/** The pattern a name matches, or null. */
+export function matchRegisteredPattern(patterns: RegisteredPattern[], name: string): RegisteredPattern | null {
+  return patterns.find((p) => p.re.test(name)) ?? null;
+}
+
+/** The pattern whose (non-empty) prefix the name starts with although the name does not match it: a malformed name. */
+export function malformedRegisteredPattern(patterns: RegisteredPattern[], name: string): RegisteredPattern | null {
+  return patterns.find((p) => p.prefix !== "" && name.startsWith(p.prefix) && !p.re.test(name)) ?? null;
 }
 
 let registeredCache: RegisteredName[] | null = null;
@@ -60,7 +84,7 @@ export function loadRegisteredNames(): RegisteredName[] {
 }
 
 export function registeredNameSet(): Set<string> {
-  return new Set(loadRegisteredNames().map((e) => e.name));
+  return new Set(loadRegisteredNames().filter((e) => typeof e.pattern !== "string").map((e) => e.name));
 }
 
 /** Clear cached registered names (after editing the file). */
@@ -80,6 +104,8 @@ export interface ResolutionSources {
   components?: Set<string>;
   /** native-registered names; default editor/registered-names.json */
   registered?: Set<string>;
+  /** native-registered name patterns (entries with `pattern`); default those of editor/registered-names.json */
+  registeredPatterns?: RegisteredName[];
 }
 
 export interface ResolutionSets {
@@ -94,6 +120,8 @@ export interface ResolutionSets {
   /** false when no component class list was available at all (the editor/data cache is missing or empty) */
   componentListKnown: boolean;
   registered: Set<string>;
+  /** names the native layer recognises by shape (a status named FwGlow_<rrggbb[aa]>): valid statuses, never listed */
+  registeredPatterns: RegisteredPattern[];
 }
 
 /** The resolution sets the validator uses. Each is a Set of names. Sources default to the real ones. */
@@ -117,5 +145,6 @@ export function resolutionSets(src: ResolutionSources = {}): ResolutionSets {
     components: new Set([...components, ...registered]),
     componentListKnown: components.size > 0,
     registered,
+    registeredPatterns: registeredPatterns(src.registeredPatterns ?? loadRegisteredNames()),
   };
 }

@@ -150,12 +150,24 @@ static void disable_our_passes(void *mainCam) {
 /* the per-frame plan, after the game's LateRender */
 static void glow_frame(void *tt) {
     if (tt != g_tt) {
-        if (g_tt) { fw_log("glow: new fight scene (TacticsTest %p -> %p): %d registration(s) dropped", g_tt, tt, g_reg.count); fw_glow_reset(&g_reg); }
+        if (g_tt) {
+            int before = g_reg.count;
+            fw_glow_reset_scene(&g_reg);   /* native registrations go; FwGlow_ status ones stay (prune + sweep re-check them) */
+            fw_log("glow: new fight scene (TacticsTest %p -> %p): %d native registration(s) dropped, %d from statuses kept", g_tt, tt, before - g_reg.count, g_reg.count);
+        }
         g_tt = tt;
         for (int k = 0; k < FW_GLOW_MAX_GROUPS; k++) g_matTexture[k] = NULL;   /* a new scene has new cameras: re-bind framebuf */
     }
     int dropped = fw_glow_prune(&g_reg);
     if (dropped) fw_log("glow: %d unit(s) dropped (pool generation moved)", dropped);
+    /* the data seam: a unit glowing because of a FwGlow_ status keeps its rim exactly as long as it carries one (any
+     * vanilla removal: expiry, stacks to 0, cleanse); the colour follows the status (the latest apply wins) */
+    void *gone[FW_GLOW_MAX_UNITS];
+    int ngone = fw_glow_sweep(&g_reg, status_engine_glow_probe, NULL, gone, FW_GLOW_MAX_UNITS);
+    for (int i = 0; i < ngone && i < FW_GLOW_MAX_UNITS; i++) {
+        fw_glow_layers_strip(fw_glow_renderer(gone[i]), CONST_MASK_LAYER);   /* alive: prune ran first */
+        fw_log("glow: %p no longer carries a FwGlow_ status; rim cleared (%d registered)", gone[i], g_reg.count);
+    }
     static FwGlowFrame f;   /* ~1.4 KB: kept off the game thread's stack */
     fw_glow_frame(&g_reg, &f);
     void *mainCam = fw_glow_main_camera(tt), *maskCam = fw_glow_mask_camera(tt);
@@ -242,6 +254,14 @@ int glow_engine_set(void *character, const float rgba[4]) {
     int ok = fw_glow_set(&g_reg, character, rgba);
     fw_log("SetUnitGlow(%p, %.2f %.2f %.2f %.2f): %s (%d registered)", character,
            rgba ? (double)rgba[0] : 0.0, rgba ? (double)rgba[1] : 0.0, rgba ? (double)rgba[2] : 0.0, rgba ? (double)rgba[3] : 0.0,
+           ok ? "ok" : "refused (null, or registry full)", g_reg.count);
+    return ok;
+}
+
+int glow_engine_set_from_status(void *character, const float rgba[4]) {
+    if (!g_orig) { fw_log("glow status: the glow hook is not installed; no rim"); return 0; }
+    int ok = fw_glow_set_from_status(&g_reg, character, rgba);
+    fw_log("glow status on %p: %.2f %.2f %.2f %.2f: %s (%d registered)", character, (double)rgba[0], (double)rgba[1], (double)rgba[2], (double)rgba[3],
            ok ? "ok" : "refused (null, or registry full)", g_reg.count);
     return ok;
 }

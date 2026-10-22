@@ -23,8 +23,11 @@ const FwStatusTable *status_engine_table(void);   /* the registered names, for f
 int status_engine_set_stacks(void *status, int value);
 int status_engine_has_status(void *character, const char *statusName);
 void status_engine_on_begin_turn(void *character);
+/* the data glow seam: 1 and the colour when `character` carries a live FwGlow_<hex> status (an FwGlowStatusProbe) */
+int status_engine_glow_probe(void *character, float rgba[4], void *user);
 
 /* glow_engine.c (API v4) */
 int glow_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_TacticsTest_LateRender step of FW_HOOK_PLAN */
 int glow_engine_set(void *character, const float rgba[4]);
 int glow_engine_clear(void *character);
+int glow_engine_set_from_status(void *character, const float rgba[4]);   /* a FwGlow_ status was applied (status_engine.c) */

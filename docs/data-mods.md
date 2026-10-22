@@ -238,15 +238,50 @@ What data *can* do, all plain passives on a character / class / item:
 For a sprite-shaped glow or drop shadow, bake it into the art: the editor's `bake_glow` (`docs/art-pipeline.md` §6)
 adds a halo shape under the source; the result is ordinary SWF geometry the game draws like any other.
 
-**Glows (2026-10-22).** The per-unit glow is a **native-only API in v1**: a native mod calls `FW_SetUnitGlow(Character*,
+**Glows (2026-10-22).** The per-unit glow is drawn by the framework: a native mod calls `FW_SetUnitGlow(Character*,
 r, g, b, a)` / `FW_ClearUnitGlow` (framework API v4, `docs/engine-map.md` "Per-unit glow") and the framework draws a
-coloured rim around the unit through the game's own outline mask. There is no data-level way to ask for one yet — no
-`registered-names.json` kind, no GON key; a `glow` kind that a status or passive could name is the natural v2 once
-per-unit colours exist. What the data layer does carry is the rim shader: `mods/fw-glow/shaders/fw_unit_glow.shader`
+coloured rim around the unit through the game's own outline mask; since glow v3 a **data mod asks for it with a status
+name** and no DLL (next section). What the data layer always carries is the rim shader: `mods/fw-glow/shaders/fw_unit_glow.shader`
 (`.shader` files in a mod path load like any pack file). A mod whose native half calls the API lists `fw-glow` next to
 itself (`mods: <mod>, fw-glow` in a `.mewtest` header, `-modpaths … mods/fw-glow` in a launch); the harness directive
 `glow <unit> <r> <g> <b> <a>` exercises it (`mods/dev-sandbox/tests/unit-glow.mewtest`). Static halos that need no
 native code remain the editor's baked glow (PR #80).
+
+## Asking for a unit glow from data (glow v3, OBSERVED 2026-10-22)
+
+Give the unit a status named **`FwGlow_<rrggbb>`** or **`FwGlow_<rrggbbaa>`** (hex, either case; alpha `ff` when
+omitted) and load `fw-glow` next to your mod: the unit glows that colour for exactly as long as it carries the status.
+Any vanilla way of applying a status works — the name is the whole request:
+
+```
+// data/characters/enemies.gon.append — a unit that glows from the moment it spawns (mods/fw-glow ships this as FwGlowRat)
+MyGlowingRat {
+    variant_of Rat
+    passives {
+        StatusOnSpawnIn {          // or StatusOnBattleStart for units present when the fight starts
+            FwGlow_ff00ff 1
+        }
+    }
+}
+// an ability: damage_instance { effects { FwGlow_00ffff 1 } }, or temporary_effects / Temporary { status FwGlow_00ffff … }
+```
+
+- **How it works.** mewframework recognises the name in its `apply_status` hook (no registration, no Mewjector name)
+  and builds a LuckUp-template status with the glow vtable, **without** LuckUp's luck bonus; the 13 name-keyed lookups
+  read it as LuckUp, so nothing reports `NO STATUS NAMED`. Removing the status by any vanilla route (expiry of a
+  Temporary, stacks to 0, a cleanse, death) ends the rim on the next frame. One glow status per unit: a second
+  `FwGlow_` apply merges into it and the **latest colour wins**. Several units in different colours work (glow v2).
+- **Validator.** `editor/registered-names.json` carries a pattern entry (kind `glow`, `^FwGlow_(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$`),
+  so any such name is a valid status; a name in the namespace that does not fit (`FwGlow_ff00f`) is the error
+  `invalid-glow-name`; on an exe the bindings do not know, `native-build-unknown` warns (the framework stays off).
+- **Display.** The status icon on the unit's bar is LuckUp's (the four-leaf clover, seen in the shot); name and
+  tooltip should come from `keyword_tooltips` by the full name (INFERRED from JokersLuck; a T3 look) — `mods/fw-glow` names `FwGlow_ff00ff` "Glowing"; give each
+  colour you use an entry, or alias it: `FwGlow_00ffff { alias FwGlow_ff00ff }`.
+- **Limits.** Combat only (the glow engine rides `TacticsTest`); up to 16 glowing units; native mods may not register
+  a `FwGlow_` name (`FW_STATUS_ERR_RESERVED`); a native `FW_SetUnitGlow` / `FW_ClearUnitGlow` on the same unit takes it
+  over (the status then no longer drives it). Proven by `mods/fw-glow/tests/data-glow.mewtest` (`npm run test:unitglow --
+  --data`; fixture `editor/test/fixtures/ingame/data-glow-summary.json`: a 5620 px magenta rim around the spawned
+  FwGlowRat, none before the spawn).
 
 ## Limits of the data layer
 

@@ -1,9 +1,7 @@
 /* Pure entity/component walks and object edits; see fw_walk.h. */
 #include "fw_walk.h"
 
-void *fw_walk_find_status(void *character, const void *vt) {
-    if (!character) return NULL;
-    void *ent = fw_walk_char_entity(character);
+void *fw_walk_entity_find_status(void *ent, const void *vt) {
     if (!ent) return NULL;
     uint32_t n = fw_walk_entity_count(ent); void **comps = fw_walk_entity_components(ent);
     for (uint32_t i = 0; i < n; i++) {
@@ -11,6 +9,10 @@ void *fw_walk_find_status(void *character, const void *vt) {
         if (c && fw_walk_status_vt(c) == vt && !fw_walk_status_removing(c) && fw_walk_status_temporary(c) == 0) return c;
     }
     return NULL;
+}
+
+void *fw_walk_find_status(void *character, const void *vt) {
+    return character ? fw_walk_entity_find_status(fw_walk_char_entity(character), vt) : NULL;
 }
 
 int fw_walk_vt_index(void *const *vts, int count, const void *vt) {
@@ -62,4 +64,14 @@ int fw_walk_touch_passives(void *status) {
     return 1;
 }
 
-void *fw_walk_find_live(void *character, const void *vt) { (void)character; (void)vt; return NULL; }   /* red stub */
+void *fw_walk_find_live(void *character, const void *vt) {
+    if (!character) return NULL;
+    void *ent = fw_walk_char_entity(character);
+    if (!ent) return NULL;
+    uint32_t n = fw_walk_entity_count(ent); void **comps = fw_walk_entity_components(ent);
+    for (uint32_t i = 0; i < n; i++) {
+        void *c = comps[i];
+        if (c && fw_walk_status_vt(c) == vt && !fw_walk_status_removing(c)) return c;
+    }
+    return NULL;
+}

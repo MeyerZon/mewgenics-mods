@@ -1,0 +1,8 @@
+// Display name and tooltip of the sample glow status (the status icon itself is LuckUp's: the framework builds every
+// FwGlow_ status from the LuckUp template, without its luck bonus). One entry per colour a mod uses; a second colour
+// can share this text with `FwGlow_00ffff { alias FwGlow_ff00ff }`.
+FwGlow_ff00ff {
+    name "KEYWORD_FWGLOW_NAME"
+    tooltip "KEYWORD_FWGLOW_DESC"
+    tooltip_stackless "KEYWORD_FWGLOW_DESC"
+}

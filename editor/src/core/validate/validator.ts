@@ -20,7 +20,7 @@ import { parseOverlayName } from "../overlay/overlay.ts";
 import { parseCsv } from "../overlay/csv.ts";
 import { parsePolicy } from "../overlay/policy.ts";
 import { findIndex } from "../gon/value.ts";
-import { resolutionSets } from "../names.ts";
+import { resolutionSets, matchRegisteredPattern, malformedRegisteredPattern } from "../names.ts";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.ts";
 import { ReportBuilder } from "./result.ts";
 import { identifyExe } from "../bindings/check.ts";
@@ -212,6 +212,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     root,
     components: opts.components ? new Set(opts.components) : undefined,
     registered: opts.registeredNames ? new Set(opts.registeredNames) : undefined,
+    registeredPatterns: opts.registeredPatterns,
   });
   const local = modLocalNames(overlays);
   const loc = loadLocalization(root);
@@ -352,12 +353,22 @@ function validateGonOverlay(
   /** names provided only by native mod code (editor/registered-names.json), warned once per file */
   const nativeWarned = new Set<string>();
   const checkNative = (name: string, at: SourceLocation): void => {
-    if (!sets.registered.has(name) || !nativeBuild || nativeBuild.known || nativeWarned.has(name)) return;
+    if ((!sets.registered.has(name) && !matchRegisteredPattern(sets.registeredPatterns, name)) || !nativeBuild || nativeBuild.known || nativeWarned.has(name)) return;
     nativeWarned.add(name);
     const id = nativeBuild.identity ? ` (TimeDateStamp ${nativeBuild.identity.timeDateStamp}, SizeOfImage ${nativeBuild.identity.sizeOfImage})` : "";
     rb.warn("native-build-unknown", `"${name}" is provided by native mod code (mewframework), but the installed Mewgenics.exe is not a build the bindings know${id}: the framework will stay inactive and the game will report NO_*_NAMED. Port the bindings first (docs/binding-port.md, check_game_build / port_bindings).`, at);
   };
   const checkStatus = (name: string, at: SourceLocation): void => {
+    // a name the native layer recognises by its shape (FwGlow_<rrggbb[aa]>: the data-level glow) is a valid status
+    if (!statusSet.has(name) && matchRegisteredPattern(sets.registeredPatterns, name)) {
+      checkNative(name, at);
+      return;
+    }
+    const malformed = statusSet.has(name) ? null : malformedRegisteredPattern(sets.registeredPatterns, name);
+    if (malformed && malformed.kind === "glow") {
+      rb.error("invalid-glow-name", `status "${name}" starts with ${malformed.prefix} but is not a glow request: write ${malformed.prefix} + 6 or 8 hex digits (rrggbb or rrggbbaa, e.g. ${malformed.prefix}ff00ff); the framework recognises nothing else in that namespace (docs/data-mods.md "Asking for a unit glow from data")`, at);
+      return;
+    }
     if (!statusSet.has(name)) {
       rb.error("unknown-status", `status "${name}" is not defined in base data, not native-registered, and not added by this mod`, at);
       return;

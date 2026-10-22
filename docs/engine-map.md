@@ -282,7 +282,9 @@ notes in `.analysis/notes-<tag>.md`):
 - `Status_ApplyByName` (RVA `0x483120`): `Status* f(std::string* name, void* ctx, int stacks, void* src, void* p5,
   void* p6, char temporary, char p8)`, a 793-way if-chain on the name calling a per-status apply function; the
   callee destroys the by-value string (`std::string::_Tidy_deallocate`, RVA `0x52780`). `ctx` holds the entity at
-  +0x18 and the character at +0x20. The LuckUp branch (`0x5f9760`) merges into an existing LuckUp found through
+  +0x18 and the character at +0x20 (a Component-shaped context; OBSERVED 2026-10-22: under `StatusOnSpawnIn` ctx is the
+  Character itself, its +0x20 another object with an empty entity, and the new status's `+0x38` is the unit — "Per-unit
+  glow" v3). The LuckUp branch (`0x5f9760`) merges into an existing LuckUp found through
   `Entity_FindComponentsByTypeId` (`0x969f90`) or constructs via `LuckUp_ctor` (`0x711c90`:
   `(Character*, Entity*, int* stacks, void** src, void** applier)`) which runs slot 30 before returning.
 - `glaiel::get_status_type(std::string)` (`0x4929c0`) and the hit-effect flags lookup (`0x493190`) are FNV-1a
@@ -301,7 +303,8 @@ category and hit-effect rules apply), and `Character::BeginTurn` (dispatches `on
 `FW_SetStatusStacks` writes +0x5c, calls slot 170, sets `touched_passives`, and removes at 0.
 The rules a definition must satisfy — at most 8 definitions (one vtable-thunk row each), a non-empty name of at
 most 15 bytes (the std::string SSO buffer, so the alias rewrite never reallocates), template `LuckUp` only, unique
-names — and the alias rewrite itself live in the pure `fw_status_rules.c` (host tests `test_status_rules.c`);
+names, none starting with `FwGlow_` (since 2026-10-22 that namespace is the data-level glow, which needs no
+registration: "Per-unit glow" v3) — and the alias rewrite itself live in the pure `fw_status_rules.c` (host tests `test_status_rules.c`);
 `FW_RegisterStatus` validates against them before it claims the name with Mewjector. Since 2026-10-21 the rest of
 the logic is pure and host-tested as well: the vtable clone into caller-supplied memory + the thunk bodies
 (`fw_vtable.c`, `test_vtable.c`; a T1 check clones the real dump `.analysis/luckup-vtable.hex` and pins slots 0/1 at
@@ -1498,8 +1501,35 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   rectangle, the mask has no identity); combat scenes only (`TacticsTest`); up to 16 units (and up to 16 colour
   materials, which live for the process); registrations belong to the current fight scene (register during the fight);
   main thread only; while any unit glows the game's white hover rim (blur mode) is off — the jump-flood passes
-  (`+0x80/+0x88`) are not touched, so a jump-flood hover still works; the API is native-only (no data-level way to ask
-  for a glow yet, see `docs/data-mods.md`).
+  (`+0x80/+0x88`) are not touched, so a jump-flood hover still works. A data mod asks for a glow with a status named
+  `FwGlow_<hex>` (v3, below; `docs/data-mods.md` "Asking for a unit glow from data").
+- **v3: a glow asked for from DATA (2026-10-22, OBSERVED in-game).** The request is a status NAME: `FwGlow_<rrggbb>` or
+  `FwGlow_<rrggbbaa>` (`fw_glow_parse_status_name`, 13 or 15 bytes, so the std::string SSO alias rewrite applies). A data
+  mod grants it through any vanilla mechanism that applies a status (`StatusOnSpawnIn` / `StatusOnBattleStart` passives,
+  an ability's `effects`, a Temporary). `fw_status_table_find` answers `FW_STATUS_GLOW_SLOT` for any valid glow name
+  without registration, so the 13 name-keyed lookups alias it to LuckUp like a registered name (no `NO STATUS NAMED`,
+  no zero divisor) and the `apply_status` hook builds it: the LuckUp ctor, then the **glow vtable** = LuckUp's with the
+  identity slots answering per object (one vtable for every colour; the object -> name table `FwGlowStatusObjs`, a
+  32-entry ring) and slot **82** `VT_APPLYSTATMODIFIERS` replaced: LuckUp's (`0x1408a8f80`, objdump of the saved exe:
+  `mov rdx,[rcx+0x38]; mov eax,[rcx+0x5c]; add [rdx+0x5d4],eax; cmp dword [rcx+0x5c],0; je Status_Remove; ret`) adds the
+  stacks to the unit's luck; ours keeps only the removal at 0 stacks. The unit is registered with
+  `fw_glow_set_from_status` (`fromStatus`); every frame, after the pool-generation prune, `fw_glow_sweep` asks
+  `status_engine_glow_probe` (`fw_walk_find_live`: a non-removing glow object in the unit's entity, temporary ones
+  included) and clears the rim of a unit that no longer carries one, so every vanilla removal ends the glow; a new
+  fight scene drops native registrations only (`fw_glow_reset_scene`). `FW_RegisterStatus` refuses the `FwGlow_`
+  prefix (`FW_STATUS_ERR_RESERVED`). **OBSERVED (run `20261022-113119-fw-glow-data-glow`):** under `StatusOnSpawnIn` the
+  `apply_status` ctx **is the Character itself** — ctx+0x18 is the entity holding the statuses and the new object's
+  `+0x38` (`OFF_STATUS_CHARACTER`) = ctx — while ctx+0x20 (the "character" of `fw_walk_apply_resolve`, right for the
+  Component-shaped contexts the JokersLuck path met) is another object whose entity holds **no** components: the first
+  launch registered that object, the sweep found no glow status on it and cleared the rim the same frame. The glow
+  path therefore merges by the resolved **entity** (`fw_walk_entity_find_status`) and glows the status's own
+  `+0x38`. With that, `spawn FwGlowRat` (mods/fw-glow) gave a 5620 px magenta patch (2628,693)-(2759,825) the pre-spawn
+  shot lacks, `expect status FwGlow_ff00ff on "Lil' Rat"` passed, the real save unchanged
+  (`editor/test/fixtures/ingame/data-glow-summary.json`). The unit's status bar shows LuckUp's clover icon for the
+  status (the icon lookup is aliased to the template). **Rejected:** a per-frame scan of every unit's status list for
+  `FwGlow_` names from the LateRender hook — the game never makes a component for an unknown name (apply_status falls
+  through, the lookups say `NO STATUS NAMED` and one default is a divisor), so the name must be handled where the
+  framework already hooks `apply_status`; the per-frame part is only the removal check of units already registered.
 - **Bindings added (glow block, all harvest-verified):** functions `TacticsTest_LateRender` 0x88d780, `vec_u32_AddUnique`
   0x72cd0, `ShaderManager_GetOrCreateMaterial` 0x9bb5d0, `Material_SetUniformVec4` 0x9bde70, `Material_SetUniformFloat`
   0x9bddc0, `Material_SetTexture` 0x9bdcd0, `Camera_AddPostProcessPass` 0x979880 (`FW_SYM_*`), reference

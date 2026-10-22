@@ -83,8 +83,11 @@ these without a decision (status per bullet below; the PR map follows).
       `feat/native-unit-glow`, session rim).
 - [ ] **Native per-unit glow — what next?** The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
       draws a rim through the game's outline mask (combat only, the rim shader shipped by `mods/fw-glow`). Decide: (a)
-      a data-level way to ask for it (a `registered-names.json` kind `glow` a status/passive names?) — still open — and
-      per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
+      a data-level way to ask for it — **done (glow v3, `feat/glow-data-seam`)**: a status named `FwGlow_<rrggbb[aa]>`
+      granted by any vanilla mechanism (StatusOnSpawnIn, an ability's effects, …) glows its carrier while it lasts, no DLL;
+      `registered-names.json` kind `glow` (a pattern) + validator `invalid-glow-name`; sample `FwGlowRat` in
+      `mods/fw-glow`, proven in-game (`npm run test:unitglow -- --data`; `docs/data-mods.md` "Asking for a unit glow from
+      data") — and per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
       scissored to its screen rect (LateRender's hovered-unit math), proven in-game (magenta Rat + cyan cat); (b)
       whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
