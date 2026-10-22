@@ -15,6 +15,10 @@ and fast to author.
 > **Legal/ethics.** For your own single-player copy. Never redistribute game executables or assets; mods load from the
 > user's own install at runtime. This repo tracks no game bytes beyond short function signatures.
 
+> **License.** MIT (`LICENSE`). Mods you make with the toolkit are yours and owe nothing; if it helped, a one-line
+> "Made with mewgenics-mods" in your mod's description would be appreciated — a request, not a condition
+> (`ATTRIBUTION.md`).
+
 ## Repository layout
 
 | Path | What |

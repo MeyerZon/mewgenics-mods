@@ -15,6 +15,7 @@ import { newCatAnimation as catAnim } from "./art/cat-rig.ts";
 import type { NewCatAnimationOptions } from "./art/cat-rig.ts";
 import type { Scene, Finding as SceneFinding } from "./art/scene.ts";
 import * as ingame from "./ingame/index.ts";
+import * as vcHeadless from "./art/vectorcraft-headless.ts";
 export { listVanillaSwfs, readVanillaSwf, vanillaSwfDir } from "./art/art-io.ts";
 import { checkInstalledBuild } from "./bindings/check.ts";
 import { portManifest, renderPortReport } from "./bindings/port.ts";
@@ -174,6 +175,15 @@ export function prepareSwfGate(o: Parameters<typeof artio.prepareSwfGate>[0]) {
   return artio.prepareSwfGate(o);
 }
 export { SWF_GATE_MOD, SWF_GATE_VARIANTS } from "./art/art-io.ts";
+/** Undo VectorCraft's artboard re-origin on an SVG it exported (svg-reorigin.ts; pure). */
+export { reoriginSvg, parseViewBox } from "./art/svg-reorigin.ts";
+/** MCP vectorcraft_exec: drive the vendored VectorCraft web build headlessly (Playwright Chromium) and apply the drawing to a shape. */
+export function vectorcraftExec(args: Parameters<typeof vcHeadless.vectorcraftExec>[0]) {
+  return vcHeadless.vectorcraftExec(args);
+}
+export function isVectorcraftVendored() {
+  return vcHeadless.isVectorcraftVendored();
+}
 export { exampleScene as exampleArtScene };
 
 // ---- in-game test harness (docs/ingame-testing.md) --------------------------
