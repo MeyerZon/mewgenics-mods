@@ -21,6 +21,7 @@
 #include "fw_gon.h"
 #include <stdio.h>
 #include "fw_unit_model.h"
+#include "fw_unit_face.h"     /* M3: the model turns with Character::Face */
 #include "fw_glow_rules.h"    /* fw_glow_renderer */
 #include "fw_obs3d_rules.h"   /* fw_obs3d_renderer_position / _position_xz / _is_masked_renderer_iso */
 
@@ -108,7 +109,8 @@ int obj3d_engine_unit_model(const void *character, char *out, size_t cap) {
  * or the block form, fw_gon_model_block) gets that model registered on it, once per (Character, pool generation).
  * The units come from the harness's walk (TurnControl -> Scene -> EntityManager -> +0x1f90, fw_unit_walk) on the
  * TurnControl framework.c's NextTurn hook hands over (obj3d_engine_on_turn_control); every read before registration
- * is guarded. Each combat frame the registered GON objects get their facing (Renderer_GetScreenMatrix m0 sign) and a
+ * is guarded. Each combat frame the registered GON objects get their facing (Renderer_GetScreenMatrix m0 sign), their
+ * face yaw (M3: Character::Face's stored direction, fw_unit_face.h; a "unit model face:" line when it changes) and a
  * position line when they moved (fw_unit_fmt_at). The mesh engine draws them like any API object.
  * ---------------------------------------------------------------------------------------------------------------- */
 typedef float *(*fn_GetScreenMatrix)(void *renderer, float out[16]);
@@ -117,7 +119,9 @@ static void *volatile g_unitTc;   /* the fight's TurnControl (NextTurn); NULL un
 static FwUnitSeen g_seen;
 #define UNIT_LOG_AT_MAX 64        /* position lines per process (a long fight must not flood the log) */
 static int g_atLogged;
-typedef struct UnitTrack { int handle; int logged; double last[2]; char entry[48]; } UnitTrack;
+#define UNIT_LOG_FACE_MAX 64      /* face lines per process */
+static int g_faceLogged;
+typedef struct UnitTrack { int handle; int logged; double last[2]; char entry[48]; int faceLogged; double faceYaw; } UnitTrack;
 static UnitTrack g_track[FW_OBJ3D_MAX];
 static int g_ntrack;
 
@@ -195,11 +199,24 @@ static void follow(void) {
         if (haveScreen) ((fn_GetScreenMatrix)getScreen)(rnd, screen);
         int facing = haveScreen ? fw_unit_facing(screen) : 1;
         fw_obj3d_set_facing(reg(), o->handle, facing);
+        /* M3 face: the yaw from the direction Character::Face stored (+OFF_CH_ORIENTATION), else the sprite's mirror */
+        int dir[2], src = 0;
+        int dirOk = fw_face_read_dir(guarded_read, NULL, o->character, dir);
+        double faceYaw = fw_face_yaw(dirOk, dir, facing, &src);
+        fw_obj3d_set_face_yaw(reg(), o->handle, faceYaw);
         double xz[2];
         fw_obs3d_position_xz(pos, xz);
         for (int k = 0; k < g_ntrack; k++) {
             UnitTrack *t = &g_track[k];
             if (t->handle != o->handle) continue;
+            if ((!t->faceLogged || t->faceYaw != faceYaw) && g_faceLogged < UNIT_LOG_FACE_MAX) {
+                char fl[160];
+                fw_face_fmt(fl, sizeof fl, t->entry, o->handle, dir, faceYaw, src, epoch_ms());
+                fw_log("%s", fl);
+                g_faceLogged++;
+                t->faceLogged = 1;
+                t->faceYaw = faceYaw;
+            }
             if (fw_unit_moved(t->logged ? t->last : NULL, xz) && g_atLogged < UNIT_LOG_AT_MAX) {
                 char line[256];
                 fw_unit_fmt_at(line, sizeof line, t->entry, o->handle, xz, haveScreen ? screen : NULL, facing, epoch_ms());

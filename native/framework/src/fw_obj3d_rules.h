@@ -40,7 +40,7 @@ typedef struct Fw3dObject {
     int usePalette;                     /* GON `palette`: -1 not given, 0 false, 1 true (the row itself is `palette` above) */
     int doubleSided;                    /* -1 not given, 0 false, 1 true */
     /* the unit's facing (+1, or -1 = its sprite is mirrored; fw_unit_facing), refreshed every combat frame by
-     * obj3d_engine.c for objects attached to a Character; -1 mirrors the model x <-> z about its anchor */
+     * obj3d_engine.c for objects attached to a Character; logged only since M3 (the model turns by faceYaw instead) */
     int facing;
     int fromGon;                        /* 1 = registered from the unit's GON graphics.model (not by a mod's API call) */
     int hideSprite;                     /* M3 GON `hide_sprite true`: 1 = the unit's 2D sprite is not drawn while this model
@@ -93,7 +93,7 @@ void fw_obj3d_identity(float out[16]);
 void fw_obj3d_mat4_mul(const float a[16], const float b[16], float out[16]);   /* out = a x b (column-major); out may alias neither */
 /* the tile centre in world (x, height, z): (col + 0.5, 0, row + 0.5) */
 void fw_obj3d_tile_centre(int col, int row, float out[3]);
-/* the object's model matrix in world space: translation to its anchor x [the x <-> z mirror when facing < 0] x its own transform. The anchor is the tile
+/* the object's model matrix in world space: translation to its anchor x Ry(faceYaw) (M3 face; M2's x <-> z mirror on facing < 0 is gone) x its own transform. The anchor is the tile
  * centre for a tile object, (unitXZ[0], 0, unitXZ[1]) for a Character object (the unit's world position, read by the
  * caller this frame); a Character object with unitXZ NULL is anchored at the origin. */
 void fw_obj3d_model_matrix(const Fw3dObject *o, const double unitXZ[2], float out[16]);

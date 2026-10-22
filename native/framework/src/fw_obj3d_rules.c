@@ -2,6 +2,7 @@
 #include <string.h>
 #include "fw_obj3d_rules.h"
 #include "fw_mesh_rules.h"
+#include "fw_unit_face.h"
 
 /* ----------------------------------------------------------------------- */
 /* registry                                                                 */
@@ -153,14 +154,12 @@ void fw_obj3d_model_matrix(const Fw3dObject *o, const double unitXZ[2], float ou
     float t[16];
     fw_obj3d_identity(t);
     t[12] = anchor[0]; t[13] = anchor[1]; t[14] = anchor[2];
-    if (o->facing < 0) {
-        /* the sprite's mirror across the screen vertical is, in the iso basis, the x <-> z swap (about the anchor) */
-        float m[16];
-        fw_obj3d_identity(m);
-        m[0] = 0.0f; m[2] = 1.0f; m[8] = 1.0f; m[10] = 0.0f;
-        float tm[16];
-        fw_obj3d_mat4_mul(t, m, tm);
-        fw_obj3d_mat4_mul(tm, o->transform, out);
+    if (o->faceYaw != 0.0f) {
+        /* M3 face: the model turns with the unit about its anchor (fw_unit_face.h); replaces M2's x <-> z mirror */
+        float ry[16], tr[16];
+        fw_face_rotation(o->faceYaw, ry);
+        fw_obj3d_mat4_mul(t, ry, tr);
+        fw_obj3d_mat4_mul(tr, o->transform, out);
         return;
     }
     fw_obj3d_mat4_mul(t, o->transform, out);
@@ -196,7 +195,12 @@ int fw_obj3d_set_facing(Fw3dRegistry *r, int handle, int facing) {
     return 1;
 }
 
-int fw_obj3d_set_face_yaw(Fw3dRegistry *r, int handle, double yawDeg) { (void)r; (void)handle; (void)yawDeg; return 0; }   /* RED STUB */
+int fw_obj3d_set_face_yaw(Fw3dRegistry *r, int handle, double yawDeg) {
+    int i = fw_obj3d_find_handle(r, handle);
+    if (i < 0) return 0;
+    r->objs[i].faceYaw = (float)yawDeg;
+    return 1;
+}
 
 int fw_obj3d_mark_gon(Fw3dRegistry *r, int handle) {
     int i = fw_obj3d_find_handle(r, handle);
