@@ -82,7 +82,9 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   const mask = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const [r, g, b] = px(img, x, y);
-    if (near(r, g, b, YELLOW, 50) && b < 90) mask[y * W + x] = 1;
+    // near-yellow at any brightness down to ~0.6: the game tints units by the tile they stand on (OBSERVED 2026-10-22:
+    // the back-facing cat's checker border at 199,197,0)
+    if (r >= 150 && g >= 150 && Math.abs(r - g) <= 40 && b <= 0.25 * r) mask[y * W + x] = 1;
   }
   let x0 = 0, y0 = 0, x1 = -1, y1 = -1, count = 0;
   const stack: number[] = [];
