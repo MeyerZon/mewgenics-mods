@@ -31,7 +31,8 @@ const char *fw_gon_entry_model(const void *gonEntry);
  * "3D models in a mod") ----
  *     graphics { model "models/crate.obj" }                                  the string form: file only, defaults
  *     graphics { model { file "models/x.glb"  scale 1  yaw 0  offset [0 0 0]  texture "models/x.png"
- *                        tint [1 1 1 1]  palette true  double_sided false } }  the block form
+ *                        tint [1 1 1 1]  palette true  double_sided false
+ *                        hide_sprite false } }                              the block form
  * A value of the wrong type keeps its default and sets its FW_GON_MODEL_BAD_* bit in `invalid` (the editor's
  * model-scale / model-yaw / model-offset / ... rules name the same cases; the DLL logs them once per unit). */
 #define FW_GON_TYPE_NUMBER 2
@@ -46,7 +47,8 @@ enum {
     FW_GON_MODEL_BAD_TINT    = 1 << 4,   /* not an array of 3 or 4 numbers */
     FW_GON_MODEL_BAD_PALETTE = 1 << 5,   /* not a bool */
     FW_GON_MODEL_BAD_DOUBLE_SIDED = 1 << 6,   /* not a bool */
-    FW_GON_MODEL_BAD_FILE    = 1 << 7    /* a block without a string `file` (the whole model is then absent: 0) */
+    FW_GON_MODEL_BAD_FILE    = 1 << 7,   /* a block without a string `file` (the whole model is then absent: 0) */
+    FW_GON_MODEL_BAD_HIDE_SPRITE = 1 << 8   /* not a bool (3D phase M3: hide_sprite) */
 };
 typedef struct FwGonModel {
     int isBlock;                 /* 0 = the string form, 1 = the block form */
@@ -59,7 +61,9 @@ typedef struct FwGonModel {
     float tint[4];               /* multiplies the base colour; default 1 1 1 1 (3 numbers = alpha 1) */
     int palette;                 /* -1 not given, 0 false, 1 true */
     int doubleSided;             /* -1 not given, 0 false, 1 true */
-    int invalid;                 /* FW_GON_MODEL_BAD_* bits of the keys whose value was refused (default kept) */
+    int hideSprite;              /* M3 `hide_sprite`: -1 not given, 0 false, 1 true = the unit's 2D sprite is not drawn while
+                                  * its model draws (fw_mesh_hide.h); a model that fails to load never hides the sprite */
+    int invalid;                /* FW_GON_MODEL_BAD_* bits of the keys whose value was refused (default kept) */
 } FwGonModel;
 /* the defaults above, file "" (isBlock 0) */
 void fw_gon_model_defaults(FwGonModel *m);

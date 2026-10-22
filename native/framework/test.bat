@@ -11,7 +11,7 @@ REM registry + model matrix + the API v6 layout (test_obj3d_rules) and the GON w
 REM models: units walk, seen set, block transform, facing, log line (test_unit_model).
 REM phase-M mesh rules: OBJ parser, game axes, unit cube, model registry, model paths (test_mesh_rules), the
 REM JSON tokenizer (test_json), the glTF 2.0 loader (test_mesh_gltf) and the mesh texture / palette rules (test_mesh_tex).
-REM JSON tokenizer (test_json), the glTF 2.0 loader (test_mesh_gltf) and the M2 sprite/mesh painter order + camera filter (test_mesh_order).
+REM JSON tokenizer (test_json), the glTF 2.0 loader (test_mesh_gltf) and the M2 sprite/mesh painter order + camera filter (test_mesh_order), M3 hide_sprite: decision, set, the wrapping filter (test_mesh_hide).
 REM Builds build\test_*.exe with w64devkit GCC and runs them; exit code = failures.
 setlocal
 if not defined GCC set "GCC=C:\raylib\w64devkit\bin\gcc.exe"
@@ -113,9 +113,17 @@ if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
   -o "%OUT%\test_mesh_tex.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_tex.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_mesh_order.c" "%HERE%src\fw_mesh_order.c" "%HERE%src\fw_functor.c" ^
   -o "%OUT%\test_mesh_order.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_order.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_mesh_hide.c" "%HERE%src\fw_mesh_hide.c" "%HERE%src\fw_mesh_order.c" "%HERE%src\fw_functor.c" "%HERE%src\fw_obj3d_rules.c" "%HERE%src\fw_mesh_rules.c" ^
+  -o "%OUT%\test_mesh_hide.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_mesh_hide.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal

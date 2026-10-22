@@ -124,9 +124,11 @@ export function runModel3dTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     eq(at("model-yaw"), "error@Crate.graphics.model.yaw,warning@Tire.graphics.model.yaw", codes(r));   // "left" / 30 (not a multiple of 45)
     eq(at("model-offset"), "error@Crate.graphics.model.offset", codes(r));
     eq(at("model-tint"), "error@Crate.graphics.model.tint", codes(r));
-    eq(at("model-flag"), "error@Crate.graphics.model.double_sided,error@Crate.graphics.model.palette", codes(r));
+    eq(at("model-flag"), "error@Crate.graphics.model.double_sided,error@Crate.graphics.model.hide_sprite,error@Crate.graphics.model.palette", codes(r));
+    assert(/hide_sprite must be true or false/.test(only(r, "model-flag").map((f) => f.message).join("\n")), "the hide_sprite flag message");
     eq(at("model-texture-missing"), "warning@Crate.graphics.model.texture", codes(r));
     eq(at("model-key-unknown"), "warning@Crate.graphics.model.spin", codes(r));
+    assert(/hide_sprite/.test(only(r, "model-key-unknown")[0]!.message), "the known-key list names hide_sprite: " + only(r, "model-key-unknown")[0]!.message);
     eq(at("model-path-invalid"), "error@Rock.graphics.model", codes(r));                               // a block without file
     eq(at("model-file-missing"), "error@Tire.graphics.model.file", codes(r));                          // the file rule still applies
     assert(/mods\/model-block-bad\/textures\/models\/none\.png/.test(only(r, "model-texture-missing")[0]!.message), only(r, "model-texture-missing")[0]!.message);

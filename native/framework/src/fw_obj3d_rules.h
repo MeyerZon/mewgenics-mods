@@ -43,6 +43,8 @@ typedef struct Fw3dObject {
      * obj3d_engine.c for objects attached to a Character; -1 mirrors the model x <-> z about its anchor */
     int facing;
     int fromGon;                        /* 1 = registered from the unit's GON graphics.model (not by a mod's API call) */
+    int hideSprite;                     /* M3 GON `hide_sprite true`: 1 = the unit's 2D sprite is not drawn while this model
+                                         * draws (fw_mesh_hide.h); 0 = drawn as before (the default, every API object) */
 } Fw3dObject;
 
 typedef struct Fw3dRegistry { Fw3dObject objs[FW_OBJ3D_MAX]; int count; int nextHandle; } Fw3dRegistry;
@@ -68,6 +70,7 @@ int  fw_obj3d_set_look(Fw3dRegistry *r, int handle, const char *texture, const f
 /* facing of object `handle`: < 0 -> -1, else +1; 1 set, 0 unknown handle */
 int  fw_obj3d_set_facing(Fw3dRegistry *r, int handle, int facing);
 int  fw_obj3d_mark_gon(Fw3dRegistry *r, int handle);   /* fromGon = 1; 1 set, 0 unknown handle */
+int  fw_obj3d_set_hide(Fw3dRegistry *r, int handle, int hideSprite);   /* hideSprite = (hideSprite == 1); 1 set, 0 unknown handle */
 const Fw3dObject *fw_obj3d_at(const Fw3dRegistry *r, int i);                     /* NULL out of range */
 
 /* the object's texture (NULL / "" = the convention) and palette row (< 0 = off); 1 ok, 0 unknown handle or a texture
