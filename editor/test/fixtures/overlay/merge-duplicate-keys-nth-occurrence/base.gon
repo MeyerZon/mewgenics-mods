@@ -1,0 +1,5 @@
+# Gon_DeepMerge_plain 0x945c30 (the `.merge` engine, policy = 0x9451c0's constant 2): object+object keeps a per-call
+# map name -> count (FUN_140123a00 operator[], ++ after each child) and asks GonObject_has_child_name 0x942910 /
+# child_by_name 0x942b50 (this, name, nth): the nth overlay child named X recurses into the nth base child named X;
+# past the base's count it is pushed (FUN_140028830 copy + FUN_14012a310 name index) and counts from then on.
+o { a 10 a 20 b 1 }

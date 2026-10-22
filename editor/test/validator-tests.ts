@@ -75,6 +75,15 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     eq(hits.map((f) => f.location?.path).sort().join("|"), "PlayerCat.ai.brain|PlayerCat.passives.NotAComponent");
     for (const h of hits) eq(h.severity, "warning");
   });
+  test("validator fixture: component-list-missing is one info naming the cache and build:index when no component names are known; nothing is then unknown-component", () => {
+    const r = v("component-list-missing", { components: [] });
+    const f = r.findings.filter((x) => x.code === "component-list-missing");
+    eq(f.length, 1, `one finding, got ${codes(r)}`);
+    eq(f[0]!.severity, "info");
+    assert(/component-names\.json/.test(f[0]!.message) && /build:index/.test(f[0]!.message) && /MEWGENICS_EDITOR_DATA/.test(f[0]!.message), f[0]!.message);
+    eq(only(r, "unknown-component").length, 0, "a known component is not flagged for want of a list");
+    assert(r.ok, "an info keeps the mod valid");
+  });
   test("validator fixture: unknown-parent is an error at Foo.variant_of", () => {
     const r = v("unknown-parent");
     const f = expectCode(r, "unknown-parent", "error");
@@ -136,6 +145,20 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
   test("validator fixture: merge-target-missing warns at 999", () => {
     const f = expectCode(v("merge-target-missing"), "merge-target-missing", "warning");
     eq(f.location?.path, "999");
+  });
+  // A `.merge` file goes through Gon_DeepMerge_plain 0x945c30 with the constant policy 2 (Gon_DefaultMergeMode
+  // 0x9451c0): no key suffix is ever read, so `brain.overwrite` is a literal child name — almost always a mistake.
+  test("validator fixture: merge-suffix-literal warns for every suffixed key in a .merge file, at any depth", () => {
+    const r = v("merge-suffix-literal");
+    const hits = only(r, "merge-suffix-literal");
+    eq(hits.map((f) => f.location?.path).sort().join(","), "NewCat.overwrite,PlayerCat.ai.brain.overwrite", codes(r));
+    for (const h of hits) eq(h.severity, "warning", "merge-suffix-literal severity");
+    assert(/\.patch/.test(hits[0]!.message), `message points at .patch: ${hits[0]!.message}`);
+  });
+  test("validator fixture: merge-suffix-literal — the mod-local name is the literal key (NewCat.overwrite), so variant_of NewCat is unknown-parent", () => {
+    const r = v("merge-suffix-literal");
+    const f = expectCode(r, "unknown-parent", "error");
+    eq(f.location?.file, "mods/merge-suffix-literal/data/characters/player_cat.gon.append");
   });
   test("validator fixture: patch-target-missing warns at 0.nope", () => {
     const f = expectCode(v("patch-target-missing"), "patch-target-missing", "warning");

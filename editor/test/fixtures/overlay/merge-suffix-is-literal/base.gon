@@ -1,0 +1,4 @@
+# Gon_overlay_apply 0x9a64a0 runs a `.merge` file through Gon_DeepMerge_plain 0x945c30 with the MergeMode callback
+# Gon_DefaultMergeMode 0x9451c0, which returns the constant 2 (MERGE) for every node: no suffix parser runs, so
+# `a.overwrite` is a child literally named "a.overwrite" (absent in the base -> pushed), and `a` is untouched.
+o { a 1 }

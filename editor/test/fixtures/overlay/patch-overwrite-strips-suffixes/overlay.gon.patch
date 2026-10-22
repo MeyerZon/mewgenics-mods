@@ -1,0 +1,2 @@
+o.overwrite { inner.add 5 nested { deep.multiply 2 } list.append [1] }
+arr.overwrite [ { k.multiply 2 } ]

@@ -1,0 +1,2 @@
+Spin { damage 10 meta { name A } }
+Spin { damage 5 }

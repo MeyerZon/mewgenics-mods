@@ -48,6 +48,18 @@ export function findIndex(obj: VObject, key: string): number {
 }
 
 /**
+ * Last index of an entry with the given key, or -1 — what the game's by-name lookup sees: its name index
+ * (FUN_14012a310 in Gon_Append 0x945410 / Gon_DeepMerge_plain 0x945c30) is repointed at every pushed child, so a
+ * duplicate name resolves to the last one.
+ */
+export function findLastIndex(obj: VObject, key: string): number {
+  for (let i = obj.entries.length - 1; i >= 0; i--) {
+    if (obj.entries[i]!.key === key) return i;
+  }
+  return -1;
+}
+
+/**
  * Escape for a double-quoted GON token the way Gon_Tokenize reads it back: `\` and `"` are escaped, a newline is
  * `\n`; tabs and CRs stay raw (the game's `\t` would decode to a plain `t`).
  */

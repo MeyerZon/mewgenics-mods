@@ -70,8 +70,12 @@ semantics and CSV guidance.
 Mode summary (full rules in the overlay reference):
 
 - `X.gon` — replaces the whole file. Avoid; conflicts with every other mod.
-- `X.gon.append` — appends the mod's children; use for **new** entries.
-- `X.gon.merge` — deep-merges by field name; use for **value changes**.
+- `X.gon.append` — appends the mod's children; use for **new** entries. An
+  existing name is kept twice (never merged); the game then sees the appended copy.
+- `X.gon.merge` — deep-merges by field name (arrays element-wise, extra items
+  appended; scalars and mismatched types overwritten); use for **value changes**.
+  Key suffixes are **not** read here — `foo.overwrite` is a literal field name
+  (validator warning `merge-suffix-literal`); per-field policies need `.patch`.
 - `X.gon.patch` — per-field policy via a key suffix (`.overwrite`, `.append`,
   `.merge`, `.add`, `.multiply`).
 - `combined.csv.append` — add new localization rows (preferred); `.merge` is
@@ -108,7 +112,29 @@ an ~83%-complete main save that must stay untouched.
 The MCP art tools cover the whole loop: `new_art_scene` → `import_svg { svgText, mod, into: { scene, shapeId } }` (or
 `write_art_scene` with a whole scene; `dryRun` validates) → `build_swf` → `inspect_swf`. Gray fills (`gray:0..15`) are
 palette-remapped by the game for cats; enemy clips are not paletted and are drawn mirrored; bitmaps are smoothed and
-clamped (`npm run test:artprobe` shows the game drawing a probe; `docs/art-preview-plan.md` §8).
+clamped (`npm run test:artprobe` shows the game drawing a probe; `docs/art-preview-plan.md` §8). The server has 24
+tools; the art ones are `list_art_scenes`, `read_art_scene`, `write_art_scene`, `new_art_scene`, `import_svg`,
+`export_svg`, `build_swf`, `inspect_swf`.
+
+What the game does with a mod's SWF (OBSERVED 2026-10-20/21, build 25143593; `editor/src/core/art/engine-behaviour.ts`):
+
+- **The root timeline is game-driven.** A character's root clip stays near its first frames (the game restarts it);
+  nested sprites run on their own clock. Put free-running animation in a nested sprite; the root's frame labels are
+  what the game selects.
+- **No filters.** Any PlaceObject3 filter list (blur / glow / drop shadow) stops the game with
+  "ERROR: FILTERS NOT SUPPORTED <swf>"; the validator refuses them (`filter-unsupported`). Bake glows and shadows into
+  the art. Blend modes are fine.
+- **No imports.** `ImportAssets2` entries are never linked: the SWF loads, but placing an imported symbol (e.g.
+  catparts.swf's `CatHead`) crashes the game (engine-map "Imports are not linked"); the validator refuses any
+  `scene.imports` (`import-unsupported`). Draw your own parts (the seven-slot cat rig: the Rig tab, `src/core/art/cat-rig.ts`).
+- **Text the base game's way.** `scene.texts { id: { text, font, size, color, align, width, height } }`, placed by
+  keys like a shape → a `DefineEditText` naming one of the game's eight font classes in `fonts.swf` (default
+  `Peralta`; e.g. `Swanky`, `Edmundm`) plus a zero-asset `ImportAssets2("fonts.swf")`, no glyphs in the file. The
+  string is literal: no loc keys, so the text is the same in every language.
+- **SVG round trip** for an external vector editor (VectorCraft, Inkscape; static drawing only, animation stays in
+  the scene's sprites): `export_svg { mod, path, shapeId }` writes `mods/<mod>/art/<shapeId>.svg`; bring the edit back
+  with `import_svg { mod, path: "art/<shapeId>.svg", options: { applyViewBox: false }, into: { scene, shapeId,
+  replace: true } }` to keep its coordinates. The UI has the same as Export SVG / Replace… on Shapes rows.
 
 ## The mod-development loop (agent alone until the last step)
 

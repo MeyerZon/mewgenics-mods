@@ -1,0 +1,4 @@
+// The game registers "NewCat.overwrite", not "NewCat": this variant_of has no parent.
+Kid {
+	variant_of NewCat
+}
