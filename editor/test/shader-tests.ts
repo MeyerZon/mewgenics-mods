@@ -190,17 +190,19 @@ export function runShaderTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
 
   // ---- the shipped shaders ----
   const real = (mod: string): Report => validateMod(mod, undefined, { modDir: join(MODS_DIR, mod), nativeBuild: null });
-  for (const mod of ["fw-glow", "fw-3d"]) {
-    test(`mods/${mod} validates clean (shaders${BASE_SHADERS_READY ? "" : "; base include check skipped"})`, () => {
-      const r = real(mod);
-      // without .extracted (CI) a .merge overlay cannot be checked against its base (fw-3d gives the vanilla Crate a model): base-missing is a warning then
-      // likewise the base-name checks (fw-glow's sample FwGlowRat is `variant_of Rat` with a `Temporary` status) resolve only against base data
-      const needsBase = new Set(["shader-include-unchecked", "base-missing", "unknown-parent", "unknown-status"]);
-      const rest = r.findings.filter((f) => f.code !== "component-list-missing" && !(needsBase.has(f.code) && !BASE_SHADERS_READY));
-      eq(codes(rest), "(none)", JSON.stringify(rest));
-    });
+  // A shipped mod validates against base data (its variant_of parents, statuses, shader includes and .merge targets),
+  // so without .extracted (CI) the whole check is skipped rather than trimmed — the repo's T1 convention.
+  if (BASE_SHADERS_READY) {
+    for (const mod of ["fw-glow", "fw-3d"]) {
+      test(`mods/${mod} validates clean (shaders + base data)`, () => {
+        const r = real(mod);
+        const rest = r.findings.filter((f) => f.code !== "component-list-missing");
+        eq(codes(rest), "(none)", JSON.stringify(rest));
+      });
+    }
+  } else {
+    console.log("  (skipped: mods/fw-glow and mods/fw-3d validate clean — .extracted absent; their names, statuses and shader includes resolve only against base data)");
   }
-  if (!BASE_SHADERS_READY) console.log("  (skipped: .extracted/shaders absent; the #include \"std_in.shader\" of mods/fw-glow is not resolved against base data)");
   const meshPath = join(MODS_DIR, "fw-3d", "shaders", "fw_mesh.shader");
   const mesh = existsSync(meshPath) ? readFileSync(meshPath, "utf8") : "";
   test("mods/fw-3d/shaders/fw_mesh.shader: both stages have one void main() and the right 1/0 flags", () => {
