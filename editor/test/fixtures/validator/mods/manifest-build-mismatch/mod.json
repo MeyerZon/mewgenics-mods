@@ -1,0 +1,7 @@
+{
+  "name": "manifest-build-mismatch",
+  "version": "0.1.0",
+  "author": "fixture",
+  "description": "validator fixture: triggers manifest-build-mismatch (tested on 25143593; the test injects another installed build)",
+  "gameBuild": "25143593"
+}

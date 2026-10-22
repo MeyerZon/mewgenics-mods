@@ -477,7 +477,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 26 editor tools", () => eq(list.tools.length, 26));
+    test("tools/list returns the 28 editor tools", () => eq(list.tools.length, 28));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -636,6 +636,10 @@ await mcpSmoke();
   let tg: typeof import("./t3-gallery-tests.ts") | null = null;
   try { tg = await import("./t3-gallery-tests.ts"); } catch (e) { test("t3-gallery-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (tg) tg.runT3GalleryTests(test, assert, eq);
+  // shipping a mod: zip writer/reader, mod.json, pack + install (docs/data-mods.md "Shipping a mod")
+  let pk: typeof import("./pack-tests.ts") | null = null;
+  try { pk = await import("./pack-tests.ts"); } catch (e) { test("pack-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (pk) await pk.runPackTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
