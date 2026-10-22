@@ -237,6 +237,51 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     const badShape = { ...amend, amend: { CatchProjectiles: { keys: { x: { type: "float" } } } } };
     assert(validateFragment(badShape, "c").some((e) => /amend.*CatchProjectiles.*keys\.x/.test(e)), "amend keys are shape-checked");
   });
+  test("component schema build: a key's defaultEvidence is disasm|pseudo (shape-checked)", () => {
+    const f = fragA() as unknown as { components: Record<string, { keys: Record<string, Record<string, unknown>> }> };
+    f.components.CatchProjectiles!.keys.chance!.defaultEvidence = "disasm";
+    eq(validateFragment(f, "a").join("; "), "", "disasm accepted");
+    f.components.CatchProjectiles!.keys.chance!.defaultEvidence = "pseudo";
+    eq(validateFragment(f, "a").join("; "), "", "pseudo accepted");
+    f.components.CatchProjectiles!.keys.chance!.defaultEvidence = "ghidra";
+    assert(validateFragment(f, "a").some((e) => /CatchProjectiles\.keys\.chance\.defaultEvidence/.test(e)), "anything else rejected");
+  });
+  test("component schema build: amend keyPatches merge fields into an existing key (default, note, defaultEvidence) and keep the rest", () => {
+    const fix = {
+      schema: 1, agent: "defaults", components: {},
+      amend: { CatchProjectiles: { keyPatches: { chance: { default: 0.5, defaultEvidence: "disasm", note: "xmm1 = 0.5 at the call" } } } },
+    } as unknown as Fragment;
+    eq(validateFragment(fix, "d").join("; "), "", "keyPatches fragment shape");
+    const m = mergeFragments([fragA(), fragB(), fix], { build: "test" });
+    eq(m.errors.join("; "), "", "no errors");
+    const k = m.schema.components.CatchProjectiles!.keys.chance!;
+    eq(k.default, 0.5, "default patched");
+    eq(k.defaultEvidence, "disasm", "defaultEvidence set");
+    eq(k.accessor, "NumberOr", "accessor kept");
+    eq(k.type, "number", "type kept");
+    eq(k.note, "xmm1 = 0.5 at the call", "note set");
+    const missing = mergeFragments([fragA(), fragB(), { ...fix, amend: { CatchProjectiles: { keyPatches: { nope: { default: 1 } } } } } as unknown as Fragment], { build: "test" });
+    assert(missing.errors.some((e) => /CatchProjectiles.*nope/.test(e)), `patching a key nobody defines is an error: ${missing.errors.join(" | ")}`);
+    const bad = { ...fix, amend: { CatchProjectiles: { keyPatches: { chance: { defaultEvidence: "ghidra", type: "float" } } } } };
+    const errs = validateFragment(bad, "d");
+    assert(errs.some((e) => /keyPatches\.chance\.defaultEvidence/.test(e)) && errs.some((e) => /keyPatches\.chance\.type/.test(e)), `patch fields shape-checked: ${errs.join(" | ")}`);
+  });
+  test("component schema build: an amend of a @shared key set patches / deletes its keys; component-only fields are rejected", () => {
+    const fix = {
+      schema: 1, agent: "defaults", components: {},
+      amend: { "@DamageInstance": { keys: { damage: null }, keyPatches: { knockback: { default: 1, defaultEvidence: "disasm" } } } },
+    } as unknown as Fragment;
+    eq(validateFragment(fix, "d").join("; "), "", "shared amend shape");
+    const m = mergeFragments([fragA(), fragB(), fix], { build: "test" });
+    eq(m.errors.join("; "), "", "no errors");
+    const s = m.schema.shared["@DamageInstance"]!;
+    eq(Object.keys(s.keys).join(","), "knockback", "damage deleted");
+    eq(s.keys.knockback!.default, 1, "knockback patched");
+    eq(s.keys.knockback!.type, "int", "type kept");
+    assert(validateFragment({ ...fix, amend: { "@DamageInstance": { open: false } } }, "d").some((e) => /@DamageInstance\.open/.test(e)), "open is not a shared-amend field");
+    const none = mergeFragments([fragA(), fragB(), { ...fix, amend: { "@Nope": { keys: { x: null } } } } as unknown as Fragment], { build: "test" });
+    assert(none.errors.some((e) => /@Nope/.test(e)), `amending an unknown shared set is an error: ${none.errors.join(" | ")}`);
+  });
   test("component schema build: amending a component closed clears its fragment vanillaMissed; the cross-check reopens it only for keys still missing", () => {
     const vanilla = { CatchProjectiles: { objUses: 2, keys: { chance: 2, ally_chance: 1, chanse: 1 } } };
     const a = fragA() as unknown as { components: Record<string, { open: boolean; vanillaMissed: string[] }> };
@@ -310,6 +355,29 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     assert(s !== null, "loads");
     eq(validateSchemaShape(s!).join("; "), "", "shape");
     assert(Object.keys(s!.components).length > 1000, `covers the component classes (${Object.keys(s!.components).length})`);
+  });
+  test("component schema: the tracked defaults are the disassembly's (the defaults audit), not Ghidra's pseudo-code", () => {
+    const s = loadComponentSchema(SCHEMA_PATH)!;
+    const k = (owner: string, name: string): KeySpec | undefined => (owner.startsWith("@") ? s.shared[owner] : s.components[owner])?.keys[name];
+    // [owner, key, default]: each read off the instruction that produces the getter's default (scratch audit,
+    // docs/engine-map.md "Component GON keys"); Ghidra printed 0 / false / nothing for every one of these
+    const pins: [string, string, number | boolean][] = [
+      ["GlobalSpawnOnRoundEnd", "chance", 1], // PercentOr, xmm1 <- xmm7 = 1.0 hoisted from .rdata
+      ["ChanceToForceEvent", "chance", 0.25], // PercentOr, xmm1 <- xmm11 = 0.25
+      ["ChaosBossFormChangeGuide", "passives_health_threshold", 0.5], // PercentOr, movsd xmm1 = 0.5
+      ["Autism", "innate", -2], // inline int: type != 2 -> mov eax, -2
+      ["AutocastEachRound", "advantage_polarity", 1], // inline double: type != 2 -> movsd 1.0
+      ["AuraBase", "aura_effects_allies", true], // inline bool: type != 5 -> mov al, 1
+      ["MovementReaction", "objects_too", true], // folded bool: the absent path is the true path
+      ["@DamageInstance", "makes_contact", true],
+      ["DeathRattle", "target_killer", false], // confirmed (absent path == false path)
+    ];
+    for (const [o, n, d] of pins) {
+      eq(k(o, n)?.default, d, `${o}.${n} default`);
+      eq(k(o, n)?.defaultEvidence, "disasm", `${o}.${n} defaultEvidence`);
+    }
+    eq(k("@DamageInstance", "incident_ally_collects_pickups"), undefined, "the phantom key (no such literal in the binary; the real one is incidentally_collects_pickups) is gone");
+    assert(k("@DamageInstance", "incidentally_collects_pickups") !== undefined, "the real key stays");
   });
 
   // ---- T1: vanilla must produce zero findings ------------------------------------------------
