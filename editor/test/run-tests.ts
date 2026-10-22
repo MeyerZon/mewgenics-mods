@@ -663,6 +663,9 @@ await mcpSmoke();
   let mot: typeof import("./mesh-occlusion-tests.ts") | null = null;
   try { mot = await import("./mesh-occlusion-tests.ts"); } catch (e) { test("mesh-occlusion-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (mot) mot.runMeshOcclusionTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mst: typeof import("./mesh-slices-tests.ts") | null = null;
+  try { mst = await import("./mesh-slices-tests.ts"); } catch (e) { test("mesh-slices-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mst) mst.runMeshSlicesTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let o3t: typeof import("./obs3d-tests.ts") | null = null;
   try { o3t = await import("./obs3d-tests.ts"); } catch (e) { test("obs3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (o3t) o3t.runObs3dTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
