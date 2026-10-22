@@ -93,4 +93,12 @@ export function runGlowMeasureTests(test: TestFn, assert: AssertFn, eq: EqFn, fi
     eq(j.summary.verdictRun, "pass");
     eq(j.summary.saveUnchanged, true);
   });
+  test("OBSERVED 2026-10-22 fixture, glow v2 (per-unit colours): with the Rat magenta and unit 0 cyan at once, the \"two\" shot held a magenta rim and a cyan rim, each over the no-glow shot, lying apart (verdict two-colour)", () => {
+    const j = JSON.parse(fixture("unit-glow-summary.json")) as { summary: { two?: { verdict: string; apart: boolean; a: { verdict: string; glowRegion: { count: number } | null }; b: { verdict: string; glowRegion: { count: number } | null } } } };
+    const two = j.summary.two;
+    assert(!!two, "the fixture carries the v2 \"two\" comparison");
+    eq(two!.verdict, "two-colour"); eq(two!.apart, true);
+    eq(two!.a.verdict, "glow"); eq(two!.b.verdict, "glow");
+    assert(!!two!.a.glowRegion && two!.a.glowRegion.count >= 100 && !!two!.b.glowRegion && two!.b.glowRegion.count >= 100, "both patches >= 100 px");
+  });
 }
