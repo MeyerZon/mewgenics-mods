@@ -160,6 +160,8 @@ export interface NewSceneOptions {
   template?: NewSceneTemplate;
   /** the animation name for the cat-animation template (default: the scene name, which must then be an identifier) */
   animation?: string;
+  /** cat-animation template: the four-way quartet <animation>LF/RF/LB/RB instead of the F/B pair */
+  fourWay?: boolean;
 }
 
 /** Create a new scene file from the starter example (or empty), or from a template. */
@@ -176,7 +178,7 @@ export function newArtScene(modName: string, name: string, opts: NewSceneOptions
   let scene: Scene;
   if (opts.template === "cat-animation") {
     scene = newScene(name);
-    const anim = newCatAnimation(scene, opts.animation ?? name);
+    const anim = newCatAnimation(scene, opts.animation ?? name, opts.fourWay ? { fourWay: true } : {});
     const e = anim.findings.find((f) => f.severity === "error");
     if (e) return { ok: false, error: e.message + (opts.animation === undefined ? " (pass `animation` to name the animation independently of the scene)" : ""), findings: anim.findings };
     scene = anim.scene;

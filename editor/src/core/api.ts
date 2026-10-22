@@ -149,14 +149,14 @@ export function newArtScene(modName: string, name: string, opts?: artio.NewScene
   return artio.newArtScene(modName, name, opts);
 }
 /**
- * Add a cat animation (a rig `<name>Pose` and the labeled `<name>F` / `<name>B` frames on the `_Append_CatTest`
- * donor) to a scene object, without touching disk. The scene is validated first; `ok` is false on a refusal.
+ * Add a cat animation (a front rig `<name>Pose`, a back rig `<name>PoseBack` and the labeled `<name>F` / `<name>B`
+ * frames — `<name>LF/RF/LB/RB` with `fourWay` — on the `_Append_CatTest` donor) to a scene object, without touching disk. The scene is validated first; `ok` is false on a refusal.
  */
-export function newCatAnimation(scene: unknown, name: string, opts?: NewCatAnimationOptions): { ok: boolean; scene: Scene; findings: SceneFinding[]; rig?: string; donor?: string } {
+export function newCatAnimation(scene: unknown, name: string, opts?: NewCatAnimationOptions): { ok: boolean; scene: Scene; findings: SceneFinding[]; rig?: string; backRig?: string; donor?: string } {
   const v = validateScene(scene);
   if (!v.ok) return { ok: false, scene: v.scene, findings: v.findings };
   const r = catAnim(v.scene, name, opts);
-  return { ok: !r.findings.some((f) => f.severity === "error"), scene: r.scene, findings: r.findings, rig: r.rig, donor: r.donor };
+  return { ok: !r.findings.some((f) => f.severity === "error"), scene: r.scene, findings: r.findings, rig: r.rig, backRig: r.backRig, donor: r.donor };
 }
 /** Validate a scene object without touching disk (live editing); with `modName` its own loc keys count for text-loc-key-html too. */
 export function validateArtScene(scene: unknown, modName?: string) {

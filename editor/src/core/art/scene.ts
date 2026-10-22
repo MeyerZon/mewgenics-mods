@@ -159,6 +159,8 @@ export interface SceneSprite {
   rig?: "cat";
   /** "game" (cat rigs): the slots are empty sprites the game fills with the cat's own parts (cat-rig.ts) */
   parts?: "game";
+  /** "back" (cat rigs): the back-facing layout a `<anim>B` frame places (head_back behind, tail in front; cat-rig.ts CAT_BACK_SLOTS) */
+  facing?: "back";
 }
 
 export interface SceneStage {
@@ -492,6 +494,8 @@ export function validateScene(input: unknown, opts: SceneValidateOptions = {}): 
     else if (sp.rig !== undefined) err("sprite-rig", `rig must be "cat"`, [at + ".rig"]);
     if (sp.parts !== undefined && sp.parts !== "game") err("sprite-parts", `parts must be "game"`, [at + ".parts"]);
     else if (sp.parts === "game" && sp.rig !== "cat") err("sprite-parts", `parts: "game" needs rig: "cat"`, [at + ".parts"]);
+    if (sp.facing !== undefined && sp.facing !== "back") err("sprite-facing", `facing must be "back" (or absent for a front rig)`, [at + ".facing"]);
+    else if (sp.facing === "back" && sp.rig !== "cat") err("sprite-facing", `facing: "back" needs rig: "cat"`, [at + ".facing"]);
     if (!(Number.isInteger(sp.frames) && sp.frames >= 1)) {
       err("sprite-frames", `sprite "${id}" frames must be an integer >= 1`, [at + ".frames"]);
       sp.frames = Math.max(1, sp.frames | 0);
