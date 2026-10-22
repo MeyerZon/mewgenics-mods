@@ -523,6 +523,45 @@ TEST(mesh_load_bytes_by_kind) {
     free(gl);
 }
 
+TEST(shipped_shader_samples_the_model_texture_and_the_palette) {
+    size_t len = 0;
+    char *src = slurp("../../../mods/fw-3d/shaders/fw_mesh.shader", &len);
+    CHECK(src != NULL);
+    if (!src) return;
+    static char out[16384];
+    CHECK(fw_shader_stage(src, len, 0, out, sizeof out) > 0);
+    CHECK(strstr(out, "uniform sampler2D fw_tex;") != NULL);
+    CHECK(strstr(out, "uniform int fw_has_tex;") != NULL);
+    CHECK(strstr(out, "texture(fw_tex, v_uv)") != NULL);
+    CHECK(strstr(out, "texelFetch(palettemap") != NULL);
+    free(src);
+}
+
+TEST(shipped_models_load_with_uvs_and_normals) {
+    size_t len = 0;
+    char *obj = slurp("../../../mods/fw-3d/models/crate.obj", &len);
+    CHECK(obj != NULL);
+    if (!obj) return;
+    FwMesh m; FwMeshError e;
+    CHECK_EQ(fw_mesh_load_bytes("models/crate.obj", (const uint8_t *)obj, len, &m, &e), 1);
+    CHECK_EQ(m.has_uvs, 1); CHECK_EQ(m.has_normals, 1);
+    CHECK_STR(m.texture, "");                                  /* OBJ: the texture comes from the convention */
+    fw_mesh_free(&m);
+    free(obj);
+    char *glb = slurp("../../../mods/fw-3d/models/pillar.glb", &len);
+    CHECK(glb != NULL);
+    if (!glb) return;
+    CHECK(len < 4096);                                         /* a few KB at most: committed */
+    CHECK_EQ(fw_mesh_load_bytes("models/pillar.glb", (const uint8_t *)glb, len, &m, &e), 1);
+    CHECK_EQ(m.nverts, 24); CHECK_EQ(m.nindices, 36);
+    CHECK_EQ(m.has_uvs, 1); CHECK_EQ(m.has_normals, 1);
+    CHECK_NEAR(m.bmin[0], -0.25, 1e-5); CHECK_NEAR(m.bmin[1], 0, 1e-5); CHECK_NEAR(m.bmax[1], 1.2, 1e-5); CHECK_NEAR(m.bmax[2], 0.25, 1e-5);
+    CHECK_NEAR(m.base_color[0], 0.1, 1e-6); CHECK_NEAR(m.base_color[1], 0.55, 1e-6); CHECK_NEAR(m.base_color[2], 0.75, 1e-6); CHECK_NEAR(m.base_color[3], 1, 1e-6);
+    CHECK_STR(m.texture, "");                                  /* no baseColorTexture: untextured, not "missing" */
+    fw_mesh_free(&m);
+    free(glb);
+}
+
 TEST(mesh_object_mvp_equals_the_probe_path) {
     float B[16], world[16], a[16], b[16], tv[16], place[16];
     base_ortho(0, 1280, 720, 0, B);

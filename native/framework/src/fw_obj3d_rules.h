@@ -30,6 +30,10 @@ typedef struct Fw3dObject {
     float transform[16];                /* the object's own model matrix in world units, column-major; identity when NULL was passed */
     int tileCol, tileRow;               /* byTile only */
     int byTile;
+    /* M2 material (fw_obj3d_set_material): texture = a name under textures/ ("" = the convention models/<stem>.png,
+     * fw_mesh_tex.h), palette = the palette.png row grey colours are remapped through (-1 = off) */
+    char texture[FW_OBJ3D_MODEL_MAX];
+    int palette;
 } Fw3dObject;
 
 typedef struct Fw3dRegistry { Fw3dObject objs[FW_OBJ3D_MAX]; int count; int nextHandle; } Fw3dRegistry;
@@ -50,6 +54,10 @@ int  fw_obj3d_remove_handle(Fw3dRegistry *r, int handle);                       
 int  fw_obj3d_prune(Fw3dRegistry *r);
 int  fw_obj3d_count(const Fw3dRegistry *r);
 const Fw3dObject *fw_obj3d_at(const Fw3dRegistry *r, int i);                     /* NULL out of range */
+
+/* the object's texture (NULL / "" = the convention) and palette row (< 0 = off); 1 ok, 0 unknown handle or a texture
+ * name fw_obj3d_model_ok refuses (the object is then unchanged). Kept when a Character object is registered again. */
+int  fw_obj3d_set_material(Fw3dRegistry *r, int handle, const char *texture, int palette);
 
 /* a model string the registry accepts: non-empty, shorter than FW_OBJ3D_MODEL_MAX, printable ASCII, no backslash */
 int  fw_obj3d_model_ok(const char *model);

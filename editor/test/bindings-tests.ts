@@ -489,7 +489,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 99, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes)");
+    eq(offs.length, 100, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures)");
   });
   if (exe) {
     const m = loadManifest(realPath);
@@ -1897,12 +1897,14 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["Renderer_layer", "OFF_RND_LAYER", "0x54"], ["Position_x", "OFF_POS_X", "0x80"], ["Position_z", "OFF_POS_Z", "0x90"], ["App_mainRT", "OFF_APP_MAIN_RT", "0xc10"],
     ["App_antialias", "OFF_APP_ANTIALIAS", "0xdf4"], ["App_clearColor", "OFF_APP_CLEAR_COLOR", "0xd98"], ["App_clearDepth", "OFF_APP_CLEAR_DEPTH", "0xd99"],
     ["App_clearStencil", "OFF_APP_CLEAR_STENCIL", "0xd9a"], ["RenderTarget_samples", "OFF_RT_SAMPLES", "0x50"],
-    ["BinaryResource_data", "OFF_BINRES_DATA", "0x28"], ["BinaryResource_size", "OFF_BINRES_SIZE", "0x30"]];
+    ["BinaryResource_data", "OFF_BINRES_DATA", "0x28"], ["BinaryResource_size", "OFF_BINRES_SIZE", "0x30"],
+    // M2 textures: the GL texture name App_GetTexture's Texture2D carries (read by the mesh draw functor at replay)
+    ["Texture2D_glName", "OFF_TEX2D_GLNAME", "0x8"]];
   const R3D_CONSTANTS: [string, string, string][] = [["LayerStride", "CONST_LAYER_STRIDE", "0xe8"], ["LayerItemShift", "CONST_LAYER_ITEM_SHIFT", "5"],
     ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
   const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",
     ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]);
-  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 24 reference functions (all signed; 2 are witness-host .pdata chunks, 1 the BinaryResource offsets' host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 21 offsets (2 BinaryResource by M2) and 4 constants with witnesses; the generated headers expose them", () => {
+  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 24 reference functions (all signed; 2 are witness-host .pdata chunks, 1 the BinaryResource offsets' host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 22 offsets (2 BinaryResource by M2, the Texture2D GL name by M2 textures) and 4 constants with witnesses; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     for (const [name, rva, index] of R3D_SYMBOLS) {
       const e = entry(m, name);

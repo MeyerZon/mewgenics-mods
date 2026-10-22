@@ -186,6 +186,31 @@ TEST(model_name_and_gon_model_path_rules) {
     CHECK(!fw_obj3d_model_path_ok("Crate3D"));
 }
 
+TEST(material_texture_and_palette_row_per_object) {
+    Fw3dRegistry r; fw_obj3d_init(&r);
+    FakeCharacter fc; void *ch = make_character(&fc, 7);
+    int ht = fw_obj3d_add_tile(&r, 4, 3, "models/crate.obj", NULL);
+    int hc = fw_obj3d_add_character(&r, ch, "models/cat.glb", NULL);
+    const Fw3dObject *t = fw_obj3d_at(&r, 0), *c = fw_obj3d_at(&r, 1);
+    CHECK(t && c);
+    if (!t || !c) return;
+    CHECK_STR(t->texture, ""); CHECK_EQ(t->palette, -1);            /* defaults: the convention texture, palette off */
+    CHECK_STR(c->texture, ""); CHECK_EQ(c->palette, -1);
+    CHECK_EQ(fw_obj3d_set_material(&r, ht, "models/wood.png", 63), 1);
+    CHECK_STR(t->texture, "models/wood.png"); CHECK_EQ(t->palette, 63);
+    CHECK_EQ(fw_obj3d_set_material(&r, hc, NULL, 12), 1);            /* NULL texture = the convention */
+    CHECK_STR(c->texture, ""); CHECK_EQ(c->palette, 12);
+    CHECK_EQ(fw_obj3d_set_material(&r, hc, "", -5), 1);              /* any negative row = off */
+    CHECK_EQ(c->palette, -1);
+    CHECK_EQ(fw_obj3d_set_material(&r, 999, "models/wood.png", 1), 0);   /* unknown handle */
+    CHECK_EQ(fw_obj3d_set_material(&r, ht, "bad\name.png", 1), 0);    /* a name fw_obj3d_model_ok refuses */
+    CHECK_STR(t->texture, "models/wood.png"); CHECK_EQ(t->palette, 63);  /* unchanged by a refusal */
+    /* re-registering a unit replaces model + transform and keeps its material (the unit agent re-registers per fight) */
+    CHECK_EQ(fw_obj3d_set_material(&r, hc, "models/fur.png", 40), 1);
+    CHECK_EQ(fw_obj3d_add_character(&r, ch, "models/cat2.glb", NULL), hc);
+    CHECK_STR(c->texture, "models/fur.png"); CHECK_EQ(c->palette, 40);
+}
+
 TEST(mat4_mul_is_column_major_a_times_b) {
     /* T(1,2,3) x S(2): a point p maps to 2p + (1,2,3) */
     const float T[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 1,2,3,1 };

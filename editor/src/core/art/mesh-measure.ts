@@ -9,7 +9,7 @@ import { measureGlow, GLOW_PROBE_COLOUR, type RgbaImageLike, type GlowRegion } f
 
 export interface MeshProbeLine { frame: number; tile: [number, number]; ndc: [number, number, number]; canvas: [number, number] }
 export interface MeshDrawLine { frame: number; fbo: number; errors: number; line: string }
-export interface MeshProbeLog { probes: MeshProbeLine[]; draws: MeshDrawLine[]; glReady: boolean; glErrors: string[] }
+export interface MeshProbeLog { probes: MeshProbeLine[]; draws: MeshDrawLine[]; glReady: boolean; glErrors: string[]; objects: MeshObjectLine[]; textures: string[]; textureMissing: string[] }
 export type MeshVerdict = "cube" | "misplaced" | "no-cube" | "stale-shots" | "no-probe-lines" | "no-shots";
 export interface MeshJudgement { verdict: MeshVerdict; staleChecked: boolean; patch: GlowRegion | null; distancePx: number | null; expectedPx: [number, number][]; shot: number | null }
 
@@ -25,7 +25,7 @@ const PROBE_RE = new RegExp(`^mesh probe f=(\\d+) tile=\\((\\d+),(\\d+)\\) ndc=\
 const DRAW_RE = /^mesh draw f=(\d+) n=\d+ fbo=(-?\d+) .* errors=(\d+)/;
 
 export function parseMeshProbeLog(text: string): MeshProbeLog {
-  const out: MeshProbeLog = { probes: [], draws: [], glReady: false, glErrors: [] };
+  const out: MeshProbeLog = { probes: [], draws: [], glReady: false, glErrors: [], objects: [], textures: [], textureMissing: [] };
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/^.*?(?=mesh[ :])/, "");   // tolerate a timestamp / prefix before the message
     let m = PROBE_RE.exec(line);
@@ -82,4 +82,18 @@ export function judgeMeshShots(shots: RgbaImageLike[], probes: MeshProbeLine[]):
     if (!best || rank(j.verdict) > rank(best.verdict) || (rank(j.verdict) === rank(best.verdict) && (j.patch?.count ?? 0) > (best.patch?.count ?? 0))) best = j;
   });
   return best!;
+}
+
+// ---- M2/M3: textures, the palette, glTF (RED stubs) ----
+export interface MeshObjectLine { frame: number; handle: number; model: string; anchor: "tile" | "unit"; world: [number, number, number]; ndc: [number, number, number] | null; tex: string | null; palette: number | null }
+export interface ColourTarget { name: string; rgb: [number, number, number] }
+export interface Box { x0: number; y0: number; x1: number; y1: number }
+export type ColourVerdict = "match" | "partial" | "absent" | "stale-shots" | "no-anchor" | "no-shots";
+export interface ColourJudgement { verdict: ColourVerdict; staleChecked: boolean; counts: Record<string, number>; shot: number | null; anchorPx: [number, number] | null; box: Box | null }
+export function lambertShade(_n: [number, number, number]): number { return -1; }
+export function shadeColour(_rgb: readonly number[], _shade: number): [number, number, number] { return [0, 0, 0]; }
+export function paletteColumn(_grey: number, _shade: number): number { return -1; }
+export function countColours(_img: RgbaImageLike, _box: Box, _targets: ColourTarget[], _tol: number): Record<string, number> { return {}; }
+export function judgeColourPatch(_shots: RgbaImageLike[], _objects: MeshObjectLine[], _targets: ColourTarget[], _opts: { minEach?: number; tol?: number; boxShare?: number } = {}): ColourJudgement {
+  return { verdict: "no-shots", staleChecked: false, counts: {}, shot: null, anchorPx: null, box: null };
 }

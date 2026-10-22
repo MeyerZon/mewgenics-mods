@@ -150,3 +150,5 @@ void fw_obj3d_model_matrix(const Fw3dObject *o, const double unitXZ[2], float ou
     t[12] = anchor[0]; t[13] = anchor[1]; t[14] = anchor[2];
     fw_obj3d_mat4_mul(t, o->transform, out);
 }
+
+int fw_obj3d_set_material(Fw3dRegistry *r, int handle, const char *texture, int palette) { (void)r; (void)handle; (void)texture; (void)palette; return -1; }   /* RED stub */

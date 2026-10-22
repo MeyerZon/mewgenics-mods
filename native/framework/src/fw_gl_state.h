@@ -105,5 +105,9 @@ typedef struct FwGlState {
 int fw_gl_fns_complete(const FwGlFns *gl);
 void fw_gl_save(const FwGlFns *gl, FwGlState *st);
 void fw_gl_restore(const FwGlFns *gl, const FwGlState *st);
+/* bind units[u] to GL_TEXTURE_2D on texture unit u for every saved unit (u < FW_GL_SAVED_UNITS), highest first, so
+ * GL_TEXTURE0 is the active unit afterwards; call it between fw_gl_save and fw_gl_restore only (the restore puts back
+ * every unit it binds and the active unit) */
+void fw_gl_bind_units(const FwGlFns *gl, const uint32_t units[FW_GL_SAVED_UNITS]);
 /* read glGetError until GL_NO_ERROR (at most max times); the first error goes to *first (0 if none); returns the count */
 int fw_gl_drain_errors(const FwGlFns *gl, uint32_t *first, int max);

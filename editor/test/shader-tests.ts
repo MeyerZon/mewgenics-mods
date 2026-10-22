@@ -146,7 +146,7 @@ export function runShaderTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   // ---- the lead's contract ----
   test("FW_MESH_UNIFORMS is the list the native side sets with glUniform* (names + GLSL types)", () => {
     eq(FW_MESH_UNIFORMS.map((u) => `${u.type} ${u.name}`).join(";"),
-      "mat4 fw_mvp;mat4 fw_model;vec3 fw_light_dir;float fw_ambient;float fw_bands;vec4 fw_base_color;sampler2D palettemap;int palette;int fw_flat;vec4 fw_cx_mul;vec4 fw_cx_add");
+      "mat4 fw_mvp;mat4 fw_model;vec3 fw_light_dir;float fw_ambient;float fw_bands;vec4 fw_base_color;sampler2D palettemap;int palette;int fw_flat;vec4 fw_cx_mul;vec4 fw_cx_add;sampler2D fw_tex;int fw_has_tex");
     eq(FW_MESH_ATTRIBUTES.map((a) => `${a.location} ${a.type} ${a.name}`).join(";"), "0 vec3 position;1 vec3 color;2 vec2 texcoord");
     for (const a of FW_MESH_ATTRIBUTES) eq(ENGINE_ATTRIBUTE_LOCATIONS[a.name as keyof typeof ENGINE_ATTRIBUTE_LOCATIONS], a.location, `${a.name} is bound by the engine to ${a.location}`);
   });

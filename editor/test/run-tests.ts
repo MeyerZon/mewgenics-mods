@@ -635,6 +635,9 @@ await mcpSmoke();
   let mpt: typeof import("./mesh-probe-tests.ts") | null = null;
   try { mpt = await import("./mesh-probe-tests.ts"); } catch (e) { test("mesh-probe-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (mpt) mpt.runMeshProbeTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mtt: typeof import("./mesh-tex-tests.ts") | null = null;
+  try { mtt = await import("./mesh-tex-tests.ts"); } catch (e) { test("mesh-tex-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mtt) mtt.runMeshTexTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let o3t: typeof import("./obs3d-tests.ts") | null = null;
   try { o3t = await import("./obs3d-tests.ts"); } catch (e) { test("obs3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (o3t) o3t.runObs3dTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
