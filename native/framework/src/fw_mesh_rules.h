@@ -34,7 +34,43 @@ typedef struct FwMesh {
     char texture[260];
 } FwMesh;
 
-typedef struct FwMeshError { char text[160]; int line; } FwMeshError;   /* line = 1-based OBJ line, 0 = not a line */
+/* ---- model codes (design §2.6, docs/data-mods.md "3D models: error codes"): ONE table, FW_MESH_CODES in
+ * fw_mesh_rules.c, shared with the editor (editor/src/core/model-codes.ts; editor/test/model-codes-tests.ts parses the
+ * table out of fw_mesh_rules.c and asserts both lists are identical, so keep its one-entry-per-line shape
+ * `[FW_MC_X] = { "model-x", "error" },`). Severity: "error" = the model is refused (the unit draws its 2D clip),
+ * "warning" = it loads but something is dropped or looks wrong, "info" = the engine fills something in. Not every code
+ * is raised by the DLL: the path/registry codes and the texture / budget ones come from the editor or later phases. */
+typedef enum FwMeshCodeId {
+    /* errors */
+    FW_MC_PATH_INVALID, FW_MC_FILE_MISSING, FW_MC_UNREGISTERED, FW_MC_PARSE_ERROR, FW_MC_EXTENSION, FW_MC_GLB_HEADER,
+    FW_MC_GLTF_VERSION, FW_MC_EXTENSION_REQUIRED, FW_MC_URI_UNSUPPORTED, FW_MC_BUFFER_MISSING, FW_MC_BUFFER_RANGE,
+    FW_MC_ACCESSOR_INVALID, FW_MC_SPARSE_UNSUPPORTED, FW_MC_PRIMITIVE_MODE, FW_MC_ATTRIBUTE_MISSING,
+    FW_MC_ATTRIBUTE_FORMAT, FW_MC_INDEX_RANGE, FW_MC_NODE_INVALID, FW_MC_NODE_CYCLE, FW_MC_EMPTY, FW_MC_LIMIT,
+    /* warnings */
+    FW_MC_MULTI_MATERIAL, FW_MC_NGON_CONCAVE, FW_MC_SKIN_IGNORED, FW_MC_ANIMATION_IGNORED, FW_MC_MORPH_IGNORED,
+    FW_MC_TEXCOORD_SET, FW_MC_TEXTURE_TRANSFORM_IGNORED, FW_MC_ALPHA_BLEND, FW_MC_IMAGE_FORMAT, FW_MC_TEXTURE_NO_UVS,
+    FW_MC_HEAVY, FW_MC_BELOW_FLOOR, FW_MC_FOOTPRINT, FW_MC_TEXTURE_MISSING, FW_MC_TEXTURE_FORMAT, FW_MC_TEXTURE_SIZE,
+    /* info */
+    FW_MC_NO_NORMALS, FW_MC_TEXTURE_EMBEDDED, FW_MC_MTL_IGNORED, FW_MC_EXTENSION_IGNORED, FW_MC_ATTRIBUTE_IGNORED,
+    FW_MC_COUNT
+} FwMeshCodeId;
+typedef struct FwMeshCode { const char *code; const char *severity; } FwMeshCode;
+extern const FwMeshCode FW_MESH_CODES[FW_MC_COUNT];
+const char *fw_mesh_code(FwMeshCodeId id);              /* the table's static string; NULL out of range */
+const char *fw_mesh_code_severity(const char *code);    /* "error" | "warning" | "info"; NULL when not in the table */
+
+/* A refusal: text (the loader's words), line (1-based OBJ line, 0 = not a line), code (a FW_MESH_CODES string; NULL
+ * only before a parse). On SUCCESS the loaders leave code NULL and list what they dropped or filled in as warning /
+ * info codes (each at most once, table order of discovery, at most FW_MESH_MAX_WARNINGS). */
+#define FW_MESH_MAX_WARNINGS 8
+typedef struct FwMeshError {
+    char text[160]; int line;
+    const char *code;
+    const char *warnings[FW_MESH_MAX_WARNINGS]; int nwarnings;
+} FwMeshError;
+void fw_mesh_err_reset(FwMeshError *e);                 /* zeroes it (NULL is fine) */
+void fw_mesh_warn(FwMeshError *e, FwMeshCodeId id);     /* adds the code once (NULL e / a full list: ignored) */
+int fw_mesh_has_warning(const FwMeshError *e, FwMeshCodeId id);
 
 /* Parses an OBJ text of `len` bytes (NOT NUL-terminated: the bytes of a BinaryResource). Returns 1 and fills *out
  * (in OBJ space; call fw_mesh_to_game_axes next), or 0 with *out zeroed and err->text / err->line set (err may be NULL).

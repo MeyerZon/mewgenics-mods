@@ -122,3 +122,9 @@ void fw_mesh_object_mvp(const float top[16], const float vp[16], const float iso
     fw_m4_mul(basis, world, bw);
     fw_m4_mul(tv, bw, out);
 }
+
+int fw_mesh_fmt_load_result(char *buf, size_t n, const char *path, int ok, const FwMesh *m, const FwMeshError *e) {
+    (void)path; (void)ok; (void)m; (void)e;   /* RED stub */
+    if (buf && n) buf[0] = 0;
+    return 0;
+}

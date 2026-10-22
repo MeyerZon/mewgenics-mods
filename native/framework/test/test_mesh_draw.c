@@ -534,4 +534,119 @@ TEST(mesh_object_mvp_equals_the_probe_path) {
     for (int i = 0; i < 16; i++) CHECK_NEAR(a[i], b[i], 1e-4);
 }
 
+/* ---- model codes (design §2.6): load_bytes' codes / warnings and THE one log line per model ---- */
+static int load_text(const char *path, const char *text, FwMesh *m, FwMeshError *e) {
+    memset(e, 0, sizeof *e);
+    return fw_mesh_load_bytes(path, (const uint8_t *)text, strlen(text), m, e);
+}
+/* tri.gltf (POSITION only: no normals, no uvs) with a base-colour texture whose image is `image` (a JSON object) */
+static char *tri_with_texture(const char *gl, const char *image) {
+    const char *a = "\"indices\": 1 }", *b = "\"scene\": 0,";
+    const char *pa = strstr(gl, a), *pb = strstr(gl, b);
+    if (!pa || !pb || pb > pa) return NULL;
+    char extra[512];
+    snprintf(extra, sizeof extra, "\"scene\": 0, \"materials\": [ { \"pbrMetallicRoughness\": { \"baseColorTexture\": { \"index\": 0 } } } ],"
+             " \"textures\": [ { \"source\": 0 } ], \"images\": [ %s ],", image);
+    const char *mat = "\"indices\": 1, \"material\": 0 }";
+    char *o = (char *)malloc(strlen(gl) + strlen(extra) + strlen(mat) + 1), *w = o;
+    memcpy(w, gl, (size_t)(pb - gl)); w += pb - gl;
+    strcpy(w, extra); w += strlen(extra);
+    const char *r = pb + strlen(b);
+    memcpy(w, r, (size_t)(pa - r)); w += pa - r;
+    strcpy(w, mat); w += strlen(mat);
+    strcpy(w, pa + strlen(a));
+    return o;
+}
+
+TEST(mesh_load_bytes_codes) {
+    const char *tri = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+    FwMesh m; FwMeshError e;
+    CHECK_EQ(load_text("models/crate.fbx", tri, &m, &e), 0);
+    CHECK_STR(e.code, "model-extension");
+    CHECK_EQ(load_text("models/../crate.obj", tri, &m, &e), 0);
+    CHECK_STR(e.code, "model-path-invalid");
+    CHECK_EQ(load_text("crate.obj", tri, &m, &e), 0);
+    CHECK_STR(e.code, "model-path-invalid");
+    CHECK_EQ(load_text("models/crate.glb", "{\"asset\":{\"version\":\"2.0\"}}", &m, &e), 0);   /* a .glb without the magic */
+    CHECK_STR(e.code, "model-glb-header");
+    CHECK(strstr(e.text, "glTF") != NULL);
+    CHECK_EQ(load_text("models/crate.obj", "v 0 0 0\nl 1 1\n", &m, &e), 0);
+    CHECK_STR(e.code, "model-primitive-mode");
+    CHECK_EQ(load_text("models/crate.gltf", "{\"asset\":{\"version\":\"1.0\"}}", &m, &e), 0);
+    CHECK_STR(e.code, "model-gltf-version");
+}
+
+TEST(mesh_load_bytes_warnings) {
+    FwMesh m; FwMeshError e;
+    /* vn on every corner, feet on the floor: no warning */
+    CHECK_EQ(load_text("models/a.obj", "v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1\n", &m, &e), 1);
+    CHECK(e.code == NULL); CHECK_EQ(e.nwarnings, 0);
+    fw_mesh_free(&m);
+    /* no normals: the engine fills in flat ones (info); a point under the floor (warning) */
+    CHECK_EQ(load_text("models/a.obj", "v 0 -0.5 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", &m, &e), 1);
+    CHECK(fw_mesh_has_warning(&e, FW_MC_NO_NORMALS));
+    CHECK(fw_mesh_has_warning(&e, FW_MC_BELOW_FLOOR));
+    CHECK_EQ(e.nwarnings, 2);
+    fw_mesh_free(&m);
+    /* -0.005 is within the floor tolerance (0.01) */
+    CHECK_EQ(load_text("models/a.obj", "v 0 -0.005 0\nv 1 0 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1\n", &m, &e), 1);
+    CHECK(!fw_mesh_has_warning(&e, FW_MC_BELOW_FLOOR));
+    fw_mesh_free(&m);
+    size_t len = 0;
+    char *gl = slurp("fixtures/mesh/tri.gltf", &len);
+    CHECK(gl != NULL);
+    if (!gl) return;
+    char *tex = tri_with_texture(gl, "{ \"uri\": \"crate.png\" }");
+    CHECK(tex != NULL);
+    if (tex) {
+        CHECK_EQ(load_text("models/tri.gltf", tex, &m, &e), 1);
+        CHECK_STR(m.texture, "crate.png");
+        CHECK(fw_mesh_has_warning(&e, FW_MC_TEXTURE_NO_UVS));       /* a texture but no TEXCOORD_0 */
+        CHECK(fw_mesh_has_warning(&e, FW_MC_NO_NORMALS));
+        CHECK(!fw_mesh_has_warning(&e, FW_MC_TEXTURE_EMBEDDED));
+        fw_mesh_free(&m);
+        free(tex);
+    }
+    tex = tri_with_texture(gl, "{ \"bufferView\": 1, \"mimeType\": \"image/png\" }");
+    if (tex) {
+        CHECK_EQ(load_text("models/tri.gltf", tex, &m, &e), 1);
+        CHECK(fw_mesh_has_warning(&e, FW_MC_TEXTURE_EMBEDDED));
+        fw_mesh_free(&m);
+        free(tex);
+    }
+    free(gl);
+}
+
+TEST(mesh_load_result_log_lines) {
+    char buf[320];
+    FwMesh m; memset(&m, 0, sizeof m);
+    m.nverts = 24; m.nindices = 36;
+    m.bmin[0] = -0.4f; m.bmin[1] = 0.0f; m.bmin[2] = -0.4f; m.bmax[0] = 0.4f; m.bmax[1] = 0.8f; m.bmax[2] = 0.4f;
+    FwMeshError e; fw_mesh_err_reset(&e);
+    int n = fw_mesh_fmt_load_result(buf, sizeof buf, "models/crate.obj", 1, &m, &e);
+    CHECK_STR(buf, "mesh: models/crate.obj: loaded 24 vertices, 12 triangles, bounds x -0.40..0.40 h 0.00..0.80 z -0.40..0.40");
+    CHECK_EQ(n, (int)strlen(buf));
+    fw_mesh_warn(&e, FW_MC_NO_NORMALS); fw_mesh_warn(&e, FW_MC_BELOW_FLOOR);
+    fw_mesh_fmt_load_result(buf, sizeof buf, "models/crate.obj", 1, &m, &e);
+    CHECK_STR(buf, "mesh: models/crate.obj: loaded 24 vertices, 12 triangles, bounds x -0.40..0.40 h 0.00..0.80 z -0.40..0.40; model-no-normals, model-below-floor");
+    fw_mesh_err_reset(&e);
+    e.code = fw_mesh_code(FW_MC_PARSE_ERROR); e.line = 4;
+    snprintf(e.text, sizeof e.text, "face index 7 out of range (3 vertices) at line 4");
+    fw_mesh_fmt_load_result(buf, sizeof buf, "models/crate.obj", 0, NULL, &e);
+    CHECK_STR(buf, "mesh: models/crate.obj: model-parse-error: face index 7 out of range (3 vertices) at line 4 \xE2\x80\x94 drawing the 2D clip");
+    e.code = fw_mesh_code(FW_MC_FILE_MISSING);
+    snprintf(e.text, sizeof e.text, "not found on the mod path");
+    fw_mesh_fmt_load_result(buf, sizeof buf, "models/crate.glb", 0, NULL, &e);
+    CHECK_STR(buf, "mesh: models/crate.glb: model-file-missing: not found on the mod path \xE2\x80\x94 drawing the 2D clip");
+    e.code = NULL;                                                   /* never left NULL by a loader; still a parse error */
+    fw_mesh_fmt_load_result(buf, sizeof buf, "models/x.obj", 0, NULL, &e);
+    CHECK(strncmp(buf, "mesh: models/x.obj: model-parse-error: ", 39) == 0);
+    fw_mesh_fmt_load_result(buf, sizeof buf, NULL, 0, NULL, NULL);   /* defensive: no crash, still one line */
+    CHECK(strstr(buf, "model-parse-error") != NULL);
+    char small[16];
+    int full = fw_mesh_fmt_load_result(small, sizeof small, "models/crate.obj", 1, &m, NULL);
+    CHECK_EQ(strlen(small), sizeof small - 1);
+    CHECK(full > (int)sizeof small);
+}
+
 int main(void) { return MT_RUN_ALL(); }

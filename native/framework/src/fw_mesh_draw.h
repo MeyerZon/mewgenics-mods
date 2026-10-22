@@ -43,6 +43,13 @@ int fw_shader_stage(const char *src, size_t len, int vertex, char *out, size_t c
  * 1 ok, 0 + err (unknown kind / parse error) */
 int fw_mesh_load_bytes(const char *path, const uint8_t *bytes, size_t len, FwMesh *out, FwMeshError *err);
 
+/* THE one log line per model per process (design §2.6; mesh_engine.c resolve_model logs it, then caches the result):
+ *   refused: "mesh: <path>: <code>: <text> — drawing the 2D clip"   (code NULL -> model-parse-error)
+ *   loaded:  "mesh: <path>: loaded N vertices, M triangles, bounds x a..b h c..d z e..f"  (game axes, %.2f)
+ *            + "; <code>, <code>" for e's warning / info codes when there are any.
+ * ok != 0 needs m. Returns the full length (snprintf-style; the buffer is always NUL-terminated when n > 0). */
+int fw_mesh_fmt_load_result(char *buf, size_t n, const char *path, int ok, const FwMesh *m, const FwMeshError *e);
+
 /* the mvp of an object whose world matrix (world (x, height, z) from model) is `world`:
  * stackTop x VP x fw_m4_iso_basis(iso) x world */
 void fw_mesh_object_mvp(const float top[16], const float vp[16], const float iso[16], const float world[16], float out[16]);

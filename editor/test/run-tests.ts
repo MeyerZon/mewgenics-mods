@@ -430,6 +430,13 @@ if (BASE_READY) {
   if (m3) m3.runModel3dTests(test, assert, eq);
 }
 
+// ---- 4g. The model codes (design §2.6): one list with the DLL (fw_mesh_rules.c FW_MESH_CODES), the header reader, the validator ----
+{
+  let mc: typeof import("./model-codes-tests.ts") | null = null;
+  try { mc = await import("./model-codes-tests.ts"); } catch (e) { test("model-codes-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mc) mc.runModelCodesTests(test, assert, eq);
+}
+
 // ---- 5. MCP smoke test ------------------------------------------------------
 /** The `tools/call` result shape the smoke reads (MCP content blocks). */
 interface ToolCallResult {

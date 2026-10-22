@@ -536,3 +536,11 @@ int fw_mesh_name_from_path(const char *path, char *out, size_t cap) {
     out[nl] = 0;
     return 1;
 }
+
+/* ------------------------------------------------------------------ model codes (RED stubs) */
+const FwMeshCode FW_MESH_CODES[FW_MC_COUNT];
+const char *fw_mesh_code(FwMeshCodeId id) { (void)id; return NULL; }
+const char *fw_mesh_code_severity(const char *code) { (void)code; return NULL; }
+void fw_mesh_err_reset(FwMeshError *e) { if (e) memset(e, 0, sizeof *e); }
+void fw_mesh_warn(FwMeshError *e, FwMeshCodeId id) { (void)e; (void)id; }
+int fw_mesh_has_warning(const FwMeshError *e, FwMeshCodeId id) { (void)e; (void)id; return 0; }

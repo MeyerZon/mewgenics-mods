@@ -406,7 +406,6 @@ TEST(gltf_hostile_accessor_count_is_refused_before_allocating) {
 
 TEST(gltf_rejects_sparse_morph_targets_and_bad_attribute_types) {
     TRI_ERR("sparse", TRI_MESH ONE_NODE, .acc0x = ",\"sparse\":{\"count\":1}");
-    TRI_ERR("morph", TRI_MESH ONE_NODE, .primx = ",\"targets\":[{\"POSITION\":0}]");
     TRI_ERR("POSITION", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"NORMAL\":1}}]}]," ONE_NODE, 0);
     TRI_ERR("POSITION", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":2}}]}]," ONE_NODE, 0);   /* VEC2 */
     TRI_ERR("NORMAL", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"NORMAL\":2}}]}]," ONE_NODE, 0);
@@ -610,6 +609,137 @@ TEST(gltf_then_to_game_axes_keeps_front_faces) {
     CHECK(windings_match_normals(&m));
     fw_mesh_to_game_axes(&m, 2.0f);
     CHECK(windings_match_normals(&m));
+    fw_mesh_free(&m);
+}
+
+/* ---------------- model codes (design §2.6): one case per code the glTF loader raises ---------------- */
+#define TRI_CODE(want, rest, ...) do { Opt o_ = { __VA_ARGS__ }; FwMesh m_; FwMeshError e_; \
+    if (tri_opt((rest), o_, &m_, &e_) != 0) { MT_FAIL("accepted, wanted %s", (want)); fw_mesh_free(&m_); } \
+    else if (!e_.code || strcmp(e_.code, (want))) MT_FAIL("code %s (%s), wanted %s", e_.code ? e_.code : "(null)", e_.text, (want)); } while (0)
+static void bytes_code(const uint8_t *b, size_t n, const char *code) {
+    FwMesh m; FwMeshError e;
+    memset(&e, 0, sizeof e);
+    if (fw_mesh_gltf_parse(b, n, NULL, NULL, &m, &e) != 0) { MT_FAIL("accepted, wanted %s", code); fw_mesh_free(&m); return; }
+    if (!e.code || strcmp(e.code, code)) MT_FAIL("code %s (%s), wanted %s", e.code ? e.code : "(null)", e.text, code);
+}
+
+TEST(gltf_codes_parse_header_version_extensions) {
+    bytes_code((const uint8_t *)"{\"asset\":{\"version\":\"2.0\"}", 26, "model-parse-error");     /* not JSON */
+    bytes_code((const uint8_t *)"[1]", 3, "model-parse-error");                                  /* not an object */
+    bytes_code((const uint8_t *)"{\"meshes\":[]}", 13, "model-gltf-version");                      /* no asset */
+    TRI_CODE("model-gltf-version", TRI_MESH ONE_NODE, .ver = "1.0");
+    TRI_CODE("model-extension-required", TRI_MESH ONE_NODE, .extra = "\"extensionsRequired\":[\"KHR_draco_mesh_compression\"],");
+    bytes_code(NULL, 0, "model-empty");
+    bytes_code((const uint8_t *)"{\"asset\":{\"version\":\"2.0\"}}", 27, "model-empty");          /* nothing to draw */
+    TRI_CODE("model-empty", TRI_MESH "\"nodes\":[{\"name\":\"empty\"}],\"scenes\":[{\"nodes\":[0]}]}", 0);
+    /* .glb container */
+    Blob bl; tri_blob(&bl, 5123, IDX012);
+    Opt o = NO; o.buf = "{\"byteLength\":104}";
+    char *j = tri_json_opt(TRI_MESH ONE_NODE, o);
+    if (strlen(j) % 4 == 0) { char *j2 = subst(j, "\"asset\"", " \"asset\"", (const char *)NULL); free(j); j = j2; }
+    size_t n; uint8_t *g = make_glb(j, &bl, 1, &n, 0);
+    bytes_code(g, n, "model-glb-header");                                   /* version 1 */
+    free(g);
+    g = make_glb(j, &bl, 2, &n, 1);
+    bytes_code(g, n, "model-glb-header");                                   /* JSON chunk not 4-aligned */
+    free(g);
+    g = make_glb(j, &bl, 2, &n, 0);
+    bytes_code(g, n - 4, "model-glb-header");                               /* header length past the bytes */
+    bytes_code(g, 16, "model-glb-header");                                  /* shorter than its header */
+    uint32_t t = 0x12345678u; memcpy(g + 16, &t, 4);
+    bytes_code(g, n, "model-glb-header");                                   /* first chunk not JSON */
+    free(g);
+    g = make_glb(j, &bl, 2, &n, 0);
+    uint32_t big = 0x7fffff00u; memcpy(g + 12, &big, 4);
+    bytes_code(g, n, "model-glb-header");                                   /* JSON chunk past the end */
+    free(g);
+    g = make_glb(j, NULL, 2, &n, 0);
+    bytes_code(g, n, "model-buffer-missing");                               /* buffer 0 without uri, no BIN chunk */
+    free(g);
+    free(j);
+}
+
+TEST(gltf_codes_buffers_and_uris) {
+    TRI_CODE("model-uri-unsupported", TRI_MESH ONE_NODE, .buf = "{\"uri\":\"/abs/tri.bin\",\"byteLength\":104}");
+    TRI_CODE("model-uri-unsupported", TRI_MESH ONE_NODE, .buf = "{\"uri\":\"http://example.com/tri.bin\",\"byteLength\":104}");
+    TRI_CODE("model-uri-unsupported", TRI_MESH ONE_NODE, .buf = "{\"uri\":\"../tri.bin\",\"byteLength\":104}");
+    TRI_CODE("model-uri-unsupported", TRI_MESH ONE_NODE, .buf = "{\"uri\":\"data:application/octet-stream,AAAA\",\"byteLength\":104}");
+    TRI_CODE("model-buffer-missing", TRI_MESH ONE_NODE, .buf = "{\"uri\":\"tri.bin\",\"byteLength\":104}");   /* no reader: not found */
+    TRI_CODE("model-buffer-range", TRI_MESH ONE_NODE, .len = "200", .buf = "{\"uri\":\"@URI@\",\"byteLength\":200}");   /* data shorter */
+    TRI_CODE("model-buffer-range", TRI_MESH ONE_NODE, .bv0x = ",\"byteOffset\":40");   /* view past its buffer */
+    TRI_CODE("model-buffer-range", TRI_MESH ONE_NODE, .n0 = "9");                      /* accessor past its view */
+}
+
+TEST(gltf_codes_accessors_attributes_indices) {
+    TRI_CODE("model-accessor-invalid", TRI_MESH ONE_NODE, .bv0x = ",\"byteStride\":6");
+    TRI_CODE("model-accessor-invalid", TRI_MESH ONE_NODE, .ctype = 5130);            /* bad componentType */
+    TRI_CODE("model-accessor-invalid", TRI_MESH ONE_NODE, .ctype = 5126);            /* float indices */
+    TRI_CODE("model-accessor-invalid", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":7}}]}]," ONE_NODE, 0);
+    TRI_CODE("model-sparse-unsupported", TRI_MESH ONE_NODE, .acc0x = ",\"sparse\":{\"count\":1}");
+    TRI_CODE("model-primitive-mode", TRI_MESH ONE_NODE, .primx = ",\"mode\":1");
+    TRI_CODE("model-primitive-mode", TRI_MESH ONE_NODE, .primx = ",\"mode\":0");
+    TRI_CODE("model-attribute-missing", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"NORMAL\":1}}]}]," ONE_NODE, 0);
+    TRI_CODE("model-attribute-format", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":2}}]}]," ONE_NODE, 0);
+    TRI_CODE("model-attribute-format", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"NORMAL\":2}}]}]," ONE_NODE, 0);
+    TRI_CODE("model-attribute-format", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"TEXCOORD_0\":1}}]}]," ONE_NODE, 0);
+    static const uint32_t IDX017[3] = { 0, 1, 7 };
+    TRI_CODE("model-index-range", TRI_MESH ONE_NODE, .idx = IDX017);
+    TRI_CODE("model-index-range", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}}]}]," ONE_NODE, .n0 = "2");   /* 2 implicit indices */
+    TRI_CODE("model-limit", TRI_MESH ONE_NODE, .n0 = "2000000000");
+}
+
+TEST(gltf_codes_nodes_scenes_materials) {
+    TRI_CODE("model-node-invalid", TRI_MESH "\"nodes\":[{\"children\":[4]}],\"scenes\":[{\"nodes\":[0]}]}", 0);
+    TRI_CODE("model-node-invalid", TRI_MESH "\"nodes\":[{\"mesh\":3}],\"scenes\":[{\"nodes\":[0]}]}", 0);
+    TRI_CODE("model-node-invalid", TRI_MESH "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":2}", 0);
+    TRI_CODE("model-node-invalid", TRI_MESH "\"nodes\":[{\"mesh\":0,\"translation\":[1,2]}],\"scenes\":[{\"nodes\":[0]}]}", 0);
+    TRI_CODE("model-node-cycle", TRI_MESH "\"nodes\":[{\"children\":[1]},{\"children\":[0],\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}]}", 0);
+    TRI_CODE("model-node-cycle", TRI_MESH "\"nodes\":[{\"children\":[1]},{\"mesh\":0}],\"scenes\":[{\"nodes\":[0,1]}]}", 0);
+    TRI_CODE("model-node-invalid", TRI_MESH ONE_NODE, .primx = ",\"material\":3", .extra = "\"materials\":[{}],");
+    TRI_CODE("model-uri-unsupported", TRI_MESH ONE_NODE, .primx = ",\"material\":0",
+             .extra = "\"materials\":[{\"pbrMetallicRoughness\":{\"baseColorTexture\":{\"index\":0}}}],"
+                      "\"textures\":[{\"source\":0}],\"images\":[{\"uri\":\"C:/tex.png\"}],");
+    /* deeper than FW_GLTF_MAX_NODE_DEPTH: a cap */
+    size_t cap = 64 * (FW_GLTF_MAX_NODE_DEPTH + 10) + 256;
+    char *deep = (char *)malloc(cap);
+    strcpy(deep, TRI_MESH "\"nodes\":[");
+    for (int i = 0; i <= FW_GLTF_MAX_NODE_DEPTH; i++) {
+        char one[64];
+        snprintf(one, sizeof one, i < FW_GLTF_MAX_NODE_DEPTH ? "{\"children\":[%d]}," : "{\"mesh\":0}", i + 1);
+        strcat(deep, one);
+    }
+    strcat(deep, "],\"scenes\":[{\"nodes\":[0]}]}");
+    TRI_CODE("model-limit", deep, 0);
+    free(deep);
+}
+
+TEST(gltf_success_leaves_code_null_and_lists_warnings) {
+    FwMesh m; FwMeshError e;
+    TRI_OK(TRI_MESH ONE_NODE, 0);
+    CHECK(e.code == NULL); CHECK_EQ(e.nwarnings, 0);
+    fw_mesh_free(&m);
+    /* v1 skips morph targets (draws the base mesh), skins (bind pose) and animations, and names each once */
+    TRI_OK(TRI_MESH ONE_NODE, .primx = ",\"targets\":[{\"POSITION\":0}]",
+           .extra = "\"skins\":[{\"joints\":[0]}],\"animations\":[{\"channels\":[],\"samplers\":[]}],");
+    CHECK(e.code == NULL);
+    CHECK(fw_mesh_has_warning(&e, FW_MC_MORPH_IGNORED));
+    CHECK(fw_mesh_has_warning(&e, FW_MC_SKIN_IGNORED));
+    CHECK(fw_mesh_has_warning(&e, FW_MC_ANIMATION_IGNORED));
+    CHECK_EQ(m.nindices, 3);
+    fw_mesh_free(&m);
+    /* extensionsUsed that are not required: ignored, said once */
+    TRI_OK(TRI_MESH ONE_NODE, .extra = "\"extensionsUsed\":[\"KHR_materials_emissive_strength\"],");
+    CHECK(fw_mesh_has_warning(&e, FW_MC_EXTENSION_IGNORED));
+    fw_mesh_free(&m);
+    /* two primitives with two different materials: v1 draws both with the first */
+    TRI_OK("\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"material\":0},{\"attributes\":{\"POSITION\":0},\"material\":1}]}]," ONE_NODE,
+           .extra = "\"materials\":[{\"name\":\"a\"},{\"name\":\"b\"}],");
+    CHECK(fw_mesh_has_warning(&e, FW_MC_MULTI_MATERIAL));
+    CHECK_EQ(e.nwarnings, 1);
+    fw_mesh_free(&m);
+    TRI_OK("\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"material\":0},{\"attributes\":{\"POSITION\":0},\"material\":0}]}]," ONE_NODE,
+           .extra = "\"materials\":[{\"name\":\"a\"}],");
+    CHECK(!fw_mesh_has_warning(&e, FW_MC_MULTI_MATERIAL));
     fw_mesh_free(&m);
 }
 
