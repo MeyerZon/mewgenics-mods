@@ -59,6 +59,20 @@ export interface SeedEvent {
   detail: string;
 }
 
+/** `run`: a campaign-walk step (run start / travel / fight); map / node / type / depth / level only when the step set them. */
+export interface RunEvent {
+  line: number;
+  op: string;
+  arg: string;
+  ok: boolean;
+  map?: string;
+  node?: number;
+  type?: string;
+  depth?: number;
+  level?: string;
+  detail: string;
+}
+
 /** `shot`: the script asked for a screenshot here; the DLL held the scene for `hold_ms` while the runner captured. */
 export interface ShotEvent {
   line: number;
@@ -107,6 +121,8 @@ export interface ResultSummary {
   seed: SeedEvent | null;
   /** pipe requests served, in order (interactive mode) */
   execs: ExecEvent[];
+  /** campaign-walk steps, in order */
+  runs: RunEvent[];
   /** the script ended and the DLL idled for pipe requests (interactive mode) */
   idle: boolean;
 }
@@ -130,6 +146,7 @@ export function parseResults(text: string | null | undefined): ResultSummary {
     shots: [],
     seed: null,
     execs: [],
+    runs: [],
     idle: false,
   };
   if (typeof text !== "string") return r;
@@ -176,6 +193,20 @@ export function parseResults(text: string | null | undefined): ResultSummary {
         break;
       }
       case "idle": r.idle = true; break;
+      case "run":
+        r.runs.push({
+          line: Number(e.line ?? 0),
+          op: String(e.op ?? ""),
+          arg: String(e.arg ?? ""),
+          ok: Boolean(e.ok),
+          ...(typeof e.map === "string" ? { map: e.map } : {}),
+          ...(typeof e.node === "number" ? { node: e.node } : {}),
+          ...(typeof e.type === "string" ? { type: e.type } : {}),
+          ...(typeof e.depth === "number" ? { depth: e.depth } : {}),
+          ...(typeof e.level === "string" ? { level: e.level } : {}),
+          detail: String(e.detail ?? ""),
+        });
+        break;
       case "expect":
         if (e.ok) r.expects.passed++;
         else {

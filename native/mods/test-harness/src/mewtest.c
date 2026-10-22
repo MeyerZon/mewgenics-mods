@@ -227,6 +227,40 @@ static void hook_DirectorInit(void *director, void *nameStr) {
     g_origDirectorInit(director, nameStr);
 }
 
+/* the campaign walk's witnesses: MapScreen::init (the map screen of the run and its map file) and
+ * MewDirector::StartMapBattle (the level path the map's pool picked). Both take a by-value std::string the callee
+ * destroys, so it is read before the original runs. */
+typedef void (*fn_GoOnAdventure)(void *director, MtMsvcString *map, int teamType, int count, char debug);
+typedef void (*fn_MapScreenInit)(void *mapScreen, MtMsvcString *map, char debug);
+typedef void (*fn_EnterNode)(void *mapScreen, void *node);
+typedef void *(*fn_StartMapBattle)(void *director, MtMsvcString *level, char a, char b);
+static fn_GoOnAdventure g_GoOnAdventure;
+static fn_EnterNode g_EnterNode;
+static fn_MapScreenInit g_origMapScreenInit;
+static fn_StartMapBattle g_origStartMapBattle;
+static int g_MapScreenHooked, g_StartMapBattleHooked;
+static void *volatile g_mapScreen;
+static volatile LONG g_mapInits, g_battles;
+static LONG g_battlesAtTravel = -1;
+static char g_mapName[64], g_battleLevel[160];
+static void hook_MapScreenInit(void *mapScreen, MtMsvcString *map, char debug) {
+    char nm[64] = "?";
+    read_msvc_string(map, nm, sizeof nm);
+    g_origMapScreenInit(mapScreen, map, debug);
+    snprintf(g_mapName, sizeof g_mapName, "%s", nm);
+    g_mapScreen = mapScreen;
+    InterlockedIncrement(&g_mapInits);
+    logf_("MapScreen::init(%p, \"%s\", debug=%d)", mapScreen, nm, (int)debug);
+}
+static void *hook_StartMapBattle(void *director, MtMsvcString *level, char a, char b) {
+    char lv[160] = "?";
+    read_msvc_string(level, lv, sizeof lv);
+    snprintf(g_battleLevel, sizeof g_battleLevel, "%s", lv);
+    InterlockedIncrement(&g_battles);
+    logf_("MewDirector::StartMapBattle(%p, \"%s\", %d, %d)", director, lv, (int)a, (int)b);
+    return g_origStartMapBattle(director, level, a, b);
+}
+
 static void maybe_hide(void) {
     if (g_hidden || !g_args.hide) return;
     void *appGlobal = (void *)g_fw.GetData(FW_DATA_App);
@@ -646,10 +680,121 @@ static int h_set_unit_glow(void *u, int i, const float *rgba, char *detail, size
     return ok ? 1 : 0;
 }
 
+/* ----------------------------------------------------------------------- */
+/* the campaign walk: run start | run travel <type> | run fight              */
+/* docs/engine-map.md "Campaign walk"; the hooks below record what the game does */
+/* ----------------------------------------------------------------------- */
+#define MT_WALK_TEAM_TYPE 1   /* TeamType for DebugGenAdventureCats (the dev buttons index a {0,1,2,3} table at 0xee9700; TacticsTest_restart uses 1) */
+#define MT_WALK_CATS      4   /* party size: the dev buttons pass their widget value; a run takes four cats */
+static void walk_copy_string(char *dst, size_t cap, const char *src) { snprintf(dst, cap, "%s", src ? src : ""); }
+
+static int run_start(const char *map, MtRunInfo *info, char *detail, size_t cap) {
+    if (!g_GoOnAdventure || !g_MapScreenHooked) { snprintf(detail, cap, "symbols missing: FW_SYM_MewDirector_GoOnAnAdventure / FW_SYM_MapScreen_init hook (framework older than this harness)"); return -1; }
+    void *directorGlobal = (void *)g_fw.GetData(FW_DATA_MewDirector), *director = NULL;
+    if (!g_dc) { snprintf(detail, cap, "no debug console yet (main menu not reached)"); return 0; }
+    if (!directorGlobal || !read_ptr(directorGlobal, &director)) { snprintf(detail, cap, "cannot read the MewDirector global"); return 0; }
+    if (!director) { snprintf(detail, cap, "no MewDirector yet"); return 2; }
+    if (g_tc) { snprintf(detail, cap, "a fight is already running (TurnControl seen)"); return 0; }
+    if (g_mapScreen) { snprintf(detail, cap, "a map is already up (MapScreen %p, \"%s\"): run start runs once", g_mapScreen, g_mapName); return 0; }
+    MtMsvcString s;
+    if (!mt_msvcstr_build(&s, map, strlen(map), (MtAllocFn)g_Allocate)) { snprintf(detail, cap, "cannot build the map name"); return 0; }
+    LONG before = g_mapInits;
+    g_GoOnAdventure(director, &s, MT_WALK_TEAM_TYPE, MT_WALK_CATS, 1);   /* by-value string: the callee destroys it */
+    if (g_mapInits == before || !g_mapScreen) { snprintf(detail, cap, "GoOnAnAdventure(director %p, \"%s\", %d, %d, debug) returned but MapScreen::init never ran", director, map, MT_WALK_TEAM_TYPE, MT_WALK_CATS); return 0; }
+    void *ms = g_mapScreen, *marker = NULL, *node = NULL;
+    uint32_t n = 0;
+    int type = -1;
+    read_u32(AT(ms, OFF_MAPSCREEN_NODE_COUNT), &n);
+    read_ptr(AT(ms, OFF_MAPSCREEN_MARKER), &marker);
+    if (marker) read_ptr(AT(marker, OFF_MAPMARKER_NODE), &node);
+    if (node) read_i32(AT(node, OFF_MAPNODE_TYPE), &type);
+    walk_copy_string(info->map, sizeof info->map, g_mapName[0] ? g_mapName : map);
+    snprintf(detail, cap, "director=%p mapScreen=%p (MapScreen::init \"%s\") nodes=%u marker=%p on node %p (%s); party %d cats, TeamType %d, debug start (no class chooser)",
+             director, ms, g_mapName, n, marker, node, mt_node_type_name(type), MT_WALK_CATS, MT_WALK_TEAM_TYPE);
+    logf_("run start: %s", detail);
+    return 1;
+}
+
+static int run_travel(const char *typeName, MtRunInfo *info, char *detail, size_t cap) {
+    if (!g_EnterNode) { snprintf(detail, cap, "symbol missing: FW_SYM_MapScreen_EnterNode"); return -1; }
+    void *ms = g_mapScreen, *marker = NULL, *cur = NULL, *data = NULL;
+    if (!ms) { snprintf(detail, cap, "no map (run start first)"); return 0; }
+    if (g_tc) { snprintf(detail, cap, "a fight is already running (TurnControl seen)"); return 0; }
+    int want = mt_node_type_id(typeName, strlen(typeName));
+    uint32_t n = 0;
+    if (!read_u32(AT(ms, OFF_MAPSCREEN_NODE_COUNT), &n) || !read_ptr(AT(ms, OFF_MAPSCREEN_NODES), &data) || !data || n == 0 || n > MT_WALK_MAX_NODES) {
+        snprintf(detail, cap, "MapScreen %p: node vector unreadable (count %u, data %p)", ms, n, data); return 0;
+    }
+    if (!read_ptr(AT(ms, OFF_MAPSCREEN_MARKER), &marker) || !marker || !read_ptr(AT(marker, OFF_MAPMARKER_NODE), &cur) || !cur) {
+        snprintf(detail, cap, "MapScreen %p: no marker / marker node (marker %p)", ms, marker); return 2;   /* the marker is placed a frame later: retry */
+    }
+    static void *nodes[MT_WALK_MAX_NODES];
+    static int types[MT_WALK_MAX_NODES], adjStart[MT_WALK_MAX_NODES + 1], adj[MT_WALK_MAX_EDGES];
+    if (!safe_read(data, nodes, n * sizeof(void *))) { snprintf(detail, cap, "MapScreen %p: node array %p unreadable", ms, data); return 0; }
+    int start = -1, edges = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        types[i] = -1;
+        read_i32(AT(nodes[i], OFF_MAPNODE_TYPE), &types[i]);
+        if (nodes[i] == cur) start = (int)i;
+    }
+    for (uint32_t i = 0; i < n; i++) {
+        adjStart[i] = edges;
+        uint32_t k = 0;
+        void *next = NULL;
+        if (!read_u32(AT(nodes[i], OFF_MAPNODE_NEXT_COUNT), &k) || !read_ptr(AT(nodes[i], OFF_MAPNODE_NEXT_DATA), &next) || !next || k > 64) continue;
+        void *targets[64];
+        if (!safe_read(next, targets, k * sizeof(void *))) continue;
+        for (uint32_t j = 0; j < k && edges < MT_WALK_MAX_EDGES; j++) {
+            int t = -1;
+            for (uint32_t q = 0; q < n; q++) if (nodes[q] == targets[j]) { t = (int)q; break; }
+            adj[edges++] = t;   /* -1 (not a node of this map) is ignored by the walk */
+        }
+    }
+    adjStart[n] = edges;
+    if (start < 0) { snprintf(detail, cap, "the marker's node %p is not among the map's %u nodes", cur, n); return 0; }
+    int depth = -1;
+    int pick = mt_walk_nearest((int)n, types, adjStart, adj, start, want, &depth);
+    if (pick < 0) { snprintf(detail, cap, "no %s node reachable from node #%d (%s) over %d next edges of %u nodes", typeName, start, mt_node_type_name(types[start]), edges, n); return 0; }
+    char done = 0;
+    safe_read(AT(nodes[pick], OFF_MAPNODE_DONE), &done, 1);
+    if (done) { snprintf(detail, cap, "node #%d (%s) is already done (+0x%x set): the game would not enter it", pick, typeName, OFF_MAPNODE_DONE); return 0; }
+    LONG battlesBefore = g_battles;
+    g_EnterNode(ms, nodes[pick]);
+    g_battlesAtTravel = battlesBefore;
+    info->node = pick; info->nodeType = types[pick]; info->depth = depth;
+    snprintf(detail, cap, "mapScreen=%p %u nodes %d edges; marker on node #%d (%s) -> node #%d %p (%s, depth %d) entered with MapScreen::EnterNode",
+             ms, n, edges, start, mt_node_type_name(types[start]), pick, nodes[pick], mt_node_type_name(types[pick]), depth);
+    logf_("run travel: %s", detail);
+    return 1;
+}
+
+static int run_fight(MtRunInfo *info, char *detail, size_t cap) {
+    if (g_battlesAtTravel < 0) { snprintf(detail, cap, "no run travel yet"); return 0; }
+    if (g_battles > g_battlesAtTravel && g_tc) {
+        walk_copy_string(info->level, sizeof info->level, g_battleLevel);
+        snprintf(detail, cap, "MewDirector::StartMapBattle(\"%s\") (battle #%ld), TurnControl %p, round %d",
+                 g_battleLevel, (long)g_battles, g_tc, h_round_number(NULL));
+        logf_("run fight: %s", detail);
+        return 1;
+    }
+    snprintf(detail, cap, "waiting for the battle: StartMapBattle %s, TurnControl %s",
+             g_battles > g_battlesAtTravel ? "ran" : "not yet", g_tc ? "seen" : "not yet");
+    return 2;
+}
+
+static int h_run_step(void *u, int op, const char *arg, MtRunInfo *info, char *detail, size_t cap) {
+    (void)u;
+    if (op == MT_RUN_START) return run_start(arg && *arg ? arg : MT_RUN_DEFAULT_MAP, info, detail, cap);
+    if (op == MT_RUN_TRAVEL) return run_travel(arg ? arg : "", info, detail, cap);
+    if (op == MT_RUN_FIGHT) return run_fight(info, detail, cap);
+    snprintf(detail, cap, "unknown run op %d", op);
+    return 0;
+}
+
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
     h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
-    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon,
+    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon, h_run_step,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
@@ -1033,6 +1178,8 @@ static void init(void) {
     g_AddDirectorTest = (fn_AddDirectorTest)g_fw.GetSymbol(FW_SYM_AddComponent_MewDirector_test);
     g_GetGame = (fn_GetGame)g_fw.GetSymbol(FW_SYM_Component_GetGame);
     g_RngSeedState = (fn_RngSeedState)g_fw.GetSymbol(FW_SYM_Rng_SeedState);
+    g_GoOnAdventure = (fn_GoOnAdventure)g_fw.GetSymbol(FW_SYM_MewDirector_GoOnAnAdventure);
+    g_EnterNode = (fn_EnterNode)g_fw.GetSymbol(FW_SYM_MapScreen_EnterNode);
     logf_("run-entry symbols: CreateScene=%p CreateEntity=%p AddComponent<TacticsTest>=%p GetGame=%p AddComponent<MewDirector>(test, reference)=%p",
           (void *)g_CreateScene, (void *)g_CreateEntity, (void *)g_AddTacticsTest, (void *)g_GetGame, (void *)g_AddDirectorTest);
     for (int i = 0; i < FW_DATA_COUNT_; i++) {
@@ -1076,6 +1223,9 @@ static void init(void) {
     if (!install_hook(FW_SYM_ApplicationBase_FrameBegin, (void *)hook_FrameBegin, (void **)&g_origFrameBegin, 50, "ApplicationBase::FrameBegin")) return;
     if (!install_hook(FW_SYM_TurnControl_NextTurn, (void *)hook_NextTurn, (void **)&g_origNextTurn, 110, "TurnControl::NextTurn")) return;
     install_hook(FW_SYM_MewDirector_init, (void *)hook_DirectorInit, (void **)&g_origDirectorInit, 120, "MewDirector::init (diagnostic)"); /* optional */
+    /* the campaign walk (optional: without them `run` reports run_unavailable) */
+    g_MapScreenHooked = install_hook(FW_SYM_MapScreen_init, (void *)hook_MapScreenInit, (void **)&g_origMapScreenInit, 120, "MapScreen::init (run start)");
+    g_StartMapBattleHooked = install_hook(FW_SYM_MewDirector_StartMapBattle, (void *)hook_StartMapBattle, (void **)&g_origStartMapBattle, 120, "MewDirector::StartMapBattle (run fight)");
 
     AddVectoredExceptionHandler(1, veh);
     g_prevFilter = SetUnhandledExceptionFilter(top_filter);

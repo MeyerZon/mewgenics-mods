@@ -514,6 +514,63 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, code);
             return 0;
         }
+        case MT_D_EXPECT_LEVEL: {
+            int ok = r->battleLevel[0] && strstr(r->battleLevel, d->a) != NULL;
+            if (r->battleLevel[0]) snprintf(detail, sizeof detail, "battle level \"%s\"", r->battleLevel);
+            else snprintf(detail, sizeof detail, "no battle level yet (run fight first)");
+            emit_expect(r, h, d, "level", d->a, ok, detail);
+            r->pc++;
+            return 1;
+        }
+        case MT_D_RUN: {
+            /* like enter: the walk needs the game's console (the main menu has been reached) */
+            if (!h->console_ready(h->user)) {
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince > MT_CONSOLE_WAIT_MS) { finish(r, h, 4, "console_unavailable"); h->request_exit(h->user, 4); return 0; }
+                return 1;
+            }
+            MtRunInfo info;
+            memset(&info, 0, sizeof info);
+            info.node = info.nodeType = info.depth = -1;
+            detail[0] = 0;
+            int rc = h->run_step ? h->run_step(h->user, (int)d->n, d->a, &info, detail, sizeof detail) : -1;
+            if (!h->run_step) snprintf(detail, sizeof detail, "this host has no run_step");
+            if (rc == 2) {
+                /* not ready (e.g. run fight before the battle the node started exists): retry next frame, same budget as the console wait */
+                r->state = MT_S_WAIT_CONSOLE;
+                if (!r->consoleWaitSince) r->consoleWaitSince = r->now ? r->now : 1;
+                if (r->now - r->consoleWaitSince <= MT_CONSOLE_WAIT_MS) return 1;
+                rc = 0;
+                char why[400];
+                snprintf(why, sizeof why, "%s", detail[0] ? detail : "the game never reported ready");
+                snprintf(detail, sizeof detail, "not ready after %d ms: %s", MT_CONSOLE_WAIT_MS, why);
+            }
+            r->consoleWaitSince = 0;
+            r->state = MT_S_RUN;
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "run");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_str(&w, "op", mt_run_op_name((int)d->n));
+            mt_jw_str(&w, "arg", d->a ? d->a : "");
+            mt_jw_bool(&w, "ok", rc == 1);
+            if (info.map[0]) mt_jw_str(&w, "map", info.map);
+            if (info.node >= 0) mt_jw_int(&w, "node", info.node);
+            if (info.nodeType >= 0) mt_jw_str(&w, "type", mt_node_type_name(info.nodeType));
+            if (info.depth >= 0) mt_jw_int(&w, "depth", info.depth);
+            if (info.level[0]) mt_jw_str(&w, "level", info.level);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) {
+                if (d->n == MT_RUN_FIGHT && info.level[0]) snprintf(r->battleLevel, sizeof r->battleLevel, "%s", info.level);
+                r->pc++;
+                return 1;
+            }
+            if (rc < 0) { finish(r, h, 4, "run_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "run_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
         case MT_D_ENTER: {
             /* like cmd: the scene entry needs the debug console (the main menu has been reached) */
             if (!h->console_ready(h->user)) {

@@ -56,7 +56,20 @@ export type Directive =
   /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
   | { line: number; kind: "seed"; seed: string }
   /** per-unit glow (framework API v4): FW_SetUnitGlow(unit, rgba) or, with `off`, FW_ClearUnitGlow on a unit of the walk */
-  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null };
+  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null }
+  /** the campaign walk (mewtest.dll: MtHost.run_step): start = GoOnAnAdventure(arg map), travel = EnterNode on the nearest
+   *  node of type arg, fight = wait for the battle that node started (its level path feeds `expect level`) */
+  | { line: number; kind: "run"; op: "start" | "travel" | "fight"; arg: string }
+  /** the level path the last `run fight` reported contains substr (DLL-side) */
+  | { line: number; kind: "expect"; what: "level"; substr: string };
+
+/** MapNode::str_to_type 0x225680's names in enum order; must agree with mt_walk.c NODE_TYPES. */
+export const NODE_TYPES = [
+  "none", "npc", "enter", "exit", "home", "battle", "hard", "miniboss", "boss", "event", "optional_event",
+  "special_event", "shop", "treasure", "furniturebox", "foodbox", "bonus", "empty", "any",
+] as const;
+/** `run start` without a map: the run's first map (mt_pure.h MT_RUN_DEFAULT_MAP) */
+export const RUN_DEFAULT_MAP = "alley.gon";
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
 export const KNOWN_SCENES = ["TacticsTest", "Campaign"];
@@ -261,7 +274,33 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (tail) return { error: `expect log: unexpected trailing text "${tail}" (no within: debug.log is read once, after the run)` };
         return { line: lineNo, kind: "expect", what: "log", substr: q.value };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|log)" };
+      if (what === "level") {
+        const q = parseQuoted(arg, 0);
+        if (!q) return { error: arg ? "expect level: unterminated or missing quoted string" : "expect level needs a quoted substring" };
+        if (arg.slice(q.end).trim()) return { error: "expect level: unexpected text after the quoted substring" };
+        return { line: lineNo, kind: "expect", what: "level", substr: q.value };
+      }
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|level|log)" };
+    }
+    case "run": {
+      const words = rest ? rest.split(/\s+/) : [];
+      const [op, arg] = words as [string | undefined, string | undefined];
+      if (op === "start") {
+        if (words.length > 2) return { error: "run start takes at most one map file name" };
+        const map = arg ?? RUN_DEFAULT_MAP;
+        if (!/^[A-Za-z0-9_.-]{1,59}\.gon$/.test(map) || map.includes("..")) return { error: "run start: the map is a data/maps file name like alley.gon ([A-Za-z0-9_.-], ends in .gon, no ..)" };
+        return { line: lineNo, kind: "run", op: "start", arg: map };
+      }
+      if (op === "travel") {
+        if (words.length !== 2) return { error: "run travel needs one node type (battle, hard, event, treasure, shop, ...)" };
+        if (!(NODE_TYPES as readonly string[]).includes(arg!)) return { error: `run travel: unknown node type "${arg}" (${NODE_TYPES.join(" ")})` };
+        return { line: lineNo, kind: "run", op: "travel", arg: arg! };
+      }
+      if (op === "fight") {
+        if (words.length !== 1) return { error: "run fight takes no arguments" };
+        return { line: lineNo, kind: "run", op: "fight", arg: "" };
+      }
+      return { error: "run needs an op: start [<map>.gon] | travel <node type> | fight" };
     }
     case "dump":
       if (rest) return { error: "dump takes no arguments" };

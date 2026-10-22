@@ -489,7 +489,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 72, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86)");
+    eq(offs.length, 80, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 8 campaign walk");
   });
   if (exe) {
     const m = loadManifest(realPath);
@@ -1829,13 +1829,13 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["MewDirector_GoOnAnAdventure", "0x3b01c0", 35], ["MapScreen_init", "0x38d150", 36], ["MapScreen_EnterNode", "0x391c20", 37], ["MewDirector_StartMapBattle", "0x3b6d10", 38],
   ];
   /** reference-only functions (witness carriers): name, rva */
-  const WALK_REFERENCE: [string, string][] = [["MapScreen_onArriveNode", "0x39b180"], ["MapScreen_tickLambda", "0x229030"], ["MapScreen_generate_map", "0x21ca60"]];
+  const WALK_REFERENCE: [string, string][] = [["MapScreen_onArriveNode", "0x39b180"], ["MapScreen_nemesisCheck", "0x392ed0"], ["MapScreen_generate_map", "0x21ca60"]];
   /** struct offsets: name, macro, value, the function whose bytes witness it */
   const WALK_OFFSETS: [string, string, string, string][] = [
     ["MapScreen_nodeCount", "OFF_MAPSCREEN_NODE_COUNT", "0x7c", "MapScreen_init"],
     ["MapScreen_nodes", "OFF_MAPSCREEN_NODES", "0x80", "MapScreen_init"],
     ["MapScreen_marker", "OFF_MAPSCREEN_MARKER", "0xa0", "MapScreen_init"],
-    ["MapMarker_node", "OFF_MAPMARKER_NODE", "0x50", "MapScreen_tickLambda"],
+    ["MapMarker_node", "OFF_MAPMARKER_NODE", "0x50", "MapScreen_nemesisCheck"],
     ["MapNode_type", "OFF_MAPNODE_TYPE", "0x138", "MapScreen_EnterNode"],
     ["MapNode_nextCount", "OFF_MAPNODE_NEXT_COUNT", "0x144", "MapScreen_generate_map"],
     ["MapNode_nextData", "OFF_MAPNODE_NEXT_DATA", "0x148", "MapScreen_generate_map"],

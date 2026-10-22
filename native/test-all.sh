@@ -29,5 +29,5 @@ run_suite "mewframework entity/component walks" "$FW/build/test_walk" -DFW_NO_WI
 run_suite "mewframework resolve + hook plan" "$FW/build/test_resolve" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_resolve.c" "$FW/src/fw_resolve.c" "$FW/src/fw_sig.c"
 run_suite "mewframework per-unit glow rules" "$FW/build/test_glow_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_glow_rules.c" "$FW/src/fw_glow_rules.c"
 run_suite "mewtest harness pure modules" "$HS/build/test_mewtest" -DMT_HOST_TEST -I"$HS/src" -I"$FW/src" "$HS/test/test_mewtest.c" \
-  "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c"
+  "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c" "$HS/src/mt_walk.c"
 echo "=== all native suites passed"
