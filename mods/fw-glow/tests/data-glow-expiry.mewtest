@@ -1,0 +1,29 @@
+mods: fw-glow, _autoplay
+timeout: 150s
+hide: false
+# Glow from DATA, the REMOVAL half: mods/fw-glow appends FwGlowTempRat, a Rat variant (999 HP, so the autoplayed cats
+# cannot kill it before the check) whose StatusOnSpawnIn grants FwGlow_ff00ff as a Temporary { turns 1
+# expires_on_end_turn true } (the vanilla timed-status shape, e.g. disorders.gon's Uncontrollable). The rim must be
+# there while the status lasts and gone, with the status, once the Temporary has expired at the end of the rat's turn.
+# `_autoplay` lets the AI play the cats, so the rounds advance unattended. editor/scripts/unit-glow-probe.ts
+# --data-expiry (`npm run test:unitglow -- --data-expiry`) measures magenta in the three shots and reads the dumps:
+# "glow" must hold a rim the pre-spawn "noglow" shot lacks, "expired" must not, and the last dump must list the rat
+# without FwGlow_ff00ff (docs/data-mods.md "Asking for a unit glow from data").
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+shot "noglow"
+cmd spawn FwGlowTempRat
+expect console "Spawned FwGlowTempRat" within 10
+wait frames 60
+dump
+expect status FwGlow_ff00ff on "Lil' Rat"
+shot "glow"
+wait rounds 1
+dump
+wait rounds 1
+dump
+expect unit "Lil' Rat" hp > 0
+shot "expired"
+quit

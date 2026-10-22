@@ -644,6 +644,10 @@ await mcpSmoke();
   let tg: typeof import("./t3-gallery-tests.ts") | null = null;
   try { tg = await import("./t3-gallery-tests.ts"); } catch (e) { test("t3-gallery-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (tg) tg.runT3GalleryTests(test, assert, eq);
+  // new_from_template (editor/src/core/templates.ts): the glowing-character template
+  let tt: typeof import("./templates-tests.ts") | null = null;
+  try { tt = await import("./templates-tests.ts"); } catch (e) { test("templates-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (tt) tt.runTemplatesTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----

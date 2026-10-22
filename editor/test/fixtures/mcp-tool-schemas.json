@@ -175,7 +175,8 @@
             "ability",
             "passive",
             "item",
-            "status-data"
+            "status-data",
+            "glowing-character"
           ]
         },
         "name": {
@@ -188,7 +189,7 @@
             "type": "string"
           },
           "additionalProperties": {},
-          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)"
+          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...; glowing-character: colour (rrggbb or rrggbbaa, required), parent (default Rat), trigger (StatusOnSpawnIn | StatusOnBattleStart))"
         }
       },
       "required": [
