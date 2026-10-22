@@ -1370,6 +1370,23 @@ is `editor/component-schema.json` (data-mods.md "Component keys"), pinned by `ed
   `AddTilesetObjects` 0x90a0e0 read per-child keys (`children: any`). Ghidra drops the `xmm1` default of `PercentOr`
   in some pseudo-code (0 printed where the disassembly loads 0.5): defaults are taken from the disassembly. Pinned by
   `editor/component-schema.json` + `editor/test/component-schema-tests.ts` (T1: vanilla 0 findings).
+- **Defaults audit (2026-10-22, branch `fix/component-schema-defaults`; OBSERVED, objdump over
+  `.analysis/exe/25143593/Mewgenics.exe`).** Every key default was re-read from the instruction that produces it, at
+  the call site after the key's literal (an `.rdata` string the key is loaded from, or `movabs`/`mov dword` immediates
+  spelling it): `PercentOr` / `NumberOr` take the default in `xmm1`, `IntOr` / `BoolOr` in `edx`/`dl`, the member
+  `Character::deval` 0x103320 in `xmm2` (rcx = this, rdx = node). MSVC often **hoists** the constant into a
+  callee-saved register (`movsd xmm7,[rip+…]` … `movaps xmm1,xmm7`): that is the pattern Ghidra's pseudo-code loses,
+  printing 0 (GlobalSpawnOnRoundEnd / SpawnEachTurn / SpawnExtraThingsOnBattleStart / ObjectDetector `chance` really
+  1.0, ChanceToForceEvent / LowerAmbientLight 0.25, ChaosBossFormChangeGuide `passives_health_threshold` 0.5). Inline
+  reads are a type test `cmp dword [node+0xa8], 2|5` whose absent branch writes the default (`mov eax,-2` Autism
+  `innate`, `mov al,1` AuraBase `aura_effects_allies`), or a **folded bool** (`cmp byte [node+0x60],0; je`) where the
+  default is whichever of the true/false paths the absent branch joins (MovementReaction `objects_too`,
+  `exclude_allies`, HealAlliesEachTurn `exclude_self` behave as true when absent). 328 key rows checked: 281
+  confirmed, 42 changed, 31 `null` defaults filled, 2 unresolved, 2 with two reads that disagree
+  (MovementReaction `enemies_only`: false in slot42's first read, true-when-absent in its second; AddTilesetObjects
+  `count`); scalar forms: 20 checked, SizeScale 0 → 1. `@DamageInstance.incident_ally_collects_pickups` was a phantom
+  (no such string in the exe; the key is `incidentally_collects_pickups`) and is deleted. Rows carry
+  `defaultEvidence: disasm|pseudo`; the fragment is `.analysis/component-schema-defaults.json`.
 - **Dispatch names.** The names `apply_status` 0x483120, `attach_passive` 0x494080 and 0x4ccb20 compare against
   (`lea rdx,[rip+str]` before `std::string == const char*` 0x52560): 1923 names, 386 of them not `glaiel::` classes
   (`HealthGain`, `Conditional_*`, `TakeExtraTurn`, …) — `.analysis/compmap/dispatch-names.json` →

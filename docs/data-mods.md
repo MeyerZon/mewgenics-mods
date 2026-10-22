@@ -375,7 +375,7 @@ returns it for the top matches; the web UI's component search shows it when you 
   `ignored-key` (info): a key marked `unread` — vanilla writes it, but no code reads it (typos such as `theshold`);
   it is never `unknown-key` (so vanilla stays clean) and never required.
 - **Proof on vanilla (T1).** Every vanilla component block passes with zero findings (`editor/test/
-  component-schema-tests.ts`: 210 files, 7728 component blocks, 2204 object blocks checked, 0 findings; and four
+  component-schema-tests.ts`: 210 files, 7722 component blocks, 2198 object blocks checked, 0 findings; and four
   vanilla files copied as renamed `.append` mods give 0 `unknown-key` / `missing-required-key`). The generator
   enforces it by construction: a key vanilla writes that RE did not find **opens** the component and is listed in its
   `vanillaMissed`; a `required` key some vanilla block omits is demoted.
@@ -400,16 +400,23 @@ returns it for the top matches; the web UI's component search shows it when you 
 - **Coverage (build 25143593, after the compclose follow-up).** 1741 classes with a vftable (of the 2007 `glaiel::`
   names; the other 266 are not components: templates, lambdas, helpers): 504 mapped from decompiles, 987 read no keys
   of their own, 250 carry only the objdump seed keys (engine / UI / ability-hierarchy classes that never appear as a
-  `passives` block; `confidence: inferred`), 0 unresolved. 1325 keys: 838 observed with a decompile, 487 inferred.
+  `passives` block; `confidence: inferred`), 0 unresolved. 1324 keys: 837 observed with a decompile, 487 inferred.
   Vanilla: **all 393 components vanilla writes as object blocks are closed** (unknown keys flagged; was 356 closed /
   38 open); vanilla literal keys read 603 / 613 and the other 10 are `unread` (+205 keys of arbitrary maps). Every
   Passive / Status / GlobalModifier class a mod can name has been decompiled (the compclose2 pass verified the 110 that
   were seed-only).
+- **Defaults are read off the disassembly.** Each key's `default` is what the code uses when the key is absent;
+  `defaultEvidence: "disasm"` marks the ones read from the instruction that produces it (328 audited: 42 corrected,
+  e.g. `GlobalSpawnOnRoundEnd { chance }` defaults to 1, not 0; `AuraBase { aura_effects_allies }` to true;
+  `Autism { innate }` to -2), `"pseudo"` the few taken from Ghidra's pseudo-code only (which drops hoisted
+  `PercentOr` defaults and prints 0). The method is in `docs/engine-map.md` "Component GON keys" (Defaults audit).
 - **Regenerating.** Fragments are `.analysis/component-schema-<tag>.json` (one per RE session, shape checked by
   `validateFragment` in `editor/src/core/component-schema-build.ts`; a follow-up session writes an `amend` section
-  instead of redefining a component: `keys` add / replace (`null` deletes), `includes` added, `notes` appended, other
+  instead of redefining a component: `keys` add / replace (`null` deletes), `keyPatches` merge fields into a key it
+  already has (`{ default, defaultEvidence, note }`), `includes` added, `notes` appended, other
   fields replace, and `open: false` clears the old `vanillaMissed` so the cross-check re-opens it only for a vanilla key
-  still unaccounted for; `.analysis/compmap/` holds the work lists and
+  still unaccounted for; an amend named `@Shared` takes `keys` / `keyPatches` / `notes` for a shared key set;
+  `.analysis/compmap/` holds the work lists and
   `dispatch-names.json`, the names the by-name dispatch chains accept). `cd editor && npm run build:component-schema`
   merges them, runs the vanilla cross-check and writes the file; `-- --check` fails when the tracked file is stale.
   After a game update the keys are string literals and usually survive; re-run the RE for classes whose vftable

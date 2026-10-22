@@ -41,7 +41,16 @@ export interface KeySpec {
    * `unknown-key`, so vanilla stays clean while a mod copying it is still told. Never required.
    */
   unread?: boolean;
+  /**
+   * where `default` was read: `disasm` = the instruction that produces the getter's default (an `xmm1`/`xmm2` load
+   * from .rdata, a `mov r, imm`, the absent branch of an inline type test), checked by the defaults audit; `pseudo` =
+   * Ghidra's pseudo-code only (which drops some PercentOr defaults and prints 0). Absent on rows the audit did not cover.
+   */
+  defaultEvidence?: DefaultEvidence;
 }
+
+export type DefaultEvidence = "disasm" | "pseudo";
+export const DEFAULT_EVIDENCE: readonly DefaultEvidence[] = ["disasm", "pseudo"];
 
 export interface ComponentSpec {
   /** the C++ base class (DeriveComponentWithBoilerplate<X, Base, id>); its keys are inherited */
@@ -280,6 +289,7 @@ export function keySpecErrors(k: unknown, where: string): string[] {
   if (k.note !== undefined && !isStr(k.note)) e.push(`${where}.note: must be a string`);
   if (k.unread !== undefined && typeof k.unread !== "boolean") e.push(`${where}.unread: must be a boolean`);
   if (k.unread === true && k.required === true) e.push(`${where}.required: an unread key cannot be required`);
+  if (k.defaultEvidence !== undefined && !DEFAULT_EVIDENCE.includes(k.defaultEvidence as DefaultEvidence)) e.push(`${where}.defaultEvidence: ${JSON.stringify(k.defaultEvidence)} is not one of ${DEFAULT_EVIDENCE.join("|")}`);
   return e;
 }
 
