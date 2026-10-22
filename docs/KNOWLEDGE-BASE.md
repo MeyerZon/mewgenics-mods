@@ -131,7 +131,8 @@ PR; everything else is on `main`.
 - [x] **Localized mod text — OBSERVED 2026-10-22** (`render-loctext.mewtest`): a `DefineEditText` whose initial text
   is exactly a key (vanilla's or one a mod adds via `combined.csv.append`) is shown localized **only when emitted
   without the HTML flag** (`scene.texts[].html: false`); in vanilla's `<p><font>` wrapper the key is drawn as
-  written. Left: the editor does not yet switch key texts to plain by itself (`data-mods.md` "Localized text for mods").
+  written. The validator warns `text-loc-key-html` on an HTML key text; Art mode's text row has a **plain (localized)**
+  box (`data-mods.md` "Localized text for mods").
 - [x] **`tilesets.gon` clip redirect — OBSERVED 2026-10-22** (`mods/_tileprobe`): `alley { Rat ArtProbe }` in a
   `tilesets.gon.merge` makes a plain Rat draw the mod clip in the alley tileset; the control run without the overlay
   draws the vanilla Rat (`data-mods.md` "Redirecting a vanilla character's clip via tilesets.gon").

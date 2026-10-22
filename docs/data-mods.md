@@ -314,7 +314,12 @@ Recipe:
 2. `scene.texts.label = { "text": "MY_MOD_LABEL", "html": false, "font": "Peralta", "size": 24, … }`, placed by a key.
 3. `build_swf`. The text is resolved once at instance creation (not on a language switch).
 
-Not done: the editor does not switch a key text to plain by itself, and the validator does not warn about an
-HTML-wrapped key (follow-up); the preview draws the key, not the localized value. Measure and its limits:
+The validator warns **`text-loc-key-html`** (scene findings in `read_art_scene` / `write_art_scene` / Art mode, and
+`validate_mod` for every `art/*.scene.json`) when a text is exactly a key and not `"html": false`: a key of the base
+`combined.csv` (that half is empty without `.extracted/`), one this mod's `data/text/*.csv` overlays add, or a string
+of the key shape `^[A-Z][A-Z0-9_]{2,}$`; the message names which matched. A wrapper of several words that merely
+contains a key is not a key text. Fix it with `"html": false` or Art mode's **plain (localized)** box on the text row.
+Not done: the editor does not switch a key text to plain by itself (the warning asks instead); the preview draws the
+key, not the localized value. Measure and its limits:
 `editor/src/core/art/probe-outcomes.ts` (ink masks per box on a clip-space grid, key vs value vs look-alike,
 min over ±3 px shifts; a box under 60 % of its best ink — the "Battle Start!" banner, the unit — does not vote).

@@ -157,6 +157,7 @@ report what the game's loader would do (`editor/src/core/art/swf-rules.ts`; erro
 - `morph-shape-skipped` (warning, SWF): DefineMorphShape is skipped (no shape tweens); key shapes on a timeline instead.
 - `place-cxform-ignored` (warning, SWF): a PlaceObject (v1) colour transform is ignored; use PlaceObject2.
 - `fill-rule-ignored` (warning, scene + SWF): the engine fills each fill style even-odd; a `nonzero` path whose sub-paths cross or self-overlap gets a hole in-game — set `fillRule` `evenodd` or split the overlap into separate paths.
+- `text-loc-key-html` (warning, scene; also `validate_mod` on `art/*.scene.json`): a text that is exactly a loc key (base `combined.csv`, this mod's csv overlays, or the key shape `^[A-Z][A-Z0-9_]{2,}$`) but still HTML is drawn as the key; set `"html": false` (Art mode: **plain (localized)**).
 - `export-shadows-vanilla` (info, scene + SWF): an export named like a vanilla export (e.g. `CatTail`) replaces it for every by-name lookup, last-loaded file first (INFERRED, untested).
 - `jpeg-bitmap` (info, SWF): JPEG bitmaps decode but the game logs a warning; prefer PNG (DefineBitsLossless2).
 - `tag-ignored` (info, SWF): a tag outside the loader's switch is skipped silently.
@@ -186,7 +187,8 @@ clips resolve through a global last-loaded-first registry and it would replace t
 Localized text (OBSERVED 2026-10-22, `docs/data-mods.md` "Localized text for mods"): add the row with
 `combined.csv.append` (`MY_MOD_LABEL,English,notes,Spanish,…` — every column), and give the scene a text whose `text`
 is exactly `MY_MOD_LABEL` **and `"html": false`** — the game then shows the current language's string. With the default
-HTML wrapper the key is drawn literally. Other texts stay literal (same in every language).
+HTML wrapper the key is drawn literally — the validator warns `text-loc-key-html` then. Other texts stay literal
+(same in every language).
 
 Redirecting a vanilla non-cat character's art without touching its GON (OBSERVED 2026-10-22, `data-mods.md`
 "Redirecting a vanilla character's clip via tilesets.gon"): a `data/tilesets.gon.merge` with

@@ -563,8 +563,10 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     **Localized text OBSERVED 2026-10-22** (`render-loctext.mewtest`, `npm run test:artprobe -- --loctext`): a text with
     `"html": false` (flags 0xeca1, the raw string as the initial text) whose string is a key of the current language —
     vanilla's `ENEMY_TOMTOM_NAME` or a mod's `combined.csv.append` key — is drawn as the localized string; in the HTML
-    wrapper the key is drawn literally. Plain texts draw in the same font and size as HTML ones (T3 owed). Not done:
-    switching key texts to plain automatically / a validator rule; the preview draws the key, not the value.
+    wrapper the key is drawn literally. Plain texts draw in the same font and size as HTML ones (T3 owed). The
+    validator warns `text-loc-key-html` on an HTML text that is exactly a key (base `combined.csv`, the mod's own csv
+    overlays, or the key shape); Art mode's text row has a **plain (localized)** box that writes `html: false`. Not
+    done: switching key texts to plain automatically; the preview draws the key, not the value.
     **tilesets.gon redirect OBSERVED 2026-10-22** (`mods/_tileprobe`, `-- --tileset`): `alley { Rat ArtProbe }` draws
     our clip for every plain Rat in alley — a data-only way to reskin a vanilla non-cat character with a mod clip.
     **Cat-parts import experiment 2026-10-20: negative.** `scene.imports` writes `ImportAssets2("catparts.swf", [{ id,
