@@ -14,12 +14,13 @@ import type { VObject } from "../src/core/gon/types.ts";
 import {
   resolveComponent, checkComponentBlock, forEachComponentBlock, loadComponentSchema, validateSchemaShape, SCHEMA_PATH,
 } from "../src/core/component-schema.ts";
-import type { ComponentSchema, ComponentSpec } from "../src/core/component-schema.ts";
+import type { ComponentSchema, ComponentSpec, KeySpec, KeyType } from "../src/core/component-schema.ts";
 import { validateFragment, mergeFragments, surveyVanilla } from "../src/core/component-schema-build.ts";
 import type { Fragment } from "../src/core/component-schema-build.ts";
 import { validateMod } from "../src/core/validate/validator.ts";
 import { componentNameSet } from "../src/core/components.ts";
 import { EXTRACTED_DATA } from "../src/core/repo.ts";
+import { searchComponents } from "../src/core/api.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -27,7 +28,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const spec = (over: Partial<ComponentSpec>): ComponentSpec => ({
   base: null, status: "mapped", open: false, children: null, scalar: null, keys: {}, includes: [], vanillaMissed: [], notes: "", ...over,
 });
-const key = (type: string, over: Record<string, unknown> = {}) => ({ type, default: null, required: false, confidence: "observed", evidence: ".analysis/decompiled/x.c", ...over });
+const key = (type: KeyType, over: Partial<KeySpec> = {}): KeySpec => ({ type, default: null, required: false, confidence: "observed", evidence: ".analysis/decompiled/x.c", ...over });
 
 /** A small hand-written schema: a Passive base, a child with own keys, an effects-children container, an open one, a shared include. */
 export function syntheticSchema(): ComponentSchema {
@@ -260,6 +261,15 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     }
     console.log(`      vanilla: ${files.length} files, ${blocks} component blocks, ${checked} object blocks checked, ${bad.length} findings`);
     eq(bad.length, 0, `vanilla findings: ${bad.slice(0, 8).join(" | ")}`);
+  });
+  test("api.searchComponents (MCP search_components) returns the keys of the top matches", () => {
+    const r = searchComponents("CatchProjectiles", { limit: 5 });
+    assert(r.names.includes("CatchProjectiles"), `names: ${r.names.join(",")}`);
+    const c = (r.schema ?? []).find((x) => x.name === "CatchProjectiles");
+    assert(!!c, `schema entry for CatchProjectiles: ${JSON.stringify(r.schema ?? null).slice(0, 300)}`);
+    assert(Array.isArray(c!.chain) && c!.chain[0] === "CatchProjectiles", "chain starts at the class");
+    assert(c!.keys !== null && typeof c!.keys === "object", "keys object");
+    eq((searchComponents("ZzNoSuchComponentZz").schema ?? []).length, 0, "no match, no schema rows");
   });
   test("component schema T1: vanilla-derived fixture mods (renamed .append copies) give 0 unknown-key / missing-required-key", () => {
     const src = ["passives/butcher_passives.gon", "items/head_items.gon", "characters/enemies.gon", "abilities/fighter_abilities.gon"].filter((p) => existsSync(join(EXTRACTED_DATA, p)));
