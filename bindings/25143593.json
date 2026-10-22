@@ -8064,6 +8064,11 @@
         ],
         "callees": [
           {
+            "ordinal": 188,
+            "name": "Character_init_clip",
+            "target": "0xf1150"
+          },
+          {
             "ordinal": 325,
             "name": "ShaderManager_GetOrCreateMaterial",
             "target": "0x9bb5d0"
@@ -8287,11 +8292,6 @@
             "ordinal": 1360,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
-          },
-          {
-            "ordinal": 188,
-            "name": "Character_init_clip",
-            "target": "0xf1150"
           }
         ],
         "cfgLite": {
