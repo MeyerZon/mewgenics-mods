@@ -91,7 +91,7 @@ these without a decision (status per bullet below; the PR map follows).
       `vectorcraft_exec` (the same `window.vectorcraft` API in Playwright's headless Chromium, ~0.5–4 s to boot;
       skips when not vendored). The native `vectorcraft-cli mcp --headless` route needs an install and stays unasked.
       Remaining: T3 — the owner's look at the tab and at a `vectorcraft_exec` drawing in game.
-- [ ] **T3 looks** (owner, 2026-10-21: he will do these later) — moved to **"Requires a human (T3 looks)"** at the
+- [x] **T3 looks** (owner, 2026-10-21: he will do these later) — moved to **"Requires a human (T3 looks)"** at the
       top of this file (the gallery: `cd editor && npm run t3`; the list: `editor/t3-looks.json`).
 - [x] **Agent, next session (no decision needed):** the deferred docs sweep — done 2026-10-21 in PR #73 (the modding
       skill's art section, binding-port.md "Known limits", KNOWLEDGE-BASE's Ruffle line, CLAUDE.md's tool count; also
@@ -152,7 +152,8 @@ Things no test can see: they need a human at the game, a decision, or an account
   `-savesuffix` check in `framework.c` has not changed since it was verified; no plain launch will be run for this).
 - [ ] **Hidden window on another machine**: confirm the harness keeps ticking hidden on a non-NVIDIA PC before any
   CI-like use.
-- [ ] **Binding-port series** (second build, decisions, play-checks): the detailed checklist is the next section.
+- [x] **Binding-port series** (second build, decisions, play-checks): the detailed checklist is the next section
+  (pointer only; its open items are indexed in "Still open (owner)" at the end, 2026-10-22).
 - [x] **Decisions pending** — all decided 2026-10-19 (see "Decisions" and "Decisions made" below): GitHub Actions
   for T0 **yes, path-filtered**; Ruffle **yes, via the dep-gate**; dead `conceptsDontShowStart` key **remove the
   button**; mechanical TDD enforcement **yes** (PR template + CI).
@@ -163,10 +164,12 @@ Things no test can see: they need a human at the game, a decision, or an account
 - [x] **Merges.** The leftovers stack (#28–#33, #32) was merged on your word, 2026-10-19 night; PR #27 (docs,
   cross-build port) merged after its rebase; the editor's TypeScript/React stack (#36, #37) merged 2026-10-20 on your
   word. Say so per PR as always (`CLAUDE.md`).
-- [ ] **After the TypeScript switch (T3 of PR #37)**: restart the `mewgenics-editor` MCP server in Claude Code once and
+- [x] **After the TypeScript switch (T3 of PR #37)**: restart the `mewgenics-editor` MCP server in Claude Code once and
   call `list_base_data` / `validate_mod` (your registration still names `editor/src/mcp/server.mjs`, now a 4-line shim);
   optionally re-register with `claude mcp add mewgenics-editor -- node "<repo>/editor/src/mcp/server.ts"`. Run
-  `npm run test:ingame` once with Steam up (the runner is typed, not changed).
+  `npm run test:ingame` once with Steam up (the runner is typed, not changed). **Done** (checked 2026-10-22): the
+  registered server has been restarted on the TypeScript core since (it serves #62/#70's art tools such as
+  `export_svg`), and `npm run test:ingame` has run green many times since #44.
 
 ### Only you can do these — added 2026-10-19 night (after the leftovers stack)
 
@@ -214,11 +217,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   caught it. Caveat: every anchored function had identical size/call counts on both builds, so only the relink case
   is proven. Result and the ladder candidates it suggests: `docs/binding-port.md` "T1 cross-build result". Repeat
   with any build that changes SDL or function bodies.
-- [ ] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` — was done 2026-10-19 (sha256
+- [x] **Keep a copy of the current exe** at `.analysis/exe/25143593/Mewgenics.exe` — was done 2026-10-19 (sha256
   `4127cd6a…`) but the worktree-junction wipe of 2026-10-19 took `.analysis/exe/` with it (checked 2026-10-20: the
   dir does not exist). An agent redoes the copy with the decompile rebuild (queued); redo it yourself before every
   Steam update: the anchors are committed, the binary is not, and the self-port/harvest tests need it once the
-  install moves on.
+  install moves on. **Back since 2026-10-20** (decompile rebuild, #57; present 2026-10-22). The "redo before every
+  Steam update" part is a standing step of a port, not an open box.
 
 ### Decisions
 - [x] **`sigCap` / `FW_SIG_MAX_BYTES` stays at 128** (owner, 2026-10-19): wait until a port actually reports a pattern
@@ -226,8 +230,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   limits"). Nothing needs more than 86 bytes since 2026-10-22 (`Status_GetCategory`'s 126-byte pattern is gone).
 - [x] **One DLL per build** (owner, 2026-10-19): the manifest set and `signatures.h` carry only the current build;
   `offsets.h` stays shared `#define`s and the generator keeps refusing mixed manifests.
-- [ ] **SDL version policy**: when `port_bindings` reports the 8 SDL slots as `needs-human` (SDL version changed), the
-  DYNAPI slot order must be re-verified by hand (`SDL_dynapi_procs.h` of that SDL version) before trusting the indices.
+- [x] **SDL version policy**: when `port_bindings` reports the 8 SDL slots as `needs-human` (SDL version changed), the
+  DYNAPI slot order must be re-verified by hand (`SDL_dynapi_procs.h` of that SDL version) before trusting the indices. Standing rule, recorded in `docs/binding-port.md` "Known limits"; acts only
+  on an SDL upgrade.
 - [x] **Optional PR 15 — runtime anchor locator in the DLL**: **skipped** (owner, 2026-10-19). The offline port tool
   plus the fail-closed build gate already give "broken binding = disabled mod, not a crash"; a game update needs a
   rebuild and a T2 pass anyway, so in-process string→xref resolution is not worth the native surface.
@@ -241,8 +246,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [ ] **Read `docs/binding-port.md` once as the person who will run the next port**; anything unclear is a doc bug.
 - [x] **`check_game_build` from Claude Code** returned `known: true`, 35 `ok` / 0 moved / 0 missing / 0 ambiguous on
   the install (2026-10-19; MCP `mewgenics-editor`, 13 tools).
-- [ ] **A `proposed` struct offset is never applied by the tool**: when a port reports one, apply it only with
+- [x] **A `proposed` struct offset is never applied by the tool**: when a port reports one, apply it only with
   `--resolve Name=0x..` after a green `npm run test:ingame` that exercises it (`docs/binding-port.md` "The ladder").
+  Standing rule, enforced by the tool and recorded in `docs/binding-port.md` "Known limits".
 
 ### Known gaps you are accepting for now
 - [x] 46 entries (40 struct offsets — the 32 of the cross-build run plus the 8 added for dev scenes and the RNG on
@@ -250,8 +256,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   instead of guessing. Follow-up below ("Witness patterns for the 46 unanchored entries"); agent work, queued.
   **Closed 2026-10-20** (PRs #53–#56; ticked in the 2026-10-21 docs sweep): every entry is anchored; the witnesses
   are verified on the installed exe, not yet on a second build.
-- [ ] A changed arity of the 13 status lookups (shapes A–E in `status_engine.c`), a compiler/CRT change (`MsvcString`
+- [x] A changed arity of the 13 status lookups (shapes A–E in `status_engine.c`), a compiler/CRT change (`MsvcString`
   layout, `_Allocate<16>`), or a changed vtable layout cannot be ported mechanically; the port will say so.
+  Accepted gap, recorded in `docs/binding-port.md` "Known limits".
 
 
 ## Done
@@ -366,7 +373,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
      the report was a run without `MEWGENICS_EDITOR_DATA`; now pinned by a test): every game-data / cache path goes
      through `repo.ts` `EXTRACTED_ROOT` / `extractedPath` / `vanillaSwfDir` / `DATA_CACHE_DIR`, so
      `MEWGENICS_EXTRACTED_DATA` + `MEWGENICS_EDITOR_DATA` are the whole worktree setup.
-8. [ ] **Golden merge cases** (owner 2026-10-20: "tdd 8 - ok" — the "golden through `dump`" sub-item is approved and
+8. [x] **Golden merge cases** (owner 2026-10-20: "tdd 8 - ok" — the "golden through `dump`" sub-item is approved and
    queued as agent work, first of the 2026-10-20 run): freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
    so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1
    (2026-10-20):** no console command reads a live GON value — the full in-run command set (84, pinned in
@@ -385,7 +392,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
      pin `health.multiply 2` → `properties.health` 12 / `hp` 12 (vanilla 6) and `speed.add 10` → `stats.speed` 15 /
      `speed` 15 (vanilla 5); fixtures `result-golden-numeric{,-vanilla}.jsonl`. Found on the way: `Character+0x248` is
      the `graphics.name` loc key, not the entry name (the entry name's home is still unknown). Target 8 is complete;
-     `.append` on an existing key (duplicate children) stays untested in-game.
+     `.append` on an existing key (duplicate children) stays untested in-game (indexed in "Still open (agent-doable)").
 9. [x] **`npm test` without `.extracted/`** (done 2026-10-19, leftovers PR 3: round-trip, real-overlay, validator and the two
    base-data MCP calls skip with a logged `(skipped: …)`; a nested run with `MEWGENICS_EXTRACTED_DATA` = empty dir is
    itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged
@@ -429,11 +436,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **Which file `-savesuffix dev` writes** — decoded 2026-10-19 (leftovers PR 5): the suffix is not part of any save
   path; names come from the slot list (`campaign0N` / `steamcampaign0N`), `test00.sav`, `housetest01.sav`
   (`engine-map.md` "Save safety"). The harness now hashes every `*.sav` and allows only the local/test families to change.
-- [ ] **`-savesuffix` gives no save isolation on this build** (finding of the decode above): a dev launch that enters a
+- [x] **`-savesuffix` gives no save isolation on this build** (finding of the decode above): a dev launch that enters a
   Steam-cloud slot would write the real `steamcampaign0N.sav`. The hash check catches it after the fact; decide whether
   dev play should go through `test00.sav` only (test director) or a copied slot, and whether to ask the developer what
   the suffix is meant to do. Harness side settled 2026-10-20: scripted meta-flow tests use the disposable
-  `mewtest01.sav` (`enter Campaign`, moved aside per run); the human dev-play policy is still yours.
+  `mewtest01.sav` (`enter Campaign`, moved aside per run); the human dev-play policy is still yours — tracked as the owner item "Dev-play policy after the save-suffix
+  decode" above (2026-10-22: this box is the finding, recorded in `docs/engine-map.md` "Save safety").
 - [x] **`FrameBegin` signature on a future build** — 2026-10-22: the 19 generic prologue bytes are replaced by a body
   window from +45 (86 bytes, 4 rip refs masked) keyed on the per-frame defaults FrameBegin stores (`0xffffff09`,
   `0x0be2`, `02 02 02 04`, `05 04 05 02`, `02`; 1 hit image-wide on 25143593), plus `before: ApplicationBase_FrameEnd`
@@ -441,8 +449,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   (71 rip refs, all globals — `.analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c`). `ApplicationBase_Step`
   stays the fallback hook point; `make-signature --manifest` would regenerate the prologue window, so keep the body
   one by hand (noted in the entry and in `docs/binding-port.md`).
-- [ ] **Hidden window on other machines**: verified on this PC (NVIDIA, ~180 fps hidden); confirm elsewhere before
-  relying on it in CI-like setups.
+- [x] **Hidden window on other machines**: verified on this PC (NVIDIA, ~180 fps hidden); confirm elsewhere before
+  relying on it in CI-like setups. Duplicate (2026-10-22) of the owner check "Hidden window on another machine".
 - [x] **In-run console command set**: captured 2026-10-20 after `enter TacticsTest` — 84 commands, pinned verbatim in
   `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt` and listed in `ingame-testing.md`.
 
@@ -480,9 +488,10 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] Old private repo renamed + **archived** (not deleted — per user); its email-bearing history is retired
 
 ### Decisions made (2026-10-19) — work items that fall out of them
-- [ ] Ruffle (WASM) dependency for previewing *vanilla* SWFs in-editor — **approved in principle**. Still goes through
+- [x] Ruffle (WASM) dependency for previewing *vanilla* SWFs in-editor — **approved in principle**. Still goes through
   the skeptic dep-gate (source review, no injection, vuln scan) and the owner's explicit per-install go before anything
-  is added to `editor/package.json`.
+  is added to `editor/package.json`. **Done in #59** (2026-10-20): dep-gate in the PR body, install approved
+  2026-10-20, `@ruffle-rs/ruffle` vendored at build time.
 - [x] Dead key `mewged.onboard.conceptsDontShowStart` — button and key removed (PR #25, 2026-10-19, red unit test first).
 - [x] GitHub Actions running T0 — done 2026-10-20 (PR #40, target 11): `.github/workflows/t0.yml` on Linux runners
   (editor typecheck + `npm test` + `bindings:check`; native host suites via `native/test-all.sh`; the game never)
@@ -497,14 +506,16 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
 (owner decision first) → VectorCraft handoff (owner info first). Plan: the session's plan file; progress: the PR list.
 
 ### Larger build-out
-- [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
-- [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
-- [ ] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-22: the append route (`_Append_CatTest` frame placing a rig with EMPTY slot sprites, experiment A0) works — the game draws the cat's own parts into our frame; the 2026-10-21 crash was the visible non-empty placeholder (engine-map "CatTest and the cat animation clips").
+- [x] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid — done in #66
+  (Timeline tab, 2026-10-20) and, for cats, #76 (`_Append_CatTest` frames)
+- [x] Part-indexed **cat-rig** authoring UI (model already supports named layers) — done in #67 (Rig tab, 2026-10-20)
+- [x] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-22: the append route (`_Append_CatTest` frame placing a rig with EMPTY slot sprites, experiment A0) works — the game draws the cat's own parts into our frame; the 2026-10-21 crash was the visible non-empty placeholder (engine-map "CatTest and the cat animation clips"). Resolved as data-only in #74 / #76 (see "Open decisions").
 - [x] Clip authoring (Timeline tab, timeline-edit.ts) and the cat rig (Rig tab, cat-rig.ts) — 2026-10-20, art build-out G + H; the game drives a character's root timeline, units are tinted by position
-- [ ] Emitter: ~~gradient fills~~ (done 2026-10-20, art build-out C: gradient.ts, gate `gradient`, probe square drawn in-game), ~~LineStyle2~~ (done 2026-10-20, art build-out E: DefineShape4, stroke.ts, gate `shape4`, caps honoured in-game), ~~fonts/text~~ (done 2026-10-21: DefineEditText in a game font class + ImportAssets2 fonts.swf, like vanilla; drawn in-game), ~~PlaceObject3~~ (done 2026-10-20, art build-out F: blends load and apply in-game; filters crash the game and are a validation error)
-- [ ] MCP tools for art (so agents can author art, not just data)
+- [x] Emitter (all four done: #63, #64, #69, #65): ~~gradient fills~~ (done 2026-10-20, art build-out C: gradient.ts, gate `gradient`, probe square drawn in-game), ~~LineStyle2~~ (done 2026-10-20, art build-out E: DefineShape4, stroke.ts, gate `shape4`, caps honoured in-game), ~~fonts/text~~ (done 2026-10-21: DefineEditText in a game font class + ImportAssets2 fonts.swf, like vanilla; drawn in-game), ~~PlaceObject3~~ (done 2026-10-20, art build-out F: blends load and apply in-game; filters crash the game and are a validation error)
+- [x] MCP tools for art (so agents can author art, not just data) — done in #62 (16 → 23 tools, 2026-10-20), then
+  `export_svg` (#70), `bake_glow` (#80), `vectorcraft_exec` (#89)
 - [x] External vector editor round trip (2026-10-21): VectorCraft (github.com/storytold/vectorcraft) is a static vector editor without timeline or player, so it edits single shapes through plain SVG — Export SVG / Replace… on Shapes rows, MCP `export_svg`, `svg-export.ts`; animation stays in the Timeline tab
-- [ ] Testing frontier from `automation-feasibility.md`: AI-brain auto-resolve to smoke-test mods in a real fight (tiers B/C) → now TDD targets 1–3 above; an IPC action layer (tier D) → the named-pipe mode in target 12
+- [x] Testing frontier from `automation-feasibility.md`: AI-brain auto-resolve to smoke-test mods in a real fight (tiers B/C) → now TDD targets 1–3 above; an IPC action layer (tier D) → the named-pipe mode in target 12 (done: #43–#46, #52)
 
 ### Open engine unknowns to resolve
 - [x] Exact SWF-format + `_Append_`/SymbolClass convention the loader requires — binding needs no DoABC; `_Append_<Target>` merges at boot; an unknown target stalls the boot (OBSERVED 2026-10-19). **Display path closed 2026-10-21** (RE session `disp`; `docs/engine-map.md` "SWF loader and display path"): the complete tag switch of `createTag` 0xa2e990 (DefineFont 1/2, a second DoABC, PlaceObject3 filters, an over-page bitmap are FATAL; scaling grids, morph shapes, PlaceObject1 cxforms, imports are skipped), even-odd per fill style, cxform after the palette remap, pad-only gradients, by-name lookup last-loaded-first, the `tilesets.gon` clip-name remap. Editor rules: `swf-rules.ts` + `scene.ts` codes `font-tag-unsupported`, `abc-count`, `bitmap-too-large`, `scaling-grid-ignored`, `gradient-spread-ignored`, `morph-shape-skipped`, `place-cxform-ignored`, `fill-rule-ignored`, `export-shadows-vanilla`, `jpeg-bitmap`, `tag-ignored`. Still open: LineStyle2 joins / miter / hairline in the outline builder, the font-class → font lookup RVA, the `tilesets.gon` redirect in-game (INFERRED).
@@ -529,7 +540,7 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
   decoder ignored the `66` prefix, and window starts fell inside instructions — three signatures were unique only
   through unmasked relocation / type-id / `__LINE__` bytes and are `null` now (the DLL takes the raw RVA). Still
   wanted: a body-changing build to exercise the rungs on a real recompile (the T1 cross-build only relinked).
-- [ ] **Witness patterns for the 46 unanchored entries** (40 struct offsets, 6 vtable slot constants) so the port stops
+- [x] **Witness patterns for the 46 unanchored entries** (40 struct offsets, 6 vtable slot constants) so the port stops
   reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.ts`. The
   second witness for `LuckUp_typeid` (the `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in
   `Status_ApplyLuckUp`) landed in PR #32; harvest and port now require every source of a constant to agree.
@@ -537,3 +548,30 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
   status_engine offsets (#55), the six vtable-slot constants derived (#56); nothing in the manifest is unanchored.
 - [x] **Runtime anchor locator in the DLL** (optional): string → lea xref → `.pdata` so anchored-but-unsigned entries
   survive a relink before anyone runs the port. **Dropped** by owner decision 2026-10-19 (see "Decisions").
+
+## Still open — index (2026-10-22 sweep)
+
+Every unticked box below "Requires a human (T3 looks)" is open; this is the short list of them, plus the open
+leftovers that live inside ticked items. The boxes stay where they are (history kept); tick them there.
+
+### Still open (agent-doable)
+- Cat animations not authored yet: the back facing's `head_back` layout and the four-way `LF/RF/LB/RB` quartet
+  ("Open decisions" → "Cat parts in a rig").
+- `.append` on an existing key (duplicate children) in-game (TDD target 8's last gap).
+- SWF display leftovers: LineStyle2 joins / miter / hairline in the outline builder, the font-class → font lookup RVA,
+  the blend modes other than normal / layer / multiply / add / overlay / erase, the `per_file_curve_resolution`
+  tolerance ("Open engine unknowns").
+- Bindings: follow chained `.pdata` chunks in `readOffsetWitness`; the callee-set rung (not needed by any entry today)
+  (`docs/binding-port.md` "Known limits").
+- Watch for the one-off early exit ("Verification still owed").
+
+### Still open (owner)
+- Native per-unit glow — what next? (a data-level way to ask for it; the hover rim while units glow) — "Open decisions".
+- Hidden window on a non-NVIDIA machine; dev-play policy after the save-suffix decode; eyeball the saves dir after a
+  dev run; watch one clean-mode run end; a fuller `debug.log`; the optional `gh pr merge` permission rule; the merge
+  policy for autonomy — "Owner checks".
+- Re-fetch build 23372843 (and optionally rerun the cross-build); a body-changing second build to exercise the port
+  rungs on a real recompile.
+- Remove the leftover agent worktree `agent-ac7ac5f970624f89d` safely (junctions first).
+- `FW_API_VERSION` bump policy for new `FW_SYM_*` / `FW_DATA_*` entries; does the `port-bindings` skill trigger on
+  "the game updated"; read `docs/binding-port.md` once as the next porter — "Owner checklist".
