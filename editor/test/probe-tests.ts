@@ -156,6 +156,6 @@ export async function runPreviewAgreementTests(test: TestFn, assert: AssertFn, e
     assert(/nestedFrame\(clk, b\.frames\)/.test(previewSource), "nested frames use the clock");
     const up = previewSource.slice(previewSource.indexOf("function uploadBitmap"), previewSource.indexOf("function uploadBitmap") + 1500);
     assert(/TEXTURE_MAG_FILTER, g\.LINEAR/.test(up) && /TEXTURE_MIN_FILTER, g\.LINEAR/.test(up) && /CLAMP_TO_EDGE/.test(up), "bitmap textures: LINEAR + clamp");
-    assert(/imageSmoothingEnabled = true/.test(previewSource) && !/imageSmoothingEnabled = false/.test(previewSource), "Canvas2D smoothing on");
+    assert(/imageSmoothingEnabled = ft < 0x42/.test(previewSource) && !/imageSmoothingEnabled = false/.test(previewSource), "Canvas2D smoothing on for the smoothed fill types 0x40 / 0x41 (0x42 / 0x43 are pixel-snapped: raster.ts bitmapFillType)");
   });
 }

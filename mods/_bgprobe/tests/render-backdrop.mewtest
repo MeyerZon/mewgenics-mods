@@ -1,0 +1,14 @@
+mods: _artprobe, _bgprobe, _autoplay
+timeout: 90s
+hide: false
+# Raster backdrop probe (2026-10-22): _bgprobe's data/tilesets.gon.merge sets alley's combat_background to
+# _artprobe's ArtProbeBackdrop (a purple / teal 2000×1500 bitmap plate). editor/scripts/art-probe.ts --raster counts
+# the plate's colours in these shots against _artprobe/render-tileset-control's baseline (the vanilla alley plate).
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "backdrop 1"
+wait frames 60
+shot "backdrop 2"
+quit

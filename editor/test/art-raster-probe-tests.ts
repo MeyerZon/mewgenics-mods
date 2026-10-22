@@ -31,14 +31,10 @@ export async function runArtRasterProbeTests(test: TestFn, assert: AssertFn, eq:
   try { P = await import("../src/core/art/probe-raster.ts"); } catch (e) { err = e instanceof Error ? e.message : String(e); }
   const need = () => { if (err) throw new Error(`probe-raster.ts: ${err}`); };
   const art = join(MODS_DIR, "_artprobe", "art");
-  const catSlotKeys = () => {
-    const probe = JSON.parse(readFileSync(join(art, "probe.scene.json"), "utf8")) as any;
-    return Object.fromEntries(probe.sprites.CatProbe.layers.filter((l: any) => l.name !== "marker").map((l: any) => [l.name, l.keys[0]]));
-  };
 
   test("rasterProbeScene validates (no errors) and is what mods/_artprobe/art/raster.scene.json holds (regenerate from probe-raster.ts)", () => {
     need();
-    const sc = P.rasterProbeScene(catSlotKeys());
+    const sc = P.rasterProbeScene();
     const v = validateScene(JSON.parse(JSON.stringify(sc))) as any;
     assert(v.ok, JSON.stringify(v.findings.filter((f: any) => f.severity === "error")));
     const file = join(art, "raster.scene.json");
@@ -66,7 +62,7 @@ export async function runArtRasterProbeTests(test: TestFn, assert: AssertFn, eq:
 
   test("the emitted raster.swf: fill types 0x41 / 0x43 (stripes) / 0x40 (tile), the DefineFont3 ProbeBlocks exported, the four exports; the loader rules are clean; patchMissingFontClass renames exactly one class and then font-class-unknown fires", () => {
     need();
-    const v = validateScene(JSON.parse(JSON.stringify(P.rasterProbeScene(catSlotKeys())))) as any;
+    const v = validateScene(JSON.parse(JSON.stringify(P.rasterProbeScene()))) as any;
     const imgs = P.rasterProbeImages();
     const bitmaps = new Map<string, Img>([["checkerbmp", decodePng(new Uint8Array(readFileSync(join(art, "checker.png"))))], ["quadbmp", imgs.small.quad], ["stripebmp", imgs.small.stripe], ["stripesnapbmp", imgs.small.stripe], ["tilebmp", imgs.small.tile], ["gray16bmp", imgs.small.gray16], ["bigbmp", imgs.generated.rasterbig], ["backdropbmp", imgs.generated.backdrop]]);
     const out = emitSwf(v.scene, { bitmaps });
@@ -77,12 +73,26 @@ export async function runArtRasterProbeTests(test: TestFn, assert: AssertFn, eq:
     const font = tags.find((t) => t.code === 75);
     eq(font.font.codes, " HI");
     const names = tags.find((t) => t.code === 76).entries.map((e: any) => e.name).sort().join(",");
-    eq(names, "ArtProbeBackdrop,ArtProbeFontMissing,ArtProbeRaster,ProbeBlocks,_Append_CatTest");
+    eq(names, "ArtProbeBackdrop,ArtProbeFontMissing,ArtProbeRaster,ProbeBlocks");
     const errs = swfFindings(tags).filter((f) => f.severity !== "info");
     eq(errs.length, 0, JSON.stringify(errs));
     const p = P.patchMissingFontClass(out.bytes);
     eq(p.patched, 1);
     assert(swfFindings(readSwf(p.bytes).tags).some((f) => f.code === "font-class-unknown"), "font-class-unknown after the patch");
+  });
+
+  test("probe.scene.json carries the raster cat frame on A0's one _Append_CatTest donor (withRasterCatFrame is idempotent over it): probeRasterF / probeRasterB place CatRasterRig, whose slots are empty and whose ramps sit at RASTER_PROBE.cat; raster.scene.json exports no _Append_CatTest (OBSERVED: a second mod donor left neither file's labels playable)", () => {
+    need();
+    const probe = JSON.parse(readFileSync(join(art, "probe.scene.json"), "utf8")) as any;
+    eq(JSON.stringify(P.withRasterCatFrame(probe)), JSON.stringify(probe));
+    const d = probe.sprites.CatAppendRoot;
+    assert(d.labels.probeIdleF === 0 && d.labels.probeIdleB === 1, "A0 labels kept");
+    const ani = d.layers.find((l: any) => l.name === "ani");
+    eq(ani.keys.filter((k: any) => k.frame === d.labels.probeRasterF || k.frame === d.labels.probeRasterB).map((k: any) => k.ref).join(","), "CatRasterRig,CatRasterRig");
+    const rig = probe.sprites.CatRasterRig;
+    eq(rig.layers.find((l: any) => l.name === "bitmapRamp").keys[0].x, P.RASTER_PROBE.cat.bitmapRamp.x);
+    assert(validateScene(JSON.parse(JSON.stringify(probe))).ok, "probe.scene.json validates");
+    assert(!("_Append_CatTest" in P.rasterProbeScene().exports), "raster.swf has no CatTest donor");
   });
 
   test("probe mod data: _artprobe enemies ArtProbeRaster / ArtProbeFontMissing (Rat variants) and ArtProbeRasterCat (a _CAT whose idle is probeRaster, custom cat ArtProbeRasterCat with palette 54); _bgprobe points alley's combat_background at ArtProbeBackdrop", () => {
@@ -199,6 +209,20 @@ export async function runArtRasterProbeTests(test: TestFn, assert: AssertFn, eq:
     eq(z.left + z.right, 0);
   });
 
+  // ---- the observed outcomes (T2 fixture) --------------------------------------------------------------------------
+  test("OBSERVED 2026-10-22 fixture (artprobe-raster-summary.json): a PNG raster sprite is drawn; 0x41 smooths and 0x43 pixel-snaps; 0x40 repeats; a minified 1-texel checker comes out flat gray (mipmapped); the mod DefineFont3 draws its own glyphs and a glyph it lacks falls back to another font's glyph; a font class nobody exports crashes the game at spawn; a mod combat_background plate replaces the arena; every run left the real save unchanged", () => {
+    const p = join(HERE, "fixtures", "ingame", "artprobe-raster-summary.json");
+    assert(existsSync(p), "written by npm run test:artprobe -- --raster");
+    const s = JSON.parse(readFileSync(p, "utf8")) as any;
+    const o = s.outcomes;
+    eq(o.rasterSprite, "drawn"); eq(o.sampling, "smooth-vs-snapped"); eq(o.repeat, "repeats"); eq(o.minified, "mipmapped");
+    eq(o.embeddedFont, "embedded-font"); eq(o.missingGlyph, "fallback-glyph"); eq(o.backdrop, "drawn");
+    assert(/^crash at 0xa2addf/.test(o.missingFont), o.missingFont);
+    for (const k of ["raster", "cat", "fontMissing", "backdrop", "control"]) assert(/real save file\(s\) unchanged/.test(s[k].save || ""), `${k}: ${s[k].save}`);
+    assert(s.backdrop.shares.every((x: any) => x.left > 0.1 && x.right > 0.1) && s.control.baselineShare.left + s.control.baselineShare.right < 0.005, JSON.stringify([s.backdrop.shares, s.control.baselineShare]));
+    assert(s.raster.shots.every((x: any) => x.marker && x.marker.found && x.marker.mirrored), "marker in every raster shot, mirrored like every enemy clip");
+  });
+
   // ---- the preview -----------------------------------------------------------------------------------------------
   test("preview-gl draws the fill type per bitmap (bitmapFillType: repeat → fract(uv), pixel-snapped → texel centre, both in the shader) and lays a scene-font text out with layoutTextPaths", () => {
     const src = readFileSync(join(HERE, "..", "web", "src", "art", "preview-gl.ts"), "utf8");
@@ -207,7 +231,7 @@ export async function runArtRasterProbeTests(test: TestFn, assert: AssertFn, eq:
     assert(/layoutTextPaths/.test(src), "scene-font texts drawn from glyph paths");
   });
 
-  test("art-probe.ts has a --raster mode (builds raster.scene.json after writing the generated PNGs, patches probefm.swf, runs the four scripts, writes raster-summary.json)", () => {
+  test("art-probe.ts has a --raster mode (builds raster.scene.json after writing the generated PNGs, patches the missing-font class in raster.swf, runs the four scripts, writes raster-summary.json)", () => {
     const src = readFileSync(join(HERE, "..", "scripts", "art-probe.ts"), "utf8");
     assert(/--raster/.test(src) && /raster-summary\.json/.test(src) && /patchMissingFontClass/.test(src) && /render-backdrop/.test(src), "art-probe --raster");
   });

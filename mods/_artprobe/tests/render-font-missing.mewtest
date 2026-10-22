@@ -1,0 +1,16 @@
+mods: _artprobe, _autoplay
+timeout: 90s
+hide: false
+# Missing-font probe (2026-10-22): ArtProbeFontMissing (swfs/raster.swf; art-probe.ts --raster patches, after the build,
+# this text's font class Peralta to Pzzzzzz, which no SWF exports): does the game crash, draw nothing, or fall back to another font?
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+cmd spawn ArtProbeFontMissing
+expect console "Spawned ArtProbeFontMissing" within 10
+wait frames 60
+shot "fontmissing 1"
+wait frames 40
+shot "fontmissing 2"
+quit

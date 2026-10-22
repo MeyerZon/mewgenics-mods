@@ -248,12 +248,12 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(scene.exports["CatProbeColours"], "CatProbeColours");
     const root = scene.sprites.CatAppendRoot;
     assert(!!root, "sprite CatAppendRoot");
-    eq(root.frames, 2);
+    eq(root.frames, 4); // frames 2 / 3: the raster probe's probeRasterF / B (probe-raster.ts withRasterCatFrame)
     eq(root.labels.probeIdleF, 0); eq(root.labels.probeIdleB, 1);
     eq(root.layers.length, 1);
     const ani = root.layers[0];
     assert(ani.name === "ani" && ani.depth === 1, "the one layer is `ani` at depth 1 (the child PlayAnimation restarts)");
-    assert(ani.keys.length === 2 && ani.keys.every((k: any) => k.ref === "CatProbe" && k.x === 3.85 && k.y === -47.95), "ani places CatProbe on both frames at vanilla idleF's (77, -959) twips");
+    assert(ani.keys.length === 4 && ani.keys.filter((k: any) => k.frame < 2).every((k: any) => k.ref === "CatProbe" && k.x === 3.85 && k.y === -47.95), "ani places CatProbe on both frames at vanilla idleF's (77, -959) twips");
     const rig = scene.sprites.CatProbe;
     eq(rig.rig, "cat"); eq(rig.parts, "game");
     for (const s of fixture.catanisMain.slots) {

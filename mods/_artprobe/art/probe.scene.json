@@ -21,9 +21,11 @@
     "CatProbeColours_body": { "paths": [ { "d": "M-40 -40 C-40 -62 40 -62 40 -40 C40 -16 -40 -16 -40 -40 Z", "fill": "#2080ff", "fillRule": "nonzero" } ] },
     "CatProbeColours_leg1": { "paths": [ { "d": "M-34 -22 L-22 -22 L-20 0 L-34 0 Z", "fill": "#ff60a0", "fillRule": "nonzero" } ] },
     "CatProbeColours_arm1": { "paths": [ { "d": "M24 -22 L36 -22 L38 0 L24 0 Z", "fill": "#a0ff40", "fillRule": "nonzero" } ] },
-    "CatProbeColours_head": { "paths": [ { "d": "M22 -78 C22 -100 70 -100 70 -78 C70 -56 22 -56 22 -78 Z M26 -92 L30 -112 L42 -96 Z M50 -96 L62 -112 L66 -92 Z", "fill": "#ffd0a0", "fillRule": "nonzero" } ] }
+    "CatProbeColours_head": { "paths": [ { "d": "M22 -78 C22 -100 70 -100 70 -78 C70 -56 22 -56 22 -78 Z M26 -92 L30 -112 L42 -96 Z M50 -96 L62 -112 L66 -92 Z", "fill": "#ffd0a0", "fillRule": "nonzero" } ] },
+    "gray16": { "paths": [ { "d": "M0 0 L16 0 L16 1 L0 1 Z", "fill": "bitmap:gray16bmp", "transform": [16,0,0,24,0,0] } ] },
+    "vramp": { "paths": [ { "d": "M0 0 L16 0 L16 24 L0 24 Z", "fill": "gray:0" },{ "d": "M16 0 L32 0 L32 24 L16 24 Z", "fill": "gray:1" },{ "d": "M32 0 L48 0 L48 24 L32 24 Z", "fill": "gray:2" },{ "d": "M48 0 L64 0 L64 24 L48 24 Z", "fill": "gray:3" },{ "d": "M64 0 L80 0 L80 24 L64 24 Z", "fill": "gray:4" },{ "d": "M80 0 L96 0 L96 24 L80 24 Z", "fill": "gray:5" },{ "d": "M96 0 L112 0 L112 24 L96 24 Z", "fill": "gray:6" },{ "d": "M112 0 L128 0 L128 24 L112 24 Z", "fill": "gray:7" },{ "d": "M128 0 L144 0 L144 24 L128 24 Z", "fill": "gray:8" },{ "d": "M144 0 L160 0 L160 24 L144 24 Z", "fill": "gray:9" },{ "d": "M160 0 L176 0 L176 24 L160 24 Z", "fill": "gray:10" },{ "d": "M176 0 L192 0 L192 24 L176 24 Z", "fill": "gray:11" },{ "d": "M192 0 L208 0 L208 24 L192 24 Z", "fill": "gray:12" },{ "d": "M208 0 L224 0 L224 24 L208 24 Z", "fill": "gray:13" },{ "d": "M224 0 L240 0 L240 24 L224 24 Z", "fill": "gray:14" },{ "d": "M240 0 L256 0 L256 24 L240 24 Z", "fill": "gray:15" } ] }
   },
-  "bitmaps": { "checkerbmp": { "file": "art/checker.png" } },
+  "bitmaps": { "checkerbmp": { "file": "art/checker.png" }, "gray16bmp": { "file": "art/raster-gray16.png" } },
   "texts": {
     "probetext": { "text": "PROBE", "font": "Peralta", "size": 24, "color": "#00ffa0", "align": "center", "width": 160, "height": 40 },
     "keyVanillaHtml": { "text": "ENEMY_TOMTOM_NAME", "font": "Peralta", "size": 22, "color": "#00ffa0", "align": "center", "width": 360, "height": 40 },
@@ -99,11 +101,7 @@
         { "name": "marker", "depth": 15, "keys": [ { "frame": 0, "ref": "CatProbeMc_marker", "x": -48, "y": -220 } ] }
       ]
     },
-    "CatAppendRoot": {
-      "frames": 2,
-      "labels": { "probeIdleF": 0, "probeIdleB": 1 },
-      "layers": [ { "name": "ani", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe", "x": 3.85, "y": -47.95 }, { "frame": 1, "ref": "CatProbe", "x": 3.85, "y": -47.95 } ] } ]
-    },
+    "CatAppendRoot": { "frames": 4, "labels": { "probeIdleF": 0, "probeIdleB": 1, "probeRasterF": 2, "probeRasterB": 3 }, "layers": [ { "name": "ani", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe", "x": 3.85, "y": -47.95 },{ "frame": 1, "ref": "CatProbe", "x": 3.85, "y": -47.95 },{ "frame": 2, "ref": "CatRasterRig", "x": 3.85, "y": -47.95 },{ "frame": 3, "ref": "CatRasterRig", "x": 3.85, "y": -47.95 } ] } ] },
     "ArtProbeLoc": {
       "frames": 1,
       "layers": [
@@ -135,7 +133,15 @@
         { "name": "walker", "depth": 9, "keys": [ { "frame": 0, "ref": "walker", "x": 600, "y": 30, "tween": "linear" }, { "frame": 59, "ref": "walker", "x": 680, "y": 30 } ] },
         { "name": "text", "depth": 10, "keys": [ { "frame": 0, "ref": "probetext", "x": 300, "y": 90 } ] }
       ]
-    }
+    },
+    "CatRaster_tail": { "frames": 1, "labels": { }, "layers": [] },
+    "CatRaster_leg2": { "frames": 1, "labels": { }, "layers": [] },
+    "CatRaster_arm2": { "frames": 1, "labels": { }, "layers": [] },
+    "CatRaster_body": { "frames": 1, "labels": { }, "layers": [] },
+    "CatRaster_leg1": { "frames": 1, "labels": { }, "layers": [] },
+    "CatRaster_arm1": { "frames": 1, "labels": { }, "layers": [] },
+    "CatRaster_head": { "frames": 1, "labels": { }, "layers": [] },
+    "CatRasterRig": { "frames": 24, "labels": { "idle": 0 }, "rig": "cat", "parts": "game", "layers": [ { "name": "tail", "depth": 1, "keys": [ { "frame": 0, "ref": "CatRaster_tail", "matrix": [0.599639892578125,0.16241455078125,-0.16241455078125,0.599639892578125,-24.45,10.05] } ] },{ "name": "leg2", "depth": 3, "keys": [ { "frame": 0, "ref": "CatRaster_leg2", "matrix": [0.6212615966796875,0,-0.0479583740234375,0.6212615966796875,-9.85,23.65], "cxform": { "mul": [0.84765625,0.84765625,0.84765625,1] } } ] },{ "name": "arm2", "depth": 5, "keys": [ { "frame": 0, "ref": "CatRaster_arm2", "matrix": [0.6212615966796875,0,0,0.6212615966796875,17.15,32.45], "cxform": { "mul": [0.84765625,0.84765625,0.84765625,1] } } ] },{ "name": "body", "depth": 7, "keys": [ { "frame": 0, "ref": "CatRaster_body", "matrix": [0.621307373046875,0.00445556640625,-0.01177978515625,0.6211090087890625,-0.4,16.35] } ] },{ "name": "leg1", "depth": 9, "keys": [ { "frame": 0, "ref": "CatRaster_leg1", "matrix": [0.6212615966796875,0,-0.0883636474609375,0.6212615966796875,-32.1,27.1] } ] },{ "name": "arm1", "depth": 11, "keys": [ { "frame": 0, "ref": "CatRaster_arm1", "matrix": [0.6212615966796875,0,0,0.6212615966796875,-4.7,37.25] } ] },{ "name": "head", "depth": 13, "keys": [ { "frame": 0, "ref": "CatRaster_head", "matrix": [0.6212615966796875,0,0,0.6212615966796875,10.95,2.3] } ] },{ "name": "marker", "depth": 15, "keys": [ { "frame": 0, "ref": "CatProbeMc_marker", "x": -48, "y": -330 } ] },{ "name": "bitmapRamp", "depth": 16, "keys": [ { "frame": 0, "ref": "gray16", "x": -128, "y": -380 } ] },{ "name": "vectorRamp", "depth": 17, "keys": [ { "frame": 0, "ref": "vramp", "x": -128, "y": -410 } ] } ] }
   },
   "exports": { "ArtProbe": "ArtProbe", "CatProbeColours": "CatProbeColours", "_Append_CatTest": "CatAppendRoot", "ArtProbeLoc": "ArtProbeLoc" }
 }
