@@ -37,6 +37,7 @@ export const POST_ROUTES = [
   "/api/art/new-scene",
   "/api/art/validate",
   "/api/art/import-svg",
+  "/api/art/import-bitmap",
   "/api/art/export-svg",
   "/api/art/build",
   "/api/art/asset",
