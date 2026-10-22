@@ -58,6 +58,7 @@ int fw_glow_colour_eq(const float a[4], const float b[4]) {
 }
 
 void fw_glow_frame(const FwGlowRegistry *r, FwGlowFrame *out) {
+    memset(out, 0, sizeof *out);
     out->active = r->count > 0;
     fw_glow_colour(r, out->colour);
 }
@@ -122,3 +123,25 @@ void fw_glow_pass_adopt(void *pass) {
     *(uint16_t *)((char *)pass + OFF_PASS_FLAGS) = 0;
     *((char *)pass + OFF_PASS_ENABLED) = 1;
 }
+
+/* ----------------------------------------------------------------------- */
+/* v2 (red: stubs, the host suite pins the behaviour)                       */
+/* ----------------------------------------------------------------------- */
+void fw_glow_groups(const FwGlowRegistry *r, FwGlowGroups *out) { (void)r; out->count = 0; }
+int fw_glow_group_of(const FwGlowGroups *g, int unit) { (void)g; (void)unit; return -1; }
+int fw_glow_plan(const FwGlowRegistry *r, const FwGlowGroups *g, FwGlowDraw out[FW_GLOW_MAX_UNITS]) { (void)r; (void)g; (void)out; return 0; }
+const char *fw_glow_material_name(int slot, char *buf, size_t cap) { (void)slot; (void)buf; (void)cap; return NULL; }
+void fw_glow_clip_bounds(float b[4], const float m[6]) { (void)b; (void)m; }
+void fw_glow_matrix_bounds(float b[4], const float M[16]) { (void)b; (void)M; }
+int fw_glow_mat4_inverse(const float m[16], float out[16]) { (void)m; (void)out; return 0; }
+void fw_glow_view_rect(const float b[4], const float C[16], double zoom, int zoomY, FwGlowRect *out) { (void)b; (void)C; (void)zoom; (void)zoomY; memset(out, 0, sizeof *out); }
+int fw_glow_unit_rect(const float rawBounds[4], const float clipM[6], const float screenM[16], const float viewM[16], double zoom, int zoomY, double margin, FwGlowRect *out) {
+    (void)rawBounds; (void)clipM; (void)screenM; (void)viewM; (void)zoom; (void)zoomY; (void)margin; memset(out, 0, sizeof *out); return 0;
+}
+void *fw_glow_unit_clip(const void *renderer) { (void)renderer; return NULL; }
+void fw_glow_clip_raw_bounds(void *clip, float out[4]) { (void)clip; (void)out; }
+const float *fw_glow_clip_matrix(const void *clip) { (void)clip; return NULL; }
+int fw_glow_collect_passes(const void *camera, int layer, void *const *mats, int nmats, void **out, int max) { (void)camera; (void)layer; (void)mats; (void)nmats; (void)out; (void)max; return 0; }
+void *fw_glow_pass_first_material(const void *pass) { (void)pass; return NULL; }
+void fw_glow_pass_set_material(void *pass, void *material) { (void)pass; (void)material; }
+void fw_glow_pass_set_rect(void *pass, const FwGlowRect *r) { (void)pass; (void)r; }
