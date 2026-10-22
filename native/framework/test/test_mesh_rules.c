@@ -59,7 +59,7 @@ TEST(obj_triangle_with_v_vt_vn) {
 
 TEST(obj_quad_is_fan_triangulated_into_two) {
     FwMesh m; FwMeshError e;
-    PARSE_OK("v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3 4\n");
+    PARSE_OK("v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1 4//1\n");   /* vn: shared corners */
     CHECK_EQ(m.nverts, 4); CHECK_EQ(m.nindices, 6);
     uint32_t want[6] = { 0, 1, 2, 0, 2, 3 };
     for (int i = 0; i < 6; i++) CHECK_EQ(m.indices[i], want[i]);
@@ -69,7 +69,7 @@ TEST(obj_quad_is_fan_triangulated_into_two) {
 
 TEST(obj_pentagon_gives_three_triangles) {
     FwMesh m; FwMeshError e;
-    PARSE_OK("v 0 0 0\nv 2 0 0\nv 3 1 0\nv 1 2 0\nv -1 1 0\nf 1 2 3 4 5\n");
+    PARSE_OK("v 0 0 0\nv 2 0 0\nv 3 1 0\nv 1 2 0\nv -1 1 0\nvn 0 0 1\nf 1//1 2//1 3//1 4//1 5//1\n");
     CHECK_EQ(m.nindices, 9);
     uint32_t want[9] = { 0, 1, 2, 0, 2, 3, 0, 3, 4 };
     for (int i = 0; i < 9; i++) CHECK_EQ(m.indices[i], want[i]);

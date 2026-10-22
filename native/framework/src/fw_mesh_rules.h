@@ -34,9 +34,13 @@ typedef struct FwMeshError { char text[160]; int line; } FwMeshError;   /* line 
  * (in OBJ space; call fw_mesh_to_game_axes next), or 0 with *out zeroed and err->text / err->line set (err may be NULL).
  * Subset: `v x y z [w ...]` (extras ignored), `vt u [v [w]]`, `vn x y z`, `f` with corners i, i/j, i//k, i/j/k and
  * negative (relative) indices; n-gons fan-triangulated (0,i,i+1: convex faces only); corners deduplicated on the
- * (v, vt, vn) triple. Ignored: blank lines, `#` comments, `o`, `g`, `s`, `mtllib`, `usemtl` (materials: later), CR
- * before LF, a UTF-8 BOM. Errors: index 0, an index out of range, a face with < 3 corners, a non-number, a trailing `\`
- * continuation, `l` / `p` / `curv` / `curv2` / `surf` and every other statement, no faces at all, the limits above. */
+ * (v, vt, vn) triple. Ignored: blank lines, `#` comments (also after a statement), `o`, `g`, `s`, `mg`, `mtllib`,
+ * `usemtl` (materials: later), the display attributes `maplib usemap lod bevel c_interp d_interp shadow_obj trace_obj
+ * ctech stech`, CR before LF, a UTF-8 BOM. Errors (text ends "at line N", err->line = N): index 0, an index out of range
+ * ("face index 7 out of range (3 vertices) at line 4"; "face texcoord index ..." / "face normal index ..."), a face with
+ * < 3 corners, a non-number, a trailing `\` continuation, "unsupported OBJ statement 'l'" (also p, curv, curv2, surf,
+ * vp and the other free-form geometry statements), "unknown OBJ statement '...'", the limits above ("... (limit)");
+ * "no faces" (line 0). */
 int fw_mesh_obj_parse(const char *text, size_t len, FwMesh *out, FwMeshError *err);
 
 /* OBJ (right-handed, Y up) -> game (x, height, z; left-handed): x_g = s*x, h = s*y, z_g = -s*z; normals mirrored the
