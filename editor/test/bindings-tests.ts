@@ -489,7 +489,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 105, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures) + 3 sprite/mesh order (M2 occlusion) + 1 unit facing (M3 face) + 1 GonResource root (M3 named models)");
+    eq(offs.length, 108, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures) + 3 sprite/mesh order (M2 occlusion) + 1 unit facing (M3 face) + 1 GonResource root (M3 named models) + 3 cat palette row (M3 pal)");
   });
   if (exe) {
     const m = loadManifest(realPath);
@@ -1918,8 +1918,51 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["GonResource_object", "OFF_GONRES_OBJECT", "0x28"]];
   const R3D_CONSTANTS: [string, string, string][] = [["LayerStride", "CONST_LAYER_STRIDE", "0xe8"], ["LayerItemShift", "CONST_LAYER_ITEM_SHIFT", "5"],
     ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
+  // M3 pal (2026-10-22): a GON `palette true` model on a cat takes the cat's own palette row, read exactly as CatParts
+  // picks the uniform `palette` of its `paletted` material: the override CatParts+0x1b8 unless it is -1 (unset) or the
+  // multi-palette sentinel -69, else the base row CatParts+0x1b4; the CatParts is Character+0x90 (NULL = not a cat).
+  const PAL_REFERENCE: [string, string][] = [["Character_init_clip", "0xf1150"], ["CatParts_Refresh", "0x73f7d0"]];
+  const PAL_OFFSETS: [string, string, string, string][] = [["Character_catParts", "OFF_CH_CATPARTS", "0x90", "Character_init_clip"],
+    ["CatParts_palette", "OFF_CATPARTS_PALETTE", "0x1b4", "CatParts_Refresh"], ["CatParts_paletteOverride", "OFF_CATPARTS_PAL_OVERRIDE", "0x1b8", "CatParts_Refresh"]];
+  const PAL_CONSTANTS: [string, string, string, string][] = [["CatPartsMultiPalette", "CONST_CAT_MULTI_PALETTE", "-0x45", "(-0x45)"]];
+  const PAL_NAMES = [...PAL_REFERENCE.map((x) => x[0]), ...PAL_OFFSETS.map((x) => x[0]), ...PAL_CONSTANTS.map((x) => x[0])];
   const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",
-    ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]);
+    ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0]), ...PAL_NAMES]);
+  test("the committed manifest carries the M3 cat palette bindings at the end of the 3D block: 2 signed witness-host functions (Character::init(clip) 0xf1150, CatParts_Refresh 0x73f7d0), Character+0x90 CatParts*, CatParts+0x1b4 / +0x1b8 base / override palette rows and the -69 multi-palette sentinel, every one with a witness; the generated offsets.h exposes them", () => {
+    const m = loadManifest(realPath);
+    for (const [name, rva] of PAL_REFERENCE) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(e!.exposure.length, 0, `${name} is reference only (a witness host)`);
+    }
+    for (const [name, macro, value, host] of PAL_OFFSETS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset" && e.value === value, `${name} is an offset ${value}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      eq(e!.anchors.witness?.function, host, `${name} witnessed in ${host}`);
+    }
+    for (const [name, macro, value] of PAL_CONSTANTS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "constant" && e.value === value, `${name} is a constant ${value}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      assert(hv.constantHasSources(e!.anchors), `${name} carries a witness the harvest can verify`);
+    }
+    const names = m.entries.map((e) => e.name);
+    eq(names.slice(-PAL_NAMES.length).join(","), PAL_NAMES.join(","), "the palette entries close the manifest (the end of the 3D block)");
+    const oh = genOffsetsH([m]);
+    for (const [, macro, value] of PAL_OFFSETS) assert(new RegExp(`^#define ${macro}\\s+${value}\\s`, "m").test(oh), `${macro} ${value} in offsets.h`);
+    for (const [, macro, , shown] of PAL_CONSTANTS) assert(oh.split(/\r?\n/).some((l) => l.startsWith(`#define ${macro} `) && l.includes(` ${shown} `)), `${macro} ${shown} in offsets.h`);
+  });
+  if (exe) {
+    test("T1 real exe: the M3 cat palette bindings verify on the installed exe (harvest): both witness hosts' signatures, Character+0x90 / CatParts+0x1b4 / +0x1b8 and the -69 sentinel read from their witnesses", () => {
+      const rep = harvestManifest(parsePe(exe), exe, loadManifest(realPath)).report;
+      for (const n of PAL_NAMES) {
+        const x = rep.find((r) => r.name === n);
+        const fn = PAL_REFERENCE.some((p) => p[0] === n);
+        assert(x?.status === "verified" || (fn && x?.status === "harvested"), `${n}: ${x?.status} ${x?.detail}`);
+      }
+    });
+  }
   test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 26 reference functions (all signed; 3 are witness-host .pdata chunks, 1 the BinaryResource offsets' host, Character_Face the M3 face witness host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 26 offsets (2 BinaryResource by M2, the Texture2D GL name by M2 textures, 3 for the M2 sprite/mesh order, Character_orientation for the M3 unit facing) and 4 constants with witnesses; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     for (const [name, rva, index] of R3D_SYMBOLS) {
