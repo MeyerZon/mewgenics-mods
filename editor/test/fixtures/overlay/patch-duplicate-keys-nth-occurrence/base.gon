@@ -1,0 +1,4 @@
+# 0x946680 keeps a per-call map name -> count (FUN_140123a00 operator[], ++ after each child) and asks
+# FUN_140942910(this, name, nth) / FUN_140942b50(this, name, nth): the nth patch child named X merges into the nth
+# base child named X; past the base's count it is appended. Suffixed children count under their stripped name.
+o { a 10 a 20 b 1 }

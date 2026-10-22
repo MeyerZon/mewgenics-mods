@@ -57,6 +57,8 @@ export interface TouchedEntry {
   status: "added" | "changed" | "unchanged";
   base: string | null;
   effective: string | null;
+  /** set when the key now occurs more than once (an `.append` of an existing name); `effective` is the last copy, the one the game's by-name lookup sees */
+  occurrences?: number;
 }
 
 export interface GonPreview {

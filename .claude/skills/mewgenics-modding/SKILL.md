@@ -70,8 +70,12 @@ semantics and CSV guidance.
 Mode summary (full rules in the overlay reference):
 
 - `X.gon` — replaces the whole file. Avoid; conflicts with every other mod.
-- `X.gon.append` — appends the mod's children; use for **new** entries.
-- `X.gon.merge` — deep-merges by field name; use for **value changes**.
+- `X.gon.append` — appends the mod's children; use for **new** entries. An
+  existing name is kept twice (never merged); the game then sees the appended copy.
+- `X.gon.merge` — deep-merges by field name (arrays element-wise, extra items
+  appended; scalars and mismatched types overwritten); use for **value changes**.
+  Key suffixes are **not** read here — `foo.overwrite` is a literal field name
+  (validator warning `merge-suffix-literal`); per-field policies need `.patch`.
 - `X.gon.patch` — per-field policy via a key suffix (`.overwrite`, `.append`,
   `.merge`, `.add`, `.multiply`).
 - `combined.csv.append` — add new localization rows (preferred); `.merge` is

@@ -1,0 +1,4 @@
+# 0x944cc0 accepts a key whose length equals the suffix length (`9 < len` for ".overwrite" means len >= 10);
+# 0x946680 then finds the stripped name empty (local_228 == 0) and recurses on the parent itself:
+# FUN_140946680(this, child). Under `.add` the unsuffixed children are appended (duplicates allowed).
+o { a 1 list [1] }
