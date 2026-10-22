@@ -21,6 +21,8 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr86-unit-glow` (#86) — In shot-glow, does the Rat at the right of the arena carry a magenta band hugging its sprite, with no wash over its body (and none in shot-noglow)?
 - [ ] `pr86-glow-width` (#86) — Is glow_radius 12 the band width you want for the per-unit rim (and is the white hover rim being off while a unit glows acceptable)?
 - [ ] `pr99-glow-colours` (#99) — In shot-two, does the cat carry a cyan rim and the Rat a magenta one, each hugging its own sprite (no cross-colour bleed), and is the cat's rim whole among the other cats (no straight scissor edge)?
+- [ ] `pr104-data-glow` (#104) — In shot-glow, does FwGlowRat (glowing from DATA: the status FwGlow_ff00ff, no DLL) carry the same magenta band hugging its sprite as the native-API Rat, with nothing over its body (and none in shot-noglow)?
+- [ ] `pr104-glow-icon` (#104) — The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip "Glowing"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
@@ -127,8 +129,11 @@ these without a decision (status per bullet below; the PR map follows).
       `feat/native-unit-glow`, session rim).
 - [ ] **Native per-unit glow — what next?** The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
       draws a rim through the game's outline mask (combat only, the rim shader shipped by `mods/fw-glow`). Decide: (a)
-      a data-level way to ask for it (a `registered-names.json` kind `glow` a status/passive names?) — still open — and
-      per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
+      a data-level way to ask for it — **done (glow v3, `feat/glow-data-seam`)**: a status named `FwGlow_<rrggbb[aa]>`
+      granted by any vanilla mechanism (StatusOnSpawnIn, an ability's effects, …) glows its carrier while it lasts, no DLL;
+      `registered-names.json` kind `glow` (a pattern) + validator `invalid-glow-name`; sample `FwGlowRat` in
+      `mods/fw-glow`, proven in-game (`npm run test:unitglow -- --data`; `docs/data-mods.md` "Asking for a unit glow from
+      data") — and per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
       scissored to its screen rect (LateRender's hovered-unit math), proven in-game (magenta Rat + cyan cat); (b)
       whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents

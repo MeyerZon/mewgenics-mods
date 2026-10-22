@@ -296,7 +296,7 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "list_registered_native_names",
-    "List status/ability/component names registered by the native layer (from registered-names.json). The validator treats these as valid references so a data mod paired with a native mod validates. Seeded with JokersLuck.",
+    "List status/ability/component names registered by the native layer (from registered-names.json). The validator treats these as valid references so a data mod paired with a native mod validates. Seeded with JokersLuck; entries with a `pattern` are names the framework recognises by shape (kind glow: a status FwGlow_<rrggbb[aa]> gives its carrier a coloured rim, no DLL).",
     () => api.listRegisteredNativeNames(),
   ),
   def(

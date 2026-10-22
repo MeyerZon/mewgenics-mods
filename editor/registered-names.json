@@ -1,6 +1,7 @@
 {
-  "_comment": "Names registered by the NATIVE layer (Mewjector + mewframework) that are not present in base game data. The validator treats these as valid status/ability/component references so data mods that pair with a native mod validate. Seeded with JokersLuck so mods/jokers-luck validates. Add a native mod's registered names here (plain strings, or {\"name\",\"kind\",\"mod\"} objects).",
+  "_comment": "Names registered by the NATIVE layer (Mewjector + mewframework) that are not present in base game data. The validator treats these as valid status/ability/component references so data mods that pair with a native mod validate. Seeded with JokersLuck so mods/jokers-luck validates. Add a native mod's registered names here (plain strings, or {\"name\",\"kind\",\"mod\"} objects). An entry with a \"pattern\" (a regular expression) is a name the framework recognises by its SHAPE, with no registration and no mod DLL: kind \"glow\" = a status named FwGlow_<rrggbb> or FwGlow_<rrggbbaa> gives its carrier a coloured rim (fw_glow_rules.h, docs/data-mods.md \"Asking for a unit glow from data\"); \"prefix\" marks the namespace, so a malformed FwGlow_ name is reported as invalid-glow-name. \"name\" is only a label there.",
   "names": [
-    { "name": "JokersLuck", "kind": "status", "mod": "jokers-luck" }
+    { "name": "JokersLuck", "kind": "status", "mod": "jokers-luck" },
+    { "name": "FwGlow_<rrggbb[aa]>", "kind": "glow", "mod": "fw-glow", "prefix": "FwGlow_", "pattern": "^FwGlow_(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$" }
   ]
 }

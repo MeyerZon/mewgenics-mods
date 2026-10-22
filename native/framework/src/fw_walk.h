@@ -23,6 +23,12 @@ static inline char    fw_walk_status_temporary(const void *status) { return *((c
 /* The first component of `character` whose vtable is `vt` and that is neither removing nor temporary; NULL if none
  * (also when character or its entity is NULL). */
 void *fw_walk_find_status(void *character, const void *vt);
+/* The same over an Entity directly (the `entity` apply_status resolves from its ctx): the glow apply's merge lookup */
+void *fw_walk_entity_find_status(void *entity, const void *vt);
+
+/* The first component of `character` whose vtable is `vt` and that is not removing, temporary ones included (a
+ * glow status granted as a Temporary still glows until it expires); NULL if none or NULL character/entity. */
+void *fw_walk_find_live(void *character, const void *vt);
 
 /* Index of `vt` in vts[0..count), -1 if absent (a NULL vt never matches). */
 int fw_walk_vt_index(void *const *vts, int count, const void *vt);

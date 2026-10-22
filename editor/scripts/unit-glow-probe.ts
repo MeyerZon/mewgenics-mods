@@ -13,7 +13,30 @@ import * as api from "../src/core/api.ts";
 import { decodePng } from "../src/core/art/png.ts";
 import { measureGlow, compareGlowShots, compareTwoColourShot, GLOW_PROBE_COLOUR, GLOW_PROBE_COLOUR_B, type GlowMeasure } from "../src/core/art/glow-measure.ts";
 
+//   node scripts/unit-glow-probe.ts --data [--json]
+// glow v3, the DATA seam: run mods/fw-glow/tests/data-glow.mewtest instead (no harness `glow` directive: the spawned
+// FwGlowRat carries the status FwGlow_ff00ff from its character entry) and compare its "glow" shot with the pre-spawn
+// "noglow" shot; writes data-glow-summary.json (fixture editor/test/fixtures/ingame/data-glow-summary.json).
+
 const json = process.argv.includes("--json");
+if (process.argv.includes("--data")) {
+  const report = await api.runIngameTest({ mod: "fw-glow", test: "data-glow", hide: false });
+  if (!("verdict" in report)) { console.error(report.error); process.exit(2); }
+  if (report.verdict === "skipped" || report.verdict === "cannot-run") { console.log(`skipped: ${report.reason}`); process.exit(2); }
+  const shot = (label: string) => report.artifacts.shots.find((s) => s.label === label && s.path) || null;
+  const g = shot("glow"), n = shot("noglow");
+  const none: GlowMeasure = { pixels: 0, region: null };
+  const mg = g ? measureGlow(decodePng(readFileSync(g.path!)), GLOW_PROBE_COLOUR) : none;
+  const mn = n ? measureGlow(decodePng(readFileSync(n.path!)), GLOW_PROBE_COLOUR) : none;
+  const cmp = compareGlowShots(mg, mn);
+  const saveUnchanged = (report.safety.saveCheck ? report.safety.saveCheck.unchanged : true) && (report.safety.saveSet ? report.safety.saveSet.unchanged : true);
+  const summary = { ...cmp, colour: GLOW_PROBE_COLOUR, verdictRun: report.verdict, reason: report.reason, saveUnchanged, shots: { glow: g ? g.path : null, noglow: n ? n.path : null } };
+  const dir = report.artifacts.runDir!;
+  writeFileSync(join(dir, "data-glow-summary.json"), JSON.stringify({ summary, observed: new Date().toISOString().slice(0, 10), script: "mods/fw-glow/tests/data-glow.mewtest" }, null, 2) + "\n");
+  if (json) console.log(JSON.stringify({ verdict: report.verdict, runDir: dir, summary }));
+  else console.log(`data glow (FwGlow_ff00ff status from FwGlowRat's character entry):\nglow shot: ${mg.pixels} magenta px, largest patch ${mg.region ? `${mg.region.count} px at (${mg.region.x0},${mg.region.y0})-(${mg.region.x1},${mg.region.y1})` : "none"}\nnoglow (pre-spawn) shot: ${mn.pixels} magenta px\ndelta ${cmp.delta} -> ${cmp.verdict}\nrun: ${report.verdict} — ${report.reason}\nreal save unchanged: ${saveUnchanged}\nartifacts: ${dir}`);
+  process.exit(report.verdict === "pass" && cmp.verdict === "glow" ? 0 : 1);
+}
 const report = await api.runIngameTest({ mod: "dev-sandbox", test: "unit-glow", hide: false });
 if (!("verdict" in report)) { console.error(report.error); process.exit(2); }
 if (report.verdict === "skipped" || report.verdict === "cannot-run") { console.log(`skipped: ${report.reason}`); process.exit(2); }

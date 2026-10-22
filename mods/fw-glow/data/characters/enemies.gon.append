@@ -1,0 +1,14 @@
+// The data-level glow sample (glow v3, no mod DLL): a Rat that glows magenta from the moment it spawns.
+// The status NAME is the request: FwGlow_<rrggbb> or FwGlow_<rrggbbaa> (hex, either case). mewframework recognises it
+// in its apply_status hook and draws the rim through the combat outline mask with mods/fw-glow/shaders/fw_unit_glow.shader;
+// the rim lasts as long as the unit carries the status (any vanilla removal ends it). Grant it through any mechanism
+// that applies a status: StatusOnSpawnIn / StatusOnBattleStart on a character, an ability's effects, a Temporary.
+// `spawn FwGlowRat` in a fight (or mods/fw-glow/tests/data-glow.mewtest). docs/data-mods.md "Asking for a unit glow from data".
+FwGlowRat {
+    variant_of Rat
+    passives {
+        StatusOnSpawnIn {
+            FwGlow_ff00ff 1
+        }
+    }
+}

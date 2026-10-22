@@ -31,8 +31,14 @@ typedef enum FwStatusRule {
     FW_STATUS_ERR_NAME_TOO_LONG,   /* > FW_STATUS_NAME_MAX */
     FW_STATUS_ERR_TEMPLATE,        /* template is not FW_STATUS_TEMPLATE */
     FW_STATUS_ERR_DUPLICATE,       /* name already in the table */
-    FW_STATUS_ERR_TABLE_FULL
+    FW_STATUS_ERR_TABLE_FULL,
+    FW_STATUS_ERR_RESERVED         /* the name is in the FwGlow_ namespace (the data-level glow seam, fw_glow_rules.h) */
 } FwStatusRule;
+
+/* fw_status_table_find's answer for a FwGlow_<rrggbb[aa]> name (fw_glow_parse_status_name): one past the registered
+ * slots. Such a name is a custom status without registration: the alias rewrite and the apply hook treat it like a
+ * registered name (template LuckUp), and the status engine gives it the glow vtable. */
+#define FW_STATUS_GLOW_SLOT FW_STATUS_MAX_DEFS
 
 /* The registered custom names, in registration order (index = the engine's definition slot). */
 typedef struct FwStatusTable {
@@ -44,7 +50,7 @@ void         fw_status_table_init(FwStatusTable *t);
 FwStatusRule fw_status_validate(const FwStatusDef *def, const FwStatusTable *t);
 /* validate, then append; returns the new index or -1 (why = the rule that refused it, FW_STATUS_OK on success) */
 int          fw_status_table_add(FwStatusTable *t, const FwStatusDef *def, FwStatusRule *why);
-/* exact-length match of `len` bytes against the registered names; -1 if none */
+/* exact-length match of `len` bytes against the registered names; FW_STATUS_GLOW_SLOT for a valid FwGlow_ name; -1 if none */
 int          fw_status_table_find(const FwStatusTable *t, const char *bytes, size_t len);
 const char  *fw_status_table_name(const FwStatusTable *t, int index);
 const char  *fw_status_rule_text(FwStatusRule r);

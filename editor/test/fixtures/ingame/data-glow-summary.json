@@ -1,0 +1,31 @@
+{
+  "summary": {
+    "verdict": "glow",
+    "delta": 5620,
+    "glowPixels": 5620,
+    "noglowPixels": 0,
+    "glowRegion": {
+      "count": 5620,
+      "x0": 2628,
+      "y0": 693,
+      "x1": 2759,
+      "y1": 825
+    },
+    "noglowRegion": null,
+    "colour": [
+      255,
+      0,
+      255
+    ],
+    "verdictRun": "pass",
+    "reason": "all 2 expectation(s) passed; 2 shot(s)",
+    "saveUnchanged": true,
+    "shots": {
+      "glow": "shot-glow.png",
+      "noglow": "shot-noglow.png"
+    }
+  },
+  "observed": "2026-10-22",
+  "script": "mods/fw-glow/tests/data-glow.mewtest",
+  "run": "20261022-113119-fw-glow-data-glow"
+}

@@ -23,6 +23,7 @@ int fw_glow_set(FwGlowRegistry *r, void *character, const float rgba[4]) {
         r->units[i].generation = fw_glow_generation(character);
     }
     memcpy(r->units[i].rgba, rgba, sizeof r->units[i].rgba);
+    r->units[i].fromStatus = 0;   /* a native call owns the entry (fw_glow_set_from_status marks it back) */
     return 1;
 }
 
@@ -308,4 +309,79 @@ void fw_glow_pass_set_rect(void *pass, const FwGlowRect *r) {
     double *b = (double *)((char *)pass + OFF_PASS_RECT_B);
     if (r) { b[0] = r->x0; b[1] = r->x1; b[2] = r->y0; b[3] = r->y1; }
     else { b[0] = 0; b[1] = 1; b[2] = 0; b[3] = 1; }
+}
+
+/* ----------------------------------------------------------------------- */
+/* the data seam: FwGlow_<rrggbb[aa]> status names                          */
+/* ----------------------------------------------------------------------- */
+static int hex_digit(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+int fw_glow_status_prefixed(const char *bytes, size_t len) {
+    return bytes && len >= FW_GLOW_STATUS_PREFIX_LEN && memcmp(bytes, FW_GLOW_STATUS_PREFIX, FW_GLOW_STATUS_PREFIX_LEN) == 0;
+}
+
+int fw_glow_parse_status_name(const char *bytes, size_t len, float rgba[4]) {
+    if (!rgba || !fw_glow_status_prefixed(bytes, len)) return 0;
+    size_t digits = len - FW_GLOW_STATUS_PREFIX_LEN;
+    if (digits != 6 && digits != 8) return 0;
+    int v[4] = { 0, 0, 0, 255 };
+    for (size_t k = 0; k < digits; k += 2) {
+        int hi = hex_digit(bytes[FW_GLOW_STATUS_PREFIX_LEN + k]), lo = hex_digit(bytes[FW_GLOW_STATUS_PREFIX_LEN + k + 1]);
+        if (hi < 0 || lo < 0) return 0;
+        v[k / 2] = hi * 16 + lo;
+    }
+    for (int k = 0; k < 4; k++) rgba[k] = (float)v[k] / 255.0f;
+    return 1;
+}
+
+int fw_glow_set_from_status(FwGlowRegistry *r, void *character, const float rgba[4]) {
+    if (!fw_glow_set(r, character, rgba)) return 0;
+    r->units[fw_glow_find(r, character)].fromStatus = 1;
+    return 1;
+}
+
+void fw_glow_reset_scene(FwGlowRegistry *r) {
+    for (int i = 0; i < r->count;) {
+        if (!r->units[i].fromStatus) remove_at(r, i);
+        else i++;
+    }
+}
+
+int fw_glow_sweep(FwGlowRegistry *r, FwGlowStatusProbe probe, void *user, void **cleared, int max) {
+    if (!probe) return 0;
+    int removed = 0;
+    for (int i = 0; i < r->count;) {
+        FwGlowEntry *e = &r->units[i];
+        float c[4];
+        if (!e->fromStatus) { i++; continue; }
+        if (probe(e->character, c, user)) { memcpy(e->rgba, c, sizeof e->rgba); i++; continue; }
+        if (cleared && removed < max) cleared[removed] = e->character;
+        remove_at(r, i);
+        removed++;
+    }
+    return removed;
+}
+
+int fw_glow_status_put(FwGlowStatusObjs *t, void *obj, const char *name, size_t len) {
+    float c[4];
+    if (!t || !obj || !fw_glow_parse_status_name(name, len, c)) return 0;
+    FwGlowStatusObj *e = NULL;
+    for (int i = 0; i < FW_GLOW_STATUS_OBJS; i++) if (t->e[i].obj == obj) { e = &t->e[i]; break; }
+    if (!e) { e = &t->e[t->next]; t->next = (t->next + 1) % FW_GLOW_STATUS_OBJS; }
+    memset(e, 0, sizeof *e);
+    e->obj = obj;
+    memcpy(e->name, name, len);                      /* len <= 15 < sizeof e->name: the parse guaranteed it */
+    memcpy(e->rgba, c, sizeof e->rgba);
+    return 1;
+}
+
+const FwGlowStatusObj *fw_glow_status_get(const FwGlowStatusObjs *t, const void *obj) {
+    if (!t || !obj) return NULL;
+    for (int i = 0; i < FW_GLOW_STATUS_OBJS; i++) if (t->e[i].obj == obj) return &t->e[i];
+    return NULL;
 }

@@ -2,6 +2,7 @@
  * test suite covers every branch. */
 #include <string.h>
 #include "fw_status_rules.h"
+#include "fw_glow_rules.h"   /* the FwGlow_ name rule (fw_glow_parse_status_name, fw_glow_status_prefixed) */
 
 void fw_status_table_init(FwStatusTable *t) {
     memset(t, 0, sizeof *t);
@@ -12,6 +13,7 @@ FwStatusRule fw_status_validate(const FwStatusDef *def, const FwStatusTable *t) 
     size_t n = strlen(def->name);
     if (n == 0) return FW_STATUS_ERR_NAME_EMPTY;
     if (n > FW_STATUS_NAME_MAX) return FW_STATUS_ERR_NAME_TOO_LONG;
+    if (fw_glow_status_prefixed(def->name, n)) return FW_STATUS_ERR_RESERVED;
     if (strcmp(def->template_name, FW_STATUS_TEMPLATE) != 0) return FW_STATUS_ERR_TEMPLATE;
     if (t) {
         if (fw_status_table_find(t, def->name, n) >= 0) return FW_STATUS_ERR_DUPLICATE;
@@ -35,6 +37,8 @@ int fw_status_table_find(const FwStatusTable *t, const char *bytes, size_t len) 
     for (int i = 0; i < t->count; i++) {
         if (strlen(t->names[i]) == len && memcmp(t->names[i], bytes, len) == 0) return i;
     }
+    float rgba[4];
+    if (fw_glow_parse_status_name(bytes, len, rgba)) return FW_STATUS_GLOW_SLOT;   /* the data glow seam: no registration */
     return -1;
 }
 
@@ -51,6 +55,7 @@ const char *fw_status_rule_text(FwStatusRule r) {
         case FW_STATUS_ERR_TEMPLATE: return "only template LuckUp is supported on this build";
         case FW_STATUS_ERR_DUPLICATE: return "name already registered";
         case FW_STATUS_ERR_TABLE_FULL: return "table full (8)";
+        case FW_STATUS_ERR_RESERVED: return "names starting with FwGlow_ are the data-level glow (no registration needed)";
         default: return "unknown rule";
     }
 }

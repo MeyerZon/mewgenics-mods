@@ -22,7 +22,9 @@
 #define FW_GLOW_MAX_UNITS 16
 
 /* ---- the registry: which units glow, and the pool generation each was registered with ---- */
-typedef struct FwGlowEntry { void *character; uintptr_t generation; float rgba[4]; } FwGlowEntry;
+/* fromStatus: the entry was made by a FwGlow_<hex> status (the data seam, below), not by a native FW_SetUnitGlow call:
+ * fw_glow_sweep re-checks it every frame against the unit's statuses and drops it with the status */
+typedef struct FwGlowEntry { void *character; uintptr_t generation; float rgba[4]; int fromStatus; } FwGlowEntry;
 typedef struct FwGlowRegistry { FwGlowEntry units[FW_GLOW_MAX_UNITS]; int count; } FwGlowRegistry;
 
 void fw_glow_reset(FwGlowRegistry *r);
@@ -31,12 +33,48 @@ int  fw_glow_find(const FwGlowRegistry *r, const void *character);              
  * rgba is NULL or the registry is full */
 int  fw_glow_set(FwGlowRegistry *r, void *character, const float rgba[4]);
 int  fw_glow_clear(FwGlowRegistry *r, const void *character);                    /* 1 removed (order kept), 0 absent */
+/* a new fight scene: drop the native registrations (they belong to the old scene), keep the status-sourced ones (a
+ * FwGlow_ status can be applied before the new scene's first frame; prune + sweep re-validate them every frame) */
+void fw_glow_reset_scene(FwGlowRegistry *r);
 /* drop every entry whose Character's pool generation no longer matches the one captured (the slot was reused or
  * freed: the game validates its remembered unit the same way); returns the number dropped */
 int  fw_glow_prune(FwGlowRegistry *r);
 /* the first registered unit's rgba (white when empty): v1's shared colour, v2's colour group 0 */
 void fw_glow_colour(const FwGlowRegistry *r, float out[4]);
 int  fw_glow_colour_eq(const float a[4], const float b[4]);
+
+/* ---- the data seam: a status named FwGlow_<rrggbb> or FwGlow_<rrggbbaa> asks for a glow (no mod DLL) ----
+ * A data mod grants the status through any vanilla mechanism (StatusOnSpawnIn / StatusOnBattleStart on a character,
+ * an ability's effects, a Temporary). status_engine.c recognises the name in its apply_status hook (the name-keyed
+ * lookups alias it to the template like a registered name), builds a LuckUp-template object with the glow vtable and
+ * registers the unit here with fromStatus = 1; every frame fw_glow_sweep asks the status engine whether the unit
+ * still carries a live glow status and clears the rim when it does not. 6 or 8 hex digits, either case; alpha 0xff
+ * when omitted; 13 or 15 bytes, so the name always fits the std::string SSO buffer the alias rewrite needs. */
+#define FW_GLOW_STATUS_PREFIX     "FwGlow_"
+#define FW_GLOW_STATUS_PREFIX_LEN 7
+/* 1 and rgba (each byte / 255) when bytes[0..len) is exactly the prefix + 6 or 8 hex digits; 0 otherwise (rgba untouched) */
+int  fw_glow_parse_status_name(const char *bytes, size_t len, float rgba[4]);
+/* 1 when bytes[0..len) starts with the prefix: a name in the glow namespace (FW_RegisterStatus refuses it) */
+int  fw_glow_status_prefixed(const char *bytes, size_t len);
+/* set from a status: like fw_glow_set, and marks the entry fromStatus (a later native fw_glow_set takes it over) */
+int  fw_glow_set_from_status(FwGlowRegistry *r, void *character, const float rgba[4]);
+/* probe(character, rgba, user): 1 = the unit carries a live glow status (rgba = its colour), 0 = none */
+typedef int (*FwGlowStatusProbe)(void *character, float rgba[4], void *user);
+/* every fromStatus entry: probe it; 0 -> removed (its character appended to cleared[0..max)), 1 -> colour updated in
+ * place. Native entries are not probed. Returns the number removed. Call after fw_glow_prune (the probe walks the unit) */
+int  fw_glow_sweep(FwGlowRegistry *r, FwGlowStatusProbe probe, void *user, void **cleared, int max);
+
+/* the glow status objects and their names: one vtable serves every colour, so GetTypeName / IsA answer per object
+ * from this table (a ring: the oldest entry is reused when full; a stale entry is harmless because only objects
+ * carrying the glow vtable are ever looked up, and put() replaces the entry of a reused address) */
+#define FW_GLOW_STATUS_OBJS 32
+typedef struct FwGlowStatusObj { void *obj; char name[FW_GLOW_STATUS_PREFIX_LEN + 8 + 1]; float rgba[4]; } FwGlowStatusObj;
+typedef struct FwGlowStatusObjs { FwGlowStatusObj e[FW_GLOW_STATUS_OBJS]; int next; } FwGlowStatusObjs;
+/* record (or re-colour) obj under a valid glow name; 0 when obj is NULL or the name does not parse */
+int  fw_glow_status_put(FwGlowStatusObjs *t, void *obj, const char *name, size_t len);
+const FwGlowStatusObj *fw_glow_status_get(const FwGlowStatusObjs *t, const void *obj);   /* NULL if unknown */
+/* the name a glow object answers with when the table lost it (opaque white, still a valid glow name) */
+#define FW_GLOW_STATUS_FALLBACK "FwGlow_ffffffff"
 
 /* ---- v2: per-unit colours ----
  * A Material holds ONE value per uniform at draw time (the composite passes run later, in the main camera's render),

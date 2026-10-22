@@ -101,4 +101,14 @@ export function runGlowMeasureTests(test: TestFn, assert: AssertFn, eq: EqFn, fi
     eq(two!.a.verdict, "glow"); eq(two!.b.verdict, "glow");
     assert(!!two!.a.glowRegion && two!.a.glowRegion.count >= 100 && !!two!.b.glowRegion && two!.b.glowRegion.count >= 100, "both patches >= 100 px");
   });
+  test("OBSERVED fixture, glow from DATA (data-glow-summary.json, `npm run test:unitglow -- --data`): a unit whose character entry grants the status FwGlow_ff00ff (mods/fw-glow FwGlowRat, no mod DLL) got a magenta rim the pre-spawn shot lacks; the run passed (expect status FwGlow_ff00ff) with the real save untouched", () => {
+    const j = JSON.parse(fixture("data-glow-summary.json")) as { script: string; summary: { verdict: string; delta: number; glowRegion: { count: number } | null; verdictRun: string; saveUnchanged: boolean; colour: number[] } };
+    eq(j.script, "mods/fw-glow/tests/data-glow.mewtest");
+    eq(j.summary.verdict, "glow");
+    assert(j.summary.delta >= 200, `delta ${j.summary.delta}`);
+    assert(!!j.summary.glowRegion && j.summary.glowRegion.count >= 100, `patch ${JSON.stringify(j.summary.glowRegion)}`);
+    eq(JSON.stringify(j.summary.colour), JSON.stringify(gm.GLOW_PROBE_COLOUR));
+    eq(j.summary.verdictRun, "pass");
+    eq(j.summary.saveUnchanged, true);
+  });
 }

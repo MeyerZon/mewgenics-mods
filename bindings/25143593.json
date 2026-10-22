@@ -3940,6 +3940,33 @@
       "note": "OnStacksChanged(this)"
     },
     {
+      "name": "VT_ApplyStatModifiers",
+      "kind": "constant",
+      "value": "82",
+      "anchors": {
+        "derive": {
+          "vtable": "LuckUp_vftable",
+          "slotSearch": {
+            "bodyPattern": "48 8B 51 ?? 8B 41 ?? 01 82 ?? ?? ?? ?? 83 79 ?? 00 0F 84"
+          }
+        },
+        "note": "the only LuckUp slot whose body is mov rdx,[rcx+character]; mov eax,[rcx+stacks]; add [rdx+luckBonus],eax; cmp dword [rcx+stacks],0; je Status_Remove (0x1408a8f80 on this build: the luck adder that also removes the status at 0 stacks)"
+      },
+      "consumers": [
+        "native/framework/src/fw_vtable.c",
+        "native/framework/src/status_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_APPLYSTATMODIFIERS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#status-effects"
+      ],
+      "note": "ApplyStatModifiers(this): LuckUp adds its stacks to Character+0x5d4 (luck) and tail-calls Status_Remove at 0 stacks; the FwGlow_ status replaces it with the removal alone"
+    },
+    {
       "name": "App_running",
       "kind": "offset",
       "struct": "ApplicationBase",
