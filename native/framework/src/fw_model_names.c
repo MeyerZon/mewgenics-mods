@@ -70,6 +70,7 @@ int fw_model_names_resolve(const FwModelNames *r, const FwGonModel *unit, FwGonM
     if (unit->texture[0]) snprintf(m.texture, sizeof m.texture, "%s", unit->texture);
     if (unit->palette >= 0) m.palette = unit->palette;
     if (unit->doubleSided >= 0) m.doubleSided = unit->doubleSided;
+    if (unit->hideSprite >= 0) m.hideSprite = unit->hideSprite;   /* M3 hide_sprite, -1 = not given */
     m.isBlock = e->m.isBlock || unit->isBlock;
     m.invalid = e->m.invalid | unit->invalid;
     m.given = e->m.given | unit->given;
