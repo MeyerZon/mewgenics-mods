@@ -1555,3 +1555,28 @@ entries of `bindings/25143593.json`). RVAs.
   chunks, entered as the witness hosts `Camera_render_body` 0x9787dc and `Swf_DisplayObject_Render_cull` 0x9b0b78;
   `MaskedRendererIso_RefreshSortKey` 0x78d480 and `Renderer_UpdateRootScale` 0x97ac40 are pdata-less leaves (documented,
   not entered; the Position offsets are witnessed in `Position_GetInterpolated` 0x9b4a30).
+- **Meshes drawn in a fight (OBSERVED, T2 2026-10-22, phase M; `native/framework/src/mesh_engine.c`).** A hand-built C
+  `std::function<void()>` (`fw_functor.c`: impl {vtable, fn, user} in place, `_Copy` returns `where`,
+  `_Delete_this` never frees) submitted through `Batch_SubmitFunctor` 0xa47820 right after
+  `Camera_RenderOneLayer(worldCamera, CONST_UNITS_LAYER)` returns survives the engine's copy, runs once per frame inside
+  `Batch_Replay` and is torn down without a dealloc (`fw_functor_unexpected_deallocs` stayed 0). Inside it the state
+  the replay left was: draw FBO **1** (the main RT `App+0xc10`), viewport 0,0,2560,1440 on a 3440x1440 window (the 16:9
+  canvas letterboxed), depth test **off**, `glDepthFunc` = GL_LESS (0x201), blend **on**, a game program and VAO bound.
+  Our draw with depth test on (GL_LESS, writes on) against that RT's depth buffer, then an exact glGet-based restore
+  (`fw_gl_state.c`), raised **no GL error** in any frame and left the game's rendering intact. mvp = matrix-stack top
+  (`MatStackData` 0x13c5bd8 + `MatStackTop` x 0x40; at that point the base canvas ortho
+  [0.0015625 0 0 0 / 0 -0.00277778 0 0 / 0 0 1e-4 0 / -1 1 -0 1] = `MatStack_Ortho(0, 1280, 720, 0)`) x
+  `Camera_GetViewProjection(cam)` x the ISO basis with a view-depth row (yaw 45 / pitch 30, x100) x the world matrix;
+  the probe cube on tile (3,3) landed at NDC (0, -0.178), 0 px from the measured magenta patch
+  (`editor/test/fixtures/ingame/mesh-probe-log.txt`, `mesh-probe-summary.json`).
+- **Mod models and the mod shader (OBSERVED, same day).** `ResourceManager_GetBinaryResource` 0x973750 served
+  `models/crate.obj` from `mods/fw-3d` on the `-modpaths` (data `*(u8**)(res+0x28)`, int32 size `res+0x30` —
+  `OFF_BINRES_DATA` / `OFF_BINRES_SIZE`, witnessed in `Texture2D_LoadFromFile` 0xa0ad40), and
+  `shaders/fw_mesh.shader` compiled and linked with our own GL calls after the game's text rewrite
+  (`fw_shader_stage`: the first `" vert()"`/`" frag()"` -> `" main()"`, `COMPILING_*` -> 1/0); attribute names
+  `position`/`color`/`texcoord` bound to 0/1/2 before linking (`mesh-model-log.txt`). A GON `graphics.model` key on
+  the vanilla `Crate` (`mods/fw-3d/data/characters/inanimate_objects.gon.merge`) produced no GON error in debug.log.
+- **Sprites vs meshes (OBSERVED, not solved).** The units layer neither tests nor writes depth, and our functor runs after
+  it: a cube on tile (2,6) — farther than the cats on (2,5) — is drawn OVER them (run 20261022-135331, shot mesh-b);
+  meshes are drawn under everything recorded later (the "Battle Start!" banner and the HUD cover the cube). The fix is
+  phase M2 of `possible_3d_work.md` (depth-tested unit layer + sprite depth in m14, or a split draw).

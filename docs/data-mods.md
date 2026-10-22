@@ -299,7 +299,7 @@ yet). Add it with a `.merge` (`mods/fw-3d/data/characters/inanimate_objects.gon.
 `"@Name"`, a model a native mod registers with the mesh engine and declares in `editor/registered-names.json` as
 `{ "name": "Name", "kind": "model", "mod": "<mod>" }` (kind `model` names resolve only `@` references, never a status
 or ability). Path rule (the editor's `editor/src/core/model3d.ts` and the DLL's `fw_obj3d_model_path_ok` apply the
-same one): relative to the mod folder, starts `models/`, ends `.obj` (OBJ only for now; glTF later), no `..`, no empty
+same one): relative to the mod folder, starts `models/`, ends `.obj` (the editor's rule; the DLL's mesh loader also reads `.gltf` / `.glb`, see "glTF models" below), no `..`, no empty
 segment, no backslash, not absolute, printable ASCII, under 64 bytes. Model files are served through `-modpaths` like
 any pack file (`ResourceManager_GetBinaryResource`, the first mod path that has the file; `possible_3d_work.md` §1
 "Mesh bytes") and are **mod-only**: the pack has none, so nothing is looked up in base data. Files under a mod's
@@ -326,12 +326,33 @@ thread only. The registry is `native/framework/src/fw_obj3d_rules.c` (host-teste
 (`fw_gon_model`, promoted from the harness's `mt_gon.c`, host-tested by `test_gon.c`) through a VirtualQuery-guarded
 reader (`obj3d_engine_unit_model`).
 
-**What draws today vs not.** Today: the data seam (key, validator, sample mod), the API (v6 exports, logged in
-`mod_logs/mewframework.log`) and the GON read are in place; **nothing is drawn yet** — the mesh engine (OBJ loader,
-the functor in the world camera's unit layer, depth against sprites: phase M1/M2) consumes the registry and the
-`graphics.model` key when it lands. Not planned in this step: glTF, textures/materials, animation, `render3d`
-modes (floor / billboard / upright), perspective (phase P). Tile entries (`data/tiles.gon`) have no runtime entry
-pointer yet, so tiles get models through `FW_Place3DObjectOnTile` only.
+**What draws today vs not (2026-10-22, OBSERVED in a fight).** The mesh engine (`native/framework/src/mesh_engine.c`)
+draws every object of the API v6 registry: tile objects (`FW_Place3DObjectOnTile`) and unit objects
+(`FW_Register3DObject`, following the unit's position), with `mods/fw-3d/shaders/fw_mesh.shader` (Lambert, base colour;
+an inline flat shader when `fw-3d` is not on the mod path). Seen in-game: `models/crate.obj` read from `mods/fw-3d`
+through the mod path and drawn on a tile next to the probe cube (`docs/engine-map.md` "Mod models and the mod shader").
+Not yet: a unit's GON `graphics.model` is read (`obj3d_engine_unit_model`) but no per-unit walk draws it; meshes are
+drawn OVER the sprites of the units layer (no sprite/mesh occlusion: phase M2) and under the HUD; no textures, no palette
+remap; `@Name` models; animation; `render3d` modes (floor / billboard / upright); perspective (phase P). Tile entries
+(`data/tiles.gon`) have no runtime entry pointer yet, so tiles get models through `FW_Place3DObjectOnTile` only.
+
+**glTF models (the DLL's loader, `fw_mesh_gltf.c`).** What a `.gltf` / `.glb` must be to load on the first try:
+- glTF **2.0** (`asset.version` "2.x"); one `.glb` (preferred), or `.gltf` + `.bin` side by side in `mods/<mod>/models/`,
+  or a `.gltf` with the buffer as a `data:` URI; name `<name>.gltf|.glb`, letters/digits/`_`/`-`, at most 63
+  characters, lowercase extension, no sub-folder.
+- **Triangles only** (Blender: Triangulate modifier or the exporter's option); points/lines/strips are refused.
+- At most 1 048 576 vertices / 3 145 728 indices for the whole model (a prop: a few thousand).
+- **Y up** (the glTF / Blender exporter default "+Y Up"); **1 unit = 1 m = 1 tile**; origin = the feet / ground contact,
+  centred on the tile, nothing below y = 0. The loader mirrors z (the game's axes are left-handed) and keeps the winding.
+- Node transforms and hierarchies are baked (applying transforms first is optional; mirrors are handled); several
+  meshes / primitives are merged into one model.
+- POSITION (float) required; NORMAL recommended (else flat shading); TEXCOORD_0 float or normalized u8/u16.
+- **Refused by name:** Draco (`KHR_draco_mesh_compression`), meshopt, `KHR_texture_transform`,
+  `KHR_mesh_quantization`, KTX2/Basis/WebP textures, any other *required* extension, sparse accessors, morph targets.
+  **Ignored:** skins (bind pose drawn), animations, cameras, lights, a second UV set, vertex colours, tangents.
+- One material: only `baseColorFactor` and the `baseColorTexture` image are read (metallic/roughness/normal/occlusion/
+  emissive ignored); textures are recorded but **not drawn yet** — prefer an external power-of-two sRGB PNG (≤ 512²)
+  next to the model.
 
 **Loading.** Needs a framework built with API v6 (mewframework 0.6) on a known build, and `mods/fw-3d` on the mod
 path next to the mod that uses it (`mods: <mod>, fw-3d` in a `.mewtest` header, `-modpaths … mods/fw-3d` in a

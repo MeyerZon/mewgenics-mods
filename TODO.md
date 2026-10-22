@@ -50,6 +50,10 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       Rat a magenta one, each hugging its own sprite (no cyan on the Rat, no magenta on the cat), and is the cat's rim
       whole where it stands among the other cats (a scissor cut would show as a straight edge)?
 
+- [ ] `3d-m1-cube` (feat/3d-meshes-m1) — Run `MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/crate.obj` (`npm run test:artprobe -- --mesh`, needs PR #117's in-process shots): does the magenta cube on tile (3,3) and the grey crate on (4,3) read as solid 3D blocks standing on their tiles, lit from the top-left, under the HUD?
+- [ ] `3d-occlusion` (feat/3d-meshes-m1) — Known wrong, for the record: with `MEWFW_MESH_PROBE=2,6` the cube (on a tile BEHIND the cats) is drawn over them. Confirm that is the only artefact before phase M2 fixes it.
+- [ ] Provide a test glTF per docs/data-mods.md "3D models" spec ("glTF models": glTF 2.0 .glb, triangulated, Y up, 1 unit = 1 tile, origin at the feet, ≤ a few thousand vertices, one material, no Draco/meshopt/KHR_texture_transform, external PNG ≤ 512²) — drop it in `mods/fw-3d/models/` and an agent wires it.
+
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
 Owner: "we will decide on it later". Everything through PR #72 is merged; the 2026-10-21/22 run answered most of
@@ -511,6 +515,11 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
       → **M2** depth against sprites → **M3** assets + `FW_Register3DObject` + GON `model` / `render3d {}` →
       **M4** palette shader → P1..P6. Phase 0 done 2026-10-22 (branch `feat/3d-investigation`): the 3D block in the
       manifest, the `MEWFW_OBSERVE3D` observer, its T2 run pinned in `editor/test/fixtures/ingame/observe3d-log.txt`.
+      **2026-10-22 evening (branch `feat/3d-meshes-m1`): M0 + M1 done, M3/M4 partly** — a cube and a mod OBJ drew in a
+      fight through a submitted draw functor + the mod shader (OBSERVED, `mesh-probe-log.txt` / `mesh-model-log.txt`);
+      OBJ + glTF loaders, API v6 `FW_Register3DObject` / `FW_Place3DObjectOnTile` drawn, GON `graphics.model` validated.
+      Next: **M2** sprite/mesh occlusion (a farther cube is drawn over the cats today), the per-unit GON `model` walk,
+      the palette texture + textures, a real glTF in-game.
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
 - [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
 - [ ] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-22: the append route (`_Append_CatTest` frame placing a rig with EMPTY slot sprites, experiment A0) works — the game draws the cat's own parts into our frame; the 2026-10-21 crash was the visible non-empty placeholder (engine-map "CatTest and the cat animation clips").

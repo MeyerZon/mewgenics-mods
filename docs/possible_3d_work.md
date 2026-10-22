@@ -17,7 +17,9 @@ image-relative (base 0x140000000); `Name` in backticks = the manifest entry.
 
 Status 2026-10-22: phase 0 done on branch `feat/3d-investigation` — every function and global the plan hooks or calls
 is signed into the manifest (harvest-verified), the log-only observer (`MEWFW_OBSERVE3D=N`) ran in a fight and its
-lines are pinned. Nothing draws differently yet. The next step is M1 (a cube on a tile).
+lines are pinned. **2026-10-22 evening (branch `feat/3d-meshes-m1`): M1 done in-game** — a cube and a mod-shipped OBJ
+drew in a real fight through a submitted draw functor and the mod shader (`engine-map.md` "Meshes drawn in a fight");
+the remaining M work is sprite/mesh occlusion (M2), palette + textures, the per-unit GON `model` walk, glTF in-game.
 
 ---
 
@@ -159,7 +161,7 @@ lines are pinned. Nothing draws differently yet. The next step is M1 (a cube on 
 
 | What | Blocks | Next step |
 |---|---|---|
-| Does a hand-built C `_Func_impl` vtable survive the game's copy/replay? | M1 | M1's T2 cube run (the functor ABI is OBSERVED; only running it proves our C side) |
+| ~~Does a hand-built C `_Func_impl` vtable survive the game's copy/replay?~~ | M1 | **settled 2026-10-22: yes** (T2 cube run, no dealloc, no GL error; `fw_functor.c`) |
 | Translucent sprite pixels write depth when a unit layer is depth-tested (no discard) | M2 | M2: patch `swf_lib.shader`'s fragment with `if (a < 0.02) discard;` via `-modpaths` and compare shots |
 | Depth precision of the stock 1e-4 z scale under perspective | P1 | P1: put near/far tight around the board; if layering breaks, rewrite m10 of the base ortho after FrameBegin |
 | The 12 unclassified `Camera_GetViewProjection` callers | P1 | key the VP override to the world camera + `Camera_RenderOneLayer`/`Camera_render` return addresses; log the rest with the observer |
@@ -206,23 +208,23 @@ look matters). Task-level detail (files, red test names, gotchas) is in `.analys
       `editor/src/core/ingame/obs3d.ts`.
 
 ### Phase M — a real mesh in the vanilla (orthographic) scene
-- [ ] **M0 pure modules (no RE dependency):** `fw_mesh_obj.c`, `fw_json.c` + `fw_mesh_gltf.c` (.gltf/.bin/.glb, one
+- [x] **M0 pure modules (no RE dependency)** — done 2026-10-22 except the perspective half of the maths (P1): `fw_mesh_rules.c` (OBJ, registry, paths), `fw_mesh_gltf.c` + `fw_json.c` (glTF 2.0 .gltf/.glb, node transforms, multi-primitive), `fw_m4.c`, `fw_functor.c`, `fw_gl_state.c`, `fw_mesh_draw.c` (`fw_shader_stage`); planned as: `fw_mesh_obj.c`, `fw_json.c` + `fw_mesh_gltf.c` (.gltf/.bin/.glb, one
       mesh/primitive, POSITION/NORMAL/TEXCOORD_0, u8/u16/u32 indices, z mirrored + winding reversed on import: the
       game's (x, height, z) is left-handed), `fw_3d_math.c` (perspective/lookAt in the 1280×720 convention, det < 0,
       billboard bases, ray–ground pick → iso-2D, view-depth key), `fw_functor.c` (the MSVC std::function in C),
       `fw_gl_state.c` (save/restore against a fake GL), `fw_shader_src.c` (the game's text-replacement dialect).
-- [ ] **M1 a cube on a tile:** post-hook `Camera_RenderOneLayer` for the world camera at layer `CONST_UNITS_LAYER`
+- [x] **M1 a cube on a tile — OBSERVED 2026-10-22** (`MEWFW_MESH_PROBE`, `mods/dev-sandbox/tests/mesh-probe.mewtest`, `npm run test:artprobe -- --mesh`; fixtures `mesh-probe-log.txt` / `mesh-probe-summary.json`; the functor is submitted after `Camera_RenderOneLayer(world, 0x19)` and restores state by glGet, not by poisoning the caches). Planned as: post-hook `Camera_RenderOneLayer` for the world camera at layer `CONST_UNITS_LAYER`
       (or a free layer's custom draw functor `Layer+0xa8`): capture the stack top (base ortho × VP) at record time,
       submit one functor via `Batch_SubmitFunctor`; in `_Do_call` bind our program/VAO, draw, restore per §1 "What a
       functor must restore". Proof: T2 `shot` + a T3 picture.
-- [ ] **M2 depth against sprites:** around the unit layer set `RenderStateFlags` bit 2 (not mode 1: that reverses the
+- [ ] **M2 depth against sprites** (OBSERVED need, 2026-10-22: a cube on a farther tile is drawn over the cats; `engine-map.md` "Sprites vs meshes"): around the unit layer set `RenderStateFlags` bit 2 (not mode 1: that reverses the
       draw order), give sprites a view depth through m14 in `Renderer_GetScreenMatrix` (scaled into ±10 000), patch the
       sprite fragment's `discard` via `-modpaths` if translucent edges punch holes; draw meshes before the unit layer
       with depth writes on. The main RT already has a cleared D24S8 buffer (§1).
-- [ ] **M3 assets + data seam:** bytes via `ResourceManager_GetBinaryResource`, textures via `App_GetTexture`
+- [~] **M3 assets + data seam** — done: model bytes via `ResourceManager_GetBinaryResource` (OBSERVED, `mesh-model-log.txt`), OBJ + glTF parsing, API v6 `FW_Register3DObject` / `FW_Place3DObjectOnTile` / `FW_Unregister3DObject` drawn by the mesh engine (tile objects OBSERVED; unit-attached follow the unit's Position, not yet seen in-game), GON `graphics.model` validated by the editor and ignored by vanilla (OBSERVED: no GON error); open: the per-unit GON walk (`obj3d_engine_unit_model` exists), textures, `@Name` models, `render3d {}`. Planned as: bytes via `ResourceManager_GetBinaryResource`, textures via `App_GetTexture`
       (`textures/models/…png`, existence-checked); API v5 `FW_Register3DObject` / `FW_Attach3DObject`; GON `model` /
       `render3d {}` keys validated by the editor (schema + checks + a `model3d` kind in `registered-names.json`).
-- [ ] **M4 palette shader:** `mods/fw-mesh/shaders/fw_mesh.shader` — lambert + the palettemap rule (§1) + the colour
+- [~] **M4 palette shader** — `mods/fw-3d/shaders/fw_mesh.shader` ships and compiles in-game through our own compile path (`fw_shader_stage`, OBSERVED); Lambert lighting draws; open: the `palettemap` texture (`App_GetTexture("palette.png")` + `Texture+8`, an offset to add) so `palette >= 0` remaps, the T3 side-by-side. Planned as: `mods/fw-mesh/shaders/fw_mesh.shader` — lambert + the palettemap rule (§1) + the colour
       transform; T3 side-by-side with a cat of the same palette.
 
 ### Phase P — true perspective
