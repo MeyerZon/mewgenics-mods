@@ -1,0 +1,11 @@
+// a map like alley.gon: the node list pulls in the shared nodes
+name Town
+
+nodes {
+    #include "std_nodes.gon"
+
+    //exits
+    exit0 {
+        type exit
+    }
+}

@@ -38,6 +38,8 @@ export interface PreviewMergeOptions {
   includeFullGon?: boolean;
   /** the base-data root in the `.extracted/data` layout (tests/fixtures); default EXTRACTED_DATA */
   extractedData?: string;
+  /** the mod folder (tests/fixtures); default mods/<modName> */
+  modDir?: string;
 }
 
 export interface CsvAppendPreview {

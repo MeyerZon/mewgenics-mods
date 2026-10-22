@@ -1,0 +1,5 @@
+/* shared nodes, like maps/standard_nodes.gon */
+shop0 {
+    type shop // a comment
+}
+#include "deeper.gon"

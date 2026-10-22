@@ -6,7 +6,11 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { previewMerge } from "../src/core/preview-merge.ts";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
+
+const INC = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "gon-include");
 
 export function runPreviewMergeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   /** a synthetic `.extracted/data` tree with one character file */
@@ -40,5 +44,13 @@ export function runPreviewMergeTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     assert(!p.baseExists, "enemies.gon must not be read from the repo's own .extracted");
     eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "Rat:added");
     eq(p.baseEntryCount, 0);
+  });
+  test("previewMerge runs the game's pre-pass on base and overlay: the base's #include and the overlay's #include are inlined", () => {
+    const p = previewMerge("m", "data/maps/town.gon.merge", { extractedData: join(INC, "base"), modDir: join(INC, "mods", "m"), includeFullGon: true });
+    assert(p.ok, `preview: ${JSON.stringify(p)}`);
+    if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
+    eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "nodes:changed");
+    const eff = p.effectiveText ?? "";
+    for (const k of ["shop0", "camp0", "appended0", "exit0", "modnode0"]) assert(eff.includes(k), `${k} in ${eff}`);
   });
 }

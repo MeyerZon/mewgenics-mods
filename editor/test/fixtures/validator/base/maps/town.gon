@@ -1,0 +1,4 @@
+name Town
+nodes {
+	#include "std_nodes.gon"
+}
