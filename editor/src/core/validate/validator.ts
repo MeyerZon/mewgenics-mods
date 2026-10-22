@@ -15,6 +15,7 @@ import { join, relative } from "node:path";
 import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, packPath } from "../repo.ts";
 import { COMPONENT_CACHE_HINT } from "../components.ts";
 import { parse, GonParseError } from "../gon/parser.ts";
+import { preprocessFile, locateInclude } from "../gon-includes.ts";
 import { toValue } from "../gon/value.ts";
 import { parseOverlayName } from "../overlay/overlay.ts";
 import { parseCsv } from "../overlay/csv.ts";
@@ -225,7 +226,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
     if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, modDir);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -245,12 +246,14 @@ function validateGonOverlay(
   modName: string,
   nativeBuild: NativeBuild | null,
   dataRoot: string,
+  modDir: string,
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
   const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
   let root;
   try {
-    root = parse(o.text);
+    parse(o.text); // the raw text first: parse errors carry positions in the file as written
+    root = semanticParse(o, rb, file, dataRoot, modDir);
   } catch (e) {
     if (e instanceof GonParseError) {
       rb.error("gon-parse-error", e.message, { file, line: e.pos?.line, col: e.pos?.col });
@@ -262,6 +265,7 @@ function validateGonOverlay(
   if (o.mode === "replace") {
     rb.warn("whole-file-replace", `${o.relPath} replaces the whole base file; prefer .append/.merge/.patch`, { file });
   }
+  if (!root) return;
   const overlay = toValue(root);
   if (overlay.t !== "obj") return;
 
@@ -416,7 +420,7 @@ function validateGonOverlay(
   if (baseExists && (o.mode === "merge" || o.mode === "patch" || o.mode === "append")) {
     let baseRoot: VNode | null;
     try {
-      baseRoot = toValue(parse(readFileSync(baseAbs, "utf8")));
+      baseRoot = toValue(parse(preprocessFile(readFileSync(baseAbs, "utf8"), { resource: o.baseName, dataRoot, modDir }).text));
     } catch {
       baseRoot = null;
     }
@@ -433,6 +437,37 @@ function validateGonOverlay(
         checkPatchTargets(overlay, baseRoot, [], rb, file);
       }
     }
+  }
+}
+
+/**
+ * The GON the game actually parses for an overlay: the text after its pre-pass (Gon_Preprocess 0xa50bd0: comments
+ * stripped, `#include` inlined against the base resource's directory with this mod's files taking part). Reports
+ * includes that resolve nowhere (`include-missing`: the game stops with the fatal "Could not locate include file")
+ * and `#define` macros (`gon-define-unmodelled`: the game expands them, the editor does not).
+ * @returns the parsed root, or null after a `gon-parse-error` the pre-pass introduced
+ */
+function semanticParse(o: OverlayFile, rb: ReportBuilder, file: string, dataRoot: string, modDir: string) {
+  const ctx = { resource: o.baseName, dataRoot, modDir };
+  const pre = preprocessFile(o.text, ctx);
+  for (const inc of pre.includes) {
+    if (inc.found) continue;
+    const t = locateInclude(ctx, inc.name);
+    const via = inc.chain.length ? ` (inside ${inc.chain.map((c) => `"${c}"`).join(" > ")})` : "";
+    const why = t.outside
+      ? `resolves to ${t.packPath}, outside data/: the editor does not read it and the game would not find it in the pack`
+      : `resolves to ${t.packPath}, which exists neither in this mod nor in the base data: the game stops with the fatal "Could not locate include file: ${inc.name}"`;
+    const at = inc.depth === 0 ? { file, line: inc.line, col: inc.col } : { file };
+    rb.error("include-missing", `#include "${inc.name}"${via} ${why}`, at);
+  }
+  if (pre.defines.length > 0) {
+    rb.warn("gon-define-unmodelled", `${o.relPath} uses #define (${pre.defines.join(", ")}): the game expands these macros before parsing, the editor does not — checks and previews of this file see the unexpanded text`, { file });
+  }
+  try {
+    return parse(pre.text);
+  } catch (e) {
+    rb.error("gon-parse-error", `after the game's comment/#include pre-pass: ${e instanceof Error ? e.message : String(e)}`, { file });
+    return null;
   }
 }
 
