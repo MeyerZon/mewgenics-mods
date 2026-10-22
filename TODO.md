@@ -20,6 +20,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr80-glow-preview` (#80) — Before → after: does the banded orange 6 px halo around the starter's gray square read as a glow at game scale (No = the default needs more bands or a wider blur)?
 - [ ] `pr86-unit-glow` (#86) — In shot-glow, does the Rat at the right of the arena carry a magenta band hugging its sprite, with no wash over its body (and none in shot-noglow)?
 - [ ] `pr86-glow-width` (#86) — Is glow_radius 12 the band width you want for the per-unit rim (and is the white hover rim being off while a unit glows acceptable)?
+- [ ] `pr99-glow-colours` (#99) — In shot-two, does the cat carry a cyan rim and the Rat a magenta one, each hugging its own sprite (no cross-colour bleed), and is the cat's rim whole among the other cats (no straight scissor edge)?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
@@ -45,7 +46,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
 - [ ] **Look at the unit-glow shots** — produced 2026-10-22 by the glow v2 agent (`cd editor && npm run test:unitglow`,
       run `20261022-102435-dev-sandbox-unit-glow`: shot-glow, shot-noglow and the v2 shot-two); `npm run t3` fills the
-      gallery's `pr86-unit-glow` / `pr86-glow-width` / glow-v2 cards. In shot-two, does the cat carry a cyan rim and the
+      gallery's `pr86-unit-glow` / `pr86-glow-width` / `pr99-glow-colours` cards. In shot-two, does the cat carry a cyan rim and the
       Rat a magenta one, each hugging its own sprite (no cyan on the Rat, no magenta on the cat), and is the cat's rim
       whole where it stands among the other cats (a scissor cut would show as a straight edge)?
 
