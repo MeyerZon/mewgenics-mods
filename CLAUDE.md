@@ -96,7 +96,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
-- `npm run test:e2e` — `vite build && playwright test`: the E2ECOUNT-check browser suite in `editor/tests/e2e/` that pins
+- `npm run test:e2e` — `vite build && playwright test`: the 54-check browser suite in `editor/tests/e2e/` that pins
   the UI's DOM and flows (Data mode, Art mode, Rooms mode, preview, onboarding, Export… / Import mod…). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
@@ -129,7 +129,8 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   the cat rig redirect rules (registry, `_CatRig_` exports, the SymbolClass list scan), Joker's Luck's reroll, the 3D observer's rules, the
   mesh draw (4x4 maths, the C std::function, GL save/restore, shader dialect), the OBJ / glTF loaders + JSON tokenizer,
   the 3D-object registry, per-unit models, the GON walker, the glTF loader, mesh textures + palette, the sprite/mesh
-  painter order, the harness's modules, the cat rig sample's bind loop; NATIVECOUNT checks, `-Werror`),
+  painter order, the harness's modules, the cat rig sample's bind loop; 441 checks = 14 + 7 + 16 + 15 + 14 + 15 + 27 + 5 + 4 + 10 + 12 + 11 + 30 + 41 + 16 + 8 + 10 + 8 + 31 + 10 + 12 + 118 + 7
+  in 23 suites, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
