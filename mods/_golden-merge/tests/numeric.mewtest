@@ -1,0 +1,40 @@
+mods: _golden-merge, _autoplay
+timeout: 120s
+# The numeric golden (TDD target 8, `.add` / `.multiply`): the same seeded fight as numeric-vanilla.mewtest, WITH the
+# overlays. `expect gon` walks the merged data/characters entry the game holds for the unit (Character+0x240) and
+# `expect unit` reads what Character::init made of it (hp +0x4b0, the stats +0x5a0..).
+#   .patch  -> Pooter properties.health.multiply 2 (6 -> 12), stats.speed.add 10 (5 -> 15), faction.overwrite allies
+#   .merge  -> Rat keeps its numbers (the merge touches graphics.name and properties.faction only)
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+expect units == 8
+cmd spawn Pooter
+expect console "Spawned Pooter" within 10
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 10
+dump
+expect units == 10
+expect unit 8 namekey == "ENEMY_POOTER_NAME"
+expect gon 8 properties.health == 12
+expect gon 8 stats.speed == 15
+expect gon 8 stats.constitution == 5
+expect gon 8 properties.faction == "allies"
+expect gon 8 properties.flying == true
+expect gon 8 properties.nope missing
+expect gon 8 abilities.spells exists
+expect gon 8 graphics.name == "ENEMY_POOTER_NAME"
+expect unit 8 hp == 12
+expect unit 8 speed == 15
+expect unit 8 constitution == 5
+expect unit 8 shield == 0
+expect unit 8 faction == 1
+expect unit 9 namekey == "GOLDEN_RAT_NAME"
+expect gon 9 properties.health == 5
+expect gon 9 stats.strength == 4
+expect unit 9 hp == 5
+expect unit 9 strength == 4
+expect unit 9 name == "Golden Rat"
+quit

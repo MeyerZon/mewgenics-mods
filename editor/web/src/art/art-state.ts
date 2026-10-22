@@ -14,6 +14,8 @@ import { grayLevelToByte } from "../../../src/core/art/scene.ts";
 import { adoptGradients } from "../../../src/core/art/gradient.ts";
 import { shapeToSvg } from "../../../src/core/art/svg-export.ts";
 import { parseViewBox, reoriginSvg } from "../../../src/core/art/svg-reorigin.ts";
+import { bakeGlow } from "../../../src/core/art/glow.ts";
+import type { BakeGlowOptions } from "../../../src/core/art/glow.ts";
 import type {
   AbcMode,
   ArtAssets,
@@ -316,6 +318,27 @@ export async function exportShapeSvgFile(id: string): Promise<void> {
   if (!r.ok) return toast(`export failed: ${r.error || "?"}`);
   if (out.findings.length) A.set((a) => ({ findings: [...out.findings.map((f) => ({ ...f, path: `shapes.${id}` })), ...a.findings] }));
   toast(`wrote mods/${mod()}/${rel} — edit it in VectorCraft or any SVG editor, then Replace… brings it back`);
+}
+
+/**
+ * Bake a glow / drop shadow of shape `id` into the open scene (glow.ts): the halo shape <id>_glow and a layer under
+ * the source in every sprite that places it. The game refuses SWF filters, so this is the way to a glow.
+ */
+export function bakeGlowInScene(id: string, opts: BakeGlowOptions): void {
+  const sc = scene;
+  if (!sc || !sc.shapes[id]) return toast(`no shape "${id}"`);
+  const r = bakeGlow(sc, id, opts);
+  if (!r.ok) {
+    A.set((a) => ({ findings: [...r.findings, ...a.findings], rightTab: "findings" }));
+    return toast(`bake refused: ${r.findings.map((f) => f.message).join("; ")}`);
+  }
+  sc.shapes = r.scene.shapes;
+  sc.sprites = r.scene.sprites;
+  if (r.findings.length) A.set((a) => ({ findings: [...r.findings, ...a.findings] }));
+  scheduleValidate();
+  bump();
+  const where = r.layersAdded.length ? `placed under it in ${r.layersAdded.map((l) => `${l.sprite} (depth ${l.depth})`).join(", ")}` : "no sprite places the source: put it on a layer under it";
+  toast(`baked "${r.glowId}" (${opts.kind === "dropShadow" ? "drop shadow" : "glow"}, ${opts.blur} px) — ${where}`);
 }
 
 /** An edited SVG replaces shape `id` in place (viewBox not applied, so the exported coordinates come back unchanged). */

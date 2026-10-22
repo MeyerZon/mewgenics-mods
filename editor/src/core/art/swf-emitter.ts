@@ -17,6 +17,7 @@ import type { Mat } from "./geometry.ts";
 import type { RgbaImage } from "./png.ts";
 import { BLEND_MODES, hasEffects, writeFilterList } from "./effects.ts";
 import { encodeDefineEditText, encodeImportGameFonts, encodeImportAssets2 } from "./text.ts";
+import { bitmapFitsAtlas, bitmapTooLargeMessage } from "./engine-behaviour.ts";
 import type { SceneFilter } from "./effects.ts";
 
 export const SWF_VERSION = 17;
@@ -163,6 +164,11 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
       const img = opts.bitmaps ? opts.bitmaps.get(id) : undefined;
       if (!img) {
         findings.push({ severity: "error", code: "bitmap-missing", message: `no decoded image supplied for bitmap "${id}" (${bitmaps[id].file})`, path: `bitmaps.${id}` });
+        continue;
+      }
+      // OBSERVED 2026-10-21: fit_texture 0xa24540 is FATAL for a bitmap that does not fit the atlas page (texture_atlas_size)
+      if (!bitmapFitsAtlas(img.width, img.height)) {
+        findings.push({ severity: "error", code: "bitmap-too-large", message: bitmapTooLargeMessage(`bitmap "${id}" (${bitmaps[id].file})`, img.width, img.height), path: `bitmaps.${id}` });
         continue;
       }
       try {

@@ -139,6 +139,32 @@ What the game does with a mod's SWF (OBSERVED 2026-10-20/21, build 25143593; `ed
   with `import_svg { mod, path: "art/<shapeId>.svg", options: { applyViewBox: false }, into: { scene, shapeId,
   replace: true } }` to keep its coordinates. The UI has the same as Export SVG / Replace… on Shapes rows.
 
+The display path is decompiled (`docs/engine-map.md` "SWF loader and display path"), so the validator and `inspect_swf`
+report what the game's loader would do (`editor/src/core/art/swf-rules.ts`; errors stop a build):
+- `font-tag-unsupported` (error, SWF): a DefineFont / DefineFont2 tag is FATAL in-game; only DefineFont3 decodes — use `scene.texts` with a game font class.
+- `abc-count` (error, SWF): a second DoABC tag is FATAL; keep at most one.
+- `bitmap-too-large` (error, scene + SWF): a bitmap with width or height >= 4096 (`texture_atlas_size`) is FATAL; keep both below it.
+- `filter-unsupported` (error, scene + SWF): any PlaceObject3 filter list is FATAL; bake glows / shadows into the art.
+- `import-unsupported` (error, scene + SWF): ImportAssets / ImportAssets2 entries are never linked; placing one crashes.
+- `scaling-grid-ignored` (warning, SWF): DefineScalingGrid is skipped; there is no 9-slice.
+- `gradient-spread-ignored` (warning, scene + SWF): spread reflect / repeat is written but the game pads every gradient.
+- `morph-shape-skipped` (warning, SWF): DefineMorphShape is skipped (no shape tweens); key shapes on a timeline instead.
+- `place-cxform-ignored` (warning, SWF): a PlaceObject (v1) colour transform is ignored; use PlaceObject2.
+- `fill-rule-ignored` (warning, scene + SWF): the engine fills each fill style even-odd; a `nonzero` path whose sub-paths cross or self-overlap gets a hole in-game — set `fillRule` `evenodd` or split the overlap into separate paths.
+- `export-shadows-vanilla` (info, scene + SWF): an export named like a vanilla export (e.g. `CatTail`) replaces it for every by-name lookup, last-loaded file first (INFERRED, untested).
+- `jpeg-bitmap` (info, SWF): JPEG bitmaps decode but the game logs a warning; prefer PNG (DefineBitsLossless2).
+- `tag-ignored` (info, SWF): a tag outside the loader's switch is skipped silently.
+The preview draws what the engine does: even-odd fills over the sub-paths the emitter keeps, the cxform after the palette
+remap, padded gradients, smoothed + clamped bitmaps.
+
+Glows and drop shadows: **bake them** — `bake_glow { mod, path, shapeId, color, blur, kind?: glow|dropShadow, dx?, dy?,
+strength?, steps?, replace? }` adds the halo shape `<shapeId>_glow` under the source on every layer that places it
+(ordinary geometry the game draws like anything else; re-bake after editing the source). Never put SWF filters on a
+key: the loader crashes on any filter list (`filter-unsupported`). For engine-side light or tint instead, give the
+character the passives `CharacterLightSource { glow [r g b a] size N }` (an additive ground disc around the unit) or
+`AdvancedTint [mul r g b a  add r g b a]` (a brightness lift of its pixels) — `docs/data-mods.md` "Lighting and tint
+knobs"; neither is a rim.
+
 ## The mod-development loop (agent alone until the last step)
 
 1. Author the overlays (`new_from_template`, `write_overlay`); `validate_mod` and

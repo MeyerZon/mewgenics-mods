@@ -274,13 +274,20 @@ export class BitReader {
     return [a, b, c, d, tx, ty];
   }
   cxformWithAlpha(): RawCxform {
+    return this.cxformN(4);
+  }
+  /** CXFORM without alpha (PlaceObject v1): three channels, the alpha terms stay identity. */
+  cxform(): RawCxform {
+    return this.cxformN(3);
+  }
+  private cxformN(channels: number): RawCxform {
     const hasAdd = this.readUB(1);
     const hasMul = this.readUB(1);
     const n = this.readUB(4);
     const mul = [256, 256, 256, 256];
     const add = [0, 0, 0, 0];
-    if (hasMul) for (let i = 0; i < 4; i++) mul[i] = this.readSB(n);
-    if (hasAdd) for (let i = 0; i < 4; i++) add[i] = this.readSB(n);
+    if (hasMul) for (let i = 0; i < channels; i++) mul[i] = this.readSB(n);
+    if (hasAdd) for (let i = 0; i < channels; i++) add[i] = this.readSB(n);
     this.align();
     return { mul, add };
   }
@@ -385,6 +392,18 @@ function parseTag(code: number, body: Uint8Array, offset: number): Tag {
         t.tags = readTags(body, 4, body.length);
         break;
       }
+      case TAG.PlaceObject: {
+        // PlaceObject v1: CharacterId, Depth, MATRIX, then an optional CXFORM (no alpha) when bytes remain
+        const characterId = r.u16();
+        const depth = r.u16();
+        const matrix = r.matrix();
+        const p: ParsedPlace = { flags: 0, move: false, depth, characterId, matrix };
+        if (r.pos < body.length) p.cxform = r.cxform();
+        t.place = p;
+        t.id = characterId;
+        t.depth = depth;
+        break;
+      }
       case TAG.PlaceObject2:
         t.place = parsePlaceObject2(r);
         t.depth = t.place.depth;
@@ -449,17 +468,34 @@ function parseTag(code: number, body: Uint8Array, offset: number): Tag {
         t.editText = et;
         break;
       }
+      case TAG.ImportAssets:
       case TAG.ImportAssets2: {
         t.raw = body;
         t.importUrl = r.string();
-        r.u8(); // reserved
-        r.u8(); // reserved
+        if (code === TAG.ImportAssets2) {
+          r.u8(); // reserved
+          r.u8(); // reserved
+        }
         const n = r.u16();
         t.importCount = n;
         t.imports = [];
         for (let i = 0; i < n; i++) t.imports.push({ id: r.u16(), name: r.string() });
         break;
       }
+      case TAG.DefineScalingGrid:
+      case TAG.DefineMorphShape:
+      case TAG.DefineMorphShape2:
+      case TAG.DefineFont:
+      case TAG.DefineFont2:
+      case TAG.DefineFont3:
+      case TAG.DefineBits:
+      case TAG.DefineBitsJPEG2:
+      case TAG.DefineBitsJPEG3:
+      case TAG.DefineBitsJPEG4:
+        // the character id is enough for the SWF rules (swf-rules.ts); the body stays raw
+        t.raw = body;
+        t.id = r.u16();
+        break;
       default:
         t.raw = body;
     }

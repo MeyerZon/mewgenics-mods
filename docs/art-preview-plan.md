@@ -90,8 +90,11 @@ gpak into the session scratchpad (never into the repo):
   positive area → fill on the right → `FillStyle1`; negative → `FillStyle0`.
   `shape.ts` additionally assigns sides nesting-aware (a hole inside an "O" gets the
   side that leaves the hole unpainted under both nonzero and even-odd), so output
-  renders the same whichever rule the engine's tessellator uses — that rule is
-  unknown (§8).
+  renders the same whichever rule the engine's tessellator uses — that rule is now
+  OBSERVED: **even-odd per fill style** (libtess2 `TESS_WINDING_ODD` baked into
+  `tessTesselate` 0xa73bb0; §8 item 7), so the preview fills even-odd over exactly the
+  sub-paths the emitter keeps and `fill-rule-ignored` warns where a `nonzero` path's
+  sub-paths cross or self-overlap.
 - The vanilla **DoABC is Flash's auto-generated linkage ABC** (minor 16, major 46): per
   SymbolClass name one class `Name extends flash.display.MovieClip` with a protected
   namespace, empty traits (or `MovieClip`-typed slots for named children), `cinit` =
@@ -125,7 +128,7 @@ Units are **pixels** (SWF twips = px × 20, computed at the boundary). `y` is do
       "paths": [
         { "d": "M0 0 L120 0 L120 80 L0 80 Z",
           "fill": "gray:8",             // gray:N (0..15) is palette-remapped by the engine
-          "fillRule": "nonzero",        // or "evenodd" (preview + tessellation hint)
+          "fillRule": "nonzero",        // or "evenodd": decides which sub-paths carry the fill (the engine itself fills even-odd)
           "stroke": null, "strokeWidth": 0,
           "transform": [1,0,0,1,0,0] }  // SVG matrix a,b,c,d,e,f (px)
       ]
@@ -221,11 +224,13 @@ Per frame N of a sprite: `timeline.bake(sprite, N)` → ordered placements
 
 1. **Flatten** each path (`geometry.flatten`, curve tolerance in px) into closed
    polygons in stage px, with the placement matrix applied.
-2. **Stencil fill** (no triangulation code): draw a triangle fan from each polygon's
-   first vertex with color writes off and `STENCIL_OP INVERT` (even-odd) or
-   `INCR_WRAP/DECR_WRAP` by winding (nonzero); then draw the polygon's bounding quad
-   with `STENCIL_FUNC NOTEQUAL 0`, which runs the fragment shader once per covered
-   pixel. This is exact for any path with holes and self-intersections.
+2. **Stencil fill** (no triangulation code): draw a triangle fan from each kept
+   polygon's first vertex (`fillSubpathMask`, the sub-paths the emitter gives a fill
+   side) with color writes off and `STENCIL_OP INVERT` — the engine's even-odd rule
+   (OBSERVED 2026-10-21, `ENGINE_DRAWING.fillRule`); then draw the polygon's bounding
+   quad with `STENCIL_FUNC NOTEQUAL 0`, which runs the fragment shader once per
+   covered pixel. This is exact for any path with holes and self-intersections, and
+   what the game's tessellator produces.
 3. **Fragment shader = `paletted_full.shader`**, ported literally:
    ```glsl
    vec4 c = u_fill;                       // gray:N → (17N,17N,17N)/255, or passthrough
@@ -238,9 +243,11 @@ Per frame N of a sprite: `timeline.bake(sprite, N)` → ordered placements
 4. Bitmaps are uploaded premultiplied and un-premultiplied in the shader exactly as
    `swf_lib.shader` does (`rgb /= max(a, .001)`), so what the atlas would show is what
    the preview shows.
-5. Sprites nest: a placement whose `ref` is a sprite recurses with the child's own frame
-   counter (child frame = parent frame mod child.frames, matching Flash's default
-   looping semantics; INFERRED for the engine — flagged in §8).
+5. Sprites nest: a placement whose `ref` is a sprite recurses with the child's own
+   clock (`nestedFrame(clock, frames)`: frames since playback started, not the
+   parent's frame — OBSERVED in-game 2026-10-20 and in `MovieClip::update` 0x9a8720's
+   per-instance accumulator). Gradients are sampled padded whatever `spread` says
+   (OBSERVED: `GradientAtlas::RasterizeRow` 0xa27de0 has no reflect/repeat).
 
 Fallback: when WebGL is unavailable the panel draws with Canvas2D (`fill()` with the
 palette color resolved on the CPU) and says so in its status line; the palette remap is
@@ -458,25 +465,35 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
   "cxform before/after the palette remap" cannot be decided on an enemy (both give the same pixels) — still open;
   a cat-part probe would need the native MewCatPartFramework.
 
-**Unverified engine behaviors (INFERRED, flagged in the UI as such)**
-5. ~~Nested sprite frame advance = parent frame mod child frames~~ — wrong, see OBSERVED above (own clock). The
-   preview follows the observations since 2026-10-20: `src/core/art/engine-behaviour.ts` holds them (a test ties it to
-   the probe fixture), `preview-gl.ts` runs nested sprites on a clock and samples bitmaps LINEAR + clamped.
-6. `_Append_<Clip>` applies to `AbilityIcon` the way it does to `Furniture`.
-7. The exact case/suffix rule mapping GON `"rat.png"` → SymbolClass `Rat`; the emitter
-   writes whatever string the scene's `exports` key says, so both spellings can be
-   exported at once (as the example does). Caveat for `abc: "stub"`: a dotted linkage
-   name follows Flash's package rule, so `"starter.png"` declares class `png` in
-   package `starter` — harmless as a linkage string, but vanilla files export the
-   class-style name (`Rat`), so prefer that spelling once the mapping is known.
-   The engine's fill rule (nonzero vs even-odd) is also unknown; `shape.ts` emits
-   shapes that render identically under both (§1.3).
-8. Whether the engine honors `PlaceObject2` cxform on palette-remapped art the same way
-   the shader suggests (`* mul + add` after the remap) — the preview does exactly that. The cxform itself is
-   OBSERVED to apply; the order relative to the remap is undecidable on an (unpaletted) enemy.
+**Engine behaviors the preview relies on — OBSERVED 2026-10-21 in the decompiled display path** (RE session `disp`;
+`docs/engine-map.md` "SWF loader and display path"; `src/core/art/engine-behaviour.ts` holds the constants and
+`test/art-engine-rules-tests.ts` pins each against the renderer):
+5. ~~Nested sprite frame advance = parent frame mod child frames~~ — wrong: own clock, OBSERVED in-game 2026-10-20 and
+   in `MovieClip::update` 0x9a8720 (per-instance accumulator `+0x30`). The root clip is label-driven by
+   `AnimStateMachine::PlayAnimation` 0x9abda0 → `gotoAndPlay(label)` 0x9a8b30 / `gotoAndStop(label)` 0x9a8c00; an
+   unknown label is a silent no-op.
+6. `_Append_<Clip>` applies to `AbilityIcon` the way it does to `Furniture` — still INFERRED for the display half
+   (the merge itself is OBSERVED, §7).
+7. The exact case/suffix rule mapping GON `"rat.png"` → SymbolClass `Rat` is still open (the emitter writes whatever
+   string the scene's `exports` key says, so both spellings can be exported at once; prefer the class-style name).
+   OBSERVED now: **the engine's fill rule is even-odd per fill style** (libtess2 `TESS_WINDING_ODD` baked into
+   `tessTesselate` 0xa73bb0, fed per style by `Tesselator::tesselate` 0xa2f900; the SWF fill-winding flag is never
+   read). The preview fills even-odd over the sub-paths the emitter keeps (`shape.ts fillSubpathMask`) and the
+   validator warns `fill-rule-ignored` where a `nonzero` path's sub-paths cross or self-overlap (a hole in-game).
+   Also OBSERVED: by-name lookup (`App_FindMovieClipByName` 0x9bb6f0) scans the last-loaded file first, so a mod
+   export with a vanilla name shadows it (`export-shadows-vanilla`, INFERRED consequence, not run).
+8. **OBSERVED:** the `PlaceObject` cxform applies **after** the palette remap — `shaders/paletted_full.shader` is
+   `out = remap(color); frag = out * color_xform[0] + color_xform[1]`, with the cxform concatenated Flash-style in
+   `DisplayObject::Render` 0x9b0a50. The preview's shader and `remapColor` do exactly that (pinned).
+   Bitmaps: fill type decides the sampling (`swf_lib.shader`): 0x41 (what the emitter writes) is LINEAR + mip,
+   clamped; 0x40 repeats; 0x42 / 0x43 are pixel-snapped — the preview's LINEAR + CLAMP_TO_EDGE is the 0x41 case.
+   Gradients: pad only (`GradientAtlas::RasterizeRow` 0xa27de0, `default_gradient.shader`); the preview pads and
+   `gradient-spread-ignored` warns on reflect/repeat. Atlas: a bitmap ≥ `texture_atlas_size` (4096) in either
+   dimension is FATAL (`fit_texture` 0xa24540) → `bitmap-too-large`.
 9. Tessellation tolerance: engine `per_file_curve_resolution` vs. our preview flatten
    tolerance; a `swflist.gon.append` `per_file_curve_resolution { <name>.swf N }` entry
-   is written when the scene sets `curveResolution`.
+   is written when the scene sets `curveResolution`. Still open, as are LineStyle2 joins / miter / hairline (parsed
+   by `LineStyle_read` 0xb6f220, not traced to the outline builder) and the font-class → font lookup RVA.
 
 **Not in this pass**
 10. **Gradient fills done 2026-10-20:** `scene.gradients` (linear/radial, focus, spread, transform, 2..8 stops) +
@@ -496,6 +513,14 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     with "ERROR: FILTERS NOT SUPPORTED <swf>"** (gate `filters`, a negative control expecting `crash`), so filters are a
     `filter-unsupported` validation error. The preview draws add / multiply / screen in GL and the Canvas2D composite
     modes; other blends are an info finding.
+    **Baked glows done 2026-10-21:** since the loader has no filter renderer (`PlaceObject::decode3` 0xb78210 stops on
+    the flag bit; engine-map "Glow and outline passes"), `src/core/art/glow.ts` bakes a glow / drop shadow as the halo
+    shape `<id>_glow` — N concentric, non-overlapping bands of the source outline pushed out by `blur·k/N` (per-vertex
+    miter offset, holes kept, fill on the right after `assignFillSides`) with alpha `colour.a · min(1, strength ·
+    (N−k+1)/N)` — placed under the source on every layer that places it (keys mirrored). `bake_glow` (MCP), the shape
+    row's "Bake glow…", `glow-baked` / `glow-orphan` findings; the preview draws it as ordinary shapes. Limitation: a
+    blur above half the shape's smallest feature folds a ring onto itself (no true Minkowski sum); stroke-only paths
+    contribute nothing; inner glows are not bakeable.
     **Clip authoring done 2026-10-20:** `src/core/art/timeline-edit.ts` (keys from the shown pose, labels, insert /
     delete frames with shifting, layer order) behind a Timeline tab (ruler + label pills, layer rows with key / hold /
     tween marks, click to scrub, key inspector). OBSERVED: **the game drives a character's root clip timeline** — a

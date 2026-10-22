@@ -139,6 +139,7 @@ function BuildPanel() {
                   <span className="k">labels</span><span>{(ins.labels || []).join(", ") || "(none)"}</span>
                   <span className="k">tags</span><span>{Object.entries(ins.histogram || {}).map(([k, v]) => `${k}×${v}`).join(" ")}</span>
                 </div>
+                {(ins.findings || []).length ? <div style={sx("margin-top:10px")}>{(ins.findings || []).map((f, i) => <FindingRow key={i} f={f} />)}</div> : <p className="dotok" style={sx("margin:8px 0 0")}>The game's loader accepts every tag.</p>}
               </div>
             ) : (
               <div className="finding error"><span className="mark">✕</span><div>{ins.error}</div></div>

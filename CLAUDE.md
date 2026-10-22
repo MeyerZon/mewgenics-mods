@@ -93,15 +93,15 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
-- `npm run test:e2e` — `vite build && playwright test`: the 34-check browser suite in `editor/tests/e2e/` that pins
+- `npm run test:e2e` — `vite build && playwright test`: the 42-check browser suite in `editor/tests/e2e/` that pins
   the UI's DOM and flows (Data mode, Art mode, preview, onboarding). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (24 tools, incl. the art tools,
-  `check_game_build` and `port_bindings`).
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (25 tools, incl. the art tools
+  with `bake_glow`, `check_game_build` and `port_bindings`).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
 
 **Data access / tooling** (repo root):
@@ -114,7 +114,9 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
-  and generated tables, the status definition rules, the harness's modules; 98 checks = 13 + 6 + 14 + 65, `-Werror`),
+  and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
+  walks + apply/merge writes, symbol resolution + the hook plan, the harness's modules;
+  158 checks = 14 + 6 + 14 + 12 + 11 + 15 + 86, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.

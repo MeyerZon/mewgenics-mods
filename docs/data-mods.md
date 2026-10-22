@@ -167,6 +167,30 @@ this section in sync with `merge.ts` and the fixtures.
   In this repo `mods/<mod>/swfs/` is **build output** of the editor's art pipeline (the SWF and the generated
   `swflist.gon.append`) and is git-ignored; the source is `mods/<mod>/art/*.scene.json`.
 - **Text** (`data/text/combined.csv`): `KEY,en,notes,sp,fr,de,it,pt-br,ru,ko,ja,zh-cn`.
+- **Tilesets** (`data/tilesets.gon`): one flat object per tileset (`alley`, `junkyard`, `sewers`, …, `house`,
+  `tutorial`, `finalboss`; 22 in this build) of `key value` string pairs plus `global_objects` / `reverb`
+  sub-objects, keyed by `default_tileset`. The game also uses it as a per-tileset **clip-name indirection** (below).
+
+### Redirecting a vanilla character's clip via tilesets.gon (INFERRED, untested)
+
+Decompiled 2026-10-21 (`ResolveClipName` 0x7bdbb0, called by `CharacterGraphics_build` 0xf1150 with
+`(graphics.movieclip, "auto")` before the SymbolClass lookup; `docs/engine-map.md` "SWF loader and display path"):
+for every **non-cat** character the game first looks `graphics.movieclip` up as a key in the *current* tileset's
+object of `tilesets.gon` and, when the value is a string, uses that string as the clip name instead. Vanilla uses this
+for `non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. Since the table is loaded once at boot
+(`SpawnDatabase_init` 0x7a74b0), a mod overlay applies, so a data-only redirect should exist:
+
+```
+// data/tilesets.gon.patch — draw the Rat with the mod's SymbolClass MyModRat, without touching enemies.gon
+alley    { Rat MyModRat }
+junkyard { Rat MyModRat }
+// … one row per tileset the character can appear in (incl. house if it shows there)
+```
+
+Caveats: the key namespace is shared with the tileset slots (`combat_background`, `static_*`, `debris`,
+`event_piece_frame`, `reverb`, `global_objects`), the `_CAT` branch does not pass through this function, and the
+validator does not model it. Not run in-game yet; the alternative is a mod SWF exporting the vanilla name itself
+(by-name lookup prefers the last-loaded file; validator info `export-shadows-vanilla`), equally INFERRED.
 
 Extract reference copies with `python -I tools/gpak.py extract .extracted --prefix data/` (git-ignored).
 
@@ -178,6 +202,29 @@ Extract reference copies with `python -I tools/gpak.py extract .extracted --pref
 applies the status. The native half (`native/mods/jokers-luck`) registers the name with the framework, which makes
 `effects { JokersLuck N }` valid everywhere the game accepts a status name. Test in battle with the console command
 `bind JokersGambit`, then use the ability; carriers should show a luck modifier that changes every turn.
+
+## Lighting and tint knobs
+
+The engine has no per-unit glow or outline a mod can switch on (the combat rim is a hover effect with a constant white
+colour, and the SWF player refuses filter lists; `docs/engine-map.md` "Glow and outline passes", OBSERVED 2026-10-21).
+What data *can* do, all plain passives on a character / class / item:
+
+- **`CharacterLightSource { color [r g b] glow [r g b a] size N }`** — a `LightSource` on the unit feeding the scene's
+  `Lighting` pass: `color` is the light pool that lightens ambient-darkened ground (visible only where a tileset's
+  `Lighting { ambient … }` is below 1); `glow` is an **additive disc of colour on the ground tiles around the unit**
+  (radius ≈ `size/2` tiles + one soft tile, per-tile resolution, bleeds onto the sprite and its neighbours; it is not
+  sprite-shaped). Vanilla: `characters/enemies.gon` `passives { Undead 1  CharacterLightSource { color [.8, .9, 1]
+  size 1.5 } }`, `small_enemies.gon` `CharacterLightSource { color [.7, .3, 1] … }`; `glow` is read only when the key
+  exists (default 0). Works in combat (`Lighting` is `Instantiatable_InCombat`).
+- **`AdvancedTint [ mul_r mul_g mul_b mul_a  add_r add_g add_b add_a ]`** — a full colour transform on the unit's
+  sprite including the **additive** term, the only data-level way to brighten a sprite's own pixels. Vanilla:
+  `characters/finalboss.gon` `passives { AdvancedTint [ .6, .6, .6, 1  .5, .5, .5, 0 ] }`. Per pixel; no rim.
+- **`TintItem { mul [r g b] add [r g b] ignore_if_str_aux_equals <aux> }`** — the item-side form (`items/weapons.gon`
+  ModelingClay: `add [0.05 0.05 0.05] mul [0.45 0.3 0.25]`); `EliteTint [r g b a]` / `EliteFlatTint [r g b]`
+  (elite_buffs.gon) and `graphics { tint [r g b a] }` are multiplies only.
+
+For a sprite-shaped glow or drop shadow, bake it into the art: the editor's `bake_glow` (`docs/art-pipeline.md` §6)
+adds a halo shape under the source; the result is ordinary SWF geometry the game draws like any other.
 
 ## Limits of the data layer
 
@@ -200,7 +247,16 @@ units event with `expect unit`. OBSERVED: `enemies.gon.merge` (`Rat { graphics {
 { faction allies } }`) → the spawned Rat dumps as `Golden Rat`, faction 1; `enemies.gon.patch` (`Pooter { properties
 { faction.overwrite allies } stats { speed.add 10 } }`) → Pooter faction 1; `enemies.gon.append` (a new entry
 `GoldenRat { variant_of Rat … }`) → `spawn GoldenRat` works and it dumps as `Appended Rat`, faction 2 (the vanilla
-enemies value); `text/combined.csv.append` rows (no header line in an append file) supply both names. What the dump
-cannot see: `.add` / `.multiply` on stats (`speed.add 10` is pinned at T0 only, against the editor's engine, by
-`run-tests.ts` 4d) — the units event carries no stat or HP field; the follow-up is in `TODO.md` target 8. Fixtures:
+enemies value); `text/combined.csv.append` rows (no header line in an append file) supply both names. Fixtures:
 `editor/test/fixtures/ingame/result-golden-{vanilla,merge}.jsonl`.
+
+The numeric policies (2026-10-22, `tests/numeric.mewtest` / `tests/numeric-vanilla.mewtest`): the harness's `expect
+gon` reads the merged entry the game holds for a spawned unit (`Character+0x240`, `docs/ingame-testing.md`), so
+`.add` / `.multiply` are pinned against the game itself. OBSERVED on build 25143593 (`enemies.gon.patch`: `Pooter {
+properties { faction.overwrite allies  health.multiply 2 } stats { speed.add 10 } }`): `properties.health` = number 12
+(int 12, double 12, text "12"; vanilla 6/6/"6"), `stats.speed` = number 15 (vanilla 5) — PatchMerge rewrites the int,
+the double **and** the token text of the node; `properties.faction` = string "allies"; and what `Character::init` made
+of it in the units event: `hp` 12 (vanilla 6: current HP right after a spawn is `properties.health`), `speed` 15,
+`constitution` 5. The `.merge`d Rat keeps `health` 5 / `hp` 5 / `strength` 4 while its `namekey` is `GOLDEN_RAT_NAME`.
+The editor's preview agrees (`run-tests.ts` 4d: speed 15, health 12). Fixtures:
+`editor/test/fixtures/ingame/result-golden-numeric{,-vanilla}.jsonl`.
