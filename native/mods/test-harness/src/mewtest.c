@@ -285,10 +285,12 @@ static void maybe_hide(void) {
 
 static void write_script_error_and_end(void);
 static void step_runner(void); /* defined after the MtHost table */
+static void maybe_hook_swap(void); /* the in-process shot capture, defined next to the MtHost table */
 static void hook_FrameBegin(void *app) {
     g_origFrameBegin(app);
     if (!g_active) return;
     maybe_hide();
+    maybe_hook_swap();
     EnterCriticalSection(&g_runLock);
     if (!g_scriptOk) {
         write_script_error_and_end();
@@ -829,10 +831,175 @@ static int h_run_step(void *u, int op, const char *arg, MtRunInfo *info, char *d
     return 0;
 }
 
+/* ----------------------------------------------------------------------- */
+/* shot: read the GL back buffer in-process (2026-10-22, the stale-shot fix)  */
+/* ----------------------------------------------------------------------- */
+/* OBSERVED 2026-10-22: with the game window in front, the runner's PrintWindow(PW_RENDERFULLCONTENT) came back dark
+ * and its screen fallback returned one frozen frame (the loading screen) for every shot of a run. Both read DWM's
+ * copy of the window. The honest frame is the back buffer the game is about to present: the SDL_GL_SwapWindow DYNAPI
+ * slot is swapped for hook_SwapWindow, which on an armed shot does glReadPixels(GL_BACK) of the default framebuffer
+ * (the final composite, UI included) into <run dir>\shot-<line>.mtraw (mt_shot.c layout) and then presents. */
+#define GLX_READ_FRAMEBUFFER          0x8CA8
+#define GLX_READ_FRAMEBUFFER_BINDING  0x8CAA
+#define GLX_PIXEL_PACK_BUFFER         0x88EB
+#define GLX_PIXEL_PACK_BUFFER_BINDING 0x88ED
+#define GLX_READ_BUFFER               0x0C02
+#define GLX_PACK_ALIGNMENT            0x0D05
+#define GLX_BACK                      0x0405
+#define GLX_RGB                       0x1907
+#define GLX_UNSIGNED_BYTE             0x1401
+typedef int (*fn_SDL_GL_SwapWindow)(void *window);
+typedef void (WINAPI *fn_glReadPixels)(int x, int y, int w, int h, unsigned fmt, unsigned type, void *px);
+typedef void (WINAPI *fn_glGetIntegerv)(unsigned pname, int *v);
+typedef void (WINAPI *fn_glPixelStorei)(unsigned pname, int v);
+typedef void (WINAPI *fn_glReadBuffer)(unsigned mode);
+typedef unsigned (WINAPI *fn_glGetError)(void);
+typedef void (WINAPI *fn_glBind)(unsigned target, unsigned name);
+typedef PROC (WINAPI *fn_wglGetProcAddress)(LPCSTR name);
+typedef HDC (WINAPI *fn_wglGetCurrentDC)(void);
+static struct {
+    int loaded;   /* 0 not tried, 1 ok, -1 opengl32 missing */
+    fn_glReadPixels ReadPixels; fn_glGetIntegerv GetIntegerv; fn_glPixelStorei PixelStorei; fn_glReadBuffer ReadBuffer;
+    fn_glGetError GetError; fn_glBind BindFramebuffer; fn_glBind BindBuffer; fn_wglGetCurrentDC GetCurrentDC;
+} g_gl;
+static fn_SDL_GL_SwapWindow g_origSwap;
+static int g_swapHook;                 /* 0 not yet, 1 installed, -1 cannot (logged once) */
+static volatile LONG g_shotState;      /* 0 idle, 1 armed, 2 done, 3 failed */
+static int g_shotLine;
+static MtShotResult g_shotRes;
+static unsigned char *g_shotBuf;
+static size_t g_shotCap;
+
+static int gl_load(void) {
+    if (g_gl.loaded) return g_gl.loaded == 1;
+    HMODULE m = GetModuleHandleA("opengl32.dll");
+    fn_wglGetProcAddress gpa = m ? (fn_wglGetProcAddress)(void *)GetProcAddress(m, "wglGetProcAddress") : NULL;
+    if (m) {
+        g_gl.ReadPixels = (fn_glReadPixels)(void *)GetProcAddress(m, "glReadPixels");
+        g_gl.GetIntegerv = (fn_glGetIntegerv)(void *)GetProcAddress(m, "glGetIntegerv");
+        g_gl.PixelStorei = (fn_glPixelStorei)(void *)GetProcAddress(m, "glPixelStorei");
+        g_gl.ReadBuffer = (fn_glReadBuffer)(void *)GetProcAddress(m, "glReadBuffer");
+        g_gl.GetError = (fn_glGetError)(void *)GetProcAddress(m, "glGetError");
+        g_gl.GetCurrentDC = (fn_wglGetCurrentDC)(void *)GetProcAddress(m, "wglGetCurrentDC");
+    }
+    if (gpa) {   /* GL 3.0 entry points: only through the current context */
+        g_gl.BindFramebuffer = (fn_glBind)(void *)gpa("glBindFramebuffer");
+        g_gl.BindBuffer = (fn_glBind)(void *)gpa("glBindBuffer");
+    }
+    g_gl.loaded = (g_gl.ReadPixels && g_gl.GetIntegerv && g_gl.PixelStorei && g_gl.ReadBuffer && g_gl.GetError && g_gl.GetCurrentDC) ? 1 : -1;
+    logf_("shot: GL entry points %s (glBindFramebuffer %p, glBindBuffer %p)", g_gl.loaded == 1 ? "resolved" : "MISSING", (void *)g_gl.BindFramebuffer, (void *)g_gl.BindBuffer);
+    return g_gl.loaded == 1;
+}
+
+static void shot_fail(const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt); vsnprintf(g_shotRes.detail, sizeof g_shotRes.detail, fmt, ap); va_end(ap);
+    logf_("shot line %d: in-process capture failed: %s", g_shotLine, g_shotRes.detail);
+    InterlockedExchange(&g_shotState, 3);
+}
+
+/* on the render thread, inside SDL_GL_SwapWindow, before the present: the context is current */
+static void shot_capture(void) {
+    DWORD t0 = GetTickCount();
+    if (!gl_load()) { shot_fail("opengl32 entry points missing"); return; }
+    HDC dc = g_gl.GetCurrentDC();
+    HWND hw = dc ? WindowFromDC(dc) : NULL;
+    RECT rc;
+    if (!hw || !GetClientRect(hw, &rc)) { shot_fail("no current GL window (dc %p)", (void *)dc); return; }
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w < 8 || h < 8 || w > 16384 || h > 16384) { shot_fail("client area %d x %d", w, h); return; }
+    size_t need = (size_t)w * (size_t)h * 3;
+    if (need > g_shotCap) {
+        if (g_shotBuf) HeapFree(GetProcessHeap(), 0, g_shotBuf);
+        g_shotBuf = (unsigned char *)HeapAlloc(GetProcessHeap(), 0, need);
+        g_shotCap = g_shotBuf ? need : 0;
+        if (!g_shotBuf) { shot_fail("out of memory for %d x %d", w, h); return; }
+    }
+    for (int i = 0; i < 16 && g_gl.GetError(); i++) { /* drain errors the game left behind */ }
+    int readFb = 0, readBuf = 0, align = 4, packBuf = 0;
+    if (g_gl.BindFramebuffer) g_gl.GetIntegerv(GLX_READ_FRAMEBUFFER_BINDING, &readFb);
+    g_gl.GetIntegerv(GLX_READ_BUFFER, &readBuf);
+    g_gl.GetIntegerv(GLX_PACK_ALIGNMENT, &align);
+    if (g_gl.BindBuffer) g_gl.GetIntegerv(GLX_PIXEL_PACK_BUFFER_BINDING, &packBuf);
+    if (g_gl.BindFramebuffer) g_gl.BindFramebuffer(GLX_READ_FRAMEBUFFER, 0);
+    if (g_gl.BindBuffer && packBuf) g_gl.BindBuffer(GLX_PIXEL_PACK_BUFFER, 0);
+    g_gl.ReadBuffer(GLX_BACK);
+    g_gl.PixelStorei(GLX_PACK_ALIGNMENT, 1);
+    g_gl.ReadPixels(0, 0, w, h, GLX_RGB, GLX_UNSIGNED_BYTE, g_shotBuf);
+    unsigned err = g_gl.GetError();
+    g_gl.PixelStorei(GLX_PACK_ALIGNMENT, align);
+    g_gl.ReadBuffer((unsigned)readBuf);
+    if (g_gl.BindBuffer && packBuf) g_gl.BindBuffer(GLX_PIXEL_PACK_BUFFER, (unsigned)packBuf);
+    if (g_gl.BindFramebuffer) g_gl.BindFramebuffer(GLX_READ_FRAMEBUFFER, (unsigned)readFb);
+    if (err) { shot_fail("glReadPixels error 0x%x (read fb was %d)", err, readFb); return; }
+    /* a coarse look at what was read, for the log: how many of ~1024 samples are not black */
+    size_t px = (size_t)w * (size_t)h, step = px / 1024 ? px / 1024 : 1, lit = 0, samples = 0;
+    for (size_t i = 0; i < px; i += step, samples++) { const unsigned char *p = g_shotBuf + i * 3; if (p[0] + p[1] + p[2] > 24) lit++; }
+    char dir[520];
+    snprintf(dir, sizeof dir, "%s", g_args.out);
+    char *slash = strrchr(dir, '\\');
+    if (!slash) slash = strrchr(dir, '/');
+    if (slash) slash[1] = 0; else dir[0] = 0;
+    snprintf(g_shotRes.path, sizeof g_shotRes.path, "%sshot-%d.mtraw", dir, g_shotLine);
+    HANDLE f = CreateFileA(g_shotRes.path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) { shot_fail("cannot create %s (err %lu)", g_shotRes.path, GetLastError()); return; }
+    unsigned char head[MT_SHOT_RAW_HEADER];
+    mt_shot_raw_header(head, (uint32_t)w, (uint32_t)h);
+    DWORD n1 = 0, n2 = 0;
+    BOOL ok = WriteFile(f, head, sizeof head, &n1, NULL) && WriteFile(f, g_shotBuf, (DWORD)need, &n2, NULL) && n2 == (DWORD)need;
+    CloseHandle(f);
+    if (!ok) { shot_fail("short write to %s", g_shotRes.path); return; }
+    g_shotRes.w = w; g_shotRes.h = h;
+    snprintf(g_shotRes.detail, sizeof g_shotRes.detail, "back buffer of hwnd %p, %zu/%zu samples lit, %lu ms%s",
+             (void *)hw, lit, samples, (unsigned long)(GetTickCount() - t0), IsWindowVisible(hw) ? "" : ", window hidden");
+    logf_("shot line %d: %s -> %s", g_shotLine, g_shotRes.detail, g_shotRes.path);
+    InterlockedExchange(&g_shotState, 2);
+}
+
+static int hook_SwapWindow(void *window) {
+    if (g_shotState == 1) shot_capture();
+    return g_origSwap(window);
+}
+
+/* swap the SDL_GL_SwapWindow DYNAPI slot once the window exists (the slot holds an init stub until SDL starts) */
+static void maybe_hook_swap(void) {
+    if (g_swapHook) return;
+    void *appGlobal = (void *)g_fw.GetData(FW_DATA_App);
+    void *app = NULL, *window = NULL;
+    if (!appGlobal || !read_ptr(appGlobal, &app) || !app || !read_ptr(AT(app, OFF_APP_WINDOW), &window) || !window) return;
+    void **slot = (void **)g_fw.GetData(FW_DATA_SDL_GL_SwapWindow);
+    void *cur = NULL;
+    if (!slot || !read_ptr(slot, &cur) || !code_ptr_ok(cur)) { g_swapHook = -1; logf_("shot: SDL_GL_SwapWindow slot %p unusable (value %p); shots fall back to the runner's window capture", (void *)slot, cur); return; }
+    DWORD old = 0;
+    if (!VirtualProtect(slot, sizeof(void *), PAGE_READWRITE, &old)) { g_swapHook = -1; logf_("shot: cannot unprotect the swap slot (err %lu)", GetLastError()); return; }
+    g_origSwap = (fn_SDL_GL_SwapWindow)cur;
+    InterlockedExchangePointer(slot, (void *)hook_SwapWindow);
+    VirtualProtect(slot, sizeof(void *), old, &old);
+    g_swapHook = 1;
+    logf_("shot: SDL_GL_SwapWindow slot %p hooked at frame %ld (was %p)", (void *)slot, g_runner.frame, cur);
+}
+
+static int h_shot_arm(void *u, int line) {
+    (void)u;
+    if (g_swapHook != 1) return -1;
+    memset(&g_shotRes, 0, sizeof g_shotRes);
+    g_shotLine = line;
+    InterlockedExchange(&g_shotState, 1);
+    return 1;
+}
+static int h_shot_poll(void *u, MtShotResult *out) {
+    (void)u;
+    LONG s = g_shotState;
+    if (s != 2 && s != 3) return 0;
+    *out = g_shotRes;
+    InterlockedExchange(&g_shotState, 0);
+    return s == 2 ? 1 : -1;
+}
+
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
     h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
     h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon, h_face_unit, h_run_step,
+    h_shot_arm, h_shot_poll,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */

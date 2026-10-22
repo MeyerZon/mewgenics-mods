@@ -155,11 +155,11 @@ expect deltas "<prefix>" <d1> [<d2> ...]         (runner side) the integers righ
                                                  counters such as `debug_sfx_memory_use` ("Total loaded sfx: N bytes") whose
                                                  absolute value varies run to run. Reported in report.logExpects (what "deltas")
 dump                                             snapshot the units into a units event
-shot "<label>"                                   screenshot: the DLL emits a shot event and holds the scene 700 ms while
-                                                 the runner captures the game window to <run dir>/shot-<label>.png
-                                                 (artifacts.shots); needs `hide: false`, else the file shows the desktop
-                                                 and the shot is flagged hidden. Frame 0..~250 is the black loading
-                                                 screen: shoot after `wait frames 300` or after `enter`
+shot "<label>"                                   screenshot to <run dir>/shot-<label>.png (artifacts.shots): the DLL reads
+                                                 the GL back buffer at the next SDL_GL_SwapWindow (works hidden too), then
+                                                 emits the shot event and holds the scene 700 ms; when it cannot, the
+                                                 runner captures the window instead (see "Shots" below). Frame 0..~250
+                                                 is the black loading screen: shoot after `wait frames 300` or `enter`
 log "<text>"                                     echo into the result file
 quit [code]                                      no code: 0 if every expect passed, else 1; end of script == quit
 ```
@@ -192,7 +192,11 @@ Every event carries `t` (ms since harness start) and `frame`.
                                                 Character+0x388 direction, +0x3ac lock_orientation, +0x3a4 facing sign,
                                                 AnimStateMachine+0x14c flip (+-art_flip, negative = mirrored), +0x4cd four_way_animations
 {"ev":"log","text":"..."}
-{"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
+{"ev":"shot","line":N,"label":"...","hold_ms":700,"source":"gl","file":"<run dir>\\shot-N.mtraw","w":W,"h":H,"detail":"back buffer of hwnd …, L/1025 samples lit, T ms"}
+                                                the DLL captured it; the runner converts the raw file to the PNG
+{"ev":"shot","line":N,"label":"...","hold_ms":700,"source":"window","gl":"<why not in-process>"}
+                                                the runner captures the window on seeing this (report.artifacts.shots);
+                                                a DLL from before 2026-10-22 emits neither source nor gl
 {"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>; FW_Random seeded"}
 {"ev":"run","line":N,"op":"start|travel|fight","arg":"alley.gon|battle|","ok":true,"map":"alley.gon","node":0,"type":"battle","depth":1,"level":"levels/alley/…/x.lvl","detail":"…"}
                                                 map (start), node/type/depth (travel) and level (fight) appear only when that step set them
@@ -291,6 +295,48 @@ Each run writes `editor/data/ingame-runs/<YYYYMMDD-HHMMSS>-<mod>-<name>/` contai
 only), `result.jsonl`, `debug.log` (copy), `mewframework.window.log` (only this launch's slice of the append-mode
 log), `chainloader.log` (copy) and `report.json` (the full report). The JSONL is written into the run dir, never
 under `mods/`.
+
+### Shots
+
+**Mechanism (2026-10-22).** Once the game window exists, `mewtest.dll` swaps the `SDL_GL_SwapWindow` DYNAPI slot
+(`FW_DATA_SDL_GL_SwapWindow`, docs/engine-map.md "SDL3 DYNAPI") for its own function. A `shot` arms a capture; at the
+next present, on the render thread with the game's context current, the DLL binds the default framebuffer for reading,
+`glReadPixels(GL_BACK, GL_RGB)` the client area (the final composite, UI included), restores the GL state it touched
+and writes `<run dir>\shot-<line>.mtraw` (`mt_shot.c`: `MTSHOT01`, u32 LE width, u32 LE height, bottom-up RGB rows).
+The shot event then carries `source: "gl"` and the file; the runner (`shot.ts` `rawShotToPng`) turns it into
+`shot-<label>.png` and deletes the raw file. The capture costs ~15–30 ms of one frame at 3440 x 1440. Because it reads
+the game's own buffer it does not depend on DWM, the window being visible, in front or covered: **hidden runs
+(`hide: true`) get real shots too** (OBSERVED 2026-10-22: six distinct fight shots with the window hidden).
+
+**Fallback.** When the slot cannot be hooked, GL entry points are missing, `glReadPixels` errors, or no present comes
+within 30 frames (`MT_SHOT_GL_FRAMES`), the event carries `source: "window"` and `gl: "<why>"` and the runner captures
+the window as before: `PrintWindow(PW_RENDERFULLCONTENT)` on the process's main window, and only when that is black and
+the game is the foreground window, the screen region (recorded as `source: "screen"`). An older `mewtest.dll` (no
+`source` field) always takes this path.
+
+**Why (the stale shots, OBSERVED 2026-10-22).** In about half of the afternoon's runs every shot of a run came back
+byte-identical, the game's loading splash, while the fight ran normally. Every one of those 13 runs had taken all or
+some of its shots through the screen fallback (`note: "screen 3440 x 1440"`), and inside each run the screen copies
+were byte-identical; none of the 26 runs with real shots used it (`note: "window …"`). In run `…-120730-…` the first
+two shots were screen copies of the splash and the third a real `PrintWindow` frame. So with the game the foreground
+window, `PrintWindow` returned a dark frame and the screen copy returned one frozen frame. The likely mechanism (not
+proven, it could not be reproduced on demand) is that the full-screen borderless window was presented outside DWM
+composition (independent flip), so both GDI paths, which read DWM's copy, saw the last frame DWM had composed: the
+splash. The diagnostics also ruled out a wrong window: the process has exactly one visible top-level window
+(`SDL_app "Mewgenics!"`, the rest are the NVIDIA GL dummy windows and IME windows), and with the game behind another
+window `PrintWindow` returned a fresh frame for every shot.
+
+**Stale check.** After every run the runner compares the captured shots (`assessShots`): when two or more were taken
+and every file is byte-identical, `artifacts.shotsCheck.status` is `stale` and the reason ends with
+`; shots: stale (…)`. `ok` = at least two distinct, `single` = one shot (nothing to compare), `none` = nothing
+captured. The verdict is not changed (the script's expectations are separate), but `npm run test:artprobe` and
+`npm run test:unitglow` refuse to measure stale shots and exit 3 (`staleShotsRefusal`). A truly static scene shot twice
+would also read as stale; a live fight never repeats a frame exactly.
+
+**Limits.** The GL read sees what the game drew into its back buffer, so anything drawn by another process on top of
+the window (overlays, the Steam overlay drawn after the present) is not in the shot, and the debug console is in it
+when open. A shot arms the capture for the next present only; a scene that stops presenting (a modal dialog) falls
+back after 30 frames.
 
 ## Safety model
 

@@ -437,6 +437,9 @@ typedef struct Fake {
     const void *gon[8];                                             /* unit_gon: the unit's entry node (NULL = unreadable) */
     int runResult; int runCalls; int runOp; char runArg[64]; MtRunInfo runInfo;   /* run_step: programmable result + the info it reports */
     int runReadyAfter;                                              /* run_step answers 2 (not ready) this many times first */
+    int shotArmResult; int shotArmCalls; int shotArmLine;           /* shot_arm: programmable result (1 armed / -1 unavailable) */
+    int shotPollResults[8]; int shotPollCount; int shotPollCalls;   /* shot_poll: results returned in order (then the last one again) */
+    MtShotResult shotRes;                                           /* what a finished poll hands back */
 } Fake;
 static Fake fk;
 
@@ -502,6 +505,24 @@ static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
     fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, NULL, fk_run_step,   /* face_unit: the facing tests use FACE_HOST */
+    NULL, NULL,                                                     /* no in-process capture: the legacy window path */
+};
+
+static int fk_shot_arm(void *u, int line) { (void)u; fk.shotArmCalls++; fk.shotArmLine = line; return fk.shotArmResult; }
+static int fk_shot_poll(void *u, MtShotResult *out) {
+    (void)u;
+    int i = fk.shotPollCalls < fk.shotPollCount ? fk.shotPollCalls : fk.shotPollCount - 1;
+    fk.shotPollCalls++;
+    int r = i >= 0 ? fk.shotPollResults[i] : 0;
+    if (r != 0) *out = fk.shotRes;
+    return r;
+}
+/* the same fake with the in-process (GL back-buffer) capture */
+static const MtHost HOST_GL = {
+    NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
+    fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, NULL, NULL,   /* no face / run step: the shot tests */
+    fk_shot_arm, fk_shot_poll,
 };
 
 static MtRunner rr;
@@ -1156,6 +1177,81 @@ TEST(runner_shot_emits_event_then_holds_then_continues) {
     CHECK_EQ(count_ev("end"), 1); CHECK_EQ(fk.exitCode, 0);
 }
 
+/* ---- shot with the in-process capture (2026-10-22, stale-shot fix): the DLL reads the GL back buffer at the next
+ * SDL_GL_SwapWindow and the shot event then carries the file; on failure it says why and the runner captures the window ---- */
+TEST(runner_shot_gl_emits_the_event_after_the_capture_with_the_file) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.shotArmResult = 1;
+    fk.shotPollResults[0] = 0; fk.shotPollResults[1] = 1; fk.shotPollCount = 2;
+    snprintf(fk.shotRes.path, sizeof fk.shotRes.path, "C:\\r\\shot-1.mtraw");
+    fk.shotRes.w = 3440; fk.shotRes.h = 1440;
+    snprintf(fk.shotRes.detail, sizeof fk.shotRes.detail, "back buffer of window 0x1");
+    CHECK_EQ(mt_runner_step(&rr, &HOST_GL), 1);       /* armed: no event until the present */
+    CHECK_EQ(fk.shotArmCalls, 1); CHECK_EQ(fk.shotArmLine, 1);
+    CHECK_EQ(count_ev("shot"), 0);
+    CHECK_EQ(mt_runner_step(&rr, &HOST_GL), 1);       /* poll 0: still pending */
+    CHECK_EQ(count_ev("shot"), 0);
+    fk.now = 2000;
+    CHECK_EQ(mt_runner_step(&rr, &HOST_GL), 1);       /* poll 1: captured */
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "\"label\":\"menu\"")); CHECK(has(ev(0), "\"source\":\"gl\""));
+    CHECK(has(ev(0), "\"file\":\"C:\\\\r\\\\shot-1.mtraw\"")); CHECK(has(ev(0), "\"w\":3440")); CHECK(has(ev(0), "\"h\":1440"));
+    fk.now = 2000 + MT_SHOT_HOLD_MS - 1;
+    mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("end"), 0);                     /* the hold still applies (the scene stays put for older runners) */
+    fk.now = 2000 + MT_SHOT_HOLD_MS + 1;
+    mt_runner_step(&rr, &HOST_GL); mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("end"), 1); CHECK_EQ(fk.exitCode, 0);
+}
+
+TEST(runner_shot_gl_failure_falls_back_to_the_window_with_the_reason) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.shotArmResult = 1;
+    fk.shotPollResults[0] = -1; fk.shotPollCount = 1;
+    snprintf(fk.shotRes.detail, sizeof fk.shotRes.detail, "glReadPixels error 0x502");
+    mt_runner_step(&rr, &HOST_GL);
+    mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "\"source\":\"window\"")); CHECK(has(ev(0), "\"gl\":\"glReadPixels error 0x502\""));
+    CHECK(!has(ev(0), "\"file\""));
+}
+
+TEST(runner_shot_gl_without_a_present_times_out_to_the_window) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.shotArmResult = 1;
+    fk.shotPollResults[0] = 0; fk.shotPollCount = 1;
+    for (int i = 0; i < MT_SHOT_GL_FRAMES; i++) mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("shot"), 0);
+    mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "\"source\":\"window\"")); CHECK(has(ev(0), "no present"));
+}
+
+TEST(runner_shot_gl_unavailable_emits_at_once_for_the_window) {
+    fk_reset("shot \"menu\"\nquit\n");
+    fk.shotArmResult = -1;
+    mt_runner_step(&rr, &HOST_GL);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(has(ev(0), "\"source\":\"window\"")); CHECK(has(ev(0), "\"gl\":\"unavailable\""));
+    CHECK_EQ(fk.shotPollCalls, 0);
+}
+
+TEST(runner_shot_without_the_capture_hook_keeps_the_legacy_event) {
+    fk_reset("shot \"menu\"\nquit\n");
+    mt_runner_step(&rr, &HOST);
+    CHECK_EQ(count_ev("shot"), 1);
+    CHECK(!has(ev(0), "\"source\"")); CHECK(!has(ev(0), "\"file\""));
+}
+
+TEST(shot_raw_header_is_magic_then_le_width_height) {
+    unsigned char h[MT_SHOT_RAW_HEADER];
+    CHECK_EQ(MT_SHOT_RAW_HEADER, 16);
+    mt_shot_raw_header(h, 3440, 0x10203);
+    CHECK(memcmp(h, "MTSHOT01", 8) == 0);
+    CHECK_EQ(h[8], 0x70); CHECK_EQ(h[9], 0x0d); CHECK_EQ(h[10], 0); CHECK_EQ(h[11], 0);
+    CHECK_EQ(h[12], 0x03); CHECK_EQ(h[13], 0x02); CHECK_EQ(h[14], 0x01); CHECK_EQ(h[15], 0);
+}
+
 TEST(runner_expect_status_without_combat_fails) {
     fk_reset("expect status LuckUp on 0\nquit\n");
     steps_until_done(5);
@@ -1613,7 +1709,7 @@ static int fk_face_unit(void *u, int i, int dx, int dy, char *detail, size_t cap
 static const MtHost FACE_HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
-    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, fk_face_unit, NULL,   /* run_step: the walk tests use HOST */
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, fk_face_unit, NULL, NULL, NULL,   /* run_step: the walk tests use HOST; no in-process shots */
 };
 static int face_steps(int max) { int n = 0; while (n < max && mt_runner_step(&rr, &FACE_HOST)) n++; return n; }
 static void fk_two_facing_units(void) {

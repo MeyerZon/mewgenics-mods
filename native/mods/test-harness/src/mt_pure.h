@@ -100,6 +100,13 @@ int mt_unit_field_is_string(MtUnitField f);                           /* name|cl
 typedef enum MtGonCheck { MT_G_NUM, MT_G_STR, MT_G_BOOL, MT_G_EXISTS, MT_G_MISSING } MtGonCheck;
 const char *mt_unit_field_name(MtUnitField f);
 #define MT_SHOT_HOLD_MS 700
+/* in-process shot capture (2026-10-22): the glue reads the GL back buffer at the next SDL_GL_SwapWindow into a raw
+ * file (MT_SHOT_RAW_HEADER bytes: "MTSHOT01", uint32 LE width, uint32 LE height; then height rows of width*3 RGB bytes,
+ * bottom row first, as glReadPixels returns them). The runner waits at most MT_SHOT_GL_FRAMES frames for it. */
+#define MT_SHOT_GL_FRAMES 30
+#define MT_SHOT_RAW_HEADER 16
+typedef struct MtShotResult { char path[520]; int w, h; char detail[160]; } MtShotResult;
+void mt_shot_raw_header(unsigned char out[MT_SHOT_RAW_HEADER], uint32_t w, uint32_t h);
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
 /* scenes `enter` knows; 0 = unknown. The DLL and the Node parser (script.ts KNOWN_SCENES) must agree. */
 #define MT_SCENE_TACTICS_TEST 1
@@ -300,9 +307,13 @@ typedef struct MtHost {
      * 2 not ready yet (the runner retries next frame for at most MT_CONSOLE_WAIT_MS; `run fight` waits this way for
      * the battle the node started). info: the run event's fields (the host sets what applies; the runner pre-fills -1/"") */
     int         (*run_step)(void *u, int op, const char *arg, MtRunInfo *info, char *detail, size_t cap);
+    /* shot capture in-process (both NULL = the runner-side window capture only): arm a back-buffer read for the next
+     * present (1 armed, -1 unavailable); poll it (0 pending, 1 done: out has path/w/h, -1 failed: out->detail says why) */
+    int         (*shot_arm)(void *u, int line);
+    int         (*shot_poll)(void *u, MtShotResult *out);
 } MtHost;
 
-typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_IDLE } MtState;
+typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_WAIT_SHOT_GL, MT_S_IDLE } MtState;
 typedef struct MtRunner {
     const MtScript *s;
     int pc;

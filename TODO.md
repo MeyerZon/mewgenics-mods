@@ -139,11 +139,14 @@ these without a decision (status per bullet below; the PR map follows).
       `new_from_template` kind `glowing-character` scaffolds one) — and per-unit colours — **done (glow v2, `feat/native-unit-glow-v2`)**: one material per colour, one pass per unit
       scissored to its screen rect (LateRender's hovered-unit math), proven in-game (magenta Rat + cyan cat); (b)
       whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
-- [ ] **Stale shots (seen 2026-10-22, glowexp):** in about half of the `hide: false` runs that afternoon every `shot` of a run
-      came back byte-identical, the game's loading screen (PrintWindow dark, then the screen region showing the splash
-      although the game was foreground and the fight ran: dumps, turns and expects all fine). Re-running gave real shots.
-      The probes then measure 0 px and say `no-glow`. Follow-up: have the runner flag a run whose shots are identical
-      (or match the splash) as `stale` instead of measuring them.
+- [x] **Stale shots (seen 2026-10-22, glowexp / #107):** in about half of the `hide: false` runs that afternoon every `shot`
+      of a run came back byte-identical, the game's loading screen, while the fight ran normally. **Done
+      (`fix/harness-stale-shots`):** cause OBSERVED — every such run had taken its shots through the runner's screen
+      fallback (PrintWindow dark with the game in front, then a screen copy that was one frozen frame for the whole run);
+      no good run used it. `mewtest.dll` now reads the GL back buffer itself at `SDL_GL_SwapWindow` (shot events with
+      `source: "gl"`), which also works with the window hidden; the runner flags a run whose shots are all
+      byte-identical as `shots: stale` (`artifacts.shotsCheck`) and the probes exit 3 instead of measuring them
+      (`docs/ingame-testing.md` "Shots").
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
       **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly).

@@ -58,6 +58,29 @@ static void emit_wait(MtRunner *r, const MtHost *h, const MtDirective *d, const 
     stamp_and_emit(r, h, &w);
 }
 
+/* the shot event, then the hold. gl = the in-process capture's file (source "gl"); else the runner captures the
+ * window (source "window", glWhy = why the in-process capture did not happen; both NULL = a glue without one). */
+static void emit_shot(MtRunner *r, const MtHost *h, const MtDirective *d, const MtShotResult *gl, const char *glWhy) {
+    MtJsonW w;
+    mt_jw_begin(&w, g_json, sizeof g_json, "shot");
+    mt_jw_int(&w, "line", d->line);
+    mt_jw_str(&w, "label", d->a);
+    mt_jw_int(&w, "hold_ms", MT_SHOT_HOLD_MS);
+    if (gl) {
+        mt_jw_str(&w, "source", "gl");
+        mt_jw_str(&w, "file", gl->path);
+        mt_jw_int(&w, "w", gl->w);
+        mt_jw_int(&w, "h", gl->h);
+        if (gl->detail[0]) mt_jw_str(&w, "detail", gl->detail);
+    } else if (glWhy) {
+        mt_jw_str(&w, "source", "window");
+        mt_jw_str(&w, "gl", glWhy);
+    }
+    stamp_and_emit(r, h, &w);
+    r->waitDeadline = r->now + MT_SHOT_HOLD_MS;   /* keep the script (and so the scene) still while the runner captures */
+    r->state = MT_S_WAIT_SHOT;
+}
+
 static void finish(MtRunner *r, const MtHost *h, int code, const char *reason) {
     if (r->finished) return;
     r->finished = 1;
@@ -422,14 +445,16 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             return 0;
         }
         case MT_D_SHOT: {
-            MtJsonW w;
-            mt_jw_begin(&w, g_json, sizeof g_json, "shot");
-            mt_jw_int(&w, "line", d->line);
-            mt_jw_str(&w, "label", d->a);
-            mt_jw_int(&w, "hold_ms", MT_SHOT_HOLD_MS);
-            stamp_and_emit(r, h, &w);
-            r->waitDeadline = r->now + MT_SHOT_HOLD_MS;   /* keep the script (and so the scene) still while the runner captures */
-            r->state = MT_S_WAIT_SHOT;
+            if (h->shot_arm && h->shot_poll) {
+                if (h->shot_arm(h->user, d->line) == 1) {   /* the glue reads the back buffer at the next present */
+                    r->waitLeft = MT_SHOT_GL_FRAMES;
+                    r->state = MT_S_WAIT_SHOT_GL;
+                    return 1;
+                }
+                emit_shot(r, h, d, NULL, "unavailable");
+                return 1;
+            }
+            emit_shot(r, h, d, NULL, NULL);
             return 1;
         }
         case MT_D_WAIT_ROUNDS:
@@ -762,6 +787,19 @@ static int dispatch(MtRunner *r, const MtHost *h) {
         case MT_S_WAIT_SHOT:
             if (r->now >= r->waitDeadline) { r->state = MT_S_RUN; r->pc++; }
             return 1;
+        case MT_S_WAIT_SHOT_GL: {
+            MtShotResult res;
+            memset(&res, 0, sizeof res);
+            int p = h->shot_poll(h->user, &res);
+            if (p == 1) emit_shot(r, h, d, &res, NULL);
+            else if (p < 0) emit_shot(r, h, d, NULL, res.detail[0] ? res.detail : "capture failed");
+            else if (--r->waitLeft <= 0) {
+                char why[64];
+                snprintf(why, sizeof why, "no present within %d frames", MT_SHOT_GL_FRAMES);
+                emit_shot(r, h, d, NULL, why);
+            }
+            return 1;
+        }
         case MT_S_WAIT_ROUNDS: {
             long round = h->units_available(h->user) ? h->round_number(h->user) : 0;
             if (round >= r->waitTargetRound) { emit_wait(r, h, d, "rounds", round - r->waitStartRound); r->state = MT_S_RUN; r->pc++; }

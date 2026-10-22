@@ -4,12 +4,13 @@
 // shots with glow-measure.ts and write unit-glow-summary.json into the run dir (the OBSERVED fixture
 // editor/test/fixtures/ingame/unit-glow-summary.json is a copy of it).
 // Exit 0 when the run passed, the glow shot holds a magenta rim the no-glow shot lacks and the "two" shot holds a
-// magenta rim and a cyan rim lying apart (compareTwoColourShot), 1 otherwise, 2 when the game cannot run.
+// magenta rim and a cyan rim lying apart (compareTwoColourShot), 1 otherwise, 2 when the game cannot run, 3 when the run's shots are stale (all byte-identical: no verdict).
 //   node scripts/unit-glow-probe.ts [--json]
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as api from "../src/core/api.ts";
+import { staleShotsRefusal } from "../src/core/ingame/shot.ts";
 import { decodePng } from "../src/core/art/png.ts";
 import { parseResults } from "../src/core/ingame/results.ts";
 import { measureGlow, compareGlowShots, compareTwoColourShot, compareExpiry, statusInDump, GLOW_PROBE_COLOUR, GLOW_PROBE_COLOUR_B, type GlowMeasure } from "../src/core/art/glow-measure.ts";
@@ -53,6 +54,7 @@ if (process.argv.includes("--data")) {
   const report = await api.runIngameTest({ mod: "fw-glow", test: "data-glow", hide: false });
   if (!("verdict" in report)) { console.error(report.error); process.exit(2); }
   if (report.verdict === "skipped" || report.verdict === "cannot-run") { console.log(`skipped: ${report.reason}`); process.exit(2); }
+  { const stale = staleShotsRefusal(report); if (stale) { console.log(stale); process.exit(3); } }
   const shot = (label: string) => report.artifacts.shots.find((s) => s.label === label && s.path) || null;
   const g = shot("glow"), n = shot("noglow");
   const none: GlowMeasure = { pixels: 0, region: null };
@@ -70,6 +72,7 @@ if (process.argv.includes("--data")) {
 const report = await api.runIngameTest({ mod: "dev-sandbox", test: "unit-glow", hide: false });
 if (!("verdict" in report)) { console.error(report.error); process.exit(2); }
 if (report.verdict === "skipped" || report.verdict === "cannot-run") { console.log(`skipped: ${report.reason}`); process.exit(2); }
+{ const stale = staleShotsRefusal(report); if (stale) { console.log(stale); process.exit(3); } }
 const shotOf = (label: string) => report.artifacts.shots.find((s) => s.label === label && s.path) || null;
 const none: GlowMeasure = { pixels: 0, region: null };
 const g = shotOf("glow"), n = shotOf("noglow"), t2 = shotOf("two");

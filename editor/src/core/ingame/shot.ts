@@ -9,7 +9,9 @@
 
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { encodePng, type RgbaImage } from "../art/png.ts";
 
 /** what a capture produced: the PNG path, or null with a short reason (`occluded`, `nowindow`, `tiny …`, an error) */
 export interface CaptureResult {
@@ -70,3 +72,57 @@ export const captureWindow: CaptureFn = (label, dir, pid): CaptureResult => {
   if (r.status !== 0 || !existsSync(out)) return { path: null, note };
   return { path: out, note };
 };
+
+// ---- the in-process capture (2026-10-22, the stale-shot fix) ----------------------------------------------------
+// OBSERVED 2026-10-22 (PR #107 runs + this PR's diagnostics): every run whose shots were all the loading screen had
+// taken them through the screen fallback above (PrintWindow dark, the game the foreground window) and the screen copy
+// was one frozen frame for the whole run. The DLL (mewtest.dll) now reads the GL back buffer at SDL_GL_SwapWindow and
+// the shot event carries the raw file (source "gl"); the window capture stays the fallback (source "window"/"screen").
+
+/** the raw file mewtest.dll writes (native/mods/test-harness/src/mt_shot.c): "MTSHOT01", u32 LE w, u32 LE h, then h
+ * rows of w*3 RGB bytes, bottom row first -> a top-down RGBA image */
+export function decodeRawShot(bytes: Uint8Array): RgbaImage {
+  if (bytes.length < 16 || String.fromCharCode(...bytes.subarray(0, 8)) !== "MTSHOT01") throw new Error("not an MTSHOT01 raw shot");
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = dv.getUint32(8, true), height = dv.getUint32(12, true);
+  const row = width * 3;
+  if (!width || !height || bytes.length < 16 + row * height) throw new Error(`raw shot ${width} x ${height} needs ${16 + row * height} bytes, has ${bytes.length}`);
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const src = 16 + (height - 1 - y) * row;
+    for (let x = 0; x < width; x++) {
+      const s = src + x * 3, d = (y * width + x) * 4;
+      data[d] = bytes[s]!; data[d + 1] = bytes[s + 1]!; data[d + 2] = bytes[s + 2]!; data[d + 3] = 255;
+    }
+  }
+  return { width, height, rgba: data };
+}
+
+/** convert the DLL's raw file into `<dir>/shot-<label>.png` and remove the raw file; the PNG path */
+export function rawShotToPng(rawPath: string, label: string, dir: string): string {
+  const img = decodeRawShot(readFileSync(rawPath));
+  const out = join(dir, shotFileName(label));
+  writeFileSync(out, encodePng(img.width, img.height, img.rgba));
+  try { unlinkSync(rawPath); } catch { /* left behind: harmless, git-ignored run dir */ }
+  return out;
+}
+
+/** a run's shots as a whole: `stale` when two or more were captured and every file is byte-identical (a frozen
+ * capture, not the game: a live fight never repeats a frame exactly across shots); `single` = one shot, nothing to
+ * compare; `none` = nothing captured */
+export interface ShotsCheck { status: "ok" | "stale" | "single" | "none"; detail: string }
+export function assessShots(shots: { label: string; path: string | null }[]): ShotsCheck {
+  const got = shots.filter((s) => s.path && existsSync(s.path));
+  if (!got.length) return { status: "none", detail: "no shot captured" };
+  if (got.length === 1) return { status: "single", detail: "one shot; nothing to compare it with" };
+  const hashes = got.map((s) => createHash("sha256").update(readFileSync(s.path!)).digest("hex"));
+  if (new Set(hashes).size === 1) return { status: "stale", detail: `all ${got.length} shots byte-identical (${got.map((s) => s.label).join(", ")}): a frozen capture, not the game` };
+  return { status: "ok", detail: `${new Set(hashes).size} distinct of ${got.length}` };
+}
+
+/** for the probes: a message refusing to derive a verdict from stale shots, or null when the shots are usable (a
+ * report from before shotsCheck existed, e.g. art-probe --from, is assessed from its shots) */
+export function staleShotsRefusal(report: { artifacts: { shotsCheck?: ShotsCheck; shots?: { label: string; path: string | null }[] } }): string | null {
+  const c = report.artifacts.shotsCheck || (report.artifacts.shots && report.artifacts.shots.length ? assessShots(report.artifacts.shots) : undefined);
+  return c && c.status === "stale" ? `shots: stale — ${c.detail}; no verdict derived from them (re-run; see docs/ingame-testing.md "shot")` : null;
+}

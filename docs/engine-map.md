@@ -226,7 +226,10 @@ in-game test harness (`docs/ingame-testing.md`). Absolute addresses, image base 
   `SDL_GL_SwapWindow` `0x1412e7650`, `SDL_HideWindow` `0x1412e82a0`, `SDL_ShowWindow` `0x1412e8c60`,
   `SDL_MinimizeWindow` `0x1412e8438`, `SDL_PollEvent` `0x1412e8528`, `SDL_CreateWindow` `0x1412e73f0`,
   `SDL_CreateWindowWithProperties` `0x1412e7400`. On disk (and until SDL initializes) the slots point at init
-  stubs, so read or patch them only once the window exists. Nothing in `mewframework` hooks these slots yet
+  stubs, so read or patch them only once the window exists. `mewtest.dll` (not `mewframework`) swaps the `SDL_GL_SwapWindow` slot
+  once the window exists, to read the GL back buffer for `shot` (2026-10-22, docs/ingame-testing.md "Shots"; OBSERVED:
+  the game presents every frame through it on the main thread with its context current, also with the window hidden).
+  Nothing in `mewframework` hooks these slots yet
   (earlier notes claiming otherwise were wrong).
 - **RNG**: the global state is 4 qwords (32 bytes) in the main thread's static TLS block at `+0x178` (the exe's
   TLS slot, index from its PE TLS directory; the save's `random_seed` property is loaded into it). `Rng_SeedState`

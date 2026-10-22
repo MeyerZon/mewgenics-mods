@@ -559,6 +559,12 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const eff = plan.directives.filter((d) => d.kind === "expect" && d.what === "unit" && String(d.field).endsWith(".effective")).map((d) => `${d.unit} ${d.field} ${d.value}`);
       for (const want of ["8 luck.effective 5", "9 luck.effective 8", "10 luck.effective 5", "8 maxhp.effective 5"]) assert(eff.includes(want), `${want} in ${eff.join("; ")}`);
     });
+    test("OBSERVED 2026-10-22 fixture: hide: true run with the in-process capture -> six shot events, all source gl with a raw file at the client size, the window hidden (result-shot-gl-hidden.jsonl)", () => {
+      const r = parseResults(fixture("result-shot-gl-hidden.jsonl")) as unknown as { shots: { label: string; source?: string; file?: string; w?: number; h?: number; detail?: string }[]; end: { code: number } | null };
+      eq(r.shots.map((s) => s.label).join(","), "menu0,menu1,enter0,fight1,fight2,fight3");
+      assert(r.shots.every((s) => s.source === "gl" && /shot-\d+\.mtraw$/.test(s.file || "") && s.w === 3440 && s.h === 1440 && /window hidden/.test(s.detail || "")), JSON.stringify(r.shots[0]));
+      eq(r.end!.code, 0);
+    });
     test("OBSERVED 2026-10-20 fixture: enter Campaign house -> the real House (no intro), the campaign director's 57 commands pinned, a house command executes (result-enter-house.jsonl + console-campaign-listcmds.txt)", () => {
       const r = parseResults(fixture("result-enter-house.jsonl")) as unknown as { enter: { ok: boolean; name: string; mode: string; detail: string } | null; expects: { passed: number; failed: number }; end: { code: number } | null; popups: unknown[]; shots: unknown[] };
       assert(!!r.enter && r.enter.ok && r.enter.name === "Campaign" && r.enter.mode === "house" && /game_began set/.test(r.enter.detail), JSON.stringify(r.enter));
@@ -1286,6 +1292,84 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const shots = (hiddenShot.artifacts as unknown as { shots?: { hidden: boolean }[] }).shots;
       assert(Array.isArray(shots) && shots.length === 1 && shots[0]!.hidden === true, JSON.stringify(shots));
       assert(/hidden/.test(hiddenShot.reason), hiddenShot.reason);
+    });
+
+    // Stale shots (2026-10-22, PR #107): with the game in front, PrintWindow came back dark and the screen fallback
+    // returned the same frozen frame (the loading screen) for every shot of a run. The DLL now reads the GL back
+    // buffer itself (shot events with source "gl" + a raw file); the runner flags runs whose shots are all identical.
+    type ShotsCheck = { status: string; detail: string };
+    type ShotMod = typeof shotMod & {
+      decodeRawShot?: (b: Uint8Array) => { width: number; height: number; rgba: Uint8Array };
+      assessShots?: (shots: { label: string; path: string | null }[]) => ShotsCheck;
+      staleShotsRefusal?: (r: { artifacts: { shotsCheck?: ShotsCheck } }) => string | null;
+    };
+    const sm = shotMod as ShotMod;
+    const { decodePng } = await import("../src/core/art/png.ts");
+    test("decodeRawShot: MTSHOT01 + LE w/h + bottom-up RGB rows -> top-down RGBA; a bad magic or short file throws", () => {
+      assert(typeof sm.decodeRawShot === "function", "decodeRawShot exported from shot.ts");
+      if (!sm.decodeRawShot) return;
+      const head = Buffer.alloc(16); head.write("MTSHOT01", 0, "latin1"); head.writeUInt32LE(2, 8); head.writeUInt32LE(1, 12);
+      const img = sm.decodeRawShot(Buffer.concat([head, Buffer.from([1, 2, 3, 4, 5, 6])]));
+      eq(img.width, 2); eq(img.height, 1);
+      eq(Array.from(img.rgba).join(","), "1,2,3,255,4,5,6,255");
+      const two = Buffer.alloc(16); two.write("MTSHOT01", 0, "latin1"); two.writeUInt32LE(1, 8); two.writeUInt32LE(2, 12);
+      eq(Array.from(sm.decodeRawShot(Buffer.concat([two, Buffer.from([9, 9, 9, 7, 7, 7])])).rgba).join(","), "7,7,7,255,9,9,9,255", "bottom row first in the file -> last in the image");
+      let threw = 0;
+      try { sm.decodeRawShot(Buffer.from("NOTASHOT00000000")); } catch { threw++; }
+      try { sm.decodeRawShot(Buffer.concat([head, Buffer.from([1, 2, 3])])); } catch { threw++; }
+      eq(threw, 2);
+    });
+    const glPlan = script.parseScript("mods: jokers-luck\ntimeout: 2s\nhide: false\nshot \"gl one\"\nshot \"fallback\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
+    const glCaptured: string[] = [];
+    const glRun = await run("shot-gl", {}, { plan: glPlan, capture: (label: string, dir: string) => { glCaptured.push(label); const p = join(dir, `shot-${label}.png`); writeFileSync(p, "png"); return { path: p, note: "window 2 x 2" }; } });
+    test("fake shot-gl -> a gl shot becomes shot-<label>.png from the DLL's raw file (no window capture); a failed one falls back to the window", () => {
+      eq(glRun.verdict, "pass", glRun.reason);
+      eq(glCaptured.join(","), "fallback", "the window capture ran only for the shot the DLL could not read");
+      const shots = (glRun.artifacts as unknown as { shots: { label: string; path: string | null; source?: string; note?: string }[] }).shots;
+      eq(shots.length, 2);
+      eq(shots[0]!.source, "gl"); eq(shots[1]!.source, "window");
+      assert(!!shots[0]!.path && /shot-gl-one\.png$/.test(shots[0]!.path), String(shots[0]!.path));
+      if (!shots[0]!.path) return;
+      const png = decodePng(readFileSync(shots[0]!.path));
+      eq(`${png.width}x${png.height}`, "2x2");
+      eq(Array.from(png.rgba.slice(0, 8)).join(","), "255,0,0,255,0,255,0,255", "top row red, green (the raw file's last row)");
+      assert(!existsSync(join(dirname(shots[0]!.path), "shot-1.mtraw")), "the raw file is removed once converted");
+      assert(/glReadPixels error 0x502/.test(shots[1]!.note || ""), `the fallback names the in-process failure: ${shots[1]!.note}`);
+    });
+    test("assessShots on a fake run dir: all byte-identical -> stale; different -> ok; one -> single; none captured -> none", () => {
+      assert(typeof sm.assessShots === "function", "assessShots exported from shot.ts");
+      if (!sm.assessShots) return;
+      const dir = mkdtempSync(join(tmpdir(), "mewshots-"));
+      const f = (n: string, body: string) => { const p = join(dir, n); writeFileSync(p, body); return p; };
+      const a = f("a.png", "same"), b = f("b.png", "same"), c = f("c.png", "same"), d = f("d.png", "other");
+      const stale = sm.assessShots([{ label: "a", path: a }, { label: "b", path: b }, { label: "c", path: c }]);
+      eq(stale.status, "stale"); assert(/3/.test(stale.detail) && /identical/.test(stale.detail), stale.detail);
+      eq(sm.assessShots([{ label: "a", path: a }, { label: "d", path: d }]).status, "ok");
+      eq(sm.assessShots([{ label: "a", path: a }]).status, "single");
+      eq(sm.assessShots([{ label: "x", path: null }]).status, "none");
+      eq(sm.assessShots([]).status, "none");
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const stalePlan = script.parseScript("mods: jokers-luck\ntimeout: 2s\nhide: false\nshot \"s1\"\nshot \"s2\"\nshot \"s3\"\nquit\n", { owningMod: "jokers-luck", name: "shot" });
+    const staleRun = await run("shot3", {}, { plan: stalePlan, capture: (label: string, dir: string) => { const p = join(dir, `shot-${label}.png`); writeFileSync(p, "the loading screen"); return { path: p, note: "screen 3440 x 1440" }; } });
+    const freshRun = await run("shot3", {}, { plan: stalePlan, capture: (label: string, dir: string) => { const p = join(dir, `shot-${label}.png`); writeFileSync(p, `frame ${label}`); return { path: p, note: "window 3440 x 1440" }; } });
+    test("runner: every shot of a run byte-identical -> artifacts.shotsCheck stale and the reason says `shots: stale`; distinct shots -> ok", () => {
+      const sc = (staleRun.artifacts as unknown as { shotsCheck?: ShotsCheck }).shotsCheck;
+      eq(sc && sc.status, "stale", JSON.stringify(sc));
+      assert(/shots: stale/.test(staleRun.reason), staleRun.reason);
+      const shots = (staleRun.artifacts as unknown as { shots: { source?: string }[] }).shots;
+      eq(shots.map((s) => s.source).join(","), "screen,screen,screen", "the screen fallback is recorded as the source");
+      const fc = (freshRun.artifacts as unknown as { shotsCheck?: ShotsCheck }).shotsCheck;
+      eq(fc && fc.status, "ok", JSON.stringify(fc));
+      assert(!/stale/.test(freshRun.reason), freshRun.reason);
+    });
+    test("staleShotsRefusal: a probe gets a refusal for stale shots and null otherwise", () => {
+      assert(typeof sm.staleShotsRefusal === "function", "staleShotsRefusal exported from shot.ts");
+      if (!sm.staleShotsRefusal) return;
+      const msg = sm.staleShotsRefusal({ artifacts: { shotsCheck: { status: "stale", detail: "all 3 shots byte-identical" } } });
+      assert(!!msg && /stale/.test(msg) && /no verdict/.test(msg), String(msg));
+      eq(sm.staleShotsRefusal({ artifacts: { shotsCheck: { status: "ok", detail: "" } } }), null);
+      eq(sm.staleShotsRefusal({ artifacts: {} }), null);
     });
 
     const enterPlan = script.parseScript("mods: jokers-luck, dev-sandbox\ntimeout: 1s\nenter TacticsTest\nwait turns 1\nexpect units >= 2\nquit\n", { owningMod: "jokers-luck", name: "enter-fight" });
