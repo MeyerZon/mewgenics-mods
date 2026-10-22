@@ -104,8 +104,45 @@ export interface DeriveAnchor {
   /** the constant is the index of the slot whose body matches `bodyPattern` as a prefix and/or whose bounded body rip-lea's `stringRef` */
   slotSearch?: { bodyPattern?: string; contains?: string; stringRef?: string; nth?: number; expect?: number };
 }
+/** the .pdata function right after (`after`) / right before (`before`) the named entry */
 export interface AfterAnchor {
   function: string;
+}
+/** the unique code site that stores a named (RTTI-rooted) vtable through a rip-relative lea: `48 8D 05 ?? ?? ?? ?? 48 89 03` (constructors) */
+export interface VtableStoreAnchor {
+  vtable: string;
+  pattern: string;
+  note?: string;
+}
+/** an imm32 equal to a derived constant (`equals`), followed within `maxForward` instructions by an E8 to `callee` */
+export interface Imm32WitnessAnchor {
+  pattern: string;
+  imm32At: number;
+  equals: string;
+  callee: string;
+  maxForward?: number;
+  note?: string;
+}
+/** a known caller: call #ordinal of `function` (rung caller-ordinal) and/or the first in-tolerance E8 after its `lea rdx,[rip+"afterStringLea"]` */
+export interface CallerAnchor {
+  function: string;
+  ordinal?: number;
+  afterStringLea?: string;
+  unique?: boolean;
+  note?: string;
+}
+/** this function references the same global as rip ref #ripRefOrdinal of `with` (e.g. NameExists shares GetValue's map) */
+export interface SharedDataRefAnchor {
+  with: string;
+  ripRefOrdinal: number;
+  note?: string;
+}
+/** a global the function references (informational; `ripRefOrdinal` is filled by the harvest and ported by ordinal) */
+export interface DataRefAnchor {
+  rva: string;
+  role?: string;
+  ripRefOrdinal?: number;
+  note?: string;
 }
 /** Loosely shaped on purpose: the manifest JSON may carry anchors this code does not read. */
 export interface Anchors {
@@ -117,6 +154,12 @@ export interface Anchors {
   rtti?: RttiAnchor;
   derive?: DeriveAnchor;
   after?: AfterAnchor;
+  before?: AfterAnchor;
+  vtableStore?: VtableStoreAnchor;
+  imm32Witness?: Imm32WitnessAnchor;
+  callers?: CallerAnchor[];
+  sharedDataRef?: SharedDataRefAnchor;
+  dataRefs?: DataRefAnchor[];
   unanchored?: boolean;
   [k: string]: unknown;
 }
