@@ -12,12 +12,13 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 | Pinned fact | Count on 25143593 | Where it is used |
 |---|---|---|
 | PE identity (TimeDateStamp + SizeOfImage) | 1 | `fw_identify_build` |
-| Byte signatures of hooked/called functions | 55 signed function entries (25 of the 28 FwSymbol + 30 reference functions, 7 of them, since 2026-10-22, only as witness hosts for the Character/GonObject offsets); 3 FwSymbol entries ship as `NULL` pattern + raw RVA | `resolve_symbols` |
+| Byte signatures of hooked/called functions | 66 signed function entries (33 of the 35 FwSymbol — 15 + 13 v4 run-entry/RNG + 7 glow — and 33 reference functions, 11 of them, since 2026-10-22, only as witness hosts: 7 for the Character/GonObject offsets, 4 for the glow offsets); `LuckUp_ctor`, `Status_GetCategory` (FwSymbol) and `Status_ApplyLuckUp` ship as `NULL` pattern + raw RVA, the 11 `FW_LK` lookups likewise | `resolve_symbols` |
 | Raw RVAs of the 13 status-name lookups (`FW_LK`) | 13 (none has a signature worth having: twins differ only in `__LINE__` immediates) | `status_engine.c` |
-| Data RVAs: App global, SDL3 DYNAPI jump table + 8 slots, default status source | 11 | `BuildInfo.rva_data`, `FW_GetData` |
-| Vftables (LuckUp, Status) and the LuckUp type id | 3 | vtable cloning, sanity check |
-| Vtable slot indices / count | 6 | `offsets.h` |
-| Struct offsets | 55 (+ `GON_NODE_SIZE`) | `offsets.h` (`status_engine.c`, `mewtest.c`, `mt_gon.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG), +15 on 2026-10-22 (Character HP/stats/GON entry, the GonObject node layout — `docs/engine-map.md` "GON at runtime") |
+| Data RVAs: App global (also exposed as the ShaderManager), MewDirector global, SDL3 DYNAPI jump table + 8 slots, default status source | 13 | `BuildInfo.rva_data`, `FW_GetData` |
+| Vftables (LuckUp, Status, TacticsTest) and the LuckUp type id | 4 | vtable cloning, sanity check, the glow hook's slot check |
+| Vtable slot indices / count | 7 (+`VT_TT_LATERENDER` 2026-10-22, by slot search) | `offsets.h` |
+| Struct offsets | 72 (+ `GON_NODE_SIZE`) | `offsets.h` (`status_engine.c`, `mewtest.c`, `mt_gon.c`, `glow_engine.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG), +17 on 2026-10-22 (per-unit glow: TacticsTest cameras/passes, Camera, renderer extra layers, Pass fields, Character renderer/generation) |
+| Layer / slot constants | 3 (`CONST_MASK_LAYER`, `CONST_COMPOSITE_LAYER`, `CONST_GLOW_FRAMEBUF_SLOT`; call-arg / displacement witnesses) | `glow_engine.c` |
 
 ## The manifest: `bindings/<steamBuildId>.json`
 
@@ -233,6 +234,10 @@ What the run suggested for the ladder, and what became of it:
   port by a hand-made seed, and the two offsets they witness follow them.
 - A changed arity of the 13 lookups (shapes A–E), a compiler/CRT change (`MsvcString` layout), or a changed
   vtable layout cannot be ported mechanically.
+- A function without a `.pdata` entry (leaf functions such as `Camera_AddLayer` 0x979bd0 or the pass-predicate lambda
+  0x8967b0) cannot be a function entry (the T1 test requires one), and a PGO-split function (`Camera_render` 0x9787c0:
+  chained `.pdata` chunks) only exposes its first chunk to `readOffsetWitness` — witnesses must sit in that chunk or in
+  another function. Following chained chunks is the next improvement.
 - The DLL still resolves functions by signature at load time. Entries that only have anchors (`signature: null`:
   the 11 lookups, `Status_GetCategory`, `LuckUp_ctor`, `Status_ApplyLuckUp`) ship as raw RVAs in `signatures.h`
   (`NULL` pattern + `expectedRva`, logged as `symbol X: no signature on this build; using RVA …`); a runtime anchor

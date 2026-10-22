@@ -145,6 +145,15 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.ok && p.body.startsWith('shot "x"\n'), "DLL-side directive");
     });
 
+    test("glow directive: <unit> <r> <g> <b> <a> (0..1 floats) or <unit> off; bad forms are line errors; it passes through to the DLL (FW_SetUnitGlow / FW_ClearUnitGlow)", () => {
+      eq(JSON.stringify(parseDirective("glow 8 1 0 1 1", 3)), JSON.stringify({ line: 3, kind: "glow", unit: "8", rgba: [1, 0, 1, 1] }));
+      eq(JSON.stringify(parseDirective('glow "Lil\' Rat" 0.5 0.25 0 1', 4)), JSON.stringify({ line: 4, kind: "glow", unit: "Lil' Rat", rgba: [0.5, 0.25, 0, 1] }));
+      eq(JSON.stringify(parseDirective("glow Rat off", 5)), JSON.stringify({ line: 5, kind: "glow", unit: "Rat", rgba: null }));
+      for (const bad of ["glow", "glow 8", "glow 8 1 0 1", "glow 8 1 0 1 x", "glow 8 1 0 1 1 extra", "glow 8 2 0 0 1", "glow 8 -1 0 0 1", "glow 8 off now", 'glow "Lil Rat 1 0 1 1']) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript('glow "Lil\' Rat" 1 0 1 1\nglow "Lil\' Rat" off\nquit\n', { owningMod: "m" });
+      assert(p.ok && p.body.startsWith('glow "Lil\' Rat" 1 0 1 1\nglow "Lil\' Rat" off\n'), `DLL-side directive: ${JSON.stringify(p.errors)}`);
+    });
+
     test("combat directives: wait rounds needs N >= 1; expect round needs <op> <N>; expect stacks needs <op> <N> or varied", () => {
       assert("error" in parseDirective("wait rounds 0", 1), "rounds 0");
       assert("error" in parseDirective("expect round 3", 1), "round without op");

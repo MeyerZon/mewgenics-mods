@@ -67,6 +67,7 @@ typedef enum MtDirKind {
     MT_D_SHOT,          /* shot "<label>": emit a shot event, then hold MT_SHOT_HOLD_MS so the runner can capture the window */
     MT_D_SEED,          /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
     MT_D_EXPECT_UNIT,   /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
+    MT_D_GLOW,          /* glow <unit> <r> <g> <b> <a> | <unit> off: FW_SetUnitGlow / FW_ClearUnitGlow on a unit of the walk (API v4) */
     MT_D_EXPECT_GON     /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
 } MtDirKind;
 /* expect unit: which MtUnit field; name|class|namekey compare as strings (== !=), the rest as integers (any op).
@@ -110,6 +111,8 @@ typedef struct MtDirective {
     unsigned long long seed;   /* seed: the value (full 64-bit) */
     int enterMode;      /* enter: MT_ENTER_* */
     MtUnitField field;  /* expect unit: the field; a string value lives in a, an integer one in value */
+    float rgba[4];      /* glow: the colour (0..1 each); a = the argument text verbatim for the event */
+    int glowOff;        /* glow … off: clear instead of set */
     const char *c;      /* expect gon: the quoted string value (a = the path, b/n = the unit) */
     double dvalue;      /* expect gon: the numeric value; a bool value lives in value */
     MtGonCheck gonCheck;
@@ -215,6 +218,9 @@ typedef struct MtHost {
     /* interactive mode: hand a reply to the pipe right now (used for quit, which exits before the pipe thread
      * would get to it); NULL when there is no pipe */
     void     (*pipe_reply)(void *u, const char *jsonLine);
+    /* glow on unit i of the walk: rgba = the colour, NULL = clear. 1 done, 0 refused (detail), -1 unavailable
+     * (framework without API v4) */
+    int      (*set_unit_glow)(void *u, int i, const float *rgba, char *detail, size_t cap);
     /* GON at runtime (expect gon): a guarded memory copy and the unit's entry node (Character+OFF_CH_GON_ENTRY;
      * NULL when the unit or the pointer is unreadable). The walker reads through mem_read only. */
     int         (*mem_read)(void *u, const void *addr, void *out, size_t n);

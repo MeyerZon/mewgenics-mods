@@ -226,6 +226,16 @@ What data *can* do, all plain passives on a character / class / item:
 For a sprite-shaped glow or drop shadow, bake it into the art: the editor's `bake_glow` (`docs/art-pipeline.md` §6)
 adds a halo shape under the source; the result is ordinary SWF geometry the game draws like any other.
 
+**Glows (2026-10-22).** The per-unit glow is a **native-only API in v1**: a native mod calls `FW_SetUnitGlow(Character*,
+r, g, b, a)` / `FW_ClearUnitGlow` (framework API v4, `docs/engine-map.md` "Per-unit glow") and the framework draws a
+coloured rim around the unit through the game's own outline mask. There is no data-level way to ask for one yet — no
+`registered-names.json` kind, no GON key; a `glow` kind that a status or passive could name is the natural v2 once
+per-unit colours exist. What the data layer does carry is the rim shader: `mods/fw-glow/shaders/fw_unit_glow.shader`
+(`.shader` files in a mod path load like any pack file). A mod whose native half calls the API lists `fw-glow` next to
+itself (`mods: <mod>, fw-glow` in a `.mewtest` header, `-modpaths … mods/fw-glow` in a launch); the harness directive
+`glow <unit> <r> <g> <b> <a>` exercises it (`mods/dev-sandbox/tests/unit-glow.mewtest`). Static halos that need no
+native code remain the editor's baked glow (PR #80).
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses
@@ -260,3 +270,22 @@ of it in the units event: `hp` 12 (vanilla 6: current HP right after a spawn is 
 `constitution` 5. The `.merge`d Rat keeps `health` 5 / `hp` 5 / `strength` 4 while its `namekey` is `GOLDEN_RAT_NAME`.
 The editor's preview agrees (`run-tests.ts` 4d: speed 15, health 12). Fixtures:
 `editor/test/fixtures/ingame/result-golden-numeric{,-vanilla}.jsonl`.
+
+## Localized text for mods (INFERRED, untested)
+
+Decompiled 2026-10-21 (session `loc`; `docs/engine-map.md` "Localization and text fields"): the game loads **every**
+`data/text/*.csv` the file manager sees (`StringsDatabase_load_csv` 0x9610a0 — so a `combined.csv.append` row is in the
+same table as vanilla's), and the text-box constructor `DynamicTextBox_init_from_DefineEditText` 0x98d910 passes a
+`DefineEditText`'s initial text to `has_key_current_lang` 0x963070: **an initial text that is exactly a key of the
+current language becomes that key's localized text at creation** (gendered `_M/_F/_N` rows and `{TOKEN}` replacements
+included; a miss shows the key itself). `SetText(…, localize = 1)` 0x98e790 does the same at runtime. So a mod text
+should need no code: a `combined.csv.append` row `MY_MOD_LABEL,Hello,,Hola,…` plus a `scene.texts` entry whose `text`
+is `MY_MOD_LABEL`. Not witnessed in-game: the editor's `text.ts` wraps the string in `<p><font>` HTML like vanilla, and
+whether the stripped text equals the key byte-for-byte is the open question. Caveats: the key must exist in the
+*current* language's table (the loader's empty-cell fallback to `en` is INFERRED); the text is resolved once at
+instance creation, not on a language switch. Parked by the owner (2026-10-21); Peralta stays the default font.
+
+Probe recipe (one `.mewtest`, agent work): in `mods/_artprobe` add the CSV row and a text whose `text` is the key, build,
+`enter TacticsTest`, `spawn` the probe character, `shot`, and look for the English text (not the key) in the shot; if
+the key shows, re-emit the DefineEditText for key texts without the HTML flag / wrapper and repeat. On pass, pin the
+run summary as a fixture and turn the HTML question into a validator rule.

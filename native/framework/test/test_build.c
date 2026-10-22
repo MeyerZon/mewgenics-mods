@@ -48,6 +48,7 @@ TEST(generated_tables_are_internally_consistent) {
         CHECK(bi->rva_Status_vftable != 0);
         CHECK(bi->rva_DefaultStatusSource != 0);
         CHECK(bi->luckUpTypeId != 0);
+        CHECK(bi->rva_TacticsTest_vftable != 0);   /* v4 glow: the combat driver whose slot 19 the glow engine hooks */
     }
 }
 
@@ -89,6 +90,24 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(OFF_APPLIER_OWNER, -8);
     CHECK_EQ(VT_SLOTS, 172);
     CHECK_EQ(VT_ONSTACKSCHANGED, 170);
+    /* per-unit glow bindings (2026-10-22): the combat outline mask the glow engine rides (docs/engine-map.md "Per-unit glow") */
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_TacticsTest_LateRender].expectedRva, 0x88d780u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_vec_u32_AddUnique].expectedRva, 0x72cd0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_ShaderManager_GetOrCreateMaterial].expectedRva, 0x9bb5d0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetUniformVec4].expectedRva, 0x9bde70u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetUniformFloat].expectedRva, 0x9bddc0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetTexture].expectedRva, 0x9bdcd0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Camera_AddPostProcessPass].expectedRva, 0x979880u);
+    CHECK_EQ(b->rva_data[FW_DATA_ShaderManager], 0x13c4a30);   /* the App global: the material map lives at +0x278 of it */
+    CHECK_EQ(b->rva_TacticsTest_vftable, 0xf0f4b8);
+    CHECK_EQ(OFF_TT_MASK_CAMERA, 0x58); CHECK_EQ(OFF_TT_MAIN_CAMERA, 0x68); CHECK_EQ(OFF_TT_BLUR_PASS, 0x90); CHECK_EQ(OFF_TT_COMPOSITE_PASS, 0x98);
+    CHECK_EQ(OFF_CAM_RTT_TEXTURE, 0x50); CHECK_EQ(OFF_CAM_PASSES, 0xb0);
+    CHECK_EQ(OFF_CH_RENDERER, 0x40); CHECK_EQ(OFF_CH_GENERATION, -8);
+    CHECK_EQ(OFF_RND_EXTRA_LAYERS, 0x68); CHECK_EQ(OFF_RND_EXTRA_COUNT, 0x6c); CHECK_EQ(OFF_RND_EXTRA_DATA, 0x70);
+    CHECK_EQ(OFF_PASS_MAT_COUNT, 0x4); CHECK_EQ(OFF_PASS_MATERIALS, 0x8); CHECK_EQ(OFF_PASS_ENABLED, 0x10);
+    CHECK_EQ(OFF_PASS_RECT_A, 0x18); CHECK_EQ(OFF_PASS_RECT_B, 0x38); CHECK_EQ(OFF_PASS_FLAGS, 0x58);
+    CHECK_EQ(CONST_MASK_LAYER, 0x18); CHECK_EQ(CONST_COMPOSITE_LAYER, 0x1a); CHECK_EQ(CONST_GLOW_FRAMEBUF_SLOT, 6);
+    CHECK_EQ(VT_TT_LATERENDER, 19);
     /* GON at runtime (2026-10-22): the harness's hp / stats fields and its GonObject walker read these */
     CHECK_EQ(OFF_CH_HP, 0x4b0);
     CHECK_EQ(OFF_CH_SHIELD, 0x4b4);
