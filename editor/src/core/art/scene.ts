@@ -8,8 +8,11 @@
 //   N = floor(r*15 + .5) to column N of a `palette.png` row; non-gray pixels pass
 //   through unchanged. So fills are either `gray:N` (remapped) or a colour (passthrough).
 
+import { normalizePath } from "./geometry.ts";
 import type { Mat } from "./geometry.ts";
 import { gradientProblems } from "./gradient.ts";
+import { fillRuleProblems } from "./shape.ts";
+import { vanillaExportSource, exportShadowsMessage } from "./swf-rules.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
 import { rigFindings } from "./cat-rig.ts";
 import { textProblems } from "./text.ts";
@@ -389,6 +392,13 @@ export function validateScene(input: unknown): SceneValidation {
       else if (f.fill.kind === "bitmap" && !(scene.bitmaps || {})[f.fill.id]) err("bitmap-missing", `fill references unknown bitmap "${f.fill.id}"`, [at + ".fill"]);
       else if (f.fill.kind === "gradient" && !(scene.gradients || {})[f.fill.id]) err("gradient-missing", `fill references unknown gradient "${f.fill.id}"`, [at + ".fill"]);
       if (p.fillRule && p.fillRule !== "nonzero" && p.fillRule !== "evenodd") err("fill-rule", `fillRule must be nonzero|evenodd`, [at + ".fillRule"]);
+      else if (f.fill.kind !== "none" && !f.error && p.fillRule !== "evenodd") {
+        // OBSERVED 2026-10-21: the engine fills every fill style even-odd (libtess2 TESS_WINDING_ODD, 0xa73bb0); the emitter
+        // resolves nesting, so only crossings / self-overlaps draw differently from the authored nonzero rule
+        let problems: string[] = [];
+        try { problems = fillRuleProblems(normalizePath(p.d, { matrix: p.transform }), p.fillRule); } catch { /* path-parse is the emitter's finding */ }
+        if (problems.length) warn("fill-rule-ignored", `the engine fills each fill style even-odd (libtess2 TESS_WINDING_ODD), not nonzero: ${problems.join("; ")} in-game; set fillRule "evenodd" to preview it that way, or put the overlapping parts in separate paths`, [at + ".fillRule"]);
+      }
       if (p.stroke) {
         const sf = parseFill(p.stroke);
         if (sf.error) err("stroke", sf.error, [at + ".stroke"]);
@@ -418,6 +428,9 @@ export function validateScene(input: unknown): SceneValidation {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient`, [`gradients.${id}`]);
     ids.add(id);
     for (const p of gradientProblems((scene.gradients || {})[id])) err(p.code, `gradient "${id}": ${p.message}`, [`gradients.${id}` + (p.at ? `.${p.at}` : "")]);
+    const spread = (scene.gradients || {})[id]?.spread;
+    // OBSERVED 2026-10-21: GradientAtlas::RasterizeRow 0xa27de0 / default_gradient.shader have no reflect/repeat arithmetic
+    if (spread === "reflect" || spread === "repeat") warn("gradient-spread-ignored", `gradient "${id}": spread "${spread}" is written to the SWF but the game pads every gradient (the last stop's colour continues past the end); the preview pads too`, [`gradients.${id}.spread`]);
   }
   for (const id of Object.keys(scene.imports || {})) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text/import`, [`imports.${id}`]);
@@ -508,6 +521,8 @@ export function validateScene(input: unknown): SceneValidation {
   for (const [linkage, ref] of Object.entries(scene.exports)) {
     if (!linkage) err("export-name", "empty linkage name", ["exports"]);
     if (typeof ref !== "string" || !(scene.shapes[ref] || scene.sprites[ref])) err("export-ref", `export "${linkage}" points at unknown id "${String(ref)}"`, [`exports.${linkage}`]);
+    const vanillaFile = linkage ? vanillaExportSource(linkage) : null;
+    if (vanillaFile) findings.push({ severity: "info", code: "export-shadows-vanilla", message: `export ${exportShadowsMessage(linkage, vanillaFile)}`, path: `exports.${linkage}` });
   }
   scene.stage_instances.forEach((si, i) => {
     if (!si || typeof si.ref !== "string" || !(scene.shapes[si.ref] || scene.sprites[si.ref] || (scene.texts || {})[si.ref] || (scene.imports || {})[si.ref])) err("stage-ref", `stage_instances[${i}].ref is not a shape or sprite`, [`stage_instances[${i}]`]);

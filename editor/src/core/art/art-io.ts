@@ -20,6 +20,7 @@ import { emitSwf, minimalGateSwf } from "./swf-emitter.ts";
 import type { EmitReport } from "./swf-emitter.ts";
 import { readSwf } from "./swf-reader.ts";
 import type { SwfHeader, Tag } from "./swf-reader.ts";
+import { swfFindings } from "./swf-rules.ts";
 
 export const ART_DIR = "art";
 export const SWF_DIR = "swfs";
@@ -354,6 +355,10 @@ export function buildSwf(modName: string, relPath: string, opts: BuildSwfOptions
   try {
     const parsed = readSwf(out.bytes);
     verify = { ok: true, tags: parsed.tags.length, frameCount: parsed.header.frameCount };
+    // the loader's rules over the bytes (swf-rules.ts); a code the scene / emitter already raised is not repeated
+    const seen = new Set(findings.map((f) => f.code));
+    findings = findings.concat(swfFindings(parsed.tags).filter((f) => !seen.has(f.code)));
+    if (findings.some((f) => f.severity === "error")) return { ok: false, error: "the game's loader would reject this SWF", findings, report: out.report, verify };
   } catch (e) {
     verify = { ok: false, error: errText(e) };
     findings.push({ severity: "error", code: "self-check", message: `emitted SWF failed to re-parse: ${errText(e)}` });
@@ -427,11 +432,13 @@ export interface InspectSwfResult {
   exports?: Array<{ id: number; name: string }>;
   doAbc?: number;
   bytes?: number;
+  /** what the game's loader would do with it (swf-rules.ts): FATALs as errors, silent skips as warnings */
+  findings?: Finding[];
 }
 
 /**
  * Inspect a built (or any) SWF inside a mod with the verification reader: header, tag
- * histogram, SymbolClass names, frame labels, DoABC presence.
+ * histogram, SymbolClass names, frame labels, DoABC presence, and the loader's rules as findings.
  */
 export function inspectSwf(modName: string, relPath: string): InspectSwfResult {
   const r = readModBytes(modName, relPath);
@@ -452,7 +459,7 @@ export function inspectSwf(modName: string, relPath: string): InspectSwfResult {
       }
     };
     walk(parsed.tags);
-    return { ok: true, header: parsed.header, histogram, labels, exports, doAbc, bytes: r.bytes.length };
+    return { ok: true, header: parsed.header, histogram, labels, exports, doAbc, bytes: r.bytes.length, findings: swfFindings(parsed.tags) };
   } catch (e) {
     return { ok: false, error: `not a readable SWF: ${errText(e)}` };
   }
