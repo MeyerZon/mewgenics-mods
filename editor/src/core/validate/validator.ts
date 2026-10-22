@@ -110,7 +110,8 @@ function collectOverlays(modDir: string, override?: TextOverride): OverlayFile[]
   const files = listModFiles(modDir);
   const texts = new Map<string, string>();
   for (const f of files) {
-    if (f.relPath === "description.json" || !isPackPath(f.relPath)) continue;
+    // art/*.scene.json is not a pack file but is validated as a scene (validateSceneFile); everything else off-pack is skipped
+    if (f.relPath === "description.json" || (!isPackPath(f.relPath) && !f.relPath.endsWith(SCENE_SUFFIX))) continue;
     try {
       texts.set(f.relPath, readFileSync(f.abs, "utf8"));
     } catch {
