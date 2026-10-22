@@ -7905,6 +7905,62 @@
       "note": "the other renderer content kind LateRender takes as a clip"
     },
     {
+      "name": "GlowCanvasWidth",
+      "kind": "constant",
+      "value": "1280",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "F3 44 0F 59 0D",
+          "ripAt": 5,
+          "rdata": "f32-recip"
+        },
+        "note": "mulss xmm9,[rip+0x8b135b] (0x88e118, the first mulss xmm9 by a rip float in LateRender): the float at 0x14113f47c is 1/1280 (0x3a4ccccd); LateRender maps canvas x to the 0..1 pass rect with it"
+      },
+      "consumers": [
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_GLOW_CANVAS_W"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ],
+      "note": "the game's virtual canvas width (pass rects are canvas x / this)"
+    },
+    {
+      "name": "GlowCanvasHeight",
+      "kind": "constant",
+      "value": "720",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "F3 44 0F 59 2D",
+          "ripAt": 5,
+          "rdata": "f32-recip"
+        },
+        "note": "mulss xmm13,[rip+0x8b12e9] (0x88e196): the float at 0x14113f488 is 1/720 (0x3ab60b61); LateRender maps canvas y to 1 - y/720"
+      },
+      "consumers": [
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_GLOW_CANVAS_H"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ],
+      "note": "the game's virtual canvas height (pass rects are 1 - canvas y / this)"
+    },
+    {
       "name": "Character_init",
       "kind": "function",
       "rva": "0xf70f0",

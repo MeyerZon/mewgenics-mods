@@ -332,7 +332,7 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
       if (vals.some((v) => v !== vals[0])) { finish(e, "needs-human", "derive", `sources disagree: ${src.notes.join("; ")}; value ${was} kept`, null); continue; }
       const v = vals[0];
       e.value = was && parseValue(was) === v ? was : hex(v);   // keep the manifest's spelling (172 stays 172) when the number is unchanged
-      const method = [src.slot !== null ? "slot-body" : "", src.arg !== null ? "call-arg" : "", src.extent !== null ? "extent" : "", src.search !== null ? "slot-search" : "", src.disp !== null ? "call-slot" : ""].filter(Boolean).join("+");
+      const method = [src.slot !== null ? "slot-body" : "", src.arg !== null ? "call-arg" : "", src.extent !== null ? "extent" : "", src.search !== null ? "slot-search" : "", src.disp !== null ? "call-slot" : "", src.rdata !== null ? "rdata" : ""].filter(Boolean).join("+");
       finish(e, "ported-derived", method, `${src.notes.join("; ")}${vals.length > 1 ? " (agree)" : ""}${was && parseValue(was) === v ? " (unchanged)" : ` (was ${was})`}`, e.value, undefined, was);
       continue;
     }

@@ -1481,7 +1481,8 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   = `maskCamera+0x28` (scene manager) `+0x30`, a double passed in xmm2), `P = C x K` with
   `K = {zoom,0,0,0 / 0,zoom*zi,0,0 / 0,0,1,0 / 640,360,0,1}` (`zoom` = camera `+0x168` double, `zi` = the int at
   `+0x170`; `K`'s rows 2/3 are the .rdata vectors 0x141140520 / 0x141140960), and the canvas `x/1280`, `1 - y/720`
-  (0x14113f47c, 0x14113f488). A 20-canvas-px margin covers the band. A unit whose rect cannot be computed (no clip of
+  (0x14113f47c, 0x14113f488; the canvas size is the manifest constants `CONST_GLOW_CANVAS_W/H`, read back from those
+  floats by an rdata witness). A 20-canvas-px margin covers the band. A unit whose rect cannot be computed (no clip of
   those kinds, a singular view) has its pass disabled — never a full-screen pass that would paint its colour on every
   unit. Host-tested in `test_glow_rules.c` (groups, plan, the rect stages, pass writes); proven in-game by the "two"
   shot of `unit-glow.mewtest`: the Rat magenta + unit 0 (a cat) cyan gave a 5515 px magenta patch around the Rat and a

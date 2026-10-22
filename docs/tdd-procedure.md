@@ -31,7 +31,7 @@ layer, which tier of test covers what, where a human still has to look, and what
   clone + thunk bodies (13, incl. a T1 clone of the real `.analysis/luckup-vtable.hex`), the entity/component walks
   + apply/merge/set-stacks writes over fake objects (11) and symbol resolution / the launch gate / API bounds / the
   hook plan (14) and the per-unit glow rules: registry, pruning, layer vector, pass lookup and writes, and the v2
-  colour groups, draw plan, screen-rect stages and per-draw pass writes (21). The glue
+  colour groups, draw plan, screen-rect stages, per-draw pass writes and the generated canvas constants (22). The glue
   (`framework.c`, `status_engine.c`, `glow_engine.c`: PE header, Mewjector calls, the game-ABI thunks and
   the calls into the game) is verified by the harness run (the symbols resolve, hooks install, Joker's Luck
   registers) and, since 2026-10-20, in a real fight:

@@ -68,8 +68,10 @@ void fw_glow_frame(const FwGlowRegistry *r, FwGlowFrame *out);
  * fw_glow_view_rect by C = inverse(Position_GetViewMatrix(maskCamera+OFF_CAM_POSITION, interp)) (fw_glow_mat4_inverse
  * replaces the leaf 0xa07c70) times the zoom matrix {zoom, 0 / 0, zoom*zoomY / 0,0,1,0 / 640,360,0,1}, divided by the
  * 1280x720 canvas, y flipped. Normalized like the pass rects (0..1, x0 < x1, y0 < y1). */
-#define FW_GLOW_CANVAS_W 1280.0   /* the game's virtual canvas: LateRender multiplies by 1/1280 (0x14113f47c) and 1/720 (0x14113f488) */
-#define FW_GLOW_CANVAS_H 720.0    /* and centres with (640, 360, 0, 1) (0x141140960) */
+/* the game's virtual canvas, from the generated offsets.h (manifest constants GlowCanvasWidth/Height, read back from the
+ * .rdata floats 1/1280 (0x14113f47c) and 1/720 (0x14113f488) LateRender multiplies by); the centre (640, 360) is half */
+#define FW_GLOW_CANVAS_W ((double)CONST_GLOW_CANVAS_W)
+#define FW_GLOW_CANVAS_H ((double)CONST_GLOW_CANVAS_H)
 typedef struct FwGlowRect { double x0, x1, y0, y1; } FwGlowRect;
 void fw_glow_clip_bounds(float b[4], const float m[6]);
 void fw_glow_matrix_bounds(float b[4], const float M[16]);
