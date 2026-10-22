@@ -67,6 +67,13 @@ PR; everything else is on `main`.
   typing (PR #83: `"5"` is a number, `""` is 0, only `true`/`false` are bools). Details + content shapes:
   **[data-mods.md](data-mods.md)** ("Fidelity to the decompiled merges", "GON typing fidelity", "Lighting and tint
   knobs", "Localized text for mods").
+- **Sounds and music are data-moddable** (OBSERVED 2026-10-22, `mods/_audioprobe`): a file at the mirrored path
+  (`mods/<m>/audio/combat_sfx/pickup_coin.wav`, `audio/music/<area>/*.ogg`) replaces the vanilla one (mod paths are
+  searched first); new sounds are new groups merged into a loaded set (`audio/combat_sfx.gon.merge` →
+  `SoundEffectGroups { MyGroup { files [x.wav] } }`, `.merge` never `.append`) referenced by name from data (`sounds {
+  ontrigger MyGroup }`, `LoopingSoundWhileAlive`, `sfx`, …). WAV PCM16 / Ogg Vorbis, lower-case extension; music Ogg
+  only, same rate/channels as the track it replaces. Backend FAudio + stb_vorbis. **[data-mods.md](data-mods.md)**
+  "Sounds and music", engine facts in [engine-map.md](engine-map.md) "Audio".
 
 ### Native layer
 - The Mewjector `version.dll` chainloader loads our `mewframework.dll`, which **gates on `-savesuffix` + the build id

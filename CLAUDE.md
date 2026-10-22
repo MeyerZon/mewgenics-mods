@@ -75,7 +75,8 @@ web build (`scripts/vendor-vectorcraft.ts`: the ONE pinned release zip, size + S
 Node built-ins only, nothing installed; owner decision 2026-10-22) into the git-ignored `web/public/vectorcraft/`,
 skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hashes it:
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
-  list and base-data index the validator needs; regenerate after the base game updates). In a secondary git
+  list, the base-data index and `audio-index.json` (the pack's audio paths + sound groups, read from the gpak index
+  read-only) the validator needs; regenerate after the base game updates). In a secondary git
   worktree, point at the main checkout instead: one `node_modules` junction plus `MEWGENICS_EXTRACTED_DATA` (the
   whole `.extracted/`: data, swfs, textures), `MEWGENICS_EDITOR_DATA` (the caches) and `MEWGENICS_ANALYSIS_DIR` (the
   reverse-engineering store); every such path resolves in `editor/src/core/repo.ts` (`docs/tdd-procedure.md` "Running

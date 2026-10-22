@@ -116,6 +116,10 @@ expect gon <unit> <path> exists|missing          children, any other is the firs
                                                  logged by the game (its own getters would log GON ERROR on a miss)
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
+expect deltas "<prefix>" <d1> [<d2> ...]         (runner side) the integers right after prefix in successive console lines (the whole
+                                                 run, from result.jsonl) step by exactly d1..dn — n+1 matching lines; for
+                                                 counters such as `debug_sfx_memory_use` ("Total loaded sfx: N bytes") whose
+                                                 absolute value varies run to run. Reported in report.logExpects (what "deltas")
 dump                                             snapshot the units into a units event
 shot "<label>"                                   screenshot: the DLL emits a shot event and holds the scene 700 ms while
                                                  the runner captures the game window to <run dir>/shot-<label>.png
