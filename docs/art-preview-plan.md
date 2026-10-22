@@ -547,8 +547,14 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     0xeca3, HTML `<p align><font size color letterSpacing kerning>`), so no glyphs live in the file. `src/core/art/text.ts`
     writes exactly that from `scene.texts` (`GAME_FONTS` = fonts.swf's eight classes, pinned in
     `test/fixtures/art/game-fonts.json` against the installed game). OBSERVED: gate `text` boots; the probe's PROBE
-    text draws in the game's font and the class is honoured (Swanky draws other glyphs than Peralta). Not done:
-    localized text (the game sets text by code/loc keys; a mod's text is the literal initial text).
+    text draws in the game's font and the class is honoured (Swanky draws other glyphs than Peralta).
+    **Localized text OBSERVED 2026-10-22** (`render-loctext.mewtest`, `npm run test:artprobe -- --loctext`): a text with
+    `"html": false` (flags 0xeca1, the raw string as the initial text) whose string is a key of the current language —
+    vanilla's `ENEMY_TOMTOM_NAME` or a mod's `combined.csv.append` key — is drawn as the localized string; in the HTML
+    wrapper the key is drawn literally. Plain texts draw in the same font and size as HTML ones (T3 owed). Not done:
+    switching key texts to plain automatically / a validator rule; the preview draws the key, not the value.
+    **tilesets.gon redirect OBSERVED 2026-10-22** (`mods/_tileprobe`, `-- --tileset`): `alley { Rat ArtProbe }` draws
+    our clip for every plain Rat in alley — a data-only way to reskin a vanilla non-cat character with a mod clip.
     **Cat-parts import experiment 2026-10-20: negative.** `scene.imports` writes `ImportAssets2("catparts.swf", [{ id,
     "CatTail" }])` and places the id; the SWF loads (gate `import`), but spawning a character whose clip places an
     imported symbol crashes the game — glaiel::swf never links import entries (`Swf_GetCharacter` 0xa4a190 finds no
