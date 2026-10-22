@@ -142,7 +142,11 @@ export async function runArtTextTests(test: TestFn, assert: AssertFn, eq: EqFn):
     });
     const f = lkFindings(sc, { locKey: lookup });
     eq(f.map((x) => x.path).sort().join(","), "texts.explicitHtml,texts.htmlKey,texts.htmlModKey,texts.htmlShape");
-    for (const x of f) eq(x.severity, "warning");
+    const sev = Object.fromEntries(f.map((x) => [x.path, x.severity]));
+    eq(sev["texts.htmlKey"], "warning", "a base key is a warning");
+    eq(sev["texts.htmlModKey"], "warning", "a mod key is a warning");
+    eq(sev["texts.htmlShape"], "info", "key shape only (no such key) is an info");
+    eq(sev["texts.explicitHtml"], "info", "key shape only (no such key) is an info");
     assert((validateScene as any)(sc, { locKey: lookup }).ok, "a warning does not fail the scene");
   });
   test("text-loc-key-html says which test fired (base combined.csv / this mod's combined.csv.append / the key shape) and how to fix it (html: false, the Art-mode plain (localized) box)", () => {
@@ -150,12 +154,13 @@ export async function runArtTextTests(test: TestFn, assert: AssertFn, eq: EqFn):
     const by = Object.fromEntries(f.map((x) => [x.path, x.message as string]));
     assert(/base combined\.csv/.test(by["texts.a"]!) && /key shape/.test(by["texts.a"]!), by["texts.a"]!);
     assert(/combined\.csv\.append/.test(by["texts.b"]!) && !/key shape/.test(by["texts.b"]!), by["texts.b"]!);
-    assert(/key shape/.test(by["texts.c"]!) && !/base combined/.test(by["texts.c"]!) && !/csv\.append/.test(by["texts.c"]!), by["texts.c"]!);
-    for (const m of Object.values(by) as string[]) assert(/"html": false/.test(m) && /plain \(localized\)/.test(m) && /plain text/.test(m), m);
+    assert(/looks like a loc key but no such key exists in the base table or this mod's csv files; if it is meant to be localized, add the key and set html: false/.test(by["texts.c"]!), by["texts.c"]!);
+    for (const m of [by["texts.a"], by["texts.b"]] as string[]) assert(/"html": false/.test(m) && /plain \(localized\)/.test(m) && /plain text/.test(m), m);
   });
   test("text-loc-key-html without a loc lookup (pure / live editing): only the key shape ^[A-Z][A-Z0-9_]{2,}$ fires", () => {
     const f = lkFindings(keyScene({ a: { text: "KEYWORD_POISON", ...box }, b: { text: "mymod_hello", ...box }, c: { text: "HP", ...box }, d: { text: "Ab_C", ...box } }));
     eq(f.map((x) => x.path).join(","), "texts.a");
+    eq(f[0].severity, "info", "without a table a key-shaped text cannot be confirmed: info");
   });
   test("SWF_RULE_CODES lists text-loc-key-html (warning, scene)", () => {
     const c = (SWF_RULE_CODES as Record<string, any>)["text-loc-key-html"];
