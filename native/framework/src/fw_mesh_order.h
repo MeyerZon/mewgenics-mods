@@ -10,8 +10,11 @@
  *    farther = drawn first; mode 0 draws the sorted items forward (mode 1 draws them in reverse);
  *  - before every item Layer_Draw calls the CAMERA's filter std::function (impl pointer at OFF_CAM_LAYER_FILTER) as
  *    `bool _Do_call(impl, Item* const& item, int const& layer)` and skips the item when it returns false.
- * So a mesh whose key is K is drawn by submitting its functor right before the first item whose key is <= K (meshes
- * win ties: equal keys are side by side on screen), and a mesh attached to a unit right after that unit's own item. */
+ * So a mesh whose key is K is drawn by submitting its functor right before the first item whose key is <= K (M3: ties
+ * go to the unit, which is drawn over the mesh, independent of the add order; M2 let the mesh win them: before the first
+ * item whose key is < K, kept as the MEWFW_MESH_ORDER=m2 control), and a mesh attached to a unit right after that
+ * unit's own item. Tile meshes come in as per-band slices (fw_mesh_slice.h) keyed n + 0.5, so a tie with a unit's
+ * integer key only happens for merged bands. */
 #pragma once
 #include <stddef.h>
 #include "offsets.h"

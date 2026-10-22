@@ -62,7 +62,8 @@ int fw_mesh_order_before_item(FwMeshOrder *o, int index, double key, const void 
     for (int i = 0; i < o->n; i++) {
         const FwMeshOrderEntry *e = &o->e[i];
         if (e->state == FW_MESH_ORDER_DONE) continue;
-        if (e->state == FW_MESH_ORDER_ARMED || e->key > key) take[i] = 1;
+        /* M3: a mesh keyed exactly like the item goes before it (the unit is drawn over it); M2 control: after it */
+        if (e->state == FW_MESH_ORDER_ARMED || e->key > key || (!o->m2 && e->key == key)) take[i] = 1;
     }
     int n = out && cap > 0 ? emit(o, take, index, key, out, cap) : 0;
     /* arm what is attached to this item: it goes right after it, i.e. before the next item */
