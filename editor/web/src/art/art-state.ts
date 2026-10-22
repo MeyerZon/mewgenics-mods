@@ -5,12 +5,16 @@
 // The preview renderer (web/src/art/preview-gl.ts) is created once, lazily, on a single
 // persistent canvas that the Preview panel mounts; it suspends/resumes itself when that
 // canvas leaves/re-enters the document (IntersectionObserver inside createPreview).
+// preview-gl.ts ships in the lazily loaded Art chunk (ArtPanes.tsx registers createPreview here), so this
+// module, which the shell imports, only holds the renderer's type. The view options (raw gray, background,
+// loop, ghost cat) persist per viewer through prefs.ts.
 
 import { createStore } from "../store.ts";
 import { S, toast } from "../state.ts";
 import { getJson, post, url } from "../api.ts";
 import { registerDirty, guard } from "../dirty.ts";
-import { createPreview, type Preview, type PreviewView } from "./preview-gl.ts";
+import type { Preview, PreviewView, createPreview as CreatePreview } from "./preview-gl.ts";
+import { getPref, setPref } from "../prefs.ts";
 import { BUILTIN_GHOST_PARTS, ghostCatsIn, ghostBounds } from "../../../src/core/art/ghost-cat.ts";
 import type { GhostParts } from "../../../src/core/art/ghost-cat.ts";
 import { grayLevelToByte } from "../../../src/core/art/scene.ts";
@@ -80,15 +84,12 @@ export interface ArtState {
   // ghost cat (preview-only placeholders in a parts: "game" rig's empty slots): on/off is a per-viewer convenience
   ghostCat: boolean;
   ghostSource: GhostParts["source"];
-}
-
-const GHOST_PREF_KEY = "mewged.art.ghostCat";
-function readGhostPref(): boolean {
-  try {
-    return typeof window === "undefined" || window.localStorage.getItem(GHOST_PREF_KEY) !== "0";
-  } catch {
-    return true;
-  }
+  /** the open scene's name (mirrored by bump(), so the Build panel need not track every edit) */
+  sceneName: string;
+  /** bumped each time the preview ingests the scene (labels / targets may have changed) */
+  pvScene: number;
+  /** a PNG picked or dropped onto an Import zone, waiting for its options and Import (ImportPng.tsx) */
+  pendingPng: File | null;
 }
 
 export const A = createStore<ArtState>({
@@ -112,8 +113,8 @@ export const A = createStore<ArtState>({
   frame: 0,
   frames: 1,
   playing: false,
-  loop: true,
-  showGray: false,
+  loop: getPref("art.loop", true),
+  showGray: getPref("art.showGray", false),
   row: 54,
   backend: "",
   pvStatus: "",
@@ -123,8 +124,11 @@ export const A = createStore<ArtState>({
   vcShape: "",
   vcRequest: 0,
   vcDirty: false,
-  ghostCat: readGhostPref(),
+  ghostCat: getPref("art.ghostCat", true),
   ghostSource: "builtin",
+  sceneName: "",
+  pvScene: 0,
+  pendingPng: null,
 });
 
 /** The open scene, edited in place; read `A.rev` from a component to track edits. */
@@ -142,7 +146,7 @@ export function sceneBody(sc: Scene): Record<string, unknown> {
 }
 
 export function bump(): void {
-  A.set((a) => ({ rev: a.rev + 1, hasScene: scene != null }));
+  A.set((a) => ({ rev: a.rev + 1, hasScene: scene != null, sceneName: scene ? String(scene.name ?? "") : "" }));
 }
 
 function mod(): string {
@@ -161,6 +165,27 @@ export function setArtSubtab(tab: string): void {
 /** Jump the right Art panel to a tab (preview | findings | build). */
 export function setArtRightTab(tab: string): void {
   A.set({ rightTab: tab as ArtRightTab });
+}
+/** The VectorCraft tab's shape picker. */
+export function setVcShape(id: string): void {
+  A.set({ vcShape: id });
+}
+/** Rig / Timeline jumps: show sprite `id` in the Timeline tab (and the preview). */
+export function openInTimeline(id: string): void {
+  A.set({ subtab: "timeline" });
+  setTarget(id);
+}
+export function openPalette(): void {
+  A.set({ palOpen: true });
+}
+export function closePalette(): void {
+  A.set({ palOpen: false });
+}
+export function setAbc(abc: AbcMode): void {
+  A.set({ abc });
+}
+export function setDropOver(v: boolean): void {
+  if (A.get().dropOver !== v) A.set({ dropOver: v });
 }
 /** VectorcraftPanel reports whether its document holds edits not yet applied. */
 export function setVcDirty(v: boolean): void {
@@ -257,7 +282,7 @@ export async function requestCloseScene(): Promise<void> {
 
 export async function openScene(relPath: string): Promise<void> {
   const r = await getJson<SceneReadResponse>(url("/api/art/scene", { mod: mod(), path: relPath }));
-  A.set({ scenePath: relPath, findings: r.findings || [], buildResult: null, vcDirty: false });
+  A.set({ scenePath: relPath, findings: r.findings || [], buildResult: null, vcDirty: false, vcShape: "", pendingPng: null });
   if (r.scene) {
     scene = r.scene;
   } else {
@@ -276,7 +301,7 @@ export async function openScene(relPath: string): Promise<void> {
 }
 
 export function closeScene(): void {
-  A.set({ scenePath: "", vcDirty: false });
+  A.set({ scenePath: "", vcDirty: false, vcShape: "", pendingPng: null });
   scene = null;
   bump();
 }
@@ -286,6 +311,92 @@ function pickDefaultTarget(): void {
   const sprites = Object.keys(scene.sprites || {});
   const hasStage = (scene.stage_instances || []).length > 0;
   A.set({ target: hasStage ? "stage" : sprites[0] || Object.keys(scene.shapes || {})[0] || "stage" });
+}
+
+// ---- scene edits the views call (each replaces the edited object, so memoized rows see the change) ----------
+function edited(): void {
+  scheduleValidate();
+  bump();
+}
+/** Replace shape `id` with `next` (an updated copy). */
+export function updateShape(id: string, next: Scene["shapes"][string]): void {
+  if (!scene || !scene.shapes[id]) return;
+  scene.shapes[id] = next;
+  edited();
+}
+export function deleteShape(id: string): void {
+  if (!scene || !scene.shapes[id]) return;
+  delete scene.shapes[id];
+  edited();
+}
+/** Wrap shape `id` in a new 1-frame sprite <id>Clip (exported under its own name) and show the Sprites tab. */
+export function wrapShapeInSprite(id: string): void {
+  const sc = scene;
+  if (!sc || !sc.shapes[id]) return;
+  let sid = id + "Clip";
+  let n = 2;
+  while (sc.sprites[sid] || sc.shapes[sid]) sid = `${id}Clip${n++}`;
+  sc.sprites[sid] = { frames: 1, labels: {}, layers: [{ name: id, depth: 1, keys: [{ frame: 0, ref: id, x: 0, y: 0 }] }] };
+  if (!Object.values(sc.exports).includes(sid)) sc.exports[sid] = sid;
+  A.set({ subtab: "sprites" });
+  edited();
+}
+/** Merge `patch` into sprite `id` (a new object). */
+export function updateSprite(id: string, patch: Partial<Scene["sprites"][string]>): void {
+  if (!scene || !scene.sprites[id]) return;
+  scene.sprites[id] = { ...scene.sprites[id]!, ...patch };
+  edited();
+}
+/** A new empty sprite (Sprite, Sprite2, …): 12 frames, an idle label. */
+export function newSprite(): void {
+  const sc = scene;
+  if (!sc) return;
+  let sid = "Sprite";
+  let n = 2;
+  while (sc.sprites[sid] || sc.shapes[sid]) sid = `Sprite${n++}`;
+  sc.sprites[sid] = { frames: 12, labels: { idle: 0 }, layers: [] };
+  edited();
+}
+/** Delete sprite `id` and every export that names it. */
+export function deleteSprite(id: string): void {
+  const sc = scene;
+  if (!sc || !sc.sprites[id]) return;
+  delete sc.sprites[id];
+  for (const k of Object.keys(sc.exports)) if (sc.exports[k] === id) delete sc.exports[k];
+  edited();
+}
+export function addExport(name: string, ref: string): void {
+  if (!scene || !name || !ref) return;
+  scene.exports = { ...scene.exports, [name]: ref };
+  edited();
+}
+export function removeExport(name: string): void {
+  if (!scene) return;
+  const next = { ...scene.exports };
+  delete next[name];
+  scene.exports = next;
+  edited();
+}
+/** Replace the scene's texts map (TextsSection builds the next one). */
+export function setTexts(texts: NonNullable<Scene["texts"]>): void {
+  if (!scene) return;
+  scene.texts = texts;
+  edited();
+}
+/** The JSON tab's Apply: parse `text` as the whole scene. True when applied; a parse error lands in A.jsonError. */
+export function applySceneJson(text: string): boolean {
+  try {
+    const obj = JSON.parse(text) as Scene;
+    scene = obj;
+    A.set({ jsonError: "" });
+    edited();
+    toast("JSON applied — validating");
+    return true;
+  } catch (e) {
+    A.set({ jsonError: String(e instanceof Error ? e.message : e) });
+    bump();
+    return false;
+  }
 }
 
 let liveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -520,7 +631,22 @@ export async function importPngFile(file: File, opts: ImportPngOptions = {}): Pr
   pushSceneToPreview();
 }
 
-/** Drop / file-picker entry: an SVG becomes a shape of the open scene, or of a new scene if none is open; a PNG a raster sprite. */
+/** The Import strip's Cancel (or a finished import): forget the waiting PNG. */
+export function clearPendingPng(): void {
+  if (A.get().pendingPng) A.set({ pendingPng: null });
+}
+/** The Import strip's Import: the waiting PNG with the strip's options. */
+export async function importPendingPng(opts: ImportPngOptions): Promise<void> {
+  const f = A.get().pendingPng;
+  if (!f) return;
+  A.set({ pendingPng: null });
+  await importPngFile(f, opts);
+}
+
+/**
+ * Drop / file-picker entry: an SVG becomes a shape of the open scene, or of a new scene if none is open; a PNG waits in
+ * the Shapes tab's Import strip for its options (mode, scale, pixel art, tile) and Import.
+ */
 export async function importIntoSceneOrNew(f: File): Promise<void> {
   const png = /\.png$/i.test(f.name);
   if (!png && !/\.svg$/i.test(f.name)) return toast("drop an .svg (a vector shape) or a .png (a raster sprite)");
@@ -532,12 +658,35 @@ export async function importIntoSceneOrNew(f: File): Promise<void> {
     await refreshArtListings();
     await openScene(r.relPath);
   }
-  if (png) await importPngFile(f);
+  if (png) A.set({ pendingPng: f, subtab: "shapes" });
   else await importSvgFile(f);
 }
 
 // ---- preview (wraps web/src/art/preview-gl.ts) -------------------------------------------
 let pv: Preview | null = null;
+let previewFactory: typeof CreatePreview | null = null;
+/** The Art chunk (ArtPanes.tsx) hands over preview-gl's createPreview when it loads. */
+export function registerPreviewFactory(create: typeof CreatePreview): void {
+  previewFactory = create;
+}
+/** The background the viewer picked (prefs; "checker" by default), as the renderer takes it. */
+function backgroundValue(v: string): string {
+  if (v === "stage") return (scene && scene.stage && scene.stage.background) || "#ffccff";
+  return v;
+}
+export type PreviewBackground = "checker" | "stage" | "#000000" | "#ffffff";
+export function previewBackground(): PreviewBackground {
+  const v = getPref<string>("art.background", "checker");
+  return v === "stage" || v === "#000000" || v === "#ffffff" ? v : "checker";
+}
+/** The View options' background select: remembered per viewer, applied to the renderer now and on every mount. */
+export function setPreviewBackground(v: PreviewBackground): void {
+  setPref("art.background", v);
+  if (pv) {
+    pv.setBackground(backgroundValue(v));
+    pv.render();
+  }
+}
 /** The one persistent canvas the Preview panel mounts (created lazily; null outside a browser). */
 let pvCanvas: HTMLCanvasElement | null = null;
 export function previewCanvas(): HTMLCanvasElement {
@@ -555,7 +704,8 @@ export function getPreview(): Preview | null {
 
 export function ensurePreview(): Preview {
   if (pv) return pv;
-  pv = createPreview(previewCanvas(), {
+  if (!previewFactory) throw new Error("the Art chunk is not loaded (preview-gl.ts registers through ArtPanes.tsx)");
+  pv = previewFactory(previewCanvas(), {
     onStatus: (s: string) => A.set({ pvStatus: s }),
     onFrame: (f: number) => A.set({ frame: f }),
     // keep the transport's play/pause label truthful, including when playback
@@ -568,7 +718,8 @@ export function ensurePreview(): Preview {
   pv.setPalette(a.palette && a.palette.ok ? a.palette.rows : null);
   pv.setPaletteRow(a.row);
   pv.setLoop(a.loop);
-  pv.setBackground("checker");
+  pv.setShowGray(a.showGray);
+  pv.setBackground(backgroundValue(previewBackground()));
   pushSceneToPreview();
   return pv;
 }
@@ -585,7 +736,7 @@ export function pushSceneToPreview(validated?: Scene): void {
     A.set({ frame: 0 });
     pv.setFrame(0);
   }
-  A.set({ backend: pv.info().backend });
+  A.set((st) => ({ backend: pv!.info().backend, pvScene: st.pvScene + 1 }));
   loadBitmaps();
   pv.render();
 }
@@ -616,6 +767,7 @@ export function setTarget(id: string): void {
 
 export function setShowGray(v: boolean): void {
   A.set({ showGray: v });
+  setPref("art.showGray", v);
   if (pv) {
     pv.setShowGray(v);
     pv.render();
@@ -634,6 +786,58 @@ export function setRow(n: number): void {
   p.setPaletteRow(row);
   p.render();
   bump();
+}
+
+export function setLoop(v: boolean): void {
+  A.set({ loop: v });
+  setPref("art.loop", v);
+  if (pv) pv.setLoop(v);
+}
+
+// ---- transport (Preview panel, Timeline tab) ----------------------------------------------
+export function togglePlay(): void {
+  const p = ensurePreview();
+  if (p.isPlaying()) {
+    p.pause();
+    A.set({ playing: false });
+  } else {
+    p.play();
+    A.set({ playing: true });
+  }
+}
+/** Jump to frame `f` (playback keeps its state). */
+export function goFrame(f: number): void {
+  const p = ensurePreview();
+  p.setFrame(f);
+  A.set({ frame: p.getFrame() });
+  p.render();
+}
+export function stepFrame(delta: number): void {
+  const p = ensurePreview();
+  p.step(delta);
+  A.set({ frame: p.getFrame() });
+  p.render();
+}
+/** Scrub to frame `f`: pauses, then shows it (the scrubber, the Timeline's cells and ruler). */
+export function scrubTo(f: number): void {
+  const p = ensurePreview();
+  p.pause();
+  A.set({ playing: false });
+  p.setFrame(f);
+  A.set({ frame: f });
+  p.render();
+}
+export function gotoLabel(label: string): void {
+  const p = ensurePreview();
+  p.gotoLabel(label);
+  A.set({ frame: p.getFrame() });
+  p.render();
+}
+export function fitPreview(): void {
+  if (pv) {
+    pv.setZoom("fit");
+    pv.render();
+  }
 }
 
 /** CSS colour for gray level N through the current palette row (or raw gray). */
@@ -668,11 +872,7 @@ export function ghostLayer(): SVGSVGElement {
 /** Turn the ghost cat on/off (remembered per viewer in this browser). */
 export function setGhostCat(on: boolean): void {
   A.set({ ghostCat: on });
-  try {
-    window.localStorage.setItem(GHOST_PREF_KEY, on ? "1" : "0");
-  } catch {
-    /* private mode / blocked storage: the toggle still works for this session */
-  }
+  setPref("art.ghostCat", on);
   if (pv) pv.setExtraBounds(ghostExtraBounds); // re-fit with or without the ghosts (renders)
 }
 

@@ -1,10 +1,13 @@
-// Art-mode center: the scene tab bar, the authoring panel (Overview / Shapes / Sprites /
-// Exports / JSON) or the empty hero, plus the modals it owns (New scene, palette drawer).
+// Art-mode center: the scene tab bar, the authoring panel (Overview / Shapes / Sprites / Timeline / Rig / VectorCraft /
+// Exports / JSON) or the empty hero, plus the modals it owns (New scene, palette drawer). The VectorCraft panel is
+// mounted here once, after (and outside) the per-scene panel, so its iframe survives scene switches; on the
+// VectorCraft sub-tab the scene panel shrinks to its header and sub-tabs (.artpanel.vc-on) and the panel fills the rest.
 
 import React, { useId } from "react";
 import { useStore } from "../store.ts";
 import { S, openArtTour } from "../state.ts";
 import { A, getScene, bump, scheduleValidate, build, requestCloseScene, openNewSceneModal, setArtSubtab, setArtRightTab } from "./art-state.ts";
+import { SubTabs } from "../components/ui.tsx";
 import { sx, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
 import { ShapesTab, SpritesTab, ExportsTab, JsonTab } from "./SceneTabs.tsx";
@@ -19,10 +22,14 @@ export function ArtCenter() {
   const scenePath = useStore(A, (a) => a.scenePath);
   const newSceneOpen = useStore(A, (a) => a.newSceneOpen);
   const palOpen = useStore(A, (a) => a.palOpen);
+  const hasScene = useStore(A, (a) => a.hasScene);
+  const subtab = useStore(A, (a) => a.subtab);
   return (
     <div className="center">
       {scenePath ? <SceneTabBar /> : null}
       {scenePath ? <ScenePanel key={scenePath} /> : <ArtEmpty />}
+      {/* outside the key: one VectorCraft for the editor's life (parked off-screen when not shown) */}
+      <VectorcraftPanel active={!!scenePath && hasScene && subtab === "vectorcraft"} />
       {newSceneOpen ? <NewSceneModal /> : null}
       {palOpen ? <PaletteDrawer /> : null}
     </div>
@@ -44,12 +51,11 @@ function ArtEmpty() {
             <div style={sx("font-weight:700;margin-bottom:4px")}>+ New scene</div>
             <div style={sx("font-size:12.5px;color:var(--ink2)")}>Starts from a bobbing gray square with two frame labels.</div>
           </button>
-          <DropZone text="Import an SVG (Inkscape, VectorCraft, Illustrator) — creates a scene if none is open." />
+          <DropZone text="Import an SVG (Inkscape, VectorCraft, Illustrator) or a PNG — creates a scene if none is open." />
         </div>
         <div style={sx("display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap")}>
           <button className="btn ghost sm" onClick={() => openArtTour()}>▲ Take the Art tour</button>
           {!mod ? <span className="muted" style={sx("font-size:12.5px")}>No mod open — pick one from the top-bar mod switcher first.</span> : null}
-          <span className="muted" style={sx("font-size:12.5px")}>Plan and open items: docs/art-preview-plan.md</span>
         </div>
       </div>
     </div>
@@ -96,20 +102,17 @@ function ScenePanel() {
   }
   const e = findings.filter((f) => f.severity === "error").length;
   const w = findings.filter((f) => f.severity === "warning").length;
-  const mk = (id: ArtSubtab, text: string) => (
-    <button className={"btn sm ghost" + (subtab === id ? " on" : "")} onClick={() => setArtSubtab(id)}>{text}</button>
-  );
   let tab: React.ReactNode;
   if (subtab === "shapes") tab = <ShapesTab />;
   else if (subtab === "sprites") tab = <SpritesTab />;
   else if (subtab === "timeline") tab = <TimelineTab />;
   else if (subtab === "rig") tab = <RigTab />;
-  else if (subtab === "vectorcraft") tab = null; // the always-mounted panel below shows itself
+  else if (subtab === "vectorcraft") tab = null; // ArtCenter's one VectorcraftPanel shows itself under this panel
   else if (subtab === "exports") tab = <ExportsTab />;
   else if (subtab === "json") tab = <JsonTab />;
   else tab = <OverviewTab />;
   return (
-    <div className="artpanel">
+    <div className={"artpanel" + (subtab === "vectorcraft" ? " vc-on" : "")}>
       <div>
         <div className="arthead">
           <h2>{sc.name}</h2>
@@ -119,14 +122,23 @@ function ScenePanel() {
             {`● ${e} error${e === 1 ? "" : "s"} · ${w} warning${w === 1 ? "" : "s"}`}
           </button>
         </div>
-        <div className="subtabs">{mk("overview", "Overview")}{mk("shapes", "Shapes")}{mk("sprites", "Sprites")}{mk("timeline", "Timeline")}{mk("rig", "Rig")}{mk("vectorcraft", "VectorCraft")}{mk("exports", "Exports")}{mk("json", "JSON")}</div>
+        <SubTabs items={SUBTABS} value={subtab} onChange={setArtSubtab} aria-label="Scene sections" />
         {tab}
-        {/* mounted for the scene's whole life (parked off-screen when another sub-tab shows) so the VectorCraft document survives tab switches */}
-        <VectorcraftPanel active={subtab === "vectorcraft"} />
       </div>
     </div>
   );
 }
+
+const SUBTABS: { id: ArtSubtab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "shapes", label: "Shapes" },
+  { id: "sprites", label: "Sprites" },
+  { id: "timeline", label: "Timeline" },
+  { id: "rig", label: "Rig" },
+  { id: "vectorcraft", label: "VectorCraft" },
+  { id: "exports", label: "Exports" },
+  { id: "json", label: "JSON" },
+];
 
 /** A labelled input that commits on `change` (label text → id). */
 export function Field({ label, value, onChange, cls = "artinput" }: { label: string; value: string | number | undefined; onChange: (v: string) => void; cls?: string }) {
@@ -158,10 +170,10 @@ function OverviewTab() {
         </div>
       </div>
       <div className="artsec"><span className="sec">Import</span></div>
-      <DropZone text="Drop an SVG here to add it as a shape (fills become gray levels; non-gray colours pass through and are flagged)." />
+      <DropZone compact text="Drop an SVG (a shape: fills become gray levels, non-gray colours pass through and are flagged) or a PNG (its options open in the Shapes tab)." />
       <div className="artsec"><span className="sec">How it ships</span></div>
       <div className="card plain" style={sx("font-size:12.5px;color:var(--ink2);line-height:1.6")}>
-        Build writes <span className="mono">{`mods/${mod}/swfs/${sc.name}.swf`}</span> (FWS v17, DefineShape3 + DefineSprite + PlaceObject2 + SymbolClass<span>{abc === "stub" ? " + a stub DoABC" : ", no DoABC"}</span>) and appends it to <span className="mono">swfs/swflist.gon.append</span>. GON addresses your art by the export names; SymbolClass alone binds them (no DoABC needed). An export named _Append_&lt;Clip&gt; is merged into that vanilla clip at boot — see the Build tab.
+        Build writes <span className="mono">{`mods/${mod}/swfs/${sc.name}.swf`}</span> (FWS v17, DefineShape3 + DefineSprite + PlaceObject2 + SymbolClass<span>{abc === "stub" ? " + a stub DoABC" : ", no DoABC"}</span>) and appends it to <span className="mono">swfs/swflist.gon.append</span>. GON addresses your art by the export names. SymbolClass binds the export names; the DoABC stub is optional. An export named _Append_&lt;Clip&gt; is merged into that vanilla clip at boot.
       </div>
     </div>
   );

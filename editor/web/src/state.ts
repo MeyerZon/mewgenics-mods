@@ -25,7 +25,7 @@ export interface ToastMessage {
 }
 
 export type Tab = "validation" | "preview" | "components";
-export type OpenMenu = "" | "mod" | "help" | "launch";
+export type OpenMenu = "" | "mod" | "help" | "launch" | `shape:${string}`;
 
 /** The unsaved-work dialog (dirty.ts guard → App.tsx ConfirmModal); null when closed. */
 export interface ConfirmState {

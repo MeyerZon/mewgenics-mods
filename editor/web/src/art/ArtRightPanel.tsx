@@ -1,23 +1,56 @@
-// Art-mode right panel: Preview | Findings | Build. The preview canvas is one persistent
+// Art-mode right panel: Preview | Findings | Build | Ruffle. The preview canvas is one persistent
 // element (art-state.previewCanvas()) that PreviewPanel inserts into .pvcanvasbox on mount;
 // unmounting the panel detaches it, which is what makes the renderer suspend (and re-mount
-// resume) without touching the user's play intent.
+// resume) without touching the user's play intent. The View options card (raw gray, background,
+// ghost cat) and the transport's loop are per-viewer prefs (prefs.ts) applied on every mount.
 
-import React, { useEffect, useRef } from "react";
-import { useStore } from "../store.ts";
-import { S, toast } from "../state.ts";
-import { post } from "../api.ts";
-import { A, getScene, bump, build, ensurePreview, getPreview, previewCanvas, ghostLayer, setGhostCat, pushSceneToPreview, setTarget, setShowGray, setRow, rampColor } from "./art-state.ts";
+import React, { useEffect, useRef, useState } from "react";
+import { useStore, useStoreShallow } from "../store.ts";
+import { S } from "../state.ts";
+import {
+  A,
+  build,
+  ensurePreview,
+  getPreview,
+  getScene,
+  previewCanvas,
+  ghostLayer,
+  setGhostCat,
+  pushSceneToPreview,
+  setTarget,
+  setShowGray,
+  setRow,
+  rampColor,
+  setArtRightTab,
+  setAbc,
+  setLoop,
+  togglePlay,
+  goFrame,
+  stepFrame,
+  scrubTo,
+  gotoLabel,
+  fitPreview,
+  openPalette,
+  previewBackground,
+  setPreviewBackground,
+  type PreviewBackground,
+} from "./art-state.ts";
 import { hasGhostRig } from "../../../src/core/art/ghost-cat.ts";
-import { sx, FindingRow } from "./Bits.tsx";
-import type { ArtRightTab, PrepareGateResponse } from "./types.ts";
+import { sx, FindingRows } from "./Bits.tsx";
+import { Tabs, Checkbox, Select, Summary } from "../components/ui.tsx";
+import { usePref } from "../hooks/usePref.ts";
+import type { ArtRightTab } from "./types.ts";
 import { RufflePanel } from "./RufflePanel.tsx";
+
+const RIGHT_TABS: { id: ArtRightTab; label: string }[] = [
+  { id: "preview", label: "Preview" },
+  { id: "findings", label: "Findings" },
+  { id: "build", label: "Build" },
+  { id: "ruffle", label: "Ruffle" },
+];
 
 export function ArtRightPanel() {
   const rightTab = useStore(A, (a) => a.rightTab);
-  const mk = (id: ArtRightTab, text: string) => (
-    <button className={"tab" + (rightTab === id ? " active" : "")} onClick={() => A.set({ rightTab: id })}>{text}</button>
-  );
   let body: React.ReactNode;
   if (rightTab === "findings") body = <FindingsPanel />;
   else if (rightTab === "build") body = <BuildPanel />;
@@ -25,7 +58,7 @@ export function ArtRightPanel() {
   else body = <PreviewPanel />;
   return (
     <div className="rightpanel">
-      <div className="tabs">{mk("preview", "Preview")}{mk("findings", "Findings")}{mk("build", "Build")}{mk("ruffle", "Ruffle")}</div>
+      <Tabs items={RIGHT_TABS} value={rightTab} onChange={setArtRightTab} aria-label="Art right panel" />
       <div className="panelbody">{body}</div>
     </div>
   );
@@ -40,16 +73,12 @@ function FindingsPanel() {
   const level = e ? "err" : w ? "warn" : "ok";
   return (
     <div>
-      <div>
-        <div className={`summary ${level}`}>
-          <div className="badge">{level === "ok" ? "✓" : "!"}</div>
-          <div>
-            <div className="t">{e ? `${e} error${e === 1 ? "" : "s"}` : w ? `${w} warning${w === 1 ? "" : "s"}` : "Scene is buildable"}</div>
-            <div className="d">{`${e} errors · ${w} warnings · ${list.length - e - w} info`}</div>
-          </div>
-        </div>
-        <div style={sx("margin-top:14px")}>{list.length ? list.map((f, i) => <FindingRow key={i} f={f} />) : <p className="dotok">No findings.</p>}</div>
-      </div>
+      <Summary
+        level={level}
+        title={e ? `${e} error${e === 1 ? "" : "s"}` : w ? `${w} warning${w === 1 ? "" : "s"}` : "Scene is buildable"}
+        detail={`${e} errors · ${w} warnings · ${list.length - e - w} info`}
+      />
+      <div style={sx("margin-top:14px")}>{list.length ? <FindingRows list={list} /> : <p className="dotok">No findings.</p>}</div>
     </div>
   );
 }
@@ -62,105 +91,76 @@ function histogramText(tags: { name: string }[]): string {
 
 function BuildPanel() {
   const mod = useStore(S, (s) => s.mod);
-  const r = useStore(A, (a) => a.buildResult);
-  const ins = useStore(A, (a) => a.inspect);
-  const abc = useStore(A, (a) => a.abc);
-  const hasScene = useStore(A, (a) => a.hasScene);
-  useStore(A, (a) => a.rev);
-  const sc = getScene();
+  const { r, ins, abc, hasScene, name } = useStoreShallow(A, (a) => ({ r: a.buildResult, ins: a.inspect, abc: a.abc, hasScene: a.hasScene, name: a.sceneName }));
   return (
     <div>
-      <div>
-        <div className="sec" style={sx("margin-bottom:8px")}>Emit</div>
-        <div className="card plain">
-          <div style={sx("font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:8px")}>Every vanilla file carries a Flash-generated DoABC, but SymbolClass alone binds the names: build with none. The SWF gate (fix spec §8) checks an _Append_AbilityIcon donor boots the game: write a variant here, then run `npm run test:swfgate -- &lt;variant&gt;` from editor/.</div>
-          <div className="pvrow">
-            <label><input type="radio" name="abcmode" checked={abc === "none"} onChange={() => A.set({ abc: "none" })} />no DoABC</label>
-            <label><input type="radio" name="abcmode" checked={abc === "stub"} onChange={() => A.set({ abc: "stub" })} />stub DoABC (Flash-faithful linkage classes)</label>
-          </div>
-          <div style={sx("display:flex;gap:8px;margin-top:10px;flex-wrap:wrap")}>
-            <button className="btn primary sm" disabled={!hasScene} onClick={() => build(false)}>Build SWF</button>
-            <button className="btn sm" disabled={!hasScene} onClick={() => build(true)}>Dry run</button>
-            <button
-              className="btn ghost sm"
-              title="Writes mods/swf-gate/swfs/gate.swf + swflist.gon.append (flat variant); run it with npm run test:swfgate -- flat"
-              onClick={async () => {
-                const g = await post<"/api/art/prepare-swf-gate", PrepareGateResponse>("/api/art/prepare-swf-gate", { variant: "flat" });
-                toast(g.ok ? `gate files written: ${(g.written || []).join(", ")} — next: ${g.next}` : `failed: ${g.error}`);
-              }}
-            >
-              Prepare SWF gate
-            </button>
-          </div>
+      <div className="sec" style={sx("margin-bottom:8px")}>Emit</div>
+      <div className="card plain">
+        <div style={sx("font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:8px")}>SymbolClass binds the export names; the DoABC stub is optional.</div>
+        <div className="pvrow">
+          <label><input type="radio" name="abcmode" checked={abc === "none"} onChange={() => setAbc("none")} />no DoABC</label>
+          <label><input type="radio" name="abcmode" checked={abc === "stub"} onChange={() => setAbc("stub")} />stub DoABC (Flash-faithful linkage classes)</label>
         </div>
-        {!r && !ins ? (
-          <div className="card plain" style={sx("color:var(--ink2);font-size:12.5px;line-height:1.6")}>
-            <span className="muted">Nothing built yet. </span>
-            {sc ? "Click Build SWF to emit mods/" + mod + "/swfs/" + (sc.name || "<name>") + ".swf (self-checked with the verification reader) and append it to swflist.gon.append." : "Open a scene, then build it."}
-          </div>
-        ) : null}
-        {r ? (
-          <div>
-            <div className="sec" style={sx("margin:14px 0 8px")}>{r.ok ? (r.dryRun ? "Dry run" : "Built") : "Build failed"}</div>
-            <div className={`summary ${r.ok ? "ok" : "err"}`}>
-              <div className="badge">{r.ok ? "✓" : "✕"}</div>
-              <div>
-                <div className="t">{r.ok ? `${r.bytes} bytes · DoABC ${r.abc}` : r.error || "error"}</div>
-                <div className="d">{r.swfPath || ""}</div>
+        <div style={sx("display:flex;gap:8px;margin-top:10px;flex-wrap:wrap")}>
+          <button className="btn primary sm" disabled={!hasScene} onClick={() => void build(false)}>Build SWF</button>
+          <button className="btn sm" disabled={!hasScene} onClick={() => void build(true)}>Dry run</button>
+        </div>
+      </div>
+      {!r && !ins ? (
+        <div className="card plain" style={sx("color:var(--ink2);font-size:12.5px;line-height:1.6")}>
+          <span className="muted">Nothing built yet. </span>
+          {hasScene ? `Click Build SWF to emit mods/${mod}/swfs/${name || "<name>"}.swf (self-checked with the verification reader) and append it to swflist.gon.append.` : "Open a scene, then build it."}
+        </div>
+      ) : null}
+      {r ? (
+        <div>
+          <div className="sec" style={sx("margin:14px 0 8px")}>{r.ok ? (r.dryRun ? "Dry run" : "Built") : "Build failed"}</div>
+          <Summary level={r.ok ? "ok" : "err"} badge={r.ok ? "✓" : "✕"} title={r.ok ? `${r.bytes} bytes · DoABC ${r.abc}` : r.error || "error"} detail={r.swfPath || ""} />
+          {r.report ? (
+            <div className="card" style={sx("margin-top:10px")}>
+              <div className="kv">
+                <span className="k">frames</span><span>{String(r.report.frameCount)}</span>
+                <span className="k">characters</span><span>{String((r.report.characters || []).length)}</span>
+                <span className="k">exports</span><span>{(r.report.exports || []).map((e) => `${e.name}→#${e.id}`).join(", ") || "(none)"}</span>
+                <span className="k">tags</span><span>{histogramText(r.report.tags || [])}</span>
               </div>
             </div>
-            {r.report ? (
-              <div className="card" style={sx("margin-top:10px")}>
-                <div className="kv">
-                  <span className="k">frames</span><span>{String(r.report.frameCount)}</span>
-                  <span className="k">characters</span><span>{String((r.report.characters || []).length)}</span>
-                  <span className="k">exports</span><span>{(r.report.exports || []).map((e) => `${e.name}→#${e.id}`).join(", ") || "(none)"}</span>
-                  <span className="k">tags</span><span>{histogramText(r.report.tags || [])}</span>
-                </div>
+          ) : null}
+          {r.swflist && r.swflist.ok ? (
+            <div className="card" style={sx("margin-top:10px")}>
+              <div className="sec" style={sx("margin-bottom:6px")}>{r.swflist.path}</div>
+              <pre className="mergecode">{r.swflist.text}</pre>
+            </div>
+          ) : null}
+          {(r.findings || []).length ? <div style={sx("margin-top:10px")}><FindingRows list={r.findings || []} /></div> : null}
+        </div>
+      ) : null}
+      {ins ? (
+        <div>
+          <div className="sec" style={sx("margin:14px 0 8px")}>{`Inspect · ${ins.relPath}`}</div>
+          {ins.ok && ins.header ? (
+            <div className="card">
+              <div className="kv">
+                <span className="k">header</span><span className="mono" style={sx("font-size:12px")}>{`${ins.header.signature} v${ins.header.version} · ${ins.bytes} B · ${ins.header.frameRate} fps · ${ins.header.frameCount} frames`}</span>
+                <span className="k">DoABC</span><span>{String(ins.doAbc)}</span>
+                <span className="k">exports</span><span>{(ins.exports || []).map((e) => `${e.name}→#${e.id}`).join(", ") || "(none)"}</span>
+                <span className="k">labels</span><span>{(ins.labels || []).join(", ") || "(none)"}</span>
+                <span className="k">tags</span><span>{Object.entries(ins.histogram || {}).map(([k, v]) => `${k}×${v}`).join(" ")}</span>
               </div>
-            ) : null}
-            {r.swflist && r.swflist.ok ? (
-              <div className="card" style={sx("margin-top:10px")}>
-                <div className="sec" style={sx("margin-bottom:6px")}>{r.swflist.path}</div>
-                <pre className="mergecode">{r.swflist.text}</pre>
-              </div>
-            ) : null}
-            {(r.findings || []).length ? <div style={sx("margin-top:10px")}>{(r.findings || []).map((f, i) => <FindingRow key={i} f={f} />)}</div> : null}
-          </div>
-        ) : null}
-        {ins ? (
-          <div>
-            <div className="sec" style={sx("margin:14px 0 8px")}>{`Inspect · ${ins.relPath}`}</div>
-            {ins.ok && ins.header ? (
-              <div className="card">
-                <div className="kv">
-                  <span className="k">header</span><span className="mono" style={sx("font-size:12px")}>{`${ins.header.signature} v${ins.header.version} · ${ins.bytes} B · ${ins.header.frameRate} fps · ${ins.header.frameCount} frames`}</span>
-                  <span className="k">DoABC</span><span>{String(ins.doAbc)}</span>
-                  <span className="k">exports</span><span>{(ins.exports || []).map((e) => `${e.name}→#${e.id}`).join(", ") || "(none)"}</span>
-                  <span className="k">labels</span><span>{(ins.labels || []).join(", ") || "(none)"}</span>
-                  <span className="k">tags</span><span>{Object.entries(ins.histogram || {}).map(([k, v]) => `${k}×${v}`).join(" ")}</span>
-                </div>
-                {(ins.findings || []).length ? <div style={sx("margin-top:10px")}>{(ins.findings || []).map((f, i) => <FindingRow key={i} f={f} />)}</div> : <p className="dotok" style={sx("margin:8px 0 0")}>The game's loader accepts every tag.</p>}
-              </div>
-            ) : (
-              <div className="finding error"><span className="mark">✕</span><div>{ins.error}</div></div>
-            )}
-          </div>
-        ) : null}
-      </div>
+              {(ins.findings || []).length ? <div style={sx("margin-top:10px")}><FindingRows list={ins.findings || []} /></div> : <p className="dotok" style={sx("margin:8px 0 0")}>The game's loader accepts every tag.</p>}
+            </div>
+          ) : (
+            <div className="finding error"><span className="mark">✕</span><div>{ins.error}</div></div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function PreviewPanel() {
-  const hasScene = useStore(A, (a) => a.hasScene);
-  const target = useStore(A, (a) => a.target);
-  const backend = useStore(A, (a) => a.backend);
-  const pvStatus = useStore(A, (a) => a.pvStatus);
-  const ghostCat = useStore(A, (a) => a.ghostCat);
-  const ghostSource = useStore(A, (a) => a.ghostSource);
-  useStore(A, (a) => a.frames); // the target list (frame counts) tracks the pushed scene
-  useStore(A, (a) => a.rev);
+  const { hasScene, target, backend, pvStatus } = useStoreShallow(A, (a) => ({ hasScene: a.hasScene, target: a.target, backend: a.backend, pvStatus: a.pvStatus }));
+  useStore(A, (a) => a.pvScene); // the target list tracks the pushed scene
   const box = useRef<HTMLDivElement>(null);
   // mount: the canvas element is persistent; the renderer is created once
   useEffect(() => {
@@ -181,8 +181,6 @@ function PreviewPanel() {
   }, []);
   const pv = getPreview();
   const targets = pv && hasScene ? pv.getTargets() : [];
-  const sc = getScene();
-  const ghostable = !!sc && hasScene && hasGhostRig(sc, target);
   return (
     <div className="pvwrap">
       {!hasScene ? (
@@ -195,14 +193,8 @@ function PreviewPanel() {
               <option key={t.id} value={t.id}>{`${t.id}${t.kind === "sprite" ? ` (${t.frames}f)` : t.kind === "stage" ? " (main timeline)" : ""}`}</option>
             ))}
           </select>
-          {ghostable ? (
-            <label title={`Preview only: grey placeholders (${ghostSource === "catparts.swf" ? "outlines from the game's catparts.swf" : "built-in silhouettes; extract the game files for the real outlines"}) where the game draws the cat's own parts into the empty slots. Never in the SWF.`}>
-              <input type="checkbox" aria-label="ghost cat" checked={ghostCat} onChange={(e) => setGhostCat(e.target.checked)} />
-              ghost cat
-            </label>
-          ) : null}
           <div className="grow" />
-          <button className="btn ghost sm" onClick={() => { const p = getPreview(); if (p) { p.setZoom("fit"); p.render(); } }}>Fit</button>
+          <button className="btn ghost sm" onClick={fitPreview}>Fit</button>
         </div>
       )}
       <div className="pvcanvasbox" ref={box}>
@@ -211,61 +203,80 @@ function PreviewPanel() {
       <Transport />
       <Scrubber />
       <LabelChips />
+      <ViewOptions />
       <PaletteRow />
     </div>
   );
 }
 
+const BACKGROUNDS: { value: PreviewBackground; label: string }[] = [
+  { value: "checker", label: "checker" },
+  { value: "stage", label: "stage colour" },
+  { value: "#000000", label: "black" },
+  { value: "#ffffff", label: "white" },
+];
+
+/** One card of per-viewer view options (prefs.ts): raw gray, the canvas background, the ghost cat on a parts: game rig. */
+function ViewOptions() {
+  const { showGray, ghostCat, ghostSource, hasScene, target } = useStoreShallow(A, (a) => ({ showGray: a.showGray, ghostCat: a.ghostCat, ghostSource: a.ghostSource, hasScene: a.hasScene, target: a.target }));
+  useStore(A, (a) => a.pvScene);
+  usePref<string>("art.background", "checker"); // re-render when the pick changes
+  const background = previewBackground();
+  const sc = getScene();
+  const ghostable = !!sc && hasScene && hasGhostRig(sc, target);
+  return (
+    <div className="card plain view-options" style={sx("margin:0")}>
+      <div className="sec" style={sx("margin-bottom:8px")}>View options</div>
+      <div className="pvrow">
+        <Checkbox checked={showGray} onChange={(v) => { ensurePreview(); setShowGray(v); }} title="Show the authored 16-level gray instead of the palette row's colours">
+          show raw gray
+        </Checkbox>
+        <label>
+          background
+          <Select aria-label="preview background" value={background} onChange={setPreviewBackground} options={BACKGROUNDS} />
+        </label>
+        {ghostable ? (
+          <Checkbox
+            aria-label="ghost cat"
+            checked={ghostCat}
+            onChange={setGhostCat}
+            title={`Preview only: grey placeholders (${ghostSource === "catparts.swf" ? "outlines from the game's catparts.swf" : "built-in silhouettes; extract the game files for the real outlines"}) where the game draws the cat's own parts into the empty slots. Never in the SWF.`}
+          >
+            ghost cat
+          </Checkbox>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function Transport() {
-  const playing = useStore(A, (a) => a.playing);
-  const frame = useStore(A, (a) => a.frame);
-  const frames = useStore(A, (a) => a.frames);
-  const loop = useStore(A, (a) => a.loop);
-  const play = () => {
-    const p = ensurePreview();
-    if (p.isPlaying()) {
-      p.pause();
-      A.set({ playing: false });
-    } else {
-      p.play();
-      A.set({ playing: true });
-    }
-  };
+  const { playing, frame, frames, loop } = useStoreShallow(A, (a) => ({ playing: a.playing, frame: a.frame, frames: a.frames, loop: a.loop }));
   return (
     <div className="transport">
-      <button className="btn ghost sm" aria-label="First frame" onClick={() => { const p = ensurePreview(); p.setFrame(0); A.set({ frame: 0 }); p.render(); }}>|◀</button>
-      <button className="btn ghost sm" aria-label="Previous frame" onClick={() => { const p = ensurePreview(); p.step(-1); A.set({ frame: p.getFrame() }); p.render(); }}>◀</button>
-      <button className="btn primary sm" aria-label={playing ? "Pause" : "Play"} style={sx("min-width:64px;justify-content:center")} onClick={play}>{playing ? "Pause" : "Play"}</button>
-      <button className="btn ghost sm" aria-label="Next frame" onClick={() => { const p = ensurePreview(); p.step(1); A.set({ frame: p.getFrame() }); p.render(); }}>▶</button>
+      <button className="btn ghost sm" aria-label="First frame" onClick={() => goFrame(0)}>|◀</button>
+      <button className="btn ghost sm" aria-label="Previous frame" onClick={() => stepFrame(-1)}>◀</button>
+      <button className="btn primary sm" aria-label={playing ? "Pause" : "Play"} style={sx("min-width:64px;justify-content:center")} onClick={togglePlay}>{playing ? "Pause" : "Play"}</button>
+      <button className="btn ghost sm" aria-label="Next frame" onClick={() => stepFrame(1)}>▶</button>
       <span className="frame">{`${frame + 1} / ${frames}`}</span>
       <div className="grow" />
-      <label style={sx("display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2)")}>
-        <input type="checkbox" checked={loop} onChange={(e) => { A.set({ loop: e.target.checked }); ensurePreview().setLoop(e.target.checked); }} />
+      <Checkbox checked={loop} onChange={setLoop} className="loop" title="Loop playback (remembered in this browser)">
         loop
-      </label>
+      </Checkbox>
     </div>
   );
 }
 
 function Scrubber() {
-  const frame = useStore(A, (a) => a.frame);
-  const frames = useStore(A, (a) => a.frames);
-  const hasScene = useStore(A, (a) => a.hasScene);
+  const { frame, frames, hasScene } = useStoreShallow(A, (a) => ({ frame: a.frame, frames: a.frames, hasScene: a.hasScene }));
+  useStore(A, (a) => a.pvScene);
   const range = useRef<HTMLInputElement>(null);
   // The range is driven imperatively (value/max) and listened to natively, so a scripted
   // `r.value = n; dispatchEvent(new Event("input"))` works exactly as it did with VanJS.
   useEffect(() => {
     const el = range.current;
     if (!el) return;
-    const h = () => {
-      const f = Number(el.value);
-      const p = ensurePreview();
-      p.pause();
-      A.set({ playing: false });
-      p.setFrame(f);
-      A.set({ frame: f });
-      p.render();
-    };
+    const h = () => scrubTo(Number(el.value));
     el.addEventListener("input", h);
     return () => el.removeEventListener("input", h);
   }, []);
@@ -280,9 +291,9 @@ function Scrubber() {
   const labels = pv && hasScene ? pv.getLabels() : [];
   return (
     <div className="scrub">
-      <input ref={range} type="range" min={0} step={1} defaultValue={0} aria-label="Frame scrubber" />
+      <input ref={range} type="range" min={0} step={1} aria-label="Frame scrubber" />
       <div className="ticks">
-        {labels.map((l, i) => <span key={i} title={`${l.label} @ ${l.frame}`} style={{ left: `${n > 1 ? (l.frame / (n - 1)) * 100 : 0}%` }} />)}
+        {labels.map((l) => <span key={`${l.label}@${l.frame}`} title={`${l.label} @ ${l.frame}`} style={{ left: `${n > 1 ? (l.frame / (n - 1)) * 100 : 0}%` }} />)}
       </div>
     </div>
   );
@@ -290,46 +301,49 @@ function Scrubber() {
 
 function LabelChips() {
   const hasScene = useStore(A, (a) => a.hasScene);
-  useStore(A, (a) => a.frames);
-  useStore(A, (a) => a.rev);
+  useStore(A, (a) => a.pvScene);
+  useStore(A, (a) => a.target);
   const pv = getPreview();
   const labels = pv && hasScene ? pv.getLabels() : [];
   if (!labels.length) return null;
   return (
     <div className="labelchips">
-      {labels.map((l, i) => (
-        <button key={i} className="btn ghost sm" title={`go to frame ${l.frame}`} onClick={() => { const p = ensurePreview(); p.gotoLabel(l.label); A.set({ frame: p.getFrame() }); p.render(); }}>{`${l.label} · ${l.frame}`}</button>
+      {labels.map((l) => (
+        <button key={`${l.label}@${l.frame}`} className="btn ghost sm" title={`go to frame ${l.frame}`} onClick={() => gotoLabel(l.label)}>{`${l.label} · ${l.frame}`}</button>
       ))}
     </div>
   );
 }
 
 function PaletteRow() {
-  const pal = useStore(A, (a) => a.palette);
-  const row = useStore(A, (a) => a.row);
-  const showGray = useStore(A, (a) => a.showGray);
-  useStore(A, (a) => a.rev);
-  const rowInput = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const el = rowInput.current;
-    if (!el) return;
-    const h = () => setRow(Number(el.value));
-    el.addEventListener("change", h);
-    return () => el.removeEventListener("change", h);
-  }, []);
-  useEffect(() => {
-    if (rowInput.current) rowInput.current.value = String(row);
-  }, [row]);
+  const { pal, row } = useStoreShallow(A, (a) => ({ pal: a.palette, row: a.row }));
+  useStore(A, (a) => a.showGray); // the ramp swatches follow the raw-gray toggle
+  // the number box shows A.row; a half-typed value lives here until it parses (blur / Enter drop it)
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = (v: string) => {
+    const n = Number(v);
+    if (v.trim() !== "" && Number.isFinite(n)) setRow(n);
+  };
   return (
     <div className="card plain" style={sx("margin:0")}>
       <div style={sx("display:flex;align-items:center;gap:8px;margin-bottom:8px")}>
         <span className="sec" style={sx("flex:1")}>Palette row</span>
         <label htmlFor="pv-row" className="muted" style={sx("font-size:12px")}>palette N</label>
-        <input ref={rowInput} id="pv-row" className="artinput num" type="number" min={0} max={255} defaultValue={row} />
-        <button className="btn ghost sm" onClick={() => A.set({ palOpen: true })}>Browse rows…</button>
+        <input
+          id="pv-row"
+          className="artinput num"
+          type="number"
+          min={0}
+          max={255}
+          value={draft ?? String(row)}
+          onChange={(e) => { setDraft(e.target.value); commit(e.target.value); }}
+          onBlur={() => setDraft(null)}
+          onKeyDown={(e) => { if (e.key === "Enter") setDraft(null); }}
+        />
+        <button className="btn ghost sm" onClick={openPalette}>Browse rows…</button>
       </div>
       <div className="ramp big" role="list" aria-label="16-colour ramp of the selected palette row">
-        {Array.from({ length: 16 }, (_, i) => <span key={i} role="listitem" title={`gray:${i}`} style={{ background: rampColor(i) }} />)}
+        {Array.from({ length: 16 }, (_, level) => <span key={level} role="listitem" title={`gray:${level}`} style={{ background: rampColor(level) }} />)}
       </div>
       <div style={sx("display:flex;gap:10px;align-items:center;margin-top:8px;font-size:12px;color:var(--muted);flex-wrap:wrap")}>
         {pal && pal.ok ? (
@@ -337,33 +351,8 @@ function PaletteRow() {
         ) : (
           <span className="warn">{pal ? `${pal.error || "palette unavailable"} — identity ramp shown. ${pal.hint || ""}` : "loading palette…"}</span>
         )}
-        <label style={sx("display:inline-flex;gap:6px;align-items:center")}>
-          <input type="checkbox" checked={showGray} onChange={(e) => { ensurePreview(); setShowGray(e.target.checked); }} />
-          show raw gray
-        </label>
-        <label style={sx("display:inline-flex;gap:6px;align-items:center")}>
-          background
-          <select
-            className="artinput"
-            aria-label="preview background"
-            defaultValue="checker"
-            onChange={(e) => {
-              const v = e.target.value;
-              const p = ensurePreview();
-              const sc = getScene();
-              p.setBackground(v === "stage" ? (sc && sc.stage && sc.stage.background) || "#ffccff" : v === "none" ? null : v);
-              p.render();
-            }}
-          >
-            <option value="checker">checker</option>
-            <option value="stage">stage colour</option>
-            <option value="#000000">black</option>
-            <option value="#ffffff">white</option>
-          </select>
-        </label>
       </div>
+      <p className="muted" style={sx("margin:6px 0 0;font-size:11.5px")}>Browsing rows never marks the scene unsaved; the row is written on the next Save.</p>
     </div>
   );
 }
-
-void bump;
