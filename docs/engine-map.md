@@ -1542,7 +1542,7 @@ entries of `bindings/25143593.json`). RVAs.
   The force bit (flags bit 0) stays set all frame, so the material/shader/texture caches (0x1413c1980, 0x1413c42b8,
   0x1413c19a0[], 0x1412f713c) and the instance VBO / indirect buffer / VAO bindings are what a functor must restore.
 - **Depth (OBSERVED, r3dD):** sprite shaders never discard and always write `gl_FragDepth`; depth is tested and written
-  only while flags bit 2 is set (mode-1 layers, drawn in reverse). `Shader_compile` 0xa55470 = text replacement
+  only while flags value 2 (bit 1) is set (mode-1 layers, drawn in reverse; bit 3 = colour AND depth mask, see "Sprites vs meshes"). `Shader_compile` 0xa55470 = text replacement
   (`" vert()"`/`" frag()"` → `" main()"`, `COMPILING_*_PROGRAM`, `MATRICES_AS_ATTRIBS`). Precisely (decompile
   re-read 2026-10-22): the entry rename is ONE find + replace of the **first** `" vert()"` / `" frag()"` (a comment
   holding that text before the definition steals it); the three flags are replace-all loops; then
@@ -1576,7 +1576,80 @@ entries of `bindings/25143593.json`). RVAs.
   (`fw_shader_stage`: the first `" vert()"`/`" frag()"` -> `" main()"`, `COMPILING_*` -> 1/0); attribute names
   `position`/`color`/`texcoord` bound to 0/1/2 before linking (`mesh-model-log.txt`). A GON `graphics.model` key on
   the vanilla `Crate` (`mods/fw-3d/data/characters/inanimate_objects.gon.merge`) produced no GON error in debug.log.
-- **Sprites vs meshes (OBSERVED, not solved).** The units layer neither tests nor writes depth, and our functor runs after
-  it: a cube on tile (2,6) — farther than the cats on (2,5) — is drawn OVER them (run 20261022-135331, shot mesh-b);
-  meshes are drawn under everything recorded later (the "Battle Start!" banner and the HUD cover the cube). The fix is
-  phase M2 of `possible_3d_work.md` (depth-tested unit layer + sprite depth in m14, or a split draw).
+- **Sprites vs meshes: painter-order interleave (OBSERVED, T2 2026-10-22, phase M2; `native/framework/src/fw_mesh_order.c`).**
+  The M1 limit (run 20261022-135331: a cube on tile (2,6), farther than the cats on (2,5), was drawn OVER them because
+  the functor ran after the whole units layer) is fixed by taking the mesh's place in the units layer's painter list
+  instead of by depth. Facts relied on:
+  - **Layer item** (0x20 bytes, `Scene_SubmitDraw` 0x989be0): `{renderable*, Position*, double key (+0x10,
+    OFF_ITEM_KEY), u32 flags}`. The key is computed at submit time by the layer's sorter std::function (impl at
+    layer+0x60, installed by `Layer_SetYSorted` 0x989440 = the leaf 0x988d30: `Position+0xb0`, interpolated with
+    `Position+0x68`). Witness: the item store `movups [rcx+rax+0x10],xmm1` (0x140989cbc) in the third `.pdata` chunk of
+    Scene_SubmitDraw, entered as the witness host `Scene_SubmitDraw_tail` 0x989c96.
+  - **Sort (OBSERVED bytes):** `Layer+0x20` (OFF_LAYER_SORTED, byte) set → std::sort with the leaf 0x988dd0
+    `movsd xmm0,[rdx+0x10]; comisd xmm0,[rcx+0x10]; setb al; ret` = `b.key < a.key`: DESCENDING (larger key = farther =
+    drawn first). Mode 0 (`+0x24`) draws forward, mode 1 in reverse. 0x988dd0 / 0x988d30 / 0x78d480 have no `.pdata`.
+  - **Camera per-item filter** (OFF_CAM_LAYER_FILTER, Camera+0x120; witness `48 8B 8F 20 01 00 00` in Layer_Draw):
+    before every item Layer_Draw loads this std::function impl pointer and, when non-null, calls slot 2
+    `bool _Do_call(impl, Item* const& item, int const& layer)` (both arguments by pointer; `&camera[+0xa4]` = the
+    layer index); false skips the item. After each drawn item it calls the post-item std::function at `Camera+0x160`
+    (same arguments; not used).
+  - **Runtime:** the world camera's `+0x120` is **NULL** in a TacticsTest fight (`mesh order: world camera filter
+    before ours = 0000000000000000`); the units layer 0x19 is `sorted=1 mode=0` with 10 items; the item keys come out
+    descending and equal `x + z` of the unit's tile centre (+0.03 for some units: the renderer's sort offsets), e.g.
+    `i=4 key=8.000 at=(2.50 5.50)`. Our C std::function (`fw_filter_*` in `fw_functor.c`) sits there for the one
+    `Camera_RenderOneLayer(world, 0x19)` call (the previous pointer chained and put back) and is called for every item,
+    with no GL error and nothing else changed.
+  - **The interleave:** the mesh engine collects its draws BEFORE the original call; a mesh's key = `x + z` of its
+    origin (a tile object on (c, r): c + r + 1, like a unit on that tile); a unit-attached mesh goes right after its
+    unit's own item (anchor = the renderable). Before item k every pending mesh with key > key_k is submitted as ONE
+    draw functor (`Batch_SubmitFunctor` mid-layer is fine: the next sprite starts a new group); ties go after the item;
+    the rest after the layer. Meshes depth-test and write among themselves only; sprites never write depth (mode 0).
+    A layer that is not sorted or not mode 0 keeps the M1 path (all after it).
+  - **Proof** (`mods/dev-sandbox/tests/mesh-occlusion.mewtest`, fixtures `mesh-occlusion-log.txt` /
+    `mesh-occlusion-summary.json`): cube on (2,6) behind the cat on (2,5): `mesh order f=1 items=10 meshes=1 groups=1
+    unsorted=0 | d0 key=9.000 before item 4 key=8.000`; of the 30694 px the unoccluded silhouette covers (the M1 run
+    measured 30883 px on the same tile) 22966 magenta px remain = **coverage 0.748** (the cat is over the cube). Cube on
+    (1,3) in front of the cat on (1,4): **coverage 1.009** (the cube over the cat). Cube on (2,4): over the cat on (1,5),
+    under the nearer cat on (1,4), coverage 0.861.
+  - **Why not depth (`Batch_ApplyGroupState` 0xa497d0, re-read 2026-10-22):** the group flags map **bit 1 (value 2) →
+    GL_DEPTH_TEST** and **bit 3 (value 8) → glColorMask and glDepthMask together**; FrameBegin sets 0x09, so a
+    depth-tested sprite also writes depth, and the game never calls glDepthFunc (GL_LESS): the parts of one cat sit at
+    one depth and would reject each other, translucent quads would punch holes, and only MaskedRendererIso goes through
+    `Renderer_GetScreenMatrix` (m14). Phase P (perspective) still needs a real per-sprite depth.
+- **Textures and the palette (OBSERVED, T2 2026-10-22, phase M2; `fw_mesh_tex.c`).**
+  - **`Texture2D+0x8` = the GL texture name** (uint32; `glGenTextures(1, tex+8)`), `+0xc` the target. Manifest offset
+    `Texture2D_glName` → `OFF_TEX2D_GLNAME` 0x8, witness `8B 53 08 8B 4B 0C FF 15` (mov edx,[rbx+8]; mov ecx,[rbx+0xc];
+    call [glBindTexture]) at 0x140a0ada7 in `Texture2D_LoadFromFile` 0xa0ad40, harvest-verified.
+  - `App_GetTexture` 0x9bb490 called at record time uploads **synchronously**: the GL name is non-zero right after the
+    call (`gl name 40 at load` for `models/crate.png`) and the same value is read at Texture2D+8 in the replayed functor.
+  - **`App_GetTexture("palette.png")` returns the already cached `textures/palette.png`** (GL name 8, 16 x 256) — the
+    texture TacticsTest::init binds as `palettemap`; row 63 column 5 = (121, 206, 183), measured in the remapped crate.
+  - Existence check: `ResourceManager_GetBinaryResource("textures/" + name)` — the exact call and path the loader makes
+    and whose NULL it dereferences (notes-r3dE) — then a PNG header gate (8-bit RGB/RGBA, ≤ 2048 px; grey PNGs would
+    upload as GL_LUMINANCE). `FileManager_FileExists` was not needed.
+  - A draw binds unit 0 = `fw_tex`, unit 1 = `palettemap` between `fw_gl_save` / `fw_gl_restore` (both units and the
+    active unit are saved): no GL error in any frame, HUD and sprites unaffected. Runs `20261022-151053` (textured crate,
+    orange 2662 px / grey 2216 px at the anchor), `-151124` (palette row 63: 2517 px of palette.png's texel),
+    `-151149` (`models/pillar.glb` drawn, teal 2587 px; one `model-texture-missing` line); fixtures
+    `mesh-tex-{crate,palette,glb}-{log.txt,summary.json}`.
+- **Per-unit models from GON (OBSERVED, T2 2026-10-22, phase M2; `fw_unit_model.c`, `fw_gon_model_block`).**
+  - No spawn hook: the existing `TurnControl::NextTurn` hook (0x8e3c60) hands the fight's TurnControl to
+    `obj3d_engine_on_turn_control`; every combat frame the units walk `TurnControl+0x18 → Scene+0x8 →
+    EntityManager+0x20 → +0x1f90 RefArray (+0xc count, +0x10 Character**)` (the harness's `dump` walk; guarded reads,
+    ≤ 256) lists the units; each `(Character*, pool generation)` is looked at once, its entry `Character+0x240` read
+    with `fw_gon_model_block` (string or block form), and a unit with a model is registered through
+    `obj3d_engine_register`. Units present at fight start are found at the first NextTurn; a unit spawned mid-fight the
+    next frame.
+  - **Following:** the anchor is the unit's renderer Position (x, z), read per frame; it is **interpolated during a
+    move** (~0.056-tile steps over ~150 ms), so the model slides with the sprite. Run `20261022-150711-_unitmodel-unit-model`:
+    the Rat moved (8.5 0.5) → (8.5 1.5) and its magenta model patch moved (−121.5, −61) px, 0.09° off the iso
+    projection of the move (`follows`); `cmd spawn Crate` drew the vanilla Crate's `models/crate.obj`. Fixtures
+    `unit-model-log.txt` / `unit-model-summary.json`.
+  - **Facing:** `Renderer_GetScreenMatrix` m0 read per frame (MaskedRendererIso only): −1 on the spawned Rat (an enemy,
+    mirrored sprite), +1 on the Crate; m0 < 0 mirrors the model x ↔ z about its anchor. A facing *change* was not seen.
+  - The 2D sprite still draws next to the model (accompanied, not replaced).
+- **Model error codes (OBSERVED, T2 2026-10-22; design §2.6).** One table `FW_MESH_CODES` (`fw_mesh_rules.c`, 42 codes)
+  = `editor/src/core/model-codes.ts` (a test keeps them identical). A model that fails costs ONE log line per process
+  (`mesh: models/broken.glb: model-glb-header: glb version 1 is not 2 — drawing the 2D clip`, fixture
+  `mesh-model-codes-log.txt`; the failure is cached) and the fight runs on; a loaded one logs
+  `mesh: <path>: loaded N vertices, M triangles, bounds x .. h .. z ..[; <warning codes>]`.

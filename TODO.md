@@ -51,7 +51,12 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       whole where it stands among the other cats (a scissor cut would show as a straight edge)?
 
 - [ ] `3d-m1-cube` (#127) — Run `MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/crate.obj` (`npm run test:artprobe -- --mesh`, needs PR #117's in-process shots): does the magenta cube on tile (3,3) and the grey crate on (4,3) read as solid 3D blocks standing on their tiles, lit from the top-left, under the HUD?
-- [ ] `3d-occlusion` (#127) — Known wrong, for the record: with `MEWFW_MESH_PROBE=2,6` the cube (on a tile BEHIND the cats) is drawn over them. Confirm that is the only artefact before phase M2 fixes it.
+- [x] `3d-occlusion` (#127) — superseded by `3d-m2-occlusion` (phase M2 fixed it: the cube behind the cats is now under them).
+- [ ] `3d-m2-occlusion` (#135) — Shots of `mods/dev-sandbox/tests/mesh-occlusion.mewtest`: the cube behind a cat (2,6) is covered by the cat, the cube in front (1,3) covers the cat, the mixed tile (2,4) is over the farther cat and under the nearer one. Does each read right, no flicker at tie keys while units idle?
+- [ ] `3d-m2-textured-crate` (#135) — The crate on (4,3) with `mods/fw-3d/textures/models/crate.png`: an orange/grey checker crate (2x2 cells a face, top brightest), no seams?
+- [ ] `3d-m2-palette` (#135) — Palette row 63 on the crate: grey cells become mint/teal along the row (darker on shaded faces, never black), orange cells unchanged? Then: side by side with a cat of the same palette row — same family of colours?
+- [ ] `3d-m2-glb-pillar` (#135) — `models/pillar.glb` (generated): a teal pillar standing upright on (4,3), 1.2 tiles tall, lit top-left like the cube?
+- [ ] `3d-m2-unit-model` (#135) — `mods/_unitmodel`: the Rat's magenta box stands on the Rat in every shot and slides with it; drawn just in front of the Rat's own sprite; mirrored when the Rat turns (not seen in T2)?
 - [ ] Provide a test glTF per docs/data-mods.md "3D models" spec ("glTF models": glTF 2.0 .glb, triangulated, Y up, 1 unit = 1 tile, origin at the feet, ≤ a few thousand vertices, one material, no Draco/meshopt/KHR_texture_transform, external PNG ≤ 512²) — drop it in `mods/fw-3d/models/` and an agent wires it.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
@@ -518,8 +523,12 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
       **2026-10-22 evening (branch `feat/3d-meshes-m1`): M0 + M1 done, M3/M4 partly** — a cube and a mod OBJ drew in a
       fight through a submitted draw functor + the mod shader (OBSERVED, `mesh-probe-log.txt` / `mesh-model-log.txt`);
       OBJ + glTF loaders, API v6 `FW_Register3DObject` / `FW_Place3DObjectOnTile` drawn, GON `graphics.model` validated.
-      Next: **M2** sprite/mesh occlusion (a farther cube is drawn over the cats today), the per-unit GON `model` walk,
-      the palette texture + textures, a real glTF in-game.
+      **Same evening (branch `feat/3d-meshes-m2`, #135): M2 done in-game** — sprite/mesh occlusion (painter-order
+      interleave through the world camera's per-item filter), textures + palette (`App_GetTexture`, `Texture2D+8`),
+      a generated `.glb` drawn, per-unit GON `graphics.model` (string or block) following its unit, the §2.6 error codes.
+      Next: phase **P** (perspective). M-follow-ups: `hide_sprite` (replace the 2D clip, not only accompany it); an
+      exported `FW_Set3DObjectMaterial` and a cat's palette row (`CatParts+0x1b4`) for GON units; `@Name` models; a
+      .glb's embedded image; per-row splitting of multi-tile meshes; the editor's full model reader when #128 merges.
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
 - [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
 - [ ] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-22: the append route (`_Append_CatTest` frame placing a rig with EMPTY slot sprites, experiment A0) works — the game draws the cat's own parts into our frame; the 2026-10-21 crash was the visible non-empty placeholder (engine-map "CatTest and the cat animation clips").

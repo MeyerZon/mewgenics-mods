@@ -120,8 +120,9 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
   walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules, the 3D observer's rules, the
   mesh draw (4x4 maths, the C std::function, GL save/restore, shader dialect), the OBJ / glTF loaders + JSON tokenizer,
-  the 3D-object registry, the GON walker, the harness's modules; 307 checks = 14 + 6 + 14 + 13 + 11 + 15 + 22 + 11 + 25
-  + 36 + 12 + 4 + 8 + 26 + 90, `-Werror`),
+  the 3D-object registry, per-unit models, the GON walker, the glTF loader, mesh textures + palette, the sprite/mesh
+  painter order, the harness's modules; 362 checks = 14 + 6 + 14 + 13 + 11 + 15 + 22 + 11 + 30 + 41 + 16 + 8 + 10 + 8
+  + 31 + 10 + 12 + 90, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
