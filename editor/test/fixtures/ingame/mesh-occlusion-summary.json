@@ -1,0 +1,199 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "script": "mods/dev-sandbox/tests/mesh-occlusion.mewtest",
+  "note": "coverage = magenta px inside the cube silhouette box / (hull area x the 16:9 area/4); the M1 run 20261022-135331 measured the same cube on (2,6) unoccluded at 30883 px. mixed: the (2,4) cube is drawn over the cat on (1,5) (tie, key 7) and under the nearer cat on (1,4) (key 6); its expectation was front, so its verdict reads occluded-in-front: the occluder is the nearer cat, which is correct.",
+  "runs": [
+    {
+      "name": "behind",
+      "expect": "behind",
+      "probe": "2,6",
+      "run": "20261022-152022-dev-sandbox-mesh-occlusion",
+      "judgement": {
+        "verdict": "behind-occluded",
+        "pass": true,
+        "coverage": 0.7482271389013995,
+        "expectedPx": 30693.888000000003,
+        "magentaPx": 22966,
+        "shot": 1,
+        "occ": {
+          "frame": 301,
+          "tile": [
+            2,
+            6
+          ],
+          "key": 9,
+          "hull": [
+            -0.4565,
+            -0.1523,
+            -0.3043,
+            0.1342
+          ],
+          "area": 0.033305
+        }
+      },
+      "cube": {
+        "verdict": "cube",
+        "patch": {
+          "count": 22966,
+          "x0": 1135,
+          "y0": 623,
+          "x1": 1330,
+          "y1": 825
+        },
+        "distancePx": 0
+      },
+      "order": {
+        "filterPrev": "0000000000000000",
+        "interleaving": true,
+        "first": "mesh order f=1 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 4 key=8.000"
+      },
+      "shots": [
+        {
+          "label": "occ-a",
+          "path": "editor/data/ingame-runs/20261022-152022-dev-sandbox-mesh-occlusion/shot-occ-a.png",
+          "note": "gl 3440 x 1440; back buffer of hwnd 00000000004b12e2, 736/1025 samples lit, 16 ms"
+        },
+        {
+          "label": "occ-b",
+          "path": "editor/data/ingame-runs/20261022-152022-dev-sandbox-mesh-occlusion/shot-occ-b.png",
+          "note": "gl 3440 x 1440; back buffer of hwnd 00000000004b12e2, 732/1025 samples lit, 31 ms"
+        }
+      ],
+      "shotsCheck": {
+        "status": "ok",
+        "detail": "2 distinct of 2"
+      },
+      "glErrors": [],
+      "verdict": "pass",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+    },
+    {
+      "name": "front",
+      "expect": "front",
+      "probe": "1,3",
+      "run": "20261022-152131-dev-sandbox-mesh-occlusion",
+      "judgement": {
+        "verdict": "front-unoccluded",
+        "pass": true,
+        "coverage": 1.0086698693889806,
+        "expectedPx": 30693.888000000003,
+        "magentaPx": 30960,
+        "shot": 1,
+        "occ": {
+          "frame": 301,
+          "tile": [
+            1,
+            3
+          ],
+          "key": 5,
+          "hull": [
+            -0.2663,
+            -0.4904,
+            -0.1141,
+            -0.2039
+          ],
+          "area": 0.033305
+        }
+      },
+      "cube": {
+        "verdict": "cube",
+        "patch": {
+          "count": 30962,
+          "x0": 1379,
+          "y0": 867,
+          "x1": 1574,
+          "y1": 1072
+        },
+        "distancePx": 0
+      },
+      "order": {
+        "filterPrev": "0000000000000000",
+        "interleaving": true,
+        "first": "mesh order f=1 items=10 meshes=1 groups=1 unsorted=0 | d0 key=5.000 before item 9 key=0.000"
+      },
+      "shots": [
+        {
+          "label": "occ-a",
+          "path": "editor/data/ingame-runs/20261022-152131-dev-sandbox-mesh-occlusion/shot-occ-a.png",
+          "note": "gl 3440 x 1440; back buffer of hwnd 0000000005160712, 735/1025 samples lit, 15 ms"
+        },
+        {
+          "label": "occ-b",
+          "path": "editor/data/ingame-runs/20261022-152131-dev-sandbox-mesh-occlusion/shot-occ-b.png",
+          "note": "gl 3440 x 1440; back buffer of hwnd 0000000005160712, 734/1025 samples lit, 16 ms"
+        }
+      ],
+      "shotsCheck": {
+        "status": "ok",
+        "detail": "2 distinct of 2"
+      },
+      "glErrors": [],
+      "verdict": "pass",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+    },
+    {
+      "name": "mixed",
+      "expect": "front",
+      "probe": "2,4",
+      "run": "20261022-152057-dev-sandbox-mesh-occlusion",
+      "judgement": {
+        "verdict": "occluded-in-front",
+        "pass": false,
+        "coverage": 0.8605296272665098,
+        "expectedPx": 30693.888000000003,
+        "magentaPx": 26413,
+        "shot": 1,
+        "occ": {
+          "frame": 301,
+          "tile": [
+            2,
+            4
+          ],
+          "key": 7,
+          "hull": [
+            -0.2663,
+            -0.3214,
+            -0.1141,
+            -0.0349
+          ],
+          "area": 0.033305
+        }
+      },
+      "cube": {
+        "verdict": "cube",
+        "patch": {
+          "count": 28184,
+          "x0": 1379,
+          "y0": 745,
+          "x1": 1574,
+          "y1": 950
+        },
+        "distancePx": 0
+      },
+      "order": {
+        "filterPrev": "0000000000000000",
+        "interleaving": true,
+        "first": "mesh order f=1 items=10 meshes=1 groups=1 unsorted=0 | d0 key=7.000 before item 7 key=6.000"
+      },
+      "shots": [
+        {
+          "label": "occ-a",
+          "path": "editor/data/ingame-runs/20261022-152057-dev-sandbox-mesh-occlusion/shot-occ-a.png",
+          "note": "gl 3440 x 1440; back buffer of hwnd 0000000000f90c16, 734/1025 samples lit, 16 ms"
+        },
+        {
+          "label": "occ-b",
+          "path": "editor/data/ingame-runs/20261022-152057-dev-sandbox-mesh-occlusion/shot-occ-b.png",
+          "note": "gl 3440 x 1440; back buffer of hwnd 0000000000f90c16, 729/1025 samples lit, 16 ms"
+        }
+      ],
+      "shotsCheck": {
+        "status": "ok",
+        "detail": "2 distinct of 2"
+      },
+      "glErrors": [],
+      "verdict": "pass",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+    }
+  ]
+}
