@@ -269,10 +269,15 @@ Things no test on this machine can decide. Tick them off here; each links to whe
      `vanilla.mewtest` / `golden.mewtest` play the same seeded fight and pin `.merge` (Rat → "Golden Rat", faction
      allies), `.patch` `faction.overwrite` (Pooter → allies) and `.append` (a new spawnable `GoldenRat`) through the
      units event; fixtures `result-golden-{vanilla,merge}.jsonl`; the editor's previews of the same overlays at T0
-     (`run-tests.ts` 4d, incl. `speed.add 10` → 15). Not observable in-game yet: numeric `.add`/`.multiply` — the
-     units event has no stat/HP field. Follow-up (agent): decompile the `1hp` / `999` console lambdas registered by
-     `TacticsTest::init` (string xref, never the whole init) for `OFF_CH_HP`, add `hp` to `MtUnit`, then pin
-     `properties.health.multiply` the same way.
+     (`run-tests.ts` 4d, incl. `speed.add 10` → 15).
+   - [x] numeric `.add` / `.multiply` in-game (2026-10-22): the `1hp` lambda gave `OFF_CH_HP` (+0x4b0) and
+     `Character::init` the stats (+0x5a0..) and the merged entry pointer (+0x240, `docs/engine-map.md` "GON at
+     runtime"); the harness's units event carries `hp` / `shield` / the seven stats / `namekey`, and `expect gon
+     <unit> <path> <op> <value>` walks the merged entry itself. `tests/numeric.mewtest` vs `numeric-vanilla.mewtest`
+     pin `health.multiply 2` → `properties.health` 12 / `hp` 12 (vanilla 6) and `speed.add 10` → `stats.speed` 15 /
+     `speed` 15 (vanilla 5); fixtures `result-golden-numeric{,-vanilla}.jsonl`. Found on the way: `Character+0x248` is
+     the `graphics.name` loc key, not the entry name (the entry name's home is still unknown). Target 8 is complete;
+     `.append` on an existing key (duplicate children) stays untested in-game.
 9. [x] **`npm test` without `.extracted/`** (done 2026-10-19, leftovers PR 3: round-trip, real-overlay, validator and the two
    base-data MCP calls skip with a logged `(skipped: …)`; a nested run with `MEWGENICS_EXTRACTED_DATA` = empty dir is
    itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged

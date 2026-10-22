@@ -459,6 +459,38 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_touchedPassives")!.value, "0xe50");
     for (const e of offs) assert(!!(e.struct && e.exposure.some((x) => "macro" in x)), `${e.name} has struct + macro`);
   });
+  test("25143593.json: GON at runtime (2026-10-22) — HP / shield / stats / base health / the unit's GON entry and name key on Character, the GonObject node layout, every one witnessed in a function that has a .pdata body", () => {
+    const m = loadManifest(realPath);
+    const macro = (n: string) => (entry(m, n)!.exposure[0] as MacroExposure).macro;
+    const witness = (n: string) => entry(m, n)!.anchors.witness!;
+    // Character: current HP is the one field a console lambda writes (1hp); the rest are Character::init stores
+    eq(entry(m, "Character_hp")!.value, "0x4b0"); eq(macro("Character_hp"), "OFF_CH_HP"); eq(witness("Character_hp").function, "TacticsTest_1hp_DoCall");
+    eq(entry(m, "Character_shield")!.value, "0x4b4"); eq(macro("Character_shield"), "OFF_CH_SHIELD"); eq(witness("Character_shield").function, "TacticsTest_1hp_DoCall");
+    eq(entry(m, "Character_divineShield")!.value, "0x4b8"); eq(macro("Character_divineShield"), "OFF_CH_DIVINE_SHIELD");
+    eq(entry(m, "Character_stats")!.value, "0x5a0"); eq(macro("Character_stats"), "OFF_CH_STATS"); eq(entry(m, "Character_stats")!.ctype, "int32[7]"); eq(witness("Character_stats").function, "Character_init");
+    eq(entry(m, "Character_baseHealth")!.value, "0x5e8"); eq(macro("Character_baseHealth"), "OFF_CH_BASE_HEALTH");
+    eq(entry(m, "Character_gonEntry")!.value, "0x240"); eq(macro("Character_gonEntry"), "OFF_CH_GON_ENTRY"); eq(entry(m, "Character_gonEntry")!.ctype, "const GonObject*");
+    eq(entry(m, "Character_nameKey")!.value, "0x248"); eq(macro("Character_nameKey"), "OFF_CH_NAME_KEY");
+    // GonObject (0xb0 bytes): what the harness's walker reads instead of calling the game's getters
+    const node: [string, string, string][] = [
+      ["GonObject_children", "0x38", "OFF_GON_CHILDREN"], ["GonObject_childrenEnd", "0x40", "OFF_GON_CHILDREN_END"], ["GonObject_int", "0x50", "OFF_GON_INT"],
+      ["GonObject_double", "0x58", "OFF_GON_DOUBLE"], ["GonObject_bool", "0x60", "OFF_GON_BOOL"], ["GonObject_text", "0x68", "OFF_GON_TEXT"],
+      ["GonObject_name", "0x88", "OFF_GON_NAME"], ["GonObject_type", "0xa8", "OFF_GON_TYPE"],
+    ];
+    for (const [n, v, mac] of node) { eq(entry(m, n)!.kind, "offset", n); eq(entry(m, n)!.value, v, n); eq(entry(m, n)!.struct, "GonObject", n); eq(macro(n), mac); }
+    const size = entry(m, "GonObject_size")!;
+    eq(size.kind, "constant"); eq(size.value, "0xb0"); eq(macro("GonObject_size"), "GON_NODE_SIZE");
+    assert(!!(size.anchors.witness && size.anchors.witness.pattern && Number.isInteger(size.anchors.witness.dispAt)), "the stride is a displacement witness (add rbx,0xb0 in child_by_name)");
+    // the witnesses are function entries with .pdata bodies (the leaf getters IntOr/NumberOr/BoolOr/Exists have none and are not entries)
+    for (const fn of ["Character_init", "TacticsTest_1hp_DoCall", "GonObject_child_by_name", "GonObject_Int", "GonObject_Number", "GonObject_Bool", "GonObject_StringRef"]) {
+      const f = entry(m, fn);
+      assert(!!(f && f.kind === "function" && f.signature && f.signature.pattern), `${fn} is a signed function entry`);
+    }
+    eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
+    for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
+    const offs = m.entries.filter((e) => e.kind === "offset");
+    eq(offs.length, 55, "40 + 7 Character + 8 GonObject");
+  });
   if (exe) {
     const m = loadManifest(realPath);
     const p = parsePe(exe);
@@ -767,12 +799,25 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       let wild = 0;
       let n = 0;
       let cat = "";
+      // Twins whose only distinguishing bytes are RIP-relative displacements: the hardened generator (2026-10-22)
+      // masks those and finds no window, but their manifest patterns (made before the hardening) still scan unique
+      // at their RVAs on this build; a new build needs a hand-made seed (docs/binding-port.md "Known limits").
+      const LEGACY_WINDOWS = new Set(["GonObject_Int", "GonObject_Number"]);
+      let legacy = 0;
       for (const e of m.entries) {
         if (e.kind !== "function" || !e.signature) continue;
         n++;
         const rva = parseInt(e.rva!, 16);
         const r = makeSignature(p, exe, rva, { minLen: 12, cap: m.sigCap });
-        if (!r.ok) { if (e.name === "Status_GetCategory") cat = r.reason; else bad.push(`${e.name}: ${r.reason}`); continue; }
+        if (!r.ok) {
+          if (e.name === "Status_GetCategory") cat = r.reason;
+          else if (LEGACY_WINDOWS.has(e.name)) {
+            const own = scanExec(p, exe, parsePattern(e.signature.pattern, m.sigCap));
+            if (own.count !== 1 || own.hits[0] + e.signature.offset !== rva) bad.push(`${e.name}: legacy pattern ${own.count} hits`);
+            else legacy++;
+          } else bad.push(`${e.name}: ${r.reason}`);
+          continue;
+        }
         if (r.signature!.wildcards.length) wild++;
         const hit = scanExec(p, exe, parsePattern(r.signature!.pattern, m.sigCap));
         if (hit.count !== 1 || hit.hits[0] + r.signature!.offset !== rva) bad.push(`${e.name}: ${hit.count} hits`);
@@ -782,7 +827,8 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       assert(bad.length === 0, bad.join("; "));
       assert(n >= 34, `functions with signatures: ${n}`);
       assert(wild >= 5, `only ${wild} of ${n} signatures needed wildcards (6 on build 25143593)`);
-      console.log(`      Status_GetCategory: ${cat}; ${wild}/${n} signatures carry wildcards`);
+      eq(legacy, LEGACY_WINDOWS.size, "both legacy windows still scan unique at their RVAs");
+      console.log(`      Status_GetCategory: ${cat}; ${wild}/${n} signatures carry wildcards; ${legacy} legacy windows verified`);
     });
   }
   // ---- check.ts: is the installed exe a known build, and do the signatures still hold? ----

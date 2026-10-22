@@ -200,7 +200,16 @@ units event with `expect unit`. OBSERVED: `enemies.gon.merge` (`Rat { graphics {
 { faction allies } }`) → the spawned Rat dumps as `Golden Rat`, faction 1; `enemies.gon.patch` (`Pooter { properties
 { faction.overwrite allies } stats { speed.add 10 } }`) → Pooter faction 1; `enemies.gon.append` (a new entry
 `GoldenRat { variant_of Rat … }`) → `spawn GoldenRat` works and it dumps as `Appended Rat`, faction 2 (the vanilla
-enemies value); `text/combined.csv.append` rows (no header line in an append file) supply both names. What the dump
-cannot see: `.add` / `.multiply` on stats (`speed.add 10` is pinned at T0 only, against the editor's engine, by
-`run-tests.ts` 4d) — the units event carries no stat or HP field; the follow-up is in `TODO.md` target 8. Fixtures:
+enemies value); `text/combined.csv.append` rows (no header line in an append file) supply both names. Fixtures:
 `editor/test/fixtures/ingame/result-golden-{vanilla,merge}.jsonl`.
+
+The numeric policies (2026-10-22, `tests/numeric.mewtest` / `tests/numeric-vanilla.mewtest`): the harness's `expect
+gon` reads the merged entry the game holds for a spawned unit (`Character+0x240`, `docs/ingame-testing.md`), so
+`.add` / `.multiply` are pinned against the game itself. OBSERVED on build 25143593 (`enemies.gon.patch`: `Pooter {
+properties { faction.overwrite allies  health.multiply 2 } stats { speed.add 10 } }`): `properties.health` = number 12
+(int 12, double 12, text "12"; vanilla 6/6/"6"), `stats.speed` = number 15 (vanilla 5) — PatchMerge rewrites the int,
+the double **and** the token text of the node; `properties.faction` = string "allies"; and what `Character::init` made
+of it in the units event: `hp` 12 (vanilla 6: current HP right after a spawn is `properties.health`), `speed` 15,
+`constitution` 5. The `.merge`d Rat keeps `health` 5 / `hp` 5 / `strength` 4 while its `namekey` is `GOLDEN_RAT_NAME`.
+The editor's preview agrees (`run-tests.ts` 4d: speed 15, health 12). Fixtures:
+`editor/test/fixtures/ingame/result-golden-numeric{,-vanilla}.jsonl`.

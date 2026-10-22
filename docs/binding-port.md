@@ -12,12 +12,12 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 | Pinned fact | Count on 25143593 | Where it is used |
 |---|---|---|
 | PE identity (TimeDateStamp + SizeOfImage) | 1 | `fw_identify_build` |
-| Byte signatures of hooked/called functions | 48 signed function entries (25 of the 28 FwSymbol + reference functions); 3 FwSymbol entries ship as `NULL` pattern + raw RVA | `resolve_symbols` |
+| Byte signatures of hooked/called functions | 55 signed function entries (25 of the 28 FwSymbol + 30 reference functions, 7 of them, since 2026-10-22, only as witness hosts for the Character/GonObject offsets); 3 FwSymbol entries ship as `NULL` pattern + raw RVA | `resolve_symbols` |
 | Raw RVAs of the 13 status-name lookups (`FW_LK`) | 13 (none has a signature worth having: twins differ only in `__LINE__` immediates) | `status_engine.c` |
 | Data RVAs: App global, SDL3 DYNAPI jump table + 8 slots, default status source | 11 | `BuildInfo.rva_data`, `FW_GetData` |
 | Vftables (LuckUp, Status) and the LuckUp type id | 3 | vtable cloning, sanity check |
 | Vtable slot indices / count | 6 | `offsets.h` |
-| Struct offsets | 40 | `offsets.h` (`status_engine.c`, `mewtest.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG) |
+| Struct offsets | 55 (+ `GON_NODE_SIZE`) | `offsets.h` (`status_engine.c`, `mewtest.c`, `mt_gon.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG), +15 on 2026-10-22 (Character HP/stats/GON entry, the GonObject node layout — `docs/engine-map.md` "GON at runtime") |
 
 ## The manifest: `bindings/<steamBuildId>.json`
 
@@ -226,6 +226,11 @@ What the run suggested for the ladder, and what became of it:
   2026-10-20); the port still reports a `proposed` offset instead of applying it.
 - The caller-ordinal-only limit is closed (see above); what remains without a second rung is the callee-set idea,
   not needed by any entry today.
+- **`GonObject_Int` / `GonObject_Number` are twins** (the witness hosts of `GonObject_int` / `GonObject_double`): their
+  bodies differ only in RIP-relative displacements, which the hardened generator masks, so `make-signature` finds no
+  window for them. Their manifest patterns (made before the hardening) still scan unique at their RVAs on this build
+  (the T1 regeneration test verifies exactly that for these two names), but on a new build they have no rung — they
+  port by a hand-made seed, and the two offsets they witness follow them.
 - A changed arity of the 13 lookups (shapes A–E), a compiler/CRT change (`MsvcString` layout), or a changed
   vtable layout cannot be ported mechanically.
 - The DLL still resolves functions by signature at load time. Entries that only have anchors (`signature: null`:

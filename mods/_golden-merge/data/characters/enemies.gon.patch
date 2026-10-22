@@ -1,9 +1,11 @@
 // .patch = GON PatchMerge: a per-field suffix picks the policy (.overwrite .append .merge .add .multiply).
-// faction.overwrite is observable through the dump; speed.add is not (no stat field in the units event) and is
-// pinned at T0 against the editor's engine only — see docs/data-mods.md "Test-only overlays".
+// faction.overwrite is observable through the dump's faction; the two numeric policies through the harness's
+// `expect gon` (the merged entry the game holds at Character+0x240: health 6 -> 12, speed 5 -> 15) and the units
+// event's hp / speed (tests/numeric.mewtest vs tests/numeric-vanilla.mewtest; docs/data-mods.md "Test-only overlays").
 Pooter {
     properties {
         faction.overwrite allies
+        health.multiply 2
     }
     stats {
         speed.add 10
