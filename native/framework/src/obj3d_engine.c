@@ -24,6 +24,9 @@
 #include "fw_unit_face.h"     /* M3: the model turns with Character::Face */
 #include "fw_glow_rules.h"    /* fw_glow_renderer */
 #include "fw_obs3d_rules.h"   /* fw_obs3d_renderer_position / _position_xz / _is_masked_renderer_iso */
+#include "fw_model_names.h"   /* M3 "@Name": data/models.gon */
+#include "fw_resolve.h"       /* fw_resolve_data_addr */
+#include "fw_vtable.h"        /* fw_msvc_init: the by-value std::string Gon_LoadFile destroys */
 
 static Fw3dRegistry g_reg;
 static int g_init;
@@ -128,10 +131,43 @@ static int g_ntrack;
 void obj3d_engine_on_turn_control(void *turnControl) { g_unitTc = turnControl; }
 
 /* obj3d_engine_on_fight's new-scene branch: a TurnControl of the old fight must never be walked again */
+/* ---- named models (3D phase M3 "@Name", fw_model_names.c): data/models.gon through the game's own GON loader ----
+ * Gon_LoadFile(ResourceMap, "data/models.gon", 0, 1) is what SpawnDatabase / appmain / MewsicController call for their
+ * data files: the pack copy or a mod path's plain file, then every mod's .append / .merge / .patch applied in mod-path
+ * order (FileManager_ResolveWithOverlays 0x9a09f0 -> GonResource::combined_decode 0x9a64a0); NULL when no mod ships
+ * the base (mods/fw-3d does). The resource is cached by the game; we read it lazily, on the first "@" reference of a
+ * fight, and copy the entries out (fw_model_names_load through the guarded reader). */
+typedef void *(*fn_GonLoadFile)(void *resourceMap, MsvcString *path, char reload, char flag);
+static FwModelNames g_names;
+static int g_namesLoaded;            /* 0 not yet this fight */
+static FwModelNamesLogged g_namesLogged;   /* one error line per reference per process */
+
+static const FwModelNames *model_names(void) {
+    if (g_namesLoaded) return &g_names;
+    g_namesLoaded = 1;
+    fw_model_names_clear(&g_names);
+    void *map = (void *)fw_resolve_data_addr(1, g_build, g_base, FW_DATA_ResourceMap);
+    fn_GonLoadFile load = (fn_GonLoadFile)g_sym[FW_SYM_Gon_LoadFile];
+    MsvcString s;
+    if (!map || !load || !g_sym[FW_SYM_string_Allocate] || !fw_msvc_init(&s, FW_MODEL_REGISTRY_FILE, (FwStringAlloc)g_sym[FW_SYM_string_Allocate])) {
+        fw_log("model names: Gon_LoadFile / ResourceMap not resolved on this build: no \"@Name\" model resolves");
+        g_names.loaded = 1;
+        return &g_names;
+    }
+    void *res = load(map, &s, 0, 1);   /* destroys s */
+    const void *root = res ? (const char *)res + OFF_GONRES_OBJECT : NULL;
+    fw_model_names_load(guarded_read, NULL, root, &g_names);
+    char line[1024];
+    fw_model_names_fmt_loaded(line, sizeof line, &g_names, root == NULL);
+    fw_log("%s (GonResource %p)", line, res);
+    return &g_names;
+}
+
 static void units_new_fight(void) {
     g_unitTc = NULL;
     fw_unit_seen_clear(&g_seen);
     g_ntrack = 0;
+    g_namesLoaded = 0;   /* a new fight reads the (cached) registry again */
 }
 
 static uint64_t epoch_ms(void) {
@@ -160,6 +196,20 @@ static void discover(void *tc) {
         char name[48];
         if (fw_gon_node_name(guarded_read, NULL, entry, name, sizeof name) != 1) snprintf(name, sizeof name, "?");
         char line[512];
+        if (m.file[0] == '@') {   /* M3: a named model of data/models.gon; the unit's keys override the entry's */
+            FwGonModel unit = m;
+            const FwModelName *hit = NULL;
+            const FwModelNames *names = model_names();
+            int rc = fw_model_names_resolve(names, &unit, &m, &hit);
+            if (rc != FW_MODEL_REF_OK) {   /* model-name-unknown / model-registry-entry: the unit keeps its 2D clip */
+                if (fw_model_names_log_first(&g_namesLogged, unit.file)) {
+                    fw_model_names_fmt_error(line, sizeof line, unit.file, rc, name, names, hit);
+                    fw_log("%s", line);
+                }
+                continue;
+            }
+            fw_log("unit model: %s: %s -> %s entry %s", name, unit.file, FW_MODEL_REGISTRY_FILE, hit ? hit->name : "?");
+        }
         fw_unit_fmt_model(line, sizeof line, name, ch, &m);
         fw_log("%s", line);
         if (m.file[0] != '@' && !fw_obj3d_model_path_ok(m.file)) {

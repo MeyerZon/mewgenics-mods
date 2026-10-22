@@ -4,7 +4,7 @@
 // equals this list entry for entry (code, severity, order), so the two cannot drift. Add a code in BOTH places.
 // Severity: "error" = the model is refused and the unit keeps drawing its 2D movieclip; "warning" = it loads but
 // something is dropped or will look wrong; "info" = the engine fills something in.
-// Not every code is raised by both halves yet: model-unregistered is editor-only, the texture / budget codes belong
+// Not every code is raised by both halves yet: model-unregistered is retired (M3 raises model-name-unknown on both sides), the texture / budget codes belong
 // to later phases, and the editor's reader is header-level until PR #128's full reader lands (model-check.ts).
 
 export type ModelCodeSeverity = "error" | "warning" | "info";
@@ -13,7 +13,9 @@ export interface ModelCode { readonly code: string; readonly severity: ModelCode
 export const MODEL_CODES: readonly ModelCode[] = [
   { code: "model-path-invalid", severity: "error", meaning: "graphics.model is not a models/<name>.obj|.gltf|.glb path inside the mod (or not a string)" },
   { code: "model-file-missing", severity: "error", meaning: "the model file the path names is not in the mod folder (or is empty)" },
-  { code: "model-unregistered", severity: "error", meaning: "an \"@Name\" model no native mod registers (editor/registered-names.json, kind model)" },
+  { code: "model-unregistered", severity: "error", meaning: "(M2; not raised since M3, see model-name-unknown) an \"@Name\" model no native mod registers" },
+  { code: "model-name-unknown", severity: "error", meaning: "an \"@Name\" model that no data/models.gon entry (this mod, mods/fw-3d, any mod on the mod path in-game) and no native registration declares" },
+  { code: "model-registry-entry", severity: "error", meaning: "a data/models.gon entry that is not a model: no string file, an \"@Name\" chain, not a models/<...>.obj|.gltf|.glb path, or neither a string nor a block" },
   { code: "model-parse-error", severity: "error", meaning: "OBJ syntax (a bad face, number or statement) or glTF JSON that does not parse" },
   { code: "model-extension", severity: "error", meaning: "the file is not .obj, .gltf or .glb" },
   { code: "model-glb-header", severity: "error", meaning: "the .glb container is broken: no glTF magic, version not 2, wrong length, first chunk not JSON, chunk not 4-byte aligned" },

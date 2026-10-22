@@ -30,6 +30,7 @@ import { resolutionSets } from "../names.ts";
 import { MODEL_KEY, MODEL_PARENT, modelPathProblem, isRegisteredModelRef } from "../model3d.ts";
 import { checkModelBytes } from "../model-check.ts";
 import { modelCodeInfo } from "../model-codes.ts";
+import { MODEL_REGISTRY_FILE, MODEL_REGISTRY_BASE_MOD, baseRegistryNames } from "../model-registry.ts";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.ts";
 import { ReportBuilder } from "./result.ts";
 import { identifyExe } from "../bindings/check.ts";
@@ -57,6 +58,7 @@ function categoryForPath(baseName: string): string | null {
   const p = baseName.replace(/\\/g, "/");
   if (p === "data/keyword_tooltips.gon") return "statuses";
   if (p === "data/difficulties.gon") return "difficulties";
+  if (p === MODEL_REGISTRY_FILE) return "models";   // named models (M3 "@Name"); not a pack file: mods/fw-3d ships the base
   if (p.startsWith("data/abilities/")) return "abilities";
   if (p.startsWith("data/ability_templates/")) return "ability_templates";
   if (p.startsWith("data/passives/")) return "passives";
@@ -231,6 +233,8 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     models: opts.registeredModels ? new Set(opts.registeredModels) : undefined,
   });
   const local = modLocalNames(overlays);
+  // "@Name" resolves against this mod's data/models.gon entries, the base registry (mods/fw-3d) and native registrations
+  const namedModels = new Set([...(local.byCategory.get("models") ?? []), ...(opts.namedModels ? opts.namedModels : baseRegistryNames())]);
   const loc = loadLocalization(root);
   const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
   if (!sets.componentListKnown) {
@@ -260,7 +264,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
         rb.warn("whole-file-replace", `${o.relPath} replaces the game's own ${name} for every material that loads it`, fileLoc);
       }
     } else if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, modDir);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, modDir, namedModels);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -281,6 +285,7 @@ function validateGonOverlay(
   nativeBuild: NativeBuild | null,
   dataRoot: string,
   modDir: string,
+  namedModels: Set<string> = new Set(),
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
   const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
@@ -295,7 +300,10 @@ function validateGonOverlay(
     }
     return;
   }
-  if (o.mode === "replace") {
+  if (o.mode === "replace" && o.category === "models") {
+    // the base registry is fw-3d's; a plain copy anywhere else replaces it (and every entry merged before this mod)
+    if (modName !== MODEL_REGISTRY_BASE_MOD) rb.warn("whole-file-replace", `${o.relPath} replaces the base registry mods/${MODEL_REGISTRY_BASE_MOD} ships (and every entry merged before this mod); declare models in ${MODEL_REGISTRY_FILE}.append`, { file });
+  } else if (o.mode === "replace") {
     rb.warn("whole-file-replace", `${o.relPath} replaces the whole base file; prefer .append/.merge/.patch`, { file });
   }
   const overlay = toValue(root);
@@ -417,12 +425,39 @@ function validateGonOverlay(
     checkModelFile(value.raw, at);
   };
 
-  const checkModelBlock = (block: VObject, at: SourceLocation): void => {
+  /** data/models.gon (M3 "@Name"): every entry is a model value (string or block) whose file is a models/ path — the
+   *  DLL refuses the same entries (fw_model_names.c FW_MODEL_ENTRY_*) with the same code */
+  const checkRegistry = (reg: VObject): void => {
+    for (const { key, value } of reg.entries) {
+      const name = o.mode === "patch" ? parsePolicy(key).name : key;
+      const at: SourceLocation = { file, path: name };
+      if (value.t === "obj") checkModelBlock(value, at, true);
+      else if (value.t === "str" && value.type === "string") checkRegistryFile(value.raw, at);
+      else rb.error("model-registry-entry", `${MODEL_REGISTRY_FILE} entry ${name} is neither a model path nor a model block: write ${name} "models/<name>.obj" or ${name} { file "models/<name>.obj" ... }`, at);
+    }
+  };
+  const checkRegistryFile = (raw: string, at: SourceLocation): void => {
+    if (isRegisteredModelRef(raw)) {
+      rb.error("model-registry-entry", `${MODEL_REGISTRY_FILE} entry names another @Name (${raw}); an entry must name a models/<...>.obj|.gltf|.glb file`, at);
+      return;
+    }
+    const why = modelPathProblem(raw);
+    if (why) {
+      rb.error("model-registry-entry", `${MODEL_REGISTRY_FILE} entry: "${raw}" ${why}`, at);
+      return;
+    }
+    checkModelFile(raw, at);
+  };
+
+  const checkModelBlock = (block: VObject, at: SourceLocation, registry = false): void => {
     const here = (k: string): SourceLocation => ({ file: at.file, path: `${at.path}.${k}` });
     const num = (v: VNode): number | null => (v.t === "str" && v.type === "number" && v.num !== null ? v.num : null);
     const nums = (v: VNode): number[] | null => (v.t === "arr" && v.items.every((it) => num(it) !== null) ? v.items.map((it) => num(it)!) : null);
     const fileEntry = block.entries.find((e) => e.key === "file");
-    if (!fileEntry || fileEntry.value.t !== "str" || fileEntry.value.type !== "string") {
+    if (registry && (!fileEntry || fileEntry.value.t !== "str" || fileEntry.value.type !== "string")) {
+      rb.error("model-registry-entry", `${MODEL_REGISTRY_FILE} entry ${at.path} is a block without a string file; nothing is drawn for it`, fileEntry ? here("file") : at);
+    } else if (registry) checkRegistryFile((fileEntry!.value as { raw: string }).raw, here("file"));
+    else if (!fileEntry || fileEntry.value.t !== "str" || fileEntry.value.type !== "string") {
       rb.error("model-path-invalid", `a graphics.model block needs file "models/<name>.obj" (or "@RegisteredModel"); without it no model is drawn`, fileEntry ? here("file") : at);
     } else checkModelFile(fileEntry.value.raw, here("file"));
     for (const { key, value: v } of block.entries) {
@@ -476,8 +511,8 @@ function validateGonOverlay(
 
   const checkModelFile = (raw: string, at: SourceLocation): void => {
     if (isRegisteredModelRef(raw)) {
-      if (!sets.models.has(raw.slice(1))) {
-        rb.error("model-unregistered", `model "${raw}" is not a native-registered model (editor/registered-names.json, kind "model")`, at);
+      if (!sets.models.has(raw.slice(1)) && !namedModels.has(raw.slice(1))) {
+        rb.error("model-name-unknown", `model "${raw}" is not declared: no ${MODEL_REGISTRY_FILE} entry named ${raw.slice(1)} in this mod or mods/${MODEL_REGISTRY_BASE_MOD}, and no native mod registers it (editor/registered-names.json, kind "model")`, at);
       }
       return;
     }
@@ -522,6 +557,10 @@ function validateGonOverlay(
     }
   };
 
+  if (o.category === "models") {
+    checkRegistry(overlay);
+    return;   // no pack base to check targets against: fw-3d's file is the base
+  }
   for (const e of overlay.entries) handleField(e.key, e.value, []);
 
   // ---- Literal suffixes outside .patch ------------------------------------------

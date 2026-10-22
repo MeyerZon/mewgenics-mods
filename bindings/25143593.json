@@ -2747,6 +2747,11 @@
             "target": "0x52a40"
           },
           {
+            "ordinal": 3,
+            "name": "Gon_LoadFile",
+            "target": "0x611a0"
+          },
+          {
             "ordinal": 7,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
@@ -5252,6 +5257,16 @@
             "ordinal": 305,
             "name": "ShaderManager_GetOrCreateMaterial",
             "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 6412,
+            "name": "Gon_LoadFile",
+            "target": "0x611a0"
+          },
+          {
+            "ordinal": 6432,
+            "name": "Gon_LoadFile",
+            "target": "0x611a0"
           }
         ],
         "cfgLite": {
@@ -11431,6 +11446,152 @@
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
         ".analysis/decompiled/Scene_SubmitDraw_0x989be0.c",
         ".analysis/decompiled/Layer_Draw_0x9896f0.c"
+      ]
+    },
+    {
+      "name": "Gon_LoadFile",
+      "kind": "function",
+      "rva": "0x611a0",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC E0 00 00 00 45",
+        "exactLen": 34,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "GonResource* (ResourceMap* this = the global at FwData ResourceMap, std::string* path by value (callee destroys), bool reload = 0, bool = 1): the resource \"gon\"+sep+path, cached in the map; a path with .append/.merge/.patch overlays on the mod path goes through FileManager_ResolveWithOverlays 0x9a09f0 and GonResource::combined_decode 0x9a64a0 (every mod's overlay applied in mod-path order), else FileManager_GetFile; NULL when the file is absent (callers test it: MewApplication_load_font_remap 0x746a80). The merged root GonObject is at res+0x28 (OFF_GONRES_OBJECT). The loader of SpawnDatabase_LoadGonDir, MewsicController_init, appmain's data files.",
+        "callees": [
+          {
+            "ordinal": 5,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 9,
+            "name": "FileManager_ResolveWithOverlays",
+            "target": "0x9a09f0"
+          },
+          {
+            "ordinal": 15,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 19,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 20,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 24,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 26,
+            "name": "FileManager_GetFile",
+            "target": "0x99ff50"
+          },
+          {
+            "ordinal": 31,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 34,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 35,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1503,
+          "calls": 42,
+          "ripRefs": 3,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56"
+      },
+      "consumers": [
+        "native/framework/src/obj3d_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Gon_LoadFile",
+          "index": 44
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Gon_LoadFile_0x611a0.c",
+        ".analysis/decompiled/MewApplication_load_font_remap_0x746a80.c",
+        ".analysis/notes-catC.md",
+        ".analysis/notes-loc.md"
+      ]
+    },
+    {
+      "name": "ResourceMap",
+      "kind": "data",
+      "rva": "0x13c61e0",
+      "anchors": {
+        "witness": {
+          "function": "ResourceManager_GetBinaryResource",
+          "needsHarvest": false,
+          "ripRefOrdinal": 6,
+          "kind": "rip-lea"
+        },
+        "note": "the resource manager every Gon_LoadFile caller passes as `this` (lea rcx,[rip+0x13c61e0]); +0x48 its mutex (GetBinaryResource locks 0x13c6228 = this+0x48)"
+      },
+      "consumers": [
+        "native/framework/src/obj3d_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_ResourceMap",
+          "index": 19
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/Gon_LoadFile_0x611a0.c",
+        ".analysis/decompiled/ResourceManager_GetBinaryResource_0x973750.c",
+        ".analysis/decompiled/SpawnDatabase_LoadGonDir_0x7c0cb0.c"
+      ]
+    },
+    {
+      "name": "GonResource_object",
+      "kind": "offset",
+      "struct": "GonResource",
+      "value": "0x28",
+      "ctype": "GonObject: the file's root object after every overlay was applied (what Gon_LoadFile's callers read)",
+      "anchors": {
+        "witness": {
+          "function": "ApplicationBase_appmain",
+          "pattern": "48 8D 48 28 48 89 4E 08",
+          "dispAt": 3,
+          "dispSize": 1
+        },
+        "note": "lea rcx,[rax+0x28] right after call Gon_LoadFile (0x1409b9a31); also CatPartsRecord_reset 0x737536 (lea rdi,[rax+0x28]) and GonResource::combined_decode applying overlays to res+0x28 (notes-loc)"
+      },
+      "consumers": [
+        "native/framework/src/obj3d_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GONRES_OBJECT"
+        }
+      ],
+      "evidence": [
+        ".analysis/decompiled/ApplicationBase_appmain_0x9b9970.c",
+        ".analysis/decompiled/CatPartsRecord_reset_0x7374c0.c",
+        ".analysis/notes-loc.md"
       ]
     },
     {

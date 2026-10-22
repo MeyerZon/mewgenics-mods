@@ -556,7 +556,8 @@ TEST(model_path_rejects_everything_else) {
 /* ---------------- model codes (design §2.6): ONE table, every refusal names its code ---------------- */
 TEST(codes_table_is_complete_unique_and_well_formed) {
     static const char *const want[] = {   /* §2.6, plus the editor-side path / file / registry codes */
-        "model-path-invalid", "model-file-missing", "model-unregistered", "model-parse-error", "model-extension",
+        "model-path-invalid", "model-file-missing", "model-unregistered", "model-name-unknown", "model-registry-entry",   /* + M3 "@Name" */
+        "model-parse-error", "model-extension",
         "model-glb-header", "model-gltf-version", "model-extension-required", "model-uri-unsupported",
         "model-buffer-missing", "model-buffer-range", "model-accessor-invalid", "model-sparse-unsupported",
         "model-primitive-mode", "model-attribute-missing", "model-attribute-format", "model-index-range",

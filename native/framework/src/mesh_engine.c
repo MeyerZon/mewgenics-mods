@@ -8,8 +8,8 @@
  *    right through the API v6 registry (obj3d_engine_place, the same path FW_Place3DObjectOnTile takes);
  *  - every object of the API v6 registry (obj3d_engine.c: FW_Register3DObject on a unit, FW_Place3DObjectOnTile):
  *    its `model` is a mod path (models/...), loaded once through ResourceManager_GetBinaryResource (0x973750: -modpaths
- *    first, then the gpak) and parsed by fw_mesh_load_bytes (OBJ or glTF, the game's left-handed axes); "@Name" models
- *    (native-registered) are not resolved yet.
+ *    first, then the gpak) and parsed by fw_mesh_load_bytes (OBJ or glTF, the game's left-handed axes); a unit's GON "@Name"
+ *    is resolved to its data/models.gon entry before registration (obj3d_engine.c, fw_model_names.c, M3).
  *
  * How (every fact OBSERVED, .analysis/notes-r3dA.md + the T2 runs of 2026-10-22):
  *  - record time: obs3d_engine.c's hook on Camera_RenderOneLayer (0x979210) calls mesh_engine_after_layer() after the
@@ -337,7 +337,7 @@ static int resolve_model(const char *path) {
         for (int i = 0; i < g_nfailed; i++) if (!strcmp(g_failed[i], path ? path : "")) return -1;
         if (remember_failed(path ? path : "")) {
             e.code = fw_mesh_code(FW_MC_PATH_INVALID);
-            snprintf(e.text, sizeof e.text, "not a models/<name>.obj|.gltf|.glb path (\"@Name\" models are not resolved yet)");
+            snprintf(e.text, sizeof e.text, "not a models/<name>.obj|.gltf|.glb path (an API \"@Name\" is not resolved: only a unit's GON graphics.model is)");
             fw_mesh_fmt_load_result(line, sizeof line, path ? path : "(null)", 0, NULL, &e);
             fw_log("%s", line);
         }
