@@ -235,7 +235,10 @@ in-game test harness (`docs/ingame-testing.md`). Absolute addresses, image base 
   boot's non-dev branch and every dev-menu fight button reseed this way; the dev-mode boot does not). OBSERVED
   2026-10-20: the harness's `seed 42` right before `enter TacticsTest` makes the generated party and every roll
   after it identical run to run (`mods/jokers-luck/tests/luck-seeded.mewtest`); the state before the pin was already
-  identical across launches of the same `test00.sav`.
+  identical across launches of the same `test00.sav`. Native mods do not draw from this state: they use the
+  framework's own stream `FW_Random` (API v5, splitmix64 in `native/framework/src/fw_rng.c`), which the same `seed`
+  directive re-seeds. The CRT `rand` is not pinnable (msvcrt keeps its state per thread; OBSERVED 2026-10-22: Joker's
+  Luck's `srand(GetTickCount())` + `rand()` gave different rerolls on every seeded launch).
 - The framework exposes the code symbols as `FW_SYM_DebugConsole_Execute`, `FW_SYM_DebugConsole_init`,
   `FW_SYM_ApplicationBase_FrameBegin`, `FW_SYM_string_Allocate` and the data addresses as `FW_DATA_*`
   (`FW_GetData`, API v3).

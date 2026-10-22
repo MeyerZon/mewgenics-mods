@@ -313,6 +313,15 @@ entity, the one thing every `apply_status` context shape has in common (`docs/en
 2026-10-22 a second application built a second object). T2: `mods/jokers-luck/tests/merge-contexts.mewtest` with the
 test-only overlay `mods/_jokersluck-merge` (both shapes, 3 stacks per unit).
 
+**Randomness in a native mod: `FW_Random`, never the CRT `rand`.** msvcrt keeps `rand`'s state per thread, so an
+`srand` in `DllMain` need not reach the game thread that rolls, and nothing can pin it: Joker's Luck's rerolls looked
+seeded until 2026-10-22 and then changed on every launch (`luck-seeded` failing with -7 / -1 where 10 / 7 were
+expected). A native mod draws from the framework's stream instead: `FW_Random(bound)` (API v5, uniform in
+`[0, bound)`, `native/framework/src/fw_rng.c`, host-tested), varied by default (seeded from
+`QueryPerformanceCounter` when the framework loads) and re-seeded by the harness `seed <N>` directive, so a `.mewtest`
+with `seed` sees the same rolls on every run. Keep the rule pure and host-test it the way
+`native/mods/jokers-luck/src/jl_roll.c` does (`test/test_roll.c`: the same seed gives the same reroll sequence).
+
 ## Lighting and tint knobs
 
 The engine has no per-unit glow or outline a mod can switch on (the combat rim is a hover effect with a constant white

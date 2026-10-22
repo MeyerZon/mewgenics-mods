@@ -76,7 +76,9 @@ enter Campaign house                             the same fresh campaign, but th
 seed <N>                                         pin the game's RNG (TLS+0x178) to N (0..2^64-1) once the game's own
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every
-                                                 roll after it are then identical run to run, so assertions can be exact
+                                                 roll after it are then identical run to run, so assertions can be exact.
+                                                 It also re-seeds the native mods' FW_Random stream (framework API v5)
+                                                 with N, so a native status's rolls are pinned too (never CRT rand)
 run start [<map>.gon]                            the campaign walk (needs a director; after `enter Campaign house`):
                                                  MewDirector::GoOnAnAdventure(<map>, default alley.gon — the run's first
                                                  map; TeamType 1, 4 cats, debug = a generated party and no class chooser)
@@ -180,7 +182,7 @@ Every event carries `t` (ms since harness start) and `frame`.
                                                 AnimStateMachine+0x14c flip (+-art_flip, negative = mirrored), +0x4cd four_way_animations
 {"ev":"log","text":"..."}
 {"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
-{"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}
+{"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>; FW_Random seeded"}
 {"ev":"run","line":N,"op":"start|travel|fight","arg":"alley.gon|battle|","ok":true,"map":"alley.gon","node":0,"type":"battle","depth":1,"level":"levels/alley/…/x.lvl","detail":"…"}
                                                 map (start), node/type/depth (travel) and level (fight) appear only when that step set them
 {"ev":"glow","line":N,"unit":N,"name":"...","arg":"<the directive's argument text>","ok":true,"detail":"FW_SetUnitGlow on 0x…: ok"}   unit -1 when no unit matched

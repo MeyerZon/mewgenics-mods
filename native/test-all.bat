@@ -3,8 +3,11 @@ REM Builds and runs every host-side native test suite (tier T0 for native/).
 REM Stops at the first failing suite; exit code 1 on any failure.
 setlocal
 set "HERE=%~dp0"
-echo === mewframework pure parts (signature scanner, build gate, status rules, vtable, walks, resolve, glow rules)
+echo === mewframework pure parts (signature scanner, build gate, status rules, vtable, walks, resolve, glow rules, rng)
 call "%HERE%framework\test.bat"
+if errorlevel 1 exit /b 1
+echo === jokers_luck reroll over the framework random stream
+call "%HERE%mods\jokers-luck\test.bat"
 if errorlevel 1 exit /b 1
 if exist "%HERE%mods\test-harness\test.bat" (
   echo === mewtest harness pure modules

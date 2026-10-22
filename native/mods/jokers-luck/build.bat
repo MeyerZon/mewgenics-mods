@@ -7,8 +7,8 @@ set "NATIVE=%HERE%..\.."
 set "OUT=%HERE%build"
 if not exist "%OUT%" mkdir "%OUT%"
 "%GCC%" -std=c11 -O2 -Wall -Wextra -Wno-cast-function-type -shared -static -static-libgcc ^
-  -I"%NATIVE%\framework\src" -I"%NATIVE%\third_party\mewjector" ^
-  "%HERE%src\jokers_luck.c" ^
+  -I"%HERE%src" -I"%NATIVE%\framework\src" -I"%NATIVE%\third_party\mewjector" ^
+  "%HERE%src\jokers_luck.c" "%HERE%src\jl_roll.c" ^
   -o "%OUT%\jokers_luck.dll"
 if errorlevel 1 ( echo BUILD FAILED & exit /b 1 )
 echo built %OUT%\jokers_luck.dll

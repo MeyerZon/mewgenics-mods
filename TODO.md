@@ -564,11 +564,18 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   is a Component in every shape and its +0x20 is the Scene, so the merge lookup through ctx+0x20 missed and a second
   JokersLuck built a second object. `fw_walk_apply_existing` walks ctx+0x18; manifest `ApplyCtx_character` ->
   `ApplyCtx_scene`; T2 `mods/jokers-luck/tests/merge-contexts.mewtest` (both shapes, 3 stacks per unit).
-- [ ] **`jokers-luck/luck-seeded` is no longer deterministic** (OBSERVED 2026-10-22, 4 launches in a row, with this
+- [x] **`jokers-luck/luck-seeded` is no longer deterministic** (OBSERVED 2026-10-22, 4 launches in a row, with this
   branch's framework and with #104's: first rerolls -9/+5/+9/-7 instead of the +10, -2, +3, +9 every earlier run had).
   `jokers_luck.c` calls `srand(GetTickCount())` in DllMain and `rand()` on the game thread; msvcrt keeps that state per
   thread (INFERRED: the test was deterministic only while DllMain ran on another thread). Fix: a per-mod LCG seeded from the
   harness `seed` (or from the game RNG), not the CRT `rand`. `luck-rerolls` (`varied`) still passes.
+  Fixed 2026-10-22 (branch `fix/jokers-luck-rng`): framework API v5 `FW_Random(bound)` / `FW_SeedRandom(seed)`
+  (splitmix64, `fw_rng.c`, host-tested), seeded from QPC at load and re-seeded by the harness `seed` directive; the
+  sample rolls through `jl_roll.c` (host test: same seed, same rerolls) and no longer touches `srand`/`rand`.
+  T2 `luck-seeded` now pins 1 -> 5 -> (<0, Webster 8, Christine 7), identical on two runs.
+- [ ] **`.mewtest` numbers cannot be negative** (found 2026-10-22, `fix/jokers-luck-rng`): `expect stacks X on 0 == -10`
+  is a script error, so `luck-seeded` can only assert Wengar's round-3 -10 as `< 0`. Accept a leading `-` in
+  `expect stacks` / `expect unit` numbers (harness `mt_script.c` + editor `src/core/ingame/script.ts`, both tested).
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")
