@@ -200,8 +200,24 @@ export function defaultGameBuild(): string {
   return all.length ? all[all.length - 1]!.manifest.build.steamBuildId : "0";
 }
 
-/** Write a draft mods/<name>/mod.json (refuses when one exists). */
-export function initModManifest(modName: string, opts: { modsDir?: string; gameBuild?: string } = {}): { ok: true; manifest: ModManifest; path: string } | { ok: false; error: string } {
+/**
+ * A mod's native half in this repo, by convention native/mods/<mod>/ (Joker's Luck): the DLL its build.bat writes
+ * (`-o "...\<x>.dll"`) and the framework's FW_API_VERSION (native/framework/src/framework_api.h). null when absent.
+ */
+export function detectNativeHalf(modName: string, repoRoot: string = REPO_ROOT): { native: string[]; frameworkApi?: number } | null {
+  const bat = join(repoRoot, "native", "mods", modName, "build.bat");
+  if (!MOD_NAME_RE.test(modName) || !existsSync(bat)) return null;
+  const dlls = [...readFileSync(bat, "utf8").matchAll(/-o\s+"?[^"\r\n]*?([A-Za-z0-9_.-]+\.[dD][lL][lL])"?/g)].map((m) => m[1]!);
+  if (!dlls.length) return null;
+  const out: { native: string[]; frameworkApi?: number } = { native: [...new Set(dlls)] };
+  const hdr = join(repoRoot, "native", "framework", "src", "framework_api.h");
+  const v = existsSync(hdr) ? /#define\s+FW_API_VERSION\s+(\d+)/.exec(readFileSync(hdr, "utf8")) : null;
+  if (v) out.frameworkApi = Number(v[1]);
+  return out;
+}
+
+/** Write a draft mods/<name>/mod.json (refuses when one exists); a native half found by detectNativeHalf is listed. */
+export function initModManifest(modName: string, opts: { modsDir?: string; gameBuild?: string; repoRoot?: string } = {}): { ok: true; manifest: ModManifest; path: string } | { ok: false; error: string } {
   const modsDir = resolve(opts.modsDir ?? MODS_DIR);
   if (!MOD_NAME_RE.test(modName)) return { ok: false, error: `invalid mod name: ${JSON.stringify(modName)}` };
   const modDir = join(modsDir, modName);
@@ -209,7 +225,8 @@ export function initModManifest(modName: string, opts: { modsDir?: string; gameB
   const target = modsDir === resolve(MODS_DIR) ? resolveModWritePath(modName, MOD_MANIFEST_FILE) : join(modDir, MOD_MANIFEST_FILE);
   if (touchesSaves(target)) return { ok: false, error: `refusing to write a saves path: ${target}` };
   if (existsSync(target)) return { ok: false, error: `${MOD_MANIFEST_FILE} already exists: ${target}` };
-  const manifest = draftModManifest({ modDir, modName, gameBuild: opts.gameBuild ?? defaultGameBuild() });
+  const nat = detectNativeHalf(modName, opts.repoRoot ?? REPO_ROOT);
+  const manifest = draftModManifest({ modDir, modName, gameBuild: opts.gameBuild ?? defaultGameBuild(), native: nat?.native, frameworkApi: nat?.frameworkApi });
   writeFileSync(target, JSON.stringify(manifest, null, 2) + "\n");
   return { ok: true, manifest, path: target };
 }
