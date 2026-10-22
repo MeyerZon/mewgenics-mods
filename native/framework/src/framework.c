@@ -127,9 +127,11 @@ static void hook_Character_BeginTurn(void *character, int kind) {
     if (g_next_Character_BeginTurn) g_next_Character_BeginTurn(character, kind);
 }
 
-/* One step of FW_HOOK_PLAN: this file's two observer hooks, the glow engine's render hook; everything else is the status engine's. */
+/* One step of FW_HOOK_PLAN: this file's two observer hooks, the glow engine's render hook, the speed engine's frame hook;
+ * everything else is the status engine's. */
 static int install_step(const FwHookSpec *spec, int ordinal, int failuresSoFar, void *user) {
     (void)ordinal; (void)failuresSoFar; (void)user;
+    if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_ApplicationBase_FrameBegin) return speed_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_TacticsTest_LateRender) return glow_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Character_BeginTurn) {
         uintptr_t rva = g_sym[spec->index] - g_base;
@@ -210,6 +212,17 @@ FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a
 FW_EXPORT int FW_ClearUnitGlow(void *character) {
     if (!g_active) return 0;
     return glow_engine_clear(character);
+}
+
+/* --- API v5: game speed (speed_engine.c) --- */
+FW_EXPORT double FW_SetTimeScale(double factor) {
+    if (!g_active) return 0.0;
+    return speed_engine_set(factor);
+}
+
+FW_EXPORT double FW_GetTimeScale(void) {
+    if (!g_active) return 0.0;
+    return speed_engine_get();
 }
 
 /* ----------------------------------------------------------------------- */

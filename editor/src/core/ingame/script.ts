@@ -56,7 +56,9 @@ export type Directive =
   /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
   | { line: number; kind: "seed"; seed: string }
   /** per-unit glow (framework API v4): FW_SetUnitGlow(unit, rgba) or, with `off`, FW_ClearUnitGlow on a unit of the walk */
-  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null };
+  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null }
+  /** game speed (framework API v5): FW_SetTimeScale(factor); `off` = 1 (the game's own scale back) */
+  | { line: number; kind: "speed"; factor: number };
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
 export const KNOWN_SCENES = ["TacticsTest", "Campaign"];
@@ -279,6 +281,12 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
     case "seed": {
       if (!/^\d{1,20}$/.test(rest) || BigInt(rest) > 18446744073709551615n) return { error: "seed needs one unsigned integer (0..18446744073709551615)" };
       return { line: lineNo, kind: "seed", seed: BigInt(rest).toString() };
+    }
+    case "speed": {
+      // same shape as mt_script.c: one -?digits[.digits] factor > 0, or `off` (= 1); the framework clamps to [1/16, 64]
+      if (rest === "off") return { line: lineNo, kind: "speed", factor: 1 };
+      if (!/^-?\d*(\.\d*)?$/.test(rest) || !/\d/.test(rest) || !(Number(rest) > 0)) return { error: "speed needs one factor > 0 (e.g. 4, 0.5) or off" };
+      return { line: lineNo, kind: "speed", factor: Number(rest) };
     }
     case "glow": {
       const usage = "glow needs: <unit> <r> <g> <b> <a> | <unit> off";

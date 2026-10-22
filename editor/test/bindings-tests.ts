@@ -489,7 +489,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 78, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects)");
+    eq(offs.length, 79, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + App_timescale (game speed)");
   });
   if (exe) {
     const m = loadManifest(realPath);
@@ -1914,7 +1914,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   }
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam)");
+    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1 + 1, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam) + App_timescale (game speed)");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);

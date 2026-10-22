@@ -646,10 +646,22 @@ static int h_set_unit_glow(void *u, int i, const float *rgba, char *detail, size
     return ok ? 1 : 0;
 }
 
+/* speed <factor>: FW_SetTimeScale (framework API v5). The harness runs in the FrameBegin hook, on the game thread. */
+static int h_set_speed(void *u, double factor, double *applied, char *detail, size_t cap) {
+    (void)u;
+    if (!g_fw.SetTimeScale) { snprintf(detail, cap, "framework older than API v5 (no FW_SetTimeScale)"); return -1; }
+    double kept = g_fw.SetTimeScale(factor);
+    *applied = kept;
+    if (kept <= 0.0) { snprintf(detail, cap, "FW_SetTimeScale(%g) refused (framework inactive)", factor); return 0; }
+    snprintf(detail, cap, "FW_SetTimeScale(%g) -> %g", factor, kept);
+    logf_("speed: %s", detail);
+    return 1;
+}
+
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
     h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
-    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon,
+    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon, h_set_speed,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
