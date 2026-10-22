@@ -93,22 +93,32 @@ worktree has none of the git-ignored inputs the main checkout accumulated — `e
    `New-Item -ItemType Junction -Path "<worktree>\editor\node_modules" -Target "<main>\editor\node_modules"`.
    Do not junction `.extracted`, `.analysis` or `editor/data`: the variables below replace those, and every junction
    is a removal hazard (`CLAUDE.md` "Worktrees with junctions are a data-loss trap").
-2. **Env vars, for every `npm` command run in the worktree:**
-   - `MEWGENICS_EXTRACTED_DATA=<main>\.extracted\data` — the base data (T1 tests, the validator, the merge preview).
-   - `MEWGENICS_EDITOR_DATA=<main>\editor\data` — the caches: `component-names.json` (the component class list;
-     `build:index` can only rebuild it from `.analysis/list_names.tsv`, which is not on disk since the 2026-10-19
-     wipe) and `base-index.json`. Without it the component-dependent check logs
-     `(skipped: editor/data/component-names.json missing …)`, the validator reports one `component-list-missing`
-     info instead of an `unknown-component` warning per passive, and `npm run build:index` writes a fresh
-     `base-index.json` into the worktree's own `editor/data/` (and says why it kept or skipped the component list).
-     An override under any `saves/` path is refused at load.
-   - `MEWGENICS_VANILLA_SWF_DIR=<main>\.extracted\swfs` — the vanilla SWF reads (art T1 tests; they skip without
-     it). The palette textures (`.extracted/textures/`) still resolve against the worktree root and skip there.
+2. **Env vars, for every `npm` command run in the worktree** — two, one per git-ignored tree:
+   - `MEWGENICS_EXTRACTED_DATA=<main>\.extracted\data` — the whole extracted pack. Its parent is the extracted root
+     (`repo.ts` `EXTRACTED_ROOT` / `extractedPath(...)`), so the base data (T1 tests, the validator, the merge
+     preview), the vanilla SWFs (`swfs/`: the art T1 tests, the Ruffle tab's list) and the palette textures
+     (`textures/`: the art palette reader) all follow this one variable.
+   - `MEWGENICS_EDITOR_DATA=<main>\editor\data` — the caches (`repo.ts` `DATA_CACHE_DIR`): `component-names.json`
+     (the component class list; `build:index` rebuilds it only from `.analysis/list_names.tsv`, and `.analysis`
+     resolves against the worktree's own root, where it is absent, so the existing list is kept) and
+     `base-index.json`, plus `ingame-runs/` and the VectorCraft zip cache (`vendor/`, so `npm run build` vendors
+     offline). Without it the component-dependent check logs `(skipped: editor/data/component-names.json missing …)`,
+     the validator reports one `component-list-missing` info instead of an `unknown-component` warning per passive,
+     and `npm run build:index` writes a fresh `base-index.json` into the worktree's own `editor/data/`. It always
+     writes to this directory (pinned in `editor/test/repo-tests.ts`). An override under any `saves/` path is
+     refused at load.
+   - Override only, not needed in a worktree: `MEWGENICS_VANILLA_SWF_DIR` points the vanilla SWF reads somewhere
+     other than `<extracted root>/swfs` (the art tests use it with a temp dir).
+
+   Every game-data / cache path resolves through `editor/src/core/repo.ts`; never join `REPO_ROOT` with `.extracted`
+   or `editor/data` anywhere else.
 3. **Before removing the worktree:** `cmd /c rmdir "<worktree>\editor\node_modules"` (unlinks the junction without
    following it), confirm `<main>\editor\node_modules` still has contents, then `git worktree remove`. The full rule
    and the incident behind it: `CLAUDE.md` "Worktrees with junctions are a data-loss trap".
 
-With the variables set, `npm test` and `npm run typecheck` in a worktree match the main checkout; without them the
+With the two variables set, `npm test`, `npm run typecheck` and `npm run test:e2e` in a worktree match the main
+checkout (after one `npm run build`, which also clears the `web/dist` skip; the one extra line is
+`(skipped: .analysis/decompiled absent …)` — the RE decompile store stays per checkout by design); without them the
 suite still exits 0 with `(skipped: …)` lines (the nested runs in `run-tests.ts` sections 4 and 10 check both
 variables on every run).
 
