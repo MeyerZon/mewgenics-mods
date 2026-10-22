@@ -131,10 +131,15 @@ static void do_dump(MtRunner *r, const MtHost *h, long id) {
         mt_jw_int(&w, "i", i);
         mt_jw_str(&w, "name", u.name);
         mt_jw_str(&w, "class", u.cls);
+        mt_jw_str(&w, "namekey", u.nameKey);
         mt_jw_int(&w, "faction", u.faction);
         mt_jw_int(&w, "move", u.move);
         mt_jw_int(&w, "act", u.act);
         mt_jw_int(&w, "turnkind", u.turnKind);
+        mt_jw_int(&w, "hp", u.hp);
+        mt_jw_int(&w, "shield", u.shield);
+        mt_jw_int(&w, "divineshield", u.divineShield);
+        for (int k = 0; k < MT_STAT_COUNT; k++) mt_jw_int(&w, mt_stat_name(k), u.stats[k]);
         mt_jw_arr_begin(&w, "statuses");
         for (int k = 0; k < u.statusCount && k < MT_UNIT_STATUSES; k++) mt_jw_arr_str(&w, u.statuses[k]);
         mt_jw_arr_end(&w);
@@ -152,6 +157,34 @@ static const char *op_text(MtOp op) {
 }
 static int op_apply(MtOp op, long a, long b) {
     switch (op) { case MT_OP_EQ: return a == b; case MT_OP_NE: return a != b; case MT_OP_GE: return a >= b; case MT_OP_LE: return a <= b; case MT_OP_GT: return a > b; default: return a < b; }
+}
+static int op_apply_d(MtOp op, double a, double b) {
+    switch (op) { case MT_OP_EQ: return a == b; case MT_OP_NE: return a != b; case MT_OP_GE: return a >= b; case MT_OP_LE: return a <= b; case MT_OP_GT: return a > b; default: return a < b; }
+}
+/* the integer MtUnit field an expect unit directive names (the string fields are handled by the caller) */
+static long unit_int_field(const MtUnit *u, MtUnitField f) {
+    switch (f) {
+        case MT_F_FACTION: return u->faction; case MT_F_MOVE: return u->move; case MT_F_ACT: return u->act; case MT_F_TURNKIND: return u->turnKind;
+        case MT_F_HP: return u->hp; case MT_F_SHIELD: return u->shield; case MT_F_DIVINESHIELD: return u->divineShield;
+        default: return f >= MT_F_STRENGTH && f <= MT_F_LUCK ? u->stats[f - MT_F_STRENGTH] : 0;
+    }
+}
+/* the unit as an expect arg: the index, the bare name, or the quoted name when it has a space */
+static void unit_text(const MtDirective *d, char *buf, size_t cap) {
+    if (d->unitIsIndex) snprintf(buf, cap, "%ld", d->n);
+    else if (strchr(d->b, 0x20)) snprintf(buf, cap, "\"%s\"", d->b);
+    else snprintf(buf, cap, "%s", d->b);
+}
+/* one scalar / container as the expect gon detail shows it */
+static void gon_value_text(const MtGonValue *v, char *buf, size_t cap) {
+    switch (v->type) {
+        case 1: snprintf(buf, cap, "string \"%s\"", v->text); break;
+        case 2: snprintf(buf, cap, "number %g (int %d, double %g, text \"%s\")", v->d, v->i, v->d, v->text); break;
+        case 3: snprintf(buf, cap, "object with %ld children", v->childCount); break;
+        case 4: snprintf(buf, cap, "array with %ld children", v->childCount); break;
+        case 5: snprintf(buf, cap, "bool %s", v->b ? "true" : "false"); break;
+        default: snprintf(buf, cap, "%s", mt_gon_type_name(v->type)); break;
+    }
 }
 
 void mt_runner_init(MtRunner *r, const MtScript *s, uint64_t now) {
@@ -294,6 +327,30 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, 1);
             return 0;
         }
+        case MT_D_GLOW: {
+            MtUnit u;
+            memset(&u, 0, sizeof u);
+            int avail = h->units_available(h->user);
+            int idx = avail ? resolve_unit(h, d, &u) : -1;
+            int rc;
+            detail[0] = 0;
+            if (idx < 0) { rc = 0; snprintf(detail, sizeof detail, "no such unit%s", avail ? "" : " (no combat)"); }
+            else rc = h->set_unit_glow(h->user, idx, d->glowOff ? NULL : d->rgba, detail, sizeof detail);
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "glow");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_int(&w, "unit", idx);
+            mt_jw_str(&w, "name", idx >= 0 ? u.name : "");
+            mt_jw_str(&w, "arg", d->a);
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "glow_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "glow_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
         case MT_D_SHOT: {
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "shot");
@@ -354,11 +411,9 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             return 1;
         }
         case MT_D_EXPECT_UNIT: {
-            int isStr = d->field == MT_F_NAME || d->field == MT_F_CLASS;
+            int isStr = d->field == MT_F_NAME || d->field == MT_F_CLASS || d->field == MT_F_NAMEKEY;
             char unitText[80];
-            if (d->unitIsIndex) snprintf(unitText, sizeof unitText, "%ld", d->n);
-            else if (strchr(d->b, 0x20)) snprintf(unitText, sizeof unitText, "\"%s\"", d->b);
-            else snprintf(unitText, sizeof unitText, "%s", d->b);
+            unit_text(d, unitText, sizeof unitText);
             if (isStr) snprintf(arg, sizeof arg, "%s %s %s \"%s\"", unitText, mt_unit_field_name(d->field), op_text(d->op), d->a);
             else snprintf(arg, sizeof arg, "%s %s %s %ld", unitText, mt_unit_field_name(d->field), op_text(d->op), d->value);
             if (!h->units_available(h->user)) { emit_expect(r, h, d, "unit", arg, 0, "no combat (units unavailable)"); r->pc++; return 1; }
@@ -374,16 +429,70 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             }
             int ok;
             if (isStr) {
-                const char *actual = d->field == MT_F_NAME ? u.name : u.cls;
+                const char *actual = d->field == MT_F_NAME ? u.name : d->field == MT_F_CLASS ? u.cls : u.nameKey;
                 int same = strcmp(actual, d->a) == 0;
                 ok = d->op == MT_OP_EQ ? same : !same;
                 snprintf(detail, sizeof detail, "unit %d \"%s\": %s \"%s\"", idx, u.name, mt_unit_field_name(d->field), actual);
             } else {
-                long actual = d->field == MT_F_FACTION ? u.faction : d->field == MT_F_MOVE ? u.move : d->field == MT_F_ACT ? u.act : u.turnKind;
+                long actual = unit_int_field(&u, d->field);
                 ok = op_apply(d->op, actual, d->value);
                 snprintf(detail, sizeof detail, "unit %d \"%s\": %s %ld", idx, u.name, mt_unit_field_name(d->field), actual);
             }
             emit_expect(r, h, d, "unit", arg, ok, detail);
+            r->pc++;
+            return 1;
+        }
+        case MT_D_EXPECT_GON: {
+            /* the unit's merged data/characters entry (Character+OFF_CH_GON_ENTRY), walked with mt_gon_get through
+             * the host's guarded reader; the value's type decides what a literal can match (a number only a number
+             * node, a quoted string only a string node, true/false only a bool node) */
+            char unitText[80], valueText[MT_GON_TEXT + 64], why[200];
+            unit_text(d, unitText, sizeof unitText);
+            switch (d->gonCheck) {
+                case MT_G_NUM: snprintf(arg, sizeof arg, "%s %s %s %g", unitText, d->a, op_text(d->op), d->dvalue); break;
+                case MT_G_STR: snprintf(arg, sizeof arg, "%s %s %s \"%s\"", unitText, d->a, op_text(d->op), d->c); break;
+                case MT_G_BOOL: snprintf(arg, sizeof arg, "%s %s %s %s", unitText, d->a, op_text(d->op), d->value ? "true" : "false"); break;
+                default: snprintf(arg, sizeof arg, "%s %s %s", unitText, d->a, d->gonCheck == MT_G_EXISTS ? "exists" : "missing"); break;
+            }
+            if (!h->units_available(h->user)) { emit_expect(r, h, d, "gon", arg, 0, "no combat (units unavailable)"); r->pc++; return 1; }
+            MtUnit u;
+            memset(&u, 0, sizeof u);
+            int idx = resolve_unit(h, d, &u);
+            if (idx < 0) {
+                if (d->unitIsIndex) snprintf(detail, sizeof detail, "unit not found: index %ld of %d", d->n, h->unit_count(h->user));
+                else snprintf(detail, sizeof detail, "unit not found: \"%s\"", d->b);
+                emit_expect(r, h, d, "gon", arg, 0, detail);
+                r->pc++;
+                return 1;
+            }
+            const char *entry = u.nameKey[0] ? u.nameKey : "?";   /* the name key identifies the unit in the detail */
+            const void *node = h->unit_gon ? h->unit_gon(h->user, idx) : NULL;
+            if (!node || !h->mem_read) {
+                snprintf(detail, sizeof detail, "unit %d \"%s\" (%s): no GON entry (Character+OFF_CH_GON_ENTRY unreadable)", idx, u.name, entry);
+                emit_expect(r, h, d, "gon", arg, 0, detail);
+                r->pc++;
+                return 1;
+            }
+            MtGonValue v;
+            int rc = mt_gon_get(h->mem_read, h->user, node, d->a, &v, why, sizeof why);
+            int ok = 0;
+            if (rc < 0) {
+                snprintf(detail, sizeof detail, "unit %d \"%s\" (%s): %s unreadable: %s", idx, u.name, entry, d->a, why);
+            } else if (rc == 0 || v.type == 0) {
+                ok = d->gonCheck == MT_G_MISSING;
+                snprintf(detail, sizeof detail, "unit %d \"%s\" (%s): %s missing: %s", idx, u.name, entry, d->a, rc == 0 ? why : "a null node");
+            } else {
+                gon_value_text(&v, valueText, sizeof valueText);
+                switch (d->gonCheck) {
+                    case MT_G_NUM: ok = v.type == 2 && op_apply_d(d->op, v.d, d->dvalue); break;
+                    case MT_G_STR: ok = v.type == 1 && ((strcmp(v.text, d->c) == 0) == (d->op == MT_OP_EQ)); break;
+                    case MT_G_BOOL: ok = v.type == 5 && (((v.b != 0) == (d->value != 0)) == (d->op == MT_OP_EQ)); break;
+                    case MT_G_EXISTS: ok = 1; break;
+                    default: ok = 0; break;
+                }
+                snprintf(detail, sizeof detail, "unit %d \"%s\" (%s): %s = %s", idx, u.name, entry, d->a, valueText);
+            }
+            emit_expect(r, h, d, "gon", arg, ok, detail);
             r->pc++;
             return 1;
         }

@@ -36,10 +36,11 @@ TEST(generated_tables_are_internally_consistent) {
             uint8_t bytes[FW_SIG_MAX_BYTES], mask[FW_SIG_MAX_BYTES];
             const SymbolSig *s = &bi->symbols[i];
             CHECK(s->name != NULL);
+            CHECK(s->expectedRva != 0);
+            if (!s->pattern) continue;   /* signature: null in the manifest -> the DLL takes expectedRva on the identified build */
             int n = fw_parse_pattern(s->pattern, bytes, mask, sizeof bytes);
             if (n <= 0) MT_FAIL("symbol %s: pattern does not parse under FW_SIG_MAX_BYTES (%d)", s->name, n);
             else if (!mask[n - 1]) MT_FAIL("symbol %s: pattern ends in a wildcard", s->name);
-            CHECK(s->expectedRva != 0);
         }
         for (size_t i = 0; i < FW_LK_COUNT; i++) CHECK(bi->lkRvas[i] != 0);
         for (size_t i = 0; i < FW_DATA_COUNT_; i++) CHECK(bi->rva_data[i] != 0);
@@ -47,6 +48,7 @@ TEST(generated_tables_are_internally_consistent) {
         CHECK(bi->rva_Status_vftable != 0);
         CHECK(bi->rva_DefaultStatusSource != 0);
         CHECK(bi->luckUpTypeId != 0);
+        CHECK(bi->rva_TacticsTest_vftable != 0);   /* v4 glow: the combat driver whose slot 19 the glow engine hooks */
     }
 }
 
@@ -55,6 +57,12 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_STR(b->name, "1.1.21239 (steam 25143593)");
     CHECK_EQ(b->symbols[FW_SYM_TurnControl_NextTurn].expectedRva, 0x8e3c60);
     CHECK_STR(b->symbols[FW_SYM_string_Allocate].name, "string_Allocate");
+    /* 2026-10-21: no relocation-free unique window exists for these (notes-bind); raw RVA + anchors instead */
+    CHECK(b->symbols[FW_SYM_LuckUp_ctor].pattern == NULL);
+    CHECK_EQ(b->symbols[FW_SYM_LuckUp_ctor].expectedRva, 0x711c90);
+    CHECK(b->symbols[FW_SYM_Status_GetCategory].pattern == NULL);
+    CHECK_EQ(b->symbols[FW_SYM_Status_GetCategory].expectedRva, 0x4929c0);
+    CHECK(b->symbols[FW_SYM_SaveProps_GetOrCreate].pattern != NULL);
     CHECK_EQ(b->lkRvas[0], 0x4929c0);
     CHECK_EQ(b->lkRvas[4], 0x493190);
     CHECK_EQ(b->lkRvas[12], 0x502b40);
@@ -82,6 +90,41 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(OFF_APPLIER_OWNER, -8);
     CHECK_EQ(VT_SLOTS, 172);
     CHECK_EQ(VT_ONSTACKSCHANGED, 170);
+    /* per-unit glow bindings (2026-10-22): the combat outline mask the glow engine rides (docs/engine-map.md "Per-unit glow") */
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_TacticsTest_LateRender].expectedRva, 0x88d780u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_vec_u32_AddUnique].expectedRva, 0x72cd0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_ShaderManager_GetOrCreateMaterial].expectedRva, 0x9bb5d0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetUniformVec4].expectedRva, 0x9bde70u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetUniformFloat].expectedRva, 0x9bddc0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Material_SetTexture].expectedRva, 0x9bdcd0u);
+    CHECK_EQ(FW_SYMBOLS_25143593[FW_SYM_Camera_AddPostProcessPass].expectedRva, 0x979880u);
+    CHECK_EQ(b->rva_data[FW_DATA_ShaderManager], 0x13c4a30);   /* the App global: the material map lives at +0x278 of it */
+    CHECK_EQ(b->rva_TacticsTest_vftable, 0xf0f4b8);
+    CHECK_EQ(OFF_TT_MASK_CAMERA, 0x58); CHECK_EQ(OFF_TT_MAIN_CAMERA, 0x68); CHECK_EQ(OFF_TT_BLUR_PASS, 0x90); CHECK_EQ(OFF_TT_COMPOSITE_PASS, 0x98);
+    CHECK_EQ(OFF_CAM_RTT_TEXTURE, 0x50); CHECK_EQ(OFF_CAM_PASSES, 0xb0);
+    CHECK_EQ(OFF_CH_RENDERER, 0x40); CHECK_EQ(OFF_CH_GENERATION, -8);
+    CHECK_EQ(OFF_RND_EXTRA_LAYERS, 0x68); CHECK_EQ(OFF_RND_EXTRA_COUNT, 0x6c); CHECK_EQ(OFF_RND_EXTRA_DATA, 0x70);
+    CHECK_EQ(OFF_PASS_MAT_COUNT, 0x4); CHECK_EQ(OFF_PASS_MATERIALS, 0x8); CHECK_EQ(OFF_PASS_ENABLED, 0x10);
+    CHECK_EQ(OFF_PASS_RECT_A, 0x18); CHECK_EQ(OFF_PASS_RECT_B, 0x38); CHECK_EQ(OFF_PASS_FLAGS, 0x58);
+    CHECK_EQ(CONST_MASK_LAYER, 0x18); CHECK_EQ(CONST_COMPOSITE_LAYER, 0x1a); CHECK_EQ(CONST_GLOW_FRAMEBUF_SLOT, 6);
+    CHECK_EQ(VT_TT_LATERENDER, 19);
+    /* GON at runtime (2026-10-22): the harness's hp / stats fields and its GonObject walker read these */
+    CHECK_EQ(OFF_CH_HP, 0x4b0);
+    CHECK_EQ(OFF_CH_SHIELD, 0x4b4);
+    CHECK_EQ(OFF_CH_DIVINE_SHIELD, 0x4b8);
+    CHECK_EQ(OFF_CH_STATS, 0x5a0);
+    CHECK_EQ(OFF_CH_BASE_HEALTH, 0x5e8);
+    CHECK_EQ(OFF_CH_GON_ENTRY, 0x240);
+    CHECK_EQ(OFF_CH_NAME_KEY, 0x248);
+    CHECK_EQ(OFF_GON_CHILDREN, 0x38);
+    CHECK_EQ(OFF_GON_CHILDREN_END, 0x40);
+    CHECK_EQ(OFF_GON_INT, 0x50);
+    CHECK_EQ(OFF_GON_DOUBLE, 0x58);
+    CHECK_EQ(OFF_GON_BOOL, 0x60);
+    CHECK_EQ(OFF_GON_TEXT, 0x68);
+    CHECK_EQ(OFF_GON_NAME, 0x88);
+    CHECK_EQ(OFF_GON_TYPE, 0xa8);
+    CHECK_EQ(GON_NODE_SIZE, 0xb0);
 }
 
 int main(void) { return MT_RUN_ALL(); }

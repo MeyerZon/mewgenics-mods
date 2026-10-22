@@ -1,0 +1,3 @@
+# the game drops the quotes before typing: "10" is a number, so .add adds (the result is re-rendered bare)
+wallet_size.add 5
+speed.multiply "2"

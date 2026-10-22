@@ -1,0 +1,15 @@
+mods: _artprobe, _autoplay
+timeout: 120s
+hide: false
+# Experiment A0 control: ArtProbeCatCtl is TomTom with alt_animations [[idle crawlingIdle]] — a label that vanilla
+# itself adds to CatTest through catanis2.swf's _Append_CatTest. It separates "an appended idle picked by
+# alt_animations" (fine here) from whatever our own appended frame does (render-cat-append.mewtest).
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+cmd spawn ArtProbeCatCtl
+expect console "Spawned ArtProbeCatCtl" within 10
+wait frames 120
+shot "ctl"
+quit

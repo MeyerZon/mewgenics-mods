@@ -12,8 +12,13 @@ export const SAVESUFFIX_RE = /^[A-Za-z0-9_-]{1,32}$/;
 export const MAX_CMD_BYTES = 4078; // the game's std::string small/large allocation boundary
 export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
 /** fields `expect unit` can read (the units event's per-unit fields); must agree with mt_script.c UNIT_FIELDS */
-export const UNIT_FIELDS = ["name", "class", "faction", "move", "act", "turnkind"] as const;
+export const UNIT_FIELDS = [
+  "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
+  "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck",
+] as const;
 export type UnitField = (typeof UNIT_FIELDS)[number];
+/** the `expect unit` fields that take a quoted value with == / != (the rest are integers with any op) */
+export const UNIT_STRING_FIELDS: readonly UnitField[] = ["name", "class", "namekey"];
 
 export interface Finding {
   line: number;
@@ -32,8 +37,13 @@ export type Directive =
   | { line: number; kind: "expect"; what: "round"; op: string; n: number }
   | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; op: string; n: number }
   | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; varied: true }
-  /** one field of one unit in the units event: name|class compare as strings (== !=), the rest as integers */
+  /** one field of one unit in the units event: name|class|namekey compare as strings (== !=), the rest as integers */
   | { line: number; kind: "expect"; what: "unit"; unit: string; field: UnitField; op: string; value: string | number }
+  /** one node of the unit's merged data/characters entry (Character+0x240, walked by mewtest.dll): a number literal
+   *  matches a number node (any op), a quoted string a string node (== !=), true/false a bool node (== !=) */
+  | { line: number; kind: "expect"; what: "gon"; unit: string; path: string; op: string; value: number | string | boolean }
+  /** the node exists (any type but null) / is missing (absent or null) */
+  | { line: number; kind: "expect"; what: "gon"; unit: string; path: string; check: "exists" | "missing" }
   /** runner-side: debug.log (after the `[file: …]` prefix) contains substr; evaluated after the run, never sent to the DLL */
   | { line: number; kind: "expect"; what: "log"; substr: string }
   | { line: number; kind: "dump" }
@@ -44,7 +54,9 @@ export type Directive =
   /** the DLL emits a shot event and holds the scene ~700 ms; the runner captures the game window into the run dir */
   | { line: number; kind: "shot"; label: string }
   /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
-  | { line: number; kind: "seed"; seed: string };
+  | { line: number; kind: "seed"; seed: string }
+  /** per-unit glow (framework API v4): FW_SetUnitGlow(unit, rgba) or, with `off`, FW_ClearUnitGlow on a unit of the walk */
+  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null };
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
 export const KNOWN_SCENES = ["TacticsTest", "Campaign"];
@@ -193,14 +205,54 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         const field = m2[1]!, op = m2[2]!, val = m2[3]!.trim();
         if (!(UNIT_FIELDS as readonly string[]).includes(field)) return { error: `expect unit: unknown field "${field}" (${UNIT_FIELDS.join("|")})` };
         if (!UNITS_OPS.includes(op)) return { error: `expect unit: bad operator "${op}" (${UNITS_OPS.join(" ")})` };
-        if (field === "name" || field === "class") {
-          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class take == or != and a quoted value" };
+        if ((UNIT_STRING_FIELDS as readonly string[]).includes(field)) {
+          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class/namekey take == or != and a quoted value" };
           const q = parseQuoted(val, 0);
-          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class take == or != and a quoted value" };
+          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class/namekey take == or != and a quoted value" };
           return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: q.value };
         }
-        if (!/^\d+$/.test(val)) return { error: "expect unit: faction/move/act/turnkind take one integer" };
+        if (!/^-?\d+$/.test(val)) return { error: "expect unit: the integer fields take one integer" };
         return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: Number(val) };
+      }
+      if (what === "gon") {
+        // expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing)
+        const usage = 'expect gon needs: <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing)';
+        let rest2 = arg;
+        let unit: string;
+        if (rest2.startsWith('"')) {
+          const q = parseQuoted(rest2, 0);
+          if (!q) return { error: "expect gon: bad quoted unit name" };
+          unit = q.value;
+          rest2 = rest2.slice(q.end).trim();
+        } else {
+          const sp = rest2.search(/\s/);
+          if (sp < 0) return { error: usage };
+          unit = rest2.slice(0, sp);
+          rest2 = rest2.slice(sp).trim();
+        }
+        const m2 = /^(\S+)\s+(\S+)(?:\s+([\s\S]+))?$/.exec(rest2);
+        if (!m2) return { error: usage };
+        const path = m2[1]!, word = m2[2]!, val = (m2[3] ?? "").trim();
+        if (!/^[^.\s]+(\.[^.\s]+)*$/.test(path)) return { error: "expect gon: the path is dot-separated segments, none empty (properties.health, abilities.spells.0)" };
+        if (word === "exists" || word === "missing") {
+          if (val) return { error: "expect gon: unexpected text after exists/missing" };
+          return { line: lineNo, kind: "expect", what: "gon", unit, path, check: word };
+        }
+        if (!UNITS_OPS.includes(word)) return { error: `expect gon: bad operator "${word}" (${UNITS_OPS.join(" ")}) or exists/missing` };
+        if (!val) return { error: usage };
+        if (val.startsWith('"')) {
+          if (word !== "==" && word !== "!=") return { error: "expect gon: a quoted string takes == or !=" };
+          const q = parseQuoted(val, 0);
+          if (!q || val.slice(q.end).trim()) return { error: "expect gon: bad quoted value or text after it" };
+          return { line: lineNo, kind: "expect", what: "gon", unit, path, op: word, value: q.value };
+        }
+        if (/\s/.test(val)) return { error: "expect gon: unexpected text after the value" };
+        if (val === "true" || val === "false") {
+          if (word !== "==" && word !== "!=") return { error: "expect gon: true/false take == or !=" };
+          return { line: lineNo, kind: "expect", what: "gon", unit, path, op: word, value: val === "true" };
+        }
+        if (!/^-?\d+(\.\d+)?$/.test(val)) return { error: "expect gon: the value is a number (-?digits[.digits]), a quoted string or true/false" };
+        return { line: lineNo, kind: "expect", what: "gon", unit, path, op: word, value: Number(val) };
       }
       if (what === "log") {
         const q = parseQuoted(arg, 0);
@@ -209,7 +261,7 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (tail) return { error: `expect log: unexpected trailing text "${tail}" (no within: debug.log is read once, after the run)` };
         return { line: lineNo, kind: "expect", what: "log", substr: q.value };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|log)" };
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|log)" };
     }
     case "dump":
       if (rest) return { error: "dump takes no arguments" };
@@ -227,6 +279,27 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
     case "seed": {
       if (!/^\d{1,20}$/.test(rest) || BigInt(rest) > 18446744073709551615n) return { error: "seed needs one unsigned integer (0..18446744073709551615)" };
       return { line: lineNo, kind: "seed", seed: BigInt(rest).toString() };
+    }
+    case "glow": {
+      const usage = "glow needs: <unit> <r> <g> <b> <a> | <unit> off";
+      if (!rest) return { error: usage };
+      let unit: string, tail: string;
+      if (rest.startsWith('"')) {
+        const q = parseQuoted(rest, 0);
+        if (!q) return { error: "glow: bad quoted unit name" };
+        unit = q.value;
+        tail = rest.slice(q.end).trim();
+      } else {
+        const sp = rest.search(/\s/);
+        if (sp < 0) return { error: usage };
+        unit = rest.slice(0, sp);
+        tail = rest.slice(sp).trim();
+      }
+      if (tail === "off") return { line: lineNo, kind: "glow", unit, rgba: null };
+      if (tail.startsWith("off")) return { error: "glow: unexpected text after off" };
+      const parts = tail.split(/\s+/);
+      if (parts.length !== 4 || !parts.every((p) => /^\d+(\.\d+)?$/.test(p) && Number(p) <= 1)) return { error: "glow needs four colour values 0..1 (r g b a) or off" };
+      return { line: lineNo, kind: "glow", unit, rgba: parts.map(Number) as [number, number, number, number] };
     }
     case "enter": {
       if (!rest) return { error: `enter needs a scene name (${KNOWN_SCENES.join("|")})` };

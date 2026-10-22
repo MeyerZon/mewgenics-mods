@@ -77,6 +77,11 @@ seed <N>                                         pin the game's RNG (TLS+0x178) 
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every
                                                  roll after it are then identical run to run, so assertions can be exact
+glow <unit> <r> <g> <b> <a>                      FW_SetUnitGlow (framework API v4) on a unit of the walk (index, bareword or
+glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; v1
+                                                 keeps one shared colour); `off` = FW_ClearUnitGlow. Needs the fight and
+                                                 `mods: …, fw-glow` (the rim shader). A missing unit or a refusal ends the
+                                                 script with code 1 (glow_failed); a framework without API v4 with code 4
 wait frames|turns|rounds|ms <N>                  N >= 1; turns = TurnControl::NextTurn calls; rounds = TurnControl's
                                                  round counter advancing by N from the directive
 expect console "<substr>" [within <frames>]      a console line since the last cmd contains substr
@@ -87,11 +92,28 @@ expect round <op> <N>                            TurnControl's round (0 outside 
 expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail)
 expect stacks <Status> on <unit> varied          >= 2 distinct stacks values seen for (unit, status) by earlier dump /
                                                  expect stacks directives (and this one)
-expect unit <unit> <field> <op> <value>          one field of one unit as the units event shows it: name|class take a
-                                                 quoted value with == or !=; faction|move|act|turnkind take an integer
-                                                 with any op. Event kind "unit", arg e.g. `8 name == "Lil' Rat"`,
-                                                 detail `unit 8 "Lil' Rat": name "Lil' Rat"`. Faction numbers seen:
-                                                 allies 1, coins 0, enemies 2
+expect unit <unit> <field> <op> <value>          one field of one unit as the units event shows it: name|class|namekey
+                                                 take a quoted value with == or !=; faction|move|act|turnkind|hp|shield|
+                                                 divineshield|strength|dexterity|constitution|intelligence|speed|
+                                                 charisma|luck take an integer (negatives allowed) with any op. Event
+                                                 kind "unit", arg e.g. `8 name == "Lil' Rat"`, detail `unit 8 "Lil'
+                                                 Rat": name "Lil' Rat"`. Faction numbers seen: allies 1, coins 0,
+                                                 enemies 2. namekey is the graphics.name loc key (ENEMY_POOTER_NAME);
+                                                 hp is current HP (= properties.health right after a spawn), the seven
+                                                 stats are what Character::init stored (data value, default 5)
+expect gon <unit> <path> <op> <number>           one node of the unit's merged data/characters entry, as the game holds
+expect gon <unit> <path> ==|!= "<string>"        it (Character+0x240; variant_of-resolved, every overlay applied): the
+expect gon <unit> <path> ==|!= true|false        DLL walks <path> (dot-separated; an all-digit segment indexes the
+expect gon <unit> <path> exists|missing          children, any other is the first child of that name) without calling
+                                                 the game. A number literal matches a number node only (compared on
+                                                 the node's double, any op), a quoted string a string node only, true/
+                                                 false a bool node only; `exists` = present and not null, `missing` =
+                                                 absent or null. Event kind "gon", arg e.g. `8 properties.health == 12`,
+                                                 detail `unit 8 "Pooter" (ENEMY_POOTER_NAME): properties.health =
+                                                 number 12 (int 12, double 12, text "12")` / `… = string "allies"` /
+                                                 `… = bool true` / `… = array with 0 children` / `… missing: no child
+                                                 named "nope" among 5 at segment 2` / `… unreadable: …`. Nothing is
+                                                 logged by the game (its own getters would log GON ERROR on a miss)
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
 dump                                             snapshot the units into a units event
@@ -120,11 +142,14 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"turn","n":N,"round":N}
 {"ev":"wait","line":N,"kind":"frames","n":N,"actual":N}
 {"ev":"expect","line":N,"kind":"console","arg":"...","ok":true,"detail":"..."}
-{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"],"stacks":[2]}]}
-                                                stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes)
+{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","namekey":"ENEMY_POOTER_NAME","faction":0,"move":3,"act":1,"turnkind":2,"hp":6,"shield":0,"divineshield":0,"strength":5,"dexterity":5,"constitution":5,"intelligence":5,"speed":5,"charisma":5,"luck":5,"statuses":["LuckUp"],"stacks":[2]}]}
+                                                stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes);
+                                                namekey/hp/shield/divineshield/the seven stats (2026-10-22) read Character+0x248/+0x4b0/+0x4b4/+0x4b8/+0x5a0..+0x5b8
+                                                (docs/engine-map.md "GON at runtime"); an unreadable field reads as 0 / ""
 {"ev":"log","text":"..."}
 {"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
 {"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}
+{"ev":"glow","line":N,"unit":N,"name":"...","arg":"<the directive's argument text>","ok":true,"detail":"FW_SetUnitGlow on 0x…: ok"}   unit -1 when no unit matched
 {"ev":"idle","line":N}                               interactive mode: the script ran to its end; the DLL now serves the pipe
 {"ev":"exec","id":N,"op":"exec","text":"...","ok":true,"lines":["..."]}   a pipe request served (also the reply on the pipe)
 {"ev":"units","id":N,...}                            a dump requested over the pipe carries the request id
@@ -133,7 +158,7 @@ Every event carries `t` (ms since harness start) and `frame`.
                                                 closed — it would otherwise stop the frame loop for good under a hidden
                                                 window; never decides the verdict, appended to its reason
 {"ev":"crash","code":"0xC0000005","addr":"0x...","module":"Mewgenics.exe","rva":"0x...","tid":N}
-{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|seed_failed|seed_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
+{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|seed_failed|seed_unavailable|glow_failed|glow_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
 ```
 
 Harness exit codes: `0` pass, `1` an expect failed or `quit 1`, `2` script timeout, `3` crash, `4` harness error
@@ -184,6 +209,7 @@ npm run test:ingame -- jokers-luck       # one mod
 npm run test:ingame -- jokers-luck smoke # one script
 npm run test:ingame -- --json            # machine-readable reports
 #   --timeout <ms>  --no-hide  --clean  --no-savecheck
+npm run test:unitglow                    # the per-unit glow proof: dev-sandbox/unit-glow + the shot measure (glow-measure.ts)
 ```
 
 Exit 0 when everything passed or was skipped, 1 on any failure, 2 on a usage error. A machine-level reason (no game,

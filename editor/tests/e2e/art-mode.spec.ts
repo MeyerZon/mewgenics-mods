@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { openApp, seedToursSeen, selectMod, readFrame, collectConsole } from "./helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -166,6 +166,30 @@ test.describe("Art mode — explorer & scene authoring", () => {
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 
+  test("Rig tab: New cat animation adds <name>F/<name>B frames on an _Append_CatTest donor placing a <name>Pose rig as `ani` at depth 1; the findings show the game-draws-its-own-parts note; the JSON has the export and the rig's slots are empty sprites (in memory)", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Rig" }).click();
+    await page.locator('input[aria-label="new cat animation name"]').fill("wave");
+    await page.getByRole("button", { name: "New cat animation" }).click();
+    await expect(page.locator(".cat-anim-label", { hasText: /^waveF$/ })).toBeVisible();
+    await expect(page.locator(".cat-anim-label", { hasText: /^waveB$/ })).toBeVisible();
+    await expect(page.locator(".cat-anim-finding", { hasText: /own parts/ })).toBeVisible();
+    // the rig the frames place is listed among the cat rigs
+    await expect(page.locator(".rig-slot .id", { hasText: /^head$/ })).toBeVisible();
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const sc = JSON.parse(await page.locator("textarea").first().inputValue());
+    expect(sc.exports._Append_CatTest).toBe("CatAnim_wave");
+    expect(sc.sprites.CatAnim_wave.labels).toEqual({ waveF: 0, waveB: 1 });
+    expect(sc.sprites.CatAnim_wave.layers.map((l: any) => `${l.name}@${l.depth}`)).toEqual(["ani@1"]);
+    expect(sc.sprites.CatAnim_wave.layers[0].keys.map((k: any) => k.ref)).toEqual(["wavePose", "wavePose"]);
+    expect(sc.sprites.wavePose.rig).toBe("cat");
+    expect(sc.sprites.wavePose.parts).toBe("game");
+    for (const l of sc.sprites.wavePose.layers) expect(sc.sprites[l.keys[0].ref].layers).toEqual([]);
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
   test("Export SVG writes art/<shape>.svg for an external editor; Replace from SVG brings an edited file back over the same shape", async ({ page }) => {
     const errors = collectConsole(page);
     await openSandboxScene(page);
@@ -182,6 +206,33 @@ test.describe("Art mode — explorer & scene authoring", () => {
     await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
     const sc = JSON.parse(await page.locator("textarea").first().inputValue());
     expect(sc.shapes.body.paths[0].fill).toBe("gray:3");
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
+  test("Bake glow… on a shape row bakes body_glow (4 bands) under body in the Starter sprite (in memory); the row then shows it as a baked glow", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    // before/after shots of the preview canvas for the PR's T3 look (editor/data/ is git-ignored)
+    const shots = join(REPO_ROOT, "editor", "data", "glow-shots");
+    mkdirSync(shots, { recursive: true });
+    const before = await page.locator(".pvcanvasbox canvas").screenshot({ path: join(shots, "before.png") });
+    await page.getByRole("button", { name: "Bake glow of body" }).click();
+    await page.locator('input[aria-label="glow colour of body"]').fill("#ff8000");
+    await page.locator('input[aria-label="glow blur of body"]').fill("6");
+    await page.getByRole("button", { name: "Bake glow now for body" }).click();
+    await expect(page.getByText(/baked "body_glow"/)).toBeVisible();
+    await page.waitForTimeout(400);
+    const after = await page.locator(".pvcanvasbox canvas").screenshot({ path: join(shots, "after.png") });
+    expect(Buffer.compare(before, after), "the preview changed once the halo was baked").not.toBe(0);
+    await expect(page.locator(".artrow", { hasText: "body_glow" })).toContainText("glow of body");
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const sc = JSON.parse(await page.locator("textarea").first().inputValue());
+    expect(sc.shapes.body_glow.paths).toHaveLength(4);
+    expect(sc.shapes.body_glow.baked).toMatchObject({ kind: "glow", of: "body", blur: 6, color: "#ff8000" });
+    const layers = sc.sprites.Starter.layers.slice().sort((a: any, b: any) => a.depth - b.depth).map((l: any) => l.keys[0].ref);
+    expect(layers.indexOf("body_glow")).toBe(layers.indexOf("body") - 1);
     const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });

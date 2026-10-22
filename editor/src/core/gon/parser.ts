@@ -11,6 +11,7 @@
 // `open`/`close` = null and the trailing `eof` token attached for trailing trivia.
 
 import { tokenize } from "./tokenizer.ts";
+import { scalarType } from "./typing.ts";
 
 import type { Token, Node, ObjectNode, ArrayNode, Field, Pos } from "./types.ts";
 
@@ -38,7 +39,8 @@ export function parse(src: string): ObjectNode {
     if (t.type === "lbracket") return parseArray(next());
     if (t.type === "string") {
       next();
-      return { kind: "scalar", token: t };
+      // The game types the unquoted text (Gon_ParseTokens 0x93fcf0): quoting never matters.
+      return { kind: "scalar", token: t, type: scalarType(t.value ?? t.text) };
     }
     throw new GonParseError(
       `unexpected ${t.type === "eof" ? "end of file" : "'" + t.text + "'"} where a value was expected`,

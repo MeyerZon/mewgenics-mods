@@ -1,0 +1,2 @@
+o { inner 5 nested { deep 2 } list [1] }
+arr [ { k 2 } ]

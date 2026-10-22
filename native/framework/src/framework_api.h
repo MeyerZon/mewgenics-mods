@@ -11,9 +11,9 @@
 
 #define FW_OWNER "mewframework"
 #define FW_VERSION_MAJOR 0
-#define FW_VERSION_MINOR 3
+#define FW_VERSION_MINOR 4
 #define FW_VERSION_PATCH 0
-#define FW_API_VERSION 3   /* bumped when functions are added; existing signatures never change */
+#define FW_API_VERSION 4   /* bumped when functions are added; existing signatures never change */
 
 /* Code symbols located by byte signature (see signatures.h). APPEND ONLY: mods compiled against an
  * older header keep working because the existing values never move. */
@@ -49,6 +49,14 @@ typedef enum FwSymbol {
     FW_SYM_AddComponent_MewDirector_named, /* MewDirector* (Scene*, Entity*, std::string* saveName) — caller keeps the string */
     FW_SYM_MewDirector_start,           /* void (MewDirector*) — new game / resume from the save's properties */
     FW_SYM_SaveProps_GetOrCreate,       /* Node** (PropMap* map, Node** out, std::string* key) — the save's property node (value at +0x30), created when absent */
+    /* API v4: per-unit glow (glow_engine.c rides the combat outline mask; docs/engine-map.md "Per-unit glow") */
+    FW_SYM_TacticsTest_LateRender,      /* void (TacticsTest*) — vftable slot 19, hooked; the plan runs after the original */
+    FW_SYM_vec_u32_AddUnique,           /* bool (vec_u32* {cap,count,data}, const uint32_t*) — push_back unless present */
+    FW_SYM_ShaderManager_GetOrCreateMaterial, /* Material* (ShaderManager*, std::string name, std::string shaderFile) — by-value strings, callee destroys */
+    FW_SYM_Material_SetUniformVec4,     /* void (Material*, std::string name, float x, float y, float z, float w) — callee destroys name */
+    FW_SYM_Material_SetUniformFloat,    /* void (Material*, std::string name, float v) — callee destroys name */
+    FW_SYM_Material_SetTexture,         /* void (Material*, std::string name, Texture*, int slot) — callee destroys name */
+    FW_SYM_Camera_AddPostProcessPass,   /* Pass* (Camera*, Material*, int layer) — owned by the camera; never cache the Pass* */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -65,6 +73,7 @@ typedef enum FwData {
     FW_DATA_SDL_CreateWindow,
     FW_DATA_SDL_CreateWindowWithProperties,
     FW_DATA_MewDirector,                       /* MewDirector* global; non-null at the main menu of a dev launch (test director) */
+    FW_DATA_ShaderManager,                     /* ShaderManager* global (API v4): the App object itself, material map at +0x278 */
     FW_DATA_COUNT_
 } FwData;
 
@@ -108,6 +117,12 @@ FW_EXPORT int FW_SetStatusStacks(void *status, int value);       /* set a custom
 FW_EXPORT int FW_CharacterHasStatus(void *character, const char *statusName);
 /* --- API v3: data addresses --- */
 FW_EXPORT uintptr_t FW_GetData(int dataId);   /* absolute address of a FwData entry, 0 if inactive/unknown */
+/* --- API v4: per-unit glow (combat scenes only; call on the game's main thread, e.g. from a turn callback or the
+ * harness). Draws a coloured rim around the unit through the game's own outline-mask pipeline. v1 keeps ONE shared
+ * colour (the first registered unit's); up to 16 units; registrations belong to the current fight scene and a unit
+ * whose pool slot is reused is dropped. 1 on success. */
+FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a);
+FW_EXPORT int FW_ClearUnitGlow(void *character);   /* 1 when it was registered */
 
 typedef int (*FW_fn_GetVersion)(void);
 typedef int (*FW_fn_IsActive)(void);
@@ -117,6 +132,8 @@ typedef int (*FW_fn_RegisterStatus)(const FwStatusDef *);
 typedef int (*FW_fn_SetStatusStacks)(void *, int);
 typedef int (*FW_fn_CharacterHasStatus)(void *, const char *);
 typedef uintptr_t (*FW_fn_GetData)(int);
+typedef int (*FW_fn_SetUnitGlow)(void *, float, float, float, float);
+typedef int (*FW_fn_ClearUnitGlow)(void *);
 
 typedef struct FwApi {
     FW_fn_GetVersion GetVersion;
@@ -126,7 +143,9 @@ typedef struct FwApi {
     FW_fn_RegisterStatus RegisterStatus;
     FW_fn_SetStatusStacks SetStatusStacks;
     FW_fn_CharacterHasStatus CharacterHasStatus;
-    FW_fn_GetData GetData;            /* v3; always the last field so older layouts stay valid prefixes */
+    FW_fn_GetData GetData;            /* v3 */
+    FW_fn_SetUnitGlow SetUnitGlow;    /* v4 */
+    FW_fn_ClearUnitGlow ClearUnitGlow; /* v4; new fields are appended so older layouts stay valid prefixes */
 } FwApi;
 
 /* Resolve the framework's exports from the loaded module. Returns 1 when every function of
@@ -141,6 +160,7 @@ static inline int FW_Resolve(FwApi *api) {
     FW__R(IsActive) FW__R(GetSymbol) FW__R(GetBuildName)
     FW__R(RegisterStatus) FW__R(SetStatusStacks) FW__R(CharacterHasStatus)
     FW__R(GetData)
+    FW__R(SetUnitGlow) FW__R(ClearUnitGlow)
 #undef FW__R
     return 1;
 }

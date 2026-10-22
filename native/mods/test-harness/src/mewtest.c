@@ -550,6 +550,12 @@ static int h_unit_info(void *u, int i, MtUnit *out) {
     read_i32(AT(ch, OFF_CH_MOVE), &out->move);
     read_i32(AT(ch, OFF_CH_ACT), &out->act);
     read_i32(AT(ch, OFF_CH_TURNKIND), &out->turnKind);
+    /* GON at runtime (2026-10-22): the display-name key, current HP / shields and the seven stats Character::init stored */
+    if (!read_msvc_string(AT(ch, OFF_CH_NAME_KEY), out->nameKey, sizeof out->nameKey)) out->nameKey[0] = 0;
+    read_i32(AT(ch, OFF_CH_HP), &out->hp);
+    read_i32(AT(ch, OFF_CH_SHIELD), &out->shield);
+    read_i32(AT(ch, OFF_CH_DIVINE_SHIELD), &out->divineShield);
+    if (!safe_read(AT(ch, OFF_CH_STATS), out->stats, sizeof out->stats)) memset(out->stats, 0, sizeof out->stats);
     void *ent = NULL;
     uint32_t cc = 0;
     void *comps = NULL;
@@ -617,11 +623,33 @@ static void pipe_write_line(const char *line) {
     FlushFileBuffers(g_pipe);
 }
 static void h_pipe_reply(void *u, const char *json) { (void)u; pipe_write_line(json); }
+/* expect gon: the walker (mt_gon.c) reads the game's GonObject nodes through the same guarded copy as everything
+ * else here, and the unit's entry node is Character+OFF_CH_GON_ENTRY (the merged data/characters entry) */
+static int h_mem_read(void *u, const void *addr, void *out, size_t n) { (void)u; return safe_read(addr, out, n); }
+static const void *h_unit_gon(void *u, int i) {
+    (void)u;
+    void *d[MAX_UNITS]; int n;
+    void *node = NULL;
+    if (!char_array(d, &n) || i < 0 || i >= n || !d[i]) return NULL;
+    if (!read_ptr(AT(d[i], OFF_CH_GON_ENTRY), &node)) return NULL;
+    return node;
+}
+
+/* glow <unit> …: FW_SetUnitGlow / FW_ClearUnitGlow (framework API v4) on the Character* of the units walk */
+static int h_set_unit_glow(void *u, int i, const float *rgba, char *detail, size_t cap) {
+    (void)u;
+    void *d[MAX_UNITS]; int n;
+    if (!g_fw.SetUnitGlow || !g_fw.ClearUnitGlow) { snprintf(detail, cap, "framework older than API v4 (no FW_SetUnitGlow)"); return -1; }
+    if (!char_array(d, &n) || i < 0 || i >= n || !d[i]) { snprintf(detail, cap, "unit %d is not in the units walk", i); return 0; }
+    int ok = rgba ? g_fw.SetUnitGlow(d[i], rgba[0], rgba[1], rgba[2], rgba[3]) : g_fw.ClearUnitGlow(d[i]);
+    snprintf(detail, cap, "%s on %p: %s", rgba ? "FW_SetUnitGlow" : "FW_ClearUnitGlow", d[i], ok ? "ok" : "refused (see mewframework.log)");
+    return ok ? 1 : 0;
+}
 
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
     h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
-    h_pipe_reply,
+    h_pipe_reply, h_set_unit_glow, h_mem_read, h_unit_gon,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */
