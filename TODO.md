@@ -93,6 +93,11 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
+- **Community adoption strategy** (2026-10-22, `docs/community-strategy.md` §7): 8 decisions. Ship through
+  Mewtator/Mewjector/Nexus rather than a rival manager? Keep or replace the `-savesuffix` gate for player builds? CI
+  release binaries? Heads-up to Tyler Glaiel first? The first three showcase mods? Nexus/Discord presence? The AI
+  transparency line? The outreach order? No outreach happens until you decide.
+
 - **Track `editor/component-schema.json`?** (component-schema PR, 2026-10-22) It is RE-derived (1741 `glaiel::` class
   names, ~1.3k key names, `.analysis/` evidence paths; ~0.9 MB) and tracked so CI and fresh clones get the
   validator checks. CLAUDE.md says the only tracked game-derived data is byte signatures in `bindings/`; this is names
