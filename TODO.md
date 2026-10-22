@@ -25,6 +25,8 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr104-glow-icon` (#104) — The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip "Glowing"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?
 - [ ] `pr109-rig-cat` (#109) — In shot-rig-1, does the cat under the yellow marker (our _CatRig_ clip) look like a real cat with Mangy's parts in the idle pose, the same cat as the marker-less control in shot-vanilla?
 - [ ] `pr109-rig-labels` (#109) — A swap rig without a label for an animation (hits, attack) keeps the cat on its frame: acceptable, or should a swap rig fall back to the vanilla labels it lacks?
+- [ ] `pr118-rig-sample` (#118) — In shot-rig-1 (rig-dll), is the cat beside the small yellow marker (bound only by catrig_sample.dll) a real cat with Mangy's parts, the same as the marker-less control?
+- [ ] `pr118-rig-dead` (#118) — A killed swap-rig cat with no death label stays STANDING (rig-labels shot-l20) where the vanilla cat lies dead (rig-labels-ctl shot-l20): acceptable, or should a swap rig fall back to the vanilla labels it lacks?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
