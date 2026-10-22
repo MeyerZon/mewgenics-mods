@@ -7,6 +7,7 @@ REM policy: symbol resolution, the launch gate, API bounds and the hook plan (te
 REM per-unit glow rules: registry, pruning, layer vector, pass lookup and writes (test_glow_rules) and the
 REM phase-0 3D observer: budget, camera/layer/item accessors, log line formats (test_obs3d_rules) and the
 REM M1 mesh draw: 4x4 maths vs the observed matrices, the std::function functor, GL save/restore, probe rules (test_mesh_draw).
+REM phase-M mesh rules: OBJ parser, game axes, unit cube, model registry, model paths (test_mesh_rules).
 REM Builds build\test_*.exe with w64devkit GCC and runs them; exit code = failures.
 setlocal
 if not defined GCC set "GCC=C:\raylib\w64devkit\bin\gcc.exe"
@@ -66,5 +67,9 @@ if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
   -o "%OUT%\test_mesh_draw.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_draw.exe"
+  "%HERE%test\test_mesh_rules.c" "%HERE%src\fw_mesh_rules.c" ^
+  -o "%OUT%\test_mesh_rules.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_mesh_rules.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal
