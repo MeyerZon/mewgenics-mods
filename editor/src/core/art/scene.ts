@@ -15,8 +15,8 @@ import { fillRuleProblems } from "./shape.ts";
 import { vanillaExportSource, exportShadowsMessage } from "./swf-rules.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
 import { rigFindings, catAnimFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
-import { textProblems } from "./text.ts";
-import type { SceneText } from "./text.ts";
+import { textProblems, locKeyHtmlProblem } from "./text.ts";
+import type { SceneText, LocKeySource } from "./text.ts";
 import { VANILLA_EXPORTS } from "./vanilla-exports.ts";
 import type { SceneImport } from "./vanilla-exports.ts";
 import type { SceneFilter } from "./effects.ts";
@@ -350,11 +350,16 @@ export interface SceneValidation {
   findings: Finding[];
 }
 
+export interface SceneValidateOptions {
+  /** is this string a localization key, and whose (text-loc-key-html)? Without it only the key shape is tested. */
+  locKey?: (key: string) => LocKeySource | null | undefined;
+}
+
 /**
  * Validate (and lightly normalize, in place, on a deep copy) a scene. Never throws on
  * bad user data; returns findings. `ok` is false only on errors.
  */
-export function validateScene(input: unknown): SceneValidation {
+export function validateScene(input: unknown, opts: SceneValidateOptions = {}): SceneValidation {
   const findings: Finding[] = [];
   const err = (code: string, message: string, at?: string[]) => findings.push({ severity: "error", code, message, path: at && at[0] });
   const warn = (code: string, message: string, at?: string[]) => findings.push({ severity: "warning", code, message, path: at && at[0] });
@@ -470,7 +475,11 @@ export function validateScene(input: unknown): SceneValidation {
   for (const id of Object.keys(scene.texts || {})) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text`, [`texts.${id}`]);
     ids.add(id);
-    for (const p of textProblems((scene.texts || {})[id])) err(p.code, `text "${id}": ${p.message}`, [`texts.${id}` + (p.at ? `.${p.at}` : "")]);
+    const t = (scene.texts || {})[id];
+    const problems = textProblems(t);
+    for (const p of problems) err(p.code, `text "${id}": ${p.message}`, [`texts.${id}` + (p.at ? `.${p.at}` : "")]);
+    const lk = !problems.length && t ? locKeyHtmlProblem(t, opts.locKey) : null;
+    if (lk) findings.push({ severity: lk.severity, code: "text-loc-key-html", message: `text "${id}": ${lk.message}`, path: `texts.${id}` });
   }
   for (const id of Object.keys(scene.sprites)) {
     const sp = scene.sprites[id];

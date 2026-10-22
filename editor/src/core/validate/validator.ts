@@ -22,7 +22,9 @@ import { parsePolicy } from "../overlay/policy.ts";
 import { findIndex } from "../gon/value.ts";
 import { resolutionSets } from "../names.ts";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.ts";
-import { ReportBuilder } from "./result.ts";
+import { ReportBuilder, finding } from "./result.ts";
+import { validateScene } from "../art/scene.ts";
+import type { LocKeySource } from "../art/text.ts";
 import { identifyExe } from "../bindings/check.ts";
 import { listManifests } from "../bindings/manifest.ts";
 import { locateGameDir } from "../ingame/launch.ts";
@@ -236,7 +238,10 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
 
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
-    if (o.fileType === "gon") {
+    if (o.relPath.endsWith(SCENE_SUFFIX)) {
+      // an art scene is a source the editor builds into a SWF, not a game file: run the scene validator on it
+      validateSceneFile(o, rb, fileLoc.file, (k) => (local.locRows.has(k) ? "mod" : loc.rows.has(k) ? "base" : null));
+    } else if (o.fileType === "gon") {
       validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
@@ -245,6 +250,20 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     }
   }
   return rb.build();
+}
+
+const SCENE_SUFFIX = ".scene.json";
+
+/** art/*.scene.json: the scene validator's findings (validateScene, the same core read_art_scene runs), located at the file. */
+function validateSceneFile(o: OverlayFile, rb: ReportBuilder, file: string, locKey: (key: string) => LocKeySource | null): void {
+  let json: unknown;
+  try {
+    json = JSON.parse(o.text);
+  } catch (e) {
+    rb.error("scene-json", `invalid JSON: ${e instanceof Error ? e.message : String(e)}`, { file });
+    return;
+  }
+  for (const f of validateScene(json, { locKey }).findings) rb.add(finding(f.severity, f.code, f.message, f.path ? { file, path: f.path } : { file }));
 }
 
 /** @param nativeBuild installed-exe identity; null = no exe */

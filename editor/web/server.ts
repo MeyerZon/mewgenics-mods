@@ -154,7 +154,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     }
     if (method === "POST" && url.pathname === "/api/art/validate") {
       const b = await body("/api/art/validate", req);
-      return sendJson(res, 200, api.validateArtScene(b.scene));
+      return sendJson(res, 200, api.validateArtScene(b.scene, b.mod));
     }
     if (method === "POST" && url.pathname === "/api/art/import-svg") {
       const b = await body("/api/art/import-svg", req);

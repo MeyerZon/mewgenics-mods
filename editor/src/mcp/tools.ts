@@ -320,7 +320,7 @@ export const TOOLS: ToolDef[] = [
   def(
     "write_art_scene",
     "Write a whole scene file inside the mod (validated first; refused with findings when invalid unless force). dryRun validates only. Writes are confined to mods/<mod>/.",
-    (a) => (a.dryRun ? api.validateArtScene(a.scene) : api.writeArtScene(a.mod, a.path, a.scene, { force: a.force })),
+    (a) => (a.dryRun ? api.validateArtScene(a.scene, a.mod) : api.writeArtScene(a.mod, a.path, a.scene, { force: a.force })),
   ),
   def(
     "new_art_scene",

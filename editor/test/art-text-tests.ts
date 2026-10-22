@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 import { exampleScene, validateScene } from "../src/core/art/scene.ts";
 import { readSwf, readTags, flattenTags } from "../src/core/art/swf-reader.ts";
 import * as emitter from "../src/core/art/swf-emitter.ts";
+import { SWF_RULE_CODES } from "../src/core/art/swf-rules.ts";
+import * as api from "../src/core/api.ts";
+import { loadLocalization } from "../src/core/base-data.ts";
 import { SWF_GATE_VARIANTS } from "../src/core/art/art-io.ts";
 import { vanillaSwfDir } from "../src/core/repo.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
@@ -119,6 +122,62 @@ export async function runArtTextTests(test: TestFn, assert: AssertFn, eq: EqFn):
     const src = readFileSync(join(HERE, "..", "web", "src", "art", "preview-gl.ts"), "utf8");
     assert(/fillText\(/.test(src), "fillText");
     assert(/scene\.texts/.test(src), "reads scene.texts");
+  });
+
+  // ---- text-loc-key-html: a key text must be plain (OBSERVED 2026-10-22, render-loctext.mewtest) ----------------------
+  const keyScene = (texts: Record<string, any>) => { const sc = exampleScene("lk") as any; sc.texts = texts; return sc; };
+  const box = { font: "Peralta", size: 22, width: 300, height: 40 };
+  const lkFindings = (sc: any, opts?: any) => ((validateScene as any)(sc, opts).findings as any[]).filter((f) => f.code === "text-loc-key-html");
+  const lookup = (key: string) => (key === "KEYWORD_POISON" ? "base" : key === "mymod_hello" ? "mod" : null);
+
+  test("validateScene: text-loc-key-html (warning) when an HTML text is exactly a key; none when html: false, for a plain word, or for a wrapper of several words that merely contains a key", () => {
+    const sc = keyScene({
+      htmlKey: { text: "KEYWORD_POISON", ...box },
+      plainKey: { text: "KEYWORD_POISON", ...box, html: false },
+      htmlWord: { text: "Hello", ...box },
+      htmlWords: { text: "Poison KEYWORD_POISON now", ...box },
+      htmlModKey: { text: "mymod_hello", ...box },
+      htmlShape: { text: "SOME_UNKNOWN_KEY", ...box },
+      explicitHtml: { text: "SOME_UNKNOWN_KEY", ...box, html: true },
+    });
+    const f = lkFindings(sc, { locKey: lookup });
+    eq(f.map((x) => x.path).sort().join(","), "texts.explicitHtml,texts.htmlKey,texts.htmlModKey,texts.htmlShape");
+    const sev = Object.fromEntries(f.map((x) => [x.path, x.severity]));
+    eq(sev["texts.htmlKey"], "warning", "a base key is a warning");
+    eq(sev["texts.htmlModKey"], "warning", "a mod key is a warning");
+    eq(sev["texts.htmlShape"], "info", "key shape only (no such key) is an info");
+    eq(sev["texts.explicitHtml"], "info", "key shape only (no such key) is an info");
+    assert((validateScene as any)(sc, { locKey: lookup }).ok, "a warning does not fail the scene");
+  });
+  test("text-loc-key-html says which test fired (base combined.csv / this mod's combined.csv.append / the key shape) and how to fix it (html: false, the Art-mode plain (localized) box)", () => {
+    const f = lkFindings(keyScene({ a: { text: "KEYWORD_POISON", ...box }, b: { text: "mymod_hello", ...box }, c: { text: "SOME_UNKNOWN_KEY", ...box } }), { locKey: lookup });
+    const by = Object.fromEntries(f.map((x) => [x.path, x.message as string]));
+    assert(/base combined\.csv/.test(by["texts.a"]!) && /key shape/.test(by["texts.a"]!), by["texts.a"]!);
+    assert(/combined\.csv\.append/.test(by["texts.b"]!) && !/key shape/.test(by["texts.b"]!), by["texts.b"]!);
+    assert(/looks like a loc key but no such key exists in the base table or this mod's csv files; if it is meant to be localized, add the key and set html: false/.test(by["texts.c"]!), by["texts.c"]!);
+    for (const m of [by["texts.a"], by["texts.b"]] as string[]) assert(/"html": false/.test(m) && /plain \(localized\)/.test(m) && /plain text/.test(m), m);
+  });
+  test("text-loc-key-html without a loc lookup (pure / live editing): only the key shape ^[A-Z][A-Z0-9_]{2,}$ fires", () => {
+    const f = lkFindings(keyScene({ a: { text: "KEYWORD_POISON", ...box }, b: { text: "mymod_hello", ...box }, c: { text: "HP", ...box }, d: { text: "Ab_C", ...box } }));
+    eq(f.map((x) => x.path).join(","), "texts.a");
+    eq(f[0].severity, "info", "without a table a key-shaped text cannot be confirmed: info");
+  });
+  test("SWF_RULE_CODES lists text-loc-key-html (warning, scene)", () => {
+    const c = (SWF_RULE_CODES as Record<string, any>)["text-loc-key-html"];
+    assert(!!c && c.severity === "warning" && c.where.join("+") === "scene", JSON.stringify(c));
+  });
+
+  test("api.validateArtScene(scene, mod) and read_art_scene feed the lookup from the mod's combined.csv.append and the base combined.csv (mods/_artprobe, the loc-key probe)", () => {
+    const sc = keyScene({ m: { text: "ARTPROBE_LOCTEST", ...box }, b: { text: "ENEMY_TOMTOM_NAME", ...box } });
+    const f = ((api.validateArtScene as any)(sc, "_artprobe").findings as any[]).filter((x) => x.code === "text-loc-key-html");
+    const by = Object.fromEntries(f.map((x) => [x.path, x.message as string]));
+    assert(/combined\.csv\.append/.test(by["texts.m"] || ""), JSON.stringify(f));
+    if (loadLocalization().rows.has("ENEMY_TOMTOM_NAME")) assert(/base combined\.csv/.test(by["texts.b"] || ""), JSON.stringify(f));
+    else console.log("  (skipped: the base half of text-loc-key-html — no .extracted/ combined.csv)");
+    const rd = api.readArtScene("_artprobe", "art/probe.scene.json") as any;
+    const paths = (rd.findings as any[]).filter((x) => x.code === "text-loc-key-html").map((x) => x.path);
+    assert(paths.includes("texts.keyModHtml") && paths.includes("texts.keyVanillaHtml"), paths.join(","));
+    assert(!paths.some((p: string) => /Plain$/.test(p)) && !paths.includes("texts.valueMod") && !paths.includes("texts.valueVanilla"), paths.join(","));
   });
 
   test("OBSERVED 2026-10-20 fixture: the game draws our DefineEditText in its own font (the probe's text box has text-coloured pixels)", () => {

@@ -186,6 +186,16 @@ structure → Publish uncompressed, strict-AS off → ship the `.swf`.
 - **Replace an existing SWF in place** (OBSERVED): drop a whole `.swf` at the same
   `swfs/<name>.swf` path in a modpath (whole-file override, same resolver as §2). Practical only
   if you re-author the whole file in Flash.
+- **Text** (OBSERVED 2026-10-21/22; `editor/src/core/art/text.ts`, `docs/art-preview-plan.md` "Text done"): a scene
+  text is a `DefineEditText` naming a game font class (no glyphs in the mod), in vanilla's HTML wrapper by default.
+  A text whose initial text is exactly a localization key is drawn **localized only when it is plain**
+  (`scene.texts.<id>.html: false`, flags 0xeca1); in the HTML wrapper the key is drawn as written
+  (`render-loctext.mewtest`, `docs/data-mods.md` "Localized text for mods"). The scene validator warns
+  **`text-loc-key-html`** for an HTML text that is exactly a key — a key of the base `combined.csv`, one the mod adds
+  in its own `data/text/*.csv` overlays (the message says which matched); a string that only has the key shape
+  `^[A-Z][A-Z0-9_]{2,}$` with no such key in either table is an **info** instead ("looks like a loc key …"); a wrapper of several words that merely contains a key is not a key text. Fix: `"html": false` on that
+  text, or tick **plain (localized)** on its row in Art mode (Shapes tab, Texts). `validate_mod` reports it for every
+  `art/*.scene.json` too.
 - **Native:** the SWF *player itself* (`glaiel::swf::*`) and which SWFs load are C++; new load
   behavior or new tag support is native.
 

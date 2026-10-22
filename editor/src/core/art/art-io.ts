@@ -9,6 +9,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSy
 import { join, dirname, relative } from "node:path";
 import { MODS_DIR, resolveModWritePath, isInside, touchesSaves, vanillaSwfDir } from "../repo.ts";
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
+import { sceneLocLookup } from "./scene-loc.ts";
 import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
 import { newCatAnimation } from "./cat-rig.ts";
 import { importSvg } from "./svg-import.ts";
@@ -113,7 +114,7 @@ export function readArtScene(modName: string, relPath: string): SceneReadResult 
   } catch (e) {
     return { ok: false, relPath, findings: [{ severity: "error", code: "scene-json", message: `invalid JSON: ${errText(e)}` }], error: "invalid JSON", text };
   }
-  const v = validateScene(json);
+  const v = validateScene(json, { locKey: sceneLocLookup(join(MODS_DIR, modName)) });
   return { ok: v.ok, relPath, scene: v.scene, findings: v.findings, text };
 }
 
@@ -132,7 +133,7 @@ export interface SceneWriteResult {
  */
 export function writeArtScene(modName: string, relPath: string, sceneInput: unknown, opts: { force?: boolean } = {}): SceneWriteResult {
   if (!relPath.endsWith(SCENE_SUFFIX)) return { ok: false, error: `scene files must end with ${SCENE_SUFFIX}`, findings: [] };
-  const v = validateScene(sceneInput);
+  const v = validateScene(sceneInput, { locKey: sceneLocLookup(join(MODS_DIR, modName)) });
   if (!v.ok && !opts.force) return { ok: false, error: "scene has errors (pass force to save anyway)", findings: v.findings };
   let abs: string;
   try {
@@ -375,7 +376,7 @@ export function buildSwf(modName: string, relPath: string, opts: BuildSwfOptions
   let scene: Scene;
   let findings: Finding[];
   if (opts.overrideScene !== undefined) {
-    const v = validateScene(opts.overrideScene);
+    const v = validateScene(opts.overrideScene, { locKey: sceneLocLookup(join(MODS_DIR, modName)) });
     if (!v.ok) return { ok: false, error: "scene has errors", findings: v.findings };
     scene = v.scene;
     findings = v.findings;

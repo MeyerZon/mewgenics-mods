@@ -56,6 +56,33 @@ export function textProblems(t: SceneText | null | undefined): TextProblem[] {
   return out;
 }
 
+/** Where a localization key comes from, as the caller's lookup knows it (the base combined.csv or the mod's own csv overlays). */
+export type LocKeySource = "base" | "mod";
+/** The cheap key test when no table is at hand: vanilla keys are ALL_CAPS_WITH_UNDERSCORES. */
+export const LOC_KEY_SHAPE = /^[A-Z][A-Z0-9_]{2,}$/;
+
+/**
+ * text-loc-key-html: the game substitutes a key only in a plain initial text (the text-box ctor 0x98d910 looks the
+ * whole string up; OBSERVED 2026-10-22, mods/_artprobe/tests/render-loctext.mewtest), so a text that is exactly a
+ * key and still carries vanilla's HTML wrapper is drawn as the key. A key the lookup confirms (base table or the mod's
+ * csv overlays) is a warning; a string that only has the key shape is an info (it may be a plain word like PROBE).
+ */
+export function locKeyHtmlProblem(t: SceneText, locKey?: (key: string) => LocKeySource | null | undefined): { severity: "warning" | "info"; message: string } | null {
+  if (!t || typeof t.text !== "string" || t.html === false) return null;
+  const key = t.text;
+  const why: string[] = [];
+  const src = locKey ? locKey(key) : null;
+  if (src === "base") why.push("in the base combined.csv");
+  if (src === "mod") why.push("added by this mod's combined.csv.append");
+  const shaped = LOC_KEY_SHAPE.test(key);
+  if (!why.length) {
+    if (!shaped) return null;
+    return { severity: "info", message: `"${key}" looks like a loc key but no such key exists in the base table or this mod's csv files; if it is meant to be localized, add the key and set html: false` };
+  }
+  if (shaped) why.push("matches the key shape ^[A-Z][A-Z0-9_]{2,}$");
+  return { severity: "warning", message: `"${key}" is a localization key (${why.join("; ")}) but the text is emitted as HTML (vanilla's <p><font> wrapper): the game substitutes a key only in a plain text, so it would draw "${key}" as written. Set "html": false on this text (Art mode: tick "plain (localized)" on its row)` };
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

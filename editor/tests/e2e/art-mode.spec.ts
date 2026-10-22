@@ -307,6 +307,29 @@ test.describe("Art mode — explorer & scene authoring", () => {
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 
+  test("Texts: a text that is a loc key shows text-loc-key-html in Findings; ticking its plain (localized) box writes html: false and clears the warning (in memory)", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await page.getByRole("button", { name: "New text" }).click();
+    const row = page.locator(".text-row").first();
+    const words = row.locator('input[aria-label^="words of"]');
+    await words.fill("KEYWORD_POISON");
+    await words.press("Enter");
+    await page.locator(".rightpanel .tab", { hasText: "Findings" }).click();
+    await expect(page.locator(".rightpanel")).toContainText("text-loc-key-html");
+    const plain = row.locator('input[type="checkbox"][aria-label^="plain (localized) of"]');
+    await expect(plain).not.toBeChecked();
+    await plain.check();
+    await expect(page.locator(".rightpanel")).not.toContainText("text-loc-key-html");
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const sc = JSON.parse(await page.locator("textarea").first().inputValue());
+    const t = Object.values(sc.texts || {}).find((x: any) => x.text === "KEYWORD_POISON") as any;
+    expect(t && t.html).toBe(false);
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
   test("import an SVG via the file input adds a shape", async ({ page }) => {
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
