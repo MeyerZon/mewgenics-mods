@@ -18,7 +18,8 @@ import { writeOverlay, writeModBinary } from "./mod-io.ts";
 import { registeredPatterns, matchRegisteredPattern } from "./names.ts";
 import { planRoom, planTilesetVariant } from "./level/level-templates.ts";
 
-export type TemplateKind = "ability" | "passive" | "item" | "status-data" | "room" | "tileset-variant" | "particle" | "vfx-ability" | "glowing-character";
+import type { TemplateKind } from "./template-kinds.ts";
+export type { TemplateKind } from "./template-kinds.ts";
 /** The kinds with a GON entry + localization rows (the map kinds have neither). */
 type EntryKind = Exclude<TemplateKind, "room" | "tileset-variant">;
 

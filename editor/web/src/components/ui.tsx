@@ -271,23 +271,42 @@ export interface FindingsListProps {
 
 const MARK: Record<string, string> = { error: "✕", warning: "!", info: "i" };
 
+/** One `.finding` row; memoized, so a re-validation that keeps a finding does not repaint it. */
+const FindingRow = React.memo(function FindingRow({ f }: { f: Finding }): React.JSX.Element {
+  return (
+    <div className={`finding ${f.severity}`}>
+      <span className="mark">{MARK[f.severity] || "i"}</span>
+      <div>
+        <div>
+          <span className="code">{f.code}</span>
+          {f.location && f.location.path ? <span className="muted">{`  @ ${f.location.path}`}</span> : null}
+          {f.location && f.location.line ? <span className="muted">{`  line ${f.location.line}`}</span> : null}
+        </div>
+        <div>{f.message}</div>
+      </div>
+    </div>
+  );
+});
+
+/** Stable row keys: code + path + line (a repeat of the same triple gets #2, #3, … in report order). */
+export function findingKeys(findings: readonly Finding[]): string[] {
+  const seen = new Map<string, number>();
+  return findings.map((f) => {
+    const k = `${f.code}|${f.location?.path ?? ""}|${f.location?.line ?? ""}`;
+    const n = (seen.get(k) ?? 0) + 1;
+    seen.set(k, n);
+    return n === 1 ? k : `${k}#${n}`;
+  });
+}
+
 /** `.finding <severity>` rows: the mark, the code, where (path / line), and the message. */
 export function FindingsList({ findings, empty }: FindingsListProps): React.JSX.Element {
+  const keys = React.useMemo(() => findingKeys(findings), [findings]);
   if (!findings.length) return <>{empty ?? null}</>;
   return (
     <div className="findings">
       {findings.map((f, n) => (
-        <div key={`${n}:${f.code}`} className={`finding ${f.severity}`}>
-          <span className="mark">{MARK[f.severity] || "i"}</span>
-          <div>
-            <div>
-              <span className="code">{f.code}</span>
-              {f.location && f.location.path ? <span className="muted">{`  @ ${f.location.path}`}</span> : null}
-              {f.location && f.location.line ? <span className="muted">{`  line ${f.location.line}`}</span> : null}
-            </div>
-            <div>{f.message}</div>
-          </div>
-        </div>
+        <FindingRow key={keys[n]} f={f} />
       ))}
     </div>
   );

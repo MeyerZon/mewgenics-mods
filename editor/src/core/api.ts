@@ -56,15 +56,34 @@ export function listBaseData(): { hasBaseData: boolean; categories: baseData.Cat
   return { hasBaseData: baseData.hasBaseData(), categories };
 }
 
-/** List entries within a category. */
-export function listBaseEntries(category: string, filter?: string): { category: string; entries: string[] } {
+/** The most entries one page of listBaseEntries returns. */
+export const BASE_PAGE_MAX = 5000;
+
+/** One page of a category listing: `entries` from `offset`, out of `total` matches. */
+export interface BaseEntriesPage {
+  category: string;
+  entries: string[];
+  total: number;
+  offset: number;
+}
+
+/**
+ * List entries within a category. Without `page` every match comes back (offset 0). With `page`, the
+ * slice [offset, offset + limit): a negative / non-numeric offset is 0, a limit outside 1..BASE_PAGE_MAX
+ * (or non-numeric) is clamped into it.
+ */
+export function listBaseEntries(category: string, filter?: string, page?: { offset?: number; limit?: number }): BaseEntriesPage {
+  let all: string[];
   if ((AUDIO_CATEGORIES as readonly string[]).includes(category)) {
     const ix = loadAudioIndex(DATA_CACHE_DIR);
-    const all = ix ? audioCategoryEntries(ix, category) ?? [] : [];
+    const list = ix ? audioCategoryEntries(ix, category) ?? [] : [];
     const f = filter?.toLowerCase();
-    return { category, entries: f ? all.filter((n) => n.toLowerCase().includes(f)) : all };
-  }
-  return { category, entries: baseData.listEntries(category, filter) };
+    all = f ? list.filter((n) => n.toLowerCase().includes(f)) : list;
+  } else all = baseData.listEntries(category, filter);
+  if (!page) return { category, entries: all, total: all.length, offset: 0 };
+  const offset = Number.isFinite(page.offset) ? Math.max(0, Math.floor(page.offset!)) : 0;
+  const limit = Number.isFinite(page.limit) ? Math.min(BASE_PAGE_MAX, Math.max(1, Math.floor(page.limit!))) : BASE_PAGE_MAX;
+  return { category, entries: all.slice(offset, offset + limit), total: all.length, offset };
 }
 
 export type ReadBaseEntryResult = ({ ok: true } & BaseEntry) | { ok: false; error: string };

@@ -7,11 +7,8 @@
     "art/SceneTabs.tsx": 3,
     "art/TimelineTab.tsx": 1,
     "art/VectorcraftPanel.tsx": 1,
-    "components/Center.tsx": 3,
     "components/ConceptsDrawer.tsx": 1,
-    "components/Drawers.tsx": 2,
     "components/Editor.tsx": 2,
-    "components/TemplateModal.tsx": 1,
     "components/Tours.tsx": 4,
     "components/WorkedExamples.tsx": 8
   },
@@ -34,7 +31,6 @@
     "art/SceneTabs.tsx": 1,
     "art/TimelineTab.tsx": 1,
     "components/ConceptsDrawer.tsx": 1,
-    "components/RightPanel.tsx": 1,
     "components/Tours.tsx": 2,
     "components/WorkedExamples.tsx": 1,
     "rooms/Rooms.tsx": 3

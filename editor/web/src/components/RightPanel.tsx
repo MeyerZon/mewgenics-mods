@@ -1,10 +1,10 @@
 // Right pane in Data mode: Validation | Preview | Components tabs.
 
 import React from "react";
-import { useS, sx, CodeView } from "./ui.tsx";
+import { useS, sx, CodeView, Tabs, Summary, FindingsList, Pill, SearchBox, Button } from "./ui.tsx";
 import { setTab, scheduleComponentSearch, searchComponents } from "../actions.ts";
 import type { Tab } from "../state.ts";
-import type { ComponentSearchResult } from "../types.ts";
+import type { ComponentSearchResult, ComponentUsage } from "../types.ts";
 
 function ValidationPanel(): React.JSX.Element {
   const rep = useS((s) => s.report);
@@ -16,33 +16,16 @@ function ValidationPanel(): React.JSX.Element {
   const title = e > 0 ? `${e} error${e === 1 ? "" : "s"}` : w > 0 ? `${w} warning${w === 1 ? "" : "s"}` : "Valid overlay";
   return (
     <div>
-      <div className={`summary ${level}`}>
-        <div className="badge">{level === "ok" ? "✓" : "!"}</div>
-        <div>
-          <div className="t">{title}</div>
-          <div className="d">{`${e} errors · ${w} warnings · ${infos} info`}</div>
-        </div>
-      </div>
+      <Summary level={level} title={title} detail={`${e} errors · ${w} warnings · ${infos} info`} />
       <div style={sx("margin-top:14px")}>
-        {rep.findings && rep.findings.length ? (
-          rep.findings.map((f, i) => (
-            <div key={i} className={`finding ${f.severity}`}>
-              <span className="mark">{f.severity === "error" ? "✕" : f.severity === "warning" ? "!" : "i"}</span>
-              <div>
-                <div>
-                  <span className="code">{f.code}</span>
-                  {f.location && f.location.path ? <span className="muted">{`  @ ${f.location.path}`}</span> : null}
-                  {f.location && f.location.line ? <span className="muted">{`  line ${f.location.line}`}</span> : null}
-                </div>
-                <div>{f.message}</div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="dotok" style={sx("margin:2px 0")}>
-            No findings — looks good.
-          </p>
-        )}
+        <FindingsList
+          findings={rep.findings || []}
+          empty={
+            <p className="dotok" style={sx("margin:2px 0")}>
+              No findings — looks good.
+            </p>
+          }
+        />
       </div>
     </div>
   );
@@ -59,10 +42,17 @@ function PreviewPanel(): React.JSX.Element {
       </div>
     );
   }
+  const baseMark = (
+    <Pill kind={pv.baseExists ? "ok" : "muted"} chip>
+      {`base ${pv.baseExists ? "found" : "missing"}`}
+    </Pill>
+  );
   if (pv.kind === "csv") {
     return (
       <div>
-        <p className="muted">{`CSV ${pv.mode} · base ${pv.baseExists ? "found" : "missing"} · ${pv.note || ""}`}</p>
+        <p className="muted pvmeta">
+          <Pill kind={pv.mode} chip>{`CSV ${pv.mode}`}</Pill> {baseMark} {pv.note ? <span>{pv.note}</span> : null}
+        </p>
         {pv.addedRows ? <CodeView text={pv.addedRows.map((r) => r.join(",")).join("\n")} /> : null}
         {pv.changedRows ? <CodeView text={pv.changedRows.map((c) => `row ${c.rowIndex}:\n  - ${c.before.join(",")}\n  + ${c.after.join(",")}`).join("\n")} /> : null}
       </div>
@@ -73,14 +63,18 @@ function PreviewPanel(): React.JSX.Element {
       <div className="sec" style={sx("margin-bottom:8px")}>
         Merge preview
       </div>
-      <p className="muted">{`GON ${pv.mode} · base ${pv.baseExists ? "found" : "missing"} · ${pv.effectiveEntryCount} effective entries`}</p>
+      <p className="muted pvmeta">
+        <Pill kind={pv.mode} chip>{`GON ${pv.mode}`}</Pill> {baseMark} <span>{`${pv.effectiveEntryCount} effective entries`}</span>
+      </p>
       {pv.touched.map((t) => (
         <div key={t.key} className="card">
           <div style={sx("display:flex;align-items:center;gap:8px;margin-bottom:8px")}>
             <span className="mono" style={sx("color:var(--ink)")}>
               {t.key}
             </span>
-            <span className={`pill ${t.status === "added" ? "ok" : t.status === "changed" ? "warn" : "muted"} chip`}>{t.status === "added" ? "+ added" : t.status}</span>
+            <Pill kind={t.status === "added" ? "ok" : t.status === "changed" ? "warn" : "muted"} chip>
+              {t.status === "added" ? "+ added" : t.status}
+            </Pill>
           </div>
           <div className="cols">
             <div>
@@ -113,7 +107,7 @@ function ComponentKeys({ components }: { components: ComponentSearchResult }): R
       {keys.length === 0 ? <small className="muted">no keys of its own (scalar form = stacks)</small> : null}
       {keys.map(([k, v]) => (
         <div key={k} className="ck">
-          <code>{k}</code> <small className="muted">{`${v.type}${v.default !== null ? ` = ${String(v.default)}` : ""}${v.required ? " (required)" : ""}${v.from !== c.name ? ` · from ${v.from}` : ""}`}</small>
+          <code>{k}</code> <small className="muted">{`${v.type}${v.default !== null ? ` = ${String(v.default)}` : ""}${v.required ? " (required)" : ""}${v.unread ? " (vanilla writes it; the game ignores it)" : ""}${v.from !== c.name ? ` · from ${v.from}` : ""}`}</small>
         </div>
       ))}
       {c.children ? <small className="muted">{`also takes ${c.children} names as children`}</small> : null}
@@ -122,23 +116,67 @@ function ComponentKeys({ components }: { components: ComponentSearchResult }): R
   );
 }
 
+/** How many where-used files a result lists before "show all". */
+const WHERE_USED_SHOWN = 8;
+/** The server lists at most this many files per class (api.searchComponents asks components.whereUsed for 20). */
+const WHERE_USED_CAP = 20;
+
+/** A matched class: its button (click = search exactly it) and, when known, the base files that use it. */
+const ComponentRow = React.memo(function ComponentRow({ name, usedIn }: { name: string; usedIn: ComponentUsage[] | undefined }): React.JSX.Element {
+  const [all, setAll] = React.useState(false);
+  const button = (
+    <button className="ci" onClick={() => void searchComponents(name)}>
+      {name}
+    </button>
+  );
+  if (!usedIn) return button;
+  const n = usedIn.length;
+  const shown = all ? usedIn : usedIn.slice(0, WHERE_USED_SHOWN);
+  return (
+    <div className="wu">
+      {button}
+      <small className="muted wucount">{n === 0 ? "not used in the base data" : `used in ${n}${n >= WHERE_USED_CAP ? "+" : ""} file${n === 1 ? "" : "s"}`}</small>
+      {n ? (
+        <ul className="wufiles">
+          {shown.map((u) => (
+            <li key={u.file} className="wufile" title={u.sample.join("\n")}>
+              <span className="mono">{u.file}</span> <small className="muted">{`×${u.hits}`}</small>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {n > WHERE_USED_SHOWN ? (
+        <Button size="sm" variant="ghost" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? "show fewer" : `show all ${n}`}
+        </Button>
+      ) : null}
+    </div>
+  );
+});
+
 export function ComponentSearch(): React.JSX.Element {
   const components = useS((s) => s.components);
+  const [query, setQuery] = React.useState("");
+  const usage = React.useMemo(() => new Map((components?.whereUsed || []).map((w) => [w.name, w.usedIn] as const)), [components]);
   return (
     <div>
-      <div className="search" style={sx("margin:0 0 10px")}>
-        <span aria-hidden="true">⌕</span>
-        <input placeholder="search glaiel:: class names…" aria-label="Search C++ component class names" onChange={(e) => scheduleComponentSearch(e.currentTarget.value.trim())} />
-      </div>
+      <SearchBox
+        value={query}
+        placeholder="search glaiel:: class names…"
+        aria-label="Search C++ component class names"
+        style={sx("margin:0 0 10px")}
+        onChange={(v) => {
+          setQuery(v);
+          scheduleComponentSearch(v.trim());
+        }}
+      />
       {components ? (
         <div>
           <small className="muted">{`${components.count} match`}</small>
           <ComponentKeys components={components} />
           <div className="complist">
             {(components.names || []).map((n) => (
-              <button key={n} className="ci" onClick={() => void searchComponents(n)}>
-                {n}
-              </button>
+              <ComponentRow key={n} name={n} usedIn={usage.get(n)} />
             ))}
           </div>
         </div>
@@ -149,21 +187,20 @@ export function ComponentSearch(): React.JSX.Element {
   );
 }
 
+const TABS: { id: Tab; label: string }[] = [
+  { id: "validation", label: "Validation" },
+  { id: "preview", label: "Preview" },
+  { id: "components", label: "Components" },
+];
+
 export function RightPanel(): React.JSX.Element {
   const tab = useS((s) => s.tab);
-  const mk = (id: Tab, labelText: string) => (
-    <button className={"tab" + (tab === id ? " active" : "")} onClick={() => setTab(id)}>
-      {labelText}
-    </button>
-  );
   return (
     <div className="rightpanel">
-      <div className="tabs">
-        {mk("validation", "Validation")}
-        {mk("preview", "Preview")}
-        {mk("components", "Components")}
+      <Tabs items={TABS} value={tab} onChange={setTab} aria-label="Data mode panels" />
+      <div className="panelbody" role="tabpanel">
+        {tab === "preview" ? <PreviewPanel /> : tab === "components" ? <ComponentSearch /> : <ValidationPanel />}
       </div>
-      <div className="panelbody">{tab === "preview" ? <PreviewPanel /> : tab === "components" ? <ComponentSearch /> : <ValidationPanel />}</div>
     </div>
   );
 }

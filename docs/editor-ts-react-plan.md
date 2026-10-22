@@ -165,6 +165,17 @@ PR 1 of the UX overhaul adds the shared building blocks; later PRs move the scre
   `src/core/api.ts`: PE headers only via the validator's memoized `installedNativeBuild`, `existsSync` checks) feeds
   the status bar; `web/src/deeplink.ts` reads and writes `?mode=&mod=&file=` (`history.replaceState`). Launch… shows
   the `launch-dev.bat mods\<mod>` command with Copy; the editor never starts the game. e2e: `tests/e2e/shell.spec.ts`.
+- **Data mode (PR 3)**: the base explorer pages instead of capping: `GET /api/base?category=&filter=&offset=&limit=`
+  answers `{entries, total, offset}` (`api.listBaseEntries`' optional page; junk offset → 0, limit clamped 1..5000;
+  no page → everything, as the MCP tool reads it), the UI asks for `BASE_PAGE` (300) and "Show 300 more" appends the
+  next page through `applyBasePage` (`state.ts`: offset 0 replaces, offset = loaded length appends, anything else is a
+  stale reply). The filter's placeholder names the category it filters. The scaffold kinds are one list,
+  `src/core/template-kinds.ts` (pure): the zod `TemplateKind` enum is built from it and the template modal imports
+  it. The modal is titled "New mod" from the mod menu (`openTemplate({intent: "mod"})`), "Scaffold an overlay"
+  otherwise; it is a `<form>` (Enter scaffolds) and the result is the written-file list with Open (a `.lvl` opens in
+  Rooms), "Open first file & validate" and the raw JSON behind `<details>`. The Components tab shows the where-used
+  files `/api/components?whereUsed=1` returns (first 8, "show all"). The editor status line reads `S.validating`
+  (`validating…` from the keystroke until the newest check answers, then `validated`; `validation off` without a mod).
 
 ## Follow-ups (not in this stack)
 
