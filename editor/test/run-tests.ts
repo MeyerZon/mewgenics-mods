@@ -419,6 +419,13 @@ if (BASE_READY) {
   if (vt) vt.runValidatorTests(test, assert, eq);
 }
 
+// ---- 4b'. Component key schema (editor/component-schema.json; T0 synthetic + T1 vanilla zero findings) ----
+{
+  let cs: typeof import("./component-schema-tests.ts") | null = null;
+  try { cs = await import("./component-schema-tests.ts"); } catch (e) { test("component-schema-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (cs) cs.runComponentSchemaTests(test, assert, eq);
+}
+
 // ---- 5. MCP smoke test ------------------------------------------------------
 /** The `tools/call` result shape the smoke reads (MCP content blocks). */
 interface ToolCallResult {
