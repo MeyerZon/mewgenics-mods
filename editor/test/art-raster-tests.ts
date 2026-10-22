@@ -134,16 +134,16 @@ export async function runArtRasterTests(test: TestFn, assert: AssertFn, eq: EqFn
   test("addBitmapToScene findings: bitmap-too-large (error, >= texture_atlas_size 4096 in either dimension), bitmap-upscaled (info: shown above 1 clip px per texel), id taken without replace (error), bad mode / origin (error)", () => {
     need();
     const big = R.addBitmapToScene(newScene("x"), { id: "Big", file: "art/Big.png", width: 4096, height: 10 });
-    assert(!big.ok); assert(codes(big.findings, "error").includes("bitmap-too-large"), JSON.stringify(big.findings));
+    assert(!big.ok, "too large"); assert(codes(big.findings, "error").includes("bitmap-too-large"), JSON.stringify(big.findings));
     const up = R.addBitmapToScene(newScene("x"), { id: "Up", file: "art/Up.png", width: 32, height: 32, scale: 4 });
-    assert(up.ok); assert(codes(up.findings, "info").includes("bitmap-upscaled"), JSON.stringify(up.findings));
+    assert(up.ok, "upscaled ok"); assert(codes(up.findings, "info").includes("bitmap-upscaled"), JSON.stringify(up.findings));
     const sc = newScene("x") as any; sc.shapes.Taken = { paths: [] };
     const taken = R.addBitmapToScene(sc, { id: "Taken", file: "art/T.png", width: 4, height: 4 });
-    assert(!taken.ok); assert(codes(taken.findings, "error").includes("id-taken"), JSON.stringify(taken.findings));
+    assert(!taken.ok, "taken"); assert(codes(taken.findings, "error").includes("id-taken"), JSON.stringify(taken.findings));
     const again = R.addBitmapToScene(sc, { id: "Taken", file: "art/T.png", width: 4, height: 4, replace: true });
     assert(again.ok, JSON.stringify(again.findings));
-    assert(!R.addBitmapToScene(newScene("x"), { id: "M", file: "art/M.png", width: 4, height: 4, mode: "photo" }).ok);
-    assert(!R.addBitmapToScene(newScene("x"), { id: "M", file: "art/M.png", width: 4, height: 4, origin: "middle" }).ok);
+    assert(!R.addBitmapToScene(newScene("x"), { id: "M", file: "art/M.png", width: 4, height: 4, mode: "photo" }).ok, "bad mode");
+    assert(!R.addBitmapToScene(newScene("x"), { id: "M", file: "art/M.png", width: 4, height: 4, origin: "middle" }).ok, "bad origin");
   });
 
   test("pngProblems: a decodable 8-bit PNG is fine; 16-bit / interlaced / not-a-PNG are bitmap-unsupported-format with the decoder's reason", () => {
@@ -198,7 +198,7 @@ export async function runArtRasterTests(test: TestFn, assert: AssertFn, eq: EqFn
     assert(r.ok, JSON.stringify(r)); eq(r.width, 3); eq(r.height, 5);
     assert(!existsSync(modDir), "nothing written");
     const bad = A.importBitmap({ base64: Buffer.from([1, 2, 3]).toString("base64") });
-    assert(!bad.ok); eq(bad.findings[0].code, "bitmap-unsupported-format");
+    assert(!bad.ok, "bad png"); eq(bad.findings[0].code, "bitmap-unsupported-format");
   });
 
   test("api.importBitmap { mod, file } reads an existing PNG inside the mod (mods/_artprobe/art/checker.png: 8×8) without copying it", () => {

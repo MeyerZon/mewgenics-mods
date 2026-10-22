@@ -15,7 +15,9 @@ import { fillRuleProblems } from "./shape.ts";
 import { vanillaExportSource, exportShadowsMessage } from "./swf-rules.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
 import { rigFindings, catAnimFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
-import { textProblems } from "./text.ts";
+import { textProblems, GAME_FONTS } from "./text.ts";
+import { fontProblems, missingGlyphs } from "./font.ts";
+import type { SceneFont } from "./font.ts";
 import type { SceneText } from "./text.ts";
 import { VANILLA_EXPORTS } from "./vanilla-exports.ts";
 import type { SceneImport } from "./vanilla-exports.ts";
@@ -161,6 +163,19 @@ export interface SceneSprite {
   parts?: "game";
 }
 
+/**
+ * A PNG inside the mod, drawn as a bitmap fill. The fill type the emitter writes follows the game's FillStyle_read
+ * 0xb6ebc0: 0x41 clipped + smoothed (default), 0x40 repeat (smoothed), 0x43 clipped pixel-snapped, 0x42 repeat
+ * pixel-snapped (raster.ts bitmapFillType; swf_lib.shader samples 0x40/0x41 LINEAR with mips, 0x42/0x43 nearest mip 0).
+ */
+export interface SceneBitmap {
+  file: string;
+  /** tile the bitmap outside its own rectangle (mod(uv,1)) instead of streaking its edge texels (default false) */
+  repeat?: boolean;
+  /** false: pixel-snapped (nearest texel, no mips) — pixel art; default true: filtered with mips */
+  smooth?: boolean;
+}
+
 export interface SceneStage {
   width: number;
   height: number;
@@ -175,7 +190,9 @@ export interface Scene {
   preview?: { palette?: number };
   curveResolution?: number;
   shapes: Record<string, SceneShape>;
-  bitmaps?: Record<string, { file: string }>;
+  bitmaps?: Record<string, SceneBitmap>;
+  /** fonts this mod carries (font.ts: a DefineFont3 + a SymbolClass name = the font id); texts[].font may name one */
+  fonts?: Record<string, SceneFont>;
   gradients?: Record<string, SceneGradient>;
   /** DefineEditText characters in a game font (text.ts); keys place them like shapes */
   texts?: Record<string, SceneText>;
@@ -442,6 +459,8 @@ export function validateScene(input: unknown): SceneValidation {
     const bm = scene.bitmaps[id];
     if (!bm || typeof bm.file !== "string" || !/\.png$/i.test(bm.file)) err("bitmap-file", `bitmap "${id}" needs a .png file path relative to the mod`, [`bitmaps.${id}`]);
     else if (bm.file.includes("..") || bm.file.startsWith("/") || /^[A-Za-z]:/.test(bm.file)) err("bitmap-path", `bitmap "${id}" path must stay inside the mod folder`, [`bitmaps.${id}.file`]);
+    if (bm && bm.repeat !== undefined && typeof bm.repeat !== "boolean") err("bitmap-option", `bitmap "${id}": repeat must be true or false`, [`bitmaps.${id}.repeat`]);
+    if (bm && bm.smooth !== undefined && typeof bm.smooth !== "boolean") err("bitmap-option", `bitmap "${id}": smooth must be true or false`, [`bitmaps.${id}.smooth`]);
   }
   for (const id of Object.keys(scene.sprites)) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap`, [`sprites.${id}`]);
@@ -467,10 +486,25 @@ export function validateScene(input: unknown): SceneValidation {
     // whose clip places an imported symbol crashes the game (0xc0000005 at Mewgenics.exe+0xa4a1a9)
     err("import-unsupported", `import "${id}": the game crashes when a clip places a symbol imported from another SWF (OBSERVED 2026-10-20)`, [`imports.${id}`]);
   }
+  const fonts = scene.fonts || {};
+  for (const id of Object.keys(fonts)) {
+    if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text/font`, [`fonts.${id}`]);
+    ids.add(id);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(id)) err("font-id", `font id "${id}" is its class name in the game's registry: letters, digits and _ only`, [`fonts.${id}`]);
+    for (const p of fontProblems(fonts[id])) err(p.code, `font "${id}": ${p.message}`, [`fonts.${id}` + (p.at ? `.${p.at}` : "")]);
+    // the by-name lookup (Swf_FindCharacterByClassName 0x9bb910 → 0x9bb6f0) scans the last-loaded file first
+    if (GAME_FONTS.includes(id)) findings.push({ severity: "info", code: "export-shadows-vanilla", message: `font "${id}" has the name of a game font class: the by-name lookup scans the last-loaded file first, so this mod font replaces the game's "${id}" in every text that names it (INFERRED from the decompile, not run in-game)`, path: `fonts.${id}` });
+  }
   for (const id of Object.keys(scene.texts || {})) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text`, [`texts.${id}`]);
     ids.add(id);
-    for (const p of textProblems((scene.texts || {})[id])) err(p.code, `text "${id}": ${p.message}`, [`texts.${id}` + (p.at ? `.${p.at}` : "")]);
+    const t = (scene.texts || {})[id];
+    for (const p of textProblems(t, Object.keys(fonts))) err(p.code, `text "${id}": ${p.message}`, [`texts.${id}` + (p.at ? `.${p.at}` : "")]);
+    const f = t && typeof t.font === "string" ? fonts[t.font] : undefined;
+    if (f && t && typeof t.text === "string") {
+      const miss = missingGlyphs(f, t.text);
+      if (miss.length) warn("font-glyph-missing", `text "${id}": font "${t.font}" has no glyph for ${miss.map((c) => JSON.stringify(c)).join(", ")}; add them to fonts.${t.font}.glyphs (what the game draws instead: docs/art-pipeline.md "Fonts")`, [`texts.${id}.text`]);
+    }
   }
   for (const id of Object.keys(scene.sprites)) {
     const sp = scene.sprites[id];
@@ -584,6 +618,7 @@ export function buildOrder(scene: Scene): string[] {
   const out = Object.keys(scene.imports || {}).sort();
   out.push(...Object.keys(scene.bitmaps || {}).sort());
   out.push(...Object.keys(scene.shapes).sort());
+  out.push(...Object.keys(scene.fonts || {}).sort());
   out.push(...Object.keys(scene.texts || {}).sort());
   const seen = new Set(out);
   const visit = (id: string) => {

@@ -18,6 +18,8 @@ import { bakeGlow } from "./glow.ts";
 import type { BakeGlowOptions, BakeGlowResult } from "./glow.ts";
 import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
+import { addBitmapToScene, pngProblems, rasterFindings } from "./raster.ts";
+import type { AddBitmapOptions } from "./raster.ts";
 import type { RgbaImage } from "./png.ts";
 import { emitSwf, minimalGateSwf } from "./swf-emitter.ts";
 import type { EmitReport } from "./swf-emitter.ts";
@@ -301,6 +303,74 @@ export function bakeGlowIntoScene(args: BakeGlowIntoSceneArgs): { ok: boolean; e
   return { ok: true, glowId: r.glowId, layersAdded: r.layersAdded, findings: r.findings };
 }
 
+export interface ImportBitmapArgs extends Partial<Omit<AddBitmapOptions, "file" | "width" | "height">> {
+  /** the mod the PNG and the scene belong to */
+  mod?: string;
+  /** a PNG already inside the mod (e.g. art/Photo.png) */
+  file?: string;
+  /** or the PNG's bytes, base64; with `mod` it is written to art/<id>.png */
+  base64?: string;
+  /** a scene file to add it to (mods/<mod>/<scenePath>); without it the PNG is only checked */
+  scenePath?: string;
+}
+
+export interface ImportBitmapResult {
+  ok: boolean;
+  error?: string;
+  width?: number;
+  height?: number;
+  /** the PNG inside the mod */
+  relPath?: string;
+  bitmapId?: string;
+  shapeId?: string;
+  spriteId?: string;
+  exportName?: string;
+  findings: Finding[];
+}
+
+/**
+ * Import a PNG as raster art (raster.ts addBitmapToScene): check it (8-bit, non-interlaced, < texture_atlas_size in both
+ * dimensions), copy it into mods/<mod>/art/<id>.png when it came as bytes, and — with scenePath — add the bitmap, its
+ * shape and (mode sprite / background) a 1-frame exported clip to the scene file. The agent-facing op behind MCP
+ * import_bitmap and the Art mode's Import PNG….
+ */
+export function importBitmap(a: ImportBitmapArgs): ImportBitmapResult {
+  let bytes: Uint8Array;
+  if (typeof a.base64 === "string") bytes = new Uint8Array(Buffer.from(a.base64, "base64"));
+  else if (a.mod && a.file) {
+    const r = readModBytes(a.mod, a.file);
+    if (!r.ok) return { ok: false, error: r.error, findings: [] };
+    bytes = r.bytes;
+  } else return { ok: false, error: "pass base64 (the PNG's bytes) or mod + file (a PNG inside the mod)", findings: [] };
+  const head = pngProblems(bytes);
+  if (head.length) return { ok: false, error: head[0]!.message, findings: head };
+  let image: RgbaImage;
+  try {
+    image = decodePng(bytes);
+  } catch (e) {
+    return { ok: false, error: errText(e), findings: [{ severity: "error", code: /not supported|not a PNG/.test(errText(e)) ? "bitmap-unsupported-format" : "bitmap-decode", message: errText(e) }] };
+  }
+  const base = (a.file || "").replace(/^.*\//, "").replace(/\.png$/i, "").replace(/[^A-Za-z0-9_]/g, "_");
+  const id = a.id || (/^[A-Za-z_]/.test(base) ? base : base ? `Bitmap_${base}` : "Bitmap");
+  const findings: Finding[] = rasterFindings(`${a.file || "the PNG"}`, image.width, image.height, a.scale ?? 1);
+  if (findings.some((f) => f.severity === "error")) return { ok: false, error: findings.find((f) => f.severity === "error")!.message, width: image.width, height: image.height, findings };
+  let relPath = a.file;
+  if (typeof a.base64 === "string" && a.mod) {
+    relPath = `${ART_DIR}/${id}.png`;
+    const w = writeModBytes(a.mod, relPath, bytes);
+    if (!w.ok) return { ok: false, error: w.error, findings };
+  }
+  if (!a.scenePath) return { ok: true, width: image.width, height: image.height, relPath, findings };
+  if (!a.mod || !relPath) return { ok: false, error: "scenePath needs mod (and the PNG inside it)", findings };
+  const rd = readArtScene(a.mod, a.scenePath);
+  if (!rd.ok || !rd.scene) return { ok: false, error: rd.error || "scene does not validate", findings: [...findings, ...(rd.findings || [])] };
+  const add = addBitmapToScene(rd.scene, { ...a, id, file: relPath, width: image.width, height: image.height });
+  if (!add.ok) return { ok: false, error: add.findings.find((f) => f.severity === "error")?.message || "could not add the bitmap", width: image.width, height: image.height, relPath, findings: add.findings };
+  const w = writeArtScene(a.mod, a.scenePath, add.scene);
+  if (!w.ok) return { ok: false, error: w.error, findings: [...add.findings, ...w.findings] };
+  return { ok: true, width: image.width, height: image.height, relPath, bitmapId: add.bitmapId, shapeId: add.shapeId, spriteId: add.spriteId, exportName: add.exportName, findings: add.findings };
+}
+
 /**
  * Export one shape of a scene as art/<shapeId>.svg inside the mod, for an external vector editor (VectorCraft,
  * Inkscape, …). Import it back with importSvgIntoScene({ …, replace: true, options: { applyViewBox: false } }).
@@ -330,7 +400,8 @@ export function loadSceneBitmaps(modName: string, scene: Scene): { bitmaps: Map<
     try {
       bitmaps.set(id, decodePng(r.bytes));
     } catch (e) {
-      findings.push({ severity: "error", code: "bitmap-decode", message: `bitmap "${id}": ${errText(e)}`, path: `bitmaps.${id}.file` });
+      // a PNG the decoder does not take (16-bit, interlaced, …) is bitmap-unsupported-format; a corrupt one bitmap-decode
+      findings.push({ severity: "error", code: /not supported|not a PNG/.test(errText(e)) ? "bitmap-unsupported-format" : "bitmap-decode", message: `bitmap "${id}": ${errText(e)}`, path: `bitmaps.${id}.file` });
     }
   }
   return { bitmaps, findings };

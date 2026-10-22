@@ -97,6 +97,21 @@ export const TOOL_INPUT = {
       replace: bool("overwrite a shape with that id").optional(),
     }).describe("save the imported shape into a scene (needs mod); without it nothing is written").optional(),
   }),
+  import_bitmap: z.object({
+    mod: str("mod folder (for file, for scene, and where base64 is written as art/<id>.png)").optional(),
+    file: str("a .png already inside the mod, e.g. art/Photo.png").optional(),
+    base64: str("or the PNG bytes, base64 (8-bit, non-interlaced; < 4096 in both dimensions)").optional(),
+    scene: str("scene file inside the mod to add it to; without it the PNG is only checked (size + findings)").optional(),
+    id: str("shape id (default: the file name); the bitmap is <id>Bmp, the clip <id>Clip").optional(),
+    mode: z.enum(["sprite", "background", "fill"]).describe("sprite (default): a 1-frame clip exported for graphics.movieclip, origin at the feet; background: the same with origin top-left, for a tileset combat_background plate; fill: only the bitmap + a shape to place yourself").optional(),
+    scale: num("clip px per texel (default 1; vanilla combat plates: 2000x1500 at 0.7667). Above 1 it looks soft in-game (bitmap-upscaled)").optional(),
+    origin: z.enum(["top-left", "center", "bottom-center"]).describe("where clip (0,0) sits on the image").optional(),
+    repeat: bool("tile the bitmap outside its rectangle (fill type 0x40) instead of streaking the edge texels (0x41)").optional(),
+    smooth: bool("false: pixel-snapped sampling (0x43 / 0x42) for pixel art; default true: filtered with mips").optional(),
+    area: z.object({ width: num("px"), height: num("px") }).describe("fill mode: the shape's size in clip px; with repeat the bitmap tiles over it").optional(),
+    exportName: str("sprite / background: the linkage name (default the id)").optional(),
+    replace: bool("overwrite existing ids / export").optional(),
+  }),
   export_svg: z.object({
     mod: str(),
     path: str("scene file inside the mod"),
@@ -337,6 +352,14 @@ export const TOOLS: ToolDef[] = [
       }
       if (!a.svgText && !(a.mod && a.path)) throw new ToolError("pass svgText, or mod + path");
       return api.importSvgShape({ svgText: a.svgText, mod: a.mod, relPath: a.path, options: a.options });
+    },
+  ),
+  def(
+    "import_bitmap",
+    "Import a PNG as raster art (the game draws bitmaps natively: every vanilla combat background is a 2000x1500 bitmap plate, enemies and props carry bitmap parts). Checks it (8-bit, non-interlaced: bitmap-unsupported-format; both sides < 4096 = texture_atlas_size or the game stops with \"Bitmap Fill could not fit into atlas\": bitmap-too-large), writes base64 bytes to mods/<mod>/art/<id>.png, and with scene adds <id>Bmp (a DefineBitsLossless2 at build), the shape <id> (a rect with the bitmap fill: clipped/repeat x smoothed/pixel-snapped) and, for mode sprite / background, a 1-frame clip <id>Clip exported as exportName: use it as graphics.movieclip, or point a tileset's combat_background at it (data/tilesets.gon.merge). Then build_swf. See docs/art-pipeline.md \"Raster art\" for what the game does with gray pixels and scale.",
+    (a) => {
+      if (!a.base64 && !(a.mod && a.file)) throw new ToolError("pass base64, or mod + file");
+      return api.importBitmap({ mod: a.mod, file: a.file, base64: a.base64, scenePath: a.scene, id: a.id, mode: a.mode, scale: a.scale, origin: a.origin, repeat: a.repeat, smooth: a.smooth, area: a.area, exportName: a.exportName, replace: a.replace });
     },
   ),
   def(

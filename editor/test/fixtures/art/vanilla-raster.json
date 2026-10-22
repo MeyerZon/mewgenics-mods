@@ -1,0 +1,201 @@
+{
+  "observed": "2026-10-22, build 25143593 (read-only census of .extracted/swfs/*.swf; src/core/art/raster-census.ts)",
+  "files": {
+    "backgrounds.swf": {
+      "bitmaps": 104,
+      "maxWidth": 2000,
+      "maxHeight": 1500,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "bosses4.swf": {
+      "bitmaps": 3,
+      "maxWidth": 3373,
+      "maxHeight": 2784,
+      "fillTypes": [
+        "0x40",
+        "0x41"
+      ]
+    },
+    "catparts.swf": {
+      "bitmaps": 5,
+      "maxWidth": 630,
+      "maxHeight": 630,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "effects.swf": {
+      "bitmaps": 1,
+      "maxWidth": 300,
+      "maxHeight": 1000,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "enemies.swf": {
+      "bitmaps": 2,
+      "maxWidth": 279,
+      "maxHeight": 263,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "enemies2.swf": {
+      "bitmaps": 12,
+      "maxWidth": 370,
+      "maxHeight": 1097,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "enemies3.swf": {
+      "bitmaps": 5,
+      "maxWidth": 152,
+      "maxHeight": 229,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "enemies4.swf": {
+      "bitmaps": 6,
+      "maxWidth": 256,
+      "maxHeight": 256,
+      "fillTypes": [
+        "0x41",
+        "0x43"
+      ]
+    },
+    "events.swf": {
+      "bitmaps": 133,
+      "maxWidth": 1999,
+      "maxHeight": 1146,
+      "fillTypes": [
+        "0x40",
+        "0x41"
+      ]
+    },
+    "familytree.swf": {
+      "bitmaps": 5,
+      "maxWidth": 1423,
+      "maxHeight": 803,
+      "fillTypes": [
+        "0x40",
+        "0x41"
+      ]
+    },
+    "house.swf": {
+      "bitmaps": 99,
+      "maxWidth": 3000,
+      "maxHeight": 2000,
+      "fillTypes": [
+        "0x40",
+        "0x41"
+      ]
+    },
+    "house_interstitials.swf": {
+      "bitmaps": 18,
+      "maxWidth": 1920,
+      "maxHeight": 1080,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "interactive_objects.swf": {
+      "bitmaps": 1,
+      "maxWidth": 170,
+      "maxHeight": 183,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "map.swf": {
+      "bitmaps": 27,
+      "maxWidth": 2000,
+      "maxHeight": 2000,
+      "fillTypes": [
+        "0x40",
+        "0x41"
+      ]
+    },
+    "modular_cutscenes.swf": {
+      "bitmaps": 208,
+      "maxWidth": 3006,
+      "maxHeight": 1783,
+      "fillTypes": [
+        "0x40",
+        "0x41"
+      ]
+    },
+    "npcs.swf": {
+      "bitmaps": 89,
+      "maxWidth": 3072,
+      "maxHeight": 2000,
+      "fillTypes": [
+        "0x40",
+        "0x41"
+      ]
+    },
+    "particles.swf": {
+      "bitmaps": 52,
+      "maxWidth": 256,
+      "maxHeight": 256,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "placeholder_screens.swf": {
+      "bitmaps": 1,
+      "maxWidth": 111,
+      "maxHeight": 92,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "portraits.swf": {
+      "bitmaps": 1,
+      "maxWidth": 256,
+      "maxHeight": 256,
+      "fillTypes": [
+        "0x43"
+      ]
+    },
+    "static_objects.swf": {
+      "bitmaps": 841,
+      "maxWidth": 722,
+      "maxHeight": 1653,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "tiles.swf": {
+      "bitmaps": 16,
+      "maxWidth": 74,
+      "maxHeight": 69,
+      "fillTypes": [
+        "0x41"
+      ]
+    },
+    "ui.swf": {
+      "bitmaps": 134,
+      "maxWidth": 2000,
+      "maxHeight": 2000,
+      "fillTypes": [
+        "0x40",
+        "0x41"
+      ]
+    }
+  },
+  "formats": [
+    5
+  ],
+  "jpeg": 0,
+  "alleyBackground": {
+    "file": "backgrounds.swf",
+    "export": "AlleyBGTest",
+    "frames": 10,
+    "bitmap": "2000x1500",
+    "scale": 0.7667
+  }
+}

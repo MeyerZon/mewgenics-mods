@@ -106,6 +106,22 @@ export interface ParsedBitmap {
   pixels: Uint8Array;
 }
 
+/** DefineFont3, as DefineFont::decode 0xa2a4a0 reads it (metrics and advances in raw ×20 em units) */
+export interface ParsedFont {
+  id: number;
+  flags: number;
+  language: number;
+  name: string;
+  /** the code table as characters, in glyph order */
+  codes: string;
+  ascent: number;
+  descent: number;
+  leading: number;
+  advances: number[];
+  /** per glyph: the FillStyle0 index of its first style record (0 when the glyph is empty or uses FillStyle1) */
+  glyphFill0: number[];
+}
+
 export interface ParsedEditText {
   id: number;
   bounds: Rect;
@@ -151,6 +167,8 @@ export interface Tag {
   abcBytes?: Uint8Array;
   entries?: Array<{ id: number; name: string }>;
   bitmap?: ParsedBitmap;
+  /** DefineFont3 */
+  font?: ParsedFont;
   /** DefineEditText */
   editText?: ParsedEditText;
   /** ImportAssets / ImportAssets2 */
@@ -485,9 +503,14 @@ function parseTag(code: number, body: Uint8Array, offset: number): Tag {
       case TAG.DefineScalingGrid:
       case TAG.DefineMorphShape:
       case TAG.DefineMorphShape2:
+      case TAG.DefineFont3: {
+        t.raw = body;
+        t.id = r.u16();
+        t.font = parseDefineFont3(body, t.id);
+        break;
+      }
       case TAG.DefineFont:
       case TAG.DefineFont2:
-      case TAG.DefineFont3:
       case TAG.DefineBits:
       case TAG.DefineBitsJPEG2:
       case TAG.DefineBitsJPEG3:
@@ -504,6 +527,45 @@ function parseTag(code: number, body: Uint8Array, offset: number): Tag {
     t.raw = body;
   }
   return t;
+}
+
+function parseDefineFont3(b: Uint8Array, id: number): ParsedFont {
+  const r = new BitReader(b, 2);
+  const flags = r.u8();
+  const language = r.u8();
+  const nameLen = r.u8();
+  const name = new TextDecoder().decode(b.subarray(r.pos, r.pos + nameLen));
+  r.pos += nameLen;
+  const n = r.u16();
+  // a font with no glyphs (a device-font reference, e.g. testing_stuff.swf) has no offset / code tables
+  if (n === 0) return { id, flags, language, name, codes: "", ascent: 0, descent: 0, leading: 0, advances: [], glyphFill0: [] };
+  const wideOffsets = !!(flags & 0x08), wideCodes = !!(flags & 0x04);
+  const tableAt = r.pos;
+  const offs: number[] = [];
+  for (let i = 0; i <= n; i++) offs.push(wideOffsets ? r.u32() : r.u16());
+  const glyphFill0: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const g = new BitReader(b, tableAt + offs[i]!);
+    const nFill = g.readUB(4);
+    g.readUB(4);
+    let fill0 = 0;
+    if (g.readUB(1) === 0) {
+      const fl = g.readUB(5);
+      if (fl & 0x01) { const mb = g.readUB(5); g.readSB(mb); g.readSB(mb); }
+      if (fl & 0x02) fill0 = g.readUB(nFill);
+    }
+    glyphFill0.push(fill0);
+  }
+  const c = new BitReader(b, tableAt + offs[n]!);
+  let codes = "";
+  for (let i = 0; i < n; i++) codes += String.fromCharCode(wideCodes ? c.u16() : c.u8());
+  let ascent = 0, descent = 0, leading = 0;
+  const advances: number[] = [];
+  if (flags & 0x80) {
+    ascent = c.u16(); descent = c.u16(); leading = c.s16();
+    for (let i = 0; i < n; i++) advances.push(c.s16());
+  }
+  return { id, flags, language, name, codes, ascent, descent, leading, advances, glyphFill0 };
 }
 
 // ---- shapes ----------------------------------------------------------------------

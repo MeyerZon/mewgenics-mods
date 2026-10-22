@@ -514,6 +514,92 @@
     }
   },
   {
+    "name": "import_bitmap",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string",
+          "description": "mod folder (for file, for scene, and where base64 is written as art/<id>.png)"
+        },
+        "file": {
+          "type": "string",
+          "description": "a .png already inside the mod, e.g. art/Photo.png"
+        },
+        "base64": {
+          "type": "string",
+          "description": "or the PNG bytes, base64 (8-bit, non-interlaced; < 4096 in both dimensions)"
+        },
+        "scene": {
+          "type": "string",
+          "description": "scene file inside the mod to add it to; without it the PNG is only checked (size + findings)"
+        },
+        "id": {
+          "type": "string",
+          "description": "shape id (default: the file name); the bitmap is <id>Bmp, the clip <id>Clip"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "sprite",
+            "background",
+            "fill"
+          ],
+          "description": "sprite (default): a 1-frame clip exported for graphics.movieclip, origin at the feet; background: the same with origin top-left, for a tileset combat_background plate; fill: only the bitmap + a shape to place yourself"
+        },
+        "scale": {
+          "type": "number",
+          "description": "clip px per texel (default 1; vanilla combat plates: 2000x1500 at 0.7667). Above 1 it looks soft in-game (bitmap-upscaled)"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "top-left",
+            "center",
+            "bottom-center"
+          ],
+          "description": "where clip (0,0) sits on the image"
+        },
+        "repeat": {
+          "type": "boolean",
+          "description": "tile the bitmap outside its rectangle (fill type 0x40) instead of streaking the edge texels (0x41)"
+        },
+        "smooth": {
+          "type": "boolean",
+          "description": "false: pixel-snapped sampling (0x43 / 0x42) for pixel art; default true: filtered with mips"
+        },
+        "area": {
+          "type": "object",
+          "properties": {
+            "width": {
+              "type": "number",
+              "description": "px"
+            },
+            "height": {
+              "type": "number",
+              "description": "px"
+            }
+          },
+          "required": [
+            "width",
+            "height"
+          ],
+          "additionalProperties": false,
+          "description": "fill mode: the shape's size in clip px; with repeat the bitmap tiles over it"
+        },
+        "exportName": {
+          "type": "string",
+          "description": "sprite / background: the linkage name (default the id)"
+        },
+        "replace": {
+          "type": "boolean",
+          "description": "overwrite existing ids / export"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "export_svg",
     "inputSchema": {
       "type": "object",
