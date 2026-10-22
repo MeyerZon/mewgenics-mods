@@ -4,7 +4,8 @@
 // generated tones (*.wav is git-ignored, so fixtures are written at test time). T1 (skips without the game): the
 // pack's own sound sets resolve every file they name, and the audio-probe tones are up to date.
 
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { readWav, isOgg, makeToneWav } from "../src/core/audio/wav.ts";
@@ -18,7 +19,11 @@ import type { ValidateOptions } from "../src/core/validate/validator.ts";
 import type { Report } from "../src/core/validate/result.ts";
 import { locateGameDir } from "../src/core/ingame/launch.ts";
 import { AUDIOPROBE_TONES, writeAudioProbeTones } from "../scripts/audio-probe-tones.ts";
+import { parseResults } from "../src/core/ingame/results.ts";
+import { checkDeltaExpects } from "../src/core/ingame/logs.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "ingame");
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
@@ -220,6 +225,18 @@ export function runAudioTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     for (const rel of Object.keys(AUDIOPROBE_TONES)) { assert(existsSync(join(dir, rel)), rel); }
     eq(writeAudioProbeTones(dir, true).length, 0, "--check passes right after writing");
     assert(Object.keys(AUDIOPROBE_TONES).includes("audio/combat_sfx/pickup_coin.wav"), "the replacement mirrors a vanilla path");
+  });
+
+  // ---- the T2 witness, pinned from a real run (2026-10-22, scrubbed result.jsonl) ----
+  test("audio T2 fixture: debug_sfx_memory_use steps by each decoded WAV's data chunk — +35280 (mod-only AudioProbe_New), +24000 (the mod's pickup_coin.wav, vanilla is 44714), +0 (absent file)", () => {
+    const res = parseResults(readFileSync(join(FIXTURES, "result-audioprobe-sounds.jsonl"), "utf8"));
+    const [r] = checkDeltaExpects(res.consoleLines, [{ line: 30, prefix: "Total loaded sfx: ", deltas: [35280, 24000, 0] }]);
+    assert(r!.ok, r!.detail);
+    const dataBytes = (rel: string): number => { const t = AUDIOPROBE_TONES[rel]!; return Math.round(t.seconds * (t.sampleRate ?? 44100)) * (t.channels ?? 1) * 2; };
+    eq(dataBytes("audio/combat_sfx/audioprobe_new.wav"), 35280, "the generator's new tone is the +35280");
+    eq(dataBytes("audio/combat_sfx/pickup_coin.wav"), 24000, "the generator's replacement tone is the +24000");
+    assert(res.consoleLines.some((l) => l.endsWith("_audioprobe/audio/combat_sfx.gon.merge.raw")), "the set overlay was read from the mod (.raw = loose file)");
+    assert(res.consoleLines.includes("audio/combat_sfx/audioprobe_new.wav") && !res.consoleLines.some((l) => /audioprobe_absent/.test(l)), "the new file is a loaded key; the absent one never is");
   });
 
   // ---- T1: the installed pack ---------------------------------------------------
