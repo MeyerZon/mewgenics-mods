@@ -122,7 +122,7 @@ if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_order.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
-  "%HERE%test\test_mesh_hide.c" "%HERE%src\fw_mesh_hide.c" "%HERE%src\fw_mesh_order.c" "%HERE%src\fw_functor.c" "%HERE%src\fw_obj3d_rules.c" "%HERE%src\fw_mesh_rules.c" ^
+  "%HERE%test\test_mesh_hide.c" "%HERE%src\fw_mesh_hide.c" "%HERE%src\fw_mesh_order.c" "%HERE%src\fw_functor.c" "%HERE%src\fw_obj3d_rules.c" "%HERE%src\fw_unit_face.c" "%HERE%src\fw_mesh_rules.c" ^
   -o "%OUT%\test_mesh_hide.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_hide.exe"
