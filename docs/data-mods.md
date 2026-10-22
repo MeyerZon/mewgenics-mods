@@ -30,6 +30,11 @@ and `mods/dev-sandbox/data/abilities/fighter_abilities.gon.append` (adds `SpinDe
 CSV merge works by position: a `combined.csv.merge` row `,5,,` changes only column 2 of that row, so it is
 fragile when the base game adds rows. Prefer `.append` with new localization keys.
 
+Not every file in a mod folder is an overlay: `tests/` (the harness's `.mewtest` scripts), `art/` (the editor's
+scene sources; the built SWFs go under `swfs/`) and dotfiles are never loaded by the game (the pack has no such
+root), so the validator skips them (`isPackPath` in `editor/src/core/validate/validator.ts`; before 2026-10-22 each
+`.mewtest` drew a `whole-file-replace` warning).
+
 ## GON typing fidelity (2026-10-22)
 
 How the game reads a `.gon` file, OBSERVED in `Gon_LoadText` 0x940840 → `Gon_Tokenize` 0x93f090 →

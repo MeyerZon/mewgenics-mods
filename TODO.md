@@ -447,6 +447,10 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt` and listed in `ingame-testing.md`.
 
 ### Next, directly queued
+- [x] **Validator: `tests/*.mewtest` no longer warn `whole-file-replace`** (#103's hand-back, 2026-10-22, branch
+  `fix/validator-mewtest-whole-file`): `tests/`, `art/` and dotfiles are not overlays. Left as is: a NEW pack file
+  (`mods/fw-glow/shaders/fw_unit_glow.shader`, no base copy) still warns `whole-file-replace`; a mod whose only pack
+  files are build output (`swf-gate`, swfs git-ignored) now warns `mod-empty` until they are built.
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")

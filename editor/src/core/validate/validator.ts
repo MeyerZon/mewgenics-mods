@@ -83,6 +83,18 @@ function listModFiles(modDir: string): Array<{ relPath: string; abs: string }> {
   return out;
 }
 
+/**
+ * Mod folders that hold files the game never loads: `tests/` (the harness's .mewtest scripts) and `art/` (the
+ * editor's scene sources; their built SWFs go under `swfs/`). The pack has no such root (its roots are audio, data,
+ * levels, shaders, swfs, textures and two loose files), so these are never overlays; neither is a dotfile
+ * (`.gitignore`) anywhere in the mod.
+ */
+const NON_PACK_ROOTS = new Set(["tests", "art"]);
+export function isPackPath(relPath: string): boolean {
+  const segs = relPath.split("/");
+  return !NON_PACK_ROOTS.has(segs[0]!) && !segs.some((s) => s.startsWith("."));
+}
+
 export interface TextOverride {
   relPath?: string;
   text?: string;
@@ -96,7 +108,7 @@ function collectOverlays(modDir: string, override?: TextOverride): OverlayFile[]
   const files = listModFiles(modDir);
   const texts = new Map<string, string>();
   for (const f of files) {
-    if (f.relPath === "description.json") continue;
+    if (f.relPath === "description.json" || !isPackPath(f.relPath)) continue;
     try {
       texts.set(f.relPath, readFileSync(f.abs, "utf8"));
     } catch {
