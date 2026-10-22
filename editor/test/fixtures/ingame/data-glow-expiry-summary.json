@@ -1,0 +1,71 @@
+{
+  "summary": {
+    "verdict": "expired",
+    "glow": {
+      "verdict": "glow",
+      "delta": 5566,
+      "glowPixels": 5566,
+      "noglowPixels": 0,
+      "glowRegion": {
+        "count": 5566,
+        "x0": 2630,
+        "y0": 693,
+        "x1": 2757,
+        "y1": 825
+      },
+      "noglowRegion": null
+    },
+    "expired": {
+      "verdict": "none",
+      "delta": 0,
+      "glowPixels": 0,
+      "noglowPixels": 0,
+      "glowRegion": null,
+      "noglowRegion": null
+    },
+    "status": {
+      "atGlow": {
+        "found": true,
+        "carries": true
+      },
+      "atExpired": {
+        "found": true,
+        "carries": false
+      }
+    },
+    "perDump": [
+      {
+        "found": true,
+        "carries": true
+      },
+      {
+        "found": true,
+        "carries": false
+      },
+      {
+        "found": true,
+        "carries": false
+      }
+    ],
+    "colour": [
+      255,
+      0,
+      255
+    ],
+    "verdictRun": "pass",
+    "reason": "all 3 expectation(s) passed; 3 shot(s)",
+    "saveUnchanged": true,
+    "shots": {
+      "glow": "shot-glow.png",
+      "expired": "shot-expired.png",
+      "noglow": "shot-noglow.png"
+    }
+  },
+  "observed": "2026-10-22",
+  "script": "mods/fw-glow/tests/data-glow-expiry.mewtest",
+  "run": "20261022-120852-fw-glow-data-glow-expiry",
+  "frameworkLog": [
+    "FwGlow_ff00ff: glow status created on <addr> with 1 stacks (obj <addr>, temporary)",
+    "glow: <addr> no longer carries a FwGlow_ status; rim cleared (0 registered)"
+  ]
+}

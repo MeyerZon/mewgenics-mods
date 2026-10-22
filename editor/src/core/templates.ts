@@ -1,6 +1,9 @@
 // new_from_template: scaffold an ability / passive / item / status-data overlay
 // plus matching localization rows, writing them under mods/<name>/ (or returning
 // the content for a dry run). Generated GON uses the .append overlay mode.
+// glowing-character: a character variant that glows from the data layer (a status FwGlow_<colour> granted by a
+// StatusOnSpawnIn / StatusOnBattleStart passive; docs/data-mods.md "Asking for a unit glow from data") plus the
+// status's keyword_tooltips entry and its text rows; the colour is checked by the validator's invalid-glow-name rule.
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -10,8 +13,9 @@ import { toValue } from "./gon/value.ts";
 import { parseCsv, serializeCsv } from "./overlay/csv.ts";
 import { LOC_COLUMNS } from "./base-data.ts";
 import { writeOverlay } from "./mod-io.ts";
+import { registeredPatterns, matchRegisteredPattern } from "./names.ts";
 
-export type TemplateKind = "ability" | "passive" | "item" | "status-data";
+export type TemplateKind = "ability" | "passive" | "item" | "status-data" | "glowing-character";
 
 /** Scaffold knobs; every field is optional and comes from untyped JSON (MCP args / HTTP body). */
 export interface TemplateOptions {
@@ -28,18 +32,26 @@ export interface TemplateOptions {
   kind?: string;
   frame?: number | string;
   gonFile?: string;
+  /** glowing-character: rrggbb or rrggbbaa (hex), or the whole status name FwGlow_<rrggbb[aa]> */
+  colour?: string;
+  /** glowing-character: the passive that grants the status (default StatusOnSpawnIn) */
+  trigger?: string;
   fillTranslations?: boolean;
   write?: boolean;
   dryRun?: boolean;
 }
 
-const LOC_PREFIX: Record<TemplateKind, string> = { ability: "ABILITY", passive: "PASSIVE", item: "ITEM", "status-data": "KEYWORD" };
+const LOC_PREFIX: Record<TemplateKind, string> = { ability: "ABILITY", passive: "PASSIVE", item: "ITEM", "status-data": "KEYWORD", "glowing-character": "KEYWORD" };
 const DEFAULT_GON_FILE: Record<TemplateKind, string> = {
   ability: "data/abilities/mod_abilities.gon.append",
   passive: "data/passives/mod_passives.gon.append",
   item: "data/items/mod_items.gon.append",
   "status-data": "data/keyword_tooltips.gon.append",
+  "glowing-character": "data/characters/enemies.gon.append",
 };
+
+/** the passives that may grant a glowing-character's status (StatusOnSpawnIn is the in-game-proven one, FwGlowRat) */
+const GLOW_TRIGGERS = ["StatusOnSpawnIn", "StatusOnBattleStart"];
 
 function toKeyToken(s: string): string {
   return s.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
@@ -157,6 +169,7 @@ export function newFromTemplate(modName: string, kind: TemplateKind, name: strin
   if (!name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     return { ok: false, error: `invalid entry name: ${JSON.stringify(name)} (letters, digits, underscore; not starting with a digit)` };
   }
+  if (kind === "glowing-character") return glowingCharacter(modName, name, options);
   const gonRel = options.gonFile || DEFAULT_GON_FILE[kind];
   const gonAbs = join(MODS_DIR, modName, gonRel);
   if (entryExists(gonAbs, name)) {
@@ -212,4 +225,79 @@ export function newFromTemplate(modName: string, kind: TemplateKind, name: strin
     written.push(r.path);
   }
   return { ok: true, kind, name, written, localizationKeys: [nameKey, descKey] };
+}
+
+/** the glow status a colour option asks for, checked against the glow pattern of editor/registered-names.json (the rule
+ * behind the validator's invalid-glow-name), or an error */
+function glowStatusName(colour: unknown): { status: string } | { error: string } {
+  const glow = registeredPatterns().find((p) => p.kind === "glow");
+  if (!glow) return { error: "no glow pattern in editor/registered-names.json (kind glow)" };
+  if (typeof colour !== "string" || colour.trim() === "") {
+    return { error: `glowing-character needs options.colour: rrggbb or rrggbbaa hex (e.g. "ff00ff"), or the whole name ${glow.prefix}ff00ff` };
+  }
+  const c = colour.trim().replace(/^#/, "");
+  const status = c.startsWith(glow.prefix) ? c : glow.prefix + c;
+  if (!matchRegisteredPattern([glow], status)) {
+    return { error: `invalid-glow-name: "${status}" is not a glow request: the colour must be 6 or 8 hex digits (rrggbb or rrggbbaa, e.g. ${glow.prefix}ff00ff)` };
+  }
+  return { status };
+}
+
+/** GON append text: the entry after the file's current content, or a new file with a header comment */
+function appendEntry(abs: string, entry: string, what: string): string {
+  return existsSync(abs) ? readFileSync(abs, "utf8").replace(/\s*$/, "") + "\n\n" + entry : `// ${what} added by the mewgenics mod editor (.append overlay)\n${entry}`;
+}
+
+function glowingCharacter(modName: string, name: string, o: TemplateOptions): TemplateResult {
+  const g = glowStatusName(o.colour);
+  if ("error" in g) return { ok: false, error: g.error };
+  const status = g.status;
+  const trigger = o.trigger || "StatusOnSpawnIn";
+  if (!GLOW_TRIGGERS.includes(trigger)) return { ok: false, error: `unknown trigger "${trigger}": use ${GLOW_TRIGGERS.join(" or ")}` };
+  const parent = o.parent || "Rat";
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(parent)) return { ok: false, error: `invalid parent: ${JSON.stringify(parent)}` };
+
+  const charRel = o.gonFile || DEFAULT_GON_FILE["glowing-character"];
+  const charAbs = join(MODS_DIR, modName, charRel);
+  if (entryExists(charAbs, name)) return { ok: false, error: `entry "${name}" already exists in mods/${modName}/${charRel}` };
+  const charEntry = `// ${name}: a ${parent} that glows while it carries the status ${status} (granted by ${trigger}).
+// Load fw-glow next to this mod (it ships the rim shader). docs/data-mods.md "Asking for a unit glow from data".
+${name} {
+    variant_of ${parent}
+    passives {
+        ${trigger} {
+            ${status} 1
+        }
+    }
+}
+`;
+  const files: TemplatePlanFile[] = [{ relPath: charRel, content: appendEntry(charAbs, charEntry, "characters") }];
+
+  // the status's display text: keyword_tooltips by the full status name (skipped when the mod already has one)
+  const base = `KEYWORD_${toKeyToken(status)}`;
+  const nameKey = `${base}_NAME`, descKey = `${base}_DESC`;
+  const kwRel = "data/keyword_tooltips.gon.append";
+  const kwAbs = join(MODS_DIR, modName, kwRel);
+  if (!entryExists(kwAbs, status)) files.push({ relPath: kwRel, content: appendEntry(kwAbs, scaffoldGon("status-data", status, o), "keyword tooltips") });
+
+  const csvRel = "data/text/combined.csv.append";
+  const csvAbs = join(MODS_DIR, modName, csvRel);
+  const existingRows = existsSync(csvAbs) ? parseCsv(readFileSync(csvAbs, "utf8")) : [];
+  const existingKeys = new Set(existingRows.map((r) => r[0]));
+  const fill = o.fillTranslations !== false;
+  const newRows: string[][] = [];
+  if (!existingKeys.has(nameKey)) newRows.push(locRow(nameKey, o.displayName || "Glowing", fill));
+  if (!existingKeys.has(descKey)) newRows.push(locRow(descKey, o.desc || "This unit is outlined by a coloured glow.", fill));
+  const allRows = existingRows.filter((r) => !(r.length === 1 && r[0] === "")).concat(newRows);
+  files.push({ relPath: csvRel, content: serializeCsv(allRows) + (allRows.length ? "\n" : "") });
+  const localizationKeys = [nameKey, descKey];
+
+  if (o.dryRun === true) return { ok: true, dryRun: true, kind: "glowing-character", name, files, localizationKeys };
+  const written: string[] = [];
+  for (const f of files) {
+    const r = writeOverlay(modName, f.relPath, f.content);
+    if (!r.ok) return { ok: false, error: r.error, partial: written };
+    written.push(r.path);
+  }
+  return { ok: true, kind: "glowing-character", name, written, localizationKeys };
 }

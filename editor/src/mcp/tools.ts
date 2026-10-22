@@ -58,9 +58,9 @@ export const TOOL_INPUT = {
   list_registered_native_names: z.object({}),
   new_from_template: z.object({
     mod: str(),
-    kind: z.enum(["ability", "passive", "item", "status-data"]),
+    kind: z.enum(["ability", "passive", "item", "status-data", "glowing-character"]),
     name: str("the new entry's GON key, e.g. MyCoolSpin"),
-    options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)").optional(),
+    options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...; glowing-character: colour (rrggbb or rrggbbaa, required), parent (default Rat), trigger (StatusOnSpawnIn | StatusOnBattleStart))").optional(),
   }),
   list_ingame_tests: z.object({
     mod: str("optional mod folder to restrict to").optional(),
@@ -254,7 +254,7 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "new_from_template",
-    "Scaffold a new content entry (kind: ability | passive | item | status-data) plus matching localization rows, writing them as .append overlays under mods/<name>/. Pass `options.dryRun: true` to return the content without writing. `options` may include displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations.",
+    "Scaffold a new content entry (kind: ability | passive | item | status-data | glowing-character) plus matching localization rows, writing them as .append overlays under mods/<name>/. glowing-character: a character variant (options.parent, default Rat) whose passives grant the status FwGlow_<options.colour> (rrggbb or rrggbbaa; a malformed colour is refused by the invalid-glow-name rule) on spawn (options.trigger StatusOnSpawnIn, or StatusOnBattleStart), plus the status's keyword_tooltips entry and its text rows; the unit glows that colour while it carries the status (load fw-glow next to the mod; docs/data-mods.md \"Asking for a unit glow from data\"). Pass `options.dryRun: true` to return the content without writing. `options` may include displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations.",
     (a) => api.newFromTemplate(a.mod, a.kind, a.name, a.options ?? {}),
   ),
   def(

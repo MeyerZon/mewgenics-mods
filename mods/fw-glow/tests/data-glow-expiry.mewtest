@@ -25,5 +25,7 @@ dump
 wait rounds 1
 dump
 expect unit "Lil' Rat" hp > 0
+# let the "Round 3" banner (it covers the middle of the arena for ~2 s) clear before the shot
+wait frames 240
 shot "expired"
 quit
