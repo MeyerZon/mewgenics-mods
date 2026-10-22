@@ -367,5 +367,16 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
     assert((j.facing["10"] as any[]).every((u) => u.facing === "B" && JSON.stringify(u.lock) === "[1,0]"), JSON.stringify(j.facing));
     assert((j.expects as string[]).length >= 16 && (j.expects as string[]).every((e) => e.startsWith("ok")), (j.expects as string[]).join("; "));
     assert(/face 9 back/.test(j.turn), j.turn);
+    // 2026-10-22 (backmarker): with the back rig's marker at clip y -220 it is in frame. Window captures only: the
+    // checker is found above unit 9 in every back shot at 1.5x the front rigs' ~1.9 px per clip px, and in neither the
+    // control (front: the F rig has no marker) nor "turned back" (unit 9 on F again), so it is the B pose's own child.
+    assert(Array.isArray(j.markers), "per-shot markers (scale / clipped)");
+    const mk = (l: string) => (j.markers as any[]).find((m) => m.label === l);
+    for (const l of ["back 1", "back 2", "back 3"]) if (windowShot(l)) {
+      const m = mk(l);
+      assert(!!m && m.found && m.scale >= 1.5 * 1.8 && m.scale <= 1.5 * 2.0, `${l}: ${JSON.stringify(m)}`);
+    }
+    for (const l of ["front", "turned back"]) if (windowShot(l)) assert(!!mk(l) && !mk(l).found, `${l}: no marker (${JSON.stringify(mk(l))})`);
+    assert(["back 1", "back 2", "back 3"].filter(windowShot).length >= 2, `window captures: ${(j.capture as string[]).join("; ")}`);
   });
 }
