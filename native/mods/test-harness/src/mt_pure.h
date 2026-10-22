@@ -68,7 +68,8 @@ typedef enum MtDirKind {
     MT_D_SEED,          /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
     MT_D_EXPECT_UNIT,   /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
     MT_D_GLOW,          /* glow <unit> <r> <g> <b> <a> | <unit> off: FW_SetUnitGlow / FW_ClearUnitGlow on a unit of the walk (API v4) */
-    MT_D_EXPECT_GON     /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
+    MT_D_EXPECT_GON,    /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
+    MT_D_SPEED          /* speed <factor> | speed off: FW_SetTimeScale(factor) (API v5); dvalue = the factor, 1.0 for off; a = the argument text */
 } MtDirKind;
 /* expect unit: which MtUnit field; name|class|namekey compare as strings (== !=), the rest as integers (any op).
  * Order = mt_script.c UNIT_FIELDS = script.ts UNIT_FIELDS; the stat fields follow MT_STAT_* (data/characters order). */
@@ -225,6 +226,9 @@ typedef struct MtHost {
      * NULL when the unit or the pointer is unreadable). The walker reads through mem_read only. */
     int         (*mem_read)(void *u, const void *addr, void *out, size_t n);
     const void *(*unit_gon)(void *u, int i);
+    /* speed <factor>: FW_SetTimeScale on the game thread; *applied = the factor the framework kept (clamped).
+     * 1 done, 0 refused (detail), -1 unavailable (framework without API v5) */
+    int         (*set_speed)(void *u, double factor, double *applied, char *detail, size_t cap);
 } MtHost;
 
 typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_IDLE } MtState;

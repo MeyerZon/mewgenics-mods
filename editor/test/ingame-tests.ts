@@ -153,6 +153,14 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const p = parseScript('glow "Lil\' Rat" 1 0 1 1\nglow "Lil\' Rat" off\nquit\n', { owningMod: "m" });
       assert(p.ok && p.body.startsWith('glow "Lil\' Rat" 1 0 1 1\nglow "Lil\' Rat" off\n'), `DLL-side directive: ${JSON.stringify(p.errors)}`);
     });
+    test("speed directive: speed <factor> (a positive decimal) or speed off (= 1); bad forms are line errors; it passes through to the DLL (FW_SetTimeScale, API v5)", () => {
+      eq(JSON.stringify(parseDirective("speed 4", 3)), JSON.stringify({ line: 3, kind: "speed", factor: 4 }));
+      eq(JSON.stringify(parseDirective("speed 0.5", 4)), JSON.stringify({ line: 4, kind: "speed", factor: 0.5 }));
+      eq(JSON.stringify(parseDirective("speed off", 5)), JSON.stringify({ line: 5, kind: "speed", factor: 1 }));
+      for (const bad of ["speed", "speed 0", "speed -2", "speed x", "speed 4 extra", "speed 4x", "speed off now", "speed ."]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript("speed 8\nwait frames 10\nspeed off\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.body.startsWith("speed 8\nwait frames 10\nspeed off\n"), `DLL-side directive: ${JSON.stringify(p.errors)}`);
+    });
 
     test("combat directives: wait rounds needs N >= 1; expect round needs <op> <N>; expect stacks needs <op> <N> or varied", () => {
       assert("error" in parseDirective("wait rounds 0", 1), "rounds 0");

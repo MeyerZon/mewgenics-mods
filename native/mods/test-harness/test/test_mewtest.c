@@ -435,6 +435,7 @@ typedef struct Fake {
     char pipeReply[8192]; int pipeReplies;                          /* pipe_reply: the last reply the runner handed to the glue */
     int glowResult; int glowCalls; int glowUnit; int glowCleared; float glowRgba[4];   /* set_unit_glow: programmable result (1 ok / 0 refused / -1 unavailable) */
     const void *gon[8];                                             /* unit_gon: the unit's entry node (NULL = unreadable) */
+    int speedResult; int speedCalls; double speedFactor; double speedApplied;   /* set_speed: programmable result; speedApplied = what the fake framework keeps */
 } Fake;
 static Fake fk;
 
@@ -487,10 +488,18 @@ static int fk_set_unit_glow(void *u, int i, const float *rgba, char *detail, siz
     return fk.glowResult;
 }
 
+static int fk_set_speed(void *u, double factor, double *applied, char *detail, size_t cap) {
+    (void)u;
+    fk.speedCalls++; fk.speedFactor = factor;
+    *applied = fk.speedApplied ? fk.speedApplied : factor;
+    snprintf(detail, cap, "fake speed");
+    return fk.speedResult;
+}
+
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
-    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon,
+    fk_pipe_reply, fk_set_unit_glow, fg_mem_read, fk_unit_gon, fk_set_speed,
 };
 
 static MtRunner rr;
@@ -1491,6 +1500,56 @@ TEST(runner_expect_gon_number_string_bool_exists_missing_no_entry_unreadable_and
     fk_reset("expect gon 0 stats exists\nquit\n");      /* no combat */
     steps_until_done(5);
     CHECK(has(ev(0), "\"kind\":\"gon\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
+}
+
+
+/* ====================================================================== */
+/* speed <factor> | speed off (2026-10-22): FW_SetTimeScale, API v5       */
+/* ====================================================================== */
+TEST(script_speed_parses_a_positive_factor_or_off_and_rejects_bad_forms) {
+    char err[256]; int line;
+    const char *s = "speed 4\nspeed 0.5\nspeed off\nspeed 16.25\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 5);
+    CHECK_EQ(g_s.d[0].kind, MT_D_SPEED); CHECK(g_s.d[0].dvalue == 4.0); CHECK_STR(g_s.d[0].a, "4");
+    CHECK_EQ(g_s.d[1].kind, MT_D_SPEED); CHECK(g_s.d[1].dvalue == 0.5);
+    CHECK_EQ(g_s.d[2].kind, MT_D_SPEED); CHECK(g_s.d[2].dvalue == 1.0); CHECK_STR(g_s.d[2].a, "off");
+    CHECK_EQ(g_s.d[3].kind, MT_D_SPEED); CHECK(g_s.d[3].dvalue == 16.25);
+    const char *bad[] = { "speed\n", "speed 0\n", "speed -2\n", "speed x\n", "speed 4 extra\n", "speed 4x\n", "speed off now\n", "speed .\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+        CHECK_EQ(line, 1);
+    }
+}
+
+TEST(runner_speed_calls_the_host_and_emits_a_speed_event_with_the_applied_factor) {
+    fk_reset("speed 8\nspeed off\nquit\n");
+    fk.speedResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.speedCalls, 1); CHECK(fk.speedFactor == 8.0);
+    CHECK(has(ev(0), "{\"ev\":\"speed\"")); CHECK(has(ev(0), "\"line\":1")); CHECK(has(ev(0), "\"arg\":\"8\""));
+    CHECK(has(ev(0), "\"applied\":\"8\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"detail\":\"fake speed\""));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.speedCalls, 2); CHECK(fk.speedFactor == 1.0);
+    CHECK(has(ev(1), "\"arg\":\"off\"")); CHECK(has(ev(1), "\"applied\":\"1\""));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":0"));
+}
+
+TEST(runner_speed_reports_the_clamped_factor_and_fails_with_1_or_4) {
+    fk_reset("speed 1000\nquit\n");
+    fk.speedResult = 1; fk.speedApplied = 64.0;                          /* the framework clamped */
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK(has(ev(0), "\"arg\":\"1000\"")); CHECK(has(ev(0), "\"applied\":\"64\""));
+    fk_reset("speed 4\nquit\n");                                        /* refused */
+    fk.speedResult = 0;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(ev(0), "\"ok\":false"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"speed_failed\""));
+    fk_reset("speed 4\nquit\n");                                        /* a framework older than API v5 */
+    fk.speedResult = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"speed_unavailable\""));
 }
 
 int main(void) { return MT_RUN_ALL(); }

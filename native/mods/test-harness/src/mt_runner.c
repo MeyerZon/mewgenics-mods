@@ -351,6 +351,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, 1);
             return 0;
         }
+        case MT_D_SPEED: { r->pc++; return 1; }   /* RED stub: the speed directive is not implemented yet */
         case MT_D_SHOT: {
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "shot");

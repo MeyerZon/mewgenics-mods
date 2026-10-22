@@ -1893,6 +1893,25 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const oh = readFileSync(join(REPO_ROOT, "native", "framework", "src", "offsets.h"), "utf8");
     assert(/^#define VT_APPLYSTATMODIFIERS\s+82\s/m.test(oh), "offsets.h exposes it");
   });
+  test("game speed (2026-10-22): App_timescale is the ApplicationBase double at 0xdc0 the main loop multiplies the frame delta by (movsd xmm2,[rsi+0xdc0] in ApplicationBase_appmain), exposed as OFF_APP_TIMESCALE for speed_engine.c", () => {
+    const m = loadManifest(realPath);
+    const e = entry(m, "App_timescale");
+    assert(!!e && e.kind === "offset" && e.value === "0xdc0" && e.struct === "ApplicationBase" && e.ctype === "double", "an ApplicationBase double offset 0xdc0");
+    eq(e!.anchors.witness?.function, "ApplicationBase_appmain");
+    eq(e!.anchors.witness?.pattern, "F2 0F 10 96 ?? ?? ?? ??");
+    eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro: "OFF_APP_TIMESCALE" }]));
+    assert((e!.consumers || []).includes("native/framework/src/speed_engine.c"), "consumed by the speed engine");
+    const oh = readFileSync(join(REPO_ROOT, "native", "framework", "src", "offsets.h"), "utf8");
+    assert(/^#define OFF_APP_TIMESCALE\s+0xdc0\s/m.test(oh), "offsets.h exposes it");
+  });
+  if (exe) {
+    test("T1 real exe: App_timescale's witness verifies on the installed exe (harvest)", () => {
+      const m = loadManifest(realPath);
+      const x = harvestManifest(parsePe(exe), exe, m).report.find((r) => r.name === "App_timescale");
+      assert(!!x, "harvested");
+      eq(x!.status, "verified", x!.detail);
+    });
+  }
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam)");
