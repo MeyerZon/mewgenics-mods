@@ -2,25 +2,19 @@
 // model" used by the overlay/merge engine and by merge-preview. The value model
 // deliberately drops trivia: merge results are pretty-printed, not round-tripped.
 
+import { numericValue, scalarType } from "./typing.ts";
 import type { Node, VNode, VObject, VArray, VScalar } from "./types.ts";
 
-// Full-match GON number (unquoted). Accepts leading-dot decimals like `.25`,
-// negatives like `-999999`, and exponents; rejects expressions like `3+bonus`.
-const NUMBER_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
-
-export function numericValue(raw: string, quoted: boolean): number | null {
-  if (quoted) return null;
-  if (!NUMBER_RE.test(raw)) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
+export { numericValue, scalarType } from "./typing.ts";
 
 /** Convert an AST node to the value model. */
 export function toValue(node: Node): VNode {
   if (node.kind === "scalar") {
     const raw = node.token.value ?? node.token.text;
     const quoted = node.token.quoted === true;
-    return { t: "str", raw, quoted, num: numericValue(raw, quoted) };
+    // The game types the unquoted text (typing.ts); `quoted` only tells the pretty-printer to keep the quotes.
+    const type = node.type ?? scalarType(raw);
+    return { t: "str", raw, quoted, num: type === "number" ? numericValue(raw) : null, type };
   }
   if (node.kind === "array") {
     return { t: "arr", items: node.items.map(toValue) };
@@ -33,15 +27,14 @@ export function toValue(node: Node): VNode {
   return obj;
 }
 
-/** Make a numeric scalar node. */
+/** Make a numeric scalar node (a merge result: the game re-renders the text, integers without a decimal point). */
 export function numberNode(n: number): VScalar {
-  const raw = Number.isInteger(n) ? String(n) : String(n);
-  return { t: "str", raw, quoted: false, num: n };
+  return { t: "str", raw: String(n), quoted: false, num: n, type: "number" };
 }
 
 /** Deep clone a value node. */
 export function clone(v: VNode): VNode {
-  if (v.t === "str") return { t: "str", raw: v.raw, quoted: v.quoted, num: v.num };
+  if (v.t === "str") return { t: "str", raw: v.raw, quoted: v.quoted, num: v.num, type: v.type };
   if (v.t === "arr") return { t: "arr", items: v.items.map(clone) };
   return { t: "obj", entries: v.entries.map((e) => ({ key: e.key, value: clone(e.value) })) };
 }
@@ -54,17 +47,18 @@ export function findIndex(obj: VObject, key: string): number {
   return -1;
 }
 
+/**
+ * Escape for a double-quoted GON token the way Gon_Tokenize reads it back: `\` and `"` are escaped, a newline is
+ * `\n`; tabs and CRs stay raw (the game's `\t` would decode to a plain `t`).
+ */
 function escapeQuoted(s: string): string {
-  return s
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t");
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }
 
-// A bare key/token is safe to print unquoted if it has no GON-significant chars.
-const BARE_SAFE_RE = /^[^\s,{}[\]"#]+$/;
+// A bare key/token is safe to print unquoted if it has no GON-significant chars: whitespace, the separators
+// `,` `:` `=`, the structural chars, `"`, `#` — and no `//` / `/*`, which the editor (and, inferred, the game's
+// comment-stripping pass) would read as a comment.
+const BARE_SAFE_RE = /^(?!.*\/[/*])[^\s,:={}[\]"#]+$/;
 
 function renderKey(key: string): string {
   if (key.length > 0 && BARE_SAFE_RE.test(key)) return key;
