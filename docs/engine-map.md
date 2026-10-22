@@ -826,6 +826,20 @@ RE session `rooms` (Ghidra 12.1.4, build 25143593); decompiles in `.analysis/dec
   current tileset string `+0x14f8`; the console `tileset <name>` sets it. OBSERVED 2026-10-22: a new name added by
   `tilesets.gon.append` (`roomprobe_yard`, a junkyard copy) selected with `tileset roomprobe_yard` draws the junkyard
   background around the next `load`ed room (run `20261022-131707-_roomprobe-new-tileset`, shot `roomprobe_yard`).
+- **Tile art (read-only look at `tiles.swf` + the exe's string table, 2026-10-22; no decompile):** `tiles.swf`
+  exports one clip per tile class under the class name (`WaterTile`, `GrassTile`, `FireTile`, `IceTile`, `MetalTile`,
+  `RockTile`, `CreepTile`, `OilTile`, `LavaTile`, `ShadowTile`, `GlassTile`, `SnowTile`, `DirtTile`, `RoadTile`,
+  `BrambleTile`, `FlowerTile`, `StalagmiteTile`, …), each registered at the diamond's centre. Classes without a clip of
+  their own name have one the string table holds next to them: `ToxicTile` → `ToxTile`, `TallGrassTile` →
+  `TallGrassBack` / `TallGrassFront`, `TallFlowerTile` → `TallFlowerBack` / `Front`, `TallBrambleTile` →
+  `TallBrambleTileBack` / `Front`, `FloatingGlassTile` → `FloatingGlassTileBottom` / `Front` (INFERRED pairing; the
+  Room editor's `TILE_CLIP_ALIASES`). `WaterTile_Current` derives from `WaterTile` (RTTI) and is drawn as it
+  (INFERRED). `SupercooledWater` and `GlitchTile` have no clip in `tiles.swf`; `BlankTile` draws nothing. The
+  shader-filled tiles (water, ice, lava, creep, oil, toxic) fill their surface with pure magenta `#ff00ff` (INFERRED:
+  a key the tile shaders replace). `data/tilesets.gon` has no per-tile-class art slot; its only tile key is
+  `water_alt_tile BloodTile` (meatworld, theend; INFERRED to replace the water clip). The `SetTilesetFrame` string
+  belongs to the map screen / CatParts UI (`MapScreen_init_0x38d150.c`), not to tiles. Pinned by the T1 test in
+  `editor/test/level-art-tests.ts` (every `alley` tile id resolves to a clip or a named reason; the clips render).
 - `"No room named: "` (0x2e8d50) belongs to `FurnitureGrid::init` (the house's rooms), not to combat levels.
 
 ## Glow and outline passes (2026-10-21)

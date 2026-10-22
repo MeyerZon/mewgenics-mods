@@ -47,6 +47,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       `20261022-131707-_roomprobe-new-tileset`, `shot-roomprobe-yard.png`): does the probe room sit in the junkyard
       art (the new tileset `roomprobe_yard`), with the three water puddles and the trash bag where `probe.lvl` puts them?
 - [ ] `pr-room-editor` (#125) — Rooms mode on `_roomprobe` → `probe.lvl`: does the grid read as the room, can you paint / place a spawn / edit a random list unaided, and are the tint swatches (not tileset art) enough?
+- [ ] `pr130-room-tile-art` (#130) — Rooms mode on `_roomprobe` → `probe.lvl`, Flat and **Iso**: do the tile/object thumbnails read as the game's (water/lava drawn in their tint, not magenta), is the Iso view the room as the in-game shot shows it (which corner is row 0?), and is painting on the diamonds comfortable?
 - [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
@@ -267,7 +268,10 @@ Things no test on this machine can decide. Tick them off here; each links to whe
     (10x10 grid painter, tile/object palettes from tiles.gon/spawns.gon + the mod's overlays, weighted random lists in
     the inspector, live `lvl-*` findings, New room from the `room` template, byte-identical save under `levels/**`)
     and MCP `read_level` / `write_level`. Docs: `editor-ts-react-plan.md` "Rooms mode", `data-mods.md`.
-    - [ ] Tileset art in the swatches (the grid shows the dev editor's `image_tint`, not the map tileset's look).
+    - [x] Tileset art in the swatches (2026-10-22, branch `feat/room-editor-tile-art`): tile/spawn id → clip in the
+      chosen tileset → frame-1 PNG thumbnails (`/api/level-tile-art`, cached in `editor/data/level-art/`), an **Iso** view
+      (2:1 diamonds, feet-registered sprites, x+y order); swatches stay the fallback with a named reason.
+      `editor-ts-react-plan.md` "Tileset art and the Iso view", `engine-map.md` "Tile art".
   - [ ] Open: prove a **campaign** battle node drawing a mod room from a map pool (needs the harness to walk a run
     from the House to a map node; decompiled, not run). Then a new map behind alley's exit (`next_map`).
 

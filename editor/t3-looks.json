@@ -230,5 +230,13 @@
     "shots": [],
     "regenerate": "cd editor && npm run build && npm run web → http://127.0.0.1:4173/?mode=rooms → mod _roomprobe → roomprobe/probe.lvl (do not Save the probe room)",
     "status": "open"
+  },
+  {
+    "id": "pr130-room-tile-art",
+    "pr": 130,
+    "question": "Rooms mode on _roomprobe → probe.lvl, Flat and Iso: do the tile/object thumbnails read as the game's art (water/lava painted in their tint, not magenta), is the Iso view the room as the in-game shot shows it (which corner is row 0?), and is painting on the diamonds comfortable?",
+    "shots": ["room-art-shots/flat.png", "room-art-shots/iso.png"],
+    "regenerate": "cd editor && npm run build && npm run web → http://127.0.0.1:4173/?mode=rooms → mod _roomprobe → roomprobe/probe.lvl → Flat / Iso (do not Save the probe room); shots: scratch script, or screenshot the two views into editor/data/room-art-shots/",
+    "status": "open"
   }
 ]
