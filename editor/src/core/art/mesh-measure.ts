@@ -345,3 +345,15 @@ export function judgeOcclusion(shots: RgbaImageLike[], occ: MeshOccLine[], expec
     : (m.coverage >= OCC_FRONT_MIN ? "front-unoccluded" : "occluded-in-front");
   return { verdict, pass: verdict === "behind-occluded" || verdict === "front-unoccluded", coverage: m.coverage, expectedPx: m.expectedPx, magentaPx: m.magentaPx, shot, occ: line };
 }
+// ---- M3: hide_sprite ---- (RED stubs; the green commit fills them in)
+export interface HideMeasure { patch: GlowRegion | null; box: Box | null; dark: number; total: number }
+export type HideVerdict = "hidden" | "not-hidden" | "no-patch" | "control-no-sprite";
+export interface HideJudgement { verdict: HideVerdict; share: number | null }
+export interface MeshHideLine { frame: number; units: number; items: number; skipped: number }
+export interface MeshHideLog { hides: MeshHideLine[]; hideUnits: string[]; badFlag: string[] }
+export const HIDE_DARK_SUM = 90;
+export const HIDE_MIN_CONTROL_DARK = 200;
+export const HIDE_MAX_SHARE = 0.05;
+export function measureHideRegion(_img: RgbaImageLike, _colour = MESH_PROBE_COLOUR): HideMeasure { return { patch: null, box: null, dark: 0, total: 0 }; }
+export function judgeHide(_hide: HideMeasure, _control: HideMeasure): HideJudgement { return { verdict: "no-patch", share: null }; }
+export function parseMeshHideLog(_text: string): MeshHideLog { return { hides: [], hideUnits: [], badFlag: [] }; }

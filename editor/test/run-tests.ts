@@ -641,6 +641,9 @@ await mcpSmoke();
   let umt: typeof import("./unit-model-tests.ts") | null = null;
   try { umt = await import("./unit-model-tests.ts"); } catch (e) { test("unit-model-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (umt) umt.runUnitModelTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mht: typeof import("./mesh-hide-tests.ts") | null = null;
+  try { mht = await import("./mesh-hide-tests.ts"); } catch (e) { test("mesh-hide-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mht) mht.runMeshHideTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let mot: typeof import("./mesh-occlusion-tests.ts") | null = null;
   try { mot = await import("./mesh-occlusion-tests.ts"); } catch (e) { test("mesh-occlusion-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (mot) mot.runMeshOcclusionTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
