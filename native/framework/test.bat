@@ -16,41 +16,41 @@ if not exist "%OUT%" mkdir "%OUT%"
   -o "%OUT%\test_sig.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_sig.exe"
-if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_build.c" "%HERE%src\fw_build.c" "%HERE%src\fw_sig.c" ^
   -o "%OUT%\test_build.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_build.exe"
-if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_status_rules.c" "%HERE%src\fw_status_rules.c" ^
   -o "%OUT%\test_status_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_status_rules.exe"
-if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_vtable.c" "%HERE%src\fw_vtable.c" "%HERE%src\fw_status_rules.c" ^
   -o "%OUT%\test_vtable.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_vtable.exe"
-if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_walk.c" "%HERE%src\fw_walk.c" ^
   -o "%OUT%\test_walk.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_walk.exe"
-if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_resolve.c" "%HERE%src\fw_resolve.c" "%HERE%src\fw_sig.c" ^
   -o "%OUT%\test_resolve.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_resolve.exe"
-if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_glow_rules.c" "%HERE%src\fw_glow_rules.c" ^
   -o "%OUT%\test_glow_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_glow_rules.exe"
-if errorlevel 1 ( echo TESTS FAILED & exit /b 1 )
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal

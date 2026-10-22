@@ -92,11 +92,28 @@ expect round <op> <N>                            TurnControl's round (0 outside 
 expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail)
 expect stacks <Status> on <unit> varied          >= 2 distinct stacks values seen for (unit, status) by earlier dump /
                                                  expect stacks directives (and this one)
-expect unit <unit> <field> <op> <value>          one field of one unit as the units event shows it: name|class take a
-                                                 quoted value with == or !=; faction|move|act|turnkind take an integer
-                                                 with any op. Event kind "unit", arg e.g. `8 name == "Lil' Rat"`,
-                                                 detail `unit 8 "Lil' Rat": name "Lil' Rat"`. Faction numbers seen:
-                                                 allies 1, coins 0, enemies 2
+expect unit <unit> <field> <op> <value>          one field of one unit as the units event shows it: name|class|namekey
+                                                 take a quoted value with == or !=; faction|move|act|turnkind|hp|shield|
+                                                 divineshield|strength|dexterity|constitution|intelligence|speed|
+                                                 charisma|luck take an integer (negatives allowed) with any op. Event
+                                                 kind "unit", arg e.g. `8 name == "Lil' Rat"`, detail `unit 8 "Lil'
+                                                 Rat": name "Lil' Rat"`. Faction numbers seen: allies 1, coins 0,
+                                                 enemies 2. namekey is the graphics.name loc key (ENEMY_POOTER_NAME);
+                                                 hp is current HP (= properties.health right after a spawn), the seven
+                                                 stats are what Character::init stored (data value, default 5)
+expect gon <unit> <path> <op> <number>           one node of the unit's merged data/characters entry, as the game holds
+expect gon <unit> <path> ==|!= "<string>"        it (Character+0x240; variant_of-resolved, every overlay applied): the
+expect gon <unit> <path> ==|!= true|false        DLL walks <path> (dot-separated; an all-digit segment indexes the
+expect gon <unit> <path> exists|missing          children, any other is the first child of that name) without calling
+                                                 the game. A number literal matches a number node only (compared on
+                                                 the node's double, any op), a quoted string a string node only, true/
+                                                 false a bool node only; `exists` = present and not null, `missing` =
+                                                 absent or null. Event kind "gon", arg e.g. `8 properties.health == 12`,
+                                                 detail `unit 8 "Pooter" (ENEMY_POOTER_NAME): properties.health =
+                                                 number 12 (int 12, double 12, text "12")` / `… = string "allies"` /
+                                                 `… = bool true` / `… = array with 0 children` / `… missing: no child
+                                                 named "nope" among 5 at segment 2` / `… unreadable: …`. Nothing is
+                                                 logged by the game (its own getters would log GON ERROR on a miss)
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
 dump                                             snapshot the units into a units event
@@ -125,8 +142,10 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"turn","n":N,"round":N}
 {"ev":"wait","line":N,"kind":"frames","n":N,"actual":N}
 {"ev":"expect","line":N,"kind":"console","arg":"...","ok":true,"detail":"..."}
-{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","faction":0,"move":3,"act":1,"turnkind":2,"statuses":["LuckUp"],"stacks":[2]}]}
-                                                stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes)
+{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","namekey":"ENEMY_POOTER_NAME","faction":0,"move":3,"act":1,"turnkind":2,"hp":6,"shield":0,"divineshield":0,"strength":5,"dexterity":5,"constitution":5,"intelligence":5,"speed":5,"charisma":5,"luck":5,"statuses":["LuckUp"],"stacks":[2]}]}
+                                                stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes);
+                                                namekey/hp/shield/divineshield/the seven stats (2026-10-22) read Character+0x248/+0x4b0/+0x4b4/+0x4b8/+0x5a0..+0x5b8
+                                                (docs/engine-map.md "GON at runtime"); an unreadable field reads as 0 / ""
 {"ev":"log","text":"..."}
 {"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
 {"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}

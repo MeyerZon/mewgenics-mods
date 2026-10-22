@@ -84,11 +84,39 @@ TEST(resolve_symbols_resolves_all_or_reports_each_failure) {
     CHECK_EQ(fw_resolve_symbols(&IMG, good, 2, addrs, res), 1);
 }
 
+TEST(resolve_symbol_with_no_signature_takes_the_raw_rva_or_fails_without_one) {
+    /* bindings manifest `signature: null` (no relocation-free unique window on this build): the identity gate
+     * already proved the image, so expectedRva is the address — no scan, no drift, like the FW_LK table */
+    FwResolveResult r;
+    SymbolSig raw = { "R", NULL, 0, 0x711c90 };
+    CHECK_EQ(fw_resolve_symbol(&IMG, &raw, &r), FW_RESOLVE_RAW_RVA);
+    CHECK_EQ(r.rva, 0x711c90u);
+    CHECK(r.addr == 0x140000000u + 0x711c90u);
+    CHECK_EQ(r.matches, 0);
+    SymbolSig nothing = { "X", NULL, 0, 0 };
+    CHECK_EQ(fw_resolve_symbol(&IMG, &nothing, &r), FW_RESOLVE_NO_RVA);
+    CHECK_EQ(r.addr, 0);
+    SymbolSig syms[2] = { { "R", NULL, 0, 0x711c90 }, { "A", "48 8B C4 55", 0, 0 } };
+    uintptr_t addrs[2] = { 1, 1 };
+    FwResolveResult res[2];
+    CHECK_EQ(fw_resolve_symbols(&IMG, syms, 2, addrs, res), 1);     /* RAW_RVA counts as resolved */
+    CHECK(addrs[0] == 0x140000000u + 0x711c90u);
+    syms[0].expectedRva = 0;
+    CHECK_EQ(fw_resolve_symbols(&IMG, syms, 2, addrs, res), 0);     /* NO_RVA fails the lot */
+}
+
 TEST(generated_signatures_resolve_against_nothing_on_a_fake_image_without_crashing) {
-    /* every real pattern parses (test_build pins that); against the fake image they all miss */
+    /* every real pattern parses (test_build pins that); against the fake image every signature misses and every
+     * `signature: null` entry is a raw RVA (at least one exists: LuckUp_ctor, test_build pins it) */
     uintptr_t addrs[FW_SYMBOL_COUNT_]; FwResolveResult res[FW_SYMBOL_COUNT_];
     CHECK_EQ(fw_resolve_symbols(&IMG, FW_BUILDS[0].symbols, FW_SYMBOL_COUNT_, addrs, res), 0);
-    for (size_t i = 0; i < FW_SYMBOL_COUNT_; i++) CHECK_EQ(res[i].code, FW_RESOLVE_NO_MATCH);
+    int rawRvas = 0;
+    for (size_t i = 0; i < FW_SYMBOL_COUNT_; i++) {
+        const SymbolSig *s = &FW_BUILDS[0].symbols[i];
+        if (s->pattern) CHECK_EQ(res[i].code, FW_RESOLVE_NO_MATCH);
+        else { CHECK_EQ(res[i].code, FW_RESOLVE_RAW_RVA); CHECK_EQ(res[i].rva, s->expectedRva); rawRvas++; }
+    }
+    CHECK(rawRvas >= 1);
 }
 
 TEST(dev_launch_gate_needs_savesuffix_on_the_command_line) {

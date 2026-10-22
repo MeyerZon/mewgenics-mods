@@ -83,6 +83,8 @@ export const TOOL_INPUT = {
     mod: str(),
     name: str("scene name, becomes art/<name>.scene.json"),
     starter: bool("start from the example scene (default true)").optional(),
+    template: z.enum(["cat-animation"]).describe("\"cat-animation\": a cat rig <animation>Pose plus an _Append_CatTest donor sprite with the labeled frames <animation>F / <animation>B, each placing the rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)").optional(),
+    animation: str("the animation name for template cat-animation (default: the scene name, which must then be an identifier); GON refers to it bare: alt_animations [[idle <animation>]] or an ability's animation <animation>").optional(),
   }),
   import_svg: z.object({
     svgText: str("SVG markup (or pass mod + path of an .svg inside the mod)").optional(),
@@ -99,6 +101,19 @@ export const TOOL_INPUT = {
     mod: str(),
     path: str("scene file inside the mod"),
     shapeId: str("the shape to export"),
+  }),
+  bake_glow: z.object({
+    mod: str(),
+    path: str("scene file inside the mod"),
+    shapeId: str("the shape to put a halo under"),
+    color: str("halo colour: #rrggbb[aa] or gray:N (its alpha is the ceiling)"),
+    blur: num("halo reach in the shape's local px (0.5..255)"),
+    strength: num("alpha multiplier of the falloff (default 1; >1 saturates the inner bands)").optional(),
+    kind: z.enum(["glow", "dropShadow"]).describe("glow (centred, default) or dropShadow (offset by dx, dy)").optional(),
+    dx: num("dropShadow offset x, local px (default 4)").optional(),
+    dy: num("dropShadow offset y, local px (default 4)").optional(),
+    steps: num("concentric bands 1..8 (default 4)").optional(),
+    replace: bool("re-bake over an existing <shapeId>_glow").optional(),
   }),
   build_swf: z.object({
     mod: str(),
@@ -295,8 +310,8 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "new_art_scene",
-    "Create art/<name>.scene.json (the example scene by default: two gray shapes, a 24-frame sprite with idle/blink labels, exports).",
-    (a) => api.newArtScene(a.mod, a.name, { starter: a.starter }),
+    "Create art/<name>.scene.json (the example scene by default: two gray shapes, a 24-frame sprite with idle/blink labels, exports). template \"cat-animation\" instead creates a cat animation: a rig: \"cat\" sprite <animation>Pose whose seven slots are EMPTY sprites (parts: \"game\" — the game draws the cat's own parts, palette, texture and face included, into them; placeholder art is preview-only and a visible non-empty slot crashes the game) and a donor sprite exported as _Append_CatTest whose labeled frames <animation>F / <animation>B place the rig as the child `ani` at depth 1 — the shape of every vanilla CatTest frame (catanis.swf; catanis2.swf appends the same way) and the child the engine restarts on every play. Then build_swf and refer to it from GON as alt_animations [[idle <animation>]] on a character or animation <animation> on an ability. The validator reports cat-anim-* findings (cat-anim-slot-not-empty when a slot holds art; the info cat-anim-untested says what the game draws, OBSERVED in PR #74 once its empty-slot run lands). Never export a clip named CatTest itself (cat-clip-override).",
+    (a) => api.newArtScene(a.mod, a.name, { starter: a.starter, template: a.template, animation: a.animation }),
   ),
   def(
     "import_svg",
@@ -314,6 +329,11 @@ export const TOOLS: ToolDef[] = [
     "export_svg",
     "Export one shape of a scene as mods/<mod>/art/<shapeId>.svg for an external vector editor (VectorCraft, Inkscape, …: static drawing only — animation stays in the scene's sprites). Re-import the edited file with import_svg { mod, path: 'art/<shapeId>.svg', options: { applyViewBox: false }, into: { scene, shapeId, replace: true } } to keep its coordinates.",
     (a) => api.exportShapeSvg(a.mod, a.path, a.shapeId),
+  ),
+  def(
+    "bake_glow",
+    "Bake a glow or drop shadow into a scene the way the game allows: the SWF player stops on any PlaceObject3 filter (\"ERROR: FILTERS NOT SUPPORTED\"), so this adds an ordinary halo shape <shapeId>_glow — concentric bands of the source outline pushed out by blur with falling alpha — and places it immediately under the source on every sprite layer that places it. The source shape is never changed. For engine-side light/tint instead, use the passives CharacterLightSource { glow [r g b a] size N } (a ground disc) or AdvancedTint [mul][add] (docs/data-mods.md).",
+    (a) => api.bakeGlowIntoScene({ mod: a.mod, scenePath: a.path, shapeId: a.shapeId, color: a.color, blur: a.blur, strength: a.strength, kind: a.kind, dx: a.dx, dy: a.dy, steps: a.steps, replace: a.replace }),
   ),
   def(
     "build_swf",

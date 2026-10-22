@@ -149,7 +149,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     }
     if (method === "POST" && url.pathname === "/api/art/new-scene") {
       const b = await body("/api/art/new-scene", req);
-      return sendJson(res, 200, api.newArtScene(b.mod, b.name, { starter: b.starter !== false }));
+      return sendJson(res, 200, api.newArtScene(b.mod, b.name, { starter: b.starter !== false, template: b.template, animation: b.animation }));
     }
     if (method === "POST" && url.pathname === "/api/art/validate") {
       const b = await body("/api/art/validate", req);

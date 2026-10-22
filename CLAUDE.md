@@ -72,7 +72,9 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 `web/public/ruffle/` by `npm run build` / `dev`); dev-only `vite`, `typescript@7.0.2`,
 `@playwright/test`; see `docs/editor-ts-react-plan.md`):
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
-  list and base-data index the validator needs; regenerate after the base game updates).
+  list and base-data index the validator needs; regenerate after the base game updates). In a secondary git
+  worktree, point at the main checkout instead: one `node_modules` junction plus `MEWGENICS_EXTRACTED_DATA` /
+  `MEWGENICS_EDITOR_DATA` (`docs/tdd-procedure.md` "Running the editor from a git worktree").
 - `npm test` — the full unit suite (`node test/run-tests.ts`: GON, overlays, validator, art, the in-game runner
   against a fake game, an MCP spawn smoke, the bindings library against fake PE images and the installed exe;
   ~250 checks). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
@@ -88,15 +90,15 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
-- `npm run test:e2e` — `vite build && playwright test`: the 34-check browser suite in `editor/tests/e2e/` that pins
+- `npm run test:e2e` — `vite build && playwright test`: the 42-check browser suite in `editor/tests/e2e/` that pins
   the UI's DOM and flows (Data mode, Art mode, preview, onboarding). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (23 tools, incl. the art tools,
-  `check_game_build` and `port_bindings`).
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (25 tools, incl. the art tools
+  with `bake_glow`, `check_game_build` and `port_bindings`).
 - `npm run web` — the local web UI on `http://127.0.0.1:4173/` (override with `PORT`).
 
 **Data access / tooling** (repo root):
@@ -110,8 +112,8 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
-  walks + apply/merge writes, symbol resolution + the hook plan, the harness's modules;
-  the per-unit glow rules; 162 checks = 13 + 6 + 14 + 13 + 11 + 14 + 8 + 83, `-Werror`),
+  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules, the harness's modules;
+  171 checks = 14 + 6 + 14 + 13 + 11 + 15 + 8 + 90, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
@@ -160,9 +162,12 @@ is a disabled mod, not a crash. Harvest anchors (`tools/bindings/harvest.ts --wr
 copy first, then applies mod overlays (later paths override earlier) named `X.gon.append` / `.merge` / `.patch` →
 GON's Append / DeepMerge / PatchMerge. The exact behavior (incl. `.patch` per-field policy suffixes
 `.overwrite`/`.append`/`.merge`/`.add`/`.multiply`) is documented in `docs/data-mods.md` and decompiled in
-`.analysis/decompiled/Gon_PatchMerge_a_0x944cc0.c` / `Gon_PatchMerge_b_0x944f50.c` (DeepMerge 0x946680 is not
-on disk yet). The editor's `editor/src/core/overlay/` re-implements these; changes there
-must stay faithful to the decompiled functions.
+`.analysis/decompiled/Gon_overlay_apply_0x9a64a0.c` (the dispatch: `.append` → `Gon_Append_0x945410.c`, `.merge` →
+`Gon_DeepMerge_plain_0x945c30.c` under the constant MERGE policy of `Gon_DefaultMergeMode_0x9451c0.c`, so `.merge`
+files never read key suffixes, `.patch` → `Gon_DeepMerge_0x946680.c`, the policy-driven merge, with
+`Gon_PatchMerge_a_0x944cc0.c` the suffix parser and `Gon_PatchMerge_b_0x944f50.c` the suffix stripper). The editor's `editor/src/core/overlay/`
+re-implements these; changes there must stay faithful to the decompiled functions — the row-by-row comparison is
+`docs/data-mods.md` "Fidelity to the decompiled merges", pinned by `editor/test/fixtures/overlay/`.
 
 **The editor's core is the single source of truth.** `editor/src/core/api.ts` is the one app surface; the MCP server
 (`editor/src/mcp/`) and the web UI (`editor/web/`) are thin adapters over it and must not re-implement GON parsing or

@@ -241,6 +241,13 @@ layering detail; the naming/trigger wiring is **OBSERVED**.
 - **Authoring + native:** new part art or new animation clips are SWF (Flash) work; because raw
   parts are **Frame Reliance** (§3), adding *new, non-conflicting* parts needs
   **MewCatPartFramework** (native) to register them (§6).
+- **Appending cat animation frames (OBSERVED 2026-10-22, experiment A0):** the vanilla cat clip is
+  `CatTest` (catanis.swf) and vanilla itself extends it with catanis2.swf's `_Append_CatTest`; a mod
+  SWF's `_Append_CatTest` merges at boot too, and a `_CAT` unit whose `alt_animations` picks the
+  appended label is drawn in that frame with the cat's own parts — provided every slot-named instance
+  (`tail leg2 arm2 body leg1 arm1 head`) is an EMPTY 1-frame sprite (`CatParts` fills a hidden or
+  empty slot; a visible non-empty one crashes at `Mewgenics.exe+0x741f5d`) — see `docs/engine-map.md`
+  "CatTest and the cat animation clips".
 
 ---
 
@@ -322,6 +329,18 @@ data.**
   `.merge` a tileset/weather to point at a **different existing** shader.
 - **Native (INFERRED):** new shader passes, new post-process effects, or new logical shader
   names driven by the renderer (`glaiel::CombatShaders`, `Renderer*`) require C++.
+
+**Glows, outlines, drop shadows (OBSERVED 2026-10-21; the full decode is `docs/engine-map.md` "Glow and outline
+passes").** The player has no filter renderer: `PlaceObject::decode3` (`0xb78210`) stops the game on the PlaceObject3
+`HasFilterList` bit alone ("ERROR: FILTERS NOT SUPPORTED"), so the SWF glow/blur/dropShadow filters are a
+`filter-unsupported` validation error. The combat outline (`composite_glow.shader`, `jump_flood_*`) is a hover effect
+on the status-menu target with a compile-time white `glow_color`; no per-character field drives it. What a mod can do:
+**bake the glow** — the editor's `bakeGlow` (`src/core/art/glow.ts`, MCP `bake_glow`, the shape row's "Bake glow…")
+adds a halo shape `<id>_glow` (concentric bands of the outline pushed out by `blur` with falling alpha, holes kept)
+placed under the source on every layer that places it; a drop shadow is the same halo offset by dx, dy. Engine-side
+alternatives are data knobs, not rims: `CharacterLightSource { glow [r g b a] size N }` (an additive ground disc
+around the unit) and `AdvancedTint [mul…][add…]` (a brightness lift of the sprite's own pixels) — see
+`docs/data-mods.md` "Lighting and tint knobs".
 
 ---
 

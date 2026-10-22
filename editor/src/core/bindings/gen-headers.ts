@@ -64,10 +64,11 @@ export function genSignaturesH(manifests: Manifest[]): string {
 
 /* A build is identified by the main module's PE TimeDateStamp + SizeOfImage (fw_build.c). Each code
  * symbol is located at load time by a unique byte pattern in the executable sections; expectedRva is
- * the RVA on the authoring build (drift log only). Data addresses, vtables, the type id and the raw
- * status-lookup hook RVAs cannot be pattern-scanned yet; they live in BuildInfo and are sanity-checked
- * at runtime before use. The FwSymbol / FwData enums are public (framework_api.h) and append-only;
- * the tables here follow their order. */
+ * the RVA on the authoring build (drift log only). A symbol whose pattern is NULL has no relocation-free
+ * unique window on this build and is taken at expectedRva (the identity gate already passed). Data
+ * addresses, vtables, the type id and the raw status-lookup hook RVAs cannot be pattern-scanned yet;
+ * they live in BuildInfo and are sanity-checked at runtime before use. The FwSymbol / FwData enums are
+ * public (framework_api.h) and append-only; the tables here follow their order. */
 
 #define FW_LK_COUNT ${lkCount}   /* status-name lookups aliased by status_engine.c (shapes A-E) */
 
@@ -92,8 +93,9 @@ typedef struct BuildInfo {
     out.push(`/* ---- build ${id}: ${m.build.name} (exe sha256 ${m.build.exeSha256.slice(0, 12)}..., SDL ${m.build.sdlVersion}) ---- */`);
     out.push(`static const SymbolSig FW_SYMBOLS_${id}[FW_SYMBOL_COUNT_] = {`);
     for (const e of symbolTable(m)) {
-      if (!e.signature) throw new GenError(`build ${id}: FwSymbol entry ${e.name} has no signature`);
       const ex = enumExposure(e);
+      // no relocation-free unique window (e.g. LuckUp_ctor): the DLL uses expectedRva on the identified build
+      if (!e.signature) { out.push(`    { "${e.name}", NULL, 0, ${u32(e.rva || "0x0")} },  /* ${ex.enum} (raw RVA: no signature on this build) */`); continue; }
       out.push(`    { "${e.name}", "${e.signature.pattern}", ${e.signature.offset}, ${u32(e.rva || "0x0")} },  /* ${ex.enum} */`);
     }
     out.push(`};`);

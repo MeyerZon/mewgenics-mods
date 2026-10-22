@@ -1,0 +1,4 @@
+# 0x944cc0 checks .overwrite, .append, .merge, .add, .multiply in that order and returns the first hit;
+# the inline strip in 0x946680 (and 0x944f50) removes each of the five once, in the same order.
+# "x.add.overwrite" -> policy overwrite, name "x".
+o { x 1 }

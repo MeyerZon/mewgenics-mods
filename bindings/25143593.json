@@ -37,7 +37,7 @@
           "bytes": 4474,
           "calls": 93,
           "ripRefs": 43,
-          "resyncs": 1
+          "resyncs": 0
         },
         "callees": [
           {
@@ -232,7 +232,7 @@
           "bytes": 7831,
           "calls": 186,
           "ripRefs": 62,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -639,23 +639,7 @@
       "name": "Status_GetCategory",
       "kind": "function",
       "rva": "0x4929c0",
-      "signature": {
-        "pattern": "48 89 5C 24 20 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC D0 00 00 00 48 8B F9 45 33 E4 48 8B 71 10 48 8B D1 4C 8B 79 18 49 83 FF 0F 76 03 48 8B 11 49 B9 ?? ?? ?? ?? ?? ?? ?? ?? 49 8B CC 48 85 F6 74 26 49 B8 ?? ?? ?? ?? ?? ?? ?? ?? 66 0F 1F 84 00 00 00 00 00 0F B6 04 0A 4C 33 C8 4D 0F AF C8 48 FF C1 48 3B CE 72 ED 4C 8B C7 48 8D 55 F7 48 8D 0D 6F",
-        "exactLen": 126,
-        "offset": 0,
-        "wildcards": [
-          {
-            "at": 61,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 79,
-            "len": 8,
-            "why": "movabs imm64"
-          }
-        ]
-      },
+      "signature": null,
       "anchors": {
         "strings": [
           {
@@ -692,7 +676,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56"
+        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56",
+        "after": {
+          "function": "Status_ApplyByName"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[0]"
@@ -711,9 +698,10 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        "docs/engine-map.md#status-effects"
+        "docs/engine-map.md#status-effects",
+        ".analysis/notes-bind.md"
       ],
-      "note": "glaiel::get_status_type(std::string) -> StatusType; FNV-1a name lookup; unknown names log NO STATUS NAMED. Also FW_LK[0]."
+      "note": "glaiel::get_status_type(std::string) -> StatusType; FNV-1a name lookup; unknown names log NO STATUS NAMED. Also FW_LK[0]. Signature null since 2026-10-21: the only unique <=128-byte windows end in the __LINE__ immediate of the NO STATUS NAMED assert (`C7 45 B7 48`, line 72) and would port a twin silently when the line shifts; the funcsig xref and the .pdata chain locate it, the DLL takes the raw RVA on the identified build (notes-bind §2.1)."
     },
     {
       "name": "Status_GetFlags",
@@ -766,7 +754,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41",
+        "after": {
+          "function": "Status_GetValue"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[4]"
@@ -785,7 +776,8 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Status_GetFlags_0x493190.c"
+        ".analysis/decompiled/Status_GetFlags_0x493190.c",
+        ".analysis/notes-bind.md"
       ],
       "note": "glaiel::get_status_flags(std::string) hit-effect flag bits. Also FW_LK[4]."
     },
@@ -793,48 +785,49 @@
       "name": "LuckUp_ctor",
       "kind": "function",
       "rva": "0x711c90",
-      "signature": {
-        "pattern": "4D 8B F1 4D 8B F8 48 8B F2 48 8B F9 33 ED 40 38 A9 B0 04 00 00 74 07 33 C0 E9 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B D8 48 89 44 24 40 48 85 C0 74 49 33 D2 41 B8 F0 00 00 00 48 8B C8 E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 89 AB C8 00 00 00 48 89 AB D0 00 00 00 48 89 AB D8 00 00 00 48 89 AB E0 00 00 00 66 C7 83 E8 00 00 00 01 00 48 8D 05 95 5D",
-        "exactLen": 121,
-        "offset": -24,
-        "wildcards": [
-          {
-            "at": 26,
-            "len": 4,
-            "why": "E9 rel32"
-          },
-          {
-            "at": 33,
-            "len": 4,
-            "why": "rip-relative disp32"
-          },
-          {
-            "at": 38,
-            "len": 4,
-            "why": "E8 rel32"
-          },
-          {
-            "at": 67,
-            "len": 4,
-            "why": "E8 rel32"
-          },
-          {
-            "at": 75,
-            "len": 4,
-            "why": "E8 rel32"
-          }
-        ]
-      },
+      "signature": null,
       "anchors": {
         "strings": [],
         "cfgLite": {
           "bytes": 292,
           "calls": 6,
-          "ripRefs": 2,
+          "ripRefs": 3,
           "resyncs": 0
         },
-        "callees": [],
-        "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89"
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "Passive_ctor",
+            "target": "0x4c940"
+          },
+          {
+            "ordinal": 5,
+            "name": "Status_OnInit_base",
+            "target": "0x8104b0"
+          }
+        ],
+        "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89",
+        "vtableStore": {
+          "vtable": "LuckUp_vftable",
+          "pattern": "48 8D 05 ?? ?? ?? ?? 48 89 03",
+          "note": "the only rip-relative code reference to LuckUp_vftable (1 hit image-wide on 25143593): lea rax,[vftable]; mov [rbx],rax at +140"
+        },
+        "dataRefs": [
+          {
+            "rva": "0x1414e40",
+            "role": "pool",
+            "note": "per-class pool; referenced only by this ctor and its 54-byte static initialiser 0x1fa40",
+            "ripRefOrdinal": 0
+          }
+        ],
+        "callers": [
+          {
+            "function": "Status_ApplyLuckUp",
+            "ordinal": 6,
+            "unique": true,
+            "note": "the only E8 caller image-wide (notes-bind §1.2)"
+          }
+        ]
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_LuckUp_ctor"
@@ -847,8 +840,95 @@
       ],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/LuckUp_ctor_0x711c90.c"
-      ]
+        ".analysis/decompiled/LuckUp_ctor_0x711c90.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "LuckUp* (Character* owner, Entity* entity, int* stacks, void** src, void** applier): pool-allocates 0xF0 bytes, base ctor (Passive_ctor), stores LuckUp_vftable, +0x18 entity / +0x20 owner, runs slot 30 (Status_OnInit_base). Byte-twin of the AIControlNextTurn / sibling ctors modulo relocations: no relocation-free unique signature exists, its identity is the vftable store and the pool global (notes-bind §1.2)."
+    },
+    {
+      "name": "Passive_ctor",
+      "kind": "function",
+      "rva": "0x4c940",
+      "signature": {
+        "pattern": "8B 15 ?? ?? ?? ?? 8D 42 01 89 05 ?? ?? ?? ?? 89 51 08 0F B6 41 0C 24 FE 24 FD 24 FB 24 F7 24 EF 24 DF 24 BF 24 7F 88 41 0C 0F B6 41 0D 24 FE 24 FD 24 FB 24 F7 24 EF 24 DF 24 BF 88 41 0D C7 41 0E 00 00 01 00 33 D2 48 89 51 18 48 89 51 20 48 89 51 28 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 89 41 30 48 8D 05 ?? ?? ?? ?? 48 89 01 48 89 51 38 48",
+        "exactLen": 112,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 2,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 11,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 85,
+            "len": 8,
+            "why": "movabs imm64"
+          },
+          {
+            "at": 100,
+            "len": 4,
+            "why": "rip-relative disp32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [],
+        "cfgLite": {
+          "bytes": 244,
+          "calls": 0,
+          "ripRefs": 4,
+          "resyncs": 0
+        },
+        "prologue": "8B 15 ?? ?? ?? ?? 8D 42 01 89 05 ??"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        ".analysis/decompiled/Passive_ctor_0x4c940.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "glaiel::Passive::Passive — the Status/Passive base constructor (2340 E8 callers); LuckUp_ctor call #2. Reference entry so the ctor's callee anchor has a name."
+    },
+    {
+      "name": "Status_OnInit_base",
+      "kind": "function",
+      "rva": "0x8104b0",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 74 24 20 55 57 41 54 41 56 41 57 48 8B EC 48 83 EC 70",
+        "exactLen": 25,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1231,
+          "calls": 24,
+          "ripRefs": 12,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 18 48 89 74 24 20 55 57"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        ".analysis/decompiled/Status_OnInit_base_0x8104b0.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "the base Status::OnInit(stacks, GonObject* data, applier) that LuckUp_ctor calls devirtualised (slot 30; call #5). Reference entry so the ctor's callee anchor has a name."
     },
     {
       "name": "Status_Remove",
@@ -1082,10 +1162,31 @@
       "kind": "function",
       "rva": "0x9b7870",
       "signature": {
-        "pattern": "48 8B C4 48 89 58 10 48 89 70 18 48 89 78 20 55 48 8D 68",
-        "exactLen": 19,
-        "offset": 0,
-        "wildcards": []
+        "pattern": "33 F6 C7 45 E4 FF FF FF 09 32 C0 48 89 75 D7 24 F9 89 75 DF 0C 09 89 75 F1 88 45 E3 48 8B D9 0F 11 05 ?? ?? ?? ?? 66 89 75 F5 B9 E2 0B 00 00 0F 11 05 ?? ?? ?? ?? C7 45 E8 02 02 02 04 0F 11 05 ?? ?? ?? ?? C7 45 EC 05 04 05 02 0F 11 05 ?? ?? ?? ?? C6 45 F0 02",
+        "exactLen": 86,
+        "offset": -45,
+        "wildcards": [
+          {
+            "at": 34,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 50,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 64,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 78,
+            "len": 4,
+            "why": "rip-relative disp32"
+          }
+        ]
       },
       "anchors": {
         "strings": [],
@@ -1096,7 +1197,10 @@
           "resyncs": 0
         },
         "callees": [],
-        "prologue": "48 8B C4 48 89 58 10 48 89 70 18 48"
+        "prologue": "48 8B C4 48 89 58 10 48 89 70 18 48",
+        "before": {
+          "function": "ApplicationBase_FrameEnd"
+        }
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:hook_FrameBegin"
@@ -1108,9 +1212,10 @@
         }
       ],
       "evidence": [
-        "docs/engine-map.md#functions-and-signatures"
+        "docs/engine-map.md#functions-and-signatures",
+        ".analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c"
       ],
-      "note": "prologue is generic; the 20-byte signature is unique on this build only. ApplicationBase_Step is the fallback hook point."
+      "note": "Body signature from +45 (86 bytes, 4 rip refs masked) keyed on the per-frame defaults it stores (0xffffff09, 0x0be2, 02 02 02 04, 05 04 05 02, 02) instead of the generic 19-byte register-save prologue that was unique on this build only; 1 hit image-wide on 25143593. Also the .pdata predecessor of ApplicationBase_FrameEnd (25655 -> 25656). No __FUNCSIG__/__FILE__ string is lea'd by it (71 rip refs, all globals). ApplicationBase_Step remains the fallback hook point."
     },
     {
       "name": "string_Allocate",
@@ -1188,7 +1293,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56"
+        "prologue": "48 89 5C 24 20 48 89 4C 24 08 55 56",
+        "after": {
+          "function": "Status_GetCategory"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[1]"
@@ -1202,8 +1310,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_GetStackMode_0x492c20.c"
-      ]
+        ".analysis/decompiled/Status_GetStackMode_0x492c20.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_NameExists",
@@ -1233,6 +1343,14 @@
         "prologue": "40 53 48 83 EC 30 48 83 79 18 0F 48",
         "after": {
           "function": "Status_GetStackMode"
+        },
+        "before": {
+          "function": "Status_GetValue"
+        },
+        "sharedDataRef": {
+          "with": "Status_GetValue",
+          "ripRefOrdinal": 0,
+          "note": "the status-value map 0x13c4830 is referenced by exactly two functions: NameExists (+0x50) and GetValue (+0x7d) — NameExists is \"the value map has this name\""
         }
       },
       "consumers": [
@@ -1247,9 +1365,10 @@
         }
       ],
       "evidence": [
-        "docs/engine-map.md#status-effects"
+        "docs/engine-map.md#status-effects",
+        ".analysis/notes-bind.md"
       ],
-      "note": "bool predicate: FNV-1a hash of the name, map lookup (map global at 0x13c3c30, end sentinel at 0x13c3c38); no __FUNCSIG__ string; sits between get_status_stackmode and get_status_value. Anchored as the .pdata function right after Status_GetStackMode (no string of its own)."
+      "note": "bool predicate: FNV-1a hash of the name, lookup in the SAME map global as Status_GetValue (0x13c4830; end sentinel +8); no __FUNCSIG__ string; sits between get_status_stackmode and get_status_value in .pdata (11370 -> 11371 -> 11372). Anchored as the successor of Status_GetStackMode, the predecessor of Status_GetValue, and the other function referencing GetValue's map."
     },
     {
       "name": "Status_GetValue",
@@ -1297,7 +1416,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41",
+        "after": {
+          "function": "Status_NameExists"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[3]"
@@ -1311,8 +1433,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_GetValue_0x492f20.c"
-      ]
+        ".analysis/decompiled/Status_GetValue_0x492f20.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_IsHitEffect",
@@ -1370,7 +1494,8 @@
       ],
       "evidence": [
         ".analysis/decompiled/Status_IsHitEffect_0x5028e0.c"
-      ]
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_OnAppliedToDamageInstance",
@@ -1408,7 +1533,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89",
+        "after": {
+          "function": "Status_GetIcon"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[6]"
@@ -1422,8 +1550,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_OnAppliedToDamageInstance_0x493690.c"
-      ]
+        ".analysis/decompiled/Status_OnAppliedToDamageInstance_0x493690.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_OnAppliedToTile",
@@ -1461,7 +1591,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89",
+        "after": {
+          "function": "Status_OnAppliedToDamageInstance"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[7]"
@@ -1475,7 +1608,8 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_OnAppliedToTile_0x493910.c"
+        ".analysis/decompiled/Status_OnAppliedToTile_0x493910.c",
+        ".analysis/notes-bind.md"
       ]
     },
     {
@@ -1514,7 +1648,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89",
+        "after": {
+          "function": "Status_OnAppliedToTile"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[8]"
@@ -1528,8 +1665,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_OnKilledCharacter_0x493b80.c"
-      ]
+        ".analysis/decompiled/Status_OnKilledCharacter_0x493b80.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_OnDamageReport",
@@ -1567,7 +1706,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89",
+        "after": {
+          "function": "Status_OnKilledCharacter"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[9]"
@@ -1581,8 +1723,10 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_OnDamageReport_0x493e00.c"
-      ]
+        ".analysis/decompiled/Status_OnDamageReport_0x493e00.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "No body signature on purpose: the only relocation-free bytes that distinguish it from its template twins are the __LINE__/column immediates of the NO STATUS NAMED assert (contains __LINE__), which a source edit above that line moves onto a twin — rung 1 would then port the wrong function silently. Located by the funcsig xref and the .pdata chain instead (notes-bind §2.2)."
     },
     {
       "name": "Status_GetIcon",
@@ -1625,7 +1769,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56"
+        "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56",
+        "after": {
+          "function": "Status_GetFlags"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[10]"
@@ -1639,7 +1786,8 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_GetIcon_0x4933e0.c"
+        ".analysis/decompiled/Status_GetIcon_0x4933e0.c",
+        ".analysis/notes-bind.md"
       ]
     },
     {
@@ -1673,7 +1821,10 @@
             "target": "0x5f9760"
           }
         ],
-        "prologue": "44 88 4C 24 20 4C 89 44 24 18 48 89"
+        "prologue": "44 88 4C 24 20 4C 89 44 24 18 48 89",
+        "after": {
+          "function": "Status_OnDamageReport"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[11]"
@@ -1687,7 +1838,8 @@
         }
       ],
       "evidence": [
-        "docs/binding-port.md#known-limits-and-human-decisions"
+        "docs/binding-port.md#known-limits-and-human-decisions",
+        ".analysis/notes-bind.md"
       ]
     },
     {
@@ -2086,7 +2238,10 @@
             "target": "0x52780"
           }
         ],
-        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41"
+        "prologue": "48 89 4C 24 08 55 53 56 57 41 54 41",
+        "after": {
+          "function": "Status_IsHitEffect"
+        }
       },
       "consumers": [
         "native/framework/src/status_engine.c:g_lk_rva[12]"
@@ -2100,7 +2255,8 @@
         }
       ],
       "evidence": [
-        ".analysis/decompiled/Status_SpawnTile_0x502b40.c"
+        ".analysis/decompiled/Status_SpawnTile_0x502b40.c",
+        ".analysis/notes-bind.md"
       ]
     },
     {
@@ -2365,7 +2521,7 @@
           "bytes": 1323,
           "calls": 34,
           "ripRefs": 31,
-          "resyncs": 4
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2440,7 +2596,7 @@
           "bytes": 1808,
           "calls": 38,
           "ripRefs": 40,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2659,7 +2815,7 @@
           "bytes": 1568,
           "calls": 31,
           "ripRefs": 8,
-          "resyncs": 1
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2703,7 +2859,7 @@
           "bytes": 2633,
           "calls": 42,
           "ripRefs": 33,
-          "resyncs": 2
+          "resyncs": 0
         },
         "callees": [
           {
@@ -2966,6 +3122,11 @@
             "target": "0x946680"
           },
           {
+            "ordinal": 18,
+            "name": "GonObject_child_by_name",
+            "target": "0x942b50"
+          },
+          {
             "ordinal": 20,
             "name": "Gon_DeepMerge",
             "target": "0x946680"
@@ -2974,6 +3135,11 @@
             "ordinal": 24,
             "name": "Gon_PatchMerge_b",
             "target": "0x944f50"
+          },
+          {
+            "ordinal": 32,
+            "name": "GonObject_child_by_name",
+            "target": "0x942b50"
           },
           {
             "ordinal": 34,
@@ -3019,14 +3185,20 @@
       "name": "Status_ApplyLuckUp",
       "kind": "function",
       "rva": "0x5f9760",
-      "signature": {
-        "pattern": "F1 89 55 AF 48 8B F9 45 33 FF 48 8B 41 20 44 38 B8 B0 04 00 00 74 07 33 C0 E9 67 02 00 00 4C 8D 2D 83 B5",
-        "exactLen": 35,
-        "offset": -40,
-        "wildcards": []
-      },
+      "signature": null,
       "anchors": {
-        "strings": [],
+        "strings": [
+          {
+            "text": "LuckUp",
+            "role": "literal",
+            "unique": true
+          },
+          {
+            "text": "None",
+            "role": "literal",
+            "unique": true
+          }
+        ],
         "cfgLite": {
           "bytes": 711,
           "calls": 12,
@@ -3055,14 +3227,38 @@
             "target": "0x483120"
           }
         ],
-        "prologue": "4C 89 4C 24 20 89 54 24 10 48 89 4C"
+        "prologue": "4C 89 4C 24 20 89 54 24 10 48 89 4C",
+        "imm32Witness": {
+          "pattern": "41 B8 ?? ?? ?? ??",
+          "imm32At": 2,
+          "equals": "LuckUp_typeid",
+          "callee": "Entity_FindComponentsByTypeId",
+          "maxForward": 4,
+          "note": "mov r8d, LuckUp_typeid (4 instructions before call #4 -> Entity_FindComponentsByTypeId); 1 hit image-wide on 25143593; the type id is re-derived from LuckUp_vftable slot 1 on the new build"
+        },
+        "callers": [
+          {
+            "function": "Status_ApplyByName",
+            "ordinal": 1261,
+            "afterStringLea": "LuckUp",
+            "note": "the first in-tolerance E8 after lea rdx,[\"LuckUp\"] (the compare call string==cstr is skipped by the size tolerance); +56 bytes on 25143593"
+          },
+          {
+            "function": "Status_AttachPassive",
+            "ordinal": 3439,
+            "afterStringLea": "LuckUp",
+            "note": "same shape; the call is 17 instructions (+97 bytes) after the lea on 25143593"
+          }
+        ]
       },
       "consumers": [],
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures",
-        ".analysis/decompiled/Status_ApplyLuckUp_0x5f9760.c"
-      ]
+        ".analysis/decompiled/Status_ApplyLuckUp_0x5f9760.c",
+        ".analysis/notes-bind.md"
+      ],
+      "note": "apply_<LuckUp>: builds the SSO name, compares with \"None\" / \"LuckUp\", merges into an existing LuckUp (by type id) or constructs via LuckUp_ctor, else Status_ApplyByName. No relocation-free unique byte signature exists (the only unique bytes are the type id `41 B8 D6 04`, which changes per build) — located by the imm32 witness, the callers after the LuckUp lea, the two literals + tolerance, or the caller ordinal (notes-bind §1.1)."
     },
     {
       "name": "Status_ctor",
@@ -3108,7 +3304,18 @@
           "ripRefs": 3,
           "resyncs": 0
         },
-        "callees": [],
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "Passive_ctor",
+            "target": "0x4c940"
+          },
+          {
+            "ordinal": 5,
+            "name": "Status_OnInit_base",
+            "target": "0x8104b0"
+          }
+        ],
         "prologue": "48 89 5C 24 10 48 89 6C 24 18 48 89"
       },
       "consumers": [],
@@ -3163,13 +3370,17 @@
           "resyncs": 0
         },
         "callees": [],
-        "prologue": "40 55 53 56 57 41 56 48 8B EC 48 83"
+        "prologue": "40 55 53 56 57 41 56 48 8B EC 48 83",
+        "after": {
+          "function": "ApplicationBase_FrameBegin"
+        }
       },
       "consumers": [],
       "exposure": [],
       "evidence": [
         "docs/engine-map.md#functions-and-signatures"
-      ]
+      ],
+      "note": "The .pdata successor of ApplicationBase_FrameBegin (both void(ApplicationBase*), once per frame from Step)."
     },
     {
       "name": "ApplicationBase_Step",
@@ -4675,7 +4886,7 @@
           "bytes": 193,
           "calls": 6,
           "ripRefs": 1,
-          "resyncs": 1
+          "resyncs": 0
         },
         "prologue": "48 89 5C 24 18 48 89 74 24 20 48 89"
       },
@@ -5784,34 +5995,39 @@
       "kind": "function",
       "rva": "0x61ea0",
       "signature": {
-        "pattern": "78 18 0F 76 03 49 8B 10 48 BB ?? ?? ?? ?? ?? ?? ?? ?? 45 33 C0 4D 85 C9 74 2A 48 B9 ?? ?? ?? ?? ?? ?? ?? ?? 0F 1F 40 00 0F 1F 84 00 00 00 00 00 42 0F B6 04 02 48 33 D8 48 0F AF D9 49 FF C0 4D 3B C1 72 EC 4C 8B CB 4D 8B C6 48 8D 54 24 20 48 8B CD E8 ?? ?? ?? ?? 48 8B 44 24 28 48 85 C0 74 0C 48 89 06 C6 46 08 00 E9 ?? ?? ?? ?? 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 39 45 10 0F 84 C6",
-        "exactLen": 126,
-        "offset": -48,
+        "pattern": "48 0F AF D9 49 FF C0 4D 3B C1 72 EC 4C 8B CB 4D 8B C6 48 8D 54 24 20 48 8B CD E8 ?? ?? ?? ?? 48 8B 44 24 28 48 85 C0 74 0C 48 89 06 C6 46 08 00 E9 ?? ?? ?? ?? 48 B8 ?? ?? ?? ?? ?? ?? ?? ?? 48 39 45 10 0F 84 ?? ?? ?? ?? 4C 8D 65 08 4C 89 64 24 30 48 C7 44 24 38 00 00 00 00 B9 38 00 00 00 E8 ?? ?? ?? ?? 48 8B F8 48 89 44 24 38 49 8B D6 48 8D 48 10 E8 ?? ?? ?? ?? 48",
+        "exactLen": 122,
+        "offset": -104,
         "wildcards": [
           {
-            "at": 10,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 28,
-            "len": 8,
-            "why": "movabs imm64"
-          },
-          {
-            "at": 83,
+            "at": 27,
             "len": 4,
             "why": "E8 rel32"
           },
           {
-            "at": 105,
+            "at": 49,
             "len": 4,
             "why": "E9 rel32"
           },
           {
-            "at": 111,
+            "at": 55,
             "len": 8,
             "why": "movabs imm64"
+          },
+          {
+            "at": 69,
+            "len": 4,
+            "why": "Jcc rel32"
+          },
+          {
+            "at": 97,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 117,
+            "len": 4,
+            "why": "E8 rel32"
           }
         ]
       },
@@ -7329,6 +7545,957 @@
         ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
       ],
       "note": "TacticsTest vftable slot of the late render / submit-phase method the glow engine hooks"
+    },
+    {
+      "name": "Character_init",
+      "kind": "function",
+      "rva": "0xf70f0",
+      "signature": {
+        "pattern": "48 8B C4 44 88 48 20 44 88 40 18 48",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Mewgenics\\game\\code\\Character.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::Character::init(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,bool,bool)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "callees": [
+          {
+            "ordinal": 325,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 732,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 740,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 748,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 756,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 764,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 772,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 780,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 788,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 796,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 804,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 812,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 820,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 828,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 836,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 844,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 852,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 860,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 868,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 876,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 884,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 892,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 900,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 908,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 916,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 924,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 932,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 991,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 1323,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1324,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1325,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1334,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1337,
+            "name": "Status_AttachPassive",
+            "target": "0x494080"
+          },
+          {
+            "ordinal": 1342,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1343,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1347,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1350,
+            "name": "Status_AttachPassive",
+            "target": "0x494080"
+          },
+          {
+            "ordinal": 1354,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1355,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1356,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1357,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1358,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1359,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 1360,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 23121,
+          "calls": 1361,
+          "ripRefs": 385,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 44 88 48 20 44 88 40 18 48"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/Character_init_0xf70f0.c"
+      ],
+      "note": "glaiel::Character::init(std::string name, bool, bool) (23 KB): resolves the unit's data/characters entry from the SpawnDatabase (*0x1413c79d0 + 0x38, variant-resolved and overlay-merged), stores it at Character+0x240 and its name at +0x248, reads stats (IntOr default 5) into +0x5a0..+0x5b8, base health = properties.health - 4*constitution into +0x5e8, shield / divine shield (x the champion multiplier +0xce8) into +0x4b4 / +0x4b8. Witness host for the Character offsets; never called by the harness."
+    },
+    {
+      "name": "TacticsTest_1hp_DoCall",
+      "kind": "function",
+      "rva": "0x895160",
+      "signature": {
+        "pattern": "48 89 5C 24 10 57 48 83 EC 40 33 FF",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [],
+        "cfgLite": {
+          "bytes": 255,
+          "calls": 4,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 57 48 83 EC 40 33 FF"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/TacticsTest_init_lambda36_1hp_DoCall_0x895160.c"
+      ],
+      "note": "TacticsTest::init lambda_36 _Do_call (the `1hp` console command, 255 B): walks the live Character array (the same RefArray walk as the harness) and for every unit sets +0x4b0 (current HP) to 1 when above 1 and zeroes +0x4b4 (shield). The one direct HP witness in the exe; `999` deals 999 damage instead of writing HP. Never called by the harness."
+    },
+    {
+      "name": "GonObject_child_by_name",
+      "kind": "function",
+      "rva": "0x942b50",
+      "signature": {
+        "pattern": "48 89 6C 24 18 56 57 41 56 48 83 EC 20 48 8B E9",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [],
+        "cfgLite": {
+          "bytes": 226,
+          "calls": 3,
+          "ripRefs": 2,
+          "resyncs": 0
+        },
+        "prologue": "48 89 6C 24 18 56 57 41 56 48 83 EC"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_child_by_name_0x942b50.c"
+      ],
+      "note": "GonObject::child_by_name(node, const std::string* key, int nth) (226 B): type 3 only; nth 0 takes the name-index hash path (Get_const 0x942da0), nth > 0 scans the children vector (+0x38..+0x40, stride 0xb0) comparing the std::string name at +0x88 and returns the nth duplicate; miss = the null node 0x1413c4de0. The harness's walker (mt_gon.c) reproduces the scan (first match) without calling the game. Witness host for the GonObject node layout."
+    },
+    {
+      "name": "GonObject_Int",
+      "kind": "function",
+      "rva": "0x941540",
+      "signature": {
+        "pattern": "A0 00 00 00 48 8B F9 45 33 E4 48 8D 35 6F 65",
+        "exactLen": 15,
+        "offset": -32,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 989,
+          "calls": 18,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_Int_0x941540.c"
+      ],
+      "note": "GonObject::Int(node) (989 B): logs `GON ERROR: Field \"<name>\" does not exist` / `is not a number` through the error sink, returns the int at +0x50 regardless. Witness host for GonObject_int (the IntOr leaf 0x9426b0 has no .pdata body)."
+    },
+    {
+      "name": "GonObject_Number",
+      "kind": "function",
+      "rva": "0x941920",
+      "signature": {
+        "pattern": "A0 00 00 00 48 8B F9 45 33 E4 48 8D 35 8F",
+        "exactLen": 14,
+        "offset": -32,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 991,
+          "calls": 18,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_Number_0x941920.c"
+      ],
+      "note": "GonObject::Number(node) (991 B): the double at +0x58 with the same error logging as Int. Witness host for GonObject_double."
+    },
+    {
+      "name": "GonObject_Bool",
+      "kind": "function",
+      "rva": "0x942290",
+      "signature": {
+        "pattern": "A0 00 00 00 48 8B F9 45 33 E4 48 8D 35 1F",
+        "exactLen": 14,
+        "offset": -32,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 990,
+          "calls": 18,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_Bool_0x942290.c"
+      ],
+      "note": "GonObject::Bool(node) (990 B): the bool byte at +0x60 (type 5), else `is not a bool`. Witness host for GonObject_bool."
+    },
+    {
+      "name": "GonObject_StringRef",
+      "kind": "function",
+      "rva": "0x941140",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC A0 00 00 00 48 8B F9 45 33 E4 48 8D 35 ?? ?? ?? ?? 48 BA",
+        "exactLen": 51,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 45,
+            "len": 4,
+            "why": "rip-relative disp32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1016,
+          "calls": 18,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 48 89 74 24 18 48 89"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_StringRef_0x941140.c"
+      ],
+      "note": "GonObject::StringRef(node) (1016 B): returns &node->text (+0x68, the raw token text kept for every scalar: numbers and bools included) for types 1, 2 and 5, logging `is not a string` otherwise. Witness host for GonObject_text."
+    },
+    {
+      "name": "Character_hp",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x4b0",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_1hp_DoCall",
+          "pattern": "C7 81 ?? ?? ?? ?? 01 00 00 00",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov dword [rcx+0x4b0],1 — the `1hp` console command's HP write (guarded by cmp [rcx+0x4b0],1 three instructions earlier); unique in the lambda"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_HP"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/TacticsTest_init_lambda36_1hp_DoCall_0x895160.c"
+      ],
+      "note": "current HP; Character::init stores properties.initial_health here when present (x the champion multiplier); a freshly spawned unit is expected to read properties.health (INFERRED until the golden-numeric T2 run says so)"
+    },
+    {
+      "name": "Character_shield",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x4b4",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_1hp_DoCall",
+          "pattern": "89 B9 ?? ?? ?? ??",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov [rcx+0x4b4],edi (edi = 0) right after the HP write: `1hp` zeroes the shield; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_SHIELD"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/TacticsTest_init_lambda36_1hp_DoCall_0x895160.c"
+      ],
+      "note": "shield; Character::init: IntOr(properties.shield, 0) x the champion multiplier"
+    },
+    {
+      "name": "Character_divineShield",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x4b8",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "Character_init",
+          "pattern": "F2 41 0F 59 86 ?? ?? ?? ?? F2 0F 2C C0 41 89 86 ?? ?? ?? ??",
+          "dispAt": 16,
+          "dispSize": 4,
+          "nth": 1
+        },
+        "note": "mulsd xmm0,[r14+0xce8]; cvttsd2si eax,xmm0; mov [r14+0x4b8],eax — the second of three champion-scaled int stores (shield 0x4b4, divine shield 0x4b8, initial HP 0x4b0)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_DIVINE_SHIELD"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/Character_init_0xf70f0.c"
+      ],
+      "note": "divine shield; Character::init: IntOr(properties.divine_shield, 0) x the champion multiplier"
+    },
+    {
+      "name": "Character_stats",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x5a0",
+      "ctype": "int32[7]",
+      "anchors": {
+        "witness": {
+          "function": "Character_init",
+          "pattern": "8B D7 48 8B C8 E8 ?? ?? ?? ?? 41 89 86 ?? ?? ?? ??",
+          "dispAt": 13,
+          "dispSize": 4,
+          "nth": 0
+        },
+        "note": "mov edx,edi (5, the default); mov rcx,rax; call GonObject_IntOr; mov [r14+0x5a0],eax — the first of the seven stat stores (0x5a0 strength, 0x5a4 dexterity, 0x5a8 constitution, 0x5ac intelligence, 0x5b0 speed, 0x5b4 charisma, 0x5b8 luck; 8 matches, the 8th stores 0x630)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_STATS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/Character_init_0xf70f0.c"
+      ],
+      "note": "seven consecutive int32 in data/characters order: strength, dexterity, constitution, intelligence, speed, charisma, luck — IntOr(stats.<name>, 5) at init; the per-stat bonus block +0x5bc..+0x5d4 follows (engine-map: LuckUp adds to +0x5d4)"
+    },
+    {
+      "name": "Character_baseHealth",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x5e8",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "Character_init",
+          "pattern": "41 8B 9E ?? ?? ?? ?? C1 E3 02 48 8D 54 24 30 49 8B CF E8 ?? ?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 2B C3 41 89 86 ?? ?? ?? ??",
+          "dispAt": 36,
+          "dispSize": 4
+        },
+        "note": "mov ebx,[r14+0x5a8] (constitution); shl ebx,2; … call GonObject_Get_const(properties, \"health\"); call GonObject_Int; sub eax,ebx; mov [r14+0x5e8],eax — the only `health - 4*con` store (the sibling `2B C3 41 89 86` stores use other multipliers); unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_BASE_HEALTH"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/Character_init_0xf70f0.c"
+      ],
+      "note": "base health = properties.health - 4*constitution (IntOr(properties.base_health, 0) when health is absent); max HP = base + 4*con + modifiers (INFERRED, no getter found)"
+    },
+    {
+      "name": "Character_gonEntry",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x240",
+      "ctype": "const GonObject*",
+      "anchors": {
+        "witness": {
+          "function": "Character_init",
+          "pattern": "4D 89 AE ?? ?? ?? ?? 48 8D",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov [r14+0x240],r13 at 0xf79c9: the only store of the entry node (six `mov rbx,[r14+0x240]` reads follow); unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_gon",
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_GON_ENTRY"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/Character_init_0xf70f0.c"
+      ],
+      "note": "the unit's data/characters entry as the game holds it: SpawnDatabase(*0x1413c79d0)+0x38 -> Get_const(name), already variant_of-resolved and overlay-merged; the harness's `expect gon` walks it"
+    },
+    {
+      "name": "Character_nameKey",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x248",
+      "ctype": "std::string",
+      "anchors": {
+        "witness": {
+          "function": "Character_init",
+          "pattern": "48 8B D0 49 8D 8E ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 4D A0",
+          "dispAt": 6,
+          "dispSize": 4,
+          "nth": 0
+        },
+        "note": "mov rdx,rax; lea rcx,[r14+0x248]; call string_assign; lea rcx,[rbp-0x60] — a std::string assignment into Character+0x248 (2 matches, both 0x248; the value a spawned unit carries is its graphics.name key)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_NAME_KEY"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/Character_init_0xf70f0.c"
+      ],
+      "note": "OBSERVED 2026-10-22 (golden-numeric T2): the unit's display-name loc key — graphics.name, e.g. ENEMY_POOTER_NAME, GOLDEN_RAT_NAME after a .merge — a std::string Character::init copies; the units event's `namekey` field. notes-gon.md inferred the entry name here; the entry name's home is still unknown"
+    },
+    {
+      "name": "GonObject_children",
+      "kind": "offset",
+      "struct": "GonObject",
+      "value": "0x38",
+      "ctype": "GonObject*",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_child_by_name",
+          "pattern": "48 8B 5D ?? 48 8B 6D ??",
+          "dispAt": 3,
+          "dispSize": 1
+        },
+        "note": "mov rbx,[rbp+0x38]; mov rbp,[rbp+0x40]: the children vector's begin/end before the linear scan; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GON_CHILDREN"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_child_by_name_0x942b50.c"
+      ],
+      "note": "std::vector<GonObject> begin (stride GON_NODE_SIZE); +0x40 end, +0x48 capacity"
+    },
+    {
+      "name": "GonObject_childrenEnd",
+      "kind": "offset",
+      "struct": "GonObject",
+      "value": "0x40",
+      "ctype": "GonObject*",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_child_by_name",
+          "pattern": "48 8B 5D ?? 48 8B 6D ??",
+          "dispAt": 7,
+          "dispSize": 1
+        },
+        "note": "the second load of the same pair: mov rbp,[rbp+0x40] (children end)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GON_CHILDREN_END"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_child_by_name_0x942b50.c"
+      ],
+      "note": "children vector end"
+    },
+    {
+      "name": "GonObject_int",
+      "kind": "offset",
+      "struct": "GonObject",
+      "value": "0x50",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_Int",
+          "pattern": "E8 ?? ?? ?? ?? 8B 47 ??",
+          "dispAt": 7,
+          "dispSize": 1
+        },
+        "note": "call (the error-sink path's last call); mov eax,[rdi+0x50]: the value Int() returns whatever the type; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GON_INT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_Int_0x0.c"
+      ],
+      "note": "int view of a number node (strtol at parse time; 1.5 -> 1)"
+    },
+    {
+      "name": "GonObject_double",
+      "kind": "offset",
+      "struct": "GonObject",
+      "value": "0x58",
+      "ctype": "double",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_Number",
+          "pattern": "E8 ?? ?? ?? ?? F2 0F 10 47 ??",
+          "dispAt": 9,
+          "dispSize": 1
+        },
+        "note": "call; movsd xmm0,[rdi+0x58]: the value Number() returns; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GON_DOUBLE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_Number_0x0.c"
+      ],
+      "note": "double view of a number node (strtod at parse time)"
+    },
+    {
+      "name": "GonObject_bool",
+      "kind": "offset",
+      "struct": "GonObject",
+      "value": "0x60",
+      "ctype": "char",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_Bool",
+          "pattern": "E8 ?? ?? ?? ?? 0F B6 47 ??",
+          "dispAt": 8,
+          "dispSize": 1
+        },
+        "note": "call; movzx eax,byte [rdi+0x60]: the value Bool() returns; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GON_BOOL"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_Bool_0x0.c"
+      ],
+      "note": "bool byte of a type-5 node (exactly `true` / `false` at parse time)"
+    },
+    {
+      "name": "GonObject_text",
+      "kind": "offset",
+      "struct": "GonObject",
+      "value": "0x68",
+      "ctype": "std::string",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_StringRef",
+          "pattern": "E8 ?? ?? ?? ?? 48 8D 47 ??",
+          "dispAt": 8,
+          "dispSize": 1
+        },
+        "note": "call; lea rax,[rdi+0x68]: the std::string StringRef() returns; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GON_TEXT"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_StringRef_0x0.c"
+      ],
+      "note": "the raw token text of every scalar (numbers and bools keep their source text; quotes are stripped by the tokenizer)"
+    },
+    {
+      "name": "GonObject_name",
+      "kind": "offset",
+      "struct": "GonObject",
+      "value": "0x88",
+      "ctype": "std::string",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_child_by_name",
+          "pattern": "48 8D 8B ?? ?? ?? ?? 4C 8B 83 ?? ?? ?? ??",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "lea rcx,[rbx+0x88]; mov r8,[rbx+0x98]: the child's name string and its size inside the scan loop; unique"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GON_NAME"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_child_by_name_0x942b50.c"
+      ],
+      "note": "the node's key under its parent (std::string: buffer/pointer +0x88, size +0x98, capacity +0xa0)"
+    },
+    {
+      "name": "GonObject_type",
+      "kind": "offset",
+      "struct": "GonObject",
+      "value": "0xa8",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_child_by_name",
+          "pattern": "83 BD ?? ?? ?? ?? 03",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "cmp dword [rbp+0xa8],3: only an object node (type 3) has named children; unique (the 11-byte Exists leaf 0x9429d0 tests the same field but has no .pdata body)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_GON_TYPE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_child_by_name_0x942b50.c"
+      ],
+      "note": "0 null, 1 string, 2 number, 3 object, 4 array, 5 bool (6 = an internal marker the getters treat as no value)"
+    },
+    {
+      "name": "GonObject_size",
+      "kind": "constant",
+      "value": "0xb0",
+      "anchors": {
+        "witness": {
+          "function": "GonObject_child_by_name",
+          "pattern": "48 81 C3 ?? ?? ?? ?? 48 3B DD",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "add rbx,0xb0; cmp rbx,rbp: the scan loop's stride (an imm32, read as the value at dispAt); unique. The same stride appears as the imul 0xb0 in Index 0x942ee0 and the /0xb0 multiply in Size 0x942f30 (no .pdata bodies)"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mt_gon.c"
+      ],
+      "exposure": [
+        {
+          "macro": "GON_NODE_SIZE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#gon-at-runtime-2026-10-21",
+        ".analysis/decompiled/GonObject_child_by_name_0x942b50.c"
+      ],
+      "note": "sizeof(GonObject): the children vector's element stride"
     }
   ]
 }

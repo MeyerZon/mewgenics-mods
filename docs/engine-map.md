@@ -39,8 +39,10 @@ beyond short byte signatures needed to locate functions.
 | `-dev_mode true` | Dev mode. |
 | `-validate_pedigree_tables true` | Repairs family-tree tables (added 1.0.20941 after a save editor broke saves). |
 
-Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map to GON's
-Append / ShallowMerge-DeepMerge / PatchMerge.
+Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map (in `Gon_overlay_apply`
+`0x9a64a0`) to `Gon_Append` `0x945410`, `Gon_DeepMerge_plain` `0x945c30` under the constant MERGE policy
+(`Gon_DefaultMergeMode` `0x9451c0` returns 2, so `.merge` files never read key suffixes) and the policy-driven
+`0x946680`; row by row in `docs/data-mods.md` "Fidelity to the decompiled merges".
 
 ## gpak contents
 
@@ -56,6 +58,19 @@ tables (`catgen`, `spawns`, `particles`, `furniture_effects`, `weather`, `diffic
 
 ## Data model
 
+**GON parser (OBSERVED 2026-10-21/22, `.analysis/decompiled/Gon_{LoadText_0x940840,Tokenize_0x93f090,ParseTokens_0x93fcf0}.c`).**
+`Gon_LoadText` wraps the text in `{ }`, tokenizes, parses the root as an object and logs `GON ERROR: More symbols
+exists after file completed parsing` if tokens remain. Tokenizer: `{ } [ ]` single-char tokens; `,` `:` `=` are
+whitespace (char mask `0x2400100000000000` over chars `< 0x3e`); `#` comments to end of line; `"` opens a quoted
+token, `\` escapes the next char (only `\n` → newline), the quotes are dropped and no flag survives; no `//` /
+`/* */` / `#include` handling, so a pre-pass must supply them (INFERRED, vanilla relies on all three; candidate
+`0xa50bd0`). Parser: `{` → type 3 object, `[` → type 4 array, a scalar is typed from its text: string (1) unless
+`strtol(tok, &end, 0)` or `strtod` consumes it entirely → number (2) with int view `+0x50` and double view
+`+0x58` both stored, exact `null` → 0, `true`/`false` → bool (5, `+0x60`); text kept at `+0x68`, type at `+0xa8`.
+`.add` / `.multiply` in `Gon_DeepMerge` 0x946680 use the double view and re-render the text. The editor reproduces
+the typing in `editor/src/core/gon/typing.ts` (pinned by `editor/test/gon-tests.ts`); the full rule-by-rule
+comparison is `docs/data-mods.md` "GON typing fidelity".
+
 GON objects reference C++ behavior components by class name. 1,750 RTTI classes live in `glaiel::`;
 hundreds are small composable behaviors (`AddStatusToBasicAttack`, `AbilityEnabledIfHasStatus`,
 `AggroTargetIsLowestHealthEnemy`, ...). Characters use `variant_of` inheritance. So the data layer can
@@ -69,7 +84,15 @@ recombine existing behaviors; new behaviors need native code.
   is the loose-files entry. Each path is logged as "Mod Path: ...".
 - The file manager (RVA `0x9a09f0`) resolves a requested relative path by taking the pack copy first, then walking
   the mod-path list from last to first; for each path it looks for the plain file and for `.append`, `.merge` and
-  `.patch` variants, applied through GON's Append / DeepMerge / PatchMerge (RVAs `0x944cc0`, `0x944f50`, `0x946680`).
+  `.patch` variants and returns their paths tagged 1 / 2 / 3; `Gon_overlay_apply` `0x9a64a0` parses each overlay and
+  dispatches on the tag: 1 → `Gon_Append` `0x945410` (push every child; a clashing name keeps both, the name index
+  `FUN_14012a310` points at the appended one; strings concatenate; anything else is `GON ERROR: Append incompatible
+  types`), 2 → `Gon_DeepMerge_plain` `0x945c30` with `Gon_DefaultMergeMode` `0x9451c0` (constant 2 = MERGE: by-name
+  recursion, nth occurrence to nth, arrays element-wise + extras appended, scalars and type mismatches overwritten
+  via `GonObject_assign` `0x30cd0`, no suffix read), 3 → `0x946680`, the policy-driven merge `.patch` needs, with
+  `0x944cc0` the key-suffix -> policy parser and `0x944f50` the recursive suffix stripper; child lookup by
+  `(name, nth)` is `GonObject_has_child_name` `0x942910` / `GonObject_child_by_name` `0x942b50`
+  (`.analysis/decompiled/Gon*.c`; row-by-row in `docs/data-mods.md` "Fidelity to the decompiled merges").
 - Live check: `launch-dev.bat` produced log lines `Save File Suffix: dev` and `Mod Path: <repo>\mods\dev-sandbox`
   with no GON errors; the main save file hash was unchanged; the game added default `debug_*` keys to
   `settings.txt` but did not persist `enable_debugconsole` or `dev_mode`.
@@ -200,6 +223,34 @@ session; the container is `--rm` and disappears.
   marks removal when stacks reach 0), 170 `OnStacksChanged`, 171 stacks-cleared callback.
 - Object fields: +0x18 entity, +0x20 owner character (also +0x38), +0x5c `int stacks`, +0x68 GON data, +0x74 applied,
   +0x75 removing, +0x76 `tickdown_this_turn`, +0xc8 applier, +0xe9 "temporary" flag.
+- OBSERVED 2026-10-21 (session `bind`, `.analysis/notes-bind.md`, cross-checked in Ghidra): `LuckUp_ctor`
+  (`0x711c90`, 292 B) pool-allocates **0xF0 bytes** (`41 B8 F0 00 00 00` memset length; pool global `0x1414e40`,
+  element size 0xf8, referenced only by the ctor and its 54-byte static initialiser `0x1fa40`), runs the base
+  `Passive::Passive` (`0x4c940`), zeroes +0xc8..+0xe0, writes word 1 at +0xe8 (so +0xe8 = 1, +0xe9 `temporary` = 0),
+  stores `LuckUp_vftable` (`lea rax,[0xf57ab8]; mov [rbx],rax` at +140 — the **only** code reference to that vftable
+  image-wide), sets **+0x18 = entity, +0x20 = owner character**, +0x28 = the owner's first qword, pushes itself into
+  `entity+0x20` (`{cap u32, count u32, T** data}`, so Entity +0x24 = count, +0x28 = `Component**`), copies
+  `entity+0x19` to +0xe and calls slot 30 `OnInit` devirtualised (`0x8104b0`: stores data at +0x68, stacks at +0x5c,
+  reads GON `tickdown_this_turn` into +0x76). It is a byte-twin of the `AIControlNextTurn` ctor (`0x705db0`) and one
+  more 0xF0-byte Status ctor (`0x705ee0`) modulo relocations: no relocation-free byte signature exists for it.
+- `Status_NameExists` (`0x492e80`) and `Status_GetValue` (`0x492f20`) share the **same map global `0x13c4830`**
+  (end sentinel +8) — the only two functions referencing it: NameExists is "the status-value map has this name".
+  Each of the other lookups owns its own map global (GetCategory `0x13c47b0`, GetStackMode `0x13c47f0`, GetFlags
+  `0x13c4870`, GetIcon `0x13c48b0`, OnAppliedToDamageInstance `0x13c48f0`, OnKilledCharacter `0x13c4930`,
+  OnAppliedToTile `0x13c4970`, OnDamageReport `0x13c49b0`, IsHitEffect `0x13c49f0`); the log sink context
+  `0x12f7b08` is shared. The 13 are one template body each (FNV-1a, `0x4c340` map find, `NO STATUS NAMED` assert
+  with `{__LINE__, column, __FILE__, __FUNCSIG__}` → `0x9522c0`); the twins differ only in relocations and the assert
+  line/column (GetCategory 72, GetStackMode 77, GetValue 88, GetFlags 96, GetIcon 105, OnAppliedToDamageInstance
+  118, OnAppliedToTile 127, OnKilledCharacter 136, OnDamageReport 145, IsHitEffect 201). They sit in one `.pdata`
+  run after `apply_status` (11368 → 11369 GetCategory … 11379 AttachPassive; 11383 IsHitEffect → 11384 SpawnTile).
+- `Status_ApplyLuckUp` (`0x5f9760`, 711 B): the only relocation-free bytes unique to it image-wide are the type id
+  `41 B8 D6 04 00 00` (`mov r8d, LuckUp_typeid`, +357, four instructions before `Entity_FindComponentsByTypeId`);
+  every reloc-masked window of its body also matches the `Bruise` (`0x5c4240`) / `Bleed` (`0x5bf1a0`) apply siblings.
+  It has exactly three E8 callers — `apply_status` (`0x48b4cb`), `attach_passive` (`0x4b24b0`) and the third by-name
+  dispatcher `0x4ccb20` — in each the call is the first in-tolerance E8 after `lea rdx,[rip+"LuckUp"]` + the
+  `std::string == const char*` compare (`0x52560`). `"LuckUp\0"` occurs once in .rdata (`0xee23d8`) and is lea'd from
+  12 `.pdata` functions; adding `"None"` (`0xed0b90`) and the size tolerance leaves this one. These facts are the
+  `bindings/25143593.json` anchors `imm32Witness`, `callers[].afterStringLea`, `vtableStore` and `sharedDataRef`.
 - Character +0x18 = `Entity*`; Entity +0x24 = component count (u32), +0x28 = `Component**` array. Character +0xe50 =
   `touched_passives` (forces a stat recompute), +0x5d4 = accumulated luck bonus.
 - `Status_ApplyByName` (RVA `0x483120`): `Status* f(std::string* name, void* ctx, int stacks, void* src, void* p5,
@@ -319,6 +370,228 @@ character lookup with lazy init: `table = file+0x28` (`Character*[]` by id), `en
 - Pinned: `editor/test/fixtures/ingame/artprobe-cat-summary.json` `importParts`; the validator refuses any
   `scene.imports` (`import-unsupported`).
 
+### CatTest and the cat animation clips (2026-10-21)
+
+Facts from a read-only parse of `.extracted/swfs/*.swf` with `editor/src/core/art/swf-reader.ts` (the slot layout is
+T1-pinned in `editor/test/fixtures/art/cat-rig-slots.json`):
+
+- **`_CAT` is not a SymbolClass in any vanilla SWF**; it is an engine-reserved `graphics.movieclip` value. Every real
+  cat uses `movieclip _CAT` plus `custom_cat_data <Name>` (part indices in `custom_cats.gon`): `player_cat.gon`,
+  `cat_enemies.gon` (e.g. `TomTom { graphics { movieclip _CAT; name "ENEMY_TOMTOM_NAME"; custom_cat_data TomTom;
+  scale 1.1; shadow_size 1.1 } … properties { tag cat; type cat; faction enemies } }`).
+- **The vanilla cat clip is `CatTest`** (catanis.swf SymbolClass id 1614, 854 frames, 776 labels). Each labeled frame
+  places **one nested sprite at depth 1** (instance name `pawing` in 423 frames, none in 252, an animation name in the
+  rest; `idleF` → sprite 9, 180 frames, matrix translation (77, −959) twips). Labels are facing pairs `<anim>F` /
+  `<anim>B` (`idleF/idleB`, `FighterIdleF/B`, `StartTurnF/B`, `dashF/B`, …) plus `_R` variants. The nested sprites
+  carry the seven named slots `tail@1 leg2@3 arm2@5 body@7 leg1@9 arm1@11 head@13` (= `CAT_SLOTS` in `cat-rig.ts`),
+  and **every slot instance is a 1-frame DefineSprite wrapping one placeholder DefineShape** (ids 2/4/6/8; the four
+  limbs share id 4) — never a bare shape.
+- **Vanilla extends `CatTest` with the append mechanism:** catanis2.swf exports `_Append_CatTest` (id 590, 296 frames,
+  239 labels such as `crawlingIdleF`, `cultistIdleF`, `robotWalkF`) — the same `_Append_<Target>` merge
+  (`process_animation_merges` 0x9bc070 → `Swf_Merge` 0xa58440) our emitter uses for `_Append_AbilityIcon`. Its frames
+  place the nested sprite **unnamed** (215 of 217; `pawing` twice; `splitfileidleF` places a bare DefineShape); its
+  nested sprites have the same seven slot sprites (depths vary per frame: `crawlingIdleF` has head@11, arm1@13),
+  placed with ~0.6-scale matrices. Both files carry one `DoABC`.
+- **`Swf_Merge`** (`.analysis/decompiled/Swf_Merge_0xa58440.c`) builds a merged copy at `original+0x130` on first
+  use, appends the donor's frames (frame numbers offset by the original's frame count, place records' character index
+  offset by the original's character count), adds the donor's labels to the map at `+0x20` and copies the donor's
+  character table (`+0xa0/+0xa4/+0xa8`). `process_animation_merges` walks **every** SymbolClass entry (list at
+  `+0x78`), so an `_Append_` export need not be a file's first entry.
+- `alt_animations [[idle <label>]]` on a character entry is valid (cat_enemies.gon `CatCaller`: `girlyIdle`,
+  `GlassSpitter`: `twitchyIdle`); the engine appends the facing suffix. catparts.swf exports `CatBody#8845 CatHead#7132
+  CatLeg#9925 CatTail#10982 CatEar CatEye CatEyebrow CatMouth CatEyeClosed CatMouthOpen CatMouthSmile
+  CatHeadPlacements#11006`.
+
+**How a cat clip's slots are filled — `glaiel::CatParts` (OBSERVED, Ghidra session catB 2026-10-21,
+`.analysis/notes-catB.md`; decompiles in `.analysis/decompiled/CatParts_*.c`).** Nothing is keyed to `CatTest`: the
+fill is by instance name, on whatever clip the renderer plays, on every prerender.
+
+- **`CatParts::prerender()` 0x742350** (vftable 0xed6a30 slot 19; type id 0x1cc, size 0xa90) walks the renderer's root
+  clip with `DisplayObjectContainer::IterateChildren(fn, namedOnly = 1)` 0x99c270 (vtable slot 14 — recursive through
+  nested and unnamed sprites, visiting named instances only; a matched slot's subtree is skipped; re-resolved every
+  prerender, no cache). The visitor `prerender::<lambda_2>` 0x742bd0 dispatches on `DisplayObject+0x48` (the name):
+  `body tail arm1 arm2 arm1_claws arm2_claws leg1 leg2 head bhead head<face> headblend<face> weapon trinket`
+  (optionally prefixed, e.g. `other_`); unknown names return 0 (ignored); a missing slot is simply not drawn.
+- **The slot helper 0x741f10 `(holder, child, material, CatParts*, flip)`** makes the slot sprite host a
+  `glaiel::swf::ReferenceRenderer` (vftable 0x112ed30) whose target `+0x98/+0xa0` is CatParts' own per-part holder
+  container (`this+0x8b0…`, one per part, holding the `catparts.swf` symbol instance — `CatBody/CatLeg/CatTail/CatHead`
+  … — already `gotoFrame`'d to the cat's part index, with `tex`/`scars`/`aux` children, palette and face applied):
+  ```
+  if ((child+8 & 0x20) == 0 || child->childCount(+0xac) == 0) {   // hidden, or no children: the CREATE path
+      child+8 |= 0x20; removeChildren(child);                      // drop the placeholder art
+      ref = new ReferenceRenderer (DisplayObject ctor 0x9b08b0); ref+0x98 = holder container; ref+0xa0 = generation;
+      addChild(child, ref, true);                                  // children[0]
+  } else {                                                         // the ELSE path: "already converted"
+      ref = child->children[0];   ref+0x98 = holder container;     // 0x741f5a / 0x741f5d
+  }
+  ```
+  The slot child keeps its own timeline matrix and cxform; the reference draws the cat's actual part in place.
+- **Why A0 crashed.** `DisplayObject_ctor` 0x9b08b0 sets bit 0x20 (visible) by default; children are stored by depth
+  (`setChildAtDepth` 0x999e40: `children[depth] = child`, holes zero-filled). Our slot sprites were visible and
+  non-empty (a shape at depth 1 → `children[0]` is a depth hole, NULL) → the else path → `MOV [RBX+0x98],RAX` at
+  `+0x741f5d`; a bare DefineShape in a slot has no child vector → the read fault at `+0x741f5a`. Vanilla's slot
+  sprites are visible and non-empty too, but each is bound by SymbolClass to a Flash class (`catanis_fla.AniTail_5`,
+  `AniLeg_6`, `AniBody_7`, `AniFace1_8`) whose frame-1 script calls `setInvisible()` — `Swf_RunFrameScript5` 0xa51fd0
+  clears bit 0x20 for that call name — so a vanilla slot arrives **hidden** → the create path.
+- **The rule for mods: every slot is an EMPTY named 1-frame DefineSprite** (ShowFrame + End; `count == 0` → the
+  create path; the placeholder would be deleted by `removeChildren` anyway). No native code is involved: the
+  ReferenceRenderer is created by CatParts itself. The editor emits exactly that for a `parts: "game"` cat rig
+  (`cat-rig.ts` `addCatRig(scene, name, { parts: "game" })`; validator `rig-slot-not-empty` / `cat-anim-slot-not-empty`
+  for a slot that holds art). The named child the animation driver restarts on every play is `ani`
+  (`Character::PlayAnimation` 0x9abda0 → 0x9ac790, `.analysis/notes-catA.md`); vanilla's `pawing` name is never read.
+
+**Experiment A0, resolved (OBSERVED 2026-10-22, `npm run test:artprobe -- --cat-append`; fixture
+`editor/test/fixtures/ingame/artprobe-cat-append-summary.json`): appended cat animations work at the data layer with
+empty slots.** `mods/_artprobe` exports `_Append_CatTest` (`CatAppendRoot`: `probeIdleF` / `probeIdleB`, each placing
+the `CatProbe` rig as the child `ani` at depth 1 at vanilla `idleF`'s offset (77, −959) twips); `CatProbe` is a
+`parts: "game"` rig — seven empty slot sprites at the vanilla depths with `idleF`'s own slot matrices (pinned T1 against
+catanis.swf) and the checker marker at the non-slot depth 15; `ArtProbeCatReal` = TomTom + `alt_animations [[idle
+probeIdle]]`.
+
+- `spawn ArtProbeCatReal`: **no crash** — a second TomTom (gray cat, palette 9, the real parts: face, texture, the
+  tail) stands in our frame with our marker above it, mirrored like every enemy clip, at the vanilla idle layout. The
+  controls (a vanilla appended label, a missing label) pass as before; the primer (the coloured `CatProbeColours` rig
+  as a plain `movieclip` on a Rat, no CatParts) still draws its colours — the fill happens only on a unit that has
+  CatParts, i.e. a `_CAT` cat.
+- The measure: our marker (a yellow box that is not the primer's; it sits at clip (−48, −330) so it cannot merge
+  with the primer's) in the rig shots, and the new near-black pixels in a 350 px window centred on the cat under it
+  vs the primer shot (a real cat's outline) compared with TomTom's outline vs the baseline, TomTom located as the
+  largest new dark blob inside the arena (`probe-compare.ts` `darkPixelsNear`, `largestChangedRegion { dark, within }`).
+  Plain diffs and colour counts are noise here: the move-range overlay toggles between shots and re-tints the units
+  it touches, and the HUD (End Turn, portraits) animates (OBSERVED in all three runs; kept in the fixture for the
+  record). Run 20261022-063637: TomTom's outline **10946** px; under our marker **11088** (rig 1) and **11695**
+  (rig 2) — the same parts; in rig 3 (+160 frames) the cat is in the vanilla hit animation (a `-5` from
+  `_autoplay`'s party; the appended idle is replaced for its duration, then comes back), so only the primer's marker
+  is found — the fixture asks for our marker in at least two of three shots.
+- Earlier runs: 20261021-194143 (our marker in rig 1 and 2 with the cat under it; rig 3 at +200 frames: the cat dead
+  in the vanilla death pose) and 20261022-063154 (rig 2 mid-hit). The controls passed every time; every run:
+  `real save file(s) unchanged`.
+- Conclusion: **the game fills a mod-appended cat frame's slots by name; the only requirement is that each slot is an
+  empty (or hidden) sprite.** A native hook is needed only for scoped standalone rig clips (a non-`_CAT` character
+  that should get a cat's parts), not for appended cat animations.
+
+### SWF loader and display path (closed, 2026-10-21)
+
+RE session `disp` (Ghidra 12.1.4, static scans, the shipped shaders in `.extracted/shaders/`); every decompile cited
+is in `.analysis/decompiled/<Name>_<0xrva>.c`, the working notes in `.analysis/notes-disp.md`. The editor turns these
+facts into rules: `editor/src/core/art/engine-behaviour.ts` (the constants), `swf-rules.ts` (the loader's rules over
+parsed bytes, behind `inspect_swf` and the build self-check), `scene.ts` (the scene-level codes) and
+`web/src/art/preview-gl.ts` (what the preview draws); `editor/test/art-engine-rules-tests.ts` pins each one.
+
+**Loader.** `glaiel::swf::SWF::load` `0x9b1d80` (dictionary at `file+0x28`; `dict+0x40` = name → id map); a second
+load of a file is FATAL `DOUBLE LOADING SWF`; `ApplicationBase::load_swf` `0x9bb9e0` is FATAL on a missing swflist
+file (`SWF File does not exist:`). The tag dispatcher `SWFTag::createTag` **`0xa2e990`** is one `switch (code)`,
+OBSERVED complete:
+
+| code | tag | decode RVA | the game does |
+|---|---|---|---|
+| 1 | ShowFrame | — | accepted |
+| 2 / 22 / 32 / 83 | DefineShape 1–4 | decode `0xb72ac0`, init `0xb72c40` (tessellates), instantiate `0xb760d0` | accepted; v4's EdgeBounds + flags are read but **UsesFillWindingRule is never used** |
+| 4 | PlaceObject | `0xb77c10` | accepted; a CXFORM is **ignored** (`Warning: color transform not supported on PlaceObject1`) → `place-cxform-ignored` |
+| 26 | PlaceObject2 | `0xb77e60` | accepted (Move, HasCharacter, HasMatrix, HasCxform, HasRatio, HasName, HasClipDepth; no ClipActions) |
+| 70 | PlaceObject3 | `0xb78210` | blend byte kept (object `+0xb`); **a filter list is FATAL** `ERROR: FILTERS NOT SUPPORTED` → `filter-unsupported` |
+| 5 / 28 | RemoveObject / 2 | `0xb78810` | accepted |
+| 6 / 21 / 35 / 90 (+8 JPEGTables) | DefineBits / DefineBitsJPEG2–4 | `0xb79d90` (stb_image `0xa8ca40`) | decoded, logs `WARNING: TEXTURE ENCODED AS JPG INSTEAD OF PNG` → `jpeg-bitmap` |
+| 20 / 36 | DefineBitsLossless / 2 | decode `0xb7a3d0`, init `0xb7a4e0` | accepted (formats 3 / 4 / 5); atlas-registered via `0xa25950` — size limit below → `bitmap-too-large` |
+| 9 | SetBackgroundColor | — | accepted |
+| 10 / 48 / 75 | DefineFont / 2 / 3 | `0xa2a4a0` | **only DefineFont3 decodes; 10 and 48 are FATAL** `ERROR: DefineFont version unsupported` → `font-tag-unsupported` |
+| 11 / 33 | DefineText / 2 | `0xb78b80` | accepted (static text) |
+| 12 | DoAction | `0xa51fd0` | AVM1 `play` / `stop` / `gotoAndPlay` / `gotoAndStop` only (else `UNKNOWN ACTION:`) |
+| 37 | DefineEditText | decode `0xb78e50`, init `0xb79410`, instantiate `0xb797e0` | accepted; font *class* string kept (`+0x68`), HTML `<p>` → newline |
+| 39 | DefineSprite | decode `0xa576a0`, init `0xa57a50`, instantiate `0xa583d0` | accepted; init compiles the child tags into 0x50-byte frame ops |
+| 43 | FrameLabel | `0xb78900` | accepted (FNV-1a label map at `def+0x80`) |
+| 56 / 76 | ExportAssets / SymbolClass | **one class**, `0xa58b30` | both write `dict+0x40[name] = id`: ExportAssets binds names exactly like SymbolClass |
+| 82 | DoABC | `0xa4a740` | accepted once; **a second DoABC is FATAL** `Multiple DoABC tags in one SWF` → `abc-count` |
+| 46 / 84 | DefineMorphShape / 2 | — | logs `WARNING: SHAPE TWEEN NOT SUPPORTED`, then skipped → `morph-shape-skipped` |
+| 78 | DefineScalingGrid | — | `default:` → skipped silently, **no 9-slice** → `scaling-grid-ignored` |
+| 57 / 71 | ImportAssets / 2 | — | skipped silently: entries never get a dictionary slot (see "Imports are not linked") → `import-unsupported` when entries > 0 |
+| everything else (69, 77, 86, 73, 74, 88, 59, 64/65, 87 …) | — | `default:` → generic `SWFTag` whose decode slot is a nop (`0x35bd0`) | skipped, no log line (the `Unknown Tag` string is only the debug tag-name table of `0xa2f4a0`) → `tag-ignored` info for the non-metadata ones |
+
+Tag vtable: 0 dtor, 1 `decode()`, 2 `init()` (lazy, run by `Swf_GetCharacter` `0xa4a190` on first use), 3
+`instantiate()` → DisplayObject.
+
+**By-name registry.** `App_FindMovieClipByName` **`0x9bb6f0`**: FNV-1a cache at `app+0x2b8`; on a miss it scans the
+loaded SWF array (`app+0x118`, count `+0x114`) **from the last loaded file backwards** through `dict+0x40`, first hit
+wins. Consequence (INFERRED, not run in-game): a mod SWF listed later (`swflist.gon.append`) shadows a vanilla
+SymbolClass / ExportAssets name of the same spelling for every by-name lookup (characters, `_Append_` targets, UI
+clips, `[img]` font icons) → validator info `export-shadows-vanilla` (vanilla names pinned in `vanilla-exports.ts`).
+
+**Render path.** `DisplayObjectContainer` slot 5 `0x998a50` → `RenderChildren` `0x998ee0` (depth order; a child with
+a clip depth opens a stencil mask `0xa35430` / `0xa354c0`) → `DisplayObject::Render` **`0x9b0a50`** per child: matrix
+stack `0x13c5bd8`, cxform stack `0x13c5be8`, concatenated Flash-style (`mul = child.mul × parent.mul`, `add =
+child.add × parent.mul + parent.add`), view-rect cull, then the blend byte dispatch (0 normal, 2 layer, 3 multiply, 8
+add, 15 erase, 13 overlay special-cased; the other SWF modes draw normally — INFERRED). Shapes: `ShapeMesh::Render`
+**`0xa31180`** (lazy `Tesselator::tesselate` `0xa2f900`, atlas / `default_full` / `default_gradient` material,
+batch draw `0xa47e50`).
+- **Fill rule: EVEN-ODD per fill style.** `Tesselator::tesselate` `0xa2f900` feeds each fill style's contours
+  (`tessAddContour` `0xa73a80`) to libtess2's `tessTesselate` **`0xa73bb0`**, which this build compiles with
+  `windingRule = TESS_WINDING_ODD` baked in (`mov [rbx+0x48], edi`, edi = 0, at `0x140a73c69`; `elementType =
+  TESS_POLYGONS`, `polySize = 3`). Overlapping sub-contours of one fill style XOR; separate fill styles are
+  tessellated and drawn in style order (INFERRED paint order). The SWF fill-winding flag is never read. The editor:
+  the emitter still resolves which sub-paths carry the fill (nesting comes out as authored), the preview fills those
+  even-odd, and `fill-rule-ignored` warns only where a `nonzero` path's sub-paths cross or self-overlap (a hole
+  in-game). `WARNING: EXTRA LARGE VERTEX BUFFER` is logged above a size threshold, not fatal.
+- **Fill styles** (`FillStyle_read` `0xb6ebc0`): 0x00 solid; gradients 0x10 linear, 0x12 radial, 0x13 focal radial
+  (records `0xb70b30`, focal `0xb70cf0`); bitmaps 0x40 (repeat) / 0x41 (clipped) smoothed, 0x42 / 0x43 their
+  pixel-snapped twins. **Gradients pad only**: `GradientAtlas::AddGradient` `0xa28500` → `RasterizeRow` `0xa27de0`
+  rasterizes 256 texels over t ∈ [0,1] (interpolation mode honoured, linear-RGB branch converts sRGB) and neither it
+  nor `default_gradient.shader` / `swf_lib.shader` has reflect/repeat arithmetic → `gradient-spread-ignored`.
+- **Line styles** (`LineStyle_read` `0xb6f220`): width, LineStyle2 caps / join / miter (8.8) / NoHScale / NoVScale
+  / PixelHinting / NoClose, HasFill strokes. Caps OBSERVED honoured in-game; **joins, miter and hairline (width 0)
+  remain unknown** (parsed, not traced through the outline builder `0xb74fb0` / `0xb748a0` / `0xb74d60`).
+- **Bitmaps / atlas** (`BitmapFillAtlas.cpp`): page size = setting **`texture_atlas_size`** (default 0x1000 = 4096,
+  read in `LoadNeededTextures` `0xa241a0`); pages are layers of a `GL_TEXTURE_2D_ARRAY` bounded by
+  `GL_MAX_ARRAY_TEXTURE_LAYERS` (`initGraphics` `0x9b5ed0`, logged `Max Texture Layers N`). `fit_texture` **`0xa24540`**
+  is FATAL `Bitmap Fill could not fit into atlas` for a bitmap whose width or height is **≥ the page**; otherwise
+  shelf-packed, `AddLayer` `0xa24bb0`, mipmapped upload `GenerateAllTextures` `0xa252a0`. Sampling (`swf_lib.shader`):
+  `textureLod` LINEAR + mip (bias −0.5) for 0x40 / 0x41, `clamp_to_nearest` mip 0 for 0x42 / 0x43; repeat =
+  `mod(uv,1)`, clipped = `clamp(uv, .5/size, 1−.5/size)`; stored premultiplied, un-premultiplied in the shader. The
+  emitter writes 0x41 → LINEAR + clamp, what the probe saw. Editor constant `TEXTURE_ATLAS_SIZE` → `bitmap-too-large`.
+- **Palette + cxform order** (`shaders/paletted_full.shader`): `out = compute_color_full(v)` → if `r≈g≈b` (±0.001)
+  `out.rgb = texelFetch(palettemap, (r·15+.5, palette))` → **`frag = out × color_xform[0] + color_xform[1]`**. The
+  concatenated PlaceObject cxform applies **after** the palette remap; `default_full` is the same minus the remap.
+  The preview's shader is this order (both renderers; pinned by `remapColor`'s test).
+- **Mirroring**: nothing in glaielswf flips by itself; a negative x-scale on an ancestor (`SetPosScale` `0x9b16c0`,
+  `SetVariable("_xscale")` `0x99b590`, `UpdateMatrix` `0x9b1750`) propagates through the matrix stack. **Autoflip**
+  (`+0xa` bit 2, set only by AS3 `SetAutoflip`) un-mirrors text / UI clips under a mirrored parent. Facing is a
+  label-suffix convention in game code (`Character_FacingSuffix` `0xf0490`).
+- **Text**: `DefineEditText::decode` `0xb78e50` keeps the font class string; `init` `0xb79410` resolves a font id via
+  `Swf_GetCharacter` and pre-parses the HTML; `instantiate` `0xb797e0` → `DynamicTextBox` `0x98d910`.
+  `data/font_remap.gon` (`0x746a80`) remaps font class names. **The exact font-class → font lookup RVA is unknown**
+  (candidates `0x9bb910`, `0x98d910`). TextBox markup (`0x994080`): `[font]`, `[size]`, `[color]`, `[outline]`,
+  `[style]`, `[animation shake|wave]`, `[img X]` → clips `FontIcon_X` / `RawFontIcon_X` / `X` by name (`0x9bb6f0`).
+
+**MovieClip model** (`0x9a8720` update / `0x9a80c0` nextFrame / `0x9a88a0` gotoFrame / `0x9a8f30` op applier).
+Every clip, nested or root, advances on its **own accumulator** (`+0x30`, `dt × timescale +0xe4`) — the OBSERVED
+own-clock nested sprites. The root clip of a character is label-driven: `Character::PlayAnimation` `0x117060` →
+`AnimStateMachine::PlayAnimation` **`0x9abda0`** (checks `hasLabel` `0x9a8e80` + the alias table `0x9acc20`) →
+`gotoAndPlay(label)` `0x9a8b30` / `gotoAndStop(label)` `0x9a8c00`; **an unknown label is a silent no-op**. Frame
+interpolation (`interpolate_movieclips`, `0x12fbb7c`, Settings `0x745b70`) only applies to clips whose DoABC calls
+`EnableInterpolation` — a no-ABC mod clip never interpolates (INFERRED default). AS3 names the engine honours in frame
+scripts (`DoABC::decode` `0xa4a740` → `AVM2Bytecode::RunObjectScript` `0xb7f2b0`): `stop`, `play`, `gotoAndPlay` /
+`gotoAndStop` (int or label), `random`, `floor`, `setRandomFrame`, `startAtRandomFrame`, `setInvisible`,
+`setCanIgnoreMasks`, `setUseDefaultShader` / `setUseShader`, `SetAutoflip`, `Enable` / `DisableInterpolation`,
+`Enable` / `DisableLoopInterpolation`, `SetTimescale`; anything else logs `PARSE ERROR CALLING FUNCTION OTHER THAN
+addFrameScript` / `UNSUPPORTED INSTRUCTION:`. Manifest-ready prologues for these functions are in
+`.analysis/notes-disp.md` "Manifest-ready rows" (the two `goto*Label` twins differ only at their tail).
+
+**Clip-name remap through `data/tilesets.gon` (INFERRED, not run in-game).** `ResolveClipName` **`0x7bdbb0`**:
+`node = tilesets[<current tileset, game+0x14f8>][name]`; a string node is returned, else `name` itself when the
+fallback is `"auto"`. `CharacterGraphics_build` `0xf1150` calls it with `(graphics.movieclip, "auto")` before the
+SymbolClass lookup `0x9bb890`, for every **non-cat** character (the `_CAT` branch does not pass through it);
+`TacticsTest::init` uses it for `battlefield_postprocess_effect`. `tilesets.gon` (loaded once in `SpawnDatabase_init`
+`0x7a74b0`, so overlays apply) holds one flat object per tileset (22 in this build: `alley`, `junkyard`, `sewers`, …,
+`house`, `tutorial`, `finalboss`) whose key namespace is shared with the slot names (`combat_background`,
+`static_*`, `debris`, `event_piece_frame`, `reverb`, `global_objects`); vanilla uses it for
+`non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. So a `data/tilesets.gon.patch` adding `<tileset>
+{ Rat MyModRat }` per tileset would redirect `graphics.movieclip Rat` to a mod SymbolClass without touching
+`enemies.gon` — see `docs/data-mods.md`; untested.
+
+**Hook seams** (for a future native "alias animation" or clip redirect): `AnimStateMachine::PlayAnimation` `0x9abda0`
+(label by `std::string*` in rdx, 7 callers, plain prologue), `gotoFrame` `0x9a88a0` (116 callers, every frame change),
+`createTag` `0xa2e990` (the one place to add a tag), `App_FindMovieClipByName` `0x9bb6f0` (the by-name seam). The
+render-side flip and the palette uniform are per-frame hot paths, not hook targets.
+
 ## Dev scenes and run entry (static decode + Ghidra, 2026-10-20)
 
 How the harness enters a fight from the main menu (`enter TacticsTest`, `docs/ingame-testing.md`). Every address is
@@ -410,6 +683,222 @@ build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4
   driver 0x3c4130). The global then points at the new director. Bindings: `FW_SYM_Entity_DestroyOwnerOf`,
   `FW_SYM_AddComponent_MewDirector_named`, `FW_SYM_MewDirector_start`. The slot name is arbitrary (the game uses it
   as the file name under `<userdata>\saves\`); `mewtest01.sav` was chosen because no slot list produces it.
+
+## Glow and outline passes (2026-10-21)
+
+Ghidra session `glow` (container `rea_ghidra_glow`, build 25143593; notes in `.analysis/notes-glow.md`, decompiles
+named below in `.analysis/decompiled/`). Addresses are RVAs (image base 0x140000000). The question was "how does the
+game draw a glow, and can a mod get one?" The answer: the SWF player has no filter rendering at all, the combat
+outline is a hover effect with a compile-time white colour, and the only data-level knobs are a ground light and a
+colour transform. Hence the editor's **baked halo** (`editor/src/core/art/glow.ts`, MCP `bake_glow`): an ordinary
+shape under the source, which every one of these facts allows.
+
+- **PlaceObject3 filters are fatal (OBSERVED).** `glaiel::swf::PlaceObject::decode3` `0xb78210`
+  (`PlaceObject_decode3_0xb78210.c`) reads the 16 PlaceObject3 flag bits; when `HasFilterList` is set it does not
+  parse the list — it formats `"ERROR: FILTERS NOT SUPPORTED " + <swf path>` (string `0x113dbc8`, single xref
+  `0xb7875d`) on the `SWF_Loading` channel and calls the no-return fatal `0x951ee0` with `{ ControlTags.cpp line
+  0x7e, "void __cdecl glaiel::swf::PlaceObject::decode3(void)" }`. Any filter id, any options, the flag bit alone;
+  no filter renderer exists in the player, so patching the check out would only skip the error. Pinned at T0 by the
+  validator's `filter-unsupported` (`editor/test/art-po3-tests.ts`, `art-glow-tests.ts`) and at T2 by the SWF gate
+  variant `filters` (expects `crash`).
+- **Post-process pass system (OBSERVED; shared by Battle, House and Lighting).** `ShaderManager::GetOrCreateMaterial`
+  `0x9bb5d0` `(mgr, std::string name, std::string shaderFile) → Material*` (FNV-1a map at `mgr+0x278`; an existing
+  name is returned as-is, the shader file then ignored; the manager is the global `DAT_1413c4a30`, witness
+  `mov rcx,[rip+…]` at `0x834f20`). `Material::SetUniform` `0x9bdbf0` `(mat, name, data, bytes)` with typed wrappers
+  vec4 `0x9bde70`, float `0x9bddc0`, vec2 `0x9bdf90`, int `0x9bdd40`, texture `0x9bdcd0 (mat, name, Texture*, slot)`.
+  `RendererBase::AddPostProcessPass` `0x979880` `(renderer, Material*, passIndex) → Pass*` (0xa0-byte pass: `+0x10`
+  enabled, `+0x0c` `std::function<bool()>` enable predicate, `+0x18..0x58` two rect doubles, `+0x58` blend/flags;
+  pushed into `(renderer+0xb0)[passIndex]`); list form `0x979a00`. Pass indices seen: 9 ground lighting, 0x18 mask
+  stage, 0x1a composite stage, 0x22 full-screen effect. Files `ShaderManager_GetOrCreateMaterial_0x9bb5d0.c`,
+  `Material_SetUniform_0x9bdbf0.c`, `Material_SetTexture_0x9bdcd0.c`, `Renderer_AddPostProcessPass_0x979880.c`.
+- **Combat outline pass (OBSERVED in `TacticsTest::init` `0x833390`, inline `0x834e00–0x8359a0`, read as asm).**
+  Materials: `ol_blur_x` / `ol_blur_y` = `variable_piecewise_glow.shader` (`axis` (1,0)/(0,1), `radius` 20.0f
+  `0x113ff98`, `alpha_cutoff` 0.75f `0x113f75c`, `framebuf` slot 4), one chain at pass 0x18 (`0x83531c`);
+  `composite_outlines` = `composite_glow.shader` (`framebuf` slot 6, **`glow_color = (1,1,1,1)`** — four loads of
+  1.0f `0x113f83c` at `0x8354d4..0x8354f8`, set at `0x835510`; **`glow_strength = 100.0f`** `0x1140020` at `0x83555a`)
+  at pass 0x1a (`0x83558a`). **The string `glow_color` has exactly one xref (`0x8354b8`): the colour is a
+  compile-time constant, white, nothing writes it at runtime**; with strength 100 the blurred mask saturates, i.e.
+  the pass draws a hard white rim, not a soft coloured halo. A second route: `jumpflood_init`
+  (`jump_flood_init.shader`, `alpha_cutoff` 0.75, pass 0x18 at `0x835712`) + `jumpflood_composite`
+  (`jump_flood_composite.shader`, `framebuf` slot 6, pass 0x1a at `0x8358c8`). All four passes get enable
+  predicates (init lambdas 6–9, helpers `0x8939a0/0x893a00/0x893a60/0x893ac0`, shared `_Do_call` `0x8967b0`
+  returning `TacticsTest->+0x58->+0x9c`; INFERRED: one "outline effects enabled" flag).
+- **Who gets outlined (OBSERVED driver, INFERRED mask draw).** Right after the passes, init adds a
+  `glaiel::ImmediateModeGameUI` component (`0x893b20` → AddComponent `0x896be0`, vftable `0x140f0f4b8`). Its slot 19
+  `0x88d780` (`ImmediateModeGameUI_init_0x88d780.c`) is the outline driver: it fetches the scene's `StatusMenu` (type
+  id 0x75d via `0x8163b0`), takes the menu's tracked entry (`StatusMenu+0xf8` vector, `entry+0x38` → doubles
+  `+0x68/+0xb0` tweened by `this+0x28->+0x30`), transforms that rect through the camera (`0x9b4c90` / `0xa07c70`),
+  writes it (±4.0 / 3.5 in 1280×720 units, scaled by the screen size from `DAT_1413c4a30+0xde0`) into the pass rects
+  of the passes it holds (`this+0x80` jump_flood_loop passes, one per `offset` 1<<n; `+0x88` composite with `radius`
+  and `outline_color`; `+0x90` blur chain; `+0x98` composite_outlines) and flips their `+0x10` enable bytes by mode
+  `this+0xa0` (1 = jump-flood on, else blur + composite on). `outline_color` is `DAT_1412f7da0` (white) or, on one
+  branch, (0.796, 0.439, 1.0): a hard-coded pair. So the outlined object is the **hovered / inspected unit** (the
+  status-menu target), the colour is a constant, and **no per-Character glow/outline field exists**. INFERRED (not
+  located): the draw that puts that unit's clip into the mask renderer the blur reads. `CombatShaders::init`
+  `0x891300` only creates the named combat materials (water, toxic, ice, godray, fog, ground_lighting_mul/add,
+  meatpulse, vignettes, shadow_occluded_spelldissolve) and has nothing to do with glows (`CombatShaders_init_0x891300.c`).
+- **House outline + palette colours (OBSERVED, `HouseTest::init` `0x332d40`, `HouseTest_init_0x332d40.c`).**
+  Renderers `this[0xb]` depth 1..1, `this[0xc]` depth 2..2 (the outline mask renderer), `this[7]` main (0x20..0x30);
+  `0x979c30(renderer, depthMin, depthMax)` sets a renderer's depth range, `renderer+0x50` is its texture. Passes:
+  `postprocess_blur` (0x22, main), `dropshadow` = `transparent_texture.shader` over a blurred texture (INFERRED: the
+  furniture/cat layer drawn offset = soft drop shadow), two `variable_piecewise_blur` materials, `jumpflood_init`
+  (pass 0x18 on the depth-2 renderer) and `jumpflood_composite` (`framebuf` = `this[0xc]+0x50`, pass 0x1a on main).
+  `HouseTest_outline_update_0x3363f0.c` builds the `jump_flood_loop` materials per offset and sets `radius` (× screen
+  size × 0.002734375) and `outline_color = HouseTest+0xd8`, a vec4 fed from the UI SWF: `0x1a6e40`
+  (`HouseBuilder_PaletteColors_0x1a6e40.c`) reads the `BuilderUI_Palette` clip's frames `solid`, `hole`,
+  `screw_out`, `screw_in`, `screw_linked`, `poop`, `blocked`, `outline_room`, `outline_valid`, `outline_invalid` and
+  stores each frame's colour transform (× white `DAT_1412f7da0`) into `DAT_1412f77a4..`. The house outline colours
+  are therefore **data (ui.swf palette frames)**; the outlined object is whatever is drawn at depth 2 (INFERRED: the
+  hovered cat / the furniture being placed). The pass machinery is identical to combat's; only the mask draw differs.
+- **`CharacterLightSource { color glow size }` → `Lighting` (OBSERVED).** Types: `glaiel::Lighting :
+  Instantiatable_InCombat` 0x4c5 (vftable `0x140f238d0`), `LightSource : Component` 0x4c4, `CharacterLightSource :
+  Passive` 0x1fa. `CharacterLightSource_init_0x8fbc70.c`: GON `color [r g b]` → `light+0x90..0x9c` (a = 1), `glow [r g
+  b a]` (only when the key exists) → `light+0xa0..0xac`, `size N` (double, default 1.0) → `light+0x88`; the light is
+  `AddComponent<LightSource>` `0x792e80` on the character's entity (`+0x48` Position, `+0x38` the scene's Lighting via
+  get-or-create `0x793670`; defaults white colour / zero glow `DAT_1413c6290`). The only other creator of a LightSource
+  is the SWF script hook `SetLightSource(clip, bool)` (`AnimatedLightSourceHooks` `0x792520` → `0x7926a0`).
+  `Lighting::init` `0x78f820` (tileset `global_objects { Lighting { ambient N [glow_strength N] … } }`, glow_strength ×
+  0.3 → `+0xd8`; materials `ground_lighting_mul` (texture `this+0x40`, blend 0x300) and `ground_lighting_add` (texture
+  `this+0x60`, blend 0xb00, `offsetmax` (0,256)), both `lightmap_padding 1.0`, both at pass 9). `Lighting::update`
+  `0x790510` (slot 11) lerps the ambient (the `LowerAmbientLight` GlobalModifier route) and calls
+  `LightSource_Accumulate` `0x791850` per light: tile position from Position `+0x80/+0x90` (+ light offset
+  `+0x50/+0x60` when `+0x81`), radius = `size·0.5` with a one-tile soft edge `d = 1 − clamp(dist − size/2, 0, 1)`;
+  the **mul table** (`Lighting+0xf4`, 10×10 vec4) screen-blends `color.rgb·d` (the light pool, visible only where
+  ambient < 1); the **add table** (`+0x734`) does `rgb += glow.rgb·d`, `a = screen(glow.a·d·glow_strength)`. Upload
+  `0x7907b0` (slot 19) normalises the add rgb to max 1 and writes both tables as 12×12 padded RGBA32F textures that
+  `ground_lighting.shader` samples bicubically in world-tile space. Visual meaning of `glow`: **an additive,
+  bicubic-smoothed disc of colour on the ground tiles around the unit** (radius ≈ size/2 tiles + 1 soft tile,
+  per-tile resolution), composited full-screen at pass 9 — it brightens whatever is drawn over those tiles (so it
+  bleeds onto the unit's own sprite and its neighbours) but it is not sprite-shaped and has no rim. Combat-visible:
+  vanilla gives it to enemies (`characters/enemies.gon` ~1729, `small_enemies.gon` ~437, `cat_enemies.gon`,
+  `minibosses.gon`) and `Lighting` is `Instantiatable_InCombat`.
+- **Sprite colour routes that are not halos (OBSERVED class names + GON use).** `graphics { tint [r g b a] }` = colour
+  transform multiply (art-pipeline §5). **`AdvancedTint [ mul r g b a  add r g b a ]`** Passive (`finalboss.gon:115`): a
+  full cxform including the **additive** term — the only data-level way to add brightness to a sprite's own pixels;
+  per pixel, no rim. `EliteTint [r g b a]` / `EliteFlatTint [r g b]` (elite_buffs.gon), `IllusionTint 1`, `TintItem {
+  mul [r g b] add [r g b] ignore_if_str_aux_equals … }` (type 0x818, `items/weapons.gon:1506`, applied through the
+  item passive path `0x73e3c0`). `AddPostProcessEffect { shader X requires_framebuffer … }` GlobalModifier
+  (`weather.gon:753`, type 0xac) and the tileset key `battlefield_postprocess_effect` (resolved by `0x7bdbb0`, default
+  `"auto"`, pass 0x22; vanilla has it commented out) are whole-screen, not per unit. No status or passive references
+  `composite_outlines`, `glow_color` or the jump-flood materials: there is no per-status aura.
+- **What a native glow would need (assessment).** Recolouring the hover rim is calls only: `GetOrCreateMaterial(g,
+  "composite_outlines", "")` + `SetUniformVec4(mat, "glow_color", rgba)` (and `jumpflood_composite` / `outline_color`),
+  but it stays hover-driven and white-or-this-colour. A per-unit, always-on glow needs (a) a mask — the unit's clip
+  drawn into a side renderer (the draw site was not located) or a new renderer with a depth range the mod moves the
+  clip into — and (b) `AddPostProcessPass` with the blur/composite materials under new names and a per-unit colour.
+  Everything but the mask draw is reachable through the functions above; being pursued as session `rim`. Until then
+  the data-level answers are the baked halo (sprite-shaped, static colour, no engine cost), `CharacterLightSource.glow`
+  (ground disc) and `AdvancedTint` (brightness lift).
+
+Manifest-ready rows (for `bindings/25143593.json` when the native route lands): `ShaderManager_GetOrCreateMaterial`
+0x9bb5d0 (pin by the FNV-1a constants `0xcbf29ce484222325`/`0x100000001b3` + the `+0x278/+0x280` map offsets; callees
+#1 0x4c340 map find, #3 0x9bb220 LoadShader, #5 0x9bcfc0 Material ctor), `Material_SetUniform` 0x9bdbf0 (`+0x40` map,
+0x50 slot stride, `+0x48`/`+0x80` dirty), `Material_SetUniformVec4` 0x9bde70, `_Float` 0x9bddc0, `_Vec2` 0x9bdf90,
+`_Int` 0x9bdd40, `Material_SetTexture` 0x9bdcd0, `RendererBase_AddPostProcessPass` 0x979880 (pass `+0x10 = 1`,
+`+0x14 = -1`, doubles 1.0 at `+0x24/+0x34/+0x44/+0x54`), `LightSource_AddComponent` 0x792e80, `CharacterLightSource_init`
+0x8fbc70 (inline immediates `"color"` 0x726f6c6f63, `"glow"` 0x776f6c67, `"size"` 0x657a6973), `LightSource_Accumulate`
+0x791850, `Lighting_init` 0x78f820 (`"ground_lighting_mul"` 0x1119c08, `"glow_strength"` 0x1119be0),
+`ImmediateModeGameUI_init` 0x88d780 (`"outline_color"` 0xf073b0), `PlaceObject_decode3` 0xb78210; data `g_ShaderManager`
+= `DAT_1413c4a30`; `LightSource` `+0x88` size, `+0x90` color, `+0xa0` glow, `+0x48` Position*, `+0x38` Lighting*;
+`Lighting` `+0x90..0xa0` ambient, `+0xd8` glow_strength×0.3, `+0xf4` mul table, `+0x734` add table; `Material` `+0x28`
+uniform slots (0x50 each), `+0x38` texture slots, `+0x40` name map, `+0x80/+0x81` dirty; `Pass` (0xa0) `+0x0c`
+predicate, `+0x10` enabled, `+0x18..0x50` rects, `+0x58` flags; type ids LightSource 0x4c4, Lighting 0x4c5,
+CharacterLightSource 0x1fa, CombatShaders 0x224, StatusMenu 0x75d, AddPostProcessEffect 0xac, TintItem 0x818.
+
+## GON at runtime (2026-10-21)
+
+RE session `gon` (Ghidra 12.1.4, build 25143593; the working notes are `.analysis/notes-gon.md`, the decompiles
+`.analysis/decompiled/GonObject_*.c`, `Gon_{Tokenize,ParseTokens,LoadText}_*.c`, `Character_init_0xf70f0.c`,
+`TacticsTest_init_lambda36_1hp_DoCall_0x895160.c`). Everything here is pinned by `bindings/25143593.json`
+(`Character_hp` … `GonObject_size`, each with a byte witness `harvest.ts` verifies) and read in-game by `mewtest.dll`
+(`mt_gon.c`, the `hp`/stats fields of the units event, `expect gon`; `docs/ingame-testing.md`). OBSERVED = read in a
+decompile / disassembly or seen in a harness run; INFERRED = a consistent reading not itself witnessed.
+
+**The node.** `GonObject` is 0xb0 bytes (`GON_NODE_SIZE`; the children vector's stride — `add rbx,0xb0` in
+`child_by_name` 0x942b50, `imul 0xb0` in `Index` 0x942ee0, `/0xb0` in `Size` 0x942f30):
+
+| offset | field | macro / witness |
+|---|---|---|
+| `+0x00..+0x38` | name index: an absl/Swiss-table style flat hash map `std::string -> int childIndex` (ctrl bytes `+0`, 0x28-byte slots `+8` with the index at slot `+0x20`, capacity mask `+0x18`); FNV-1a 64 over the key, folded by a 128-bit multiply; probed by `GonObject_NameIndex_Find` 0x124df0 | not read by the harness |
+| `+0x38` / `+0x40` / `+0x48` | `std::vector<GonObject>` children begin / end / capacity | `OFF_GON_CHILDREN`, `OFF_GON_CHILDREN_END` (`child_by_name`) |
+| `+0x50` | `int` value | `OFF_GON_INT` (`Int` 0x941540 returns it whatever the type) |
+| `+0x58` | `double` value | `OFF_GON_DOUBLE` (`Number` 0x941920) |
+| `+0x60` | `bool` value | `OFF_GON_BOOL` (`Bool` 0x942290) |
+| `+0x68` | `std::string` text — **every scalar keeps its raw token**, numbers and bools included | `OFF_GON_TEXT` (`StringRef` 0x941140 returns `node+0x68` for types 1, 2, 5) |
+| `+0x88` | `std::string` name (the key under the parent; size `+0x98`, capacity `+0xa0`) | `OFF_GON_NAME` (`child_by_name`'s scan compares it) |
+| `+0xa8` | `int` type: 0 null, 1 string, 2 number, 3 object, 4 array, 5 bool (6 is also tested by `StringOr` and treated as "no value"; INFERRED an internal marker) | `OFF_GON_TYPE` (`cmp [rbp+0xa8],3` in `child_by_name`; the 11-byte `Exists` 0x9429d0 is `type != 0`) |
+
+Two static null nodes, `0x1413c4d30` (`Get` misses; also `DefaultStatusSource`) and `0x1413c4de0` (`Get_const` /
+`Index` / `child_by_name` misses). Every typed getter on a null node logs `GON ERROR: Field "<name>" does not
+exist` through the error sink (`PTR_PTR_1412f7ad8`, vtable slot `+0x10`) and still returns the zero field — never
+fatal; `<name>` is the global `std::string` `DAT_1412f7ae0` that `Get` / `Get_const` overwrite with the **last key
+asked for**, so the message names the last lookup, not the node.
+
+**Read API** (all `__fastcall`, `this = GonObject*`, strings MSVC `std::string*`; OBSERVED): `Get_const` 0x942da0
+`(node, key)` — type 3 → hash lookup → `children[idx]`, else null; `Get` 0x942ca0 the same with the other null node
+(the non-const `operator[]`; `Character::init` uses it for `stats`); `Index` 0x942ee0 `(node, int)` — object/array
+`0 <= i < size` → child i else null, **a scalar returns itself**; `Size` 0x942f30 — null 0, scalar 1, container count;
+`Begin`/`End` 0x942f70/0x942f90; `Exists` 0x9429d0 `type != 0`; `Contains` 0x942880; `child_by_name` 0x942b50
+`(node, key, nth)` — nth 0 takes the hash path, nth > 0 scans the vector comparing `+0x88` and returns the nth
+duplicate (DeepMerge's path); `Int` 0x941540 / `Number` 0x941920 / `Bool` 0x942290 / `Percent` 0x941d00 (number, or a
+string ending in `%` → `strtod(prefix)*0.01`) / `String` 0x940d30 / `StringRef` 0x941140 log on a miss and return the
+field anyway; the no-logging defaults `IntOr` 0x9426b0 (`type == 2 ? +0x50 : def`, 15 bytes), `NumberOr` 0x9426c0,
+`PercentOr` 0x9426e0, `BoolOr` 0x942860 (`type == 5 ? +0x60 : def`), `StringOr` 0x942670 (types 1/2/5 → copy of
+`+0x68`). `IntOr` / `NumberOr` / `BoolOr` / `Exists` / `Index` / `Size` are leaf functions **without a `.pdata`
+entry**, which is why the manifest witnesses the layout in `child_by_name` and the logging getters instead.
+`Character::deval(const GonObject&, double def, int, int, int, int, bool)` 0x103320 (funcsig 0x140edd5c0) evaluates
+"a number, else a stat-scaled expression" for damage (INFERRED; not decoded).
+
+**Where a unit keeps its entry (OBSERVED, `Character::init(std::string, bool, bool)` 0xf70f0).** `db =
+*(SpawnDatabase**)0x1413c79d0` (through `FUN_140047dc0`, `mov rax,[rcx]; ret`); `entry = Get_const(db + 0x38, name)`;
+`!Exists(entry)` → two alternative resolutions (0x7be2d0 / 0x7be820) and finally the fatal `No Character Named <name>`
+(`Character.cpp` line 0x27c). INFERRED: `0x1413c79d0` is the SpawnDatabase singleton and `+0x38` the merged
+`data/characters` object (`SpawnDatabase_init` 0x7a74b0 fills it through `process_gon_variants` 0x94be60, so the
+entry is already `variant_of`-resolved and overlay-merged — OBSERVED in-game: a `.patch`ed `properties.health` reads
+12 there). Stores: **`Character+0x240 = const GonObject*` entry** (`mov [r14+0x240],r13` at 0xf79c9, `OFF_CH_GON_ENTRY`;
+six `mov rbx,[r14+0x240]` reads follow); sub-nodes init reads: `properties`, `abilities`, `passives`, `stats`
+(non-const `Get`), `graphics`. **`Character+0x248 = std::string`** (`OFF_CH_NAME_KEY`): the notes inferred the entry
+name; OBSERVED 2026-10-22 on spawned units it holds the **`graphics.name` loc key** (`ENEMY_POOTER_NAME`,
+`GOLDEN_RAT_NAME` after a `.merge`), so the units event calls it `namekey`. Where the entry name itself lives is
+still open. (`Status+0x68 = const GonObject*` is the status's data node, known.)
+
+**Stats and HP (OBSERVED unless marked).** Seven `int32` read as `IntOr(Get(stats, name), 5)` (default 5) in
+`data/characters` order at **`+0x5a0` strength, `+0x5a4` dexterity, `+0x5a8` constitution, `+0x5ac` intelligence,
+`+0x5b0` speed, `+0x5b4` charisma, `+0x5b8` luck** (`OFF_CH_STATS`, `int32[7]`; seven `mov edx,edi; mov rcx,rax; call
+IntOr; mov [r14+N],eax` from 0xf99ba, 0x3a apart). INFERRED: `+0x5bc..+0x5d4` are the per-stat bonus ints (the
+known LuckUp `+0x5d4 += stacks` is the 7th = luck). Base block from `entry.properties`, the stat share subtracted so
+the runtime formula re-adds it: `+0x5d8` base movement (`IntOr(base_movement, 4)`; with `movement`: `Int(movement) -
+(speed-5)/2`), `+0x5dc` base initiative (`Int(initiative) - 2*speed`), `+0x5e4` health regen, **`+0x5e8` base health
+= `Int(properties.health) - 4*constitution`** (`OFF_CH_BASE_HEALTH`; `mov ebx,[r14+0x5a8]; shl ebx,2; … sub eax,ebx;
+mov [r14+0x5e8],eax` at 0xfa91e; champions/bosses — `+0xce0` set — `round((base + 4*con) * +0xce8, +0xcf0) -
+4*con`), `+0x5ec` a copy taken at the end of init (INFERRED the unmodified base), `+0x5f0` base mana (`Int(mana) -
+3*charisma`), `+0x624` a luck-scaled base (`- 2*luck`; key not read). **`+0x4b0` current HP** (`OFF_CH_HP`): init
+stores `Int(properties.initial_health)` × the champion multiplier when present; the `1hp` console lambda (0x895160,
+`TacticsTest::init` lambda_36, registered through `DebugConsole_AddCommand` 0xa168e0) walks the live Character
+array and does `if (+0x4b0 > 1) +0x4b0 = 1; +0x4b4 = 0` — the one direct HP witness (`999` is "deal 999 damage to
+every non-ally" through `Character_TakeDamage` 0x110120, not an HP write). OBSERVED in-game: ten frames after
+`spawn`, `+0x4b0` equals `properties.health` (Pooter 6; 12 with `health.multiply 2`; Rat 5). `+0x4b4` shield =
+`IntOr(properties.shield, 0)` × multiplier (`OFF_CH_SHIELD`), `+0x4b8` divine shield likewise
+(`OFF_CH_DIVINE_SHIELD`). **Max HP**: no stored field was found; the champion scaling treats `+0x5e8 + 4*con` as the
+base formula (INFERRED for the runtime value, the getter with stat bonuses and status modifiers is unknown).
+`Character_BeginTurn` / `GetTurnControl` touch none of these (`+0xeb4/+0xebc` there are re-entrancy counters).
+
+**Parser scalar typing (OBSERVED: `Gon_LoadText` 0x940840, `Gon_Tokenize` 0x93f090, `Gon_ParseTokens` 0x93fcf0).**
+`LoadText` wraps the text in `{ … }`, tokenizes, parses the root as an object and logs `GON ERROR: More symbols
+exists after file completed parsing` if tokens remain. The tokenizer splits on whitespace where **`,` `:` `=` count
+as whitespace**; `{ } [ ]` are single-char tokens; `#` starts a comment to end of line; `"` opens a quoted token
+(`\` escapes the next char, the closing `"` flushes it) and **the quotes are dropped with no "was quoted" flag**;
+unclosed quote / comment → the two `GON ERROR: didn't close …` messages. `//` comments (the pack's `.gon` files use
+them) are not handled by the tokenizer — INFERRED stripped by an earlier pass (the overlay text goes through
+`0xa50bd0(&gon, &text, …, 0x100, 1)` first). The parser: `{` → type 3 (`name value` pairs), `[` → type 4 (values),
+anything else is a scalar that starts as type 1 with the token in `+0x68`, then `strtol(tok, &end, 0)` consuming the
+whole token → type 2 with `+0x50`, `strtod` consuming it → type 2 with `+0x58` (both are always stored: `1.5` → int
+1, double 1.5), then exact `null` → 0, `true` / `false` → 5. Consequences: bare `5` and `"5"` are identical number
+nodes; `yes` / `True` / `1` are not bools (`Bool()` on them logs `is not a bool`); `1e3`, `0x10`, `-3` are numbers;
+`5%` is a string `Percent()` reads as 0.05; `""` is an empty token → number 0 (INFERRED). The overlay engine's
+`.add` / `.multiply` (PatchMerge) rewrite the int, the double **and** the token text (OBSERVED in-game:
+`health.multiply 2` → int 12, double 12, text `"12"`). The editor-side parser's typing is another PR's concern;
+these are the facts it must mirror.
 
 ## Save safety
 
