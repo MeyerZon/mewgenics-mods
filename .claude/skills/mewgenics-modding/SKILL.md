@@ -172,8 +172,13 @@ character the passives `CharacterLightSource { glow [r g b a] size N }` (an addi
 knobs"; neither is a rim.
 
 New cat animation (the engine's shape: `_Append_CatTest` frames `<name>F` / `<name>B` on the root, each placing a cat
-rig as the child `ani` at depth 1 — the instance the engine restarts on every play; the rig's seven slots are EMPTY
-sprites, `parts: "game"`): `new_art_scene { mod, name, template: "cat-animation", animation: "<name>" }` → pose the
+rig as the child `ani` at depth 1 — the instance the engine restarts on every play; the rigs' seven slots are EMPTY
+sprites, `parts: "game"`; the F frame places the front rig `<name>Pose`, the B frame the back rig `<name>PoseBack`
+— `facing: "back"`, vanilla idleB's layout: `head_back` (the head with the catgen face `back`, drawn from behind)
+behind the body and the tail in front; `cat-anim-back-facing` warns when a B frame places a front rig):
+`new_art_scene { mod, name, template: "cat-animation", animation: "<name>" }` (add `fourWay: true` for a character with
+`graphics { four_way_animations true }`: frames `<name>LF/RF/LB/RB`, L mirrored — such a cat plays only four-way
+labels, which vanilla CatTest has none of) → pose the
 empty slots over the frames if you want (never put art in them: the game draws the cat's own parts — palette, texture,
 face — into empty slots, and a visible non-empty slot crashes it; placeholder art is preview-only) → `build_swf` →
 refer to it bare from GON: `alt_animations [[idle <name>]]` on a character or `animation <name>` on an ability (the

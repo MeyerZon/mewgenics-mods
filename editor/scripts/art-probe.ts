@@ -26,7 +26,11 @@
 // colours beyond TomTom's own, and the outline change between wave shots vs the idle TomTom's (probe-outcomes.ts
 // catWaveOutcome; exit 0 on `animated`). --glow-arena (2026-10-22): run render-glow-arena.mewtest (ArtProbeGlow: a
 // bakeGlow halo, an unglowed control square, a colour swatch) and write glow-arena-summary.json (measureGlowArena /
-// glowArenaOutcome; exit 0 on `halo`). Both take `--from <runDir>` too.
+// glowArenaOutcome; exit 0 on `halo`). Both take `--from <runDir>` too. --cat-back (2026-10-22): run
+// render-cat-back.mewtest (TomTom; ArtProbeCatFacing, the probeBack animation at the default facing — the F frame, no
+// marker; ArtProbeCatBack, the turn attempt with start/lock_orientation [0 -1]; ArtProbeCatBackShown, the back rig on both labels;
+// our B frames place the back rig at 1.5x, so each new cat is measured by its height over TomTom's) and
+// write cat-back-summary.json (probe-outcomes.ts catBackOutcome; exit 0 on `back-facing` / `back-pose-drawn`; `--from <runDir>` too).
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
@@ -35,7 +39,7 @@ import { join } from "node:path";
 import * as api from "../src/core/api.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { decodePng } from "../src/core/art/png.ts";
-import { measureLocText, summarizeLocText, tilesetOutcome, catWaveOutcome, measureGlowArena, glowArenaOutcome, GLOW_ARENA_PROBE } from "../src/core/art/probe-outcomes.ts";
+import { measureLocText, summarizeLocText, tilesetOutcome, catWaveOutcome, catBackOutcome, CAT_BACK_BIG, measureGlowArena, glowArenaOutcome, GLOW_ARENA_PROBE } from "../src/core/art/probe-outcomes.ts";
 import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
 
 /** the CatProbe rig's slot colours (mods/_artprobe/art/probe.scene.json) */
@@ -147,6 +151,44 @@ if (process.argv.includes("--cat-wave")) {
     `artifacts: ${r.artifacts.runDir}`,
   ].join("\n"));
   process.exit(outcome === "animated" ? 0 : 1);
+}
+if (process.argv.includes("--cat-back")) {
+  // the back-facing probe (2026-10-22): render-cat-back.mewtest — baseline, vanilla (TomTom), front (the control
+  // ArtProbeCatFacing: probeBack at the default facing), back 1..3 (ArtProbeCatBack, the turn attempt: start_orientation
+  // + lock_orientation [0 -1]), shown 1..2 (ArtProbeCatBackShown: the back rig on both labels). Our B frames place the
+  // back rig at 1.5x (its marker is not drawn, OBSERVED), so each new cat is measured by its height over TomTom's.
+  const r = await runOrReread("render-cat-back");
+  const byLabel = new Map(r.artifacts.shots.filter((s) => s.path).map((s) => [s.label, decodePng(readFileSync(s.path!))]));
+  const baseline = byLabel.get("baseline"), vanilla = byLabel.get("vanilla"), front = byLabel.get("front");
+  const backLabels = [...byLabel.keys()].filter((l) => /^back \d$/.test(l));
+  const shownLabels = [...byLabel.keys()].filter((l) => /^shown \d$/.test(l));
+  const arena = vanilla ? { x0: Math.round(vanilla.width * 0.15), y0: Math.round(vanilla.height * 0.1), x1: Math.round(vanilla.width * 0.85), y1: Math.round(vanilla.height * 0.7) } : undefined;
+  // TomTom (the size control): the largest new dark blob vs the baseline inside the arena (as --cat-wave)
+  const vRegion = baseline && vanilla ? largestChangedRegion(vanilla, baseline, { dark: 40, within: arena }) : null;
+  const vH = vRegion ? vRegion.y1 - vRegion.y0 + 1 : 0;
+  /** a new cat in `img`: the largest new dark blob vs `ref` (the shot before it spawned) and its height over TomTom's */
+  const measure = (label: string, img: typeof vanilla, ref: typeof vanilla) => {
+    const region = img && ref ? largestChangedRegion(img, ref, { dark: 40, within: arena }) : null;
+    return { label, region, ratio: region && vH ? Math.round(((region.y1 - region.y0 + 1) / vH) * 1000) / 1000 : null };
+  };
+  const frontM = measure("front", front, vanilla);
+  const back = backLabels.map((l) => measure(l, byLabel.get(l), front || vanilla));
+  const lastBack = byLabel.get(backLabels[backLabels.length - 1] || "") || front || vanilla;
+  const shown = shownLabels.map((l) => measure(l, byLabel.get(l), lastBack));
+  const markers = [...byLabel.keys()].filter((l) => l !== "baseline" && analyzeProbeShot(byLabel.get(l)!).found);
+  const outcome = catBackOutcome({ verdict: r.verdict, front: frontM.ratio, back: back.map((s) => s.ratio), shown: shown.map((s) => s.ratio) });
+  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, outcome, big: CAT_BACK_BIG, turnAttempt: "ArtProbeCatBack: start_orientation [0 -1] + lock_orientation [0 -1] (earlier runs: lock_orientation [1 0] 20261022-113746 and [0 -1] 20261022-113911 left the spawned cat facing the camera)", markerShots: markers, shots: [...byLabel.keys()], vanilla: { region: vRegion, height: vH }, front: frontM, back, shown };
+  writeFileSync(join(r.artifacts.runDir || ".", "cat-back-summary.json"), JSON.stringify(out, null, 2) + "\n");
+  const line = (s: { label: string; region: { cx: number; cy: number; n: number } | null; ratio: number | null }) => `${s.label}: ${s.region ? `new cat at ${s.region.cx},${s.region.cy} (${s.region.n} px), height ${s.ratio}x TomTom's${s.ratio !== null && s.ratio >= CAT_BACK_BIG ? " — OUR 1.5x back rig" : ""}` : "no new cat found"}`;
+  console.log([
+    `vanilla TomTom: ${vRegion ? `dark region ${vRegion.n} px at ${vRegion.cx},${vRegion.cy}, height ${vH}` : "not found"}`,
+    line(frontM), ...back.map(line), ...shown.map(line),
+    `checker marker in: ${markers.join(", ") || "no shot"}`,
+    `outcome: ${outcome}`,
+    `run: ${r.verdict} — ${r.reason}; ${out.save}`,
+    `artifacts: ${r.artifacts.runDir}`,
+  ].join("\n"));
+  process.exit(outcome === "back-facing" || outcome === "back-pose-drawn" ? 0 : 1);
 }
 if (process.argv.includes("--glow-arena")) {
   // the baked-glow probe (2026-10-22): render-glow-arena.mewtest — baseline (no unit), then ArtProbeGlow three times

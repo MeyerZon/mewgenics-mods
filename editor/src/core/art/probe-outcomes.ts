@@ -315,3 +315,36 @@ export function glowArenaOutcome(m: GlowArenaMeasure): GlowArenaOutcome {
   if (m.monotonicRays < 3) return "non-monotonic";
   return "halo";
 }
+
+// ---- E. the back-facing probe (2026-10-22): a cat facing away plays its <anim>B frame on the back rig --------------
+//
+// probe.scene.json's donor carries probeBackF (the front rig probeBackPose, as authored) and probeBackB (the back rig
+// probeBackPoseBack: head_back behind, tail in front — at 1.5x), plus probeBackShowF / probeBackShowB (both the 1.5x
+// back rig). OBSERVED 2026-10-22: the checker marker at depth 15 of the back rig is not drawn (it is in the front rigs),
+// so the probe tells our B frame apart from vanilla idleB by SIZE: each new cat's dark-blob height over TomTom's.
+// ArtProbeCatFacing (the default enemy facing) is the control; ArtProbeCatBack the turn attempt (start_orientation +
+// lock_orientation [0 -1]); ArtProbeCatBackShown shows the back rig at any facing (scripts/art-probe.ts --cat-back).
+
+/** a new cat at least this many times TomTom's height is our 1.5x back rig */
+export const CAT_BACK_BIG = 1.3;
+
+export interface CatBackFacts {
+  verdict: string;
+  /** the control's height ratio (null when no new cat was found) */
+  front: number | null;
+  /** the turn attempt's height ratio per back shot */
+  back: Array<number | null>;
+  /** ArtProbeCatBackShown's height ratio per shown shot */
+  shown: Array<number | null>;
+}
+export type CatBackOutcome = "back-facing" | "back-pose-drawn" | "front-big" | "not-drawn" | string;
+
+/** back-facing: the turned cat plays our B frame; back-pose-drawn: it did not turn, but the back rig is drawn (shown cat). */
+export function catBackOutcome(f: CatBackFacts): CatBackOutcome {
+  if (f.verdict !== "pass") return f.verdict;
+  const big = (r: number | null) => r !== null && r >= CAT_BACK_BIG;
+  if (big(f.front)) return "front-big";
+  if (f.back.filter(big).length >= 2) return "back-facing";
+  if (f.shown.filter(big).length >= 2) return "back-pose-drawn";
+  return "not-drawn";
+}

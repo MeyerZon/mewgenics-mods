@@ -79,6 +79,20 @@
     "wavePose_leg1": { "frames": 1, "labels": {}, "layers": [] },
     "wavePose_arm1": { "frames": 1, "labels": {}, "layers": [] },
     "wavePose_head": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPose_tail": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPose_leg2": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPose_arm2": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPose_body": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPose_leg1": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPose_arm1": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPose_head": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPoseBack_head_back": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPoseBack_arm2": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPoseBack_leg2": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPoseBack_body": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPoseBack_arm1": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPoseBack_leg1": { "frames": 1, "labels": {}, "layers": [] },
+    "probeBackPoseBack_tail": { "frames": 1, "labels": {}, "layers": [] },
     "CatProbe": {
       "frames": 24,
       "labels": { "idle": 0 },
@@ -111,13 +125,17 @@
       ]
     },
     "CatAppendRoot": {
-      "frames": 4,
-      "labels": { "probeIdleF": 0, "probeIdleB": 1, "waveF": 2, "waveB": 3 },
+      "frames": 8,
+      "labels": { "probeIdleF": 0, "probeIdleB": 1, "waveF": 2, "waveB": 3, "probeBackF": 4, "probeBackB": 5, "probeBackShowF": 6, "probeBackShowB": 7 },
       "layers": [ { "name": "ani", "depth": 1, "keys": [
         { "frame": 0, "ref": "CatProbe", "x": 3.85, "y": -47.95 },
         { "frame": 1, "ref": "CatProbe", "x": 3.85, "y": -47.95 },
         { "frame": 2, "ref": "wavePose", "x": 3.85, "y": -47.95 },
-        { "frame": 3, "ref": "wavePose", "x": 3.85, "y": -47.95 }
+        { "frame": 3, "ref": "wavePose", "x": 3.85, "y": -47.95 },
+        { "frame": 4, "ref": "probeBackPose", "x": 3.85, "y": -47.95 },
+        { "frame": 5, "ref": "probeBackPoseBack", "x": 3.85, "y": -47.95, "sx": 1.5, "sy": 1.5 },
+        { "frame": 6, "ref": "probeBackPoseBack", "x": 3.85, "y": -47.95, "sx": 1.5, "sy": 1.5 },
+        { "frame": 7, "ref": "probeBackPoseBack", "x": 3.85, "y": -47.95, "sx": 1.5, "sy": 1.5 }
       ] } ]
     },
     "wavePose": {
@@ -133,6 +151,38 @@
         { "name": "leg1", "depth": 9, "keys": [ { "frame": 0, "ref": "wavePose_leg1", "matrix": [0.6212615966796875, 0, -0.0883636474609375, 0.6212615966796875, -32.1, 27.1] } ] },
         { "name": "arm1", "depth": 11, "keys": [ { "frame": 0, "ref": "wavePose_arm1", "x": -4.7, "y": 37.25, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0, "tween": "linear" }, { "frame": 15, "ref": "wavePose_arm1", "x": -4.7, "y": 37.25, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": -110, "tween": "linear" }, { "frame": 29, "ref": "wavePose_arm1", "x": -4.7, "y": 37.25, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0 } ] },
         { "name": "head", "depth": 13, "keys": [ { "frame": 0, "ref": "wavePose_head", "x": 10.95, "y": 2.3, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0, "tween": "linear" }, { "frame": 15, "ref": "wavePose_head", "x": 10.95, "y": -5.7, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0, "tween": "linear" }, { "frame": 29, "ref": "wavePose_head", "x": 10.95, "y": 2.3, "sx": 0.6212615966796875, "sy": 0.6212615966796875, "rot": 0 } ] },
+        { "name": "marker", "depth": 15, "keys": [ { "frame": 0, "ref": "CatProbeMc_marker", "x": -48, "y": -330 } ] }
+      ]
+    },
+    "probeBackPose": {
+      "frames": 1,
+      "labels": { "idle": 0 },
+      "rig": "cat",
+      "parts": "game",
+      "layers": [
+        { "name": "tail", "depth": 1, "keys": [ { "frame": 0, "ref": "probeBackPose_tail", "matrix": [0.599639892578125, 0.16241455078125, -0.16241455078125, 0.599639892578125, -24.45, 10.05] } ] },
+        { "name": "leg2", "depth": 3, "keys": [ { "frame": 0, "ref": "probeBackPose_leg2", "matrix": [0.6212615966796875, 0, -0.0479583740234375, 0.6212615966796875, -9.85, 23.65], "cxform": { "mul": [0.84765625, 0.84765625, 0.84765625, 1] } } ] },
+        { "name": "arm2", "depth": 5, "keys": [ { "frame": 0, "ref": "probeBackPose_arm2", "matrix": [0.6212615966796875, 0, 0, 0.6212615966796875, 17.15, 32.45], "cxform": { "mul": [0.84765625, 0.84765625, 0.84765625, 1] } } ] },
+        { "name": "body", "depth": 7, "keys": [ { "frame": 0, "ref": "probeBackPose_body", "matrix": [0.621307373046875, 0.00445556640625, -0.01177978515625, 0.6211090087890625, -0.4, 16.35] } ] },
+        { "name": "leg1", "depth": 9, "keys": [ { "frame": 0, "ref": "probeBackPose_leg1", "matrix": [0.6212615966796875, 0, -0.0883636474609375, 0.6212615966796875, -32.1, 27.1] } ] },
+        { "name": "arm1", "depth": 11, "keys": [ { "frame": 0, "ref": "probeBackPose_arm1", "matrix": [0.6212615966796875, 0, 0, 0.6212615966796875, -4.7, 37.25] } ] },
+        { "name": "head", "depth": 13, "keys": [ { "frame": 0, "ref": "probeBackPose_head", "matrix": [0.6212615966796875, 0, 0, 0.6212615966796875, 10.95, 2.3] } ] }
+      ]
+    },
+    "probeBackPoseBack": {
+      "frames": 1,
+      "labels": { "idle": 0 },
+      "rig": "cat",
+      "parts": "game",
+      "facing": "back",
+      "layers": [
+        { "name": "head_back", "depth": 1, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_head_back", "matrix": [0.6212615966796875, 0, 0, 0.6212615966796875, 18.35, -1.7] } ] },
+        { "name": "arm2", "depth": 3, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_arm2", "matrix": [0.6212615966796875, 0, -0.0479583740234375, 0.6212615966796875, -1.75, 24.05], "cxform": { "mul": [0.84765625, 0.84765625, 0.84765625, 1] } } ] },
+        { "name": "leg2", "depth": 5, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_leg2", "matrix": [0.6212615966796875, 0, -0.079864501953125, 0.6212615966796875, -30.95, 32.45], "cxform": { "mul": [0.84765625, 0.84765625, 0.84765625, 1] } } ] },
+        { "name": "body", "depth": 7, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_body", "matrix": [0.621307373046875, 0.00445556640625, -0.01177978515625, 0.6211090087890625, -0.6, 16.35] } ] },
+        { "name": "arm1", "depth": 9, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_arm1", "matrix": [0.6212615966796875, 0, 0.0306396484375, 0.6212615966796875, 17.3, 30.75] } ] },
+        { "name": "leg1", "depth": 11, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_leg1", "matrix": [0.6212615966796875, 0, 0, 0.6212615966796875, -10.1, 37.75] } ] },
+        { "name": "tail", "depth": 13, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_tail", "matrix": [0.599639892578125, 0.16241455078125, -0.16241455078125, 0.599639892578125, -26.55, 13.55] } ] },
         { "name": "marker", "depth": 15, "keys": [ { "frame": 0, "ref": "CatProbeMc_marker", "x": -48, "y": -330 } ] }
       ]
     },

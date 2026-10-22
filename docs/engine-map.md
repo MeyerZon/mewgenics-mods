@@ -505,6 +505,45 @@ probeIdle]]`.
   game's parts: the arm visibly swings and the head bobs. The nested `ani` plays its own timeline on the held root
   label.
 
+**The back facing and the four-way quartet (2026-10-22; T1-pinned in `editor/test/fixtures/art/cat-back-facing.json`,
+`editor/test/art-cat-back-tests.ts`).**
+- OBSERVED (read-only parse): a `<anim>B` frame places **its own pose sprite**, not its `<anim>F` partner's. `idleB`
+  (sprite 10; `idleF` is sprite 9, both at (77, −959) twips) stacks **`head_back@1 arm2@3 leg2@5 body@7 arm1@9 leg1@11
+  tail@13`** — the head behind the body, the tail in front, the far limbs swapped (= `CAT_BACK_SLOTS` in `cat-rig.ts`).
+  Across the B frames, `head_back` is in the pose of 356 of 362 CatTest labels and 88 of 91 `_Append_CatTest` labels
+  (a plain `head` in 19 / 7: frames that turn the face to the camera); the visitor's `bhead` spelling (0x742bd0) is in
+  **no** vanilla cat frame.
+- OBSERVED (decompile): **`head_back` is not a separate part.** `CatParts::load_faces` 0x73a990 builds the slot names
+  `"head_" + <face>` (list 0x1413c60f0) and `"headblend_" + <face>` (0x1413c6108) for every `catgen.gon faces` entry,
+  and the first face is `back { back true }`; the visitor matches `head_<face>` → the head holder `+0x8c8` with that
+  preset's flip (`preset+0x4c`) and pose (`ApplyFacePose` 0x740a00). So `head_back` = the cat's own head drawn from
+  behind, and `head_faceleft`, `head_dead`, … in vanilla frames are the same head with other face presets.
+- OBSERVED (read-only parse): the four-way clips (`MegaFetus` enemies.swf, `Thump` enemies2.swf, `TracyX` enemies4.swf,
+  `ManglersMonster` bosses3.swf — the characters with `graphics.four_way_animations true`) carry only complete
+  `<anim>LF/RF/LB/RB` quartets; **no CatTest label is four-way**. With the flag, `Character_SetOrientation` 0x10ce50
+  appends L/R + F/B and never mirrors the character (catC), so a four-way cat needs a quartet for every animation it
+  plays (vanilla idle, walk, hit, … included) or those are silent no-ops; the editor's quartet draws the L frames
+  mirrored (sx −1) — INFERRED from the two-way rule (the engine flips exactly the L directions there), not observed.
+- Authoring (`cat-rig.ts`): `newCatAnimation` adds a front rig `<name>Pose` and a back rig `<name>PoseBack`
+  (`facing: "back"`, the back layout, empty slots); `<name>B` places the back rig. `{ fourWay: true }` emits the
+  quartet (LF / RF on the front rig, LB / RB on the back rig). Validator: `rig-back-head` (a back rig with `head`),
+  `sprite-facing`, `cat-anim-back-facing` (a B frame placing a front rig or the reverse), `cat-anim-four-way-incomplete`,
+  `cat-anim-four-way` (info).
+- **In the game (OBSERVED 2026-10-22, `npm run test:artprobe -- --cat-back`, run 20261022-114912; fixture
+  `editor/test/fixtures/ingame/artprobe-cat-back-summary.json`): the back rig works.** `ArtProbeCatBackShown` (TomTom +
+  `alt_animations [[idle probeBackShow]]`, both labels placing the back rig `probeBackPoseBack` at 1.5x) spawns
+  without a crash and is drawn **from behind with TomTom's own parts** — `head_back` filled with the head seen from
+  behind (ears, no face), the body, the tail in front of it — at 1.572x TomTom's height (21.6k vs 9.8k dark px), so it
+  is our frame, not vanilla idleB. Every run: `real save file(s) unchanged`.
+- OBSERVED, unexplained: **a non-slot child of the back rig is not drawn** — the checker marker at depth 15 (drawn in
+  the A0 and wave front rigs at the same depth) never appears on the back rig (runs 20261022-114440, -114637, -114912).
+  INFERRED: the `head_<face>` / `back true` path hides the rest; not decompiled. A back-pose overlay therefore cannot
+  ride inside the rig yet.
+- **Turning a unit away in a test fight is not solved.** `graphics { lock_orientation [1 0] }` (run 20261022-113746),
+  `[0 -1]` (-113911) and `start_orientation [0 -1]` + `lock_orientation [0 -1]` (-114912) all left the spawned TomTom
+  variant facing the camera (only its mirror changed with `[1 0]`); the harness has no command that turns a unit, so
+  the B frame on a genuinely back-facing unit (a move away, a turn) stays a T3 item.
+
 ### SWF loader and display path (closed, 2026-10-21)
 
 RE session `disp` (Ghidra 12.1.4, static scans, the shipped shaders in `.extracted/shaders/`); every decompile cited

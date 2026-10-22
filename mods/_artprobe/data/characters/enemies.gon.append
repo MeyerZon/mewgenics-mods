@@ -108,3 +108,55 @@ ArtProbeGlow {
         tooltip "ENEMY_LILRAT_DESC"
     }
 }
+
+// test-only (back-facing probe, 2026-10-22): a real cat — TomTom's parts — whose idle is the appended `probeBack`
+// (probe.scene.json: probeBackF places the front rig probeBackPose with NO marker, probeBackB the back rig
+// probeBackPoseBack — head_back behind, tail in front, as vanilla idleB — with the marker), so the marker in a shot
+// means the B frame plays. The turn attempt: start_orientation + lock_orientation [0 -1] (OBSERVED 2026-10-22:
+// lock_orientation [1 0] and [0 -1] alone left the spawned cat facing the camera, only mirrored or not);
+// npm run test:artprobe -- --cat-back
+ArtProbeCatBack {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeBack]]
+        start_orientation [0 -1]
+        lock_orientation [0 -1]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (back-facing probe control): the same cat and animation at the default enemy facing — it plays probeBackF
+// (the front rig, no marker), so a marker on this one would mean the default facing is already B
+ArtProbeCatFacing {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeBack]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only (back-facing probe, the shown pose): TomTom whose idle is `probeBackShow` — probeBackShowF and
+// probeBackShowB BOTH place the back rig probeBackPoseBack (with the marker), so the back pose is drawn at any facing:
+// does the game fill head_back with the cat's own head seen from behind?
+ArtProbeCatBackShown {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeBackShow]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}

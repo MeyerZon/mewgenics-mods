@@ -73,8 +73,9 @@ export async function runArtWaveGlowTests(test: TestFn, assert: AssertFn, eq: Eq
     const v = validateScene(scene) as any;
     assert(v.ok, JSON.stringify(v.findings.filter((f: any) => f.severity === "error")));
     // probeIdleB / waveB predate the back rig (2026-10-22, art-cat-back-tests.ts): they place the front pose on purpose
-    // (the cats in those probes face front), so cat-anim-back-facing is the one warning they may carry
-    const ca = catAnimFindings(scene).filter((f) => f.severity !== "info" && !(f.code === "cat-anim-back-facing" && /"(probeIdleB|waveB)"/.test(f.message)));
+    // (the cats in those probes face front), and probeBackShowF places the back rig on an F label by design (the back
+    // probe), so cat-anim-back-facing is the one warning they may carry
+    const ca = catAnimFindings(scene).filter((f) => f.severity !== "info" && !(f.code === "cat-anim-back-facing" && /"(probeIdleB|waveB|probeBackShowF)"/.test(f.message)));
     eq(ca.length, 0, JSON.stringify(ca));
   });
 

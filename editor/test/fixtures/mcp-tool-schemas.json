@@ -447,11 +447,15 @@
           "enum": [
             "cat-animation"
           ],
-          "description": "\"cat-animation\": a cat rig <animation>Pose plus an _Append_CatTest donor sprite with the labeled frames <animation>F / <animation>B, each placing the rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)"
+          "description": "\"cat-animation\": a front cat rig <animation>Pose, a back-facing rig <animation>PoseBack (head_back behind, tail in front, as vanilla idleB) and an _Append_CatTest donor sprite with the labeled frames <animation>F (front rig) / <animation>B (back rig), each placing its rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)"
         },
         "animation": {
           "type": "string",
           "description": "the animation name for template cat-animation (default: the scene name, which must then be an identifier); GON refers to it bare: alt_animations [[idle <animation>]] or an ability's animation <animation>"
+        },
+        "fourWay": {
+          "type": "boolean",
+          "description": "template cat-animation: emit the four-way quartet <animation>LF / RF / LB / RB (the L frames mirrored) for a character with graphics { four_way_animations true }; vanilla CatTest has no four-way label"
         }
       },
       "required": [

@@ -1,0 +1,43 @@
+mods: _artprobe
+timeout: 120s
+hide: false
+# Back-facing probe (2026-10-22, T3 card pr-cat-back): a cat facing AWAY plays its <anim>B frame, which places the
+# back rig the editor now authors (cat-rig.ts newCatAnimation: probeBackPoseBack, facing "back" — head_back behind
+# the body, the tail in front, vanilla idleB's layout and slot matrices; seven EMPTY slot sprites). probe.swf's
+# _Append_CatTest donor carries probeBackF (the front rig, NO marker) and probeBackB (the back rig + the checker
+# marker at the non-slot depth 15), so our marker appears only when the B frame plays.
+# ArtProbeCatFacing = TomTom + alt_animations [[idle probeBack]] at the default enemy facing (the control: F, no
+# marker); ArtProbeCatBack = the same with an orientation key (meant to face it away: the B label —
+# Character_SetOrientation 0x10ce50) — OBSERVED 2026-10-22 not to turn a spawned cat (lock alone, [1 0] and [0 -1]); now
+# start_orientation + lock_orientation [0 -1]. ArtProbeCatBackShown's probeBackShowF / probeBackShowB both place the
+# back rig, so its shots show the back pose whatever the facing. No _autoplay: nobody acts, nothing turns or hits.
+# editor/scripts/art-probe.ts --cat-back reads the shots (probe-outcomes.ts catBackOutcome): no marker in "front",
+# our marker in the back (or shown) shots with a TomTom-sized outline (the cat's own parts) under it.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+cmd spawn TomTom
+expect console "Spawned TomTom" within 10
+wait frames 120
+shot "vanilla"
+cmd spawn ArtProbeCatFacing
+expect console "Spawned ArtProbeCatFacing" within 10
+wait frames 90
+shot "front"
+cmd spawn ArtProbeCatBack
+expect console "Spawned ArtProbeCatBack" within 10
+wait frames 90
+shot "back 1"
+wait ms 200
+shot "back 2"
+wait ms 200
+shot "back 3"
+cmd spawn ArtProbeCatBackShown
+expect console "Spawned ArtProbeCatBackShown" within 10
+wait frames 90
+shot "shown 1"
+wait ms 200
+shot "shown 2"
+quit

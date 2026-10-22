@@ -583,7 +583,9 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     so the editor names the placed layer `ani`; `.analysis/notes-catA.md`, engine-map "CatTest and the cat animation
     clips"); `idleF`'s pose sprite (180 frames) carries `tail@1 leg2@3 arm2@5 body@7 leg1@9 arm1@11 head@13` =
     `CAT_SLOTS`, while `idleB`'s uses `head_back@1 arm2@3 leg2@5 body@7 arm1@9 leg1@11 tail@13` (a back-facing layout
-    with a `head_back` slot — the editor does not author it yet; both facings place the same front rig for now).
+    with a `head_back` slot — the head with the catgen face `back`; since 2026-10-22 `newCatAnimation` authors it:
+    the B frame places a second rig `<name>PoseBack` with `facing: "back"`, and `{ fourWay: true }` emits the
+    `LF/RF/LB/RB` quartet; engine-map "The back facing and the four-way quartet").
     `catanis2.swf` extends the clip with an export `_Append_CatTest` (id 590, 296 frames, 239 labels such as
     `crawlingIdleF`, `robotWalkF`) of the same shape. GON refers to an animation bare and the engine adds the facing:
     `alt_animations [[idle <name>]]` on a character (cat_enemies.gon `CatCaller`), `animation <name>` on an ability;
@@ -607,7 +609,12 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     `<name>Pose` (or the given rig, refused unless its slots are empty), the donor sprite `CatAnim_<name>` (or the
     scene's existing `_Append_CatTest` donor, extended on its next two frames) with `<name>F` / `<name>B` each placing
     the rig as the layer `ani` at depth 1, and `exports._Append_CatTest`; refusals for bad names, taken labels, a
-    non-rig or non-empty `opts.rig`, an export that is not a donor.
+    non-rig or non-empty `opts.rig`, an export that is not a donor. **2026-10-22:** the B frame places a second rig,
+    `<name>PoseBack` (`addCatRig { facing: "back" }`: `CAT_BACK_SLOTS`, vanilla idleB's `head_back@1 … tail@13`;
+    `opts.backRig` reuses one), and `{ fourWay: true }` emits `<name>LF/RF/LB/RB` (LF/RF on the front rig, LB/RB on
+    the back rig, the L frames with sx −1); validator `rig-back-head` (warning), `sprite-facing` (error),
+    `cat-anim-back-facing` (warning), `cat-anim-four-way-incomplete` (error), `cat-anim-four-way` (info); the Rig tab
+    lists a back rig's own slots and has a Four-way checkbox next to New cat animation.
     Validator (`catAnimFindings`, on the `_Append_CatTest` donor): `cat-anim-missing-facing` (error), `cat-anim-layer-not-rig`
     (error), `cat-anim-layer-name` (error: the placed layer is not `ani`), `cat-anim-slot-not-empty` (error: a slot of
     the placed rig holds art), `cat-anim-depth` (warning), `cat-anim-donor` (error), `cat-anim-untested` (info: what
