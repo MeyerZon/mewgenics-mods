@@ -515,8 +515,14 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
       in the same script) in the vanilla idle, not the appended frame, though A0's own `render-cat-append` still passes.
       Find what makes the appended idle show (spawn order, a hit / turn re-playing idle?), then read the gray ramps
       (`measureCatRamp`) to move "gray texels are remapped on a cat" from shader source to in-game OBSERVED.
-- [ ] **Two mod SWFs exporting `_Append_CatTest`:** with a second donor (an earlier raster.swf) A0's frame did not show
-      either; re-test once the item above is understood — if it holds, it is a cross-mod limit for cat animations.
+      2026-10-22 (multi-append PR): the appended frame does play on a fresh spawn. A0's marker at clip y −330 is off the
+      top of the screen for a back-row cat, so "vanilla idle" was the marker out of frame (engine-map "Several mods
+      appending to one clip"). Re-run with the ramp placed lower (or the cat further forward), then measure.
+- [x] **Two mod SWFs exporting `_Append_CatTest`** (2026-10-22, `npm run test:artprobe -- --multi-append`): they coexist in
+      either `-modpaths` order. A label both define resolves to the later mod (Swf_Merge's label store at 0xa58a23). Two
+      mods shipping the same `swfs/<name>.swf` load only the later file. Validator: `validate_mod { modpaths }` →
+      `cat-append-conflict`, `swf-file-conflict`, `cat-append-shadows-vanilla`, `swf-file-shadows-vanilla`. The #124
+      observation was A0's marker off screen. Optional native follow-up: log label overwrites at 0xa58a23.
 - [ ] **TTF/OTF → scene.fonts:** a font importer (cmap + glyf quadratic contours, pure TS) so modders need not draw
       glyph paths by hand.
 

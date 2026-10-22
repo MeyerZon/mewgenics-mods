@@ -24,6 +24,9 @@
 // --raster (2026-10-22): write the big generated PNGs (art/generated/), build art/raster.scene.json, patch its
 // missing-font text's class (patchMissingFontClass), run render-raster / render-raster-cat / render-font-missing,
 // _bgprobe/render-backdrop and the control render-tileset-control, and write raster-summary.json (probe-raster.ts).
+// --multi-append (2026-10-22): build the _catappendA / _catappendB / _catappendSame probe SWFs, run A alone, B alone,
+// A+B, B+A and A+Same, count each marker colour per shot (probe-multiappend.ts) and write multi-append-summary.json
+// (pinned as test/fixtures/ingame/multi-append-summary.json).
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
