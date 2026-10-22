@@ -1,0 +1,5 @@
+PlayerCat {
+	ai {
+		brain PlayerBrain
+	}
+}

@@ -9,7 +9,8 @@
 
 import { sectionBytes } from "./pe.ts";
 import type { Pe, PeSection, RuntimeFunction } from "./pe.ts";
-import { parsePattern, patternToString } from "./scan.ts";
+import { parsePattern, patternToString, scanAllExec } from "./scan.ts";
+import type { Pattern } from "./scan.ts";
 import { decodeInstruction } from "./siggen.ts";
 import type { Instruction } from "./siggen.ts";
 import { hex, parseValue, entry } from "./manifest.ts";
@@ -171,6 +172,131 @@ export function harvestFunction(pe: Pe, buf: Buffer, rva: number, opts: { names?
     cfgLite: { bytes: d.end - d.begin, calls, ripRefs: ripRefs.length, resyncs: d.resyncs },
     prologue: patternToString({ bytes: head, mask, length: head.length }),
   };
+}
+
+// ---- the 2026-10-21 locators (notes-bind): each returns the .pdata function begins an anchor leads to ----------------
+
+const matchesAt = (buf: Buffer, off: number, pat: Pattern): boolean => {
+  if (off < 0 || off + pat.length > buf.length) return false;
+  for (let k = 0; k < pat.length; k++) if (pat.mask[k] && buf[off + k] !== pat.bytes[k]) return false;
+  return true;
+};
+const fnBegins = (pe: Pe, sites: number[]): number[] => [...new Set(sites.map((at) => { const f = pe.pdata.find(at); return f ? f.begin : -1; }).filter((x) => x >= 0))];
+
+/**
+ * vtable-store rung: the .pdata functions containing a rip-relative lea of `vftableRva` whose bytes match `pattern`
+ * at the lea (e.g. "48 8D 05 ?? ?? ?? ?? 48 89 03" = lea rax,[vftable]; mov [rbx],rax). A constructor is normally the
+ * only such site, and the vftable comes from RTTI, so this rung needs no ported function.
+ */
+export function findVtableStoreFunctions(pe: Pe, buf: Buffer, vftableRva: number, pattern: string, sigCap?: number): number[] {
+  const pat = parsePattern(pattern, sigCap);
+  const sites = (leaIndex(pe, buf).get(vftableRva) || []).filter((at) => matchesAt(buf, pe.rvaToOff(at), pat));
+  return fnBegins(pe, sites);
+}
+
+/**
+ * imm32-witness rung: the .pdata functions containing an instruction matching `pattern` with `value` as the imm32 at
+ * `imm32At`, followed within `maxForward` instructions by an E8 call to `calleeRva` (Status_ApplyLuckUp: `mov r8d,
+ * LuckUp_typeid` four instructions before `call Entity_FindComponentsByTypeId`). The value is the constant's derived
+ * value on this image, so the rung tracks a type id that changes between builds.
+ */
+export function findImm32WitnessFunctions(pe: Pe, buf: Buffer, pattern: string, imm32At: number, value: number, calleeRva: number, maxForward = 8, sigCap?: number): number[] {
+  const pat = parsePattern(pattern, sigCap);
+  if (imm32At < 0 || imm32At + 4 > pat.length) return [];
+  const bytes = Uint8Array.from(pat.bytes), mask = Uint8Array.from(pat.mask);
+  for (let k = 0; k < 4; k++) { bytes[imm32At + k] = (value >>> (8 * k)) & 0xff; mask[imm32At + k] = 1; }
+  const out: number[] = [];
+  for (const hit of scanAllExec(pe, buf, { bytes, mask, length: pat.length })) {
+    const fn = pe.pdata.find(hit);
+    if (!fn) continue;
+    const d = decodeFunction(pe, buf, fn.begin);
+    const i = d.instrs.findIndex((x) => x.at === hit);
+    if (i < 0) continue;   // the hit is not an instruction boundary of its function
+    for (let k = i + 1; k < d.instrs.length && k <= i + maxForward; k++) {
+      const x = d.instrs[k];
+      if (x.ins.kind === "call" && x.ins.reloc && x.ins.reloc.why === "E8 rel32" && x.ins.relTarget !== null && x.at + x.ins.length + x.ins.relTarget === calleeRva) { if (!out.includes(fn.begin)) out.push(fn.begin); break; }
+    }
+  }
+  return out;
+}
+
+/**
+ * caller-after-lea rung: inside the caller's .pdata body, every rip-relative lea of the unique whole string `literal`
+ * and, per lea site, the E8 targets (that begin a .pdata function) within the next `maxForward` instructions, in order.
+ * apply_status compares the name (`lea rdx,["LuckUp"]; call string==cstr; test al,al; jz`) and then calls the
+ * per-status apply function: the caller picks the first target inside its size/call tolerance. The default window of
+ * 24 instructions covers attach_passive, whose call sits 17 instructions after the lea on 25143593.
+ */
+export function findCallsAfterStringLea(pe: Pe, buf: Buffer, callerRva: number, literal: string, maxForward = 24): { leaAt: number; targets: number[] }[] {
+  const s = findString(pe, buf, literal);
+  if (s.rva === null || s.count !== 1) return [];
+  const fn = pe.pdata.find(callerRva);
+  if (!fn || fn.begin !== callerRva) return [];
+  const d = decodeFunction(pe, buf, callerRva);
+  const out: { leaAt: number; targets: number[] }[] = [];
+  for (let i = 0; i < d.instrs.length; i++) {
+    const x = d.instrs[i];
+    if (!(x.ins.kind === "lea" && x.ins.reloc && x.ins.reloc.why === "rip-relative disp32" && x.ins.relTarget !== null && x.at + x.ins.length + x.ins.relTarget === s.rva)) continue;
+    const targets: number[] = [];
+    for (let k = i + 1; k < d.instrs.length && k <= i + maxForward; k++) {
+      const y = d.instrs[k];
+      if (y.ins.kind === "call" && y.ins.reloc && y.ins.reloc.why === "E8 rel32" && y.ins.relTarget !== null) {
+        const t = y.at + y.ins.length + y.ins.relTarget;
+        const tf = pe.pdata.find(t);
+        if (tf && tf.begin === t) targets.push(t);
+      }
+    }
+    out.push({ leaAt: x.at, targets });
+  }
+  return out;
+}
+
+/** The .pdata function `delta` entries after (+1) / before (-1) the function beginning at `rva`, by table index. */
+export function pdataNeighbour(pe: Pe, rva: number, delta: number): number | null {
+  let lo = 0, hi = pe.pdata.count - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const e = pe.pdata.get(mid);
+    if (rva < e.begin) hi = mid - 1;
+    else if (rva >= e.end) lo = mid + 1;
+    else {
+      if (e.begin !== rva) return null;
+      const j = mid + delta;
+      return j >= 0 && j < pe.pdata.count ? pe.pdata.get(j).begin : null;
+    }
+  }
+  return null;
+}
+
+const ripRefCache = new WeakMap<Buffer, Map<number, number[]>>();
+
+/**
+ * One pass over every .pdata function collecting each rip-relative reference (any opcode) by target RVA. Built lazily
+ * and cached per image: the shared-data-ref rung is the only consumer and it runs only when the cheaper rungs failed.
+ * @returns target rva -> function begins referencing it
+ */
+export function ripRefIndex(pe: Pe, buf: Buffer): Map<number, number[]> {
+  const cached = ripRefCache.get(buf);
+  if (cached) return cached;
+  const idx = new Map<number, number[]>();
+  for (let i = 0; i < pe.pdata.count; i++) {
+    const f = pe.pdata.get(i);
+    const d = decodeFunction(pe, buf, f.begin);
+    for (const { at, ins } of d.instrs) {
+      if (!ins.reloc || ins.reloc.why !== "rip-relative disp32" || ins.relTarget === null) continue;
+      const t = at + ins.length + ins.relTarget;
+      const list = idx.get(t);
+      if (!list) idx.set(t, [f.begin]);
+      else if (list[list.length - 1] !== f.begin) list.push(f.begin);
+    }
+  }
+  ripRefCache.set(buf, idx);
+  return idx;
+}
+
+/** shared-data-ref rung: the .pdata functions other than `withRva` that rip-reference `target`. */
+export function findSharedDataRefFunctions(pe: Pe, buf: Buffer, target: number, withRva: number): number[] {
+  return (ripRefIndex(pe, buf).get(target) || []).filter((f) => f !== withRva);
 }
 
 function u32At(pe: Pe, buf: Buffer, rva: number): number | null {
@@ -459,6 +585,101 @@ export function constantValues(src: ConstantSources): number[] {
 }
 
 export type HarvestStatus = "harvested" | "verified" | "mismatch" | "unresolved" | "unanchored" | "skipped";
+
+/** the value an imm32 witness must find: the constant's slot-body derivation on this image when it has one (and the vtable is usable), else the manifest value */
+export function constantValueOnImage(manifest: Manifest, pe: Pe, buf: Buffer, c: Entry): { value: number | null; via: string } {
+  const d = c.anchors.derive;
+  if (d && d.vtable && d.slot !== undefined && d.bodyPattern && d.imm32At !== undefined) {
+    const vt = entry(manifest, d.vtable);
+    if (vt && (!vt.port || String(vt.port.status).startsWith("ported"))) {
+      const v = deriveFromVtableSlot(pe, buf, parseInt(vt.rva || "0", 16), d.slot, d.bodyPattern, d.imm32At);
+      return { value: v, via: v === null ? `slot ${d.slot} of ${d.vtable} does not match ${d.bodyPattern}` : `slot ${d.slot} of ${d.vtable}` };
+    }
+    return { value: null, via: `${d.vtable} did not port` };
+  }
+  return c.value ? { value: parseValue(c.value), via: "manifest value" } : { value: null, via: "no value" };
+}
+
+interface AnchorVerification {
+  checks: string[];
+  failed: boolean;
+  /** an anchor field (caller ordinal) was rewritten to what the image shows */
+  rewritten: boolean;
+}
+
+/**
+ * Verify (and re-harvest the ordinals of) a function entry's locating anchors against this image: vtableStore,
+ * imm32Witness, callers (after-lea + ordinal), after/before, sharedDataRef, dataRefs. Values are never rewritten.
+ */
+export function verifyFunctionAnchors(manifest: Manifest, pe: Pe, buf: Buffer, e: Entry, harvestOf: (e: Entry) => FunctionHarvest): AnchorVerification {
+  const a = e.anchors;
+  const rva = parseInt(e.rva || "0", 16);
+  const r: AnchorVerification = { checks: [], failed: false, rewritten: false };
+  const list = (fns: number[]) => (fns.length ? fns.map((f) => hex(f)).join("/") : "nothing");
+  const check = (name: string, fns: number[]) => {
+    const ok = fns.length === 1 && fns[0] === rva;
+    r.checks.push(ok ? `${name} ok` : `${name} -> ${list(fns)} (manifest says ${e.rva})`);
+    if (!ok) r.failed = true;
+  };
+  if (a.vtableStore && a.vtableStore.vtable) {
+    const vt = entry(manifest, a.vtableStore.vtable);
+    check("vtable-store", vt && vt.rva ? findVtableStoreFunctions(pe, buf, parseInt(vt.rva, 16), a.vtableStore.pattern, manifest.sigCap) : []);
+  }
+  if (a.imm32Witness && a.imm32Witness.equals) {
+    const w = a.imm32Witness;
+    const c = entry(manifest, w.equals);
+    const callee = entry(manifest, w.callee);
+    const val = c ? constantValueOnImage(manifest, pe, buf, c) : { value: null, via: "no such constant" };
+    if (val.value === null || !callee || !callee.rva) { r.checks.push(`imm32-witness unusable (${val.value === null ? val.via : `callee ${w.callee} missing`})`); r.failed = true; }
+    else check(`imm32-witness ${hex(val.value)}`, findImm32WitnessFunctions(pe, buf, w.pattern, w.imm32At, val.value, parseInt(callee.rva, 16), w.maxForward ?? 8, manifest.sigCap));
+  }
+  for (const c of Array.isArray(a.callers) ? a.callers : []) {
+    const caller = entry(manifest, c.function);
+    if (!caller || !caller.rva) { r.checks.push(`callers: ${c.function} missing`); r.failed = true; continue; }
+    const crva = parseInt(caller.rva, 16);
+    if (c.afterStringLea) {
+      const sites = findCallsAfterStringLea(pe, buf, crva, c.afterStringLea, c.maxForward ?? 24);
+      const hit = sites.some((s) => s.targets.includes(rva));
+      r.checks.push(hit ? `caller-after-lea ok (${c.function})` : `caller-after-lea: no call to ${e.rva} after lea "${c.afterStringLea}" in ${c.function} (${sites.length} lea site(s))`);
+      if (!hit) r.failed = true;
+    }
+    const ords = harvestOf(caller).callees.filter((x) => x.name === e.name).map((x) => x.ordinal);
+    if (!ords.length) { r.checks.push(`caller-ordinal: ${c.function} has no call to ${e.name}`); r.failed = true; continue; }
+    if (c.ordinal !== undefined && ords.includes(c.ordinal)) r.checks.push(`caller-ordinal ok (#${c.ordinal} of ${c.function})`);
+    else if (ords.length === 1) { r.checks.push(`caller-ordinal ${c.ordinal === undefined ? "filled" : `#${c.ordinal} -> `}#${ords[0]} of ${c.function}`); if (c.ordinal !== undefined) r.rewritten = true; c.ordinal = ords[0]; }
+    else { r.checks.push(`caller-ordinal: ${c.function} calls ${e.name} at #${ords.join("/#")}, manifest says #${c.ordinal}`); r.failed = true; }
+  }
+  if (a.after && a.after.function) {
+    const n = entry(manifest, a.after.function);
+    const t = n && n.rva ? pdataNeighbour(pe, parseInt(n.rva, 16), 1) : null;
+    check(`pdata-successor of ${a.after.function}`, t === null ? [] : [t]);
+  }
+  if (a.before && a.before.function) {
+    const n = entry(manifest, a.before.function);
+    const t = n && n.rva ? pdataNeighbour(pe, parseInt(n.rva, 16), -1) : null;
+    check(`pdata-predecessor of ${a.before.function}`, t === null ? [] : [t]);
+  }
+  if (a.sharedDataRef && a.sharedDataRef.with) {
+    const w = entry(manifest, a.sharedDataRef.with);
+    const ref = w ? harvestOf(w).ripRefs[a.sharedDataRef.ripRefOrdinal] : undefined;
+    const mine = harvestOf(e).ripRefs.map((x) => x.target);
+    const ok = !!ref && mine.includes(ref.target);
+    r.checks.push(ok ? `shared-data-ref ok (${ref!.target} = rip ref #${a.sharedDataRef.ripRefOrdinal} of ${a.sharedDataRef.with})` : `shared-data-ref: ${ref ? `${e.name} does not reference ${ref.target}` : `${a.sharedDataRef.with} has no rip ref #${a.sharedDataRef.ripRefOrdinal}`}`);
+    if (!ok) r.failed = true;
+  }
+  if (Array.isArray(a.dataRefs) && a.dataRefs.length) {
+    const refs = harvestOf(e).ripRefs;
+    const bad: string[] = [];
+    for (const d of a.dataRefs) {
+      const hit = refs.find((x) => parseInt(x.target, 16) === parseInt(d.rva, 16));
+      if (!hit) { bad.push(d.rva); continue; }
+      d.ripRefOrdinal = hit.ordinal;
+    }
+    r.checks.push(bad.length ? `dataRefs: ${bad.join("/")} not referenced by ${e.name}` : `dataRefs ok (${a.dataRefs.map((d) => `#${d.ripRefOrdinal}`).join(",")})`);
+    if (bad.length) r.failed = true;
+  }
+  return r;
+}
 export interface HarvestRow {
   name: string;
   kind: string;
@@ -493,7 +714,9 @@ export function harvestManifest(pe: Pe, buf: Buffer, manifest: Manifest): { mani
       a.cfgLite = h.cfgLite;
       a.prologue = h.prologue;
       const sig = h.strings.find((s) => s.role === "funcsig" && s.unique);
-      report.push({ name: e.name, kind: e.kind, status: "harvested", detail: `${h.cfgLite.bytes} bytes, ${h.callees.length} calls, ${h.ripRefs.length} rip refs${sig ? ", unique funcsig" : h.strings.length ? ", strings but no unique funcsig" : ", no strings"}` });
+      const v = verifyFunctionAnchors(out, pe, buf, e, harvestOf);
+      const status: HarvestStatus = v.failed ? "mismatch" : v.checks.length && !v.rewritten ? "verified" : "harvested";
+      report.push({ name: e.name, kind: e.kind, status, detail: `${h.cfgLite.bytes} bytes, ${h.callees.length} calls, ${h.ripRefs.length} rip refs${sig ? ", unique funcsig" : h.strings.length ? ", strings but no unique funcsig" : ", no strings"}${v.checks.length ? `; anchors: ${v.checks.join(", ")}` : ""}` });
       continue;
     }
     if (a.witness && typeof a.witness.function === "string" && (e.kind === "data")) {

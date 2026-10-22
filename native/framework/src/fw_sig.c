@@ -11,6 +11,7 @@ static int hexval(char c) {
 
 int fw_parse_pattern(const char *sig, uint8_t *bytes, uint8_t *mask, size_t cap) {
     size_t n = 0;
+    if (!sig) return -1;   /* a NULL pattern (signature: null) is the caller's raw-RVA case, never a scan */
     while (*sig) {
         while (*sig == ' ' || *sig == '\t') sig++;
         if (!*sig) break;

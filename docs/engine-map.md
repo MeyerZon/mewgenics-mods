@@ -39,8 +39,10 @@ beyond short byte signatures needed to locate functions.
 | `-dev_mode true` | Dev mode. |
 | `-validate_pedigree_tables true` | Repairs family-tree tables (added 1.0.20941 after a save editor broke saves). |
 
-Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map to GON's
-Append / ShallowMerge-DeepMerge / PatchMerge.
+Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map (in `Gon_overlay_apply`
+`0x9a64a0`) to `Gon_Append` `0x945410`, `Gon_DeepMerge_plain` `0x945c30` under the constant MERGE policy
+(`Gon_DefaultMergeMode` `0x9451c0` returns 2, so `.merge` files never read key suffixes) and the policy-driven
+`0x946680`; row by row in `docs/data-mods.md` "Fidelity to the decompiled merges".
 
 ## gpak contents
 
@@ -56,6 +58,19 @@ tables (`catgen`, `spawns`, `particles`, `furniture_effects`, `weather`, `diffic
 
 ## Data model
 
+**GON parser (OBSERVED 2026-10-21/22, `.analysis/decompiled/Gon_{LoadText_0x940840,Tokenize_0x93f090,ParseTokens_0x93fcf0}.c`).**
+`Gon_LoadText` wraps the text in `{ }`, tokenizes, parses the root as an object and logs `GON ERROR: More symbols
+exists after file completed parsing` if tokens remain. Tokenizer: `{ } [ ]` single-char tokens; `,` `:` `=` are
+whitespace (char mask `0x2400100000000000` over chars `< 0x3e`); `#` comments to end of line; `"` opens a quoted
+token, `\` escapes the next char (only `\n` → newline), the quotes are dropped and no flag survives; no `//` /
+`/* */` / `#include` handling, so a pre-pass must supply them (INFERRED, vanilla relies on all three; candidate
+`0xa50bd0`). Parser: `{` → type 3 object, `[` → type 4 array, a scalar is typed from its text: string (1) unless
+`strtol(tok, &end, 0)` or `strtod` consumes it entirely → number (2) with int view `+0x50` and double view
+`+0x58` both stored, exact `null` → 0, `true`/`false` → bool (5, `+0x60`); text kept at `+0x68`, type at `+0xa8`.
+`.add` / `.multiply` in `Gon_DeepMerge` 0x946680 use the double view and re-render the text. The editor reproduces
+the typing in `editor/src/core/gon/typing.ts` (pinned by `editor/test/gon-tests.ts`); the full rule-by-rule
+comparison is `docs/data-mods.md` "GON typing fidelity".
+
 GON objects reference C++ behavior components by class name. 1,750 RTTI classes live in `glaiel::`;
 hundreds are small composable behaviors (`AddStatusToBasicAttack`, `AbilityEnabledIfHasStatus`,
 `AggroTargetIsLowestHealthEnemy`, ...). Characters use `variant_of` inheritance. So the data layer can
@@ -69,7 +84,15 @@ recombine existing behaviors; new behaviors need native code.
   is the loose-files entry. Each path is logged as "Mod Path: ...".
 - The file manager (RVA `0x9a09f0`) resolves a requested relative path by taking the pack copy first, then walking
   the mod-path list from last to first; for each path it looks for the plain file and for `.append`, `.merge` and
-  `.patch` variants, applied through GON's Append / DeepMerge / PatchMerge (RVAs `0x944cc0`, `0x944f50`, `0x946680`).
+  `.patch` variants and returns their paths tagged 1 / 2 / 3; `Gon_overlay_apply` `0x9a64a0` parses each overlay and
+  dispatches on the tag: 1 → `Gon_Append` `0x945410` (push every child; a clashing name keeps both, the name index
+  `FUN_14012a310` points at the appended one; strings concatenate; anything else is `GON ERROR: Append incompatible
+  types`), 2 → `Gon_DeepMerge_plain` `0x945c30` with `Gon_DefaultMergeMode` `0x9451c0` (constant 2 = MERGE: by-name
+  recursion, nth occurrence to nth, arrays element-wise + extras appended, scalars and type mismatches overwritten
+  via `GonObject_assign` `0x30cd0`, no suffix read), 3 → `0x946680`, the policy-driven merge `.patch` needs, with
+  `0x944cc0` the key-suffix -> policy parser and `0x944f50` the recursive suffix stripper; child lookup by
+  `(name, nth)` is `GonObject_has_child_name` `0x942910` / `GonObject_child_by_name` `0x942b50`
+  (`.analysis/decompiled/Gon*.c`; row-by-row in `docs/data-mods.md` "Fidelity to the decompiled merges").
 - Live check: `launch-dev.bat` produced log lines `Save File Suffix: dev` and `Mod Path: <repo>\mods\dev-sandbox`
   with no GON errors; the main save file hash was unchanged; the game added default `debug_*` keys to
   `settings.txt` but did not persist `enable_debugconsole` or `dev_mode`.
@@ -200,6 +223,34 @@ session; the container is `--rm` and disappears.
   marks removal when stacks reach 0), 170 `OnStacksChanged`, 171 stacks-cleared callback.
 - Object fields: +0x18 entity, +0x20 owner character (also +0x38), +0x5c `int stacks`, +0x68 GON data, +0x74 applied,
   +0x75 removing, +0x76 `tickdown_this_turn`, +0xc8 applier, +0xe9 "temporary" flag.
+- OBSERVED 2026-10-21 (session `bind`, `.analysis/notes-bind.md`, cross-checked in Ghidra): `LuckUp_ctor`
+  (`0x711c90`, 292 B) pool-allocates **0xF0 bytes** (`41 B8 F0 00 00 00` memset length; pool global `0x1414e40`,
+  element size 0xf8, referenced only by the ctor and its 54-byte static initialiser `0x1fa40`), runs the base
+  `Passive::Passive` (`0x4c940`), zeroes +0xc8..+0xe0, writes word 1 at +0xe8 (so +0xe8 = 1, +0xe9 `temporary` = 0),
+  stores `LuckUp_vftable` (`lea rax,[0xf57ab8]; mov [rbx],rax` at +140 — the **only** code reference to that vftable
+  image-wide), sets **+0x18 = entity, +0x20 = owner character**, +0x28 = the owner's first qword, pushes itself into
+  `entity+0x20` (`{cap u32, count u32, T** data}`, so Entity +0x24 = count, +0x28 = `Component**`), copies
+  `entity+0x19` to +0xe and calls slot 30 `OnInit` devirtualised (`0x8104b0`: stores data at +0x68, stacks at +0x5c,
+  reads GON `tickdown_this_turn` into +0x76). It is a byte-twin of the `AIControlNextTurn` ctor (`0x705db0`) and one
+  more 0xF0-byte Status ctor (`0x705ee0`) modulo relocations: no relocation-free byte signature exists for it.
+- `Status_NameExists` (`0x492e80`) and `Status_GetValue` (`0x492f20`) share the **same map global `0x13c4830`**
+  (end sentinel +8) — the only two functions referencing it: NameExists is "the status-value map has this name".
+  Each of the other lookups owns its own map global (GetCategory `0x13c47b0`, GetStackMode `0x13c47f0`, GetFlags
+  `0x13c4870`, GetIcon `0x13c48b0`, OnAppliedToDamageInstance `0x13c48f0`, OnKilledCharacter `0x13c4930`,
+  OnAppliedToTile `0x13c4970`, OnDamageReport `0x13c49b0`, IsHitEffect `0x13c49f0`); the log sink context
+  `0x12f7b08` is shared. The 13 are one template body each (FNV-1a, `0x4c340` map find, `NO STATUS NAMED` assert
+  with `{__LINE__, column, __FILE__, __FUNCSIG__}` → `0x9522c0`); the twins differ only in relocations and the assert
+  line/column (GetCategory 72, GetStackMode 77, GetValue 88, GetFlags 96, GetIcon 105, OnAppliedToDamageInstance
+  118, OnAppliedToTile 127, OnKilledCharacter 136, OnDamageReport 145, IsHitEffect 201). They sit in one `.pdata`
+  run after `apply_status` (11368 → 11369 GetCategory … 11379 AttachPassive; 11383 IsHitEffect → 11384 SpawnTile).
+- `Status_ApplyLuckUp` (`0x5f9760`, 711 B): the only relocation-free bytes unique to it image-wide are the type id
+  `41 B8 D6 04 00 00` (`mov r8d, LuckUp_typeid`, +357, four instructions before `Entity_FindComponentsByTypeId`);
+  every reloc-masked window of its body also matches the `Bruise` (`0x5c4240`) / `Bleed` (`0x5bf1a0`) apply siblings.
+  It has exactly three E8 callers — `apply_status` (`0x48b4cb`), `attach_passive` (`0x4b24b0`) and the third by-name
+  dispatcher `0x4ccb20` — in each the call is the first in-tolerance E8 after `lea rdx,[rip+"LuckUp"]` + the
+  `std::string == const char*` compare (`0x52560`). `"LuckUp\0"` occurs once in .rdata (`0xee23d8`) and is lea'd from
+  12 `.pdata` functions; adding `"None"` (`0xed0b90`) and the size tolerance leaves this one. These facts are the
+  `bindings/25143593.json` anchors `imm32Witness`, `callers[].afterStringLea`, `vtableStore` and `sharedDataRef`.
 - Character +0x18 = `Entity*`; Entity +0x24 = component count (u32), +0x28 = `Component**` array. Character +0xe50 =
   `touched_passives` (forces a stat recompute), +0x5d4 = accumulated luck bonus.
 - `Status_ApplyByName` (RVA `0x483120`): `Status* f(std::string* name, void* ctx, int stacks, void* src, void* p5,
@@ -225,7 +276,15 @@ category and hit-effect rules apply), and `Character::BeginTurn` (dispatches `on
 The rules a definition must satisfy — at most 8 definitions (one vtable-thunk row each), a non-empty name of at
 most 15 bytes (the std::string SSO buffer, so the alias rewrite never reallocates), template `LuckUp` only, unique
 names — and the alias rewrite itself live in the pure `fw_status_rules.c` (host tests `test_status_rules.c`);
-`FW_RegisterStatus` validates against them before it claims the name with Mewjector.
+`FW_RegisterStatus` validates against them before it claims the name with Mewjector. Since 2026-10-21 the rest of
+the logic is pure and host-tested as well: the vtable clone into caller-supplied memory + the thunk bodies
+(`fw_vtable.c`, `test_vtable.c`; a T1 check clones the real dump `.analysis/luckup-vtable.hex` and pins slots 0/1 at
+`0x140566ed0` / `0x140566ec0`), the Character → Entity → component walks and the apply_status argument resolution,
+merge writes (+0x5c, +0xc8, +0xd0 = applier−8) and set-stacks writes over `offsets.h`-shaped fake objects
+(`fw_walk.c`, `test_walk.c`), and the load-time policy — symbol resolution over executable sections only with
+exactly one hit, the `-savesuffix` gate, `FW_GetSymbol`/`FW_GetData` bounds and the hook plan: `Character::BeginTurn`
+(priority 20, abort on failure) → LuckUp vtable sanity check → `apply_status` + the 13 lookups (priority 20, all
+attempted, counted) → `TurnControl::NextTurn` (priority 100) (`fw_resolve.c`, `test_resolve.c`).
 Verified in process on 2026-10-17: all hooks installed, Mewjector integrity ALL OK, `JokersLuck` registered with
 type id 0x1000. Combat behavior still needs a played fight to confirm.
 
@@ -524,6 +583,101 @@ build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4
   driver 0x3c4130). The global then points at the new director. Bindings: `FW_SYM_Entity_DestroyOwnerOf`,
   `FW_SYM_AddComponent_MewDirector_named`, `FW_SYM_MewDirector_start`. The slot name is arbitrary (the game uses it
   as the file name under `<userdata>\saves\`); `mewtest01.sav` was chosen because no slot list produces it.
+
+## GON at runtime (2026-10-21)
+
+RE session `gon` (Ghidra 12.1.4, build 25143593; the working notes are `.analysis/notes-gon.md`, the decompiles
+`.analysis/decompiled/GonObject_*.c`, `Gon_{Tokenize,ParseTokens,LoadText}_*.c`, `Character_init_0xf70f0.c`,
+`TacticsTest_init_lambda36_1hp_DoCall_0x895160.c`). Everything here is pinned by `bindings/25143593.json`
+(`Character_hp` … `GonObject_size`, each with a byte witness `harvest.ts` verifies) and read in-game by `mewtest.dll`
+(`mt_gon.c`, the `hp`/stats fields of the units event, `expect gon`; `docs/ingame-testing.md`). OBSERVED = read in a
+decompile / disassembly or seen in a harness run; INFERRED = a consistent reading not itself witnessed.
+
+**The node.** `GonObject` is 0xb0 bytes (`GON_NODE_SIZE`; the children vector's stride — `add rbx,0xb0` in
+`child_by_name` 0x942b50, `imul 0xb0` in `Index` 0x942ee0, `/0xb0` in `Size` 0x942f30):
+
+| offset | field | macro / witness |
+|---|---|---|
+| `+0x00..+0x38` | name index: an absl/Swiss-table style flat hash map `std::string -> int childIndex` (ctrl bytes `+0`, 0x28-byte slots `+8` with the index at slot `+0x20`, capacity mask `+0x18`); FNV-1a 64 over the key, folded by a 128-bit multiply; probed by `GonObject_NameIndex_Find` 0x124df0 | not read by the harness |
+| `+0x38` / `+0x40` / `+0x48` | `std::vector<GonObject>` children begin / end / capacity | `OFF_GON_CHILDREN`, `OFF_GON_CHILDREN_END` (`child_by_name`) |
+| `+0x50` | `int` value | `OFF_GON_INT` (`Int` 0x941540 returns it whatever the type) |
+| `+0x58` | `double` value | `OFF_GON_DOUBLE` (`Number` 0x941920) |
+| `+0x60` | `bool` value | `OFF_GON_BOOL` (`Bool` 0x942290) |
+| `+0x68` | `std::string` text — **every scalar keeps its raw token**, numbers and bools included | `OFF_GON_TEXT` (`StringRef` 0x941140 returns `node+0x68` for types 1, 2, 5) |
+| `+0x88` | `std::string` name (the key under the parent; size `+0x98`, capacity `+0xa0`) | `OFF_GON_NAME` (`child_by_name`'s scan compares it) |
+| `+0xa8` | `int` type: 0 null, 1 string, 2 number, 3 object, 4 array, 5 bool (6 is also tested by `StringOr` and treated as "no value"; INFERRED an internal marker) | `OFF_GON_TYPE` (`cmp [rbp+0xa8],3` in `child_by_name`; the 11-byte `Exists` 0x9429d0 is `type != 0`) |
+
+Two static null nodes, `0x1413c4d30` (`Get` misses; also `DefaultStatusSource`) and `0x1413c4de0` (`Get_const` /
+`Index` / `child_by_name` misses). Every typed getter on a null node logs `GON ERROR: Field "<name>" does not
+exist` through the error sink (`PTR_PTR_1412f7ad8`, vtable slot `+0x10`) and still returns the zero field — never
+fatal; `<name>` is the global `std::string` `DAT_1412f7ae0` that `Get` / `Get_const` overwrite with the **last key
+asked for**, so the message names the last lookup, not the node.
+
+**Read API** (all `__fastcall`, `this = GonObject*`, strings MSVC `std::string*`; OBSERVED): `Get_const` 0x942da0
+`(node, key)` — type 3 → hash lookup → `children[idx]`, else null; `Get` 0x942ca0 the same with the other null node
+(the non-const `operator[]`; `Character::init` uses it for `stats`); `Index` 0x942ee0 `(node, int)` — object/array
+`0 <= i < size` → child i else null, **a scalar returns itself**; `Size` 0x942f30 — null 0, scalar 1, container count;
+`Begin`/`End` 0x942f70/0x942f90; `Exists` 0x9429d0 `type != 0`; `Contains` 0x942880; `child_by_name` 0x942b50
+`(node, key, nth)` — nth 0 takes the hash path, nth > 0 scans the vector comparing `+0x88` and returns the nth
+duplicate (DeepMerge's path); `Int` 0x941540 / `Number` 0x941920 / `Bool` 0x942290 / `Percent` 0x941d00 (number, or a
+string ending in `%` → `strtod(prefix)*0.01`) / `String` 0x940d30 / `StringRef` 0x941140 log on a miss and return the
+field anyway; the no-logging defaults `IntOr` 0x9426b0 (`type == 2 ? +0x50 : def`, 15 bytes), `NumberOr` 0x9426c0,
+`PercentOr` 0x9426e0, `BoolOr` 0x942860 (`type == 5 ? +0x60 : def`), `StringOr` 0x942670 (types 1/2/5 → copy of
+`+0x68`). `IntOr` / `NumberOr` / `BoolOr` / `Exists` / `Index` / `Size` are leaf functions **without a `.pdata`
+entry**, which is why the manifest witnesses the layout in `child_by_name` and the logging getters instead.
+`Character::deval(const GonObject&, double def, int, int, int, int, bool)` 0x103320 (funcsig 0x140edd5c0) evaluates
+"a number, else a stat-scaled expression" for damage (INFERRED; not decoded).
+
+**Where a unit keeps its entry (OBSERVED, `Character::init(std::string, bool, bool)` 0xf70f0).** `db =
+*(SpawnDatabase**)0x1413c79d0` (through `FUN_140047dc0`, `mov rax,[rcx]; ret`); `entry = Get_const(db + 0x38, name)`;
+`!Exists(entry)` → two alternative resolutions (0x7be2d0 / 0x7be820) and finally the fatal `No Character Named <name>`
+(`Character.cpp` line 0x27c). INFERRED: `0x1413c79d0` is the SpawnDatabase singleton and `+0x38` the merged
+`data/characters` object (`SpawnDatabase_init` 0x7a74b0 fills it through `process_gon_variants` 0x94be60, so the
+entry is already `variant_of`-resolved and overlay-merged — OBSERVED in-game: a `.patch`ed `properties.health` reads
+12 there). Stores: **`Character+0x240 = const GonObject*` entry** (`mov [r14+0x240],r13` at 0xf79c9, `OFF_CH_GON_ENTRY`;
+six `mov rbx,[r14+0x240]` reads follow); sub-nodes init reads: `properties`, `abilities`, `passives`, `stats`
+(non-const `Get`), `graphics`. **`Character+0x248 = std::string`** (`OFF_CH_NAME_KEY`): the notes inferred the entry
+name; OBSERVED 2026-10-22 on spawned units it holds the **`graphics.name` loc key** (`ENEMY_POOTER_NAME`,
+`GOLDEN_RAT_NAME` after a `.merge`), so the units event calls it `namekey`. Where the entry name itself lives is
+still open. (`Status+0x68 = const GonObject*` is the status's data node, known.)
+
+**Stats and HP (OBSERVED unless marked).** Seven `int32` read as `IntOr(Get(stats, name), 5)` (default 5) in
+`data/characters` order at **`+0x5a0` strength, `+0x5a4` dexterity, `+0x5a8` constitution, `+0x5ac` intelligence,
+`+0x5b0` speed, `+0x5b4` charisma, `+0x5b8` luck** (`OFF_CH_STATS`, `int32[7]`; seven `mov edx,edi; mov rcx,rax; call
+IntOr; mov [r14+N],eax` from 0xf99ba, 0x3a apart). INFERRED: `+0x5bc..+0x5d4` are the per-stat bonus ints (the
+known LuckUp `+0x5d4 += stacks` is the 7th = luck). Base block from `entry.properties`, the stat share subtracted so
+the runtime formula re-adds it: `+0x5d8` base movement (`IntOr(base_movement, 4)`; with `movement`: `Int(movement) -
+(speed-5)/2`), `+0x5dc` base initiative (`Int(initiative) - 2*speed`), `+0x5e4` health regen, **`+0x5e8` base health
+= `Int(properties.health) - 4*constitution`** (`OFF_CH_BASE_HEALTH`; `mov ebx,[r14+0x5a8]; shl ebx,2; … sub eax,ebx;
+mov [r14+0x5e8],eax` at 0xfa91e; champions/bosses — `+0xce0` set — `round((base + 4*con) * +0xce8, +0xcf0) -
+4*con`), `+0x5ec` a copy taken at the end of init (INFERRED the unmodified base), `+0x5f0` base mana (`Int(mana) -
+3*charisma`), `+0x624` a luck-scaled base (`- 2*luck`; key not read). **`+0x4b0` current HP** (`OFF_CH_HP`): init
+stores `Int(properties.initial_health)` × the champion multiplier when present; the `1hp` console lambda (0x895160,
+`TacticsTest::init` lambda_36, registered through `DebugConsole_AddCommand` 0xa168e0) walks the live Character
+array and does `if (+0x4b0 > 1) +0x4b0 = 1; +0x4b4 = 0` — the one direct HP witness (`999` is "deal 999 damage to
+every non-ally" through `Character_TakeDamage` 0x110120, not an HP write). OBSERVED in-game: ten frames after
+`spawn`, `+0x4b0` equals `properties.health` (Pooter 6; 12 with `health.multiply 2`; Rat 5). `+0x4b4` shield =
+`IntOr(properties.shield, 0)` × multiplier (`OFF_CH_SHIELD`), `+0x4b8` divine shield likewise
+(`OFF_CH_DIVINE_SHIELD`). **Max HP**: no stored field was found; the champion scaling treats `+0x5e8 + 4*con` as the
+base formula (INFERRED for the runtime value, the getter with stat bonuses and status modifiers is unknown).
+`Character_BeginTurn` / `GetTurnControl` touch none of these (`+0xeb4/+0xebc` there are re-entrancy counters).
+
+**Parser scalar typing (OBSERVED: `Gon_LoadText` 0x940840, `Gon_Tokenize` 0x93f090, `Gon_ParseTokens` 0x93fcf0).**
+`LoadText` wraps the text in `{ … }`, tokenizes, parses the root as an object and logs `GON ERROR: More symbols
+exists after file completed parsing` if tokens remain. The tokenizer splits on whitespace where **`,` `:` `=` count
+as whitespace**; `{ } [ ]` are single-char tokens; `#` starts a comment to end of line; `"` opens a quoted token
+(`\` escapes the next char, the closing `"` flushes it) and **the quotes are dropped with no "was quoted" flag**;
+unclosed quote / comment → the two `GON ERROR: didn't close …` messages. `//` comments (the pack's `.gon` files use
+them) are not handled by the tokenizer — INFERRED stripped by an earlier pass (the overlay text goes through
+`0xa50bd0(&gon, &text, …, 0x100, 1)` first). The parser: `{` → type 3 (`name value` pairs), `[` → type 4 (values),
+anything else is a scalar that starts as type 1 with the token in `+0x68`, then `strtol(tok, &end, 0)` consuming the
+whole token → type 2 with `+0x50`, `strtod` consuming it → type 2 with `+0x58` (both are always stored: `1.5` → int
+1, double 1.5), then exact `null` → 0, `true` / `false` → 5. Consequences: bare `5` and `"5"` are identical number
+nodes; `yes` / `True` / `1` are not bools (`Bool()` on them logs `is not a bool`); `1e3`, `0x10`, `-3` are numbers;
+`5%` is a string `Percent()` reads as 0.05; `""` is an empty token → number 0 (INFERRED). The overlay engine's
+`.add` / `.multiply` (PatchMerge) rewrite the int, the double **and** the token text (OBSERVED in-game:
+`health.multiply 2` → int 12, double 12, text `"12"`). The editor-side parser's typing is another PR's concern;
+these are the facts it must mirror.
 
 ## Save safety
 

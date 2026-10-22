@@ -17,9 +17,12 @@ import { parsePolicy } from "../src/core/overlay/policy.ts";
 import { validateMod } from "../src/core/validate/validator.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { previewMerge } from "../src/core/preview-merge.ts";
+import { componentCacheStatus } from "../src/core/components.ts";
 import { EXTRACTED_DATA, REPO_ROOT, MODS_DIR } from "../src/core/repo.ts";
 import { makeTestFilter } from "./filter.ts";
 import { runGonRoundTripTests } from "./gon-roundtrip-tests.ts";
+import { runGonTests } from "./gon-tests.ts";
+import { runOverlayTests } from "./overlay-tests.ts";
 
 /** The harness contract every suite is written against (`runXTests(test, assert, eq)`). */
 export type TestFn = (name: string, fn: () => void) => void;
@@ -130,6 +133,9 @@ console.log("\n# Runner (name filter)");
   }
 }
 
+// ---- 1b. GON typing fidelity (T0; the game's tokenizer + parser rules) -------
+runGonTests(test, assert, eq);
+
 // ---- 2. Overlay engine fixtures --------------------------------------------
 console.log("\n# Overlay engine (Append / DeepMerge / PatchMerge)");
 test("append concatenates object children (duplicates allowed)", () => {
@@ -208,6 +214,9 @@ test("parsePolicy matches suffixes in the decompiled order", () => {
   eq(parsePolicy("wallet_size").policy, "default");
 });
 
+// Fixture pairs pinned against the decompiled merge functions (docs/data-mods.md "Fidelity to the decompiled merges").
+runOverlayTests(test, assert, eq);
+
 // ---- 3. Real mods against real base ----------------------------------------
 console.log("\n# Real overlays applied to extracted base data");
 {
@@ -273,10 +282,25 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
     assert(r.ok, "a warning keeps the mod valid for the data layer");
     eq(new Set(w.map((f) => f.message)).size, w.length, "one warning per name per file");
   });
-  test("_jokersluck-test (test-only overlay) validates: JokersLuck resolves as a registered name under StatusOnBattleStart", () => {
+  const cache = componentCacheStatus();
+  if (cache.ok) test("_jokersluck-test (test-only overlay) validates: JokersLuck resolves as a registered name under StatusOnBattleStart", () => {
     const r = validateMod("_jokersluck-test", undefined, { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } });
     assert(r.ok, `expected ok, got ${JSON.stringify(r.findings.filter((f) => f.severity === "error"))}`);
     assert(!r.findings.some((f) => f.code === "unknown-status" || f.code === "unknown-component"), r.findings.map((f) => f.code).join(","));
+  });
+  else console.log(`  (skipped: ${cache.hint}; StatusOnBattleStart cannot be checked as a component)`);
+  // The check above needs the git-ignored component-names cache. A fresh worktree has none: the test must then
+  // say so with a '(skipped: …)' line, not FAIL (nested run with MEWGENICS_EDITOR_DATA pointing at an empty dir).
+  test("component cache absent: the JokersLuck validation check logs '(skipped: … component-names.json …)' and the run stays green", () => {
+    const empty = mkdtempSync(join(tmpdir(), "mewged-nocache-"));
+    const r = spawnSync(process.argv[0]!, [join(HERE, "run-tests.ts"), "--only", "_jokersluck-test"], {
+      env: { ...process.env, MEWGENICS_EDITOR_DATA: empty, MEWGENICS_EXTRACTED_DATA: EXTRACTED_DATA },
+      encoding: "utf8", timeout: 600000, maxBuffer: 64 << 20,
+    });
+    const out = (r.stdout || "") + (r.stderr || "");
+    const fails = out.split("\n").filter((l) => l.startsWith("FAIL")).slice(0, 6);
+    assert(/\(skipped: [^\n]*component-names\.json[^\n]*build:index/.test(out), `inner run: expected a '(skipped: … component-names.json … build:index …)' line, got: ${fails.join(" | ") || out.slice(-400)}`);
+    assert(r.status === 0 && /, 0 failed/.test(out), `inner run exit ${r.status}: ${fails.join(" | ") || out.slice(-300)}`);
   });
   test("native-build-unknown: nothing when the build is known, when no exe is installed, or when the mod uses no native names", () => {
     const codes = (r: { findings: { code: string }[] }) => r.findings.map((f) => f.code);
@@ -346,7 +370,7 @@ if (BASE_READY) {
     eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "GoldenRat:added");
     eq(p.effectiveEntryCount, p.baseEntryCount + 1);
   });
-  test("_golden-merge .patch preview: Pooter changed — faction.overwrite allies and stats.speed.add 10 -> 15", () => {
+  test("_golden-merge .patch preview: Pooter changed — faction.overwrite allies, stats.speed.add 10 -> 15 and properties.health.multiply 2 -> 12", () => {
     const p = previewMerge("_golden-merge", "data/characters/enemies.gon.patch");
     assert(p.ok, `preview: ${JSON.stringify(p)}`);
     if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
@@ -355,6 +379,7 @@ if (BASE_READY) {
     const eff = p.touched[0]!.effective || "";
     assert(/faction\s+allies/.test(eff), `faction overwritten: ${eff.slice(0, 500)}`);
     assert(/speed\s+15\b/.test(eff), `speed 5 + 10 = 15: ${eff.slice(0, 500)}`);
+    assert(/health\s+12\b/.test(eff), `health 6 * 2 = 12 (the in-game twin is mods/_golden-merge/tests/numeric.mewtest): ${eff.slice(0, 500)}`);
     eq(p.effectiveEntryCount, p.baseEntryCount);
   });
   test("_golden-merge CSV .append preview: two 12-column loc rows added (GOLDEN_RAT_NAME, APPENDED_RAT_NAME)", () => {
@@ -562,6 +587,13 @@ await mcpSmoke();
   let dt: typeof import("./deps-tests.ts") | null = null;
   try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (dt) await dt.runDepsTests(test, assert, eq);
+  // repo.ts path constants + the merge preview against an injected base root (a fresh git worktree's needs)
+  let rt: typeof import("./repo-tests.ts") | null = null;
+  try { rt = await import("./repo-tests.ts"); } catch (e) { test("repo-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (rt) rt.runRepoTests(test, assert, eq);
+  let pm: typeof import("./preview-merge-tests.ts") | null = null;
+  try { pm = await import("./preview-merge-tests.ts"); } catch (e) { test("preview-merge-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (pm) pm.runPreviewMergeTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----
