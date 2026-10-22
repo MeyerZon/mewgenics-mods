@@ -509,7 +509,50 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     "CatTail" }])` and places the id; the SWF loads (gate `import`), but spawning a character whose clip places an
     imported symbol crashes the game — glaiel::swf never links import entries (`Swf_GetCharacter` 0xa4a190 finds no
     character for the id; engine-map "Imports are not linked"). Imports are therefore a validation error. Real cat
-    parts in a mod rig need copying geometry (H2) or native work. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
+    parts in a mod rig need copying geometry (H2) or native work.
+    **Cat animations (append) 2026-10-21:** the editor authors new cat animations in the exact shape vanilla uses.
+    OBSERVED 2026-10-21 (read-only parse of `.extracted/swfs/catanis.swf` / `catanis2.swf`, pinned in
+    `test/fixtures/art/cat-anim-append.json` and re-checked against the installed game by `art-catrig-tests.ts`): the
+    vanilla cat clip is `CatTest` (catanis.swf id 1614, 854 frames, 776 labels); labels come in facing pairs `<anim>F` /
+    `<anim>B` (`idleF/idleB`, `FighterIdleF/B`, `dashF/B`, …); every labeled frame places at most one character, always
+    at depth 1 — a nested pose sprite (named `pawing` on 422 frames, unnamed on the class idles, 4 frames empty — but
+    the engine reads none of those names: `Character::PlayAnimation` 0x9abda0 → 0x9ac790 looks up name + facing on the
+    ROOT clip's label map, GotoLabel on the root, then restarts the child instance named **`ani`** (GetClip2 0x9aabb0),
+    so the editor names the placed layer `ani`; `.analysis/notes-catA.md`, engine-map "CatTest and the cat animation
+    clips"); `idleF`'s pose sprite (180 frames) carries `tail@1 leg2@3 arm2@5 body@7 leg1@9 arm1@11 head@13` =
+    `CAT_SLOTS`, while `idleB`'s uses `head_back@1 arm2@3 leg2@5 body@7 arm1@9 leg1@11 tail@13` (a back-facing layout
+    with a `head_back` slot — the editor does not author it yet; both facings place the same front rig for now).
+    `catanis2.swf` extends the clip with an export `_Append_CatTest` (id 590, 296 frames, 239 labels such as
+    `crawlingIdleF`, `robotWalkF`) of the same shape. GON refers to an animation bare and the engine adds the facing:
+    `alt_animations [[idle <name>]]` on a character (cat_enemies.gon `CatCaller`), `animation <name>` on an ability;
+    `alt_animations [[from to]]` registers `fromF→toF` and `fromB→toB` (0x103da0), with `LF/RF/LB/RB` for
+    `four_way_animations`, and a **missing label is a silent no-op** (returns 0, no log) — the validator's facing check
+    is the only guard. Clips resolve by name through a **global registry of every loaded SWF, last-loaded first**
+    (0x9bb6f0): a mod export literally named `CatTest` would replace the cat clip for every cat, so the validator
+    refuses it (`cat-clip-override`; no opt-in exists yet).
+    **The slots stay empty — the game draws the cat's own parts** (OBSERVED, Ghidra session catB,
+    `.analysis/notes-catB.md`): `CatParts::prerender` 0x742350 walks the root clip by instance name on every prerender
+    and, on a slot sprite's first prerender, takes the create path (removes the placeholder, inserts its
+    ReferenceRenderer that draws the cat's real part — palette, texture, face included) only when the slot sprite is
+    hidden or has no children; a visible, non-empty slot is taken for an already-converted one and `children[0]` (a
+    depth hole) is dereferenced — the A0 crash (`+0x741f5d`, PR #74). Vanilla hides its placeholders with a frame-1
+    ActionScript `setInvisible()` the emitter cannot express, so a mod's slot sprites are **empty 1-frame sprites**;
+    placeholder art is preview-only (and on a non-cat character it is simply drawn). OBSERVED in PR #74 once its
+    empty-slot run lands.
+    Built: `cat-rig.ts` `addCatRig(scene, name, { parts: "game" })` → a `rig: "cat"` sprite with `parts: "game"` whose
+    seven slots reference empty sprites `<name>_<slot>` (validator `rig-slot-not-empty`, error, when such a slot holds
+    art; `sprite-parts` for a bad value). `newCatAnimation(scene, name, { rig?, frames? })` → a `parts: "game"` rig
+    `<name>Pose` (or the given rig, refused unless its slots are empty), the donor sprite `CatAnim_<name>` (or the
+    scene's existing `_Append_CatTest` donor, extended on its next two frames) with `<name>F` / `<name>B` each placing
+    the rig as the layer `ani` at depth 1, and `exports._Append_CatTest`; refusals for bad names, taken labels, a
+    non-rig or non-empty `opts.rig`, an export that is not a donor.
+    Validator (`catAnimFindings`, on the `_Append_CatTest` donor): `cat-anim-missing-facing` (error), `cat-anim-layer-not-rig`
+    (error), `cat-anim-layer-name` (error: the placed layer is not `ani`), `cat-anim-slot-not-empty` (error: a slot of
+    the placed rig holds art), `cat-anim-depth` (warning), `cat-anim-donor` (error), `cat-anim-untested` (info: what
+    the game draws, pointing at engine-map "CatTest and the cat animation clips"); plus `cat-clip-override` on any
+    scene. `api.newCatAnimation`, `new_art_scene { template: "cat-animation", animation }`, the Rig tab's "New cat
+    animation" control (name input, facing pills, findings, "Animate pose"; a `parts: game` rig's slot selects are
+    disabled), an e2e check. Was: Gradient fills (gradient atlas), `DefineShape4` LineStyle2, fonts/text, `PlaceObject3`
     blend/filters, `ImportAssets2`, `DefineScalingGrid`.
 11. **Done 2026-10-20:** MCP tools `list_art_scenes`, `read_art_scene`, `write_art_scene` (dryRun validates), `new_art_scene`,
     `import_svg` (with `into { scene, shapeId }` it saves the shape), `build_swf`, `inspect_swf`. Was: MCP tool surface for art (`build_swf`, `import_svg`), kept out to leave the 9-tool

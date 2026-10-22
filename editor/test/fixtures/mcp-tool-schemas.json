@@ -437,6 +437,17 @@
         "starter": {
           "type": "boolean",
           "description": "start from the example scene (default true)"
+        },
+        "template": {
+          "type": "string",
+          "enum": [
+            "cat-animation"
+          ],
+          "description": "\"cat-animation\": a cat rig <animation>Pose plus an _Append_CatTest donor sprite with the labeled frames <animation>F / <animation>B, each placing the rig as the child `ani` at depth 1 (the vanilla CatTest shape; the engine restarts `ani` on every play)"
+        },
+        "animation": {
+          "type": "string",
+          "description": "the animation name for template cat-animation (default: the scene name, which must then be an identifier); GON refers to it bare: alt_animations [[idle <animation>]] or an ability's animation <animation>"
         }
       },
       "required": [
