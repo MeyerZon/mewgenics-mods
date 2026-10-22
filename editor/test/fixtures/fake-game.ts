@@ -32,6 +32,8 @@ const fwSession =
         "hook installed: TurnControl::NextTurn rva 0x8e3c60, chain depth 1",
         mode === "signature-failed" ? "signature DebugConsole_Execute: 0 matches (need exactly 1); framework disabled" : "framework active: 15 symbols resolved, mewjector api v3",
       ];
+// FAKE_GAME_FW_LINES: extra mewframework.log lines for this session, "|"-separated (for runner-side `expect fwlog` tests)
+for (const extra of String(process.env.FAKE_GAME_FW_LINES || "").split("|").filter(Boolean)) fwSession.push(extra);
 appendFileSync(join(cwd, "mod_logs", "mewframework.log"), fwSession.join("\n") + "\n");
 writeFileSync(
   join(cwd, "mod_logs", "chainloader.log"),

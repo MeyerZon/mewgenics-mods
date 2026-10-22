@@ -562,6 +562,11 @@ await mcpSmoke();
   await runArtTimelineEditTests(test, assert, eq);
   const { runArtCatRigTests } = await import("./art-catrig-tests.ts");
   await runArtCatRigTests(test, assert, eq);
+  {
+    let cs: typeof import("./catrig-sample-tests.ts") | null = null;
+    try { cs = await import("./catrig-sample-tests.ts"); } catch (e) { test("catrig-sample-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+    if (cs) await cs.runCatRigSampleTests(test, assert, eq);
+  }
   const { runArtSvgExportTests } = await import("./art-svg-export-tests.ts");
   await runArtSvgExportTests(test, assert, eq);
   const { runArtSvgReoriginTests } = await import("./art-svg-reorigin-tests.ts");

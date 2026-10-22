@@ -246,6 +246,18 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(!p.ok && p.errors[0].line === 1, JSON.stringify(p.errors));
     });
 
+    test("expect fwlog parses a quoted substring (runner side, the mewframework.log window); within / bare / unterminated are line errors", () => {
+      const d = parseDirective('expect fwlog "catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)"', 4) as { kind: string; what: string; substr: string };
+      eq(d.kind, "expect"); eq(d.what, "fwlog"); eq(d.substr, "catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)");
+      for (const bad of ['expect fwlog "x" within 5', "expect fwlog bare", 'expect fwlog "unterminated', "expect fwlog"]) {
+        assert("error" in parseDirective(bad, 9), `${bad} should be an error`);
+      }
+      const p = parseScript('cmd listcmds\nexpect fwlog "catrig: "\nquit\n', { owningMod: "m" });
+      assert(p.ok, JSON.stringify(p.errors));
+      eq(p.body.split("\n")[1], '# runner: expect fwlog "catrig: "', "kept out of the DLL body like expect log");
+      assert(script.isRunnerSide(p.directives[1]!) && !script.isRunnerSide(p.directives[0]!), "isRunnerSide marks expect fwlog");
+    });
+
     test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const lines = p.body.split("\n");
@@ -594,6 +606,17 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const absent = check!(null, [{ line: 2, substr: "x" }]);
       assert(!absent[0]!.ok && /debug\.log absent/.test(absent[0]!.detail), JSON.stringify(absent));
       eq(check!(text, []).length, 0);
+    });
+    test("checkFwLogExpects: plain lines of the mewframework.log window, the missing substring and line, an absent log; tagged source fwlog", () => {
+      const check = (logs as unknown as { checkFwLogExpects?: (text: string | null, e: { line: number; substr: string }[]) => { line: number; substr: string; ok: boolean; detail: string; source?: string }[] }).checkFwLogExpects;
+      assert(typeof check === "function", "checkFwLogExpects exported from logs.ts");
+      const text = "mewframework 0.5.0 starting; mewjector=yes\ncatrig: registered RigSampleCatClip for RigSampleCat (from a DLL)\ncatrig: RigSampleCat: CatTest -> RigSampleCatClip (instance 0000)\n";
+      const r = check!(text, [{ line: 3, substr: "registered RigSampleCatClip for RigSampleCat (from a DLL)" }, { line: 4, substr: "CatTest -> RigSampleCatClip" }, { line: 5, substr: "(from data" }]);
+      assert(r[0]!.ok && r[0]!.detail === "matched mewframework.log window line 2" && r[0]!.source === "fwlog", JSON.stringify(r[0]));
+      assert(r[1]!.ok && /line 3/.test(r[1]!.detail), JSON.stringify(r[1]));
+      assert(!r[2]!.ok && r[2]!.line === 5 && /not found in this launch's mewframework.log window/.test(r[2]!.detail), JSON.stringify(r[2]));
+      const absent = check!(null, [{ line: 2, substr: "x" }]);
+      assert(!absent[0]!.ok && /mewframework.log absent/.test(absent[0]!.detail), JSON.stringify(absent));
     });
     test("checkSaveSuffix: ok / missing / different", () => {
       assert(checkSaveSuffix("dev", "dev").ok, "same");
@@ -1006,6 +1029,9 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(enterUnavail.verdict, "harness-error", "enter_unavailable -> harness-error");
       assert(/enter_unavailable|symbols missing/.test(enterUnavail.reason), enterUnavail.reason);
       // runner-side expect log: a miss is a fail naming line and substring; log-errors still wins; all ok -> pass
+      const missFw = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 7, substr: "CatTest -> X", ok: false, detail: "not found", source: "fwlog" } as NonNullable<VerdictInput["logExpects"]>[number]] });
+      eq(missFw.verdict, "fail", "expect fwlog miss -> fail");
+      assert(/expect fwlog failed at line 7/.test(missFw.reason) && /CatTest -> X/.test(missFw.reason), missFw.reason);
       const missLog = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 5, substr: "Luck changed", ok: false, detail: "not found in debug.log" }] });
       eq(missLog.verdict, "fail", "expect log miss -> fail");
       assert(/expect log failed at line 5/.test(missLog.reason) && /Luck changed/.test(missLog.reason), missLog.reason);
@@ -1176,6 +1202,21 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     test("fake pass without the line -> fail naming the expect log line and substring", () => {
       eq(logMiss.verdict, "fail", logMiss.reason);
       assert(/expect log failed at line 5/.test(logMiss.reason) && /ZZ custom marker/.test(logMiss.reason), logMiss.reason);
+    });
+
+    const fwPlan = script.parseScript("mods: jokers-luck\ntimeout: 1s\ncmd listcmds\nexpect fwlog \"catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)\"\nexpect log \"Save File Suffix\"\nquit\n",{ owningMod: "jokers-luck", name: "smoke" });
+    const fwHit = await run("pass", { FAKE_GAME_FW_LINES: "catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)" }, { plan: fwPlan });
+    test("fake pass with FAKE_GAME_FW_LINES -> expect fwlog matched in this launch's framework log window -> pass (both runner-side kinds counted)", () => {
+      eq(fwHit.verdict, "pass", fwHit.reason);
+      const le = (fwHit as unknown as { logExpects?: { ok: boolean; line: number; source?: string }[] }).logExpects || [];
+      assert(le.length === 2 && le.every((e) => e.ok), `logExpects: ${JSON.stringify(le)}`);
+      assert(le.some((e) => e.source === "fwlog" && e.line === 4), JSON.stringify(le));
+      assert(/2 log expectation/.test(fwHit.reason), fwHit.reason);
+    });
+    const fwMiss = await run("pass", {}, { plan: fwPlan });
+    test("fake pass without the framework line -> fail naming the expect fwlog line", () => {
+      eq(fwMiss.verdict, "fail", fwMiss.reason);
+      assert(/expect fwlog failed at line 4/.test(fwMiss.reason), fwMiss.reason);
     });
 
     const pass = await run("pass");
