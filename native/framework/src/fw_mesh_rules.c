@@ -123,6 +123,12 @@ static const char *const kIgnored[] = { "o", "g", "s", "mg", "mtllib", "usemtl",
 static const char *const kUnsupported[] = { "l", "p", "curv", "curv2", "surf", "vp", "cstype", "deg", "bmat", "step",
                                             "parm", "trim", "hole", "scrv", "sp", "end", "con", NULL };
 
+void fw_mesh_default_material(FwMesh *m) {
+    if (!m) return;
+    for (int k = 0; k < 4; k++) m->base_color[k] = 1.0f;
+    m->texture[0] = 0;
+}
+
 /* ------------------------------------------------------------------ OBJ parser */
 typedef struct ObjState {
     float *pos; uint32_t npos, cpos;      /* 3 floats each */
@@ -328,6 +334,7 @@ int fw_mesh_obj_parse(const char *text, size_t len, FwMesh *out, FwMeshError *er
     out->verts = s.verts; out->nverts = s.nverts;
     out->indices = s.idx; out->nindices = s.nidx;
     out->has_uvs = s.anyUv;
+    fw_mesh_default_material(out);
     out->has_normals = s.allNormals;
     s.verts = NULL; s.idx = NULL;
     obj_state_free(&s);
@@ -431,6 +438,7 @@ int fw_mesh_unit_cube(FwMesh *out) {
     }
     out->nverts = 24; out->nindices = 36;
     out->has_normals = 1; out->has_uvs = 1;
+    fw_mesh_default_material(out);
     fw_mesh_bounds(out);
     return 1;
 }
@@ -473,25 +481,31 @@ void fw_mesh_reg_clear(FwMeshRegistry *reg) {
 
 /* ------------------------------------------------------------------ model paths */
 #define MODEL_PREFIX "models/"
-#define MODEL_EXT ".obj"
 
-/* length of <name> when ref is exactly models/<name>.obj with a valid name, else 0 */
-static size_t model_name_len(const char *ref) {
+/* the kind of models/<name>.<obj|gltf|glb> with a valid name (and *nameLen), else 0 */
+static int model_check(const char *ref, size_t *nameLen) {
     if (!ref) return 0;
-    size_t pl = sizeof MODEL_PREFIX - 1, el = sizeof MODEL_EXT - 1, n = strlen(ref);
-    if (n <= pl + el || strncmp(ref, MODEL_PREFIX, pl) != 0 || strcmp(ref + n - el, MODEL_EXT) != 0) return 0;
-    size_t nl = n - pl - el;
-    if (nl > FW_MESH_NAME_MAX) return 0;
-    for (size_t i = 0; i < nl; i++) {
-        char c = ref[pl + i];
+    size_t pl = sizeof MODEL_PREFIX - 1;
+    if (strncmp(ref, MODEL_PREFIX, pl) != 0) return 0;
+    size_t nl = 0;
+    for (const char *q = ref + pl; *q && *q != '.'; q++) {
+        char c = *q;
         if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || is_digit(c) || c == '_' || c == '-')) return 0;
+        nl++;
     }
-    return nl;
+    if (nl == 0 || nl > FW_MESH_NAME_MAX) return 0;
+    const char *ext = ref + pl + nl;
+    int kind = strcmp(ext, ".obj") == 0 ? FW_MESH_KIND_OBJ : strcmp(ext, ".gltf") == 0 ? FW_MESH_KIND_GLTF
+             : strcmp(ext, ".glb") == 0 ? FW_MESH_KIND_GLB : 0;
+    if (kind && nameLen) *nameLen = nl;
+    return kind;
 }
+
+int fw_mesh_model_kind(const char *path) { return model_check(path, NULL); }
 
 int fw_mesh_model_path(const char *ref, char *out, size_t cap) {
     if (out && cap) out[0] = 0;
-    if (!out || !model_name_len(ref)) return 0;
+    if (!out || !model_check(ref, NULL)) return 0;
     size_t n = strlen(ref);
     if (n + 1 > cap) return 0;
     memcpy(out, ref, n + 1);
@@ -500,11 +514,9 @@ int fw_mesh_model_path(const char *ref, char *out, size_t cap) {
 
 int fw_mesh_name_from_path(const char *path, char *out, size_t cap) {
     if (out && cap) out[0] = 0;
-    size_t nl = model_name_len(path);
-    if (!out || !nl || nl + 1 > cap) return 0;
+    size_t nl = 0;
+    if (!out || !model_check(path, &nl) || nl + 1 > cap) return 0;
     memcpy(out, path + sizeof MODEL_PREFIX - 1, nl);
     out[nl] = 0;
     return 1;
 }
-
-int fw_mesh_model_kind(const char *path) { (void)path; return 0; }   /* RED stub */
