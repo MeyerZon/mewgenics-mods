@@ -43,6 +43,8 @@ export interface LogExpect {
   substr: string;
   ok: boolean;
   detail: string;
+  /** which log: debug.log (`expect log`, the default) or this launch's mewframework.log window (`expect fwlog`) */
+  source?: "debug" | "fwlog";
 }
 
 /**
@@ -55,6 +57,21 @@ export function checkLogExpects(text: string | null, expects: { line: number; su
     if (msgs === null) return { line, substr, ok: false, detail: "debug.log absent" };
     const i = msgs.findIndex((m) => m.includes(substr));
     return i >= 0 ? { line, substr, ok: true, detail: `matched debug.log line ${i + 1}` } : { line, substr, ok: false, detail: "not found in debug.log" };
+  });
+}
+
+/**
+ * Runner-side `expect fwlog "<substr>"`: each substring must occur in some line of this launch's mewframework.log
+ * window (plain lines, no prefix). Pure; `text` null means the log was not found.
+ */
+export function checkFwLogExpects(text: string | null, expects: { line: number; substr: string }[]): LogExpect[] {
+  const lines = text === null ? null : text.split(/\r?\n/);
+  return expects.map(({ line, substr }) => {
+    if (lines === null) return { line, substr, ok: false, detail: "mewframework.log absent", source: "fwlog" as const };
+    const i = lines.findIndex((m) => m.includes(substr));
+    return i >= 0
+      ? { line, substr, ok: true, detail: `matched mewframework.log window line ${i + 1}`, source: "fwlog" as const }
+      : { line, substr, ok: false, detail: "not found in this launch's mewframework.log window", source: "fwlog" as const };
   });
 }
 

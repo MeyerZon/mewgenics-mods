@@ -69,7 +69,11 @@ these without a decision (status per bullet below; the PR map follows).
       art in catparts.swf. **S1 built 2026-10-22 (framework API v5, `feat/native-catrig-redirect`):** a SWF export
       `_CatRig_<Entry>` (or `FW_RegisterCatRig`) gives one `movieclip _CAT` entry its own whole cat clip; T2
       `render-rig.mewtest` redirected (engine-map "Cat rig redirect", data-mods "A whole cat rig for one character").
-      Next: an editor "swap rig for <entry>" control / MCP template (plan A3) and the sample pairing (plan A2.4). Not authored yet: the back facing's `head_back` layout, the four-way `LF/RF/LB/RB` quartet,
+      **Sample pairing (plan A2.4) done 2026-10-22** (`native/mods/catrig-sample` + `mods/catrig-sample`, `npm run
+      test:catrigsample`, data-mods "Pairing a cat rig with a DLL"): `FW_RegisterCatRig` from a mod DLL redirected an
+      export with no `_CatRig_` prefix; `<Entry>_Champion` / `_Elite` names get the entry's rig; a rig's `hitF/B` plays on
+      a non-lethal hit and every label it lacks is a silent no-op — a killed rig cat with no death label stays STANDING.
+      Next: an editor "swap rig for <entry>" control / MCP template (plan A3). Not authored yet: the back facing's `head_back` layout, the four-way `LF/RF/LB/RB` quartet,
       a ghost cat in the preview for empty slots.
 - [x] **Localized text?** **Owner, 2026-10-21: deferred; Peralta is fine as the default font.** Since then session
       `loc` found it **looks data-only** (the text-box ctor 0x98d910 localizes an initial text that is a loc key; every

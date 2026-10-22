@@ -1,0 +1,738 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "mod": "catrig-sample",
+  "entry": "RigSampleCat",
+  "clip": "RigSampleCatClip",
+  "dll": {
+    "verdict": "pass",
+    "reason": "all 2 expectation(s) passed, 2 log expectation(s); 5 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-130356-catrig-sample-rig-dll",
+    "log": {
+      "registered": [
+        {
+          "clip": "RigSampleCatClip",
+          "character": "RigSampleCat",
+          "source": "dll"
+        }
+      ],
+      "redirected": [
+        {
+          "character": "RigSampleCat",
+          "clip": "RigSampleCatClip"
+        }
+      ],
+      "missing": [],
+      "refused": []
+    },
+    "sample": [
+      "bound RigSampleCat -> RigSampleCatClip (FW_CatRigFor agrees)",
+      "1 of 1 cat rig(s) bound"
+    ],
+    "vanilla": {
+      "marker": false,
+      "outline": 10517,
+      "region": {
+        "n": 9709,
+        "x0": 1865,
+        "y0": 492,
+        "x1": 2070,
+        "y1": 684,
+        "cx": 1967.5,
+        "cy": 588
+      }
+    },
+    "rig": [
+      {
+        "label": "rig 1",
+        "marker": true,
+        "scale": 0.96875,
+        "mirrored": true,
+        "outline": 10448
+      },
+      {
+        "label": "rig 2",
+        "marker": true,
+        "scale": 0.96875,
+        "mirrored": true,
+        "outline": 10462
+      },
+      {
+        "label": "rig 3",
+        "marker": true,
+        "scale": 0.96875,
+        "mirrored": true,
+        "outline": 10423
+      }
+    ],
+    "idleScale": 0.96875,
+    "outcome": "redirected",
+    "markers": 3,
+    "partsDrawn": 3
+  },
+  "champion": {
+    "entry": "RigSampleCat_Champion",
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed, 2 log expectation(s); 4 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-130428-catrig-sample-rig-champion",
+    "spawned": true,
+    "log": {
+      "registered": [
+        {
+          "clip": "RigSampleCatClip",
+          "character": "RigSampleCat",
+          "source": "dll"
+        }
+      ],
+      "redirected": [
+        {
+          "character": "RigSampleCat",
+          "clip": "RigSampleCatClip"
+        }
+      ],
+      "missing": [],
+      "refused": []
+    },
+    "shots": [
+      {
+        "label": "variant 1",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false
+      },
+      {
+        "label": "variant 2",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false
+      },
+      {
+        "label": "variant 3",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false
+      }
+    ],
+    "markers": 3,
+    "outcome": "redirected"
+  },
+  "elite": {
+    "entry": "RigSampleCat_Elite",
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed, 2 log expectation(s); 4 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-130452-catrig-sample-rig-elite",
+    "spawned": true,
+    "log": {
+      "registered": [
+        {
+          "clip": "RigSampleCatClip",
+          "character": "RigSampleCat",
+          "source": "dll"
+        }
+      ],
+      "redirected": [
+        {
+          "character": "RigSampleCat",
+          "clip": "RigSampleCatClip"
+        }
+      ],
+      "missing": [],
+      "refused": []
+    },
+    "shots": [
+      {
+        "label": "variant 1",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false
+      },
+      {
+        "label": "variant 2",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false
+      },
+      {
+        "label": "variant 3",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false
+      }
+    ],
+    "markers": 3,
+    "outcome": "redirected"
+  },
+  "labels": {
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed, 1 log expectation(s); 40 shot(s), 15 not captured (nowindow)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-130515-catrig-sample-rig-labels",
+    "idleScale": 0.96875,
+    "shots": [
+      {
+        "label": "l01",
+        "marker": true,
+        "scale": 0.96875,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l02",
+        "marker": true,
+        "scale": 1.9166666666666667,
+        "clipped": true,
+        "kind": "hit"
+      },
+      {
+        "label": "l03",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l04",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l05",
+        "marker": true,
+        "scale": 0.96875,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l06",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l07",
+        "marker": true,
+        "scale": 1.9166666666666667,
+        "clipped": true,
+        "kind": "hit"
+      },
+      {
+        "label": "l08",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l09",
+        "marker": true,
+        "scale": 0.96875,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l10",
+        "marker": true,
+        "scale": 0.96875,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l11",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l12",
+        "marker": true,
+        "scale": 0.96875,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l13",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l14",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l15",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l16",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l17",
+        "marker": true,
+        "scale": 0.96875,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l18",
+        "marker": true,
+        "scale": 0.96875,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l19",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l20",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l21",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l22",
+        "marker": true,
+        "scale": 0.96875,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l23",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l24",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      },
+      {
+        "label": "l25",
+        "marker": true,
+        "scale": 0.9583333333333334,
+        "clipped": false,
+        "kind": "idle"
+      }
+    ],
+    "hp": [
+      15,
+      10,
+      5,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "rounds": {
+      "first": 1,
+      "last": 5
+    },
+    "series": [
+      {
+        "frame": 765,
+        "round": 1,
+        "inWalk": true,
+        "hp": 15
+      },
+      {
+        "frame": 1299,
+        "round": 1,
+        "inWalk": true,
+        "hp": 10
+      },
+      {
+        "frame": 1825,
+        "round": 1,
+        "inWalk": true,
+        "hp": 5
+      },
+      {
+        "frame": 2355,
+        "round": 2,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 2891,
+        "round": 2,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 3428,
+        "round": 3,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 3964,
+        "round": 3,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 4498,
+        "round": 4,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 5035,
+        "round": 5,
+        "inWalk": true,
+        "hp": 0
+      }
+    ],
+    "end": {
+      "ev": "end",
+      "code": 0,
+      "reason": "quit",
+      "frames": 5036,
+      "turns": 21,
+      "elapsed_ms": 40297,
+      "expect_pass": 1,
+      "expect_fail": 0,
+      "t": 40297,
+      "frame": 5036
+    },
+    "outcome": "hit-drawn",
+    "counts": {
+      "idle": 23,
+      "hit": 2,
+      "other": 0,
+      "none": 0
+    },
+    "hpDrops": 3,
+    "fightAdvanced": true
+  },
+  "labelsControl": {
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 40 shot(s), 13 not captured (nowindow)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-130611-catrig-sample-rig-labels-ctl",
+    "idleScale": 0.96875,
+    "shots": [
+      {
+        "label": "l01",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l02",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l03",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l04",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l05",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l06",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l07",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l08",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l09",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l10",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l11",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l12",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l13",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l14",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l15",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l16",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l17",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l18",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l19",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l20",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l21",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l22",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l23",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l24",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l25",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l26",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      },
+      {
+        "label": "l27",
+        "marker": false,
+        "scale": 0,
+        "clipped": false,
+        "kind": "none"
+      }
+    ],
+    "hp": [
+      15,
+      10,
+      5,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "rounds": {
+      "first": 1,
+      "last": 5
+    },
+    "series": [
+      {
+        "frame": 840,
+        "round": 1,
+        "inWalk": true,
+        "hp": 15
+      },
+      {
+        "frame": 1366,
+        "round": 1,
+        "inWalk": true,
+        "hp": 10
+      },
+      {
+        "frame": 1895,
+        "round": 1,
+        "inWalk": true,
+        "hp": 5
+      },
+      {
+        "frame": 2426,
+        "round": 2,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 2964,
+        "round": 2,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 3504,
+        "round": 3,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 4044,
+        "round": 3,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 4584,
+        "round": 4,
+        "inWalk": true,
+        "hp": 0
+      },
+      {
+        "frame": 5124,
+        "round": 5,
+        "inWalk": true,
+        "hp": 0
+      }
+    ],
+    "end": {
+      "ev": "end",
+      "code": 0,
+      "reason": "quit",
+      "frames": 5125,
+      "turns": 21,
+      "elapsed_ms": 40204,
+      "expect_pass": 1,
+      "expect_fail": 0,
+      "t": 40204,
+      "frame": 5125
+    },
+    "outcome": "hit-not-caught",
+    "counts": {
+      "idle": 0,
+      "hit": 0,
+      "other": 0,
+      "none": 27
+    },
+    "hpDrops": 3,
+    "fightAdvanced": true
+  },
+  "answers": {
+    "dllRoute": "FW_RegisterCatRig from catrig_sample.dll's DllMain: redirected — the framework logged the registration \"(from a DLL)\" (none from data: the export is RigSampleCatClip, not _CatRig_), the DLL's read-back agreed (bound RigSampleCat -> RigSampleCatClip (FW_CatRigFor agrees); 1 of 1 cat rig(s) bound), and RigSampleCat showed the rig's marker over real cat parts in 3/3 shots while the vanilla control on the same parts showed none",
+    "championElite": "RigSampleCat_Champion: redirected (marker in 3/3 shots), RigSampleCat_Elite: redirected (3/3) — the framework's suffix stripping gives an <Entry>_Champion / _Elite name the entry's rig. The console's spawn refuses a name that is no entry (\"No enemy named RigSampleCat_Champion\"), so the variants are declared as entries (variant_of RigSampleCat); the game's own champion path (the level spawner appends the suffix, Character::init strips it and sets the flags) hands Character::init the same string but was not driven from the harness",
+    "missingLabel": "a rig with idleF/B, hitF/B and hithard/hitup/knockback F/B only: hit-drawn (poses {\"idle\":23,\"hit\":2,\"other\":0,\"none\":0}: the two non-lethal hits showed our hitF/B pose); the killing hit (death labels) and every other label the rig lacks were silent no-ops — the cat kept its idle frame, no crash, no line in debug.log or mewframework.log, and the fight ran exactly like the vanilla control (rig HP per dump 15 10 5 0 0 0 0 0 0, rounds 1 -> 5; control HP 15 10 5 0 0 0 0 0 0, rounds 1 -> 5). Visible difference: at 0 HP the vanilla cat lies dead on its tile while the rig cat keeps STANDING in its idle pose (no death label) for the rest of the run"
+  }
+}

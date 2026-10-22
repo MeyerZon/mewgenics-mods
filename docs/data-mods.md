@@ -311,6 +311,39 @@ ArtProbeRigCat { variant_of TomTom  graphics { movieclip _CAT  custom_cat_data A
   `editor/test/fixtures/ingame/artprobe-rig-summary.json`): ArtProbeRigCat shows the rig's marker over a real cat in all
   three shots, ArtProbeVanillaCat on the same parts shows none. Engine side: `docs/engine-map.md` "Cat rig redirect".
 
+### Pairing a cat rig with a DLL (the sample, OBSERVED 2026-10-22)
+
+`mods/catrig-sample/` + `native/mods/catrig-sample/` is the loop for the DLL route — the shape to copy when a native
+mod decides which entry gets which rig (or wants an export name of its own):
+
+- **Data half** (`mods/catrig-sample/`): the entry `RigSampleCat { variant_of TomTom  graphics { movieclip _CAT
+  custom_cat_data RigSampleParts … } }`, its parts in `custom_cats.gon.append`, and `art/rig.scene.json` whose root clip
+  is exported as **`RigSampleCatClip`** — any name; it deliberately has no `_CatRig_` prefix, so nothing binds it
+  without the DLL. The validator's `cat-rig-*` checks only look at `_CatRig_` exports; a DLL-bound rig is checked by
+  the mod's own tests.
+- **Native half** (`native/mods/catrig-sample/`, pattern `native/mods/jokers-luck/`): `DllMain` → `FW_Resolve` →
+  `IsActive` → `FW_RegisterCatRig({"RigSampleCat", "RigSampleCatClip"})` → `FW_CatRigFor("RigSampleCat")` to read it
+  back. Registering in `DllMain` is fine: the registry is read only when a character spawns. The pairs, the checks
+  (entry 1..63 bytes, clip 1..71, not a `_CatRig_` name) and the bind loop are pure C (`catrig_sample_rules.c`,
+  host suite `test/test_catrig_sample.c`, in `native\test-all.bat`). Build with `build.bat`, deploy
+  `build/catrig_sample.dll` next to `mewframework.dll` in `native/dist/`.
+- **The join** is the entry name: the framework logs `catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)`
+  at load and `catrig: RigSampleCat: CatTest -> RigSampleCatClip` at each spawn; the DLL's own lines land in
+  `chainloader.log` as `[catrig_sample] bound RigSampleCat -> RigSampleCatClip (FW_CatRigFor agrees)`. A `.mewtest`
+  asserts the framework lines with the runner-side **`expect fwlog "<substr>"`** (they never reach the console or
+  debug.log; `docs/ingame-testing.md`).
+- **Champion / elite.** `RigSampleCat_Champion` / `RigSampleCat_Elite` get the entry's rig (the framework strips the
+  suffix). The harness's `spawn` cannot make a real champion (`No enemy named RigSampleCat_Champion`), so the sample
+  declares the two names as entries (`variant_of RigSampleCat`) — the string `Character::init` then receives is the
+  one the game's champion spawn hands it.
+- **Labels the rig lacks** (the sample ships `idleF/B`, `hitF/B`, `hithardF/B`, `hitupF/B`, `knockbackF/B` only): a
+  non-lethal hit plays the rig's `hitF/B`; anything else is a silent no-op — the cat holds its frame, the fight runs
+  exactly as with the vanilla clip. Visible: **a killed rig cat with no death label stays standing** in its idle pose
+  (the vanilla cat lies dead). Ship the death labels (`dyingF/B`, `deadF/B`, …) with a rig used in real fights.
+- T2: `cd editor && npm run test:catrigsample` (builds the SWF, needs `catrig_sample.dll` in `native/dist`; runs
+  `rig-dll`, `rig-champion`, `rig-elite`, `rig-labels` and its vanilla control `rig-labels-ctl`; writes
+  `catrig-sample-summary.json`, fixture `editor/test/fixtures/ingame/catrig-sample-summary.json`).
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses

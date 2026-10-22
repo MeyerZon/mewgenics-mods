@@ -3,7 +3,7 @@
  * The framework is a fake built on the framework's own rules (fw_catrig_rules.c: first registration wins, the same
  * pair is idempotent, _Champion / _Elite stripped on lookup), so the loop is tested against what the real registry
  * answers. The DllMain wiring (FW_Resolve, IsActive) and the redirect itself are verified in game
- * (mods/catrig-sample/tests/*.mewtest, T2). */
+ * (the .mewtest scripts in mods/catrig-sample/tests, T2). */
 #define FW_NO_WINDOWS
 #include <string.h>
 #include <stdio.h>

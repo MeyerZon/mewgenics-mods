@@ -1,0 +1,102 @@
+mods: catrig-sample, _autoplay
+timeout: 300s
+hide: false
+# The control of rig-labels.mewtest: the same seeded _autoplay fight against RigSampleVanillaCat (the same parts,
+# the vanilla CatTest with every label). What the game does with a normal cat — its HP per dump, whether its unit
+# stays in the walk after it dies, the rounds — is the reference the rig cat's missing labels are compared against.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+cmd spawn RigSampleVanillaCat
+expect console "Spawned RigSampleVanillaCat" within 10
+dump
+wait frames 5
+shot "l01"
+wait frames 5
+shot "l02"
+wait frames 5
+shot "l03"
+wait frames 5
+shot "l04"
+wait frames 5
+shot "l05"
+dump
+wait frames 5
+shot "l06"
+wait frames 5
+shot "l07"
+wait frames 5
+shot "l08"
+wait frames 5
+shot "l09"
+wait frames 5
+shot "l10"
+dump
+wait frames 5
+shot "l11"
+wait frames 5
+shot "l12"
+wait frames 5
+shot "l13"
+wait frames 5
+shot "l14"
+wait frames 5
+shot "l15"
+dump
+wait frames 5
+shot "l16"
+wait frames 5
+shot "l17"
+wait frames 5
+shot "l18"
+wait frames 5
+shot "l19"
+wait frames 5
+shot "l20"
+dump
+wait frames 5
+shot "l21"
+wait frames 5
+shot "l22"
+wait frames 5
+shot "l23"
+wait frames 5
+shot "l24"
+wait frames 5
+shot "l25"
+dump
+wait frames 5
+shot "l26"
+wait frames 5
+shot "l27"
+wait frames 5
+shot "l28"
+wait frames 5
+shot "l29"
+wait frames 5
+shot "l30"
+dump
+wait frames 5
+shot "l31"
+wait frames 5
+shot "l32"
+wait frames 5
+shot "l33"
+wait frames 5
+shot "l34"
+wait frames 5
+shot "l35"
+dump
+wait frames 5
+shot "l36"
+wait frames 5
+shot "l37"
+wait frames 5
+shot "l38"
+wait frames 5
+shot "l39"
+wait frames 5
+shot "l40"
+dump
+quit

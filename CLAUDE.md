@@ -114,13 +114,14 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
 
 **Native layer** (Windows, w64devkit GCC; set the `GCC` env var to override the default `C:\raylib\w64devkit\bin\gcc.exe`):
 - `native/framework/build.bat` builds `mewframework.dll` into `native/framework/build/`; copy it to `native/dist/`
-  (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL;
+  (the chainloader's scan path). `native/mods/jokers-luck/build.bat` builds the sample mod DLL,
+  `native/mods/catrig-sample/build.bat` the cat rig sample (`FW_RegisterCatRig` from a DLL; T2 `npm run test:catrigsample`);
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
   walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam),
-  the cat rig redirect rules (registry, `_CatRig_` exports, the SymbolClass list scan), the harness's modules;
-  208 checks = 14 + 6 + 16 + 15 + 13 + 15 + 27 + 12 + 90, `-Werror`),
+  the cat rig redirect rules (registry, `_CatRig_` exports, the SymbolClass list scan), the harness's modules, the
+  cat rig sample's bind loop; 215 checks = 14 + 6 + 16 + 15 + 13 + 15 + 27 + 12 + 90 + 7, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.

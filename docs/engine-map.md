@@ -1587,3 +1587,24 @@ framework API v5 (`FW_RegisterCatRig`, `FW_CatRigFor`); data seam: a SymbolClass
   keeps its frame) — a full rig needs the labels the cat plays (`idle`, `walk`, hits, `attack`, … × F/B); one rig per
   entry, 16 entries, names ≤ 63 bytes (clips ≤ 71: `_CatRig_` + entry); dev launches with a known build only (the
   framework's gate) — elsewhere the export is inert.
+- **OBSERVED with the sample pairing (plan A2.4, 2026-10-22; `native/mods/catrig-sample` + `mods/catrig-sample`,
+  `npm run test:catrigsample`, runs `20261022-130356…130611-catrig-sample-*`, fixture `catrig-sample-summary.json`):**
+  1. *The DLL route.* `FW_RegisterCatRig({"RigSampleCat", "RigSampleCatClip"})` called from a mod DLL's `DllMain` (after
+     `FW_Resolve` + `IsActive`; the framework is loaded first by `[LoadOrder]`) registers before any SWF loads (log
+     `catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)`; the DLL's `FW_CatRigFor` read-back agrees, its
+     own lines go to `chainloader.log` as `[catrig_sample] …`), and the redirect works for an export with **no**
+     `_CatRig_` prefix (`catrig: RigSampleCat: CatTest -> RigSampleCatClip`): marker over real parts 3/3, the control on
+     the same parts none.
+  2. *`_Champion` / `_Elite`.* The console's `spawn` refuses a name that is no entry (`No enemy named
+     RigSampleCat_Champion`), so the game's own champion path (`r3dC_IsoOrPickUser_0x8d66c0.c` appends `_Champion` to an
+     entry name; `Character::init` strips it and sets `+0xcde`/`+0xcdf`) is out of the harness's reach. With
+     `RigSampleCat_Champion` / `_Elite` declared as plain entries (`variant_of RigSampleCat`), `Character::init` receives
+     exactly that string, no rig is registered under it, and the framework's suffix stripping gave both the entry's rig
+     (redirect line naming `RigSampleCat`, marker 3/3 each).
+  3. *A label the rig lacks.* Rig with `idleF/B`, `hitF/B`, `hithardF/B`, `hitupF/B`, `knockbackF/B` only, in a seeded
+     `_autoplay` fight vs the same fight against the vanilla-clip control: the two non-lethal hits played **our
+     `hitF/B`** pose (1x marker caught in 2 shots); everything else the rig lacks was a silent no-op as decoded (the cat
+     keeps its frame; nothing in debug.log or mewframework.log, no crash) and the fight ran identically (HP per dump
+     15 10 5 0 0 0 0 0 0, rounds 1 → 5 in both). The one visible consequence: with no death label the killed rig cat
+     **stays standing in its idle pose** for the rest of the run where the vanilla cat lies dead on its tile. Whether a
+     swap rig should fall back to the vanilla labels it lacks is an owner decision (TODO).

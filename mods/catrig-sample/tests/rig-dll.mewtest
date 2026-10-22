@@ -1,0 +1,37 @@
+mods: catrig-sample
+timeout: 120s
+hide: false
+# The cat rig sample, DLL route (framework API v5, plan A2.4). catrig_sample.dll calls
+# FW_RegisterCatRig({"RigSampleCat", "RigSampleCatClip"}) in its DllMain; swfs/rig.swf exports RigSampleCatClip (NOT
+# _CatRig_<Entry>, so the framework's data scan cannot bind it). RigSampleVanillaCat (same parts, vanilla CatTest, no
+# marker) is the control and the real-parts reference; then RigSampleCat three times within 160 frames of its spawn.
+# No _autoplay: the fight waits on the player, so the rig cat stays in its idle pose (the 1x marker).
+# The framework's own lines are asserted with the runner-side `expect fwlog` (they reach neither the console nor
+# debug.log). `wait ms 1500` after each shot: the runner captures the window while the DLL holds the scene, and a
+# loaded machine was seen capturing late (a "vanilla" shot that already showed the rig cat); the wait keeps the next
+# spawn out of the previous shot. npm run test:catrigsample measures the shots (marker + real parts under it; probe-compare.ts).
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+wait ms 1500
+cmd spawn RigSampleVanillaCat
+expect console "Spawned RigSampleVanillaCat" within 10
+wait frames 120
+shot "vanilla"
+wait ms 1500
+cmd spawn RigSampleCat
+expect console "Spawned RigSampleCat" within 10
+wait frames 120
+shot "rig 1"
+wait ms 1500
+wait frames 20
+shot "rig 2"
+wait ms 1500
+wait frames 20
+shot "rig 3"
+wait ms 1500
+expect fwlog "catrig: registered RigSampleCatClip for RigSampleCat (from a DLL)"
+expect fwlog "catrig: RigSampleCat: CatTest -> RigSampleCatClip"
+quit

@@ -498,8 +498,10 @@ export interface RigSwapInput {
   vanilla: { marker: boolean; outline: number };
   /** the rigged cat's shots: our marker (the rig's own art) and the new dark outline under it */
   rig: Array<{ label: string; marker: boolean; outline: number }>;
+  /** when set, the registration for the entry must have come from that route (the DLL sample: "dll") */
+  source?: "data" | "dll";
 }
-export type RigSwapOutcome = "redirected" | "not-registered" | "not-redirected" | "not-scoped" | "no-marker" | "not-filled" | string;
+export type RigSwapOutcome = "redirected" | "not-registered" | "wrong-source" | "not-redirected" | "not-scoped" | "no-marker" | "not-filled" | string;
 
 /**
  * The swap rig's outcome: the run passed; the framework registered a rig for the entry and redirected its CatTest
@@ -514,10 +516,88 @@ export function rigSwapVerdict(i: RigSwapInput): { outcome: RigSwapOutcome; mark
   const outcome: RigSwapOutcome =
     i.verdict !== "pass" ? i.verdict
     : !i.log.registered.some((r) => r.character === i.character) ? "not-registered"
+    : i.source && !i.log.registered.some((r) => r.character === i.character && r.source === i.source) ? "wrong-source"
     : !i.log.redirected.some((r) => r.character === i.character) ? "not-redirected"
     : i.vanilla.marker ? "not-scoped"
     : markers < 2 ? "no-marker"
     : partsDrawn < markers ? "not-filled"
     : "redirected";
   return { outcome, markers, partsDrawn };
+}
+
+// ---- the cat rig sample (DLL route; npm run test:catrigsample) ------------------------------------------------------
+
+/**
+ * Which pose a rig shot shows, from the size of the yellow marker: mods/catrig-sample's idle pose carries the 96x64
+ * checker at 1x, its hit pose the same checker at 2x. `idleScale` is the marker scale measured on the idle cat
+ * (rig-dll.mewtest). Within 25 % of 1x = idle, within 20 % of 2x = hit; any other size (another marker, a partial one) = other.
+ */
+export function rigMarkerKind(shot: { marker: boolean; scale: number }, idleScale: number): "idle" | "hit" | "other" | "none" {
+  if (!shot.marker) return "none";
+  if (!(idleScale > 0)) return "other";
+  const r = shot.scale / idleScale;
+  return Math.abs(r - 1) <= 0.25 ? "idle" : Math.abs(r - 2) <= 0.4 ? "hit" : "other";
+}
+
+export interface VariantRigInput {
+  verdict: string;
+  /** the game spawned the variant (the console said "Spawned <Entry>_Champion" / "_Elite") */
+  spawned: boolean;
+  /** the base entry the rig is registered for (the redirect line names it, not the variant) */
+  character: string;
+  log: CatRigLog;
+  /** shots with our marker (reported, not required: a champion / elite tint can recolour the yellow) */
+  markers: number;
+}
+/** A champion / elite spawn of a rigged entry: not-spawned first (the game refused the name), then the run verdict, then the redirect line. */
+export function variantRigVerdict(i: VariantRigInput): { outcome: string; markers: number } {
+  const outcome = !i.spawned ? "not-spawned"
+    : i.verdict !== "pass" ? i.verdict
+    : !i.log.redirected.some((r) => r.character === i.character) ? "not-redirected"
+    : "redirected";
+  return { outcome, markers: i.markers };
+}
+
+export interface RigLabelsInput {
+  verdict: string;
+  idleScale: number;
+  shots: Array<{ label: string; marker: boolean; scale: number }>;
+  /** the rig cat's HP at each dump (absent dumps skipped) */
+  hp: number[];
+  /** TurnControl's round at the first and the last dump */
+  rounds: { first: number; last: number };
+}
+/**
+ * The labels fight (rig-labels.mewtest): the rig has idleF/B (0.5x marker), hitF/B (1x) and hithardF/B, hitupF/B,
+ * knockbackF/B (0.75x, kind "other") only. hit-drawn = a shot shows the hitF/B pose (the game played OUR hit label);
+ * hit-other-drawn = only the hithard / hitup / knockback pose was seen; hit-not-caught = the cat lost HP but no shot landed in the hit;
+ * never-hit = its HP never dropped. fightAdvanced = the rounds moved on although every other label the game asked
+ * for (walk, attack, death …) is missing from the rig.
+ */
+export function rigLabelsVerdict(i: RigLabelsInput): { outcome: string; counts: Record<"idle" | "hit" | "other" | "none", number>; hpDrops: number; fightAdvanced: boolean } {
+  const counts = { idle: 0, hit: 0, other: 0, none: 0 };
+  for (const s of i.shots) counts[rigMarkerKind(s, i.idleScale)]++;
+  let hpDrops = 0;
+  for (let k = 1; k < i.hp.length; k++) if (i.hp[k]! < i.hp[k - 1]!) hpDrops++;
+  const fightAdvanced = i.rounds.last > i.rounds.first;
+  const outcome = i.verdict !== "pass" ? i.verdict : counts.hit > 0 ? "hit-drawn" : counts.other > 0 ? "hit-other-drawn" : hpDrops > 0 ? "hit-not-caught" : "never-hit";
+  return { outcome, counts, hpDrops, fightAdvanced };
+}
+
+/**
+ * A copy of the shot with every pixel whose brightest channel is at least `floor` scaled so that channel is 255
+ * (darker pixels untouched). The fight dims the arena while the AI plays (OBSERVED 2026-10-22: the probe marker's
+ * yellow at 164,161,0 and its magenta at 165,0,162 during rig-labels.mewtest), which puts the marker outside
+ * analyzeProbeShot's colour tolerance; normalised, the checker's hues are back at full strength while grey arena
+ * pixels stay grey (no channel gains on the others).
+ */
+export function normalizeBrightness(img: RgbaImageLike, floor = 90): RgbaImageLike {
+  const out = new Uint8Array(img.rgba);
+  for (let i = 0; i < out.length; i += 4) {
+    const m = Math.max(out[i]!, out[i + 1]!, out[i + 2]!);
+    if (m < floor || m >= 255) continue;
+    const k = 255 / m;
+    out[i] = Math.round(out[i]! * k); out[i + 1] = Math.round(out[i + 1]! * k); out[i + 2] = Math.round(out[i + 2]! * k);
+  }
+  return { width: img.width, height: img.height, rgba: out };
 }

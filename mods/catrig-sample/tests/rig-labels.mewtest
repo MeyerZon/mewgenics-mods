@@ -1,0 +1,107 @@
+mods: catrig-sample, _autoplay
+timeout: 300s
+hide: false
+# The cat rig sample: the labels a swap rig lacks (plan A2.4 question 3; an OBSERVATION, the fallback is an owner
+# decision). RigSampleCatClip has idleF/B (the checker marker at 0.5x), hitF/B (1x, a 90-frame pose) and hithardF/B,
+# hitupF/B, knockbackF/B (0.75x) ONLY: walk, attack, every death / dead / deadhit label … are missing. _autoplay lets the
+# four party cats fight RigSampleCat (the only enemy) on their own; 40 shots ~0.75 s apart (wait frames 5 + the 700 ms
+# shot hold) and a dump every 5 shots record which pose it shows (the marker scale), its HP and the round.
+# rig-labels-ctl.mewtest is the same fight against the vanilla-clip RigSampleVanillaCat. npm run test:catrigsample
+# -> probe-compare.ts rigLabelsVerdict (hit-drawn / hit-other-drawn / hit-not-caught; fightAdvanced).
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+cmd spawn RigSampleCat
+expect console "Spawned RigSampleCat" within 10
+dump
+wait frames 5
+shot "l01"
+wait frames 5
+shot "l02"
+wait frames 5
+shot "l03"
+wait frames 5
+shot "l04"
+wait frames 5
+shot "l05"
+dump
+wait frames 5
+shot "l06"
+wait frames 5
+shot "l07"
+wait frames 5
+shot "l08"
+wait frames 5
+shot "l09"
+wait frames 5
+shot "l10"
+dump
+wait frames 5
+shot "l11"
+wait frames 5
+shot "l12"
+wait frames 5
+shot "l13"
+wait frames 5
+shot "l14"
+wait frames 5
+shot "l15"
+dump
+wait frames 5
+shot "l16"
+wait frames 5
+shot "l17"
+wait frames 5
+shot "l18"
+wait frames 5
+shot "l19"
+wait frames 5
+shot "l20"
+dump
+wait frames 5
+shot "l21"
+wait frames 5
+shot "l22"
+wait frames 5
+shot "l23"
+wait frames 5
+shot "l24"
+wait frames 5
+shot "l25"
+dump
+wait frames 5
+shot "l26"
+wait frames 5
+shot "l27"
+wait frames 5
+shot "l28"
+wait frames 5
+shot "l29"
+wait frames 5
+shot "l30"
+dump
+wait frames 5
+shot "l31"
+wait frames 5
+shot "l32"
+wait frames 5
+shot "l33"
+wait frames 5
+shot "l34"
+wait frames 5
+shot "l35"
+dump
+wait frames 5
+shot "l36"
+wait frames 5
+shot "l37"
+wait frames 5
+shot "l38"
+wait frames 5
+shot "l39"
+wait frames 5
+shot "l40"
+dump
+expect fwlog "catrig: RigSampleCat: CatTest -> RigSampleCatClip"
+quit

@@ -41,11 +41,11 @@ export async function runCatRigSampleTests(test: TestFn, assert: AssertFn, eq: E
     assert(!exports.some((e) => e.startsWith("_Append_")), "no append: the vanilla CatTest stays untouched");
   });
 
-  test("the rig root has exactly idleF / idleB / hitF / hitB, each placing a 7-empty-slot rig:cat pose as `ani` at depth 1; walk / attack / death are missing on purpose", () => {
+  test("the rig root has exactly idleF/B, hitF/B and the other hit reactions hithardF/B, hitupF/B, knockbackF/B, each placing a 7-empty-slot rig:cat pose as `ani` at depth 1; walk / attack / death are missing on purpose", () => {
     const rootName = sceneRaw.exports.RigSampleCatClip as string;
     const root = sceneRaw.sprites[rootName];
-    eq(Object.keys(root.labels).sort().join(","), "hitB,hitF,idleB,idleF");
-    for (const missing of ["walkF", "attackF", "dyingF", "deadF", "knockbackF"]) assert(!(missing in root.labels), missing);
+    eq(Object.keys(root.labels).sort().join(","), "hitB,hitF,hithardB,hithardF,hitupB,hitupF,idleB,idleF,knockbackB,knockbackF");
+    for (const missing of ["walkF", "attackF", "dyingF", "deadF", "death1F", "deadhitF"]) assert(!(missing in root.labels), missing);
     eq(root.layers.length, 1);
     eq(root.layers[0].name, "ani"); eq(root.layers[0].depth, 1);
     for (const [label, frame] of Object.entries(root.labels as Record<string, number>)) {
@@ -62,7 +62,7 @@ export async function runCatRigSampleTests(test: TestFn, assert: AssertFn, eq: E
     }
   });
 
-  test("the hit pose's marker is the idle marker at 2x (the probe tells the labels apart by the marker's scale)", () => {
+  test("the hit pose's marker is the idle marker at 2x its size (the probe tells the labels apart by the marker's scale)", () => {
     const root = sceneRaw.sprites[sceneRaw.exports.RigSampleCatClip];
     const poseOf = (label: string) => sceneRaw.sprites[root.layers[0].keys.find((k: { frame: number }) => k.frame === root.labels[label]).ref];
     const markerScale = (pose: any) => {
@@ -70,8 +70,11 @@ export async function runCatRigSampleTests(test: TestFn, assert: AssertFn, eq: E
       const m = l.keys[0].matrix as number[] | undefined;
       return m ? m[0] : 1;
     };
-    eq(markerScale(poseOf("idleF")), 1); eq(markerScale(poseOf("idleB")), 1);
-    eq(markerScale(poseOf("hitF")), 2); eq(markerScale(poseOf("hitB")), 2);
+    // the idle marker is the 96x64 checker at 0.5x just above the head, the hit marker the same checker at 1x (both low
+    // enough to stay on screen on a back tile)
+    eq(markerScale(poseOf("idleF")), 0.5); eq(markerScale(poseOf("idleB")), 0.5);
+    eq(markerScale(poseOf("hitF")), 1); eq(markerScale(poseOf("hitB")), 1);
+    for (const l of ["hithardF", "hithardB", "hitupF", "hitupB", "knockbackF", "knockbackB"]) eq(markerScale(poseOf(l)), 0.75, l);
   });
 
   test("the native pair: catrig_sample_rules.c registers RigSampleCat -> RigSampleCatClip, the entry the mod appends (movieclip _CAT, custom_cat_data RigSampleParts) and the clip the scene exports", () => {
@@ -126,6 +129,12 @@ export async function runCatRigSampleTests(test: TestFn, assert: AssertFn, eq: E
     eq(pc.rigMarkerKind({ marker: true, scale: 6 }, 1.9), "other");
     eq(pc.rigMarkerKind({ marker: true, scale: 1.9 }, 0), "other", "no idle reference");
   });
+  test("normalizeBrightness: a dimmed marker pixel goes back to full strength, a grey stays grey, dark pixels and alpha untouched", () => {
+    const img = { width: 4, height: 1, rgba: new Uint8Array([164, 161, 0, 255, 120, 120, 120, 200, 30, 30, 2, 255, 255, 10, 10, 255]) };
+    const n = pc.normalizeBrightness(img);
+    eq([...n.rgba].join(","), "255,250,0,255,255,255,255,200,30,30,2,255,255,10,10,255");
+    eq([...img.rgba].slice(0, 3).join(","), "164,161,0", "the input is not modified");
+  });
   test("rigSwapVerdict with source: a DLL-route probe needs the registration to come from the DLL (wrong-source otherwise)", () => {
     const log = { registered: [{ clip: "RigSampleCatClip", character: "RigSampleCat", source: "dll" as const }], redirected: [{ character: "RigSampleCat", clip: "RigSampleCatClip" }], missing: [], refused: [] };
     const base = { verdict: "pass", character: "RigSampleCat", log, vanilla: { marker: false, outline: 10000 }, rig: [1, 2, 3].map((i) => ({ label: `rig ${i}`, marker: true, outline: 15000 })) };
@@ -148,6 +157,7 @@ export async function runCatRigSampleTests(test: TestFn, assert: AssertFn, eq: E
     const base = { verdict: "pass", idleScale: 1.9, hp: [30, 30, 24, 18], rounds: { first: 1, last: 3 } };
     const a = pc.rigLabelsVerdict({ ...base, shots: shots(["idle", "hit", "hit", "idle", "none"]) });
     eq(a.outcome, "hit-drawn"); eq(a.counts.idle, 2); eq(a.counts.hit, 2); eq(a.counts.none, 1); eq(a.hpDrops, 2); eq(a.fightAdvanced, true);
+    eq(pc.rigLabelsVerdict({ ...base, shots: shots(["idle", "other", "idle"]) }).outcome, "hit-other-drawn", "only the hithard / hitup / knockback pose was seen");
     eq(pc.rigLabelsVerdict({ ...base, shots: shots(["idle", "idle"]) }).outcome, "hit-not-caught", "hp dropped, no hit shot");
     eq(pc.rigLabelsVerdict({ ...base, hp: [30, 30], shots: shots(["idle"]) }).outcome, "never-hit");
     eq(pc.rigLabelsVerdict({ ...base, rounds: { first: 1, last: 1 }, shots: shots(["idle"]) }).fightAdvanced, false);

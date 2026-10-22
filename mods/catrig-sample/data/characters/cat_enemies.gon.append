@@ -1,0 +1,43 @@
+// The cat rig sample (framework API v5, the DLL route; docs/data-mods.md "Pairing a cat rig with a DLL").
+// catrig_sample.dll calls FW_RegisterCatRig({"RigSampleCat", "RigSampleCatClip"}); while RigSampleCat's
+// Character::init runs, the framework answers the game's "CatTest" lookup with RigSampleCatClip (swfs/rig.swf, built
+// from art/rig.scene.json), and CatParts fills its empty slots with RigSampleParts. RigSampleCat_Champion /
+// RigSampleCat_Elite (the game strips the suffix itself) get the same rig. RigSampleVanillaCat is the control: the
+// same parts drawn by the vanilla CatTest. Spawn-only (harness fights); no vanilla entry is changed.
+RigSampleCat {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data RigSampleParts
+        scale 1.1
+        shadow_size 1.1
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+RigSampleVanillaCat {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data RigSampleParts
+        scale 1.1
+        shadow_size 1.1
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// The suffix check (framework fw_catrig_find: exact, then _Champion / _Elite stripped). The console's `spawn` refuses a
+// name that is no entry (OBSERVED 2026-10-22: `spawn RigSampleCat_Champion` -> "No enemy named RigSampleCat_Champion"),
+// so a harness cannot reach the game's own champion path (the level spawner appends _Champion to the entry name and
+// Character::init strips it again, setting the champion flags). These two entries make the framework see exactly the
+// string that path hands Character::init — "RigSampleCat_Champion" / "RigSampleCat_Elite", no rig registered under it —
+// so its suffix stripping is what gives them RigSampleCat's rig. They are plain variants (no champion flags, no tint).
+RigSampleCat_Champion {
+    variant_of RigSampleCat
+}
+
+RigSampleCat_Elite {
+    variant_of RigSampleCat
+}

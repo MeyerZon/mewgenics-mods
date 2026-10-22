@@ -116,6 +116,11 @@ expect gon <unit> <path> exists|missing          children, any other is the firs
                                                  logged by the game (its own getters would log GON ERROR on a miss)
 expect log "<substr>"                            (runner side) debug.log contains substr after the [file: …] prefix;
                                                  evaluated once, after the run — no within; no JSONL event, see report.logExpects
+expect fwlog "<substr>"                          (runner side) a line of THIS launch's mewframework.log window contains
+                                                 substr — the framework's own lines (catrig registrations / redirects,
+                                                 hook installs, RegisterStatus) reach neither the console nor debug.log;
+                                                 like expect log: after the run, no within, report.logExpects (source
+                                                 "fwlog"), a miss = fail "expect fwlog failed at line N"
 dump                                             snapshot the units into a units event
 shot "<label>"                                   screenshot: the DLL emits a shot event and holds the scene 700 ms while
                                                  the runner captures the game window to <run dir>/shot-<label>.png

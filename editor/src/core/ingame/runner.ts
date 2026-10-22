@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
 import { DATA_CACHE_DIR } from "../repo.ts";
 import { locateGameDir, preflight, buildLaunch, LaunchError, type Preflight, type LaunchSpec, type Env } from "./launch.ts";
 import { parseResults, type ResultSummary } from "./results.ts";
-import { collectLogs, listCrashFiles, locateAppdataLogsDir, readWindow, checkLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
+import { collectLogs, listCrashFiles, locateAppdataLogsDir, readWindow, checkLogExpects, checkFwLogExpects, type LogFindings, type LogExpect } from "./logs.ts";
 import { isRunnerSide } from "./script.ts";
 import { captureWindow, type CaptureFn } from "./shot.ts";
 import {
@@ -243,7 +243,7 @@ function decideVerdictBase(input: VerdictInput): { verdict: Verdict; reason: str
   }
   const logExpects = input.logExpects || [];
   const missedLog = logExpects.find((e) => !e.ok);
-  if (missedLog) return { verdict: "fail", reason: `expect log failed at line ${missedLog.line}: "${missedLog.substr}" ${missedLog.detail}` };
+  if (missedLog) return { verdict: "fail", reason: `expect ${missedLog.source === "fwlog" ? "fwlog" : "log"} failed at line ${missedLog.line}: "${missedLog.substr}" ${missedLog.detail}` };
   if (code !== 0 && code !== null) return { verdict: "fail", reason: `exit code ${code}` };
   const extra = logExpects.length ? `, ${logExpects.length} log expectation(s)` : "";
   return { verdict: "pass", reason: `all ${result.expects.passed} expectation(s) passed${extra}` };
@@ -465,8 +465,10 @@ export async function runPlan(args: RunPlanArgs): Promise<IngameReport> {
     report.logFindings = logs;
     const runnerSide = plan.directives.filter(isRunnerSide);
     if (runnerSide.length) {
-      const debugText = logs.debugLog.path && logs.debugLog.present ? readFileSync(logs.debugLog.path, "utf8") : null;
-      report.logExpects = checkLogExpects(debugText, runnerSide);
+      const debugSide = runnerSide.filter((d) => d.what === "log"), fwSide = runnerSide.filter((d) => d.what === "fwlog");
+      const debugText = debugSide.length && logs.debugLog.path && logs.debugLog.present ? readFileSync(logs.debugLog.path, "utf8") : null;
+      const fwText = fwSide.length ? readWindow(frameworkLogPath, frameworkLogOffset) : null;
+      report.logExpects = [...checkLogExpects(debugText, debugSide), ...checkFwLogExpects(fwText, fwSide)].sort((a, b) => a.line - b.line);
     }
     const saveAfter = saveBefore && savePath ? snapshotFile(savePath) : null;
     const setAfter = setBefore && savesDir ? snapshotSaves(savesDir, { allow }) : null;
