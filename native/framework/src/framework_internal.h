@@ -42,6 +42,7 @@ void mesh_engine_on_late_render(void *tacticsTest);   /* every combat frame, fro
 int obj3d_engine_register(void *character, const char *model, const float transform[16]);   /* handle > 0, 0 refused */
 int obj3d_engine_place(int col, int row, const char *model, const float transform[16]);     /* handle > 0, 0 refused */
 int obj3d_engine_unregister(void *character, int handle);   /* by character when non-NULL, else by handle; 1 removed */
+int obj3d_engine_set_material(int handle, const char *texture, int palette);   /* M2: texture (NULL = convention) + palette row (< 0 off); 1 ok */
 /* for the mesh engine, every combat frame: on_fight first (a new TacticsTest clears the registry, freed units are
  * pruned), then iterate count/get; fw_obj3d_model_matrix(o, unitXZ, out) gives the world matrix */
 int obj3d_engine_count(void);

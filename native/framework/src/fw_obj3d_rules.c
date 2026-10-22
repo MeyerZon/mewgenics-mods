@@ -48,6 +48,7 @@ static Fw3dObject *new_object(Fw3dRegistry *r) {
     Fw3dObject *o = &r->objs[r->count++];
     memset(o, 0, sizeof *o);
     o->handle = r->nextHandle++;
+    o->palette = -1;   /* M2: no palette remap until fw_obj3d_set_material */
     return o;
 }
 
@@ -151,4 +152,13 @@ void fw_obj3d_model_matrix(const Fw3dObject *o, const double unitXZ[2], float ou
     fw_obj3d_mat4_mul(t, o->transform, out);
 }
 
-int fw_obj3d_set_material(Fw3dRegistry *r, int handle, const char *texture, int palette) { (void)r; (void)handle; (void)texture; (void)palette; return -1; }   /* RED stub */
+int fw_obj3d_set_material(Fw3dRegistry *r, int handle, const char *texture, int palette) {
+    int i = fw_obj3d_find_handle(r, handle);
+    if (i < 0) return 0;
+    if (texture && texture[0] && !fw_obj3d_model_ok(texture)) return 0;
+    Fw3dObject *o = &r->objs[i];
+    if (texture && texture[0]) { size_t n = strlen(texture); memcpy(o->texture, texture, n + 1); }
+    else o->texture[0] = 0;
+    o->palette = palette < 0 ? -1 : palette;
+    return 1;
+}

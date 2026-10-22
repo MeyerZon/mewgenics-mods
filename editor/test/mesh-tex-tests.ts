@@ -56,7 +56,7 @@ export function runMeshTexTests(test: TestFn, assert: AssertFn, eq: EqFn, fixtur
   test("lambertShade = fw_mesh.shader's ambient 0.45 + 0.55 * max(n . normalize(-0.4, 1, -0.6), 0) (mesh_engine.c's light)", () => {
     eq(mm.lambertShade([0, 1, 0]).toFixed(5), "0.89611");
     eq(mm.lambertShade([-1, 0, 0]).toFixed(5), "0.62844");
-    eq(mm.lambertShade([0, 0, -1]).toFixed(5), "0.71766");
+    eq(mm.lambertShade([0, 0, -1]).toFixed(5), "0.71767");
     eq(mm.lambertShade([1, 0, 0]).toFixed(5), "0.45000");
     eq(mm.shadeColour([96, 96, 96], mm.lambertShade([0, 1, 0])).join(","), "86,86,86");
     eq(mm.shadeColour([230, 120, 20], mm.lambertShade([0, 1, 0])).join(","), "206,108,18");

@@ -9,6 +9,8 @@ uniform sampler2D palettemap;
 uniform float palette;
 uniform int fw_flat;
 uniform vec4 fw_cx_mul, fw_cx_add;
+uniform sampler2D fw_tex;
+uniform int fw_has_tex;
 #if COMPILING_VERTEX_PROGRAM
     in vec3 position;
     void vert(){ gl_Position = fw_mvp * vec4(position, 1.0); }

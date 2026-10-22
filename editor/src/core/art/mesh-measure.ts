@@ -35,6 +35,10 @@ export function parseMeshProbeLog(text: string): MeshProbeLog {
     }
     m = DRAW_RE.exec(line);
     if (m) { out.draws.push({ frame: +m[1]!, fbo: +m[2]!, errors: +m[3]!, line }); continue; }
+    const obj = parseObject(line);
+    if (obj) { out.objects.push(obj); continue; }
+    if (/^mesh: texture /.test(line) || /^mesh: palette\.png /.test(line)) out.textures.push(line);
+    if (/model-texture-missing/.test(line)) { out.textureMissing.push(line); continue; }
     if (/^mesh: GL objects ready/.test(line)) out.glReady = true;
     else if (/^mesh: .*(GL error|compile failed|link failed|not found|disabled)/.test(line)) out.glErrors.push(line);
   }
@@ -84,16 +88,97 @@ export function judgeMeshShots(shots: RgbaImageLike[], probes: MeshProbeLine[]):
   return best!;
 }
 
-// ---- M2/M3: textures, the palette, glTF (RED stubs) ----
+// ---- M2/M3: textures, the palette, glTF ----
+// mewframework logs each drawn object ("mesh object f=.. handle=.. model=.. tile|unit world=(..) ndc=(x y z) tex=<name|none>
+// palette=<row>", native/framework/src/fw_mesh_tex.c fw_mesh_fmt_object; M1 lines stop after world=) and its texture
+// work ("mesh: texture <name> for <model>: ...", "mesh: palette.png WxH ...", one "model-texture-missing" line per
+// model). A shot proves a textured / palette-mapped / glTF draw when the colours the shader must produce — computed
+// here from fw_mesh.shader's light and palette rule — cover enough pixels in a box around an object's projected anchor.
 export interface MeshObjectLine { frame: number; handle: number; model: string; anchor: "tile" | "unit"; world: [number, number, number]; ndc: [number, number, number] | null; tex: string | null; palette: number | null }
 export interface ColourTarget { name: string; rgb: [number, number, number] }
 export interface Box { x0: number; y0: number; x1: number; y1: number }
 export type ColourVerdict = "match" | "partial" | "absent" | "stale-shots" | "no-anchor" | "no-shots";
 export interface ColourJudgement { verdict: ColourVerdict; staleChecked: boolean; counts: Record<string, number>; shot: number | null; anchorPx: [number, number] | null; box: Box | null }
-export function lambertShade(_n: [number, number, number]): number { return -1; }
-export function shadeColour(_rgb: readonly number[], _shade: number): [number, number, number] { return [0, 0, 0]; }
-export function paletteColumn(_grey: number, _shade: number): number { return -1; }
-export function countColours(_img: RgbaImageLike, _box: Box, _targets: ColourTarget[], _tol: number): Record<string, number> { return {}; }
-export function judgeColourPatch(_shots: RgbaImageLike[], _objects: MeshObjectLine[], _targets: ColourTarget[], _opts: { minEach?: number; tol?: number; boxShare?: number } = {}): ColourJudgement {
-  return { verdict: "no-shots", staleChecked: false, counts: {}, shot: null, anchorPx: null, box: null };
+
+const OBJECT_RE = new RegExp(`^mesh object f=(\\d+) handle=(\\d+) model=(\\S+) (tile|unit) world=\\(${NUM} ${NUM} ${NUM}\\)(?: ndc=\\(${NUM} ${NUM} ${NUM}\\) tex=(\\S+) palette=(-?\\d+))?`);
+
+function parseObject(line: string): MeshObjectLine | null {
+  const m = OBJECT_RE.exec(line);
+  if (!m) return null;
+  return {
+    frame: +m[1]!, handle: +m[2]!, model: m[3]!, anchor: m[4] as "tile" | "unit", world: [+m[5]!, +m[6]!, +m[7]!],
+    ndc: m[8] !== undefined ? [+m[8]!, +m[9]!, +m[10]!] : null,
+    tex: m[11] === undefined || m[11] === "none" ? null : m[11]!, palette: m[12] !== undefined ? +m[12]! : null,
+  };
+}
+
+/** mesh_engine.c's light (toward the light, world) and fw_mesh.shader's shade floor */
+export const FW_MESH_LIGHT_DIR: [number, number, number] = [-0.4, 1, -0.6];
+export const FW_MESH_AMBIENT = 0.45;
+
+/** fw_mesh.shader: clamp(ambient + (1 - ambient) * max(n . normalize(light), 0), 0, 1) for a unit world normal */
+export function lambertShade(n: [number, number, number]): number {
+  const l = FW_MESH_LIGHT_DIR, len = Math.hypot(l[0], l[1], l[2]);
+  const d = Math.max((n[0] * l[0] + n[1] * l[1] + n[2] * l[2]) / len, 0);
+  return Math.min(Math.max(FW_MESH_AMBIENT + (1 - FW_MESH_AMBIENT) * d, 0), 1);
+}
+
+/** an 8-bit colour x shade, as the framebuffer stores it */
+export function shadeColour(rgb: readonly number[], shade: number): [number, number, number] {
+  return [0, 1, 2].map((k) => Math.round(Math.min(Math.max((rgb[k]! / 255) * shade, 0), 1) * 255)) as [number, number, number];
+}
+
+/** the paletted_full rule as fw_mesh.shader applies it: column = int(clamp(grey * shade) * 15 + .5) */
+export function paletteColumn(grey: number, shade: number): number {
+  return Math.trunc(Math.min(Math.max((grey / 255) * shade, 0), 1) * 15 + 0.5);
+}
+
+function near(img: RgbaImageLike, i: number, rgb: readonly number[], tol: number): boolean {
+  return Math.abs(img.rgba[i]! - rgb[0]!) <= tol && Math.abs(img.rgba[i + 1]! - rgb[1]!) <= tol && Math.abs(img.rgba[i + 2]! - rgb[2]!) <= tol;
+}
+
+/** pixels within tol (per channel) of each target inside box (clipped to the image; x1 / y1 exclusive) */
+export function countColours(img: RgbaImageLike, box: Box, targets: ColourTarget[], tol: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const t of targets) out[t.name] = 0;
+  const x0 = Math.max(0, Math.floor(box.x0)), y0 = Math.max(0, Math.floor(box.y0));
+  const x1 = Math.min(img.width, Math.ceil(box.x1)), y1 = Math.min(img.height, Math.ceil(box.y1));
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const i = (y * img.width + x) * 4;
+    for (const t of targets) if (near(img, i, t.rgb, tol)) out[t.name]!++;
+  }
+  return out;
+}
+
+/** Counts each target colour in a square box (side = 2 x boxShare x shot width) around every logged anchor of the object
+ * (ndc -> letterboxed shot pixel), keeps the best shot: "match" when every target has >= minEach pixels, "partial" when
+ * some do, "absent" when none; byte-identical shots give no verdict ("stale-shots"). */
+export function judgeColourPatch(shots: RgbaImageLike[], objects: MeshObjectLine[], targets: ColourTarget[], opts: { minEach?: number; tol?: number; boxShare?: number } = {}): ColourJudgement {
+  const minEach = opts.minEach ?? 200, tol = opts.tol ?? 4, boxShare = opts.boxShare ?? 0.05;
+  const base: ColourJudgement = { verdict: "no-shots", staleChecked: false, counts: {}, shot: null, anchorPx: null, box: null };
+  if (!shots.length) return base;
+  const anchors = objects.filter((o) => o.ndc);
+  if (!anchors.length) return { ...base, verdict: "no-anchor" };
+  const staleChecked = shots.length >= 2;
+  if (staleChecked && shots.every((s) => sameBytes(s, shots[0]!))) return { ...base, verdict: "stale-shots", staleChecked };
+  const rank = (v: ColourVerdict) => (v === "match" ? 2 : v === "partial" ? 1 : 0);
+  const seen = new Set<string>();
+  let best: ColourJudgement | null = null;
+  shots.forEach((img, si) => {
+    for (const o of anchors) {
+      const key = `${si}:${o.ndc![0]},${o.ndc![1]}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const p = ndcToShotPixel([o.ndc![0], o.ndc![1]], img.width, img.height);
+      const r = boxShare * img.width;
+      const box = { x0: p[0] - r, y0: p[1] - r, x1: p[0] + r, y1: p[1] + r };
+      const counts = countColours(img, box, targets, tol);
+      const hit = targets.filter((t) => counts[t.name]! >= minEach).length;
+      const verdict: ColourVerdict = hit === targets.length ? "match" : hit ? "partial" : "absent";
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      const j: ColourJudgement = { verdict, staleChecked, counts, shot: si, anchorPx: p, box };
+      if (!best || rank(verdict) > rank(best.verdict) || (rank(verdict) === rank(best.verdict) && total > Object.values(best.counts).reduce((a, b) => a + b, 0))) best = j;
+    }
+  });
+  return best!;
 }

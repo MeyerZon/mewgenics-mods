@@ -31,7 +31,8 @@ export interface GlslDecl {
 /**
  * The uniforms mewframework's mesh renderer sets with glUniform* on material "fw_mesh" (fw_mesh.shader): the
  * contract between mods/fw-3d/shaders/fw_mesh.shader and the native side. Matrices are column-major (transpose
- * GL_FALSE); `palette` < 0 = no palette remap; `fw_flat` != 0 = output fw_base_color unlit.
+ * GL_FALSE); `palette` < 0 = no palette remap; `fw_flat` != 0 = output fw_base_color unlit; `fw_tex` (unit 0) is
+ * sampled with the mesh's uvs when `fw_has_tex` != 0, `palettemap` is on unit 1.
  */
 export const FW_MESH_UNIFORMS: readonly GlslDecl[] = [
   { name: "fw_mvp", type: "mat4" },
@@ -45,6 +46,8 @@ export const FW_MESH_UNIFORMS: readonly GlslDecl[] = [
   { name: "fw_flat", type: "int" },
   { name: "fw_cx_mul", type: "vec4" },
   { name: "fw_cx_add", type: "vec4" },
+  { name: "fw_tex", type: "sampler2D" },
+  { name: "fw_has_tex", type: "int" },
 ];
 
 /** The mesh VBO layout (stride 32): the names are the engine's, so its by-name binds give exactly these locations. */

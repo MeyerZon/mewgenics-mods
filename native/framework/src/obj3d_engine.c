@@ -43,6 +43,13 @@ int obj3d_engine_place(int col, int row, const char *model, const float transfor
     return h;
 }
 
+int obj3d_engine_set_material(int handle, const char *texture, int palette) {
+    int ok = fw_obj3d_set_material(reg(), handle, texture, palette);
+    fw_log("Set3DObjectMaterial(%d, %s, palette %d): %s", handle, texture && texture[0] ? texture : "(convention)", palette,
+           ok ? "ok" : "refused (unknown handle or bad texture name)");
+    return ok;
+}
+
 int obj3d_engine_unregister(void *character, int handle) {
     int ok = character ? fw_obj3d_remove_character(reg(), character) : fw_obj3d_remove_handle(reg(), handle);
     fw_log("Unregister3DObject(%p, %d): %s (%d object(s))", character, handle, ok ? "removed" : "not registered", fw_obj3d_count(reg()));

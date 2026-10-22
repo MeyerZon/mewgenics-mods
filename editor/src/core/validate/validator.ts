@@ -108,6 +108,7 @@ function collectOverlays(modDir: string, override?: TextOverride): OverlayFile[]
   for (const f of files) {
     if (f.relPath === "description.json") continue;
     if (f.relPath.startsWith("models/")) continue; // 3D model assets (graphics.model), not overlays of a pack file
+    if (f.relPath.startsWith("textures/models/") && f.relPath.endsWith(".png")) continue; // 3D model textures (App_GetTexture "models/<stem>.png"), new files
     try {
       texts.set(f.relPath, readFileSync(f.abs, "utf8"));
     } catch {

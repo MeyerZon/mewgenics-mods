@@ -10548,6 +10548,34 @@
       ]
     },
     {
+      "name": "Texture2D_glName",
+      "kind": "offset",
+      "struct": "Texture2D",
+      "value": "0x8",
+      "ctype": "uint32: the GL texture name (glGenTextures(1, tex+8) in Texture2D_LoadFromFile); 0 until uploaded",
+      "anchors": {
+        "witness": {
+          "function": "Texture2D_LoadFromFile",
+          "pattern": "8B 53 08 8B 4B 0C FF 15",
+          "dispAt": 2,
+          "dispSize": 1
+        },
+        "note": "mov edx,[rbx+0x8]; mov ecx,[rbx+0xc]; call [glBindTexture] (0x140a0ada7): glBindTexture(tex->target, tex->glName) (notes-r3dE G13f)"
+      },
+      "consumers": [
+        "native/framework/src/fw_mesh_tex.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TEX2D_GLNAME"
+        }
+      ],
+      "evidence": [
+        ".analysis/notes-r3dE.md",
+        ".analysis/decompiled/Texture2D_LoadFromFile_0xa0ad40.c"
+      ]
+    },
+    {
       "name": "MaskedRendererIso_vftable",
       "kind": "vtable",
       "rva": "0xed81e8",

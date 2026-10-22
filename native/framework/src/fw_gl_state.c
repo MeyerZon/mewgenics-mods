@@ -81,4 +81,9 @@ int fw_gl_drain_errors(const FwGlFns *gl, uint32_t *first, int max) {
     return n;
 }
 
-void fw_gl_bind_units(const FwGlFns *gl, const uint32_t units[FW_GL_SAVED_UNITS]) { (void)gl; (void)units; }   /* RED stub */
+void fw_gl_bind_units(const FwGlFns *gl, const uint32_t units[FW_GL_SAVED_UNITS]) {
+    for (int u = FW_GL_SAVED_UNITS - 1; u >= 0; u--) {   /* unit 0 last: it stays the active unit */
+        gl->ActiveTexture(FW_GL_TEXTURE0 + (uint32_t)u);
+        gl->BindTexture(FW_GL_TEXTURE_2D, units[u]);
+    }
+}
