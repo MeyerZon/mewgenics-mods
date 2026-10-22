@@ -396,3 +396,9 @@ textarea.scenejson { width: 100%; min-height: 320px; resize: vertical; font-fami
 .timeline .tl-cell.key.empty::after { background: transparent; border: 1px solid var(--ink); }
 .timeline .tl-cell.sel { outline: 2px solid var(--acc); outline-offset: -1px; }
 .timeline .tl-inspector { margin-top: 10px; }
+
+/* Art mode — VectorCraft tab (web/src/art/VectorcraftPanel.tsx): the vendored app in a same-origin iframe */
+.vcpanel .vc-caption { font-size: 12.5px; line-height: 1.5; margin: 0 0 10px; }
+.vcpanel .vc-status { font-size: 12px; margin: 0 0 8px; min-height: 16px; }
+.vcpanel .vc-shape { font-family: var(--mono); font-size: 12.5px; }
+.vcpanel .vc-frame { display: block; width: 100%; height: max(420px, calc(100vh - 340px)); border: 1px solid var(--line); border-radius: 10px; background: #262626; }

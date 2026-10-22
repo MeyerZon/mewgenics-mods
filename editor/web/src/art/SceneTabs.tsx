@@ -4,7 +4,7 @@
 import React, { useRef, useState } from "react";
 import { useStore } from "../store.ts";
 import { toast } from "../state.ts";
-import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, rampColor, exportShapeSvgFile, replaceShapeFromSvg, bakeGlowInScene } from "./art-state.ts";
+import { A, getScene, setScene, bump, scheduleValidate, setTarget, setShowGray, rampColor, exportShapeSvgFile, replaceShapeFromSvg, bakeGlowInScene, openShapeInVectorcraft } from "./art-state.ts";
 import { sx, Ramp, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
 import { shapeGrayUsage, parseFill } from "../../../src/core/art/scene.ts";
@@ -59,6 +59,7 @@ export function ShapesTab() {
             >
               → Sprite
             </button>
+            <button className="btn ghost sm" aria-label={`Open ${id} in VectorCraft`} title="Draw on this shape in the VectorCraft tab (in-editor); Apply there brings it back" onClick={() => openShapeInVectorcraft(id)}>VectorCraft</button>
             <button className="btn ghost sm" aria-label={`Export SVG of ${id}`} title="Write art/<shape>.svg for VectorCraft, Inkscape or any vector editor" onClick={() => void exportShapeSvgFile(id)}>Export SVG</button>
             {sh.baked ? null : (
               <button className="btn ghost sm" aria-label={`Bake glow of ${id}`} title="The game refuses SWF filters; this bakes a halo shape <id>_glow under this shape (bakeGlow)" onClick={() => setGlowFor(glowFor === id ? null : id)}>
