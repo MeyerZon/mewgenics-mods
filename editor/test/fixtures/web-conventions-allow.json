@@ -1,0 +1,49 @@
+{
+  "store-set-in-view": {
+    "art/ArtCenter.tsx": 3,
+    "art/ArtExplorer.tsx": 1,
+    "art/ArtRightPanel.tsx": 13,
+    "art/DropZone.tsx": 3,
+    "art/NewSceneModal.tsx": 1,
+    "art/PaletteDrawer.tsx": 1,
+    "art/RigTab.tsx": 3,
+    "art/SceneTabs.tsx": 3,
+    "art/TimelineTab.tsx": 1,
+    "art/VectorcraftPanel.tsx": 1,
+    "components/Center.tsx": 3,
+    "components/ConceptsDrawer.tsx": 1,
+    "components/Drawers.tsx": 2,
+    "components/Editor.tsx": 2,
+    "components/Explorer.tsx": 2,
+    "components/TemplateModal.tsx": 1,
+    "components/TopBar.tsx": 1,
+    "components/Tours.tsx": 4,
+    "components/WorkedExamples.tsx": 13,
+    "rooms/Rooms.tsx": 6
+  },
+  "window-confirm": {},
+  "clickable-span-div": {
+    "art/ArtCenter.tsx": 1,
+    "art/TimelineTab.tsx": 1
+  },
+  "uncontrolled-default": {
+    "art/ArtRightPanel.tsx": 3,
+    "art/SceneTabs.tsx": 2
+  },
+  "effect-deps": {
+    "rooms/Rooms.tsx": 1
+  },
+  "index-key": {
+    "art/ArtRightPanel.tsx": 6,
+    "art/Bits.tsx": 1,
+    "art/PaletteDrawer.tsx": 1,
+    "art/RigTab.tsx": 2,
+    "art/SceneTabs.tsx": 1,
+    "art/TimelineTab.tsx": 1,
+    "components/ConceptsDrawer.tsx": 1,
+    "components/RightPanel.tsx": 1,
+    "components/Tours.tsx": 2,
+    "components/WorkedExamples.tsx": 1,
+    "rooms/Rooms.tsx": 3
+  }
+}
