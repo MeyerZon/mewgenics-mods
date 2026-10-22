@@ -5,7 +5,7 @@ Crate {
 }
 Rock {
 	graphics {
-		model "models/rock.glb"
+		model "models/rock.fbx"
 	}
 }
 Tire {

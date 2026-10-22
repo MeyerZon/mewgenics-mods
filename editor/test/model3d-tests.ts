@@ -36,10 +36,11 @@ export function runModel3dTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
   const only = (r: Report, code: string): Finding[] => r.findings.filter((f) => f.code === code);
 
   test("model3d: the path rule — models/<...>.obj only; .., absolute, drive, backslash, empty segment, other extension refused", () => {
-    for (const ok of ["models/crate.obj", "models/props/tire.obj", "models/a b.obj"]) eq(modelPathProblem(ok), null, ok);
+    for (const ok of ["models/crate.obj", "models/props/tire.obj", "models/a b.obj", "models/crate.glb", "models/props/tire.gltf"]) eq(modelPathProblem(ok), null, ok);   // one rule with the DLL (fw_mesh_model_kind): .gltf / .glb load too
     const bad: Array<[string, RegExp]> = [
       ["crate.obj", /models\//],
-      ["models/crate.glb", /\.obj/],
+      ["models/crate.fbx", /\.obj/],
+      ["models/crate.GLB", /\.obj/],
       ["models/crate.OBJ.txt", /\.obj/],
       ["models/.obj", /name/],
       ["models/../crate.obj", /\.\./],
@@ -80,7 +81,7 @@ export function runModel3dTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     assert(!r.ok, "an error");
     eq(only(r, "merge-target-missing").length, 0, "graphics.model is meant to be added by a .merge: no merge-target-missing");
   });
-  test("model3d: model-path-invalid is an error per bad value (.., .glb, a number) and no file check follows", () => {
+  test("model3d: model-path-invalid is an error per bad value (.., .fbx, a number) and no file check follows", () => {
     const r = v("model-path-invalid");
     const hits = only(r, "model-path-invalid");
     eq(hits.map((f) => f.location?.path).sort().join(","), "Crate.graphics.model,Rock.graphics.model,Tire.graphics.model", codes(r));

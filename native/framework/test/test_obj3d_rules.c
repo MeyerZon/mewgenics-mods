@@ -10,6 +10,7 @@
 #include <math.h>
 #include "../../test/minitest.h"
 #include "fw_obj3d_rules.h"
+#include "fw_mesh_rules.h"
 #include "framework_api.h"
 
 _Static_assert(OFF_CH_GENERATION == -8, "the generation sits right before the Character (the pool header)");
@@ -171,7 +172,10 @@ TEST(model_name_and_gon_model_path_rules) {
     CHECK(fw_obj3d_model_path_ok("models/props/crate.obj"));
     CHECK(!fw_obj3d_model_path_ok(NULL));
     CHECK(!fw_obj3d_model_path_ok("crate.obj"));                 /* not under models/ */
-    CHECK(!fw_obj3d_model_path_ok("models/crate.glb"));          /* .obj only for now */
+    CHECK(fw_obj3d_model_path_ok("models/crate.glb"));           /* the mesh loader reads glTF too: one rule (fw_mesh_model_kind) */
+    CHECK(fw_obj3d_model_path_ok("models/props/tire.gltf"));
+    const char *same[] = { "models/crate.obj", "models/props/tire.obj", "models/a b.obj", "models/crate.fbx", "models/../x.obj", "models/crate.OBJ", "Crate3D" };
+    for (size_t i = 0; i < sizeof same / sizeof same[0]; i++) CHECK_EQ(fw_obj3d_model_path_ok(same[i]), fw_mesh_model_kind(same[i]) != 0);
     CHECK(!fw_obj3d_model_path_ok("models/crate.OBJ.txt"));
     CHECK(!fw_obj3d_model_path_ok("models/.obj"));               /* empty base name */
     CHECK(!fw_obj3d_model_path_ok("models/../crate.obj"));

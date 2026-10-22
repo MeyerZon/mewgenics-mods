@@ -31,7 +31,7 @@ run_suite "mewframework per-unit glow rules" "$FW/build/test_glow_rules" -DFW_NO
 run_suite "mewframework 3D observer rules" "$FW/build/test_obs3d_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_obs3d_rules.c" "$FW/src/fw_obs3d_rules.c"
 run_suite "mewframework mesh draw (M1)" "$FW/build/test_mesh_draw" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_draw.c" "$FW/src/fw_m4.c" "$FW/src/fw_functor.c" "$FW/src/fw_gl_state.c" "$FW/src/fw_mesh_draw.c" "$FW/src/fw_mesh_rules.c" "$FW/src/fw_mesh_gltf.c" "$FW/src/fw_json.c" -lm
 run_suite "mewframework mesh rules" "$FW/build/test_mesh_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_rules.c" "$FW/src/fw_mesh_rules.c" -lm
-run_suite "mewframework 3D object registry" "$FW/build/test_obj3d_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_obj3d_rules.c" "$FW/src/fw_obj3d_rules.c"
+run_suite "mewframework 3D object registry" "$FW/build/test_obj3d_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_obj3d_rules.c" "$FW/src/fw_obj3d_rules.c" "$FW/src/fw_mesh_rules.c" -lm
 run_suite "mewframework GON walker" "$FW/build/test_gon" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_gon.c" "$FW/src/fw_gon.c"
 run_suite "mewframework JSON tokenizer" "$FW/build/test_json" -I"$FW/src" "$FW/test/test_json.c" "$FW/src/fw_json.c"
 run_suite "mewframework glTF loader" "$FW/build/test_mesh_gltf" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_gltf.c" "$FW/src/fw_mesh_gltf.c" "$FW/src/fw_json.c" "$FW/src/fw_mesh_rules.c" -lm

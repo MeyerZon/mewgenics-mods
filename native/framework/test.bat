@@ -73,7 +73,7 @@ if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
   -o "%OUT%\test_mesh_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_rules.exe"
-  "%HERE%test\test_obj3d_rules.c" "%HERE%src\fw_obj3d_rules.c" ^
+  "%HERE%test\test_obj3d_rules.c" "%HERE%src\fw_obj3d_rules.c" "%HERE%src\fw_mesh_rules.c" ^
   -o "%OUT%\test_obj3d_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_obj3d_rules.exe"

@@ -53,7 +53,9 @@ TEST(obj_triangle_with_v_vt_vn) {
     CHECK_STR(m.texture, "");
     CHECK(veq(m.verts[m.indices[1]].pos, 1, 0, 0));
     CHECK(veq(m.verts[m.indices[2]].nrm, 0, 0, 1));
-    CHECK(feq(m.verts[m.indices[2]].uv[0], 0) && feq(m.verts[m.indices[2]].uv[1], 1));
+    /* OBJ's texture origin is bottom-left, the game's / glTF's top-left: v' = 1 - v (Godot's OBJ importer, obj-read.ts) */
+    CHECK(feq(m.verts[m.indices[2]].uv[0], 0) && feq(m.verts[m.indices[2]].uv[1], 0));
+    CHECK(feq(m.verts[m.indices[0]].uv[1], 1));
     CHECK_EQ(m.indices[0], 0); CHECK_EQ(m.indices[1], 1); CHECK_EQ(m.indices[2], 2);   /* file order kept */
     fw_mesh_free(&m);
     CHECK(is_zeroed(&m));
@@ -101,7 +103,7 @@ TEST(obj_v_slash_vt_form_has_uvs_and_flat_normals) {
     FwMesh m; FwMeshError e;
     PARSE_OK("v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0.25 0.75\nf 1/1 2/1 3/1\n");
     CHECK_EQ(m.has_uvs, 1); CHECK_EQ(m.has_normals, 0);
-    CHECK(feq(m.verts[0].uv[0], 0.25f) && feq(m.verts[0].uv[1], 0.75f));
+    CHECK(feq(m.verts[0].uv[0], 0.25f) && feq(m.verts[0].uv[1], 0.25f));   /* v flipped: 1 - 0.75 */
     CHECK(veq(m.verts[0].nrm, 0, 0, 1));
     fw_mesh_free(&m);
 }
@@ -493,6 +495,29 @@ TEST(model_path_accepts_gltf_and_glb) {
     CHECK_EQ(fw_mesh_model_kind(NULL), 0);
 }
 
+/* ONE path rule for the loader, the 3D-object registry (fw_obj3d_model_path_ok) and the editor (model3d.ts): sub-folders,
+ * spaces and dots in names are fine; the kind comes from the lowercase extension; at most 63 bytes */
+TEST(model_path_is_one_rule_with_subfolders) {
+    char out[96];
+    const char *ok[] = { "models/props/tire.obj", "models/a b.gltf", "models/cr.ate.glb", "models/x/y/z.obj" };
+    for (size_t i = 0; i < sizeof ok / sizeof ok[0]; i++) {
+        if (fw_mesh_model_path(ok[i], out, sizeof out) != 1) MT_FAIL("model_path refused \"%s\"", ok[i]);
+        CHECK_STR(out, ok[i]);
+    }
+    CHECK_EQ(fw_mesh_name_from_path("models/props/tire.obj", out, sizeof out), 1);
+    CHECK_STR(out, "tire");
+    CHECK_EQ(fw_mesh_name_from_path("models/cr.ate.glb", out, sizeof out), 1);
+    CHECK_STR(out, "cr.ate");
+    CHECK_EQ(fw_mesh_model_kind("models/props/tire.gltf"), FW_MESH_KIND_GLTF);
+    char longp[80];
+    memset(longp, 'a', sizeof longp); memcpy(longp, "models/", 7);
+    strcpy(longp + 63 - 4, ".obj");                     /* 63 bytes: the longest accepted */
+    CHECK_EQ(fw_mesh_model_kind(longp), FW_MESH_KIND_OBJ);
+    memset(longp, 'a', sizeof longp); memcpy(longp, "models/", 7);
+    strcpy(longp + 64 - 4, ".obj");                     /* 64 bytes: too long */
+    CHECK_EQ(fw_mesh_model_kind(longp), 0);
+}
+
 TEST(unit_cube_and_obj_have_the_default_material) {
     FwMesh m;
     CHECK_EQ(fw_mesh_unit_cube(&m), 1);
@@ -505,8 +530,8 @@ TEST(model_path_rejects_everything_else) {
     const char *bad[] = { "", "crate.obj", "models/.obj", "models/crate", "models/crate.OBJ", "models/crate.GLB",
                           "models/crate.fbx", "models/crate.gltf.bak", "models/.gltf", "models/crate.glbx",
                           "models/crate.obj.bak", "models/../crate.obj", "../models/crate.obj", "/models/crate.obj",
-                          "C:/models/crate.obj", "models\\crate.obj", "models/sub/crate.obj", "models//crate.obj",
-                          "Models/crate.obj", "models/cr ate.obj", "models/cr.ate.obj", "./models/crate.obj",
+                          "C:/models/crate.obj", "models\\crate.obj", "models//crate.obj", "models/./crate.obj",
+                          "Models/crate.obj", "models/props/../crate.obj", "models/tab\tname.obj", "./models/crate.obj",
                           "models/crate.obj ", "textures/crate.obj" };
     char out[96];
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {

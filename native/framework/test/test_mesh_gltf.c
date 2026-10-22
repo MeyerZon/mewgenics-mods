@@ -396,6 +396,14 @@ TEST(gltf_accessor_past_buffer_end_is_an_error) {
     TRI_ERR("accessor", "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":7}}]}]," ONE_NODE, 0);
 }
 
+/* design decision 6 (docs/3d-importer-design.md): every count read from the file is bounded (by its bufferView, or the
+ * caps) BEFORE it sizes an allocation — a hostile count of 2e9 (which crashed the first TS reader) is an error, not a
+ * 2e9-element malloc */
+TEST(gltf_hostile_accessor_count_is_refused_before_allocating) {
+    TRI_ERR("accessor 0", TRI_MESH ONE_NODE, .n0 = "2000000000");
+    TRI_ERR("accessor 0", TRI_MESH ONE_NODE, .n0 = "3145728");          /* at the cap: still bounded by the 96-byte view */
+}
+
 TEST(gltf_rejects_sparse_morph_targets_and_bad_attribute_types) {
     TRI_ERR("sparse", TRI_MESH ONE_NODE, .acc0x = ",\"sparse\":{\"count\":1}");
     TRI_ERR("morph", TRI_MESH ONE_NODE, .primx = ",\"targets\":[{\"POSITION\":0}]");
