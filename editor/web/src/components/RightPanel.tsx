@@ -1,6 +1,7 @@
 // Right pane in Data mode: Validation | Preview | Components tabs.
 
 import React from "react";
+import { TOUR } from "../tour-anchors.ts";
 import { useS, sx, CodeView, Tabs, Summary, FindingsList, Pill, SearchBox, Button } from "./ui.tsx";
 import { setTab, scheduleComponentSearch, searchComponents } from "../actions.ts";
 import type { Tab } from "../state.ts";
@@ -187,9 +188,9 @@ export function ComponentSearch(): React.JSX.Element {
   );
 }
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "validation", label: "Validation" },
-  { id: "preview", label: "Preview" },
+const TABS: { id: Tab; label: string; tour?: string }[] = [
+  { id: "validation", label: "Validation", tour: TOUR.validation },
+  { id: "preview", label: "Preview", tour: TOUR.preview },
   { id: "components", label: "Components" },
 ];
 

@@ -354,6 +354,17 @@ label.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5
 .stepnum.on { background: var(--acc); color: #fff; }
 .stepnum.done { background: var(--ok); color: #06210d; }
 .stepnum.off { border: 1px solid var(--line2); color: var(--muted); }
+/* anchored coachmarks (Tours.tsx): the spotlight dims everything but the target; the card sits beside it */
+.scrim.tour-anchored { background: transparent; display: block; }
+.tour-spot { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(5, 8, 12, .62); outline: 2px solid var(--acc-ink); outline-offset: 0; pointer-events: none; transition: left .18s ease, top .18s ease, width .18s ease, height .18s ease; }
+.tourcard.anchored { position: fixed; width: min(420px, calc(100vw - 24px)); padding: 18px; }
+.tourcard.anchored.side-over { box-shadow: 0 24px 70px rgba(0, 0, 0, .65), 0 0 0 2px var(--acc-ink); }
+.tour-arrow { position: absolute; width: 14px; height: 14px; background: var(--elev); border: 1px solid var(--line2); transform: rotate(45deg); pointer-events: none; }
+.tourcard.side-right .tour-arrow { left: -8px; border-top-color: transparent; border-right-color: transparent; }
+.tourcard.side-left .tour-arrow { right: -8px; border-bottom-color: transparent; border-left-color: transparent; }
+.tourcard.side-below .tour-arrow { top: -8px; border-bottom-color: transparent; border-right-color: transparent; }
+.tourcard.side-above .tour-arrow { bottom: -8px; border-top-color: transparent; border-left-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .tour-spot { transition: none; } }
 
 /* worked example (full page overlay) */
 .example { position: fixed; inset: 0; z-index: var(--z-example); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }

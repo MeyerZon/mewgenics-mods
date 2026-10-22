@@ -4,7 +4,7 @@
 // The shell's mode-aware commands (saveCurrent / validateCurrent / openFindings), the editor status
 // (GET /api/status) and the deep link (?mode=&mod=&file=) live here too.
 
-import { S, tpl, lsGet, lsSet, onboarding, toast, applyBasePage, BASE_PAGE, type OpenMenu, type Tab, type TemplateIntent, type TemplateForm } from "./state.ts";
+import { S, tpl, lsGet, lsSet, lsRemove, onboarding, TOUR_KEYS, toast, applyBasePage, BASE_PAGE, type OpenMenu, type Tab, type TemplateIntent, type TemplateForm, type TourKind, type ConceptsSection } from "./state.ts";
 import { getJson, post, url } from "./api.ts";
 import { editorCtl } from "./components/Editor.tsx";
 import { loadArtForMod, refreshArtListings, saveScene, runValidate as runArtValidate, setArtRightTab } from "./art/art-state.ts";
@@ -334,28 +334,58 @@ export function closeMenu(): void {
   if (S.get().openMenu) S.set({ openMenu: "" });
 }
 
-// ---- onboarding -----------------------------------------------------------------------------
+// ---- onboarding (the three tours, the worked examples, the concepts drawer; UX PR 6) ----------------------
+/** Open the Data tour at step 0 (Help menu, the Data hero). */
 export function openTour(): void {
   S.set({ tourStep: 0, openMenu: "", tourOpen: true });
 }
+/** Move a tour to step `n`. */
+export function setTourStep(kind: TourKind, n: number): void {
+  if (kind === "data") S.set({ tourStep: n });
+  else if (kind === "art") S.set({ artTourStep: n });
+  else S.set({ roomTourStep: n });
+}
+/**
+ * The tour card's "Don't show again": remembered at once (not only on close), so the empty states' "Take the … tour"
+ * nudges hide too. Unticking forgets it.
+ */
+export function setTourDontShow(kind: TourKind, on: boolean): void {
+  if (kind === "data") S.set({ tourDontShow: on });
+  else if (kind === "art") S.set({ artTourDontShow: on });
+  else S.set({ roomTourDontShow: on });
+  if (on) lsSet(TOUR_KEYS[kind].dontShow, "1");
+  else lsRemove(TOUR_KEYS[kind].dontShow);
+}
+/** Close a tour (Skip / Done / Esc): it is then seen and no longer auto-opens. */
+function closeTourOf(kind: TourKind): void {
+  if (kind === "data") S.set({ tourOpen: false });
+  else if (kind === "art") S.set({ artTourOpen: false });
+  else S.set({ roomTourOpen: false });
+  lsSet(TOUR_KEYS[kind].seen, "1");
+}
 export function closeTour(): void {
-  S.set({ tourOpen: false });
-  lsSet("mewged.onboard.tourSeen", "1");
-  if (S.get().tourDontShow) lsSet("mewged.onboard.tourDontShow", "1");
+  closeTourOf("data");
 }
 export function closeArtTour(): void {
-  S.set({ artTourOpen: false });
-  lsSet("mewged.onboard.artTourSeen", "1");
-  if (S.get().artTourDontShow) lsSet("mewged.onboard.artTourDontShow", "1");
+  closeTourOf("art");
 }
-// Opened automatically the first time the user enters Art mode (unless dismissed), and
-// re-openable from the Help (?) menu — mirrors the data-mode tour exactly.
+export function closeRoomTour(): void {
+  closeTourOf("rooms");
+}
+function tourDismissed(kind: TourKind): boolean {
+  return lsGet(TOUR_KEYS[kind].dontShow) === "1" || lsGet(TOUR_KEYS[kind].seen) === "1";
+}
+// The Art / Rooms tour opens automatically the first time the user enters that mode (unless seen or dismissed),
+// and is re-openable from the Help (?) menu and the mode's empty state.
 function maybeOpenArtTour(): void {
   if (onboarding.artTourTriggered) return;
   onboarding.artTourTriggered = true;
-  if (lsGet("mewged.onboard.artTourDontShow") !== "1" && lsGet("mewged.onboard.artTourSeen") !== "1") {
-    S.set({ artTourStep: 0, artTourOpen: true });
-  }
+  if (!tourDismissed("art")) S.set({ artTourStep: 0, artTourOpen: true });
+}
+function maybeOpenRoomTour(): void {
+  if (onboarding.roomTourTriggered) return;
+  onboarding.roomTourTriggered = true;
+  if (!tourDismissed("rooms")) S.set({ roomTourStep: 0, roomTourOpen: true });
 }
 export function enterArtMode(): void {
   S.set({ artMode: true, roomMode: false });
@@ -367,12 +397,27 @@ export function leaveArtMode(): void {
 /** Rooms mode: the Room editor (levels/**.lvl grid painter). */
 export function enterRoomMode(): void {
   S.set({ roomMode: true, artMode: false });
+  maybeOpenRoomTour();
 }
+/** Put the editor in mode `m` when it is not there already (a tour step that points into another mode). */
+export function ensureMode(m: Mode): void {
+  if (currentMode() === m) return;
+  if (m === "art") enterArtMode();
+  else if (m === "rooms") enterRoomMode();
+  else leaveArtMode();
+}
+/** Help ▸ Worked example — Joker's Luck: opens at step 1. */
 export function openExample(): void {
-  S.set({ openMenu: "", exampleStep: 2, exampleOpen: true });
+  S.set({ openMenu: "", exampleStep: 0, exampleOpen: true });
+}
+export function setExampleStep(n: number): void {
+  S.set({ exampleStep: n });
 }
 export function openArtExample(): void {
   S.set({ artExampleStep: 0, openMenu: "", artExampleOpen: true });
+}
+export function setArtExampleStep(n: number): void {
+  S.set({ artExampleStep: n });
 }
 export function closeExample(): void {
   S.set({ exampleOpen: false });
@@ -380,18 +425,46 @@ export function closeExample(): void {
 export function closeArtExample(): void {
   S.set({ artExampleOpen: false });
 }
-/** Close the art example and land the user in the live Art UI (already onboarding → no auto-tour). */
-export function artExampleGoto(go: () => void): void {
-  S.set({ artExampleOpen: false, artMode: true });
+/** Open a top-bar menu after the current click has finished bubbling (the window click listener closes menus). */
+function openMenuSoon(menu: OpenMenu): void {
+  setTimeout(() => S.set({ openMenu: menu }), 0);
+}
+/**
+ * Close the art example and land the user in the live Art UI (already onboarding → no auto-tour), then run `go`.
+ * With `needsMod` and no mod open, it opens the mod switcher instead and says so.
+ */
+export function artExampleGoto(go: () => void, needsMod = true): void {
+  S.set({ artExampleOpen: false, artMode: true, roomMode: false });
   onboarding.artTourTriggered = true;
+  if (needsMod && !S.get().mod) {
+    toast("pick a mod first — the mod switcher is open", { ms: 5000 });
+    openMenuSoon("mod");
+    return;
+  }
   go();
 }
-export function openConcepts(): void {
-  S.set({ openMenu: "", conceptsOpen: true });
+/** Focus the first element matching `selector` once it renders (a jump that switches a tab first). */
+export function focusWhenShown(selector: string, frames = 30): void {
+  if (typeof document === "undefined") return;
+  const tick = (left: number) => {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (el) {
+      el.scrollIntoView({ block: "nearest" });
+      el.focus({ preventScroll: true });
+    } else if (left > 0) requestAnimationFrame(() => tick(left - 1));
+  };
+  requestAnimationFrame(() => tick(frames));
 }
-/** Help ▸ Rooms concepts. A placeholder until the Rooms tour lands (UX PR 6 replaces this body). */
-export function openRoomTour(): void {
-  openConcepts();
+/** Open the concepts drawer, scrolled to `section` ("" = the top; Help ▸ Rooms concepts passes "rooms"). */
+export function openConcepts(section: ConceptsSection = ""): void {
+  S.set({ openMenu: "", conceptsOpen: true, conceptsSection: section });
+}
+export function closeConcepts(): void {
+  S.set({ conceptsOpen: false, conceptsSection: "" });
+}
+/** Open the Launch… popover (the Data example's last step). */
+export function openLaunchMenu(): void {
+  openMenuSoon("launch");
 }
 
 export interface TemplatePrefill {
@@ -509,19 +582,21 @@ export function startup(): void {
   });
   void loadBaseCats();
   void loadCompTotal();
-  // First-run guided tour (shows once unless dismissed with "don't show again").
-  if (lsGet("mewged.onboard.tourDontShow") !== "1" && lsGet("mewged.onboard.tourSeen") !== "1") {
-    S.set({ tourOpen: true });
-  }
+  // the tours' "Don't show again" (it also hides the empty states' tour nudges) and ?tour=center (no spotlight)
+  S.set({ tourDontShow: lsGet(TOUR_KEYS.data.dontShow) === "1", artTourDontShow: lsGet(TOUR_KEYS.art.dontShow) === "1", roomTourDontShow: lsGet(TOUR_KEYS.rooms.dontShow) === "1" });
+  onboarding.tourCentered = typeof location !== "undefined" && new URLSearchParams(location.search).get("tour") === "center";
+  // First-run guided tour (shows once unless seen or dismissed with "Don't show again").
+  if (!tourDismissed("data")) S.set({ tourOpen: true });
   // ?mode=art opens straight into Art mode (skips the tours, e.g. for demos/screenshots). Both onboarding tours
   // stay reachable from the Help (?) menu.
   if (link.mode === "art") {
     S.set({ artMode: true, tourOpen: false });
     onboarding.artTourTriggered = true; // don't auto-pop the art tour over a deep-linked session
   }
-  // ?mode=rooms opens straight into the Room editor (no tour over it)
+  // ?mode=rooms opens straight into the Room editor (no tour over it; the Rooms tour stays in the Help menu)
   if (link.mode === "rooms") {
     S.set({ roomMode: true, tourOpen: false });
+    onboarding.roomTourTriggered = true;
   }
   syncDeepLink();
 }

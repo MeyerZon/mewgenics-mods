@@ -19,6 +19,7 @@ import {
   type PaletteKind,
 } from "./room-state.ts";
 import { ArtImg, artLine, artOf } from "./RoomBits.tsx";
+import { TOUR, tourAttr } from "../tour-anchors.ts";
 import type { ArtResolution } from "../../../src/core/level/tile-art.ts";
 
 const PALETTE_CAP = 200;
@@ -89,7 +90,7 @@ function Palette(): React.JSX.Element {
         onChange={(v) => setPaletteFilter(kind, v)}
         style={sx("margin:0 12px 6px")}
       />
-      <div className={`exbody tw palette-list palette-${kind}`}>
+      <div className={`exbody tw palette-list palette-${kind}`} {...tourAttr(TOUR.roomsPalette)}>
         {hits.slice(0, PALETTE_CAP).map((e) => {
           const a = artOf(art, kind, e.id);
           return (
@@ -141,7 +142,7 @@ export function RoomExplorer(): React.JSX.Element {
         </div>
       ) : (
         <>
-          <div className="exbody tw rooms-list">
+          <div className="exbody tw rooms-list" {...tourAttr(TOUR.roomsList)}>
             {levels.length ? (
               levels.map((l) => (
                 <LevelRow

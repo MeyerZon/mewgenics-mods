@@ -25,6 +25,8 @@ export interface ToastMessage {
 }
 
 export type Tab = "validation" | "preview" | "components";
+/** A section of the concepts drawer (components/ConceptsDrawer.tsx). */
+export type ConceptsSection = "" | "data" | "art" | "rooms";
 export type OpenMenu = "" | "mod" | "help" | "launch" | `shape:${string}`;
 
 /** The unsaved-work dialog (dirty.ts guard → App.tsx ConfirmModal); null when closed. */
@@ -63,6 +65,8 @@ export interface AppState {
   // overlays
   templateOpen: boolean;
   conceptsOpen: boolean;
+  /** the concepts drawer section to scroll to on open ("" = the top) */
+  conceptsSection: ConceptsSection;
   baseDrawer: boolean;
   compDrawer: boolean;
   tourOpen: boolean;
@@ -79,6 +83,10 @@ export interface AppState {
   artTourDontShow: boolean;
   artExampleOpen: boolean;
   artExampleStep: number;
+  // Rooms mode onboarding (UX PR 6): the Rooms tour, gated like the Art tour
+  roomTourOpen: boolean;
+  roomTourStep: number;
+  roomTourDontShow: boolean;
   confirm: ConfirmState | null;
   /** GET /api/status (null until it answers) */
   status: EditorStatus | null;
@@ -115,13 +123,14 @@ export const S = createStore<AppState>({
   openMenu: "",
   templateOpen: false,
   conceptsOpen: false,
+  conceptsSection: "",
   baseDrawer: false,
   compDrawer: false,
   tourOpen: false,
   tourStep: 0,
   tourDontShow: false,
   exampleOpen: false,
-  exampleStep: 2,
+  exampleStep: 0,
   artMode: false,
   roomMode: false,
   artTourOpen: false,
@@ -129,6 +138,9 @@ export const S = createStore<AppState>({
   artTourDontShow: false,
   artExampleOpen: false,
   artExampleStep: 0,
+  roomTourOpen: false,
+  roomTourStep: 0,
+  roomTourDontShow: false,
   confirm: null,
   status: null,
   serverOk: true,
@@ -196,6 +208,13 @@ export function lsSet(k: string, v: string): void {
     /* private mode / blocked storage — onboarding still works, just not remembered */
   }
 }
+export function lsRemove(k: string): void {
+  try {
+    window.localStorage.removeItem(k);
+  } catch {
+    /* as lsSet */
+  }
+}
 
 // ---- shared helpers -------------------------------------------------------------------
 /** How many toasts show at once (older ones drop off first). */
@@ -243,11 +262,39 @@ export function setBusy(key: string, on: boolean): void {
   });
 }
 
-/** Once the Art tour has been opened or deliberately suppressed, entering Art mode no longer auto-opens it. */
-export const onboarding = { artTourTriggered: false };
+/**
+ * In-memory onboarding gates: once the Art / Rooms tour has been opened or deliberately suppressed (a deep link),
+ * entering that mode no longer auto-opens it. `tourCentered` is the `?tour=center` switch (the card without a
+ * spotlight), read once at startup.
+ */
+export const onboarding = { artTourTriggered: false, roomTourTriggered: false, tourCentered: false };
 
-/** Open the Art tour at step 0 (Help menu, art worked example, first Art entry). */
+/** The three tours and their per-viewer localStorage keys (closing one sets *Seen; the checkbox sets *DontShow). */
+export type TourKind = "data" | "art" | "rooms";
+export const TOUR_KEYS: Record<TourKind, { seen: string; dontShow: string }> = {
+  data: { seen: "mewged.onboard.tourSeen", dontShow: "mewged.onboard.tourDontShow" },
+  art: { seen: "mewged.onboard.artTourSeen", dontShow: "mewged.onboard.artTourDontShow" },
+  rooms: { seen: "mewged.onboard.roomTourSeen", dontShow: "mewged.onboard.roomTourDontShow" },
+};
+
+/** Open the Art tour at step 0 (Help menu, the Art empty state, first Art entry). */
 export function openArtTour(): void {
   onboarding.artTourTriggered = true;
   S.set({ artTourStep: 0, artTourOpen: true, openMenu: "" });
+}
+/** Open the Rooms tour at step 0 (Help menu, the Rooms empty state, first Rooms entry). */
+export function openRoomTour(): void {
+  onboarding.roomTourTriggered = true;
+  S.set({ roomTourStep: 0, roomTourOpen: true, openMenu: "" });
+}
+
+// ---- the overlay editor's document state (components/Editor.tsx reports through these) ------------------
+/** The open document's size, for the status line. */
+export function setDocStats(lines: number, bytes: number): void {
+  const s = S.get();
+  if (s.docLines !== lines || s.docBytes !== bytes) S.set({ docLines: lines, docBytes: bytes });
+}
+/** The overlay was edited (the Save button's dot, the unsaved-work guard). */
+export function markUnsaved(): void {
+  if (S.get().saved) S.set({ saved: false });
 }

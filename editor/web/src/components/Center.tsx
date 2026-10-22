@@ -4,6 +4,7 @@
 import React from "react";
 import { useS, sx, Button, EmptyState, Pill } from "./ui.tsx";
 import { Editor } from "./Editor.tsx";
+import { TOUR, tourAttr } from "../tour-anchors.ts";
 import { currentFile, modeChipLabel, fileTypeLabel, closeFile, openTemplate, openTour, openExample, openConcepts, browseBaseData } from "../actions.ts";
 
 function FileTabBar(): React.JSX.Element {
@@ -77,6 +78,8 @@ function HeroCard({ icon, title, body, onClick, link }: { icon: string; title: s
 }
 
 function HeroEmpty(): React.JSX.Element {
+  // "Don't show again" on the tour also retires its nudge here
+  const tourDontShow = useS((s) => s.tourDontShow);
   return (
     <div className="emptycenter">
       <EmptyState
@@ -94,7 +97,7 @@ function HeroEmpty(): React.JSX.Element {
             <div className="grid2">
               <HeroCard icon="＋" title="Create your first overlay" body="Scaffold an ability, item, passive, or status from a template — localization rows included." onClick={() => openTemplate({ mod: "" })} />
               <HeroCard icon="⌕" title="Browse base data" body="Read the base-game data files and components to see what you can recombine or override." onClick={() => void browseBaseData()} />
-              <HeroCard icon="✦" title="Take the guided tour" body="A 5-step walkthrough of browse → edit → validate → preview." onClick={() => openTour()} link="Start tour →" />
+              {!tourDontShow ? <HeroCard icon="✦" title="Take the guided tour" body="A 5-step walkthrough of browse → edit → validate → preview → launch." onClick={() => openTour()} link="Start tour →" /> : null}
               <HeroCard icon="★" title="Rebuild Joker's Luck" body="Follow the worked example end to end." onClick={() => openExample()} link="Open example →" />
             </div>
             <div style={sx("margin-top:22px;font-size:13px;color:var(--muted)")}>
@@ -136,7 +139,7 @@ export function Center(): React.JSX.Element {
   const mod = useS((s) => s.mod);
   const file = useS((s) => s.file);
   return (
-    <div className="center">
+    <div className="center" {...tourAttr(TOUR.editor)}>
       {file ? <FileTabBar /> : null}
       <div style={sx("flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden")}>
         <Editor />

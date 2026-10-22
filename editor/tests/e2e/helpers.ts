@@ -8,6 +8,8 @@ export const LS = {
   tourDontShow: "mewged.onboard.tourDontShow",
   artTourSeen: "mewged.onboard.artTourSeen",
   artTourDontShow: "mewged.onboard.artTourDontShow",
+  roomTourSeen: "mewged.onboard.roomTourSeen",
+  roomTourDontShow: "mewged.onboard.roomTourDontShow",
 };
 
 /**
@@ -38,13 +40,15 @@ export async function seedLocalStorage(page: Page, entries: Record<string, strin
   }, entries);
 }
 
-/** Seed both tours as already-seen (used by non-onboarding tests). */
+/** Seed the three tours (Data, Art, Rooms) as already-seen (used by non-onboarding tests). */
 export async function seedToursSeen(page: Page): Promise<void> {
   await seedLocalStorage(page, {
     [LS.tourSeen]: "1",
     [LS.tourDontShow]: "1",
     [LS.artTourSeen]: "1",
     [LS.artTourDontShow]: "1",
+    [LS.roomTourSeen]: "1",
+    [LS.roomTourDontShow]: "1",
   });
 }
 

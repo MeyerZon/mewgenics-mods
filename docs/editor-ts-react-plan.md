@@ -210,6 +210,24 @@ PR 1 of the UX overhaul adds the shared building blocks; later PRs move the scre
   (tile id, objects summary, art src, selected, random), so painting one cell re-renders that cell. The New room dialog
   is a `<form>` (Enter creates). Every `rooms/*` file is off the conventions allow-list. e2e: `tests/e2e/rooms.spec.ts`
   "the explorer, the panes and the grid input (UX PR 5)".
+- **Onboarding (PR 6)**: the tours are anchored coachmarks. `web/src/tour-anchors.ts` defines every anchor id once
+  (`TOUR`, `tourAttr(id)` → `data-tour`; the primitives take `tour` on a tab / segment / tablist and `triggerTour` on a
+  Menu) plus the pure placement maths (`placeCard`: right of the target, flipped left / below / above, "over" when
+  nothing fits; `isOnScreen`). `GuidedTour` (`components/Tours.tsx`) spotlights the first present target of a step
+  (`.tour-spot`, a dimming box-shadow + ring) with the card beside it, re-measured on resize, a `ResizeObserver` and a
+  300 ms poll (late lazy panes), scrolling the target into view once; with no target on screen or `?tour=center` it
+  is the centred card. A step's `onEnter` switches mode (`ensureMode`), so the Art tour's step 2 enters Art mode.
+  Data (5), Art (7: + Timeline, Rig, VectorCraft) and Rooms (5, `mewged.onboard.roomTourSeen` / `roomTourDontShow`,
+  auto-opened on the first `enterRoomMode()`, suppressed by `?mode=rooms`) tours. Closing sets `*Seen`; the
+  "Don't show again" box writes `*DontShow` at once (`setTourDontShow`), which also hides the empty states' tour
+  nudges. The worked examples are `components/examples/` (`steps.ts`: ONE `EXAMPLE_STEPS` / `ART_EXAMPLE_STEPS` list
+  of `{id, title, sub, body, action}` with the bodies as data, so index and content cannot drift; `Stepper.tsx`, the
+  shell with `useDialog`; `DataExample.tsx`, `ArtExample.tsx`); the Data example opens on step 1 and step 3 is the
+  `combined.csv.append` rows. The Art example's jumps need a mod (else the mod switcher opens with a toast) and the
+  Import jump focuses the Shapes tab's Import card. The Concepts drawer has a Rooms section and shows the current
+  mode first (Help ▸ Rooms concepts scrolls to it). Tours, examples and the drawer are one lazy chunk
+  (`components/Onboarding.tsx`, 31.4 kB). Every view is off `store-set-in-view`; the allow-list holds only
+  `art/SceneTabs.tsx`'s one index key. e2e: `tests/e2e/onboarding.spec.ts`.
 
 ## Follow-ups (not in this stack)
 

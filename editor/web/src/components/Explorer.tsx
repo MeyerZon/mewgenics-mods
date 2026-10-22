@@ -1,6 +1,7 @@
 // Left pane in Data mode: the mod's overlay files (as a tree) and the read-only base data.
 
 import React from "react";
+import { TOUR, tourAttr } from "../tour-anchors.ts";
 import { useS, sx, Pill, SearchBox, SectionHeader, Button, type PillKind } from "./ui.tsx";
 import { BASE_PAGE } from "../state.ts";
 import { buildTree, type TreeNode } from "../tree.ts";
@@ -56,12 +57,12 @@ function ModFilesSection(): React.JSX.Element {
   const toggleDir = (path: string) => setCollapsed((cur) => ({ ...cur, [path]: !cur[path] }));
   const tree = React.useMemo(() => buildTree(files), [files]);
   return (
-    <div>
+    <div {...tourAttr(TOUR.explorerFiles)}>
       <SectionHeader
         label="Mod files"
         action={
           mod ? (
-            <Button variant="ghost" size="sm" style={sx("color:var(--acc-ink)")} onClick={() => openTemplate({ mod })}>
+            <Button variant="ghost" size="sm" style={sx("color:var(--acc-ink)")} onClick={() => openTemplate({ mod })} {...tourAttr(TOUR.newOverlay)}>
               + New overlay
             </Button>
           ) : undefined
@@ -70,7 +71,7 @@ function ModFilesSection(): React.JSX.Element {
       {!mod ? (
         <div className="dashed">
           <div style={sx("font-size:13px;margin-bottom:12px")}>No mod open yet.</div>
-          <Button variant="primary" style={sx("width:100%")} onClick={() => openTemplate({ intent: "mod", mod: "" })}>
+          <Button variant="primary" style={sx("width:100%")} onClick={() => openTemplate({ intent: "mod", mod: "" })} {...tourAttr(TOUR.newOverlay)}>
             + New mod
           </Button>
         </div>
@@ -174,7 +175,7 @@ function BaseFilter(): React.JSX.Element {
 function BaseDataSection(): React.JSX.Element {
   const baseCats = useS((s) => s.baseCats);
   return (
-    <div>
+    <div {...tourAttr(TOUR.explorerBase)}>
       <SectionHeader label="Base data" action={<small className="muted">· read-only</small>} />
       <BaseFilter />
       <div className="exbody">
