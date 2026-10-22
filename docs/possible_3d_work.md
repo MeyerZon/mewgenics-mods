@@ -1,235 +1,192 @@
-# Possible 3D work — action list
+# Possible 3D work — plan toward full true 3D
 
-Work plan for drawing Mewgenics through a real camera (floor flat, sprites billboarded, board
-orbitable, 3D mods possible). Same conventions as `TODO.md`: `[x]` done · `[~]` in progress ·
-`[ ]` planned. Each item says **what** to do, **why** it is needed, and **what it takes**. Evidence
-and addresses are in [`3d-rendering-feasibility.md`](3d-rendering-feasibility.md) (§6 hook table) and
-the git-ignored `.analysis/rea-renderer-report-2026-10-18.md`. Everything here is native work on
-`mewframework.dll`, pinned to build 25143593, fail-closed on any other build, dev save only.
+Owner's goal (2026-10-22, their words): **"FULL true 3D, so I will be able to put there 3D models, and it will
+work."** End state = real meshes (OBJ / glTF shipped by a mod through `-modpaths`) drawn into the tactics scene
+through a real perspective camera, depth-tested against the billboarded sprites, picked correctly, shaded so they sit
+in the paletted vector look. The orthographic orbit (old "phase 1") is only a stepping stone.
 
-Status as of 2026-10-18 (evening): research done including a second Ghidra pass (z range, frame
-model, FBO format, cameras, picking, cull/autoflip); nothing built. **Chosen target: true
-perspective + genuine 3D meshes** (phases 2–3); phase 1 stays the cheapest way to validate hooks
-and classification on the way there.
+Everything here is native work on `mewframework.dll`, pinned to build 25143593 through `bindings/25143593.json`,
+fail-closed on any other build, dev save only. Evidence and the hook table: [`3d-rendering-feasibility.md`](3d-rendering-feasibility.md)
+(§1 facts, §6 hooks); camera/layer/pass facts: [`engine-map.md`](engine-map.md) "Glow and outline passes" and
+"Per-unit glow (native)"; gameplay is 2D: [`spatial-model.md`](spatial-model.md).
 
-## Done
+Conventions: `[x]` done · `[~]` in progress · `[ ]` planned. **OBSERVED** = read from a decompile / bytes / a live run
+on this machine; **INFERRED** = reasoned from that; **WIPED** = stated by the 2026-10-18 reports whose decompiles
+(`r3d_*`, `p2_*`) were lost on 2026-10-19 — believed right, to be re-verified before code relies on it. RVAs are
+image-relative (base 0x140000000).
 
-- [x] Spatial model: gameplay is strictly 2D (`spatial-model.md`)
-- [x] Renderer RE: mvp composition, iso matrix, camera, sort, depth, GL table, shadow placement
-      (`.analysis/decompiled/r3d_*`, 108 functions — not on disk since 2026-10-19; re-decompile on demand)
-- [x] Board geometry measured from vanilla art (2:1 diamonds, feet-registered sprites)
-- [x] Prior-art survey (Helix/geo-11, 3dSen, Stardew 3D, Don't Starve, Flash 2.5D, billboard math)
-- [x] Feasibility write-up with design levels A–D and hook table
-- [x] Ghidra pass 2: pixels→clip base matrix and z range, single-threaded record/replay frame model,
-      D24S8 MSAA scene FBO, camera defaults (zoom 60, flip −1) and the three combat cameras, the
-      single picking helper, cull-disable counter, autoflip rule, tile = floor(world) OBSERVED
-      (`.analysis/rea-renderer-report-pass2-2026-10-18.md`, `.analysis/decompiled/p2_*`)
+Status 2026-10-22: inventory + gap list written first (this file, as restructured on branch `feat/3d-investigation`),
+then RE sessions `r3dA`..`r3dE` sized to the gaps only, then the phase-0 bindings + observer hooks.
 
-## Phase 0 — confirm the unknowns (days)
+---
 
-- [ ] **Sign the hook functions into `bindings/25143593.json` (`signatures.h` is generated from it).**
-      What: `FUN_14078d600` (iso local mat4), `FUN_1409b4c90` (plain mat4), `FUN_1409b4a30`
-      (interpolated transform), `FUN_1409785e0` (camera VP), `FUN_1409787c0` (Camera::render),
-      `FUN_14078d480` (iso depth key), `FUN_1409896f0` (layer render), `FUN_140a47e50` (instance
-      writer), `FUN_1409b0a50` (DisplayObject render). Data: ISO `0x1412f7a00`, ISO⁻¹ `0x1412f79c0`,
-      state flags `0x1412f714c`, mat stack `0x1413c5bd0`, GLEW table `0x1413bc370`.
-      Why: the framework only activates on a verified build; code addresses are pattern-scanned, data
-      addresses live in `BuildInfo` and are sanity-checked (e.g. ISO m0 ≈ 0.8944).
-      Takes: `tools/bindings/make-signature.ts` runs; the manifest + `npm run bindings:gen` carry the full unique pattern (lesson from the status engine).
-- [ ] **Log a few instance records in-process.**
-      What: observer hook on `FUN_140a47e50`, dump 10 mat4s + depth_bias to the framework log, once.
-      Why: confirms the column-major layout and m14 = 0 for iso objects in a live frame. The z
-      mapping itself is now known statically: `window z = 0.5 + 0.5e-4·z_view`, range ±10 000.
-      Takes: one `MJ_InstallHook` observer, a dev-save launch, no behaviour change.
-- [ ] **Identify the scene camera at runtime.**
-      What: log layer bitset (+0xc8), RTT flag (+0x80), HDR (+0x81), zoom (+0x168), flip (+0x170) and
-      sort order (+0xa0) for every `Camera::render`; also log `DAT_1413c6d88` and what
-      `FUN_1401b1070` returns during a fight.
-      Why: the combat scene builds three cameras (RTT+HDR, transform scale 1.15, UI on layers
-      0x25..0x30); the perspective hook must fire for exactly one of them. Defaults are zoom 60 /
-      flip −1, but `zoomer` / `camera_bounds` GON may change them.
-      Takes: observer hook on `FUN_1409787c0`; one fight on the dev save.
-- [x] ~~Dump a tile transform to confirm tile = world~~ — OBSERVED statically in pass 2: the tile
-      picker `FUN_1408abc50` takes `floor(world x), floor(world z)`. Still worth one log line to see
-      whether tile centres sit at `col + 0.5`.
-- [ ] **Decide the classification mechanism.**
-      What: pick between (a) entity component type (`TacticsTile`/`Shadow` → floor, `Character`/
-      `TacticsObject` → standing), (b) render layer index (renderer+0x54), (c) a GON `render3d {}` key.
-      Why: floor vs standing is the one thing the matrices cannot tell us; getting it wrong draws
-      cats lying on the ground.
-      Takes: start with (a)+(b) for the PoC; (c) is phase 2 (editor-validated).
+## 1. Known — do not re-derive
 
-## Phase 1 — orthographic orbit proof of concept (~1 week)
+### Projection and the matrix stack
+- **K1 Iso local mat4 = `Renderer_GetScreenMatrix` 0x78d600** (the old `FUN_14078d600`; FwSymbol 35 since PR #99).
+  Reads the interpolated transform `0x9b4a30(Position = renderer+0x40, out[6], alpha = (renderer+0x28)->+0x30)` →
+  `(x, height, z, sx, sy, rot°)`; writes a rotation/scale 2×2 into m0/m1/m4/m5, **m12 = ISO[0]·x + ISO[4]·h + ISO[8]·z,
+  m13 = ISO[1]·x + ISO[5]·h + ISO[9]·z, m14 = 0**, m10 = m15 = 1. ISO is read as floats at `0x1412f7a00/04` (x column),
+  `0x1412f7a10/14` (height), `0x1412f7a20/24` (z). OBSERVED (`Renderer_GetScreenMatrix_0x78d600.c`).
+- **K2 ISO values** m0 = 0.8944, m1 = 0.4472, m4 = 0, m5 = 1, m8 = −0.8944, m9 = 0.4472 (= (2,1)/√5); inverse at
+  `0x1412f79c0`; static init `0x140025700`; 23 other readers. WIPED (feasibility §1); values re-read in r3dC.
+- **K3 Camera VP and the stack.** `Camera_render` 0x9787c0 pushes a copy of the stack top (`0x9feaf0(&0x1413c5bd0)`;
+  stack data `DAT_1413c5bd8`, top index `DAT_1413c5c00`, 0x40-byte column-major floats) and **post-multiplies it by
+  `0x9785e0(cam, out)`** (the camera VP), then draws every enabled layer with `Layer_Draw` 0x9896f0, then pops.
+  OBSERVED (`Camera_render_0x9787c0.c` lines 221-325). Hooking 0x9785e0 for one camera therefore changes that
+  camera's VP and nothing else.
+- **K4 VP decomposition** (PR #99, OBSERVED in `TacticsTest::LateRender` 0x88d780 asm): `VP = K × inverse(V)` with
+  `V = Position_GetViewMatrix 0x9b4c90(cam+0x38, out, interp)` (inverse = leaf 0xa07c70) and
+  `K = {zoom,0,0,0 / 0,zoom·zi,0,0 / 0,0,1,0 / 640,360,0,1}`, `zoom` = double `cam+0x168` (default 60), `zi` = int
+  `cam+0x170` (default −1 = y-flip); K's rows 2/3 are the .rdata vectors 0x141140520 / 0x141140960; canvas 1280×720
+  (`CONST_GLOW_CANVAS_W/H`). z passes through K unscaled.
+- **K5 Base ortho**: `FrameBegin` 0x9b7870 resets the stack bottom and calls `0x9fec80(&stack)` (OBSERVED,
+  `ApplicationBase_FrameBegin_0x9b7870.c:169`); its `m10 = 1e-4` ⇒ `window z = 0.5 + 0.5e-4·z_view`, |z| ≤ 10 000,
+  one `depth_bias` unit = 20 z units (WIPED, disassembly `0x1409b7d25`).
+- **K6 Autoflip** `0xa082b0` = `det4x4 < 0`, column 0 negated when the sign differs from the base ortho's (WIPED).
+  Root scale `0x97ac40` → `0x9b16c0(root, 1/zoom, flip/zoom)`, re-run by `0x97ad80` whenever the camera zoom/flip
+  differs from the renderer's cache (renderer `+0x98/+0xa0` zoom copy, OBSERVED in rim notes) ⇒ keep `cam+0x168/+0x170`
+  constant under perspective.
 
-- [ ] **Camera state + input.**
-      What: yaw/pitch/zoom struct in the framework; mouse wheel = yaw (or zoom with a modifier),
-      drag = pitch, key = reset to 45°/30°. Yaw stepped or clamped to ±45°, pitch clamped to 20–60°.
-      Why: free spinning breaks the left/right-only sprite facing and tires the eye (Stardew 3D
-      reviews); Don't Starve's 45° steps are the proven model.
-      Takes: SDL3 DYNAPI event hook (the framework already hooks DYNAPI slots) or ImGui input; must not
-      swallow events the game needs.
-- [ ] **Per-frame rewrite of ISO and ISO⁻¹.**
-      What: before `RenderCore::render`, write the rotated orthographic basis into `0x1412f7a00`
-      (x → (cos y·k, sin y·sin p·k), z → (−sin y·k, cos y·sin p·k), height → (0, h)) and its inverse
-      into `0x1412f79c0`. At the default angle it equals the vanilla matrix bit-for-bit.
-      Why: this one data write moves every consumer at once: iso renderers, `Shadow` placement,
-      `camera_to_world`, and the 23 picking/preview sites. No projection pipeline is needed because
-      a rotated orthographic ground view is still a 2D affine map.
-      Takes: a frame-begin hook (community `ApplicationBase::FrameBegin` or our `Camera::render`
-      hook); restore vanilla values when the mod is disabled; keep the inverse exact.
-- [ ] **Floor un-skew hook.**
-      What: in `FUN_14078d600`, for floor-class entities, pre-multiply the object's output by
-      `ISO_vanilla⁻¹|ground` (diamond art → unit square) and then by the current ground basis.
-      Why: tile art is pre-drawn as 2:1 diamonds; without this, tiles move with the camera but keep
-      their old diamond shape. At the default angle the correction is the identity.
-      Takes: the classification from phase 0; the maths is a 2×2 affine; `Shadow` already does the
-      equivalent for its `shadow` child, so the engine's convention is known.
-- [ ] **Scene-camera filter.**
-      What: in the `Camera::render` hook, apply the rewritten basis only while the scene camera
-      renders (pattern from phase 0), never for the UI camera.
-      Why: the ISO globals are process-wide; UI floaters and menus that inline the iso projection must
-      keep the vanilla values. Rewrite before the scene camera, restore after.
-      Takes: two writes per frame around one camera.
-- [ ] **Sort-key hook.**
-      What: replace `x + z` with `dot((x, z), ground forward)` in `FUN_14078d480` and the two inlined
-      copies (slots 6 and 19 of RendererIso), or install a layer key functor (layer+0x60).
-      Why: painter's order must stay back-to-front when the board turns; the engine's key is only
-      correct for yaw 45°.
-      Takes: three small hooks, or one functor swap; keep `depth_offset` as a bias on the new key.
-- [ ] **Height factor.**
-      What: set the ISO height column to `h = 1.0` at default (the engine's 0.913 squash relative to
-      a consistent camera) and decide whether to blend toward `k·cos(pitch)` as the pitch changes.
-      Why: pixel identity at the default view; a style choice beyond it.
-      Takes: a constant; expose as a setting.
-- [ ] **Shader uniform check.**
-      What: verify `camera_to_world` (`FUN_14078f820`) and `camera_mat` (`FUN_140891300`) pick up the
-      new basis automatically; patch via `-modpaths` only if not.
-      Why: ground lighting and water texture mapping are computed from these.
-      Takes: visual check on a water map and a cave (lighting) map.
-- [ ] **Acceptance.**
-      What: screenshot diff vanilla vs mod at 45°/30° = empty; rotate ±45° and tilt: cats stand on a
-      flat diamond grid, shadows and targeting previews follow, hover/click picks the right tile.
-      Why: the "preserve original look if set correctly" requirement is the whole point.
-      Takes: a dev-save fight, two screenshots, a pixel diff script (plain node).
+### Cameras (combat)
+- **K7 Camera struct** (0x178, OBSERVED rim notes + `Camera_render_0x9787c0.c`): `+0x38` Position*, `+0x40`
+  RenderQueue*, `+0x48` RenderTarget*, `+0x50` Texture2D*, `+0x60..+0x78` scissor, `+0x80` RTT byte, `+0x81` HDR byte
+  (1 or 4 bytes/channel), `+0x82` skip-when-empty, `+0x88` RTT scale, `+0x90/+0x94` explicit size, `+0x98` bind unit,
+  `+0x9c` had-content, `+0xa4` current layer, `+0xa8` primary, `+0xb0` per-layer pass vectors, `+0xc8` layer bitset
+  (all on by default), `+0x120` item filter fn, `+0x160` post-item fn, `+0x168` zoom double, `+0x170` flip int.
+  `DAT_1413c6d88` = the camera currently rendering (set/cleared by `Camera_render`).
+- **K8 The world camera is `TacticsTest+0x68` and it is NOT render-to-texture** (OBSERVED, TacticsTest::init asm
+  0x140833573..0x140833b76, rim notes §4): layers = all minus 0x25..0x30 minus {1,2,3,0x15,0x16,0x17,0x18,0x1d} plus
+  0x2a; its passes composite at 0x1a and the battlefield effect at 0x22. `+0x60` = UI (0x25..0x2f). `+0x40/+0x48/+0x50
+  /+0x58/+0x70` are RTT side cameras (layers 0x16, 0x15, 1+3, 0x18 mask, 0x17 cursor). Units draw on layer **0x19**.
+  This **corrects** feasibility §1 "scene camera to a texture … RTT+HDR": the old reading came from `0x764da0`, which
+  is not what combat uses for the world. Predicate for hooks: `cam == *(Camera**)(TacticsTest + 0x68)` (TacticsTest is
+  already found by the glow engine's LateRender hook).
+- **K9 RT handling in `Camera_render`** (OBSERVED): an RTT camera binds `cam+0x48` via a `RenderTarget::bind` lambda
+  submitted through `0xa47820`, creating it with `0xa28a80(rt, w, h, samples = *(int*)(App + 0xc60), 2, hdr = cam+0x81,
+  1)`; full-screen non-HDR RTT cameras share one global RT `DAT_1413c6d80` (refcount `DAT_1413c6d90`); the current RT
+  global is `DAT_1413c1a28`. `FrameEnd` 0x9b7d80 unbinds the app's main RT at **`App+0xc10`** (`0xa28fb0(App+0xc10,1)`),
+  submits its blit lambda, replays (`0xa481d0(&0x1412f80f0)`), then `SDL_GL_SwapWindow` (OBSERVED,
+  `ApplicationBase_FrameEnd_0x9b7d80.c:66-115`). So `App+0xc60` = main RT `+0x50` = the MSAA sample count, and the
+  non-RTT world camera draws into the main RT `App+0xc10` (INFERRED — r3dD confirms its depth attachment).
 
-## Phase 2 — perspective, robustness, data model (1–2 months)
+### Draw order, depth, layers
+- **K10 Layer** (0xe8 bytes, `RenderQueue+0x38 + i·0xe8`, 0x30 layers in combat): `+0x08` items `{renderable*,
+  Position*, double key, u32 flags}` ×0x20, `+0x18` material, `+0x20` sorted byte, **`+0x24` draw mode**, `+0x28` sort-key
+  `std::function<double(const RenderPacket&)>` (impl `+0x60`), `+0x68` fn (impl `+0xa0`), **`+0xa8` custom draw
+  `std::function` (impl `+0xe0`)**. `Layer_Draw` 0x9896f0 sorts with comparator 0x988dd0 (descending), sets the queue's
+  current mode, and draws each item by renderable vtable slot 20 or the layer's custom draw functor. **Mode 1 = the
+  depth-tested layer: draws the items in reverse with `DAT_1412f714c |= 2`, then `depth_bias` (`DAT_1413c5c40`) += 1.0.**
+  OBSERVED (`Layer_Draw_0x9896f0.c`, rim notes).
+- **K11 Sort key** = `Position+0xb0 = z + x + offset_z(renderer+0x118) + offset_x(+0x108)`, copied to `+0x68`
+  (`MaskedRendererIso_RefreshSortKey` 0x78d480, slot 25). OBSERVED. GON `depth_offset d` writes `(d,0,d)` (WIPED, asm
+  0x1400f2f92).
+- **K12 Depth state**: bit 1 (value 2) of `DAT_1412f714c` = depth test, bit 3 = colour+depth mask; applier 0xa497d0;
+  `glDepthFunc`/`glDepthRange`/`glClipControl` never called (GL_LESS, [0,1]); vanilla iso objects sit at z = 0.5;
+  fragment shaders write `gl_FragDepth = gl_FragCoord.z - depth_bias*.001` (WIPED except the `|= 2`, OBSERVED in K10).
+- **K13 Cull**: `Swf_DisplayObject_Render` 0x9b0a50 culls (affine bbox vs NDC bounds `0x1413c5c20..38`) only while
+  `DAT_1413c5c90 == 0`. OBSERVED (`Swf_DisplayObject_Render_0x9b0a50.c:119`).
 
-- [ ] **Perspective camera path.**
-      What: hook `FUN_1409785e0` for the scene camera only; return `P_persp × lookAt` in the
-      1280×720 virtual-pixel convention with view z scaled into the ±10 000 range the base ortho
-      maps (`m10 = 1e-4`); keep `det(VP) < 0` (flip −1 convention) so the autoflip
-      (`FUN_140a082b0`, det < 0 test) does not mirror everything; keep `cam+0x168` constant so
-      `FUN_14097ad80` does not rescale every SWF root per frame. In `FUN_14078d600` emit
-      `(x, height, z)` into m12/m13/m14 with an upright billboard basis.
-      Why: the Octopath/HD-2D look; also what makes real meshes read as 3D.
-      Takes: the scene-camera pattern from phase 0; optionally hook `FUN_1409fec80` to change the z
-      scale if 24-bit depth over ±10 000 proves too coarse.
-- [ ] **Disable the 2D screen-space cull.**
-      What: keep the cull-disable counter `DAT_1413c5c90` non-zero (add a large value once; the
-      engine's inc/dec pairs are balanced), or hook `FUN_1409b0a50` to divide by w.
-      Why: the cull transforms the bbox by the affine part of the matrix and ignores w, so under
-      perspective it culls wrongly and objects pop.
-      Takes: one data write (data-only fix) — minutes, plus a check that nothing else reads the
-      counter.
-- [ ] ~~Per-object tessellation LOD~~ → **Distance-dependent sprite sizing (optional).**
-      What: pass 2 showed `FUN_14097ac40` is not an LOD: it sets the SWF root scale to
-      `(1/zoom, flip/zoom)`, cached per renderer. If perspective makes near sprites look polygonal,
-      apply extra scale in the model matrix, not via zoom.
-      Why: changing zoom per object thrashes the root rescale; no per-frame curve LOD exists.
-      Takes: nothing unless the look demands it.
-- [ ] **Depth test for scene layers.**
-      What: set bit 1 of `DAT_1412f714c` (state applier `FUN_140a497d0`; bit 3 = colour+depth mask)
-      while the scene camera draws; write one depth per object (anchor); keep `depth_bias` for
-      sub-shape layering (one unit = 20 view-z units). FrameBegin resets `depth_bias` and the camera's
-      RT is cleared COLOR|DEPTH|STENCIL on bind.
-      Why: needed for meshes to intersect/occlude billboards; optional for sprites alone.
-      Takes: a flag toggle around the scene camera; verify no vanilla type-1 layer relies on the
-      default-off state.
-- [ ] **Ray picking via the single helper.**
-      What: hook `FUN_1409796d0(Camera*, double out[2])` (mouse → camera-2D, 32 callers): cast the
-      mouse ray from the perspective camera, intersect the ground plane, and return the **iso-2D
-      equivalent** `(a·x + c·z, b·x + d·z)`. Every ISO⁻¹ consumer (tile picker `FUN_1408abc50`, AOE
-      origin, cursor tile) then yields the right tile unchanged.
-      Why: a perspective ground map is a homography, so the global-matrix trick stops being exact;
-      pass 2 found that all screen→world picking funnels through this one function.
-      Takes: one hook plus ray maths. World→screen has no shared helper (inlined at ~12 sites), but
-      world-anchored objects drawn by the scene camera are correct automatically; only screen-space
-      overlays that inline the iso projection (`FUN_14010eef0`, `FUN_1401571f0/78b0/7f40`,
-      `FUN_14016c700`, … unclassified) may need attention — classify them in-game first.
-- [ ] **Screen-space shader patches (data layer).**
-      What: `ground_lighting.shader` (`/w` after `camera_to_world`), `water*.shader` (reflections
-      toggle), `textured_tile.shader`, `shadow_occluded*.shader`, shipped as `-modpaths` overrides.
-      Why: they assume a flat 1280×720 screen.
-      Takes: GLSL edits; the engine does not prepend `#version`, files carry `#version 150`.
-- [ ] **Per-asset `render3d {}` GON classification.**
-      What: `render3d { mode floor|billboard|upright|screen; offset [x y z]; tilt 0 }` on tiles,
-      characters, static objects, particles; the editor validates it (new schema entry + check).
-      Why: entity-type heuristics will misclassify some art (floating tiles, flat props, tall tiles);
-      data mods need to declare their own.
-      Takes: editor schema + validator work in `editor/src/core/`; framework reads the key via the
-      existing GON access.
-- [ ] **Tall-tile halves and backdrops.**
-      What: TallGrass/Bramble/FloatingGlass Back/Front → two billboards at the tile's far/near edge;
-      `combat_background` plates camera-locked.
-      Why: the halves exist only to fake 2D occlusion; backdrops have no 3D meaning.
-      Takes: classification entries; no engine change.
-- [ ] **Settings UI + safety.**
-      What: ImGui panel (compiled into the game) for mode (off/ortho/perspective), yaw step, pitch
-      clamp, height factor, reflections; persisted in the framework's own file, never in
-      `settings.txt`; mod active only with `-savesuffix dev` until proven.
-      Why: same discipline as everything native here.
-      Takes: small; ImGui is already in the exe (`IMGUISceneBase`).
+### Frame model and GL
+- **K14 Record-and-replay**: `0xa47820(x, std::function<void()>*)` appends to the group vector `0x1412f80f0`;
+  `0xa481d0` replays all groups (state → functor → draw) in FrameEnd. Every `Camera_render` RT bind / scissor pop /
+  texture bind is itself such a functor. The std::function as built by the game: a 0x40-byte object whose first qword
+  is a `std::_Func_impl_no_alloc<lambda,void>` vftable, captures after it, the impl pointer at `+0x38` (= the object
+  itself) (OBSERVED, `Camera_render_0x9787c0.c:204-212, 314-318, 330-337`). Draws are `glMultiDrawElementsIndirect`
+  (WIPED: GLEW slot 0x1413bd5f0, call 0x140a486fd).
+- **K15 Per-instance record** (100 B: mat4 mvp, mat2x4 colour transform, float depth_bias; attribs 0–2 vertex, 3–6 mvp,
+  7–8 colour, 9 depth) written by 0xa47e50; vertices are SWF-local 2D, `gl_Position = mvp * vec4(pos.xy, 0, 1)`. WIPED.
+- **K16 GL 3.2 core / GLSL 1.50, GLEW static** (table 0x1413bc370..0x1413bdea0; `glUniformMatrix4fv` 0x1413bc5a8,
+  `glVertexAttribPointer` 0x1413bc6e0, `glVertexAttribDivisor` 0x1413bc908; IAT `glEnable` 0x140e3f858, `glDisable`
+  0x140e3f7f8, `glDepthMask` 0x140e3f898). WIPED.
 
-## Phase 3 — genuine 3D mods (weeks, after phase 1; independent of perspective)
+### Materials, shaders, mod-shipped assets
+- **K17 A mod-shipped shader becomes a material with one call**: `ShaderManager_GetOrCreateMaterial` 0x9bb5d0
+  `(App 0x13c4a30, name, "file.shader")` loads `shaders/<file>` through the resource layer, so `-modpaths` serves it;
+  `Material_SetUniformVec4/Float/SetTexture` set uniforms. OBSERVED in-game (PR #86/#99 `fw_unit_glow.shader`).
+- **K18 The framework already hooks the frame**: `TacticsTest::LateRender` 0x88d780 (vftable 0xf0f4b8 slot 19) via
+  `MJ_InstallHook`, finds the cameras at `TacticsTest+0x58/+0x68`, adds passes with `Camera_AddPostProcessPass`
+  0x979880 — the template for every 3D hook (`glow_engine.c`).
 
-- [ ] **Mesh draw hook.**
-      What: submit the mesh draw as a `std::function<void()>` through `FUN_140a47820` while the
-      frame is recorded (from a `Camera::render`/layer-render/`Renderer::render` hook or a
-      `CallbackOnRender` display object, vftable `0x14112ec98`). It replays in `FrameEnd`
-      (`FUN_140a481d0`, before `SDL_GL_SwapWindow`) in recorded order with the scene camera's FBO
-      `rt+0x1c` and viewport bound. Inside the functor: bind own program/VAO, draw with the current
-      view-projection and depth test on, then restore program, VAO, `GL_ARRAY_BUFFER`,
-      `GL_DRAW_INDIRECT_BUFFER`, the instance VBO and depth/stencil/blend/mask state (or set the next
-      group's force bit).
-      Why: everything is single-threaded record-and-replay on the main thread; direct GL calls made
-      during recording execute before every batched draw of the frame, i.e. out of order.
-      Takes: GLEW table access after `glewInit`; the state save/restore list; the matrix convention
-      (virtual pixels, z ±10 000, negative determinant).
-- [ ] **Match the scene framebuffer.**
-      What: render into the camera's FBO with colour RGBA8 (RGBA16F if `cam+0x81`), depth
-      GL_DEPTH24_STENCIL8 **multisampled** at the main RT's sample count; if a later pass needs the
-      depth, blit `GL_DEPTH_BUFFER_BIT` before unbind (`FUN_140a29150` resolves colour only).
-      Why: the depth buffer is a renderbuffer, not a texture — it can be tested against but not
-      sampled, and sample counts must agree or the draw fails.
-      Takes: read `rt+0x50` (samples) and `cam+0x81` at hook time; no own FBO needed.
-- [ ] **Mesh assets through `-modpaths`.**
-      What: minimal OBJ (then glTF) loader; textures as PNG via the existing resource layer.
-      Why: mods must ship models as plain files, like SWFs and GON today.
-      Takes: a few hundred lines of C; no third-party libs (repo rule).
-- [ ] **`FW_*` API + GON binding.**
-      What: `FW_Register3DObject(entity|name, model, transform)`, `FW_Set3DCamera(...)`;
-      GON `model "models/crate.obj"` on static objects/characters; names registered in
-      `editor/registered-names.json` so the validator accepts them.
-      Why: this is the seam between data mods and native, same pattern as `JokersLuck`.
-      Takes: `framework_api.h` additions (API version bump), editor registered-names support.
-- [ ] **Lighting/palette-compatible mesh shader.**
-      What: flat/lambert shader that samples the game's `palettemap` so meshes match the paletted
-      vector look; optional shadow blob.
-      Why: unlit grey meshes next to palette-remapped cats look wrong instantly.
-      Takes: shader work; read `paletted_full.shader` for the remap rule.
+### Picking
+- **K19** Screen→world funnels through `0x9796d0(Camera*, double out[2])` (mouse → camera-2D, 32 callers), then ISO⁻¹;
+  tile picker `0x8abc50` = `floor(x), floor(z)` (1 world unit = 1 tile). World→screen is inlined at ~12 sites
+  (`0x10eef0`, `0x1571f0`, `0x1578b0`, `0x157f40`, `0x16c700`, …). WIPED.
 
-## Open unknowns (resolve as they block)
+---
 
-- [ ] Pixels→NDC base matrix location (z range for the depth test) — phase 0 logging
-- [ ] Scene camera flip sign and zoom — phase 0 logging
-- [ ] `TacticsGrid` (col,row) → transform function — phase 0 dump makes it unnecessary for the PoC
-- [ ] `glMultiDrawElementsIndirect` call site — only needed for level-A diagnostics
-- [ ] How `SetRenderLayer` changes layer +0x54 at runtime — affects classification by layer
-- [ ] Whether `depth_offset`'s `(d, 0, d)` also offsets the drawn position — affects the bias mapping
-- [ ] Particles: `ParticleSystemDepthSorter` / `DepthTrackingBehindEffect` keys — phase 2 sorting
+## 2. Gaps — what is genuinely unknown, and whether it blocks real meshes
 
-## Explicitly not planned
+"Blocks" = blocks *meshes drawn + depth-tested + picked + palette-shaded*; "polish" = needed for the full perspective
+experience but not for a first mesh on screen.
 
-- Replacing the SWF renderer (months; forks the art pipeline — levels B/C/D ride on vanilla instead)
-- Gameplay verticality (height in rules/LOS/range) — out of scope; see `spatial-model.md`
-- Any change to `Mewgenics.exe`, `resources.gpak`, or non-`dev` saves
+| # | Gap | Blocks? | Session |
+|---|---|---|---|
+| G1 | `0xa47820` exact ABI (first arg, copy vs move, which `_Func_impl` vtable slots replay calls: copy / move / call / delete) and whether a hand-built C vtable is enough | **blocks** (mesh draw insertion) | r3dA |
+| G2 | What replay `0xa481d0` re-applies per group after a functor (program, VAO, buffers, textures, blend, depth, mask, scissor), and the applier `0xa497d0`'s cached shadow state (must be invalidated if a functor changes GL state) | **blocks** (state restore list) | r3dA |
+| G3 | GLEW slot addresses for a mesh renderer (UseProgram, BindVertexArray, Gen/BindBuffer, BufferData, VertexAttribPointer, EnableVertexAttribArray, DrawElements, UniformMatrix4fv, GetUniformLocation, Bind/ActiveTexture, GetIntegerv, BindFramebuffer, BlitFramebuffer, Create/Compile/Link) or the material path that lets us skip them | **blocks** | r3dA |
+| G4 | Instance record layout 0xa47e50 (re-verify K15) + call rate | observer only | r3dA |
+| G5 | The main RT `App+0xc10`: creator, depth attachment (D24S8?), sample count, clear per frame — i.e. what depth buffer the world camera's layers can test against | **blocks** (depth test) | r3dD |
+| G6 | Do the sprite fragment shaders `discard` transparent pixels (else sprites write depth over their whole quad) and does every one write `gl_FragDepth`? Is the depth bit's state honoured per group (K12)? | **blocks** (sprite/mesh occlusion) | r3dD |
+| G7 | `0xa55470`: Shader::compile (feasibility) vs `Swf_RenderBatch_BuildVertices` (disp session); where `MATRICES_AS_ATTRIBS` is set; the sprite VAO attribute layout | blocks only if meshes reuse the sprite VAO (plan: they don't) | r3dD |
+| G8 | Palette remap rule (`paletted_full.shader`), what `ground_lighting` / `water*` / `textured_tile` / `shadow_occluded*` assume about a flat screen; how `camera_to_world` (`0x78f820`) and `camera_mat` (`0x891300`) are fed | **blocks** palette shading; polish for the rest | r3dD |
+| G9 | `0x9785e0` exact body + callers (does picking or LateRender re-derive the VP independently of it? — PR #99 replicates it from K4, so a perspective hook must be mirrored there), the base ortho 0x9fec80 (re-verify m10), autoflip callers, root-rescale trigger | **blocks** perspective | r3dB |
+| G10 | Which `Camera*` gameplay calls "the scene camera" (`0x1b1070`, component type 7) and whether it equals `TacticsTest+0x68`; does zoom change at runtime (`zoomer` / `camera_bounds` GON, mouse wheel) | blocks the camera predicate | r3dB |
+| G11 | `0x9796d0` math + its 32 callers classified; ISO/ISO⁻¹ section writable? every ISO consumer classified (world / shadow / pick / UI floater / uniform) | **blocks** picking under perspective; floaters = polish | r3dC |
+| G12 | Floor vs standing classification: renderer/owner vftables for tiles, shadows, characters, objects, splatters; `SetRenderLayer` / `render_layer` → layer index; layer ids per class | blocks billboarding under perspective | r3dC |
+| G13 | Resource layer: a getter for **arbitrary file bytes by path** (`models/x.obj`, `.gltf`, `.bin`, `.glb`) through `-modpaths` (text getter `0x7c10e0` is known), and the PNG → GL texture path | **blocks** mesh assets | r3dE |
+| G14 | ImGui callable for a settings panel; free inputs (mouse wheel / right drag) in fights; particle depth sorters | polish | r3dE |
+
+Not gaps any more (closed by K-items): the scene camera identity (K8), the RT sample source (K9), the per-layer custom
+draw seam (K10), the VP push point (K3), the matrix decomposition (K4), the sort-key formula (K11), the cull gate (K13),
+the std::function shape (K14), the shader/material route (K17).
+
+## 3. RE sessions (2026-10-22, one Ghidra container each, run in parallel)
+
+| Tag | Gaps | Out of scope (already known) |
+|---|---|---|
+| `r3dA` | G1, G2, G3, G4 | FrameBegin/End, cull, Camera_render (on disk) |
+| `r3dB` | G9, G10 | Camera struct, combat cameras, K4 decomposition |
+| `r3dC` | G11, G12 (+ re-read K2 bytes, K11's `depth_offset`) | sort-key formula, iso local mat4 |
+| `r3dD` | G5, G6, G7, G8 | RT bind path in Camera_render, the material API |
+| `r3dE` | G13, G14 | the text getter |
+| `r3dF` (no Ghidra) | build design: C99 OBJ/glTF loaders, GL state save list, mesh shader, math module, editor keys, ordered tasks | — |
+
+Each writes `.analysis/notes-<tag>.md` (OBSERVED/INFERRED, manifest-ready rows, hook-site assessment).
+
+## 4. Build steps toward full 3D
+
+The mesh path does **not** depend on perspective; perspective does not depend on meshes. Order chosen so every step is
+visible in-game and T2-testable.
+
+### Phase 0 — bindings + observers (this branch)
+- [ ] Sign every function/data address of K1–K19 + the session results into `bindings/25143593.json`
+      (`make-signature.ts`, witnesses, evidence paths; `npm run bindings:gen`), red tests on counts/goldens first.
+- [ ] Observer hooks (log-only, framework setting `observe3d`, off by default): every `Camera_render` (pointer,
+      `+0x80/+0x81/+0x168/+0x170`, layer bitset, `== TacticsTest+0x68?`), the VP returned by 0x9785e0 for the world
+      camera, one unit's `Renderer_GetScreenMatrix`, N instance records. Pure parts host-tested; one T2 run; log lines
+      pinned as a fixture.
+
+### Phase M — a mesh in the vanilla (orthographic) scene (first owner-visible 3D)
+- [ ] M1 Mesh draw functor: from the world-camera `Camera_render` (or a free layer's custom draw functor `+0xa8`,
+      K10), submit a `std::function` through `0xa47820` (G1) that binds a mod-shipped program, draws a VAO with
+      `VP × model`, restores state (G2), all through GLEW slots (G3). Proof: a cube on a tile.
+- [ ] M2 Depth: give the mesh layer and the unit layer the depth test (G5, G6), z from the camera's view depth inside
+      ±10 000 (K5); meshes occlude and are occluded by cats.
+- [ ] M3 Assets: OBJ then glTF/glb loaded from `-modpaths` (G13), textures via the PNG path; `FW_Register3DObject`,
+      GON `model "models/x.glb"` on objects, `registered-names.json` kind, validator checks.
+- [ ] M4 Palette-compatible shader (G8): lambert/flat + the palettemap remap; shipped as a mod `.shader` (K17).
+
+### Phase P — true perspective
+- [ ] P1 VP hook on `0x9785e0` for the world camera only (K3, K8, G9): `P_persp × lookAt` in the 1280×720 pixel
+      convention, `det < 0` kept (K6), zoom fields untouched; mirror it in the glow rect math (K4).
+- [ ] P2 Billboards: in `Renderer_GetScreenMatrix` emit `(x, height, z)` into m12/m13/m14 with an upright basis for
+      standing classes, floor un-skew for floor classes (G12).
+- [ ] P3 Cull off (`DAT_1413c5c90` += large, K13); view-depth sort key (K11) or the layer key functor.
+- [ ] P4 Picking: hook `0x9796d0` with a ray–ground hit returning the iso-2D equivalent (G11).
+- [ ] P5 Screen-space shader patches via `-modpaths` (G8); UI floaters (G11).
+- [ ] P6 Camera control + settings (G14): yaw stepped/clamped, pitch clamped, reset; ImGui or a key; never `settings.txt`.
+
+### Explicitly not planned
+- Replacing the SWF renderer; gameplay verticality (`spatial-model.md`); any change to `Mewgenics.exe`,
+  `resources.gpak` or non-`dev` saves.
