@@ -226,6 +226,10 @@ export async function runLevelEditorTests(test: TestFn, assert: AssertFn, eq: Eq
     const tools = await load("../src/mcp/tools.ts");
     let listed: any = null, edited: any = null, refused = "";
     if (!tools.__error && tools.TOOL_INPUT?.read_level) {
+      // self-contained under --only: the two files this test reads, as the level io tests leave them
+      mkdirSync(join(modDir, "levels", "t"), { recursive: true });
+      writeFileSync(join(modDir, "levels", "t", "room.lvl"), encodeLvl(room()));
+      if (!existsSync(join(modDir, "levels", "t", "odd.lvl"))) writeFileSync(join(modDir, "levels", "t", "odd.lvl"), encodeLvl(room()));
       listed = await tools.callTool("read_level", { mod: tmpMod });
       edited = await tools.callTool("write_level", { mod: tmpMod, path: "levels/t/room.lvl", edits: [{ op: "tile", x: 9, y: 9, id: 9100 }, { op: "object", x: 4, y: 4, object: "BigRat" }, { op: "remove", x: 3, y: 8 }] });
       try { await tools.callTool("write_level", { mod: tmpMod, path: "data/evil.lvl", edits: [] }); } catch (e) { refused = String(e instanceof Error ? e.message : e); }

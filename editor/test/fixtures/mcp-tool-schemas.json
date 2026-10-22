@@ -783,5 +783,302 @@
       ],
       "additionalProperties": false
     }
+  },
+  {
+    "name": "read_level",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "a level inside the mod, levels/<folder>/<name>.lvl; omit to list the mod's levels"
+        },
+        "palette": {
+          "type": "boolean",
+          "description": "also return the tile (tiles.gon) and object (spawns.gon) palettes: base + this mod's overlays, with names, classes and swatch colours"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "write_level",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "levels/<folder>/<name>.lvl inside the mod (nothing else is writable)"
+        },
+        "level": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "width": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "height": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "objectPalette": {
+              "type": "string"
+            },
+            "tilePalette": {
+              "type": "string"
+            },
+            "tiles": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "weight": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "weight"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                ]
+              }
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "y": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "id": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "weight": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "weight"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "raw": {
+              "type": "object",
+              "properties": {
+                "layers": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "a": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "b": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "width2": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "height2": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "pad1": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "pad2": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "trailer": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "layers",
+                "a",
+                "b",
+                "width2",
+                "height2",
+                "pad1",
+                "pad2",
+                "trailer"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "version",
+            "width",
+            "height",
+            "objectPalette",
+            "tilePalette",
+            "tiles",
+            "objects"
+          ],
+          "additionalProperties": false,
+          "description": "the whole level as read_level returns it (version, width, height, objectPalette, tilePalette, tiles row-major: id | [{id, weight}], objects: [{x, y, id}], raw?)"
+        },
+        "base64": {
+          "type": "string",
+          "description": "or the level file's bytes"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": [
+                  "tile",
+                  "object",
+                  "remove"
+                ],
+                "description": "tile: paint the cell's tile; object: put an object on the cell (replaces the first one there); remove: clear the cell's objects"
+              },
+              "x": {
+                "type": "number",
+                "description": "column 0..width-1"
+              },
+              "y": {
+                "type": "number",
+                "description": "row 0..height-1"
+              },
+              "id": {
+                "type": "number",
+                "description": "a tiles.gon / spawns.gon id"
+              },
+              "object": {
+                "type": "string",
+                "description": "a spawns.gon object/utility name instead of an id, e.g. Rat, PlayerSpawn"
+              },
+              "random": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "number",
+                      "description": "id"
+                    },
+                    "object": {
+                      "type": "string",
+                      "description": "name"
+                    },
+                    "weight": {
+                      "type": "number",
+                      "description": "weight (default 1)"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "a weighted random list instead of one id"
+              }
+            },
+            "required": [
+              "op",
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          },
+          "description": "applied in order to level / base64 / the file on disk / an empty 10x10 room"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "encode and validate, write nothing (returns base64)"
+        }
+      },
+      "required": [
+        "mod",
+        "path"
+      ],
+      "additionalProperties": false
+    }
   }
 ]

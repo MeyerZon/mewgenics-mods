@@ -201,6 +201,24 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       const b = await body("/api/art/prepare-swf-gate", req);
       return sendJson(res, 200, api.prepareSwfGate({ mod: b.mod || undefined, variant: b.variant }));
     }
+    // ---- rooms: levels/**/*.lvl (the Room editor) ------------------------------
+    if (method === "GET" && url.pathname === "/api/levels") {
+      return sendJson(res, 200, api.listLevels(q.get("mod") || ""));
+    }
+    if (method === "GET" && url.pathname === "/api/level") {
+      return sendJson(res, 200, api.readLevel(q.get("mod") || "", q.get("path") || ""));
+    }
+    if (method === "GET" && url.pathname === "/api/level-palette") {
+      return sendJson(res, 200, api.levelPalette(q.get("mod") || ""));
+    }
+    if (method === "POST" && url.pathname === "/api/level") {
+      const b = await body("/api/level", req);
+      return sendJson(res, 200, api.writeLevel(b.mod, b.path, b.level, { dryRun: !!b.dryRun }));
+    }
+    if (method === "POST" && url.pathname === "/api/level/validate") {
+      const b = await body("/api/level/validate", req);
+      return sendJson(res, 200, api.validateLevel(b.mod, b.path, b.level));
+    }
     return sendJson(res, 404, { error: `no route: ${method} ${url.pathname}` });
   } catch (e) {
     if (e instanceof BodyError) return sendJson(res, 400, { error: e.message, issues: e.issues });

@@ -146,9 +146,9 @@ export async function runVectorcraftExecTests(test: TestFn, assert: AssertFn, eq
   try { badScene = await tools.callTool("vectorcraft_exec", { mod: "dev-sandbox", scene: "art/does-not-exist.scene.json", shapeId: "body", commands: [] }); } catch (e) { badErr = e instanceof Error ? e.message : String(e); }
   let badArgs = "";
   try { await tools.callTool("vectorcraft_exec", { mod: "dev-sandbox", scene: "art/my_rat.scene.json", commands: [{ params: {} }] }); } catch (e) { badArgs = e instanceof Error ? e.message : String(e); }
-  test("MCP vectorcraft_exec is listed last with a zod schema; a missing scene is refused before any browser starts; a command without a name is a ToolError", () => {
+  test("MCP vectorcraft_exec is listed right after port_bindings with a zod schema; a missing scene is refused before any browser starts; a command without a name is a ToolError", () => {
     const names = (tools.TOOLS as ToolLike[]).map((t) => t.name);
-    eq(names[names.length - 1], "vectorcraft_exec", names.join(","));
+    eq(names[names.indexOf("port_bindings") + 1], "vectorcraft_exec", names.join(","));
     assert(!!tools.TOOL_INPUT.vectorcraft_exec, "zod schema");
     assert(!badErr && !!badScene && (badScene as { ok: boolean }).ok === false && /does-not-exist|scene/.test((badScene as { error?: string }).error || ""), `${badErr} ${JSON.stringify(badScene)}`);
     assert(/invalid arguments for vectorcraft_exec/.test(badArgs) && /command/.test(badArgs), badArgs);
