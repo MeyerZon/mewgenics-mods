@@ -1,0 +1,9 @@
+ModClipAura {
+    movieclip ModDot
+}
+VanillaClipAura {
+    movieclip ParticlePuff
+}
+NoSuchClipAura {
+    movieclip NoSuchClip
+}

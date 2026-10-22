@@ -50,7 +50,9 @@ Tools, by purpose:
   from `registered-names.json` (seeded with `JokersLuck`).
 - `new_from_template` — scaffold an ability/passive/item/status-data overlay
   plus matching localization rows; kind `room` writes a new
-  `levels/<folder>/<name>.lvl`, kind `tileset-variant` a new tileset.
+  `levels/<folder>/<name>.lvl`, kind `tileset-variant` a new tileset; `particle` scaffolds a `particles.gon.append`
+  system (`options.movieclip` = the SWF clip each particle draws, no loc rows) and
+  `vfx-ability` an ability whose `graphics.particle` plays your effect clip.
 - `pack_mod` — ship a mod: needs `mods/<mod>/mod.json` (`init: true` drafts
   it), rebuilds the SWFs, refuses on validation errors unless `force`, writes
   `editor/data/dist/<name>-<version>.zip` (+ `README-INSTALL.txt`,
@@ -109,6 +111,14 @@ characters, classes, difficulties, the SWF art list, and the localization CSV),
 plus GON syntax rules. Read
 [references/content-shapes.md](references/content-shapes.md) before authoring,
 and confirm real field names with `read_base_entry` rather than guessing.
+
+Particles / VFX (docs/data-mods.md "Particles and VFX"): a particle SYSTEM is a
+`data/particles.gon` entry (emitter keys, `movieclip <clip>`; no colour key: draw
+the clip in the colour you want) worn by `passives { EliteParticle <system> }` or
+named by `ParticleBurst` / `global_particles`; an ability's `graphics { particle /
+affected_particle / … }` names an SWF CLIP directly. A clip your mod builds
+(`build_swf`) works wherever a vanilla clip name does. The validator reports
+`particle-missing`, `clip-missing`, `particle-unknown-key`.
 
 ## Validate and test safely
 

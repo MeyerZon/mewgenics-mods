@@ -1,0 +1,6 @@
+// test-only (VFX probe a): the vanilla SparkleBuff particle system (the Reactive elite's aura) keeps every emitter
+// key but draws this mod's VfxProbeMarker clip (the _artprobe yellow-bordered checker; swfs/vfx.swf, built from
+// art/vfx.scene.json). `.merge` recurses into SparkleBuff by name and overwrites the movieclip string.
+SparkleBuff {
+    movieclip VfxProbeMarker
+}

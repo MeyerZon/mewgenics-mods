@@ -463,6 +463,67 @@ The validator checks rooms (`lvl-bad-format`, `lvl-unknown-spawn-id`, `lvl-unkno
   `levels/alley/easy/ch1-82.lvl`. Pinned in `editor/test/fixtures/ingame/walk-summary.json`. The walk directives:
   `docs/ingame-testing.md` "Campaign walk".
 
+## Particles and VFX (2026-10-22)
+
+**Yes — a data mod can define new particle effects with its own art and attach them.** Decompiled 2026-10-22 (session
+`particles`, `docs/engine-map.md` "Particle systems and effect clips") and run in-game (`mods/_vfxprobe`, below).
+Two different things are called "particle" in the data:
+
+| what | where it is defined | what names it | the art |
+|---|---|---|---|
+| **particle system** — an emitter: rate, lifetime, motion, size / alpha curves | a named entry of `data/particles.gon` (combat, 3D) or `data/particles2d.gon` (2D scenes); add with `particles.gon.append`, change with `.merge` | `passives { EliteParticle <system> }` (a permanent aura on the unit), `ParticleBurst <system>`, `global_particles [..]` (tilesets.gon), `particles [..]` (house_weather.gon), `FormChangeOnElementInfluence { particle <system> }`, and other systems via `combo [..]` / `chain` | `movieclip <clip>`: every particle is one copy of that SWF clip |
+| **effect clip** — a one-shot animation played on cast / hit | an SWF export (vanilla: `effects.swf`, e.g. `PoisonPoof`, `HealMed`, `Explosion`; projectiles: `NeedleProjectile`, …) | an ability's `graphics { particle / affected_particle / center_particle / area_particle / miss_particle <clip>; projectile <clip> }` | the clip itself |
+
+Both resolve clip names through the game's one global clip registry (`App_FindMovieClipByName` 0x9bb6f0, last-loaded
+first), so **a clip your mod's SWF exports works anywhere a vanilla clip name does** (build it with `build_swf`; the
+generated `swfs/swflist.gon.append` loads it).
+
+Keys of a particle system (the decoder `ParticleSystemData decode` 0x9c5970 plus the loader 0x9c88d0; the editor's list
+is `editor/src/core/particles.ts`, the validator warns `particle-unknown-key` for anything else):
+
+- clip and drawing: `movieclip`, `movieclip_timescale`, `material`, `unlit`, `depth_bias`, `render_mode`
+  (`default` | `separate`), `render_layer`, `projection_matrix`;
+- simulation: `simulation_space` (`global` | `local`), `ownership`, `update_mode` (`unlocked` | `locked`),
+  `max_particles`, `adaptive_growth`, `flat_movement`, `live_bounds` (4 or 6 numbers), `particle_lifetime`,
+  `face_moving_direction`, `speed_scale`, `inherit_speed`, `tags`;
+- emission: `emit_rate`, `emit_amount`, `emit_direction`, `emit_spread`, `emit_box` (4 or 6 numbers: an AABB),
+  `emit_radius`, `emit_shell`, `emitshape_scale`, `emit_timespread`, `emit_timespread_curve` (`flat` | `ease_in` |
+  `ease_out`), `spurt`;
+- curves, each as `X` or `X_start` / `X_end` / `X_in` / `X_out` (a number or `[min max]`): `size`, `alpha`, `speed`,
+  `friction`, `force`, `rotation`, `rotation_speed`;
+- composition: `combo [A, B]` (spawn several systems), `chain <system>` + `chain_chance`, `variant_of`,
+  `scripts { ParticleBouncePlane {..} ParticleTornadoForce {..} … }` (seven script components).
+
+Limits: **there is no colour key** — a particle's colour is its clip's art (and the alpha curve); for a coloured effect
+draw the clip in that colour. `continual_emission` (one vanilla use) is read by nothing. A `movieclip` the registry
+does not know logs `No Movieclip Named <name>` and draws vanilla's `ParticleError` clip instead. Re-pointing a vanilla
+system (`.merge` its `movieclip`) changes it everywhere it is used.
+
+**OBSERVED in-game 2026-10-22** (`mods/_vfxprobe`, `npm run test:artprobe -- --vfx`; fixture
+`editor/test/fixtures/ingame/vfxprobe-summary.json`): (a) `particles.gon.merge` `SparkleBuff { movieclip
+VfxProbeMarker }` made the vanilla Reactive-elite aura draw our marker clip (stretched along the motion, as the system's
+`face_moving_direction` / `speed_scale` say); (b) a NEW system `VfxProbeAura` (`particles.gon.append`, `movieclip
+VfxProbeDot` — a #ff0090 disc in our SWF) worn by a spawned Rat through `passives { EliteParticle VfxProbeAura }` drew a
+moving cloud of pink discs on the unit. Not run: an ability's `graphics.particle` pointing at a mod clip (same
+registry, INFERRED to work), `ParticleBurst` / `global_particles` with a mod system.
+
+Recipe — a coloured aura on a character:
+
+```
+// art/myfx.scene.json exports MyDot (a small disc in your colour); build_swf
+// data/particles.gon.append (or: new_from_template particle MyAura { movieclip: "MyDot" })
+MyAura { movieclip MyDot  unlit true  render_mode separate  simulation_space global  ownership local
+         emit_rate 30  emit_amount 1  emit_direction [0, 1, 0]  emit_spread 30  emit_box [-.3 .3 0 1 -.3 .3]
+         live_bounds [-999 999 -999 999 -999 999]  particle_lifetime 1.5  speed_start .6  size .4  alpha 1 }
+// data/characters/enemies.gon.append (or a class / item / passive's passives block)
+MyRat { variant_of Rat  passives { EliteParticle MyAura } }
+```
+
+A hit effect with your own art: `new_from_template vfx-ability PinkSpin { movieclip: "MyHitClip" }` (an ability whose
+`graphics.particle` names your clip). The validator checks the names: `particle-missing` (error) for a system no
+particles file defines, `clip-missing` (warning) for a clip neither vanilla nor your scenes export (another loaded mod
+may still provide it), `clip-list-missing` (info) when the vanilla SWFs are not extracted.
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components (the keys each one reads: "Component keys" above). A mechanic that no component expresses

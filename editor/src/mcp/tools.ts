@@ -59,9 +59,9 @@ export const TOOL_INPUT = {
   list_registered_native_names: z.object({}),
   new_from_template: z.object({
     mod: str(),
-    kind: z.enum(["ability", "passive", "item", "status-data", "room", "tileset-variant"]),
+    kind: z.enum(["ability", "passive", "item", "status-data", "room", "tileset-variant", "particle", "vfx-ability"]),
     name: str("the new entry's GON key, e.g. MyCoolSpin"),
-    options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)").optional(),
+    options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, movieclip (particle / vfx-ability: the SWF clip), dryRun, ...)").optional(),
   }),
   list_ingame_tests: z.object({
     mod: str("optional mod folder to restrict to").optional(),

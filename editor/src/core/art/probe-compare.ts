@@ -232,7 +232,7 @@ export interface ProbeSummary {
 const parseColours = (colours: Record<string, string>) => Object.entries(colours).map(([k, hex]) => [k, [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)] as Rgb] as const);
 
 /** pixel i of img is colour c up to a uniform tint factor 0.55..1.15 (units are tinted by where they stand) and ±24 per channel */
-function matchTinted(img: RgbaImageLike, i: number, c: Rgb): boolean {
+export function matchTinted(img: RgbaImageLike, i: number, c: Rgb): boolean {
   const r = img.rgba[i * 4]!, g = img.rgba[i * 4 + 1]!, b = img.rgba[i * 4 + 2]!;
   const cc = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
   if (!cc) return r < 24 && g < 24 && b < 24;

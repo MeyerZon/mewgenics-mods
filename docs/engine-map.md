@@ -1846,3 +1846,44 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   `.pdata` chunks (0x9787c0..dc, 0x9787dc..c42, 0x978ded..f98, ...) and the harvester reads only the first, so `Camera+0x9c`
   (had-content) has no witness — the engine never writes it (the predicate reads it). Following chained chunks is an
   improvement candidate for `readOffsetWitness`.
+
+## Particle systems and effect clips (2026-10-22)
+
+Ghidra session `particles` (`.analysis/notes-particles.md`, container `rea_ghidra_particles`; decompiles under
+`.analysis/decompiled/`: `ParticleSystemData_decode_0x9c5970.c`, `ParticleCore_LoadSystems_0x9c88d0.c`,
+`ParticleCore_LoadSystems2D_or_byName_0x9c7c40.c`, `Particle_decode_vec_0x9c3af0.c`, `Particle_decode_aabb_0x9c3e50.c`,
+`AbilityGraphics_decode_0x96c20.c`, `ParticleBurst_spawn_0x604b00.c`, `Particles2D_load_0x338a30.c`). Data-side
+summary and recipe: `docs/data-mods.md` "Particles and VFX"; the key list the editor uses: `editor/src/core/particles.ts`.
+
+- **Decoder** — OBSERVED. `glaiel::decode(const GonObject&) -> ParticleSystemData` **0x9c5970** (funcsig string 0x112f1b0,
+  `Particles.cpp` 0x112ef40). `movieclip` → `App_FindMovieClipByName(DAT_1413c4a30, name)` **0x9bb6f0**; on a miss it logs
+  `"No Movieclip Named " + name` (category `Particles`, 0x951bc0) and substitutes **`ParticleError`**. `material` → material
+  create 0x9bb5d0. Then `adaptive_growth`, `max_particles`, `render_layer`, `render_mode` (`default`/`separate`),
+  `update_mode` (`unlocked`/`locked`), `simulation_space` (`global`/`local`), `ownership`, `projection_matrix`,
+  `flat_movement`, `live_bounds` (`decode_aabb` 0x9c3e50, "needs 4 or 6 values"), the `emit_*` keys (`decode_vec` 0x9c3af0
+  for directions), `emit_timespread_curve` (`flat`/`ease_in`/`ease_out`), `chain`, `spurt`, `chain_chance`,
+  `particle_lifetime`, the curves `speed` / `rotation` / `rotation_speed` / `size` / `alpha` / `force` / `friction`
+  (each `X`, `X_start`, `X_end`, `X_in`, `X_out`: suffix strings 0x112f068 / 0x112f040 / 0x112f048 / 0x112f21c; readers
+  0x9c3500 / 0x9c4370 / 0x9c4740 / 0x9c53d0), `inherit_speed`, `face_moving_direction`, `speed_scale`, `tags`. Key names
+  are built as immediates, so a plain string scan misses most of them.
+- **No colour key.** Neither the decoder nor the .rdata key block 0x112ef00..0x112f5d0 has `color`/`tint`; a particle's
+  colour is its clip's art. `continual_emission` (one vanilla use) has no string in the exe: a dead key. OBSERVED.
+- **Elsewhere:** `scripts` 0x9c9810 (seven components: ParticleBouncePlane, ParticleAttractor, ParticleGlobalForce,
+  ParticleCharacterCollision, ParticleRandomForce, ParticleLineCollisions, ParticleTornadoForce; `towards` 0x9ccdd0);
+  `depth_bias` read at 0xa561be (0xa55470, renderer side); `unlit`, `is_3D`, `variant_of` INFERRED (renderer / GON loader).
+- **Loader** `ParticleCore_LoadSystems` **0x9c88d0** (callers 0x3cef90, 0x7666a0, 0x766bd0) and 0x9c7c40 (callers 0x338a30
+  particles2D, 0x3d1590): the file comes through the GON loader 0x9c78a0 (file manager, so `-modpaths` overlays apply);
+  per top-level child without `combo` → decode → a name-keyed map (0x9c8410 assigns into an existing node: a duplicate
+  name overwrites, INFERRED last-wins); with `combo` → a list of system names. `data/particles.gon` (0xf183a0) is loaded
+  from TacticsTest::init 0x833ec2, AlleyBGTest 0x3cd2c5, ParticleTest 0x765968; `data/particles2D.gon` (0xf0fea8) 0x338b04.
+- **Ability effect clips** — `graphics { particle / affected_particle / center_particle / area_particle / miss_particle /
+  orient_particle }` decoded by **0x96c20** and resolved through `App_FindMovieClipByName` 0x9bb6f0: SWF clip names, played
+  by `SpellParticle` (DetatchedCombatEffect, RTTI 0x132e718). Not particles.gon systems. OBSERVED (decompile).
+- **References to systems:** `EliteParticle` (Passive; RTTI 0x138fa58, IsA 0x5aea90, string 0xf196b0), `ParticleBurst`
+  (0xf222e0; 0x604b00), `GlobalParticle` (GlobalModifier, 0xf224d0), `global_particles` (TacticsTest::init 0x8347d7),
+  `StatusEffectParticles` (component, 0xed88d8).
+- **OBSERVED in-game 2026-10-22** (`mods/_vfxprobe`, `npm run test:artprobe -- --vfx`, fixture
+  `editor/test/fixtures/ingame/vfxprobe-summary.json`): a `particles.gon.append` system whose `movieclip` is a mod SWF export,
+  worn through `EliteParticle` by a spawned Rat, draws (a moving cloud of the mod's #ff0090 discs); a `particles.gon.merge`
+  re-pointing vanilla `SparkleBuff`'s `movieclip` to a mod clip draws the mod clip. The window capture lagged the shot event
+  by up to ~1 s in that run (the probe now waits 240 frames after each shot before changing the scene).

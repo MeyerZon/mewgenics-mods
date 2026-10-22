@@ -177,7 +177,9 @@
             "item",
             "status-data",
             "room",
-            "tileset-variant"
+            "tileset-variant",
+            "particle",
+            "vfx-ability"
           ]
         },
         "name": {
@@ -190,7 +192,7 @@
             "type": "string"
           },
           "additionalProperties": {},
-          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)"
+          "description": "scaffold options (displayName, desc, parent, mana, statusEffect, movieclip (particle / vfx-ability: the SWF clip), dryRun, ...)"
         }
       },
       "required": [

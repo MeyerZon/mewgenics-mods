@@ -54,6 +54,11 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       committed `mods/jokers-luck/mod.json`: license, description), then read the zip's `README-INSTALL.txt` as a player
       would — clear enough? — and install it on another folder (`npm run pack -- --install <zip> --into <dir>`) and
       launch with the README's `-modpaths` line: does the mod load? Also try *Export…* / *Import mod…* in the web UI.
+- [ ] `pr120-vfx-aura` / `pr120-vfx-repoint` (#120) — **VFX probe shots** (`npm run test:artprobe -- --vfx`, run `20261022-131810-_vfxprobe-vfx-probe`, `shot-aura-2.png`,
+      `shot-repoint-1.png`): does the NEW aura read as a rising cloud of pink discs on the Rat (not a flat blob), and does the
+      re-pointed SparkleBuff show our yellow-bordered marker clip (streaked along the motion) on the second Rat? Note: that
+      run used PR #117's in-process GL capture (its `mewtest.dll` swapped in and restored); with the window capture every
+      shot came back as the loading screen (stale-shots, refused by the measure) — re-run after #117 merges.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
@@ -532,6 +537,13 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   `fix/validator-mewtest-whole-file`): `tests/`, `art/` and dotfiles are not overlays. Left as is: a NEW pack file
   (`mods/fw-glow/shaders/fw_unit_glow.shader`, no base copy) still warns `whole-file-replace`; a mod whose only pack
   files are build output (`swf-gate`, swfs git-ignored) now warns `mod-empty` until they are built.
+
+- [x] **Particles / VFX from data** (2026-10-22, branch `feat/particles-data`): mapped (`docs/data-mods.md` "Particles and VFX",
+      engine-map "Particle systems and effect clips") and proven in-game (`mods/_vfxprobe`: a NEW particles.gon system with a
+      mod clip worn through `EliteParticle`, and vanilla `SparkleBuff` re-pointed to a mod clip). Editor: `new_from_template
+      particle` / `vfx-ability`, validator `particle-missing` / `clip-missing` / `particle-unknown-key` / `clip-list-missing`.
+      Open: run an ability whose `graphics.particle` is a mod clip, and `ParticleBurst` / `global_particles` with a mod
+      system, in-game (INFERRED to work: same registry / loader); the web UI has no particle editor (templates only).
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")
