@@ -49,7 +49,8 @@ Tools, by purpose:
 - `list_registered_native_names` — list native-registered status/ability names
   from `registered-names.json` (seeded with `JokersLuck`).
 - `new_from_template` — scaffold an ability/passive/item/status-data overlay
-  plus matching localization rows.
+  plus matching localization rows; kind `room` writes a new
+  `levels/<folder>/<name>.lvl`, kind `tileset-variant` a new tileset.
 - `pack_mod` — ship a mod: needs `mods/<mod>/mod.json` (`init: true` drafts
   it), rebuilds the SWFs, refuses on validation errors unless `force`, writes
   `editor/data/dist/<name>-<version>.zip` (+ `README-INSTALL.txt`,
@@ -57,9 +58,18 @@ Tools, by purpose:
 - `install_mod` — install a mod zip into `mods/<name>/` after checking it; a
   `build-mismatch` verdict carries a `prompt` for the user — call again with
   `acceptBuildMismatch: true` only if they agree.
+- `read_level` / `write_level` — rooms (binary `levels/**.lvl`: a 10x10 grid of
+  `tiles.gon` ids + objects placed by `spawns.gon` id, any id may be a weighted
+  random list). `read_level { mod, path?, palette? }` decodes one (or lists the
+  mod's rooms; `palette: true` adds the tile/object palettes with names and
+  classes). `write_level { mod, path, level | base64 | edits }` writes only under
+  `levels/` inside the mod, byte-identical when unedited; edits are
+  `{ op: tile|object|remove, x, y, id | object: "Rat" | random: [{id|object, weight}] }`.
+  It returns the `lvl-*` findings. See docs/data-mods.md "Maps, rooms and encounters".
 
 A web UI (`node editor/web/server.ts`, opened in a browser) browses base data
-and components and shows inline validation and merge-preview. It is for a human;
+and components and shows inline validation and merge-preview; its Rooms mode is a
+10x10 grid painter for the same `.lvl` files. It is for a human;
 as an agent, drive the MCP tools.
 
 ## How mods load
@@ -132,7 +142,7 @@ exportTo?, screenshot? }`**: the vendored VectorCraft web build starts in Playwr
 installed), the shape's SVG becomes its artboard (the viewBox moved to 0,0 — command coordinates are artboard px),
 the commands run through `window.vectorcraft.execute` (`shape.rectangle { x, y, width, height }`, `shape.ellipse`,
 `path.create { d }`, `object.move { dx, dy }`, …), the export is re-origined and replaces `exportTo` in the scene file;
-it answers `skipped: true` with the reason when the build is not vendored. The server has 26 tools; the art ones are
+it answers `skipped: true` with the reason when the build is not vendored. The server has 30 tools; the art ones are
 `list_art_scenes`, `read_art_scene`, `write_art_scene`, `new_art_scene`, `import_svg`, `export_svg`, `bake_glow`,
 `build_swf`, `inspect_swf`, `vectorcraft_exec`.
 

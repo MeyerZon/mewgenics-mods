@@ -484,7 +484,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 28 editor tools", () => eq(list.tools.length, 28));
+    test("tools/list returns the 30 editor tools", () => eq(list.tools.length, 30));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -657,6 +657,10 @@ await mcpSmoke();
   let lv: typeof import("./level-tests.ts") | null = null;
   try { lv = await import("./level-tests.ts"); } catch (e) { test("level-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (lv) lv.runLevelTests(test, assert, eq);
+  // the Room editor: grid-edit helpers, level I/O on the app API, /api/level bodies, MCP read_level / write_level
+  let le: typeof import("./level-editor-tests.ts") | null = null;
+  try { le = await import("./level-editor-tests.ts"); } catch (e) { test("level-editor-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (le) await le.runLevelEditorTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----

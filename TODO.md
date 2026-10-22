@@ -47,6 +47,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] **New tileset shot** (`cd editor && npm run test:ingame -- _roomprobe new-tileset`, run
       `20261022-131707-_roomprobe-new-tileset`, `shot-roomprobe-yard.png`): does the probe room sit in the junkyard
       art (the new tileset `roomprobe_yard`), with the three water puddles and the trash bag where `probe.lvl` puts them?
+- [ ] `pr-room-editor` (#125) — Rooms mode on `_roomprobe` → `probe.lvl`: does the grid read as the room, can you paint / place a spawn / edit a random list unaided, and are the tint swatches (not tileset art) enough?
 - [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 - [ ] **Ship a mod end to end** (PR feat/mod-packaging): `cd editor && npm run pack -- jokers-luck` (review the
       committed `mods/jokers-luck/mod.json`: license, description), then read the zip's `README-INSTALL.txt` as a player
@@ -292,6 +293,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   vanilla levels round-trip), validator rules for a mod's levels and maps, `new_from_template` kinds `room` and
   `tileset-variant`, `mods/_roomprobe` proven in-game (new room + new spawn id, nested-name search, new tileset). Docs:
   `data-mods.md` "Maps, rooms and encounters", `engine-map.md` "Maps, rooms and level files".
+  - [x] **Room editor** (2026-10-22, branch `feat/room-editor-ui`, stacked on the rooms PR): the web UI's Rooms mode
+    (10x10 grid painter, tile/object palettes from tiles.gon/spawns.gon + the mod's overlays, weighted random lists in
+    the inspector, live `lvl-*` findings, New room from the `room` template, byte-identical save under `levels/**`)
+    and MCP `read_level` / `write_level`. Docs: `editor-ts-react-plan.md` "Rooms mode", `data-mods.md`.
+    - [ ] Tileset art in the swatches (the grid shows the dev editor's `image_tint`, not the map tileset's look).
   - [ ] Open: prove a **campaign** battle node drawing a mod room from a map pool (needs the harness to walk a run
     from the House to a map node; decompiled, not run). Then a new map behind alley's exit (`next_map`).
 

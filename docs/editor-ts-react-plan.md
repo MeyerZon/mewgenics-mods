@@ -43,6 +43,7 @@ editor/
   web/src/state.ts            the app store (S, tpl) + actions (selectMod, openFile, save, …)
   web/src/components/*.tsx    TopBar, Explorer, Center (+ Editor), RightPanel, StatusBar, Toast, modals, drawers, tours
   web/src/art/*.ts(x)         art-state.ts, ArtExplorer, ArtCenter, ArtRightPanel, NewSceneModal, preview-gl.ts
+  web/src/rooms/*.ts(x)       Rooms mode (2026-10-22): room-state.ts (store + actions), Rooms.tsx (explorer, grid, inspector, findings)
   web/art/preview-dev.html    second Vite page (the standalone preview harness) → preview-dev.ts
   web/server.ts → server.ts  static dist + /api bridge with the zod gate
   scripts/*.ts, test/*.ts     node runs them directly
@@ -78,6 +79,19 @@ See each PR body for the red → green table with the exact summary lines. End s
 `npm run typecheck` clean over the whole editor + `tools/bindings`, `npm test` 288 passed / 0 failed,
 `npm run test:e2e` 34 passed, `npm run bindings:check` current, zero JSDoc type tags left, zero `.mjs` sources
 except the MCP shim.
+
+## Rooms mode (the Room editor, 2026-10-22)
+
+A third mode beside Data and Art (top bar Data | Art | **Rooms**, deep link `?mode=rooms`; a `.lvl` clicked in the
+Data-mode explorer opens there). It follows the same split as the other two modes: the browser holds a store
+(`web/src/rooms/room-state.ts`, `S.roomMode` in the app store) and calls the `/api` bridge; every edit goes through
+the pure helpers of `src/core/level/edit.ts`, which Vite bundles into the UI and MCP `write_level` runs on the server,
+so a click and an agent edit change a level identically. The core owns the disk side (`src/core/level/level-io.ts`:
+`listLevels` / `readLevel` / `writeLevel` / `validateLevel` / `levelPalette` on `api.ts`; writes only
+`mods/<mod>/levels/**.lvl`), the routes are `GET /api/levels`, `GET /api/level`, `GET /api/level-palette`,
+`POST /api/level`, `POST /api/level/validate` (zod `LvlFileSchema` in `api-schemas.ts`). Tests:
+`test/level-editor-tests.ts` (helpers, I/O, schema, MCP tools; T1: all 2361 vanilla levels through the JSON wire path)
+and `tests/e2e/rooms.spec.ts`.
 
 ## Follow-ups (not in this stack)
 

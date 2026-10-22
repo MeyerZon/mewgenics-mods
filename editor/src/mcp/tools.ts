@@ -7,6 +7,7 @@
 import { z } from "zod";
 import * as api from "../core/api.ts";
 import { resolveReadPath } from "../core/repo.ts";
+import { LvlFileSchema } from "../core/api-schemas.ts";
 
 export class ToolError extends Error {
   constructor(message: string) {
@@ -190,6 +191,26 @@ export const TOOL_INPUT = {
   install_mod: z.object({
     zip: str("path to the mod zip to install into mods/<name>/"),
     acceptBuildMismatch: bool("install although the mod's gameBuild is not the installed game's build (pass only after the user agreed to the returned prompt)").optional(),
+  }),
+  read_level: z.object({
+    mod: str(),
+    path: str("a level inside the mod, levels/<folder>/<name>.lvl; omit to list the mod's levels").optional(),
+    palette: bool("also return the tile (tiles.gon) and object (spawns.gon) palettes: base + this mod's overlays, with names, classes and swatch colours").optional(),
+  }),
+  write_level: z.object({
+    mod: str(),
+    path: str("levels/<folder>/<name>.lvl inside the mod (nothing else is writable)"),
+    level: LvlFileSchema.describe("the whole level as read_level returns it (version, width, height, objectPalette, tilePalette, tiles row-major: id | [{id, weight}], objects: [{x, y, id}], raw?)").optional(),
+    base64: str("or the level file's bytes").optional(),
+    edits: z.array(z.object({
+      op: z.enum(["tile", "object", "remove"]).describe("tile: paint the cell's tile; object: put an object on the cell (replaces the first one there); remove: clear the cell's objects"),
+      x: num("column 0..width-1"),
+      y: num("row 0..height-1"),
+      id: num("a tiles.gon / spawns.gon id").optional(),
+      object: str("a spawns.gon object/utility name instead of an id, e.g. Rat, PlayerSpawn").optional(),
+      random: z.array(z.object({ id: num("id").optional(), object: str("name").optional(), weight: num("weight (default 1)").optional() })).describe("a weighted random list instead of one id").optional(),
+    })).describe("applied in order to level / base64 / the file on disk / an empty 10x10 room").optional(),
+    dryRun: bool("encode and validate, write nothing (returns base64)").optional(),
   }),
 };
 
@@ -404,6 +425,24 @@ export const TOOLS: ToolDef[] = [
     "install_mod",
     "Install a mod zip (as pack_mod writes it) into mods/<name>/ and nowhere else. Checks first and writes nothing on a refusal: size caps (64 MiB zip, 256 MiB unpacked, 5000 entries), path traversal / absolute / backslash names, symlinks, saves/ segments, case-only duplicates, layout (one <name>/ folder + README-INSTALL.txt / MANIFEST.sha256), <name>/mod.json valid and naming that folder, MANIFEST.sha256 matching every file, an existing mods/<name>/ (never overwritten). Then compares mod.json gameBuild with the installed game (check_game_build): on a mismatch it returns { ok: false, verdict: \"build-mismatch\", prompt } — show the prompt to the user and call again with acceptBuildMismatch: true only if they agree. Success: { ok: true, verdict: \"installed\", name, version, dir, files, build, notes, report (validate_mod of the installed mod) }; refusal: { ok: false, verdict: \"refused\", code, reason }.",
     (a) => api.installMod(resolveReadPath(a.zip), { acceptBuildMismatch: a.acceptBuildMismatch }),
+  ),
+  def(
+    "read_level",
+    "Read a room (an encounter layout, levels/<folder>/<name>.lvl: a 10x10 tile grid of data/tiles.gon ids plus objects placed by data/spawns.gon id; 0xffff in the file = a weighted random list, here [{id, weight}]). With path: { level, base64, bytes }; without: the mod's levels with a summary. palette: true adds the tile and object palettes (base + this mod's .append/.merge/.patch) with names, classes (tile WaterTile / object Rat / utility PlayerSpawn) and swatch colours. The web UI's Rooms mode edits the same files.",
+    (a) => {
+      const r = a.path ? api.readLevel(a.mod, a.path) : api.listLevels(a.mod);
+      if (!r.ok) throw new ToolError(r.error);
+      return a.palette ? { ...r, palette: api.levelPalette(a.mod) } : r;
+    },
+  ),
+  def(
+    "write_level",
+    "Write a room levels/<folder>/<name>.lvl inside the mod (the only place it writes; byte-identical for an unedited level). Give the whole level (as read_level returns it), its bytes (base64), and/or edits: [{ op: tile|object|remove, x, y, id | object: <spawns name> | random: [{id|object, weight}] }] applied to it, to the file on disk, or to an empty 10x10 room. Returns { ok, path, bytes, findings } with the lvl-* validator findings (lvl-unknown-spawn-id, lvl-unknown-tile-id, lvl-no-player-spawn, …). To start a room with 4 player spawns and 2 Rats use new_from_template kind room; play it with the console command load <folder>/<name> in a test fight.",
+    (a) => {
+      const r = api.writeLevelFrom(a.mod, a.path, { level: a.level, base64: a.base64, edits: a.edits, dryRun: a.dryRun });
+      if (!r.ok) throw new ToolError(r.error);
+      return r;
+    },
   ),
 ];
 

@@ -43,6 +43,8 @@ export const POST_ROUTES = [
   "/api/art/prepare-swf-gate",
   "/api/mod/pack",
   "/api/mod/install",
+  "/api/level",
+  "/api/level/validate",
 ];
 
 /** Start web/server.ts on an OS-chosen port and return { port, stop }. */

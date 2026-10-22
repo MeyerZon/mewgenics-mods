@@ -7,6 +7,7 @@ import { useS, sx } from "./ui.tsx";
 import {
   enterArtMode,
   leaveArtMode,
+  enterRoomMode,
   toggleMenu,
   selectMod,
   openTemplate,
@@ -107,6 +108,8 @@ function HelpMenu(): React.JSX.Element {
 
 export function TopBar(): React.JSX.Element {
   const artMode = useS((s) => s.artMode);
+  const roomMode = useS((s) => s.roomMode);
+  const dataMode = !artMode && !roomMode;
   const mod = useS((s) => s.mod);
   const file = useS((s) => s.file);
   const openMenu = useS((s) => s.openMenu);
@@ -119,11 +122,14 @@ export function TopBar(): React.JSX.Element {
       <div className="vdiv" />
       {/* Data (GON overlays) | Art (scenes → SWF + in-game-faithful preview) */}
       <div className="modeswitch" role="group" aria-label="Editor mode">
-        <button className={"btn sm" + (artMode ? "" : " on")} aria-pressed={String(!artMode) as "true" | "false"} onClick={() => leaveArtMode()}>
+        <button className={"btn sm" + (dataMode ? " on" : "")} aria-pressed={String(dataMode) as "true" | "false"} onClick={() => leaveArtMode()}>
           Data
         </button>
         <button className={"btn sm" + (artMode ? " on" : "")} aria-pressed={String(artMode) as "true" | "false"} onClick={() => enterArtMode()}>
           Art
+        </button>
+        <button className={"btn sm" + (roomMode ? " on" : "")} aria-pressed={String(roomMode) as "true" | "false"} onClick={() => enterRoomMode()}>
+          Rooms
         </button>
       </div>
       <div className="vdiv" />
@@ -145,12 +151,16 @@ export function TopBar(): React.JSX.Element {
       </div>
       <div className="grow" />
       <StatusPill />
-      <button className="btn ghost" onClick={() => void runLive()} disabled={!file}>
-        Validate
-      </button>
-      <button className="btn primary" onClick={() => void save()} disabled={!file}>
-        Save
-      </button>
+      {roomMode ? null : (
+        <>
+          <button className="btn ghost" onClick={() => void runLive()} disabled={!file}>
+            Validate
+          </button>
+          <button className="btn primary" onClick={() => void save()} disabled={!file}>
+            Save
+          </button>
+        </>
+      )}
       <button
         className="btn ghost"
         onClick={() =>

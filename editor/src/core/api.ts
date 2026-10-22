@@ -19,6 +19,8 @@ import type { Scene, Finding as SceneFinding } from "./art/scene.ts";
 import * as ingame from "./ingame/index.ts";
 import * as vcHeadless from "./art/vectorcraft-headless.ts";
 import * as pack from "./pack.ts";
+import * as levelio from "./level/level-io.ts";
+import type { LvlFile } from "./level/lvl.ts";
 export { listVanillaSwfs, readVanillaSwf, vanillaSwfDir } from "./art/art-io.ts";
 import { checkInstalledBuild } from "./bindings/check.ts";
 import { portManifest, renderPortReport } from "./bindings/port.ts";
@@ -456,3 +458,34 @@ export function readPackedZip(fileName: string): Uint8Array | null {
 export { MOD_MANIFEST_FILE } from "./mod-manifest.ts";
 export type { ModManifest } from "./mod-manifest.ts";
 export type { PackResult, InstallResult } from "./pack.ts";
+// ---- rooms: level files levels/**/*.lvl (the Room editor, MCP read_level / write_level) ----
+// docs/data-mods.md "Maps, rooms and encounters"; the codec is src/core/level/lvl.ts, the edit helpers
+// src/core/level/edit.ts (shared with the browser), the disk side src/core/level/level-io.ts.
+
+export type { LvlFile, LvlPick, LvlChoice, LvlObject } from "./level/lvl.ts";
+export type { LevelInfo, ListLevelsResult, ReadLevelResult, WriteLevelResult, LevelPalette, PaletteEntry, LevelEdit } from "./level/level-io.ts";
+
+/** The mod's levels/**.lvl files with a decode summary. */
+export function listLevels(modName: string) {
+  return levelio.listLevels(modName);
+}
+/** Decode one of the mod's levels: { ok, relPath, level, base64, bytes }. */
+export function readLevel(modName: string, relPath: string) {
+  return levelio.readLevel(modName, relPath);
+}
+/** Encode and write a level (levels/**.lvl inside the mod only); returns the lvl-* findings. */
+export function writeLevel(modName: string, relPath: string, level: LvlFile, opts?: levelio.LevelIoOptions) {
+  return levelio.writeLevel(modName, relPath, level, opts);
+}
+/** write_level's other sources: base64 bytes and/or edit ops applied to the level (or the file on disk / an empty room). */
+export function writeLevelFrom(modName: string, relPath: string, src: levelio.WriteLevelSource) {
+  return levelio.writeLevelFrom(modName, relPath, src);
+}
+/** The lvl-* validator rules for unsaved level content (the Room editor's live findings). */
+export function validateLevel(modName: string, relPath: string, level: LvlFile, opts?: levelio.LevelIoOptions) {
+  return levelio.validateLevel(modName, relPath, level, opts);
+}
+/** The tile (tiles.gon) and object (spawns.gon) palettes for the mod: base + its overlays, with swatch colours. */
+export function levelPalette(modName: string, opts?: levelio.LevelIoOptions) {
+  return levelio.levelPalette(modName, opts);
+}

@@ -451,7 +451,7 @@ function lvlPalettes(overlays: OverlayFile[], dataRoot: string): LvlPalettes {
  * (src/core/level/lvl.ts) and checks every object id against data/spawns.gon and every tile id against
  * data/tiles.gon (base + this mod's overlays on them); id 0 is the reserved empty entry.
  */
-function validateLvl(o: OverlayFile, rb: ReportBuilder, pal: LvlPalettes, modName: string, modDir: string, dataRoot: string): void {
+function validateLvl(o: Pick<OverlayFile, "relPath">, rb: ReportBuilder, pal: LvlPalettes, modName: string, modDir: string, dataRoot: string, unsaved?: Uint8Array): void {
   const file = `mods/${modName}/${o.relPath}`;
   if (!o.relPath.startsWith("levels/")) {
     rb.warn("lvl-outside-levels", `${o.relPath} is a level file outside levels/: the game reads levels only as "levels/<name>.lvl", so it never sees this one`, { file });
@@ -460,7 +460,7 @@ function validateLvl(o: OverlayFile, rb: ReportBuilder, pal: LvlPalettes, modNam
     rb.warn("whole-file-replace", `${o.relPath} replaces the vanilla level of the same path (whole file); give a new room its own name`, { file });
   }
   let bytes: Uint8Array;
-  try { bytes = readFileSync(join(modDir, o.relPath)); } catch (e) { rb.error("lvl-bad-format", `cannot read ${o.relPath}: ${String(e)}`, { file }); return; }
+  try { bytes = unsaved ?? readFileSync(join(modDir, o.relPath)); } catch (e) { rb.error("lvl-bad-format", `cannot read ${o.relPath}: ${String(e)}`, { file }); return; }
   let lvl;
   try { lvl = decodeLvl(bytes); } catch (e) {
     rb.error("lvl-bad-format", `${o.relPath} is not a level file the game can read: ${e instanceof Error ? e.message : String(e)}`, { file });
@@ -481,6 +481,19 @@ function validateLvl(o: OverlayFile, rb: ReportBuilder, pal: LvlPalettes, modNam
   if (!ids.objects.some((id) => pal.playerSpawns.has(id))) {
     rb.warn("lvl-no-player-spawn", `${o.relPath} has no player spawn (an object whose spawns.gon entry is \`utility PlayerSpawn\`, vanilla id 1): the party has nowhere to stand`, { file });
   }
+}
+
+/**
+ * The lvl-* rules for one level whose bytes may not be on disk yet (the Room editor's live findings, the report of a
+ * write): the palettes resolve against the base and the mod's spawns.gon / tiles.gon overlays as saved.
+ */
+export function validateLevelBytes(modName: string, relPath: string, bytes: Uint8Array, opts: ValidateOptions = {}): Report {
+  const rb = new ReportBuilder();
+  const modDir = opts.modDir ?? join(MODS_DIR, modName);
+  const root = opts.extractedData ?? EXTRACTED_DATA;
+  const overlays = existsSync(modDir) ? collectOverlays(modDir) : [];
+  validateLvl({ relPath }, rb, lvlPalettes(overlays, root), modName, modDir, root, bytes);
+  return rb.build();
 }
 
 /**

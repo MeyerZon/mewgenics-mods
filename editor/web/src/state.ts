@@ -51,6 +51,8 @@ export interface AppState {
   exampleStep: number;
   // art mode (was `artMode` exported from art-ui.mjs) + its onboarding
   artMode: boolean;
+  /** Rooms mode (the Room editor: rooms/Rooms.tsx); exclusive with artMode */
+  roomMode: boolean;
   artTourOpen: boolean;
   artTourStep: number;
   artTourDontShow: boolean;
@@ -93,6 +95,7 @@ export const S = createStore<AppState>({
   exampleOpen: false,
   exampleStep: 2,
   artMode: false,
+  roomMode: false,
   artTourOpen: false,
   artTourStep: 0,
   artTourDontShow: false,

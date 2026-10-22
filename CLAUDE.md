@@ -95,16 +95,16 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
-- `npm run test:e2e` — `vite build && playwright test`: the 46-check browser suite in `editor/tests/e2e/` that pins
-  the UI's DOM and flows (Data mode, Art mode, preview, onboarding, Export… / Import mod…). Needs Playwright's Chromium.
+- `npm run test:e2e` — `vite build && playwright test`: the E2ECOUNT-check browser suite in `editor/tests/e2e/` that pins
+  the UI's DOM and flows (Data mode, Art mode, Rooms mode, preview, onboarding, Export… / Import mod…). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (28 tools, incl. the art tools
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (30 tools, incl. the art tools
   with `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
-  Chromium), `check_game_build`, `port_bindings`, and `pack_mod` / `install_mod`).
+  Chromium), `check_game_build`, `port_bindings`, the room tools `read_level` / `write_level`, and `pack_mod` / `install_mod`).
 - `npm run pack -- <mod> [--force] [--init]` — ship a mod: needs `mods/<mod>/mod.json` (name, version, author,
   description, `gameBuild` = the Steam build id; `--init` drafts it), rebuilds its SWFs, refuses on validator errors
   unless `--force`, writes the git-ignored `editor/data/dist/<mod>-<version>.zip` (mod minus `tests/` and `art/`, plus

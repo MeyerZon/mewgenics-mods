@@ -130,5 +130,5 @@ export interface ComponentKeyInfo {
 
 // ---- template scaffolder (templates) -------------------------------------------------------
 export type TemplateResult =
-  | { ok: true; kind?: string; name?: string; written?: string[]; localizationKeys?: string[]; dryRun?: boolean }
+  | { ok: true; kind?: string; name?: string; written?: string[]; localizationKeys?: string[]; dryRun?: boolean; hint?: string }
   | { ok: false; error: string; partial?: string[] };
