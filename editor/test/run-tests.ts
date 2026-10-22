@@ -576,6 +576,10 @@ await mcpSmoke();
   let dt: typeof import("./deps-tests.ts") | null = null;
   try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (dt) await dt.runDepsTests(test, assert, eq);
+  // VectorCraft vendoring (scripts/vendor-vectorcraft.ts): pinned-zip verification + the zip reader, no network
+  let vt: typeof import("./vendor-vectorcraft-tests.ts") | null = null;
+  try { vt = await import("./vendor-vectorcraft-tests.ts"); } catch (e) { test("vendor-vectorcraft-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (vt) await vt.runVendorVectorcraftTests(test, assert, eq);
   // repo.ts path constants + the merge preview against an injected base root (a fresh git worktree's needs)
   let rt: typeof import("./repo-tests.ts") | null = null;
   try { rt = await import("./repo-tests.ts"); } catch (e) { test("repo-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
