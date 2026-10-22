@@ -6,8 +6,20 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { DATA_CACHE_DIR, ANALYSIS_DIR, EXTRACTED_DATA } from "./repo.ts";
 
-const CACHE_FILE = join(DATA_CACHE_DIR, "component-names.json");
+export const COMPONENT_CACHE_FILE = join(DATA_CACHE_DIR, "component-names.json");
+const CACHE_FILE = COMPONENT_CACHE_FILE;
 const NAMES_TSV = join(ANALYSIS_DIR, "list_names.tsv");
+
+/** What to do when no component names are known (a fresh clone or git worktree has no editor/data/ cache). */
+export const COMPONENT_CACHE_HINT =
+  `editor/data/component-names.json missing or empty (${COMPONENT_CACHE_FILE}) — run npm run build:index with ` +
+  `.analysis/list_names.tsv present, or set MEWGENICS_EDITOR_DATA to a checkout's editor/data that has it`;
+
+/** Whether a component-name list is available, and the hint when it is not. */
+export function componentCacheStatus(): { ok: true; count: number } | { ok: false; hint: string } {
+  const n = loadComponentNames().length;
+  return n > 0 ? { ok: true, count: n } : { ok: false, hint: COMPONENT_CACHE_HINT };
+}
 
 let namesCache: string[] | null = null;
 let nameSet: Set<string> | null = null;

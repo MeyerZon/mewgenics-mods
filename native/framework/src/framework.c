@@ -10,6 +10,12 @@
  *  - Installs hooks through Mewjector's MJ_InstallHook so other mods can chain.
  *  - Never writes to the game folder or to save files.
  *
+ * This file is the Windows/game-facing glue; the decisions are host-tested pure modules: the build gate
+ * (fw_build.c), the signature scanner (fw_sig.c), symbol resolution over the image's executable sections,
+ * the -savesuffix gate, the FW_GetSymbol / FW_GetData bounds and the hook plan — order, priorities, failure
+ * policy (fw_resolve.c). What stays here: reading the PE header, the Mewjector calls, the hook functions
+ * themselves (fixed game ABI) and logging.
+ *
  * Build: native/framework/build.bat (w64devkit GCC, no MSVC needed).
  */
 #define WIN32_LEAN_AND_MEAN
@@ -22,6 +28,7 @@
 #include "framework_internal.h"
 #include "fw_sig.h"
 #include "fw_build.h"
+#include "fw_resolve.h"
 
 MewjectorAPI g_mj;
 int g_mjAvailable = 0;
@@ -46,14 +53,6 @@ void fw_log(const char *fmt, ...) {
 }
 
 /* ----------------------------------------------------------------------- */
-/* command line gate                                                        */
-/* ----------------------------------------------------------------------- */
-static int command_line_has(const wchar_t *flag) {
-    const wchar_t *cl = GetCommandLineW();
-    return cl && wcsstr(cl, flag) != NULL;
-}
-
-/* ----------------------------------------------------------------------- */
 /* build identity                                                           */
 /* ----------------------------------------------------------------------- */
 static const BuildInfo *identify_build(uintptr_t base) {
@@ -70,54 +69,37 @@ static const BuildInfo *identify_build(uintptr_t base) {
 }
 
 /* ----------------------------------------------------------------------- */
-/* signature scanning (IDA-style "48 8B ?? ?? 89" patterns, exec sections)  */
-/* The parser and matcher live in fw_sig.c (host-tested); this adds the PE  */
-/* section walk.                                                            */
+/* signature scanning: the PE section walk feeds fw_resolve_symbols, which  */
+/* scans executable sections only and demands exactly one hit per symbol.  */
 /* ----------------------------------------------------------------------- */
-static uintptr_t scan_unique(uintptr_t base, const char *pattern, int *matches) {
-    uint8_t bytes[FW_SIG_MAX_BYTES], mask[FW_SIG_MAX_BYTES];
-    int n = fw_parse_pattern(pattern, bytes, mask, sizeof bytes);
-    *matches = 0;
-    if (n <= 0) return 0;
-    const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)base;
-    const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64 *)(base + dos->e_lfanew);
-    const IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
-    uintptr_t found = 0;
-    for (unsigned s = 0; s < nt->FileHeader.NumberOfSections; s++) {
-        if (!(sec[s].Characteristics & IMAGE_SCN_MEM_EXECUTE)) continue;
-        const uint8_t *p = (const uint8_t *)(base + sec[s].VirtualAddress);
-        const uint8_t *hit = fw_scan_buffer(p, sec[s].Misc.VirtualSize, bytes, mask, (size_t)n, matches);
-        if (hit && !found) found = (uintptr_t)hit;
-        if (*matches > 1) return found;
-    }
-    return found;
-}
-
+#define PE_MAX_SECTIONS 96   /* the PE/COFF limit on NumberOfSections */
 
 static int resolve_symbols(void) {
-    int ok = 1;
+    const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)g_base;
+    const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64 *)(g_base + dos->e_lfanew);
+    const IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
+    FwImageSection sections[PE_MAX_SECTIONS];
+    unsigned n = nt->FileHeader.NumberOfSections;
+    if (n > PE_MAX_SECTIONS) n = PE_MAX_SECTIONS;
+    for (unsigned s = 0; s < n; s++) {
+        sections[s].bytes = (const uint8_t *)(g_base + sec[s].VirtualAddress);
+        sections[s].len = sec[s].Misc.VirtualSize;
+        sections[s].executable = (sec[s].Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0;
+    }
+    FwImage img = { g_base, sections, n };
+    FwResolveResult res[FW_SYMBOL_COUNT_];
+    int ok = fw_resolve_symbols(&img, g_build->symbols, FW_SYMBOL_COUNT, g_sym, res);
     for (size_t i = 0; i < FW_SYMBOL_COUNT; i++) {
         const SymbolSig *s = &g_build->symbols[i];
-        int matches = 0;
-        if (!s->pattern) {
-            /* no relocation-free unique window on this build (bindings manifest signature: null): the
-             * identity gate already proved the image, so the manifest's RVA is taken as-is, like FW_LK */
-            if (!s->expectedRva) { fw_log("symbol %s: no signature and no RVA; framework disabled", s->name); ok = 0; continue; }
-            g_sym[i] = g_base + s->expectedRva;
-            fw_log("symbol %s: no signature on this build; using RVA 0x%llx", s->name, (unsigned long long)s->expectedRva);
-            continue;
-        }
-        uintptr_t hit = scan_unique(g_base, s->pattern, &matches);
-        if (matches != 1) {
-            fw_log("signature %s: %d matches (need exactly 1); framework disabled", s->name, matches);
-            ok = 0;
-            continue;
-        }
-        uintptr_t addr = hit + s->offset;
-        if (s->expectedRva && (addr - g_base) != s->expectedRva)
+        if (res[i].code == FW_RESOLVE_DRIFT)
             fw_log("signature %s resolved to RVA 0x%llx (expected 0x%llx for known build); using scan result",
-                  s->name, (unsigned long long)(addr - g_base), (unsigned long long)s->expectedRva);
-        g_sym[i] = addr;
+                  s->name, (unsigned long long)res[i].rva, (unsigned long long)s->expectedRva);
+        else if (res[i].code == FW_RESOLVE_RAW_RVA)
+            fw_log("symbol %s: no signature on this build; using RVA 0x%llx", s->name, (unsigned long long)res[i].rva);
+        else if (res[i].code == FW_RESOLVE_NO_RVA)
+            fw_log("symbol %s: no signature and no RVA; framework disabled", s->name);
+        else if (res[i].code != FW_RESOLVE_OK)
+            fw_log("signature %s: %d matches (need exactly 1); framework disabled", s->name, res[i].matches);
     }
     return ok;
 }
@@ -145,28 +127,36 @@ static void hook_Character_BeginTurn(void *character, int kind) {
     if (g_next_Character_BeginTurn) g_next_Character_BeginTurn(character, kind);
 }
 
-static int install_hooks(void) {
-    {
-        uintptr_t rva = g_sym[FW_SYM_Character_BeginTurn] - g_base;
+/* One step of FW_HOOK_PLAN: this file's two observer hooks; everything else is the status engine's. */
+static int install_step(const FwHookSpec *spec, int ordinal, int failuresSoFar, void *user) {
+    (void)ordinal; (void)failuresSoFar; (void)user;
+    if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Character_BeginTurn) {
+        uintptr_t rva = g_sym[spec->index] - g_base;
         void *tramp = NULL;
-        if (!g_mj.InstallHook(rva, 0, (void *)hook_Character_BeginTurn, &tramp, 20, FW_OWNER)) {
-            fw_log("MJ_InstallHook failed for Character::BeginTurn (rva 0x%llx)", (unsigned long long)rva);
+        if (!g_mj.InstallHook(rva, 0, (void *)hook_Character_BeginTurn, &tramp, spec->priority, FW_OWNER)) {
+            fw_log("MJ_InstallHook failed for %s (rva 0x%llx)", spec->label, (unsigned long long)rva);
             return 0;
         }
         g_next_Character_BeginTurn = (fn_Character_BeginTurn)tramp;
-        fw_log("hook installed: Character::BeginTurn rva 0x%llx", (unsigned long long)rva);
+        fw_log("hook installed: %s rva 0x%llx", spec->label, (unsigned long long)rva);
+        return 1;
     }
-    if (!status_engine_install_hooks()) return 0;
-    uintptr_t rva = g_sym[FW_SYM_TurnControl_NextTurn] - g_base;
-    void *tramp = NULL;
-    if (!g_mj.InstallHook(rva, 0, (void *)hook_TurnControl_NextTurn, &tramp, 100, FW_OWNER)) {
-        fw_log("MJ_InstallHook failed for TurnControl::NextTurn (rva 0x%llx)", (unsigned long long)rva);
-        return 0;
+    if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_TurnControl_NextTurn) {
+        uintptr_t rva = g_sym[spec->index] - g_base;
+        void *tramp = NULL;
+        if (!g_mj.InstallHook(rva, 0, (void *)hook_TurnControl_NextTurn, &tramp, spec->priority, FW_OWNER)) {
+            fw_log("MJ_InstallHook failed for %s (rva 0x%llx)", spec->label, (unsigned long long)rva);
+            return 0;
+        }
+        g_next_TurnControl_NextTurn = (fn_TurnControl_NextTurn)tramp;
+        fw_log("hook installed: %s rva 0x%llx, chain depth %d", spec->label, (unsigned long long)rva, g_mj.QueryHook(rva));
+        return 1;
     }
-    g_next_TurnControl_NextTurn = (fn_TurnControl_NextTurn)tramp;
-    fw_log("hook installed: TurnControl::NextTurn rva 0x%llx, chain depth %d",
-          (unsigned long long)rva, g_mj.QueryHook(rva));
-    return 1;
+    return status_engine_hook_step(spec);
+}
+
+static int install_hooks(void) {
+    return fw_hook_run(FW_HOOK_PLAN, FW_HOOK_PLAN_COUNT, install_step, NULL);
 }
 
 /* ----------------------------------------------------------------------- */
@@ -175,16 +165,13 @@ static int install_hooks(void) {
 FW_EXPORT int FW_GetVersion(void) { return FW_API_VERSION; }
 FW_EXPORT int FW_IsActive(void) { return g_active; }
 FW_EXPORT uintptr_t FW_GetSymbol(int symbol) {
-    if (!g_active || symbol < 0 || symbol >= (int)FW_SYMBOL_COUNT) return 0;
-    return g_sym[symbol];
+    return fw_resolve_symbol_addr(g_active, g_sym, FW_SYMBOL_COUNT, symbol);
 }
 FW_EXPORT const char *FW_GetBuildName(void) { return g_build ? g_build->name : "unknown"; }
 
 /* --- API v3: per-build data addresses (globals, DYNAPI slots) --- */
 FW_EXPORT uintptr_t FW_GetData(int dataId) {
-    if (!g_active || !g_build || dataId < 0 || dataId >= (int)FW_DATA_COUNT_) return 0;
-    uint32_t rva = g_build->rva_data[dataId];
-    return rva ? g_base + rva : 0;
+    return fw_resolve_data_addr(g_active, g_build, g_base, dataId);
 }
 
 /* --- custom statuses (API v2) --- */
@@ -221,7 +208,7 @@ static void init(void) {
     fw_log("mewframework %d.%d.%d starting; mewjector=%s", FW_VERSION_MAJOR, FW_VERSION_MINOR, FW_VERSION_PATCH,
           g_mjAvailable ? "yes" : "no");
 
-    if (!command_line_has(L"-savesuffix")) {
+    if (!fw_resolve_is_dev_launch(GetCommandLineW())) {
         fw_log("vanilla launch (no -savesuffix on command line); framework inactive");
         return;
     }

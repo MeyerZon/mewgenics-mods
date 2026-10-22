@@ -39,8 +39,10 @@ beyond short byte signatures needed to locate functions.
 | `-dev_mode true` | Dev mode. |
 | `-validate_pedigree_tables true` | Repairs family-tree tables (added 1.0.20941 after a save editor broke saves). |
 
-Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map to GON's
-Append / ShallowMerge-DeepMerge / PatchMerge.
+Overlay file semantics for `.gon`, `.csv`, `.txt`: `X.append`, `X.merge`, `X.patch` map (in `Gon_overlay_apply`
+`0x9a64a0`) to `Gon_Append` `0x945410`, `Gon_DeepMerge_plain` `0x945c30` under the constant MERGE policy
+(`Gon_DefaultMergeMode` `0x9451c0` returns 2, so `.merge` files never read key suffixes) and the policy-driven
+`0x946680`; row by row in `docs/data-mods.md` "Fidelity to the decompiled merges".
 
 ## gpak contents
 
@@ -56,6 +58,19 @@ tables (`catgen`, `spawns`, `particles`, `furniture_effects`, `weather`, `diffic
 
 ## Data model
 
+**GON parser (OBSERVED 2026-10-21/22, `.analysis/decompiled/Gon_{LoadText_0x940840,Tokenize_0x93f090,ParseTokens_0x93fcf0}.c`).**
+`Gon_LoadText` wraps the text in `{ }`, tokenizes, parses the root as an object and logs `GON ERROR: More symbols
+exists after file completed parsing` if tokens remain. Tokenizer: `{ } [ ]` single-char tokens; `,` `:` `=` are
+whitespace (char mask `0x2400100000000000` over chars `< 0x3e`); `#` comments to end of line; `"` opens a quoted
+token, `\` escapes the next char (only `\n` → newline), the quotes are dropped and no flag survives; no `//` /
+`/* */` / `#include` handling, so a pre-pass must supply them (INFERRED, vanilla relies on all three; candidate
+`0xa50bd0`). Parser: `{` → type 3 object, `[` → type 4 array, a scalar is typed from its text: string (1) unless
+`strtol(tok, &end, 0)` or `strtod` consumes it entirely → number (2) with int view `+0x50` and double view
+`+0x58` both stored, exact `null` → 0, `true`/`false` → bool (5, `+0x60`); text kept at `+0x68`, type at `+0xa8`.
+`.add` / `.multiply` in `Gon_DeepMerge` 0x946680 use the double view and re-render the text. The editor reproduces
+the typing in `editor/src/core/gon/typing.ts` (pinned by `editor/test/gon-tests.ts`); the full rule-by-rule
+comparison is `docs/data-mods.md` "GON typing fidelity".
+
 GON objects reference C++ behavior components by class name. 1,750 RTTI classes live in `glaiel::`;
 hundreds are small composable behaviors (`AddStatusToBasicAttack`, `AbilityEnabledIfHasStatus`,
 `AggroTargetIsLowestHealthEnemy`, ...). Characters use `variant_of` inheritance. So the data layer can
@@ -69,7 +84,15 @@ recombine existing behaviors; new behaviors need native code.
   is the loose-files entry. Each path is logged as "Mod Path: ...".
 - The file manager (RVA `0x9a09f0`) resolves a requested relative path by taking the pack copy first, then walking
   the mod-path list from last to first; for each path it looks for the plain file and for `.append`, `.merge` and
-  `.patch` variants, applied through GON's Append / DeepMerge / PatchMerge (RVAs `0x944cc0`, `0x944f50`, `0x946680`).
+  `.patch` variants and returns their paths tagged 1 / 2 / 3; `Gon_overlay_apply` `0x9a64a0` parses each overlay and
+  dispatches on the tag: 1 → `Gon_Append` `0x945410` (push every child; a clashing name keeps both, the name index
+  `FUN_14012a310` points at the appended one; strings concatenate; anything else is `GON ERROR: Append incompatible
+  types`), 2 → `Gon_DeepMerge_plain` `0x945c30` with `Gon_DefaultMergeMode` `0x9451c0` (constant 2 = MERGE: by-name
+  recursion, nth occurrence to nth, arrays element-wise + extras appended, scalars and type mismatches overwritten
+  via `GonObject_assign` `0x30cd0`, no suffix read), 3 → `0x946680`, the policy-driven merge `.patch` needs, with
+  `0x944cc0` the key-suffix -> policy parser and `0x944f50` the recursive suffix stripper; child lookup by
+  `(name, nth)` is `GonObject_has_child_name` `0x942910` / `GonObject_child_by_name` `0x942b50`
+  (`.analysis/decompiled/Gon*.c`; row-by-row in `docs/data-mods.md` "Fidelity to the decompiled merges").
 - Live check: `launch-dev.bat` produced log lines `Save File Suffix: dev` and `Mod Path: <repo>\mods\dev-sandbox`
   with no GON errors; the main save file hash was unchanged; the game added default `debug_*` keys to
   `settings.txt` but did not persist `enable_debugconsole` or `dev_mode`.
@@ -253,7 +276,15 @@ category and hit-effect rules apply), and `Character::BeginTurn` (dispatches `on
 The rules a definition must satisfy — at most 8 definitions (one vtable-thunk row each), a non-empty name of at
 most 15 bytes (the std::string SSO buffer, so the alias rewrite never reallocates), template `LuckUp` only, unique
 names — and the alias rewrite itself live in the pure `fw_status_rules.c` (host tests `test_status_rules.c`);
-`FW_RegisterStatus` validates against them before it claims the name with Mewjector.
+`FW_RegisterStatus` validates against them before it claims the name with Mewjector. Since 2026-10-21 the rest of
+the logic is pure and host-tested as well: the vtable clone into caller-supplied memory + the thunk bodies
+(`fw_vtable.c`, `test_vtable.c`; a T1 check clones the real dump `.analysis/luckup-vtable.hex` and pins slots 0/1 at
+`0x140566ed0` / `0x140566ec0`), the Character → Entity → component walks and the apply_status argument resolution,
+merge writes (+0x5c, +0xc8, +0xd0 = applier−8) and set-stacks writes over `offsets.h`-shaped fake objects
+(`fw_walk.c`, `test_walk.c`), and the load-time policy — symbol resolution over executable sections only with
+exactly one hit, the `-savesuffix` gate, `FW_GetSymbol`/`FW_GetData` bounds and the hook plan: `Character::BeginTurn`
+(priority 20, abort on failure) → LuckUp vtable sanity check → `apply_status` + the 13 lookups (priority 20, all
+attempted, counted) → `TurnControl::NextTurn` (priority 100) (`fw_resolve.c`, `test_resolve.c`).
 Verified in process on 2026-10-17: all hooks installed, Mewjector integrity ALL OK, `JokersLuck` registered with
 type id 0x1000. Combat behavior still needs a played fight to confirm.
 

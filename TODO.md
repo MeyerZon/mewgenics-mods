@@ -4,30 +4,36 @@ Living status snapshot (last updated 2026-10-19 evening: owner ran the game-side
 
 ## Open decisions — return to these next time (parked 2026-10-21)
 
-Owner: "we will decide on it later". Everything through PR #71 is merged; nothing is waiting on an agent except the
-docs sweep at the end of this list.
+Owner: "we will decide on it later". Everything through PR #71 is merged; the docs sweep at the end of this list is
+done (2026-10-21). Owner's answers of 2026-10-21 are recorded under each item; cat parts and filters stay open.
 
-- [ ] **Cat parts in a rig — which route, if any?** The import route is closed (#71: `ImportAssets2` entries are never
+- [ ] **Cat parts in a rig — which route, if any?** Still under discussion (owner, 2026-10-21). The import route is closed (#71: `ImportAssets2` entries are never
       linked, placing one crashes — engine-map "Imports are not linked"). Options:
       (a) copy part geometry from catparts.swf into the mod — ~1 day, 1–2 PRs; frozen copies that do not follow each
       cat's look, and publishing the mod redistributes game art;
       (b) native swap (the game puts its own per-cat parts into our rig's slots) — several RE sessions, 3–6 PRs,
       uncertain;
       (c) neither — keep drawing our own parts (Rig tab + SVG round trip).
-- [ ] **Localized text?** Texts (#69) are the literal initial string in a game font. Should mods get localized text
+- [x] **Localized text?** Texts (#69) are the literal initial string in a game font. Should mods get localized text
       (loc keys / per-language strings), and is Peralta the right default font?
+      **Owner, 2026-10-21: deferred; Peralta is fine as the default for now.** No work queued.
 - [ ] **Filters / glows:** the game refuses any PlaceObject3 filter ("FILTERS NOT SUPPORTED", #65), so the validator
-      blocks them. Want a "bake glow / shadow into the art" helper, or leave it?
-- [ ] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
+      blocks them. Want a "bake glow / shadow into the art" helper, or leave it? Still under discussion (owner,
+      2026-10-21).
+- [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
-- [ ] **T3 looks** still unticked from the art PRs — the shots are in `editor/data/ingame-runs/` (`npm run
+      **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly). Not
+      started; scope and install go to the owner before any work (nothing gets installed without the owner's say-so).
+- [ ] **T3 looks** (owner, 2026-10-21: he will do these later) still unticked from the art PRs — the shots are in `editor/data/ingame-runs/` (`npm run
       test:artprobe`, `npm run test:artprobe -- --cat` rebuild them):
       gradient square red → black (#63); top green line shorter than the bottom one (#64); the add square a lightened
       dark red (#65); Timeline and Rig tabs readable and usable (#66, #67); PROBE in the game's lettering (#69); an
       Export SVG → edit in VectorCraft/Inkscape → Replace… round trip (#70); the Ruffle tab (#59).
-- [ ] **Agent, next session (no decision needed):** the deferred docs sweep — the modding skill's art section (root
+- [x] **Agent, next session (no decision needed):** the deferred docs sweep — the modding skill's art section (root
       timeline is game-driven, filters crash, imports crash, text, SVG round trip, export_svg = 24 MCP tools),
-      binding-port.md "Known limits", KNOWLEDGE-BASE's Ruffle line, CLAUDE.md's tool count.
+      binding-port.md "Known limits", KNOWLEDGE-BASE's Ruffle line, CLAUDE.md's tool count. Done 2026-10-21
+      (`docs/sweep-art-bindings`); the sweep also found the "46 unanchored entries" items stale (closed by #53–#56:
+      every manifest entry is anchored) and ticked them below.
 
 ## Owner checks — only you can do these (agents cannot)
 
@@ -137,9 +143,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   `--resolve Name=0x..` after a green `npm run test:ingame` that exercises it (`docs/binding-port.md` "The ladder").
 
 ### Known gaps you are accepting for now
-- [ ] 46 entries (40 struct offsets — the 32 of the cross-build run plus the 8 added for dev scenes and the RNG on
+- [x] 46 entries (40 struct offsets — the 32 of the cross-build run plus the 8 added for dev scenes and the RNG on
   2026-10-20 — and 6 vtable slot constants) are still `unanchored`: every port reports them as `needs-human`
   instead of guessing. Follow-up below ("Witness patterns for the 46 unanchored entries"); agent work, queued.
+  **Closed 2026-10-20** (PRs #53–#56; ticked in the 2026-10-21 docs sweep): every entry is anchored; the witnesses
+  are verified on the installed exe, not yet on a second build.
 - [ ] A changed arity of the 13 status lookups (shapes A–E in `status_engine.c`), a compiler/CRT change (`MsvcString`
   layout, `_Allocate<16>`), or a changed vtable layout cannot be ported mechanically; the port will say so.
 
@@ -226,11 +234,18 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 4. [x] **Bindings regression test (T1)** — `editor/test/bindings-tests.ts`: every manifest signature matches exactly
    once at its RVA in the installed exe, every function RVA begins a `.pdata` entry, anchors re-verify, self-port
    changes nothing; `check_game_build` reports it live. (2026-10-19, binding-port series)
-5. [~] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
+5. [x] **Framework pure parts**: the build gate is `fw_build.c` (host-tested with the generated tables, `test_build.c`);
    the status definition table / name rules / alias rewrite / hierarchy rewrite are `fw_status_rules.c` since
    2026-10-20 (`test_status_rules.c`, 14 checks; one cap of 8 shared by `framework.c` and `status_engine.c`, which
-   had disagreed 16 vs 8). Still game-bound and only T2-verified: the vtable clone + thunks, the `ApplyByName` hook
-   and the entity/component walks in `status_engine.c`, and everything in `framework.c` but the build gate.
+   had disagreed 16 vs 8). Since 2026-10-21 the rest is pure too: the vtable clone + thunk bodies are `fw_vtable.c`
+   (`test_vtable.c`, 12 checks incl. a golden-bytes clone and a T1 clone of the real dump
+   `.analysis/luckup-vtable.hex`), the entity/component walks and the apply/merge/set-stacks writes are `fw_walk.c`
+   (`test_walk.c`, 11 checks over fake objects shaped by `offsets.h`), symbol resolution over the executable
+   sections, the `-savesuffix` gate, the `FW_GetSymbol`/`FW_GetData` bounds and the hook plan (order, priorities,
+   failure policy) are `fw_resolve.c` (`test_resolve.c`, 14 checks). Still game-bound by nature: the PE header
+   read, the Mewjector calls, the per-definition C thunks and lookup wrappers (fixed game ABI), the calls into the
+   template constructor / vtable slots / `Status_Remove` / the string destructor, and logging — `status_engine.c`
+   and `framework.c` are the thin glue around the pure modules.
 6. [x] **Tools tests (T0)**: `tools/bindings/make-signature.ts` is covered by the siggen section of
    `bindings-tests.ts` (uniqueness, cap, negative offsets, rel32/rip wildcards); `tools/gpak.py` by
    `editor/test/gpak-tests.ts` on a synthetic archive (2026-10-19; list/cat/extract/stats, truncation, path escapes).
@@ -238,8 +253,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    — a synthetic base and one minimal mod per finding code (all 20: `mod-missing` … `csv-column-count`, plus a clean
    mod), driven through injectable `ValidateOptions` (`modDir`, `extractedData`, `components`, `registeredNames`), so
    the checks run at T0 without game data. Found on the way: the overlay-target check joined a hardcoded `.extracted/`
-   and ignored `MEWGENICS_EXTRACTED_DATA` (fixed). Follow-up: `preview-merge.ts` still joins `.extracted` directly
-   (same fix, when the merge preview gets its own fixtures).
+   and ignored `MEWGENICS_EXTRACTED_DATA` (fixed). Follow-up done 2026-10-21 (`fix/worktree-env-paths`):
+   `preview-merge.ts` resolves the base through the shared `packPath` / `EXTRACTED_DATA` with an injectable
+   `extractedData` (`editor/test/preview-merge-tests.ts`); `MEWGENICS_EDITOR_DATA` redirects the `editor/data`
+   caches and a missing component list is one `component-list-missing` info / a logged skip
+   (`docs/tdd-procedure.md` "Running the editor from a git worktree").
 8. [ ] **Golden merge cases** (owner 2026-10-20: "tdd 8 - ok" — the "golden through `dump`" sub-item is approved and
    queued as agent work, first of the 2026-10-20 run): freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
    so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1
@@ -402,5 +420,7 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
   reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.ts`. The
   second witness for `LuckUp_typeid` (the `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in
   `Status_ApplyLuckUp`) landed in PR #32; harvest and port now require every source of a constant to agree.
+  Done 2026-10-20: offset witness harvest (#53), batch 1 — 19 harness/app/scene offsets (#54), batch 2 — 21
+  status_engine offsets (#55), the six vtable-slot constants derived (#56); nothing in the manifest is unanchored.
 - [x] **Runtime anchor locator in the DLL** (optional): string → lea xref → `.pdata` so anchored-but-unsigned entries
   survive a relink before anyone runs the port. **Dropped** by owner decision 2026-10-19 (see "Decisions").
