@@ -41,12 +41,12 @@ import type { VNode, VObject, VScalar } from "../gon/types.ts";
 import type { Policy } from "./policy.ts";
 
 function isNumber(v: VNode): v is VScalar {
-  return v.t === "str" && v.num !== null;
+  return v.t === "str" && v.type === "number";
 }
 
-/** A GON string: a scalar that is neither a number nor a bare `true`/`false` (GON's bool type). */
+/** A GON string: a scalar the game types as a string — not a number, bool or null (quotes never type, so `"true"` is a bool). */
 function isGonString(v: VNode): v is VScalar {
-  return v.t === "str" && v.num === null && !(!v.quoted && (v.raw === "true" || v.raw === "false"));
+  return v.t === "str" && v.type === "string";
 }
 
 /** Index of the nth (0-based) entry with the given key, or -1. */
@@ -74,7 +74,7 @@ export function append(base: VNode, overlay: VNode): VNode {
     return b;
   }
   if (isGonString(b) && isGonString(overlay)) {
-    return { t: "str", raw: b.raw + overlay.raw, quoted: b.quoted || overlay.quoted, num: null };
+    return { t: "str", raw: b.raw + overlay.raw, quoted: b.quoted || overlay.quoted, num: null, type: "string" };
   }
   // Numbers, bools and every container/scalar mix: incompatible — the game logs and does nothing.
   return b;
@@ -138,7 +138,7 @@ export function patchValue(b: VNode, o: VNode, policy: Policy): VNode {
   // Strings: append / add concatenate, everything else overwrites.
   if (isGonString(b) && isGonString(o)) {
     if (policy === "append" || policy === "add") {
-      return { t: "str", raw: b.raw + o.raw, quoted: b.quoted || o.quoted, num: null };
+      return { t: "str", raw: b.raw + o.raw, quoted: b.quoted || o.quoted, num: null, type: "string" };
     }
     return clone(o);
   }

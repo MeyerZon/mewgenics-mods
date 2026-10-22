@@ -169,6 +169,10 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     const f = expectCode(v("patch-nonnumeric"), "patch-nonnumeric", "warning");
     eq(f.location?.path, "0.wallet_size");
   });
+  test("validator fixture: patch-quoted-number — wallet_size.add \"5\" is a number to the game (quotes are dropped before typing), so no patch-nonnumeric", () => {
+    const r = v("patch-quoted-number");
+    eq(only(r, "patch-nonnumeric").length, 0, `no patch-nonnumeric (all: ${codes(r)})`);
+  });
   test("validator fixture: csv-positional-merge-fragile warns for combined.csv.merge", () => {
     const f = expectCode(v("csv-positional-merge-fragile"), "csv-positional-merge-fragile", "warning");
     eq(f.location?.file, "mods/csv-positional-merge-fragile/data/text/combined.csv.merge");

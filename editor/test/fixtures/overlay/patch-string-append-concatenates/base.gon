@@ -5,3 +5,4 @@ name "abc"
 tag foo
 flag true
 n 1
+qflag "true"   # quoted, still a bool (type 5): quotes are dropped before typing

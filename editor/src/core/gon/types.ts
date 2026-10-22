@@ -1,5 +1,7 @@
 // Shared types for the GON engine. This module exports nothing at runtime.
 
+import type { GonScalarType } from "./typing.ts";
+
 /** A source position (0-based offset, 1-based line/col). */
 export interface Pos {
   offset: number;
@@ -20,9 +22,12 @@ export interface Token {
   text: string;
   /** Exact trivia text immediately before the token. */
   leading: string;
-  /** Decoded value for string tokens (quotes/escapes resolved). */
+  /** Decoded value for string tokens (quotes/escapes resolved) — the text the game types and stores. */
   value?: string;
-  /** True if the string token was double-quoted. */
+  /**
+   * True if the string token was double-quoted. Round-tripping only: the game drops the quotes before typing, so
+   * this never drives a type (see `ScalarNode.type`).
+   */
   quoted?: boolean;
   /** Position of the start of `text`. */
   pos: Pos;
@@ -58,6 +63,8 @@ export interface ArrayNode {
 export interface ScalarNode {
   kind: "scalar";
   token: Token;
+  /** The game's type of this scalar (`scalarType(token.value)`): quoting plays no part. */
+  type: GonScalarType;
 }
 
 export type Node = ObjectNode | ArrayNode | ScalarNode;
@@ -80,14 +87,19 @@ export interface VArray {
   items: VNode[];
 }
 
+/**
+ * Any GON scalar (`t: "str"` is the discriminator for all four game types; `type` tells them apart).
+ */
 export interface VScalar {
   t: "str";
-  /** Decoded scalar value (no surrounding quotes). */
+  /** Decoded scalar value (no surrounding quotes) — the text the game stores on the node. */
   raw: string;
-  /** True if originally double-quoted. */
+  /** True if originally double-quoted. Preserved for the pretty-printer; never drives typing. */
   quoted: boolean;
-  /** Numeric value if this is an unquoted GON number, else null. */
+  /** The game's double view (`numericValue(raw)`) when `type` is "number", else null. */
   num: number | null;
+  /** The game's type of this scalar — quotes dropped, so `"5"` is a number and `"true"` a bool. */
+  type: GonScalarType;
 }
 
 export type VNode = VObject | VArray | VScalar;
