@@ -222,6 +222,8 @@ look matters). Task-level detail (files, red test names, gotchas) is in `.analys
 - [ ] **M3 assets + data seam:** bytes via `ResourceManager_GetBinaryResource`, textures via `App_GetTexture`
       (`textures/models/…png`, existence-checked); API v5 `FW_Register3DObject` / `FW_Attach3DObject`; GON `model` /
       `render3d {}` keys validated by the editor (schema + checks + a `model3d` kind in `registered-names.json`).
+      The importer design for both halves (glTF subset v1–v3, `model-*` codes, axes/UV/texture/colour rules, the GON
+      `model {}` block, the Blender export recipe) is [`3d-importer-design.md`](3d-importer-design.md).
 - [ ] **M4 palette shader:** `mods/fw-mesh/shaders/fw_mesh.shader` — lambert + the palettemap rule (§1) + the colour
       transform; T3 side-by-side with a cat of the same palette.
 

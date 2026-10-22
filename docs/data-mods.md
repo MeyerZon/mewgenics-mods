@@ -318,3 +318,74 @@ Not done: the editor does not switch a key text to plain by itself, and the vali
 HTML-wrapped key (follow-up); the preview draws the key, not the localized value. Measure and its limits:
 `editor/src/core/art/probe-outcomes.ts` (ink masks per box on a clip-space grid, key vs value vs look-alike,
 min over ±3 px shifts; a box under 60 % of its best ink — the "Battle Start!" banner, the unit — does not vote).
+
+## 3D models: exporting from Blender
+
+**For the owner** (you said you can provide `.gltf` files). Phase M of `docs/possible_3d_work.md`; the importer rules
+behind every step are in [`3d-importer-design.md`](3d-importer-design.md) (§2.5 lists what is read, ignored or
+refused). Written for Blender 5.x's bundled glTF exporter (File > Export > glTF 2.0); the setting names are the
+exporter's own (`scripts/addons_core/io_scene_gltf2/__init__.py` at v5.2.3).
+
+**Before exporting — the model itself**
+
+1. **Scale: 1 metre = 1 tile.** A prop that fills its tile is about 1 × 1 m on the ground; keep it inside a
+   1 × 1 m square around its origin (the editor warns `model-footprint` past 0.5 m from the origin). Height is free;
+   a cat-sized prop is 0.6–1.0 m. Leave the scene's Unit Scale at 1.0.
+2. **Origin at the feet.** Put the object's origin at the bottom centre of the model: snap the 3D cursor there
+   (Shift+S > Cursor to Selected on the bottom face, or to the world origin if the model already stands on it), then
+   Object > Set Origin > Origin to 3D Cursor. Nothing should go below the origin (`model-below-floor`).
+3. **Front = Blender's −Y** (what the Front view, numpad 1, shows). In the game that side faces the lower right of
+   the screen; turning it is a GON setting, not an export setting.
+4. **Apply the object's transform** (Ctrl+A > All Transforms). Not strictly needed — the importer bakes node
+   transforms — but it makes the origin and the size you see the size you get.
+5. **One object, one material.** Join parts into one object (Ctrl+J) and give it one material; v1 draws the whole
+   model with one colour/texture (`model-multi-material` warns otherwise). Several objects in one file are merged,
+   which also works, but one is simplest.
+6. **Material: Principled BSDF with Base Color only.** Either a plain colour, or an **Image Texture node plugged
+   straight into Base Color** — no Mapping node between them (a Mapping node becomes `KHR_texture_transform`, which v1
+   ignores). Metallic, roughness, normal maps and emission are ignored. Exactly grey colours (R = G = B) are recoloured
+   by the unit's palette like cat art; use `palette false` in the GON block to keep authored colours.
+7. **Texture: PNG, RGB or RGBA, 8 bit, at most 1024 × 1024** (256 or 512 is plenty: the prop is ~100 px on screen
+   and the game uses no mipmaps). Not greyscale-only (a 1-channel PNG cannot be uploaded by the game's loader).
+   Transparency is a cut-out (alpha below 0.5 is a hole); no soft translucency.
+8. **Triangle budget: ≤ 5 000 triangles** (≈ 2 000 is plenty; Decimate modifier if needed). The glTF exporter
+   triangulates by itself; add a Triangulate modifier first only if you want to control how n-gons are split.
+9. **No armature, no shape keys, no animation** for now (v1 draws a static prop; skins and animations are skipped
+   with a warning, and shape keys make the exporter write sparse accessors).
+10. **Name**: lowercase letters, digits, `_` or `-` (e.g. `crate`, `bone_pile-2`); the file becomes
+    `models/<name>.glb` (the whole path under 64 characters).
+
+**Export — File > Export > glTF 2.0 (.glb/.gltf), then in the side panel:**
+
+| Panel | Setting | Value |
+|---|---|---|
+| (top) | Format | **glTF Binary (.glb)** — one self-contained file |
+| Include | Limit to: Selected Objects | **on** (select only the model) |
+| Include | Custom Properties, Cameras, Punctual Lights | off |
+| Transform | +Y Up | **on** (the default) |
+| Data > Mesh | Apply Modifiers | **on** |
+| Data > Mesh | UVs | on (needed for a texture) |
+| Data > Mesh | Normals | on (off = flat shading) |
+| Data > Mesh | Tangents, Loose Edges, Loose Points, Shared Accessors | off |
+| Data > Material | Materials | Export |
+| Data > Material | Images | Automatic (PNG stays PNG) |
+| Data > Shape Keys | Shape Keys | **off** |
+| Data > Armature / Skinning | Skinning | off |
+| Data > Compression | Draco mesh compression | **off** (a Draco file is refused) |
+| Data > Compression | Meshopt compression | off |
+| Animation | Animation | off |
+
+Save it as `mods/<your mod>/models/<name>.glb`, or just hand the `.glb` to an agent.
+
+**The texture file.** The game loads textures by file name from `textures/`, so the PNG also has to sit at
+`mods/<mod>/textures/models/<name>.png`. With a `.glb` the editor extracts the embedded PNG there (planned:
+`extract_model_texture`; until then an agent does it). Alternatively export **glTF Separate (.gltf + .bin +
+textures)** and copy the PNG to that path yourself.
+
+**OBJ instead** (File > Export > Wavefront (.obj)): Forward −Z, Up Y (the defaults), Selected Only, Apply Modifiers,
+UV Coordinates, Normals, **Triangulated Mesh on**, Materials off (the `.mtl` is not read: colour and texture come from
+the GON block). Same scale, origin and name rules.
+
+**Check:** `validate_mod` (once the model checks are wired, `3d-importer-design.md` §3.3) lists every problem with a
+`model-*` code; until then an agent runs `readModel` on the file. What is drawn today is in "3D models in a mod
+(preview)" once the `feat/3d-meshes-*` branches land.
