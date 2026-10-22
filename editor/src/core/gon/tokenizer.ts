@@ -6,22 +6,25 @@
 // (including the final `eof` token, whose `leading` holds any trailing trivia)
 // reproduces the input byte-for-byte. This is what makes round-tripping faithful.
 //
-// GON facts honored here (observed in the extracted base data + gon.h behavior):
-//  - Objects `{ }`, arrays `[ ]`.
-//  - Bare tokens run until whitespace / comma / structural char / quote / comment.
+// GON facts honored here (OBSERVED in Gon_Tokenize 0x93f090, docs/data-mods.md "GON typing fidelity"):
+//  - Objects `{ }`, arrays `[ ]`: single-character tokens, no space needed around them (`a{b 1}`).
+//  - `,` `:` `=` are whitespace, exactly like space / tab / CR / LF — `a=5`, `a:5`, `[1,2,3]`.
+//  - Bare tokens run until whitespace / a structural char / `"` / `#`.
 //    Examples: `3+bonus_melee_ability_damage`, `.25`, `character_to_tile`, `pt-br`.
-//  - Quoted strings `"..."` with backslash escapes.
-//  - Commas are optional separators (treated as whitespace) — seen in
-//    `[idle, FighterIdle]`.
-//  - Comments: `// line`, `# line`, and `/* block */`.
+//  - Quoted tokens `"..."`: `\` escapes the next character and only `\n` means a newline (`\t` is a plain `t`);
+//    the quotes are dropped by the game and leave no flag — `quoted` here exists for round-tripping only.
+//  - `#` starts a comment to end of line, even in the middle of a bare token.
+//  - `//` and `/* */` are not in the game's tokenizer; 188 / 35 of the 210 vanilla .gon files use them, so an
+//    earlier pass must strip them (INFERRED, not located). The editor treats both as comments.
 
 import type { Token, TokenType } from "./types.ts";
 
-const SPACE = new Set([" ", "\t", "\r", "\n", ","]);
+const SPACE = new Set([" ", "\t", "\r", "\n", ",", ":", "="]);
 const STRUCT: Record<string, Exclude<TokenType, "string" | "eof">> = { "{": "lbrace", "}": "rbrace", "[": "lbracket", "]": "rbracket" };
 
 /**
- * Decode a quoted GON string's inner escapes.
+ * Decode a quoted GON string's inner escapes the way Gon_Tokenize does: `\n` is a newline, every other escaped
+ * character is itself (`\"` -> `"`, `\\` -> `\`, `\t` -> `t`).
  * @param inner raw characters between the quotes
  */
 function decodeEscapes(inner: string): string {
@@ -31,13 +34,7 @@ function decodeEscapes(inner: string): string {
     if (c === "\\" && i + 1 < inner.length) {
       const n = inner[i + 1]!;
       i++;
-      if (n === "n") out += "\n";
-      else if (n === "t") out += "\t";
-      else if (n === "r") out += "\r";
-      else if (n === '"') out += '"';
-      else if (n === "\\") out += "\\";
-      else if (n === "/") out += "/";
-      else out += n; // unknown escape: keep the escaped char literally
+      out += n === "n" ? "\n" : n;
     } else {
       out += c;
     }

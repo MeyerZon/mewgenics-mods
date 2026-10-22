@@ -53,6 +53,9 @@ export const ArtNewSceneBody = z.object({
   mod: str,
   name: str,
   starter: z.boolean().optional(),
+  /** "cat-animation": a rig + the _Append_CatTest donor with <animation>F / <animation>B frames */
+  template: z.enum(["cat-animation"]).optional(),
+  animation: str.optional(),
 });
 
 export const ArtValidateBody = z.object({ scene: anyObject });

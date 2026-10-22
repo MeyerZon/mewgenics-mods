@@ -12,12 +12,12 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 | Pinned fact | Count on 25143593 | Where it is used |
 |---|---|---|
 | PE identity (TimeDateStamp + SizeOfImage) | 1 | `fw_identify_build` |
-| Byte signatures of hooked/called functions | 15 FwSymbol + 20 reference functions | `resolve_symbols` |
-| Raw RVAs of the 13 status-name lookups (`FW_LK`) | 13 (12 of them have no unique signature) | `status_engine.c` |
+| Byte signatures of hooked/called functions | 55 signed function entries (25 of the 28 FwSymbol + 30 reference functions, 7 of them, since 2026-10-22, only as witness hosts for the Character/GonObject offsets); 3 FwSymbol entries ship as `NULL` pattern + raw RVA | `resolve_symbols` |
+| Raw RVAs of the 13 status-name lookups (`FW_LK`) | 13 (none has a signature worth having: twins differ only in `__LINE__` immediates) | `status_engine.c` |
 | Data RVAs: App global, SDL3 DYNAPI jump table + 8 slots, default status source | 11 | `BuildInfo.rva_data`, `FW_GetData` |
 | Vftables (LuckUp, Status) and the LuckUp type id | 3 | vtable cloning, sanity check |
 | Vtable slot indices / count | 6 | `offsets.h` |
-| Struct offsets | 40 | `offsets.h` (`status_engine.c`, `mewtest.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG) |
+| Struct offsets | 55 (+ `GON_NODE_SIZE`) | `offsets.h` (`status_engine.c`, `mewtest.c`, `mt_gon.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG), +15 on 2026-10-22 (Character HP/stats/GON entry, the GonObject node layout — `docs/engine-map.md` "GON at runtime") |
 
 ## The manifest: `bindings/<steamBuildId>.json`
 
@@ -34,7 +34,7 @@ and **anchors**, the evidence that finds it again:
 
 | Entry kind | Anchors recorded by `tools/bindings/harvest.ts` |
 |---|---|
-| function | `signature` (shortest unique masked prefix, rel32 / rip-relative disp32 / imm64 wildcarded, may start inside the function with a negative `offset`), `strings` (the MSVC `__FUNCSIG__` / `__FILE__` strings it references via rip-relative `lea`, with uniqueness; hand-added `literal` strings are kept), `callees` (calls to other manifest entries, by ordinal among all calls), `cfgLite` (bytes from `.pdata`, calls, rip refs), `prologue`, optionally `after` (the `.pdata` function it follows) |
+| function | `signature` (shortest unique masked window, rel32 / rip-relative disp32 / imm64 wildcarded; may start later in the function, always on an instruction boundary, with a negative `offset`; `null` when no relocation-free unique window exists — the DLL then takes the manifest RVA on the identified build), `strings` (the MSVC `__FUNCSIG__` / `__FILE__` strings it references via rip-relative `lea`, with uniqueness; hand-added `literal` strings are kept), `callees` (calls to other manifest entries, by ordinal among all calls), `cfgLite` (bytes from `.pdata`, calls, rip refs), `prologue`, and the hand-written locators the harvest **verifies** on every run (a function row is `verified` / `mismatch`): `vtableStore { vtable, pattern }` (the only code site that stores an RTTI-derived vftable — constructors), `imm32Witness { pattern, imm32At, equals, callee, maxForward }` (an immediate equal to a constant re-derived on the new image, within N instructions before a call to a known callee), `callers [{ function, ordinal, afterStringLea, maxForward }]` (call #ordinal of a known caller, re-harvested, and/or the first in-tolerance E8 after that caller's `lea rdx,[rip+"literal"]`), `after` / `before` (the `.pdata` function right after / before a named entry, by table index), `sharedDataRef { with, ripRefOrdinal }` (the other function referencing rip ref #k of a named function), `dataRefs [{ rva, role }]` (globals it references; informational, ported by rip-ref ordinal) |
 | data | `witness` (the function that references it and the ordinal of that rip-relative reference), or `derive { table, index }` |
 | vtable | `rtti { typeDescriptorName }` (TypeDescriptor → CompleteObjectLocator → vftable) + `slotChecks` |
 | constant | `derive { vtable, slot, bodyPattern, imm32At }` (read from the slot's code) and/or `witness { function, callee, pattern, imm32At, maxBack }` (the imm32 of the instruction matching `pattern` within `maxBack` instructions before the first call to `callee` inside `function`) and/or a displacement witness `witness { function, pattern, dispAt, dispSize, scale }` without a callee (the displacement of the matching instruction divided by `scale`: a `call [reg+8*slot]` witnesses a vtable slot index; port method `call-slot`). With two sources the port applies a value only when both agree; a split is `needs-human` with both values. `LuckUp_typeid` carries both since 2026-10-19 (slot 1 body of the LuckUp vftable; `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in `Status_ApplyLuckUp`). |
@@ -68,25 +68,43 @@ The library behind them is `editor/src/core/bindings/` (`pe`, `scan` with the DL
 
 ## The ladder (`port.ts`)
 
-Per function, the first rung that yields exactly one answer wins:
+Vtables port first (RTTI needs no function). Then, per function, the rungs are tried in this order and the first
+rung whose candidates — **filtered by the cfgLite tolerance** (±35 % bytes, ±2 or 25 % calls) — leave exactly one
+wins (`ported-anchor`, method = the rung's name):
 
 1. the stored masked signature matches exactly once → `ported-exact` (same RVA) or `ported-rescan` (moved)
-2. every unique funcsig/literal string anchor is found once and xref'd by rip-relative `lea` from exactly one
-   `.pdata` function whose size/call count is within tolerance (±35 % bytes, ±2 or 25 % calls) → `ported-anchor`
-3. the k-th call of an already-ported caller that called it at ordinal k → `ported-anchor` (caller-ordinal)
-4. the `.pdata` function right after a ported neighbour (`anchors.after`) → `ported-anchor` (pdata-successor)
-5. several candidates → `ambiguous` (each listed with RVA, size, calls, how found); none → `failed`;
+2. `vtable-store`: the only code site that `lea`s the named RTTI-derived vftable with the given pattern
+   (`48 8D 05 ?? ?? ?? ?? 48 89 03`) → its `.pdata` function. `LuckUp_ctor`, which has no relocation-free unique
+   byte signature at all (notes-bind §1.2), ports this way
+3. `imm32-witness`: an instruction matching the pattern with the constant's value *re-derived on the new image*
+   (`LuckUp_typeid` from the vftable slot) as imm32, followed within `maxForward` instructions by an E8 to the
+   ported callee → `Status_ApplyLuckUp` (`mov r8d, typeid` before `Entity_FindComponentsByTypeId`)
+4. `caller-after-lea`: in a ported caller, the first E8 after `lea rdx,[rip+"literal"]` whose target is within the
+   tolerance (the `string == cstr` compare call before it is too small) — `Status_ApplyLuckUp` after the
+   `"LuckUp"` lea in `apply_status` / `attach_passive`, independent of the ordinal 1261 / 3439
+5. `funcsig-xref`: every unique funcsig/literal string anchor is found once and xref'd by rip-relative `lea`; the
+   intersection over the strings is filtered by the tolerance before anything is called ambiguous (the 12 functions
+   that lea `"LuckUp"` collapse to one once `"None"` and the tolerance are applied)
+6. `caller-ordinal`: the k-th call of an already-ported caller that called it at ordinal k
+7. `pdata-successor` / `pdata-predecessor`: the `.pdata` function right after / before a ported neighbour, by table
+   index (`anchors.after` / `anchors.before`): the 11 lookups form one chain from `apply_status`
+8. `shared-data-ref`: the other function referencing rip ref #k of a ported function (`Status_NameExists` shares
+   `Status_GetValue`'s map)
+9. several in-tolerance candidates → `ambiguous` (each listed with RVA, size, calls, how found); none → `failed`;
    `--resolve Name=0xRVA` → `ported-anchor` (resolved)
 
-Then vtables via RTTI and constants via their sources — slot body and/or call-arg witness; all present sources must
+Then constants via their sources — slot body and/or call-arg witness; all present sources must
 agree (`ported-derived`, method `slot-body+call-arg`), otherwise `needs-human` with every value listed — data via witness rip-ref ordinals
 (`ported-witness`; a shifted ordinal is accepted only when exactly one reference of the same opcode remains) and
 table+index (`ported-derived`, or `needs-human` when the SDL version changed), struct offsets via their witness
 pattern (`ported-witness` when the displacement is unchanged, **`proposed` with the value NOT applied** when it
 moved; the same `readOffsetWitness` the harvest verifies with, so an anchor that verifies today ports tomorrow). Unanchored entries are carried over as `needs-human`. Every ported function gets a fresh signature and
-fresh anchors on the new image; every entry gets a `port { from, status, method, note, candidates? }` block.
+fresh anchors on the new image (caller ordinals and `dataRefs` re-harvested); every entry gets a `port { from, status, method, note, candidates? }` block.
 
-Rungs 2–4 iterate until nothing more ports, so a string-less helper becomes reachable once its caller is ported.
+Rungs 2–8 iterate until nothing more ports, so a string-less helper becomes reachable once its caller or neighbour
+is ported. Every rung's locator is the same function the harvest verifies with (`harvest.ts`:
+`findVtableStoreFunctions`, `findImm32WitnessFunctions`, `findCallsAfterStringLea`, `pdataNeighbour`,
+`findSharedDataRefFunctions`), so an anchor that verifies today is the anchor that ports tomorrow.
 
 ## The report (`bindings/<build>.port-report.md`)
 
@@ -153,19 +171,25 @@ Per status, 98 entries: `ported-rescan` 32 · `ported-anchor` 14 · `ported-witn
   unchanged bodies. The signature rung and the anchors survived a relink; the ±35 % / ±25 % tolerances, the
   `ambiguous` path and the `proposed` path were not stressed by a real image.
 
-What the run suggests for the ladder (candidates, not implemented):
+What the run suggested for the ladder, and what became of it:
 
-- **Report bug**: `portFunction` writes `e.rva` before `finish` reads `oldValue = e.rva`, so the table's `old` column
-  shows the ported value for every ported row (data and derived rows too); the real old value survives only in the
-  `was 0x…` detail. Capture `oldValue` before the mutation and assert the column in the fake-PE T0 tests.
-- **Rung 3 is the weakest rung that carried weight.** `Status_ApplyLuckUp` and `LuckUp_ctor` have no strings and no
-  `after`, so one call added or removed before ordinal 1261 in `apply_status` fails both with no fallback.
-  Candidates: a *callee-set* rung (match a candidate by the already-ported functions it calls at matching ordinals —
-  `Status_ApplyLuckUp` calls `Entity_FindComponentsByTypeId` #4, `Status_Remove` #5, `LuckUp_ctor` #6,
-  `Status_ApplyByName` #9); a tolerant ordinal window (±k calls, accepted only when exactly one candidate passes the
-  cfgLite tolerance); a *vftable-store* rung for constructors (`LuckUp_ctor` is the `.pdata` function that stores
-  `LuckUp_vftable` through a rip-relative `lea`) — RTTI has no function dependency, so the vtable phase could run
-  before the function rungs to make that possible.
+- ~~**Report bug**~~ — fixed in PR #29: `finish` takes the pre-port value from the caller.
+- ~~**Rung 3 is the weakest rung that carried weight.**~~ — closed 2026-10-21/22 (the "bindings hardening" PR, from the
+  Ghidra session's `.analysis/notes-bind.md`): `Status_ApplyLuckUp` now carries the `"LuckUp"` + `"None"` literals,
+  an `imm32Witness` on the type id and `callers` after the `"LuckUp"` lea in `apply_status` / `attach_passive`;
+  `LuckUp_ctor` carries `vtableStore` on `LuckUp_vftable` (plus the pool `dataRef`); the 11 lookups carry the
+  `.pdata` chain and `Status_NameExists` the shared value map. Vtables port before the function rungs. The caller
+  ordinal is the *last* rung for both, not the only one. Not done: the *callee-set* rung (match a candidate by the
+  ported functions it calls at matching ordinals) — the witnesses above made it unnecessary for the two entries
+  that needed it.
+- **Signature generator defects found by the same session** (fixed in that PR): `decodeRelocs` dropped a
+  relocation straddling the window end, so `Status_GetCategory` (`… 48 8D 0D 6F`) and `LuckUp_ctor`
+  (`… 48 8D 05 95 5D`) were unique only through unmasked disp32 bytes; `makeSignature` tried window starts every 8
+  bytes regardless of instruction boundaries, so `Status_ApplyLuckUp`'s pattern began inside `49 8B F1` and masked
+  nothing; and the lite decoder ignored the `66` operand-size prefix, so `mov word [rbx+0xe8],1` desynced it.
+  Starts are instruction boundaries now, a cut relocation is masked, uniqueness is found by binary search, and the
+  three entries whose only unique bytes are a relocation, the type id or a `__LINE__` immediate are `signature: null`
+  (the DLL takes `expectedRva` for a `NULL` pattern on the identified build, exactly like the FW_LK raw RVAs).
 - ~~Anchor the six constants~~ — done 2026-10-20: `LuckUp_vtableSlots` = `derive { vtable, extent: true }` (172
   consecutive code pointers); `VT_GetTypeId` / `VT_GetTypeHierarchy` = `derive.slotSearch { bodyPattern }` (the only
   slot whose body is `mov eax,imm32; ret` / `lea rax,[rip+x]; ret`); `VT_GetTypeName` / `VT_IsA` = `slotSearch {
@@ -184,13 +208,33 @@ What the run suggests for the ladder (candidates, not implemented):
 
 ## Known limits and human decisions
 
-- `FW_SIG_MAX_BYTES` / `sigCap` is 128; `Status_GetCategory` needs 126. Raising it means changing `fw_sig.h`
-  and the host test together.
+- `FW_SIG_MAX_BYTES` / `sigCap` is 128. Nothing needs it any more: `Status_GetCategory`'s 126-byte pattern was unique
+  only through an unmasked relocation byte and is `null` since 2026-10-22 (its funcsig xref and the `.pdata` chain
+  locate it; the DLL takes the raw RVA). Raising the cap still means changing `fw_sig.h` and the host test together.
+- **`__LINE__` signatures are deliberately not used.** The 13 `ConstructionHelpers.cpp` lookups are one template
+  body each; the only relocation-free bytes that tell the twins apart are the `__LINE__` / column immediates of the
+  `NO STATUS NAMED` assert (`C7 45 B7 48 00 00 00 …` = line 72 for `get_status_type`). A body signature built on them
+  is unique today but a source edit above that line moves it onto a twin, and rung 1 would port the wrong function
+  silently (`GetValue` / `OnAppliedToDamageInstance` / `OnKilledCharacter` / `OnDamageReport` even share the column).
+  The funcsig xref and the `.pdata` chain are strictly stronger; those entries stay `signature: null` with a note.
+  `make-signature --manifest` without `--only` lists them as `skipped (null)` and never regenerates one.
+- `ApplicationBase_FrameBegin` has no string of its own; its signature is a hand-chosen body window from +45 keyed
+  on the per-frame defaults it stores (not the generic 19-byte prologue), plus `before: ApplicationBase_FrameEnd`.
+  `make-signature --manifest` would replace it with the shortest prologue window again — keep the body one.
 - An SDL upgrade changes the DYNAPI slot order: the 8 slots become `needs-human` until re-verified.
-- 46 entries (40 struct offsets, 6 vtable slot constants) are still `unanchored`: the port reports them instead of
-  guessing. Adding witness patterns is the next improvement.
+- Nothing is `unanchored` any more (40 struct offsets and 6 vtable slot constants carry witnesses / derivations since
+  2026-10-20); the port still reports a `proposed` offset instead of applying it.
+- The caller-ordinal-only limit is closed (see above); what remains without a second rung is the callee-set idea,
+  not needed by any entry today.
+- **`GonObject_Int` / `GonObject_Number` are twins** (the witness hosts of `GonObject_int` / `GonObject_double`): their
+  bodies differ only in RIP-relative displacements, which the hardened generator masks, so `make-signature` finds no
+  window for them. Their manifest patterns (made before the hardening) still scan unique at their RVAs on this build
+  (the T1 regeneration test verifies exactly that for these two names), but on a new build they have no rung — they
+  port by a hand-made seed, and the two offsets they witness follow them.
 - A changed arity of the 13 lookups (shapes A–E), a compiler/CRT change (`MsvcString` layout), or a changed
   vtable layout cannot be ported mechanically.
-- The DLL still resolves functions by signature at load time. Entries that only have anchors (`signature: null`)
-  ship as raw RVAs in `signatures.h`; a runtime anchor locator in the DLL (string → lea xref → `.pdata`) is the
-  optional follow-up that would let those survive a relink before anyone runs the port.
+- The DLL still resolves functions by signature at load time. Entries that only have anchors (`signature: null`:
+  the 11 lookups, `Status_GetCategory`, `LuckUp_ctor`, `Status_ApplyLuckUp`) ship as raw RVAs in `signatures.h`
+  (`NULL` pattern + `expectedRva`, logged as `symbol X: no signature on this build; using RVA …`); a runtime anchor
+  locator in the DLL (RTTI → vftable store → unique E8 caller, string → lea xref → `.pdata`) is the optional
+  follow-up that would let those survive a relink before anyone runs the port.
