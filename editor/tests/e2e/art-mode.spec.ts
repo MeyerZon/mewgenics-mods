@@ -239,6 +239,31 @@ test.describe("Art mode — explorer & scene authoring", () => {
     expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
   });
 
+  test("Ghost cat: a parts: game rig's seven empty slots show labelled ghost silhouettes over the preview (none for a plain sprite); the ghost cat toggle hides them", async ({ page }) => {
+    const errors = collectConsole(page);
+    await openSandboxScene(page);
+    // a plain sprite: no ghosts, no toggle
+    await expect(page.locator(".pvcanvasbox .ghost-part")).toHaveCount(0);
+    await expect(page.locator('input[aria-label="ghost cat"]')).toHaveCount(0);
+    await page.locator(".subtabs .btn", { hasText: "Rig" }).click();
+    await page.locator('input[aria-label="new cat animation name"]').fill("wave");
+    await page.getByRole("button", { name: "New cat animation" }).click();
+    await page.getByRole("button", { name: "Animate pose" }).click();
+    const ghosts = page.locator(".pvcanvasbox .ghost-cat .ghost-part");
+    await expect(ghosts).toHaveCount(7);
+    const labels = await page.locator(".pvcanvasbox .ghost-cat .ghost-label").allInnerTexts();
+    expect(labels.slice().sort()).toEqual(["arm1", "arm2", "body", "head", "leg1", "leg2", "tail"]);
+    await expect(page.locator(".pvcanvasbox .ghost-cat")).toHaveAttribute("data-source", /^(catparts\.swf|builtin)$/);
+    const toggle = page.locator('input[aria-label="ghost cat"]');
+    await expect(toggle).toBeChecked();
+    await toggle.uncheck();
+    await expect(ghosts).toHaveCount(0);
+    await toggle.check();
+    await expect(ghosts).toHaveCount(7);
+    const real = errors.filter((e) => !/WebGL|SwiftShader|GL_|ANGLE|GPU/i.test(e.text));
+    expect(real, JSON.stringify(errors, null, 2)).toHaveLength(0);
+  });
+
   test("Export SVG writes art/<shape>.svg for an external editor; Replace from SVG brings an edited file back over the same shape", async ({ page }) => {
     const errors = collectConsole(page);
     await openSandboxScene(page);
