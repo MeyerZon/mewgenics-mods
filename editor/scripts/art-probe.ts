@@ -21,6 +21,12 @@
 // control _artprobe/render-tileset-control.mewtest (no overlay) and write tileset-summary.json: the marker per shot
 // (baseline before `spawn Rat`, two after) and the outcome (probe-outcomes.ts tilesetOutcome). `--loctext --from <runDir>`
 // re-reads an earlier run's report.json and shots instead of launching the game.
+// --cat-wave (2026-10-22): run render-cat-wave.mewtest (TomTom, then ArtProbeCatWave whose idle is the appended,
+// keyed `wave` pose) and write cat-wave-summary.json: our marker, the cat's outline under it vs TomTom's, the slot
+// colours beyond TomTom's own, and the outline change between wave shots vs the idle TomTom's (probe-outcomes.ts
+// catWaveOutcome; exit 0 on `animated`). --glow-arena (2026-10-22): run render-glow-arena.mewtest (ArtProbeGlow: a
+// bakeGlow halo, an unglowed control square, a colour swatch) and write glow-arena-summary.json (measureGlowArena /
+// glowArenaOutcome; exit 0 on `halo`). Both take `--from <runDir>` too.
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
@@ -29,7 +35,7 @@ import { join } from "node:path";
 import * as api from "../src/core/api.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { decodePng } from "../src/core/art/png.ts";
-import { measureLocText, summarizeLocText, tilesetOutcome } from "../src/core/art/probe-outcomes.ts";
+import { measureLocText, summarizeLocText, tilesetOutcome, catWaveOutcome, measureGlowArena, glowArenaOutcome, GLOW_ARENA_PROBE } from "../src/core/art/probe-outcomes.ts";
 import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
 
 /** the CatProbe rig's slot colours (mods/_artprobe/art/probe.scene.json) */
@@ -79,7 +85,94 @@ if (process.argv.includes("--loctext")) {
   ].join("\n"));
   process.exit(r.verdict === "pass" && first ? 0 : 1);
 }
-const report = await api.runIngameTest({ mod: "_artprobe", test: catAppend ? "render-cat-append" : cat ? "render-cat" : "render-probe", hide: false });
+/** a finished run: launched now, or re-read from `--from <runDir>` (report.json + its shots) */
+async function runOrReread(test: string) {
+  const fromAt = process.argv.indexOf("--from");
+  const r = fromAt > 0 ? (JSON.parse(readFileSync(join(process.argv[fromAt + 1]!, "report.json"), "utf8")) as Awaited<ReturnType<typeof api.runIngameTest>>) : await api.runIngameTest({ mod: "_artprobe", test, hide: false });
+  if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
+  if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
+  return r;
+}
+if (process.argv.includes("--cat-wave")) {
+  // the wave probe (2026-10-22): render-cat-wave.mewtest — baseline, vanilla (TomTom), then ArtProbeCatWave five times
+  const r = await runOrReread("render-cat-wave");
+  const byLabel = new Map(r.artifacts.shots.filter((s) => s.path).map((s) => [s.label, decodePng(readFileSync(s.path!))]));
+  const baseline = byLabel.get("baseline"), vanilla = byLabel.get("vanilla");
+  const waveLabels = [...byLabel.keys()].filter((l) => /^wave \d$/.test(l));
+  const arena = vanilla ? { x0: Math.round(vanilla.width * 0.15), y0: Math.round(vanilla.height * 0.1), x1: Math.round(vanilla.width * 0.85), y1: Math.round(vanilla.height * 0.7) } : undefined;
+  /** a window around a changed region: its centre and a radius covering it with margin (the arm sweeps past the body) */
+  const windowOf = (g: { x0: number; y0: number; x1: number; y1: number; cx: number; cy: number }) => ({ x: g.cx, y: g.cy, r: Math.round(Math.max(g.x1 - g.x0, g.y1 - g.y0) * 0.65) + 20 });
+  // TomTom (the control): the largest new dark blob vs the baseline inside the arena (as --cat-append)
+  const vRegion = baseline && vanilla ? largestChangedRegion(vanilla, baseline, { dark: 40, within: arena }) : null;
+  const vWin = vRegion ? windowOf(vRegion) : null;
+  const vanillaOutline = vWin && baseline && vanilla ? darkPixelsNear(vanilla, baseline, vWin, vWin.r) : 0;
+  // our cat: the largest new dark blob vs the vanilla shot below our marker (the marker sits above the cat's head)
+  const first = waveLabels.map((l) => ({ l, img: byLabel.get(l)!, a: analyzeProbeShot(byLabel.get(l)!) })).find((s) => s.a.found);
+  let rigWin: { x: number; y: number; r: number } | null = null, rigRegion = null;
+  if (first && vanilla && first.a.box) {
+    const b = first.a.box, w = b.x1 - b.x0, h = b.y1 - b.y0;
+    const search = { x0: Math.max(0, b.x0 - w), y0: b.y0, x1: Math.min(vanilla.width - 1, b.x1 + w), y1: Math.min(vanilla.height - 1, b.y1 + 6 * h) };
+    rigRegion = largestChangedRegion(first.img, vanilla, { dark: 40, within: search });
+    if (rigRegion) rigWin = windowOf(rigRegion);
+  }
+  // the slot colours are matched tint-tolerantly, so a real cat hits them too (OBSERVED 2026-10-22: TomTom's light fur
+  // reads as the head slot's peach, ~2.7k px): a slot colour counts only beyond twice what TomTom's own window holds
+  const vanillaSlots: Record<string, number> = vWin && vanilla ? slotColoursPresent(vanilla, CAT_PROBE_COLOURS, { centre: vWin, radius: vWin.r }) : {};
+  const wave = waveLabels.map((label) => {
+    const img = byLabel.get(label)!;
+    const a = analyzeProbeShot(img);
+    const slots = rigWin ? slotColoursPresent(img, CAT_PROBE_COLOURS, { centre: rigWin, radius: rigWin.r }) : slotColoursPresent(img, CAT_PROBE_COLOURS);
+    const slotsExcess = Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, Math.max(0, v - 2 * (vanillaSlots[k] || 0))]));
+    return { label, marker: geomOf(a), outline: rigWin && vanilla ? darkPixelsNear(img, vanilla, rigWin, rigWin.r) : 0, slots, slotsExcess };
+  });
+  // motion: new dark pixels both ways between every pair of wave shots, in our window and in TomTom's
+  const pairs: Array<{ a: string; b: string; rig: number; control: number }> = [];
+  for (let i = 0; i < waveLabels.length; i++) for (let j = i + 1; j < waveLabels.length; j++) {
+    const A = byLabel.get(waveLabels[i]!)!, B = byLabel.get(waveLabels[j]!)!;
+    const both = (w: { x: number; y: number; r: number } | null) => (w ? darkPixelsNear(B, A, w, w.r) + darkPixelsNear(A, B, w, w.r) : 0);
+    pairs.push({ a: waveLabels[i]!, b: waveLabels[j]!, rig: both(rigWin), control: both(vWin) });
+  }
+  const motion = { pairs, max: Math.max(0, ...pairs.map((p) => p.rig)), controlMax: Math.max(0, ...pairs.map((p) => p.control)) };
+  const marked = wave.filter((w) => w.marker && w.marker.found);
+  const outcome = catWaveOutcome({ verdict: r.verdict, markers: marked.length, partsDrawn: marked.filter((w) => vanillaOutline > 0 && w.outline >= 0.3 * vanillaOutline).length, slotMax: Math.max(0, ...wave.flatMap((w) => Object.values(w.slotsExcess))), motion: motion.max, controlMotion: motion.controlMax });
+  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, outcome, shots: [...byLabel.keys()], vanilla: { region: vRegion, window: vWin, outline: vanillaOutline, slots: vanillaSlots }, rig: { region: rigRegion, window: rigWin }, wave, motion };
+  writeFileSync(join(r.artifacts.runDir || ".", "cat-wave-summary.json"), JSON.stringify(out, null, 2) + "\n");
+  console.log([
+    `vanilla TomTom: ${vRegion ? `dark region ${vRegion.n} px at ${vRegion.cx},${vRegion.cy}, window r ${vWin!.r}` : "not found"}; outline ${vanillaOutline}`,
+    `rig window: ${rigWin ? `${rigWin.x},${rigWin.y} r ${rigWin.r}` : "not found"}`,
+    ...wave.map((w) => `${w.label}: marker ${w.marker && w.marker.found ? `found (scale ${w.marker.scale.toFixed(2)}, ${w.marker.mirrored ? "mirrored" : "as authored"})` : "not found"}; outline ${w.outline}; slot px max ${Math.max(0, ...Object.values(w.slots))} (beyond 2x TomTom: ${Math.max(0, ...Object.values(w.slotsExcess))})`),
+    `motion (outline px changed between wave shots): rig max ${motion.max}, control TomTom max ${motion.controlMax} — ${pairs.map((p) => `${p.a.slice(5)}/${p.b.slice(5)} ${p.rig}:${p.control}`).join(", ")}`,
+    `outcome: ${outcome}`,
+    `run: ${r.verdict} — ${r.reason}; ${out.save}`,
+    `artifacts: ${r.artifacts.runDir}`,
+  ].join("\n"));
+  process.exit(outcome === "animated" ? 0 : 1);
+}
+if (process.argv.includes("--glow-arena")) {
+  // the baked-glow probe (2026-10-22): render-glow-arena.mewtest — baseline (no unit), then ArtProbeGlow three times
+  const r = await runOrReread("render-glow-arena");
+  const byLabel = new Map(r.artifacts.shots.filter((s) => s.path).map((s) => [s.label, decodePng(readFileSync(s.path!))]));
+  const baseline = byLabel.get("baseline");
+  const shots = [...byLabel.keys()].filter((l) => /^glow \d$/.test(l)).map((label) => {
+    const img = byLabel.get(label)!;
+    const g = geomOf(analyzeProbeShot(img));
+    const measure = g && g.found && baseline ? measureGlowArena(img, baseline, g) : null;
+    return { label, marker: g, measure, outcome: measure ? glowArenaOutcome(measure) : "no-marker" };
+  });
+  const firstM = shots.find((s) => s.measure);
+  const outcome = r.verdict !== "pass" ? r.verdict : firstM ? firstM.outcome : "no-marker";
+  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, probe: GLOW_ARENA_PROBE, outcome, marker: firstM ? firstM.marker : null, measure: firstM ? firstM.measure : null, shots };
+  writeFileSync(join(r.artifacts.runDir || ".", "glow-arena-summary.json"), JSON.stringify(out, null, 2) + "\n");
+  const f2 = (n: number) => n.toFixed(2);
+  console.log([
+    ...shots.map((s) => `${s.label}: marker ${s.marker && s.marker.found ? `found (scale ${s.marker.scale.toFixed(2)}, ${s.marker.mirrored ? "mirrored" : "as authored"})` : "not found"}${s.measure ? `; ${s.outcome}: halo alpha ${f2(s.measure.glowAlpha)} (control ${f2(s.measure.controlAlpha)}, beyond ${f2(s.measure.beyondAlpha)}), inner ${s.measure.inner.join(",")} vs swatch ${s.measure.swatch.join(",")} (${s.measure.colourMatch ? "match" : "MISMATCH"}), monotonic rays ${s.measure.monotonicRays}/4, band steps ${s.measure.bandJumps}\n    ${s.measure.rays.map((ray) => `${ray.dir}: ${ray.alpha.map(f2).join(" ")}`).join("\n    ")}` : ""}`),
+    `outcome: ${outcome}`,
+    `run: ${r.verdict} — ${r.reason}; ${out.save}`,
+    `artifacts: ${r.artifacts.runDir}`,
+  ].join("\n"));
+  process.exit(outcome === "halo" ? 0 : 1);
+}
+const report = await api.runIngameTest({ mod: "_artprobe", test: catAppend ?"render-cat-append" : cat ? "render-cat" : "render-probe", hide: false });
 if (!("verdict" in report)) { console.error(report.error); process.exit(2); }
 if (report.verdict === "skipped" || report.verdict === "cannot-run") { console.log(`skipped: ${report.reason}`); process.exit(2); }
 if (catAppend) {

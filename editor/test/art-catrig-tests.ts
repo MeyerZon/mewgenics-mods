@@ -248,12 +248,12 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(scene.exports["CatProbeColours"], "CatProbeColours");
     const root = scene.sprites.CatAppendRoot;
     assert(!!root, "sprite CatAppendRoot");
-    eq(root.frames, 2);
+    eq(root.frames, 4, "probeIdleF / probeIdleB, then the wave probe's waveF / waveB (art-wave-glow-tests.ts)");
     eq(root.labels.probeIdleF, 0); eq(root.labels.probeIdleB, 1);
     eq(root.layers.length, 1);
     const ani = root.layers[0];
     assert(ani.name === "ani" && ani.depth === 1, "the one layer is `ani` at depth 1 (the child PlayAnimation restarts)");
-    assert(ani.keys.length === 2 && ani.keys.every((k: any) => k.ref === "CatProbe" && k.x === 3.85 && k.y === -47.95), "ani places CatProbe on both frames at vanilla idleF's (77, -959) twips");
+    assert(ani.keys.filter((k: any) => k.frame <= 1).length === 2 && ani.keys.filter((k: any) => k.frame <= 1).every((k: any) => k.ref === "CatProbe" && k.x === 3.85 && k.y === -47.95), "ani places CatProbe on both frames at vanilla idleF's (77, -959) twips");
     const rig = scene.sprites.CatProbe;
     eq(rig.rig, "cat"); eq(rig.parts, "game");
     for (const s of fixture.catanisMain.slots) {
@@ -459,7 +459,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(c0.includes("info:cat-anim-untested"), c0.join(","));
     assert(!c0.some((c) => /^(error|warning):cat-anim/.test(c)), c0.join(","));
     const note = (validateScene(good) as any).findings.find((f: any) => f.code === "cat-anim-untested");
-    assert(note.severity === "info" && /draws the cat's own parts/.test(note.message) && /OBSERVED in PR #74/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
+    assert(note.severity === "info" && /draws the cat's own parts/.test(note.message) && /OBSERVED 2026-10-22/.test(note.message) && /animated pose/.test(note.message) && /render-cat-wave/.test(note.message) && !/once its empty-slot run lands/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
     const filled = R.assignSlot(good, "wavePose", "head", "body").scene;
     const cf = codes(filled);
     assert(cf.includes("error:cat-anim-slot-not-empty"), cf.join(","));

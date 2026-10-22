@@ -1,0 +1,292 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "verdict": "pass",
+  "reason": "all 2 expectation(s) passed; 7 shot(s)",
+  "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+  "runDir": "C:\\OldBackUp\\My Programming Stuff\\experiments\\mewgenics-mods\\editor\\data\\ingame-runs\\20261022-101117-_artprobe-render-cat-wave",
+  "outcome": "animated",
+  "shots": [
+    "baseline",
+    "vanilla",
+    "wave 1",
+    "wave 2",
+    "wave 3",
+    "wave 4",
+    "wave 5"
+  ],
+  "vanilla": {
+    "region": {
+      "n": 9933,
+      "x0": 1851,
+      "y0": 510,
+      "x1": 2087,
+      "y1": 683,
+      "cx": 1969,
+      "cy": 596.5
+    },
+    "window": {
+      "x": 1969,
+      "y": 596.5,
+      "r": 173
+    },
+    "outline": 11004,
+    "slots": {
+      "tail": 0,
+      "leg2": 0,
+      "arm2": 0,
+      "body": 0,
+      "leg1": 0,
+      "arm1": 0,
+      "head": 2561
+    }
+  },
+  "rig": {
+    "region": {
+      "n": 9627,
+      "x0": 1731,
+      "y0": 812,
+      "x1": 1964,
+      "y1": 986,
+      "cx": 1847.5,
+      "cy": 899
+    },
+    "window": {
+      "x": 1847.5,
+      "y": 899,
+      "r": 171
+    }
+  },
+  "wave": [
+    {
+      "label": "wave 1",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1743,
+          "y0": 241,
+          "x1": 1925,
+          "y1": 362
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "outline": 10703,
+      "slots": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 2946
+      },
+      "slotsExcess": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 0
+      }
+    },
+    {
+      "label": "wave 2",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1743,
+          "y0": 241,
+          "x1": 1925,
+          "y1": 362
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "outline": 10569,
+      "slots": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 3170
+      },
+      "slotsExcess": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 0
+      }
+    },
+    {
+      "label": "wave 3",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1743,
+          "y0": 241,
+          "x1": 1925,
+          "y1": 362
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "outline": 10682,
+      "slots": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 2896
+      },
+      "slotsExcess": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 0
+      }
+    },
+    {
+      "label": "wave 4",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1743,
+          "y0": 241,
+          "x1": 1925,
+          "y1": 362
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "outline": 10617,
+      "slots": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 3091
+      },
+      "slotsExcess": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 0
+      }
+    },
+    {
+      "label": "wave 5",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1743,
+          "y0": 241,
+          "x1": 1925,
+          "y1": 362
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "outline": 10908,
+      "slots": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 2794
+      },
+      "slotsExcess": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 0
+      }
+    }
+  ],
+  "motion": {
+    "pairs": [
+      {
+        "a": "wave 1",
+        "b": "wave 2",
+        "rig": 9563,
+        "control": 3008
+      },
+      {
+        "a": "wave 1",
+        "b": "wave 3",
+        "rig": 10452,
+        "control": 362
+      },
+      {
+        "a": "wave 1",
+        "b": "wave 4",
+        "rig": 4927,
+        "control": 968
+      },
+      {
+        "a": "wave 1",
+        "b": "wave 5",
+        "rig": 4041,
+        "control": 2676
+      },
+      {
+        "a": "wave 2",
+        "b": "wave 3",
+        "rig": 7186,
+        "control": 3757
+      },
+      {
+        "a": "wave 2",
+        "b": "wave 4",
+        "rig": 7507,
+        "control": 4380
+      },
+      {
+        "a": "wave 2",
+        "b": "wave 5",
+        "rig": 10340,
+        "control": 47
+      },
+      {
+        "a": "wave 3",
+        "b": "wave 4",
+        "rig": 9917,
+        "control": 166
+      },
+      {
+        "a": "wave 3",
+        "b": "wave 5",
+        "rig": 10773,
+        "control": 3484
+      },
+      {
+        "a": "wave 4",
+        "b": "wave 5",
+        "rig": 7318,
+        "control": 4157
+      }
+    ],
+    "max": 10773,
+    "controlMax": 4380
+  }
+}

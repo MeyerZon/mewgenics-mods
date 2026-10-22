@@ -353,7 +353,10 @@ passes").** The player has no filter renderer: `PlaceObject::decode3` (`0xb78210
 on the status-menu target with a compile-time white `glow_color`; no per-character field drives it. What a mod can do:
 **bake the glow** — the editor's `bakeGlow` (`src/core/art/glow.ts`, MCP `bake_glow`, the shape row's "Bake glow…")
 adds a halo shape `<id>_glow` (concentric bands of the outline pushed out by `blur` with falling alpha, holes kept)
-placed under the source on every layer that places it; a drop shadow is the same halo offset by dx, dy. Engine-side
+placed under the source on every layer that places it; a drop shadow is the same halo offset by dx, dy. In the arena
+it is drawn as baked (OBSERVED 2026-10-22, `npm run test:artprobe -- --glow-arena`, run 20261022-101249: the inner
+band is the baked colour, alpha falls off outward, and the default 4 bands show as 4 measurable plateaus — whether
+that reads as a glow is the owner's T3 `pr80-glow-in-game`). Engine-side
 alternatives are data knobs, not rims: `CharacterLightSource { glow [r g b a] size N }` (an additive ground disc
 around the unit) and `AdvancedTint [mul…][add…]` (a brightness lift of the sprite's own pixels) — see
 `docs/data-mods.md` "Lighting and tint knobs".
