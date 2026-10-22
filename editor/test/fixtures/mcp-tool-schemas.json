@@ -175,7 +175,9 @@
             "ability",
             "passive",
             "item",
-            "status-data"
+            "status-data",
+            "room",
+            "tileset-variant"
           ]
         },
         "name": {

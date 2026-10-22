@@ -1,0 +1,30 @@
+// test-only (room probe, 2026-10-22): a NEW tileset name for tests/new-tileset.mewtest (`tileset roomprobe_yard`).
+// tilesets added by the mewgenics mod editor (.append overlay)
+// tileset roomprobe_yard: a copy of vanilla "junkyard" — change the slots (combat_background, static_*, debris, global_objects, …)
+roomprobe_yard {
+	combat_background JunkyardBG
+	combat_ui_background UI_Background_Junkyard
+	static_1x1_a StaticJunkSmall
+	static_1x1_b Stump
+	static_1x1_c SmallGravelPile
+	static_2x2_a StaticJunkCube
+	static_2x2_b BigGravelPile
+	static_tall_a Tree
+	static_tall_b StaticTires
+	debris Debris2
+	event_piece_frame junkyard
+	global_objects {
+		Fly {
+			count [0 20]
+		}
+	}
+	reverb {
+		battle {
+			preset ParkingLot
+			amount .35
+			ReverbDelay .25
+			DecayTime 1.68
+			volume_adjustment 1.35
+		}
+	}
+}

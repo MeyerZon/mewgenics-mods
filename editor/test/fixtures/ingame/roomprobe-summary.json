@@ -1,0 +1,330 @@
+{
+ "note": "T2 runs of mods/_roomprobe (2026-10-22, build 25143593): units after `load`, expects, verdict, real save check. Written from each run dir result.jsonl + report.json.",
+ "runs": [
+  {
+   "run": "20261022-131655-_roomprobe-new-room",
+   "test": "new-room",
+   "verdict": "pass",
+   "saveUnchanged": true,
+   "cmds": [
+    "load roomprobe/probe"
+   ],
+   "units": [
+    {
+     "i": 0,
+     "name": "Newton",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 20
+    },
+    {
+     "i": 1,
+     "name": "Cloe",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 40
+    },
+    {
+     "i": 2,
+     "name": "Gubbins",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 32
+    },
+    {
+     "i": 3,
+     "name": "Agni",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 16
+    },
+    {
+     "i": 4,
+     "name": "[img:champion] Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 154
+    },
+    {
+     "i": 5,
+     "name": "Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 77
+    },
+    {
+     "i": 6,
+     "name": "Pooter",
+     "namekey": "ENEMY_POOTER_NAME",
+     "faction": 2,
+     "hp": 6
+    },
+    {
+     "i": 7,
+     "name": "Trash Bag",
+     "namekey": "OBJECT_TRASHBAG_NAME",
+     "faction": 0,
+     "hp": 25
+    },
+    {
+     "i": 8,
+     "name": "Coin",
+     "namekey": "PICKUP_COIN_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 9,
+     "name": "Coin",
+     "namekey": "PICKUP_COIN_NAME",
+     "faction": 0,
+     "hp": 20
+    }
+   ],
+   "expects": [
+    {
+     "arg": "units == 8",
+     "ok": true
+    },
+    {
+     "arg": "console Executed: load",
+     "ok": true
+    },
+    {
+     "arg": "units >= 8",
+     "ok": true
+    },
+    {
+     "arg": "gon 4 properties.health == 77",
+     "ok": true
+    },
+    {
+     "arg": "gon 5 properties.health == 77",
+     "ok": true
+    },
+    {
+     "arg": "unit 6 name == \"Pooter\"",
+     "ok": true
+    },
+    {
+     "arg": "unit 7 name == \"Trash Bag\"",
+     "ok": true
+    }
+   ],
+   "shots": []
+  },
+  {
+   "run": "20261022-131734-_roomprobe-find-room",
+   "test": "find-room",
+   "verdict": "pass",
+   "saveUnchanged": true,
+   "cmds": [
+    "load rp_nested_find"
+   ],
+   "units": [
+    {
+     "i": 0,
+     "name": "Newton",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 20
+    },
+    {
+     "i": 1,
+     "name": "Cloe",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 40
+    },
+    {
+     "i": 2,
+     "name": "Gubbins",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 32
+    },
+    {
+     "i": 3,
+     "name": "Agni",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 16
+    },
+    {
+     "i": 4,
+     "name": "[img:champion] Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 154
+    },
+    {
+     "i": 5,
+     "name": "Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 77
+    },
+    {
+     "i": 6,
+     "name": "Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 77
+    },
+    {
+     "i": 7,
+     "name": "Black Bird",
+     "namekey": "ENEMY_BLACKBIRD_NAME",
+     "faction": 7,
+     "hp": 2
+    },
+    {
+     "i": 8,
+     "name": "Catnip",
+     "namekey": "PICKUP_CATNIP_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 9,
+     "name": "Coin",
+     "namekey": "PICKUP_COIN_NAME",
+     "faction": 0,
+     "hp": 20
+    }
+   ],
+   "expects": [
+    {
+     "arg": "console Executed: load",
+     "ok": true
+    },
+    {
+     "arg": "gon 4 properties.health == 77",
+     "ok": true
+    },
+    {
+     "arg": "gon 5 properties.health == 77",
+     "ok": true
+    },
+    {
+     "arg": "gon 6 properties.health == 77",
+     "ok": true
+    }
+   ],
+   "shots": []
+  },
+  {
+   "run": "20261022-131707-_roomprobe-new-tileset",
+   "test": "new-tileset",
+   "verdict": "pass",
+   "saveUnchanged": true,
+   "cmds": [
+    "tileset roomprobe_yard",
+    "load roomprobe/probe"
+   ],
+   "units": [
+    {
+     "i": 0,
+     "name": "Armin",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 16
+    },
+    {
+     "i": 1,
+     "name": "Icarus",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 36
+    },
+    {
+     "i": 2,
+     "name": "Mew Generic",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 24
+    },
+    {
+     "i": 3,
+     "name": "Giorno Giovanna",
+     "namekey": "PLAYER_CAT_NAME",
+     "faction": 1,
+     "hp": 20
+    },
+    {
+     "i": 4,
+     "name": "Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 77
+    },
+    {
+     "i": 5,
+     "name": "[img:champion] Lil' Rat",
+     "namekey": "ENEMY_LILRAT_NAME",
+     "faction": 2,
+     "hp": 154
+    },
+    {
+     "i": 6,
+     "name": "Pooter",
+     "namekey": "ENEMY_POOTER_NAME",
+     "faction": 2,
+     "hp": 6
+    },
+    {
+     "i": 7,
+     "name": "Trash Bag",
+     "namekey": "OBJECT_TRASHBAG_NAME",
+     "faction": 0,
+     "hp": 25
+    },
+    {
+     "i": 8,
+     "name": "Pigeon",
+     "namekey": "ENEMY_PIGEON_NAME",
+     "faction": 7,
+     "hp": 7
+    },
+    {
+     "i": 9,
+     "name": "Catnip",
+     "namekey": "PICKUP_CATNIP_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 10,
+     "name": "Coin",
+     "namekey": "PICKUP_COIN_NAME",
+     "faction": 0,
+     "hp": 20
+    },
+    {
+     "i": 11,
+     "name": "Food",
+     "namekey": "PICKUP_FOOD_NAME",
+     "faction": 0,
+     "hp": 20
+    }
+   ],
+   "expects": [
+    {
+     "arg": "console Executed: tileset",
+     "ok": true
+    },
+    {
+     "arg": "console Executed: load",
+     "ok": true
+    },
+    {
+     "arg": "gon 4 properties.health == 77",
+     "ok": true
+    }
+   ],
+   "shots": [
+    "roomprobe_yard"
+   ]
+  }
+ ]
+}

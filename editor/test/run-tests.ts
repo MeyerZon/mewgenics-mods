@@ -653,6 +653,10 @@ await mcpSmoke();
   let pk: typeof import("./pack-tests.ts") | null = null;
   try { pk = await import("./pack-tests.ts"); } catch (e) { test("pack-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (pk) await pk.runPackTests(test, assert, eq);
+  // level files (levels/**/*.lvl): the binary codec, the room builder, the validator's .lvl rules
+  let lv: typeof import("./level-tests.ts") | null = null;
+  try { lv = await import("./level-tests.ts"); } catch (e) { test("level-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (lv) lv.runLevelTests(test, assert, eq);
 }
 
 // ---- 10. T0 without .extracted/ (nested run; MEWGENICS_EXTRACTED_DATA -> empty dir) ----

@@ -67,6 +67,11 @@ PR; everything else is on `main`.
   typing (PR #83: `"5"` is a number, `""` is 0, only `true`/`false` are bools). Details + content shapes:
   **[data-mods.md](data-mods.md)** ("Fidelity to the decompiled merges", "GON typing fidelity", "Lighting and tint
   knobs", "Localized text for mods").
+- **New rooms, spawn ids, tilesets and maps are data (2026-10-22).** A room is a binary `levels/<path>.lvl` (10x10
+  tile ids into `tiles.gon` + objects whose ids index `spawns.gon`; codec `editor/src/core/level/lvl.ts`); every file
+  listing the game does (`FileManager_ListDir` 0x9a1900) walks the mod paths, so a mod's new room joins a map's level
+  pool, and `load <path>` plays it (OBSERVED, `mods/_roomprobe`). Hard limits: node `type` (19 names, fatal otherwise),
+  `chapter_id` (a C++ enum), the run's first map. Details: **[data-mods.md](data-mods.md)** "Maps, rooms and encounters".
 
 ### Native layer
 - The Mewjector `version.dll` chainloader loads our `mewframework.dll`, which **gates on `-savesuffix` + the build id
@@ -133,6 +138,10 @@ PR; everything else is on `main`.
   without the HTML flag** (`scene.texts[].html: false`); in vanilla's `<p><font>` wrapper the key is drawn as
   written. The validator warns `text-loc-key-html` on an HTML key text; Art mode's text row has a **plain (localized)**
   box (`data-mods.md` "Localized text for mods").
+- [x] **New rooms / encounters / tilesets — OBSERVED 2026-10-22** (`mods/_roomprobe`): a mod's new
+  `levels/roomprobe/probe.lvl` placing a new `spawns.gon.append` id is the fight after `load roomprobe/probe` (77-hp
+  RoomProbeRats), a bare `load rp_nested_find` finds a mod-only nested level, and a new `tilesets.gon.append` name
+  draws its art. Open: a campaign node drawing the room from a pool (decompiled, not run — the harness cannot walk a run).
 - [x] **`tilesets.gon` clip redirect — OBSERVED 2026-10-22** (`mods/_tileprobe`): `alley { Rat ArtProbe }` in a
   `tilesets.gon.merge` makes a plain Rat draw the mod clip in the alley tileset; the control run without the overlay
   draws the vanilla Rat (`data-mods.md` "Redirecting a vanilla character's clip via tilesets.gon").

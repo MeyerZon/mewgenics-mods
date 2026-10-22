@@ -58,7 +58,7 @@ export const TOOL_INPUT = {
   list_registered_native_names: z.object({}),
   new_from_template: z.object({
     mod: str(),
-    kind: z.enum(["ability", "passive", "item", "status-data"]),
+    kind: z.enum(["ability", "passive", "item", "status-data", "room", "tileset-variant"]),
     name: str("the new entry's GON key, e.g. MyCoolSpin"),
     options: anyObject.describe("scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)").optional(),
   }),
@@ -264,7 +264,7 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "new_from_template",
-    "Scaffold a new content entry (kind: ability | passive | item | status-data) plus matching localization rows, writing them as .append overlays under mods/<name>/. Pass `options.dryRun: true` to return the content without writing. `options` may include displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations.",
+    "Scaffold a new content entry (kind: ability | passive | item | status-data) plus matching localization rows, writing them as .append overlays under mods/<name>/. Pass `options.dryRun: true` to return the content without writing. `options` may include displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations. Map kinds (no localization rows): `room` writes a NEW level file levels/<options.folder or custom>/<name>.lvl (options.objects: [{x,y,id|object|random}], options.tiles: [{x,y,id|random}], width/height default 10; no objects = 4 player spawns + 2 Rats); `tileset-variant` copies vanilla tileset options.parent (default alley) under the new name into data/tilesets.gon.append. Both return a `hint` with the console command that plays the result (docs/data-mods.md, Maps, rooms and encounters).",
     (a) => api.newFromTemplate(a.mod, a.kind, a.name, a.options ?? {}),
   ),
   def(

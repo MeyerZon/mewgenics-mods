@@ -1,0 +1,2 @@
+# level files are binary (levels/**/*.lvl, editor/src/core/level/lvl.ts): never convert line endings
+*.lvl binary

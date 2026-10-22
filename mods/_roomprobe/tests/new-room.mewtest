@@ -1,0 +1,23 @@
+mods: _roomprobe
+timeout: 90s
+# Room probe (2026-10-22): a data mod ships a NEW level file, levels/roomprobe/probe.lvl (written by the editor's
+# new_from_template kind room), and a NEW spawn-palette id 9001 (data/spawns.gon.append → object RoomProbeRat, a Rat
+# variant with 77 hp from data/characters/enemies.gon.append). The console's `load roomprobe/probe` reads
+# "levels/" + arg + ".lvl" through the file manager (TacticsTest_cmd_load 0x888870), so the mod's file is the level.
+# The layout: 4 player spawns, 2 x id 9001, a Pooter (26), a Trash Bag (5010); vanilla Rat health is 5, so a 77
+# can only come from this mod's room placing this mod's spawn id.
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+expect units == 8
+cmd load roomprobe/probe
+expect console "Executed: load" within 10
+wait ms 3000
+dump
+expect units >= 8
+expect gon 4 properties.health == 77
+expect gon 5 properties.health == 77
+expect unit 6 name == "Pooter"
+expect unit 7 name == "Trash Bag"
+quit

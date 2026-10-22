@@ -44,6 +44,9 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] **Redirected Rat** (`npm run test:artprobe -- --tileset`, run `20261022-090748-_tileprobe-render-tileset-redirect`,
       `shot-rat-2.png`): any wrong offset or mirroring of the ArtProbe clip drawn for a plain Rat, against the ArtProbe
       enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
+- [ ] **New tileset shot** (`cd editor && npm run test:ingame -- _roomprobe new-tileset`, run
+      `20261022-131707-_roomprobe-new-tileset`, `shot-roomprobe-yard.png`): does the probe room sit in the junkyard
+      art (the new tileset `roomprobe_yard`), with the three water puddles and the trash bag where `probe.lvl` puts them?
 - [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 - [ ] **Ship a mod end to end** (PR feat/mod-packaging): `cd editor && npm run pack -- jokers-luck` (review the
       committed `mods/jokers-luck/mod.json`: license, description), then read the zip's `README-INSTALL.txt` as a player
@@ -285,6 +288,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 
 
 ## Done
+- [x] **Maps, rooms and encounters** (2026-10-22, branch `feat/rooms-and-encounters`): `.lvl` codec (all 2361
+  vanilla levels round-trip), validator rules for a mod's levels and maps, `new_from_template` kinds `room` and
+  `tileset-variant`, `mods/_roomprobe` proven in-game (new room + new spawn id, nested-name search, new tileset). Docs:
+  `data-mods.md` "Maps, rooms and encounters", `engine-map.md` "Maps, rooms and level files".
+  - [ ] Open: prove a **campaign** battle node drawing a mod room from a map pool (needs the harness to walk a run
+    from the House to a map node; decompiled, not run). Then a new map behind alley's exit (`next_map`).
 
 ### Foundations
 - [x] Review, validate (no injection, 0 vuln deps) and install REA from reviewed source (Docker-based)

@@ -130,8 +130,9 @@ entries as base); a mod can include a file it ships at the mirrored path (**OBSE
 `FileManager_GetFile` 0x99ff50). So `..`, `.`, empty segments, a backslash and a leading `/` never match the pack (→ the fatal
 miss) and are resolved by the OS for loose files (`..` can leave the mod folder); the validator's
 `include-path-unsafe`. `FileManager_enumerate` 0x15e960's three callers (0x15e6f0, `MewApplication::OnLoad` 0x745f60,
-0x912150) all list `data/text/*.csv`; nothing enumerates `data/characters`, so a helper there is read only through its
-include. The editor ports the pre-pass in `editor/src/core/gon/preprocess.ts` and the
+0x912150) all list `data/text/*.csv`; `data/characters` is listed by SpawnDatabase_LoadGonDir 0x7c0cb0 through
+FileManager_ListDir 0x9a1900, which also walks the mod paths ("Maps, rooms and level files"; INFERRED: a mod's helper
+file there is loaded as a file of entries too — keep include fragments free of top-level names that collide). The editor ports the pre-pass in `editor/src/core/gon/preprocess.ts` and the
 resolver in `editor/src/core/gon-includes.ts` (pinned by `editor/test/gon-tests.ts` "gon pre-pass" / "gon include",
 fixtures `editor/test/fixtures/gon-include/`); the validator and the merge preview parse the pre-passed text.
 
@@ -852,6 +853,54 @@ build 25143593; the function ones are in `bindings/25143593.json` (`FW_SYM_*` v4
   driver 0x3c4130). The global then points at the new director. Bindings: `FW_SYM_Entity_DestroyOwnerOf`,
   `FW_SYM_AddComponent_MewDirector_named`, `FW_SYM_MewDirector_start`. The slot name is arbitrary (the game uses it
   as the file name under `<userdata>\saves\`); `mewtest01.sav` was chosen because no slot list produces it.
+
+## Maps, rooms and level files (2026-10-22)
+
+RE session `rooms` (Ghidra 12.1.4, build 25143593); decompiles in `.analysis/decompiled/` (names below), notes in
+`.analysis/notes-rooms.md`. The modding recipe is `docs/data-mods.md` "Maps, rooms and encounters".
+
+- **`.lvl` format (OBSERVED, all 2361 vanilla files re-encode byte for byte, `editor/src/core/level/lvl.ts`,
+  `test/level-tests.ts` T1):** little-endian `u32 version (2; four old test levels 1), u32 width, u32 height, u32 1,
+  u32 objectCount, u32 0, u32 0, u32 width, u32 height, str objectPalette "spawns.gon", str tilePalette "tiles.gon"
+  ("" in v1), u32 0, u32 0`, then `width*height` row-major u16 tile ids (`data/tiles.gon`), then `objectCount` ×
+  `u16 x, u16 y, u32 id` (`data/spawns.gon`), then `u32 0`. A cell or object id `0xffff` is followed by `u16 n` and
+  n × `u16 id, u16 weight` (a weighted random pick, id 0 = nothing). Strings are `u32 length` + bytes. Every vanilla
+  level is 10x10. `Level_decode_palettes` 0x376230 sets the palette names (literals "spawns.gon"/"tiles.gon").
+- **`Level::init` / load `0x35aaf0`** (`Level_LoadFile_0x35aaf0.c`): `"levels/" + name + ".lvl"` through the file
+  manager; the function also holds `levels/missing.lvl` (`.rdata` 0xf12778), the name "missing" and a
+  "does not exist" message (INFERRED: the fallback for a missing level). So a mod's new `levels/<path>.lvl` is a loadable level by name (the same resolver as every data file).
+- **Console `load <arg>` = `TacticsTest_cmd_load` 0x888870** (TacticsTest::init lambda, registered with the run
+  commands): `FileExists("levels/" + arg + ".lvl")` (0x9a14c0); when absent, `FileManager_ListDir` 0x9a1900
+  (`"levels"`, `".lvl"`, recursive = 1) and keep the paths ending in `arg + ".lvl"` (one → load it). OBSERVED
+  2026-10-22: `load roomprobe/probe` loads the mod's `levels/roomprobe/probe.lvl`; `load rp_nested_find` finds the
+  mod-only `levels/roomprobe/deep/rp_nested_find.lvl` (`mods/_roomprobe`, fixture `roomprobe-summary.json`).
+- **`FileManager_ListDir` 0x9a1900** (`FileManager_ListDir_0x9a1900.c`; `(fm=&DAT_1413c5650, out, dir, ext,
+  recursive)`): walks the pack's path set (`fm+0x1c0`, prefix `dir/`, suffix `ext`, direct children only unless
+  recursive) **and then every `-modpaths` dir** (`fm+0x268..0x270`, 0x20-byte strings): `std::filesystem::exists(mod +
+  dir)` then a directory iterator (non-recursive: FindNextFile until 0x12; recursive: `recursive_directory_iterator`),
+  merged into one sorted set. **So every listing the game does sees mod files**: SpawnDatabase_LoadGonDir 0x7c0cb0
+  (`data/characters`, `data/abilities`, …, `data/maps` — a mod's *new* `.gon` there is loaded), the level pools and
+  the console search. (Correction to "GON text pre-pass": `data/characters` *is* enumerated, by this function.)
+- **Map level pools — `MapLevelPool_build` 0x394450** (`MapLevelPool_build_0x394450.c`, with 0x395930 / 0x3968e0 for
+  the boss / miniboss paths): reads the map GON (`map+0xb8`): `levels.folder`, then `levels.<pool>` (`easy`, `rare`,
+  …) as sub-folder names, builds `"levels/" + folder + "/" + sub` and lists it with 0x9a1900 (`".lvl"`, recursive 0);
+  candidates go through the director's level registry (`director+0x590`, 0x8dda40 / 0x8ddec0; INFERRED: "already
+  played"), and the `easy` path also reads the map's `chapter_id` and a random roll (not decoded further). INFERRED (not run): a `.lvl` a mod drops in `levels/alley/easy/` joins alley's easy pool.
+- **Map files**: SpawnDatabase_init 0x7a74b0 lists `data/maps` (0x7c0cb0) but only folds each map's
+  `enemy_pools.medium` into a global list (`+0x13c0`); a run loads a map by path, `"data/maps/" + name` →
+  `Gon_LoadFile` 0x611a0 (`MewDirector_maps_3b0d20` 0x3b0d20), name = an exit node's `next_map`. `data/maps/alley.gon`
+  is a literal at 0xf0c250 (INFERRED: the run's first map). `chapter_id_enum.gon` is read into a name → position map
+  (`SpawnDatabase+0x15b8`) and a vector (`+0x15f8`); the file says it mirrors a C++ enum in MewDirector.h (INFERRED: a
+  new chapter id has no C++ meaning).
+- **Node types are hard-coded — `MapNode::str_to_type` 0x225680** (`MapNode_type_225680_0x225680.c`): none 0, npc 1,
+  enter 2, exit 3, home 4, battle 5, hard 6, miniboss 7, boss 8, event 9, optional_event 10, special_event 11, shop 12,
+  treasure 13, furniturebox 14, foodbox 15, bonus 16, empty 17, any 18; anything else →
+  `Fatal_Error` "No node type named: " (MapNode.cpp). The validator's `map-node-type-unknown`.
+- **Tilesets**: `data/tilesets.gon` is one GON (`SpawnDatabase+0xa88`, overlays apply); `default_tileset` → the
+  current tileset string `+0x14f8`; the console `tileset <name>` sets it. OBSERVED 2026-10-22: a new name added by
+  `tilesets.gon.append` (`roomprobe_yard`, a junkyard copy) selected with `tileset roomprobe_yard` draws the junkyard
+  background around the next `load`ed room (run `20261022-131707-_roomprobe-new-tileset`, shot `roomprobe_yard`).
+- `"No room named: "` (0x2e8d50) belongs to `FurnitureGrid::init` (the house's rooms), not to combat levels.
 
 ## Glow and outline passes (2026-10-21)
 
