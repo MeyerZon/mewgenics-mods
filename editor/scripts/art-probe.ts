@@ -21,6 +21,8 @@
 // control _artprobe/render-tileset-control.mewtest (no overlay) and write tileset-summary.json: the marker per shot
 // (baseline before `spawn Rat`, two after) and the outcome (probe-outcomes.ts tilesetOutcome). `--loctext --from <runDir>`
 // re-reads an earlier run's report.json and shots instead of launching the game.
+// --mesh (2026-10-22, 3D phase M1): run dev-sandbox/mesh-probe.mewtest with MEWFW_MESH_PROBE and judge the probe cube
+// (mesh-measure.ts) into mesh-summary.json; --tile <c>,<r> moves it.
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
@@ -29,6 +31,7 @@ import { join } from "node:path";
 import * as api from "../src/core/api.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { decodePng } from "../src/core/art/png.ts";
+import * as mm from "../src/core/art/mesh-measure.ts";
 import { measureLocText, summarizeLocText, tilesetOutcome } from "../src/core/art/probe-outcomes.ts";
 import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
 
@@ -36,12 +39,36 @@ import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent
 export const CAT_PROBE_COLOURS: Record<string, string> = { tail: "#ff8000", leg2: "#8000ff", arm2: "#00a080", body: "#2080ff", leg1: "#ff60a0", arm1: "#a0ff40", head: "#ffd0a0" };
 
 const json = process.argv.includes("--json");
+/** the harness's save guard line ("1 real save file(s) unchanged (…)") */
+const saveOf = (r: { safety?: { saveSet?: { detail?: string } | null } }) => (r.safety && r.safety.saveSet && r.safety.saveSet.detail) || null;
+// --mesh (3D phase M1, 2026-10-22): run mods/dev-sandbox/tests/mesh-probe.mewtest with MEWFW_MESH_PROBE (default "1" =
+// tile 3,3; pass --tile <c>,<r> to move it) so mewframework draws its flat magenta probe cube, then read the framework
+// log's "mesh probe" / "mesh draw" lines and the two shots with mesh-measure.ts (judgeMeshShots: a magenta patch at the
+// projected tile centre; no verdict when the shots are byte-identical) and write mesh-summary.json into the run dir.
+if (process.argv.includes("--mesh")) {
+  const ti = process.argv.indexOf("--tile");
+  process.env.MEWFW_MESH_PROBE = ti > 0 && process.argv[ti + 1] ? process.argv[ti + 1] : (process.env.MEWFW_MESH_PROBE || "1");
+  const r = await api.runIngameTest({ mod: "dev-sandbox", test: "mesh-probe", hide: false });
+  if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
+  if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
+  const logPath = r.artifacts.frameworkLogWindow;
+  const log = mm.parseMeshProbeLog(logPath ? readFileSync(logPath, "utf8") : "");
+  const shots = r.artifacts.shots.filter((s) => s.path);
+  const j = mm.judgeMeshShots(shots.map((s) => decodePng(readFileSync(s.path!))), log.probes);
+  const summary = { observed: "2026-10-22, build 25143593", probe: process.env.MEWFW_MESH_PROBE, judgement: j, shots: shots.map((s) => ({ label: s.label, path: s.path })),
+    probes: log.probes, draws: log.draws, glReady: log.glReady, glErrors: log.glErrors, run: { verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir, frameworkLog: logPath } };
+  if (r.artifacts.runDir) writeFileSync(join(r.artifacts.runDir, "mesh-summary.json"), JSON.stringify(summary, null, 2) + "\n");
+  if (json) console.log(JSON.stringify(summary));
+  else console.log([`run: ${r.verdict} — ${r.reason}`, `save: ${saveOf(r)}`, `GL ready: ${log.glReady}; GL errors: ${log.glErrors.length ? log.glErrors.join(" | ") : "none"}`,
+    `probe lines: ${log.probes.length} (first ${log.probes[0] ? `ndc ${log.probes[0].ndc.join(" ")} canvas ${log.probes[0].canvas.join(" ")}` : "none"}); draw lines: ${log.draws.length}${log.draws[0] ? ` (${log.draws[0].line})` : ""}`,
+    `mesh verdict: ${j.verdict}${j.patch ? ` — magenta patch ${j.patch.count} px at (${j.patch.x0},${j.patch.y0})-(${j.patch.x1},${j.patch.y1}), ${j.distancePx?.toFixed(1)} px from the projected centre, shot ${j.shot}` : ""}${j.staleChecked ? "" : " (single shot: not stale-checked)"}`,
+    `artifacts: ${r.artifacts.runDir}`].join("\n"));
+  process.exit(r.verdict === "pass" && j.verdict === "cube" ? 0 : 1);
+}
 const b = buildSwf("_artprobe", "art/probe.scene.json", {});
 if (!b.ok) { console.error(`build failed: ${JSON.stringify(b).slice(0, 400)}`); process.exit(1); }
 const cat = process.argv.includes("--cat");
 const catAppend = process.argv.includes("--cat-append");
-/** the harness's save guard line ("1 real save file(s) unchanged (…)") */
-const saveOf = (r: { safety?: { saveSet?: { detail?: string } | null } }) => (r.safety && r.safety.saveSet && r.safety.saveSet.detail) || null;
 const geomOf = (a: ReturnType<typeof analyzeProbeShot>) => (a.box ? { found: a.found, box: a.box, scale: a.scale, mirrored: a.mirrored } : null);
 if (process.argv.includes("--tileset")) {
   const runs: Record<string, { mod: string; test: string; verdict: string; reason: string; save: string | null; runDir: string | null; baseline: { found: boolean; box: unknown } | null; after: Array<{ label: string; found: boolean; box: unknown; scale: number; mirrored: boolean }> }> = {};

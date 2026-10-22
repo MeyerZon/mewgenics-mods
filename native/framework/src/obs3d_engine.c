@@ -47,7 +47,7 @@ static void *data_ptr(int id) {
 }
 
 void obs3d_on_late_render(void *tt) {
-    if (!g_orig && !g_origOneLayer) return;
+    if (g_budget <= 0 || (!g_orig && !g_origOneLayer)) return;
     if (tt != g_tt) { g_tt = tt; g_worldFrame = 0; g_logging = 0; g_lateLogged = 0; fw_log("obs3d fight tt=%p", tt); }
     /* the first late frames of a fight: is Camera_render reached, and for the world camera? */
     if (g_lateLogged < 3) {
@@ -120,15 +120,18 @@ static void hook_Camera_render(void *cam) {
  * a camera's layer-0 call opens its frame */
 static void hook_Camera_RenderOneLayer(void *cam, int layer) {
     g_layerCalls++;
-    if (cam && layer == 0 && g_windows <= g_budget) observe(cam);
+    if (g_budget > 0 && cam && layer == 0 && g_windows <= g_budget) observe(cam);
     g_origOneLayer(cam, layer);
+    mesh_engine_after_layer(cam, layer);   /* phase M: the mesh draw functor goes in after the world camera's units layer */
 }
 
-/* the FW_SYM_Camera_render / FW_SYM_Camera_RenderOneLayer steps of FW_HOOK_PLAN: a no-op success when the observer is off */
+/* the FW_SYM_Camera_render / FW_SYM_Camera_RenderOneLayer steps of FW_HOOK_PLAN: a no-op success when the observer is off
+ * (Camera_render) / when neither the observer nor the mesh engine needs it (Camera_RenderOneLayer: the mesh engine's
+ * record-time insertion point, mesh_engine.c) */
 int obs3d_engine_hook_step(const FwHookSpec *spec) {
     g_budget = fw_obs3d_budget(getenv("MEWFW_OBSERVE3D"));
-    if (g_budget <= 0) return 1;
     int one = spec->index == FW_SYM_Camera_RenderOneLayer;
+    if (g_budget <= 0 && !(one && mesh_engine_wants_layer_hook())) return 1;
     void *tramp = NULL;
     uintptr_t rva = g_sym[spec->index] - g_base;
     if (!g_mj.InstallHook(rva, 0, one ? (void *)hook_Camera_RenderOneLayer : (void *)hook_Camera_render, &tramp, spec->priority, FW_OWNER)) {
@@ -136,6 +139,6 @@ int obs3d_engine_hook_step(const FwHookSpec *spec) {
         return 0;
     }
     if (one) g_origOneLayer = (fn_CameraRenderOneLayer)tramp; else g_orig = (fn_CameraRender)tramp;
-    fw_log("hook installed: %s rva 0x%llx (observe3d: %d window(s) of %d world frames)", spec->label, (unsigned long long)rva, g_budget, FW_OBS3D_EVERY);
+    fw_log("hook installed: %s rva 0x%llx (observe3d: %d window(s) of %d world frames; meshes: %s)", spec->label, (unsigned long long)rva, g_budget, FW_OBS3D_EVERY, one && mesh_engine_wants_layer_hook() ? "on" : "off");
     return 1;
 }

@@ -32,3 +32,8 @@ int glow_engine_clear(void *character);
 /* obs3d_engine.c (phase-0 3D observer, log-only, MEWFW_OBSERVE3D) */
 int obs3d_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_Camera_render step: a no-op success when off */
 void obs3d_on_late_render(void *tacticsTest);        /* called by the glow engine's LateRender hook every combat frame */
+
+/* mesh_engine.c (phase M: meshes in the vanilla scene; docs/possible_3d_work.md) */
+int mesh_engine_wants_layer_hook(void);               /* reads MEWFW_MESH_PROBE once; 1 when the Camera_RenderOneLayer hook must be installed */
+void mesh_engine_after_layer(void *cam, int layer);   /* record time, after the original Camera_RenderOneLayer */
+void mesh_engine_on_late_render(void *tacticsTest);   /* every combat frame, from the glow engine's LateRender hook */
