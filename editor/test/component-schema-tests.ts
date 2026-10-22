@@ -41,7 +41,9 @@ export function syntheticSchema(): ComponentSchema {
       CatchProjectiles: spec({ base: "Passive", keys: { chance: key("number", { default: 1 }), ally_chance: key("number") } }),
       OnHitEffects: spec({ base: "Passive", children: "effects" }),
       Mystery: spec({ base: "Passive", status: "unresolved", open: true }),
-      SpawnThing: spec({ base: "Passive", keys: { object: key("string", { required: true }), number: key("int", { default: 1 }) } }),
+      SpawnThing: spec({ base: "Passive", keys: { object: key("string", { required: true }), number: key("int", { default: 1 }), numbr: key("any", { unread: true, note: "vanilla typo of number" }) } }),
+      FormChanger: spec({ base: "Passive", children: "any" }),
+      Rain: spec({ base: "Passive" }),
       Revenge: spec({ base: "Passive", includes: ["@DamageInstance"] }),
       LateRevenge: spec({ base: "Revenge", keys: { delay: key("int") } }),
     },
@@ -127,7 +129,29 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(checkComponentBlock(sp, block("SpawnThing { number 2 }"), { patch: false, requireComplete: false, isDynamicChild: dyn }).missing.length, 0, "partial overlay: not checked");
   });
 
+  test("component schema: an unread key (vanilla writes it, no code reads it) is reported as ignored, never unknown or required", () => {
+    const s = syntheticSchema();
+    const r = resolveComponent(s, "SpawnThing")!;
+    eq(r.required.join(","), "object", "unread keys are never required");
+    const c = checkComponentBlock(r, block("SpawnThing { object Rat numbr 2 nmber 3 }"), { patch: false, requireComplete: true, isDynamicChild: dyn });
+    eq(c.unknown.join(","), "nmber", "an unread key is not unknown");
+    eq(c.ignored.join(","), "numbr", "it is listed as ignored");
+    eq(validateSchemaShape(s).join("; "), "", "unread keys pass the shape check");
+    const bad = syntheticSchema();
+    bad.components.SpawnThing!.keys.numbr = key("any", { unread: true, required: true });
+    assert(validateSchemaShape(bad).some((e) => /numbr.*unread/.test(e)), `an unread key cannot be required: ${validateSchemaShape(bad).join(" | ")}`);
+  });
+
   // ---- traversal -----------------------------------------------------------------
+  test("component schema: forEachComponentBlock does not treat the map keys of a children:any component as blocks", () => {
+    const comps = new Set(["FormChanger", "Rain", "CatchProjectiles"]);
+    const seen: string[] = [];
+    forEachComponentBlock(obj(`
+      Boss { passives { FormChanger { Rain { ai { brain x } passives { CatchProjectiles { chance 1 } } } } Rain { x 1 } } }
+    `), (n) => comps.has(n), (name, _v, path) => seen.push(`${name}@${path.join(".")}`), (n) => n === "FormChanger");
+    eq(seen.join(" | "), "FormChanger@Boss.passives.FormChanger | CatchProjectiles@Boss.passives.FormChanger.Rain.passives.CatchProjectiles | Rain@Boss.passives.Rain",
+      "a form named Rain is a map key (its passives are still walked); a real Rain block is still a block");
+  });
   test("component schema: forEachComponentBlock finds passives / bonus_passives / effects blocks and nested ones", () => {
     const comps = new Set(["CatchProjectiles", "OnHitEffects", "Bleed", "Minions"]);
     const seen: string[] = [];
@@ -190,6 +214,52 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(m.schema.coverage!.vanillaKeys, 3, "vanilla literal keys counted");
     eq(m.schema.coverage!.vanillaKeysFound, 2, "found ones counted");
   });
+  test("component schema build: an amend fragment adds / replaces / deletes keys and reshapes an existing component", () => {
+    const amend = {
+      schema: 1, agent: "compclose", components: {},
+      amend: {
+        CatchProjectiles: { keys: { ally_chance: key("number", { default: 0, accessor: "NumberOr" }), chance: null }, open: false, notes: "ally_chance in a lambda" },
+        SpawnThing: { children: "effects", includes: ["@DamageInstance"] },
+      },
+    } as unknown as Fragment;
+    eq(validateFragment(amend, "c").join("; "), "", "amend fragment shape");
+    const m = mergeFragments([fragA(), fragB(), amend], { build: "test" });
+    eq(m.errors.join("; "), "", "no errors");
+    const cp = m.schema.components.CatchProjectiles!;
+    eq(Object.keys(cp.keys).join(","), "ally_chance", "added one key, deleted one");
+    assert(/compA/.test(cp.agent ?? "") && /compclose/.test(cp.agent ?? ""), `agent records both: ${cp.agent}`);
+    assert(cp.notes.endsWith("ally_chance in a lambda"), `notes appended: ${cp.notes}`);
+    eq(m.schema.components.SpawnThing!.children, "effects", "children set");
+    eq(m.schema.components.SpawnThing!.includes.join(","), "@DamageInstance", "include added");
+    const missing = mergeFragments([fragA(), { ...amend, amend: { Nope: { open: false } } } as unknown as Fragment], { build: "test" });
+    assert(missing.errors.some((e) => /amend.*Nope/.test(e)), `amending an unknown component is an error: ${missing.errors.join(" | ")}`);
+    const badShape = { ...amend, amend: { CatchProjectiles: { keys: { x: { type: "float" } } } } };
+    assert(validateFragment(badShape, "c").some((e) => /amend.*CatchProjectiles.*keys\.x/.test(e)), "amend keys are shape-checked");
+  });
+  test("component schema build: amending a component closed clears its fragment vanillaMissed; the cross-check reopens it only for keys still missing", () => {
+    const vanilla = { CatchProjectiles: { objUses: 2, keys: { chance: 2, ally_chance: 1, chanse: 1 } } };
+    const a = fragA() as unknown as { components: Record<string, { open: boolean; vanillaMissed: string[] }> };
+    a.components.CatchProjectiles!.open = true;
+    a.components.CatchProjectiles!.vanillaMissed = ["ally_chance", "chanse"];
+    const close = (keys: Record<string, unknown>) => ({ schema: 1, agent: "compclose", components: {}, amend: { CatchProjectiles: { open: false, keys } } }) as unknown as Fragment;
+    const half = mergeFragments([a as unknown as Fragment, fragB(), close({ ally_chance: key("number") })], { build: "test", vanilla });
+    eq(half.schema.components.CatchProjectiles!.vanillaMissed.join(","), "chanse", "only the key still missing");
+    eq(half.schema.components.CatchProjectiles!.open, true, "still open");
+    const full = mergeFragments([a as unknown as Fragment, fragB(), close({ ally_chance: key("number"), chanse: key("any", { unread: true }) })], { build: "test", vanilla });
+    eq(full.schema.components.CatchProjectiles!.open, false, "every vanilla key accounted for -> closed");
+    eq(full.schema.coverage!.vanillaKeysFound, 2, "read keys found");
+    eq(full.schema.coverage!.vanillaKeysUnread, 1, "the unread one counted apart");
+    eq(full.schema.coverage!.vanillaOpen, 0, "no vanilla component open");
+    eq(full.schema.coverage!.vanillaClosed, 1, "one vanilla component closed");
+  });
+  test("component schema build: surveyVanilla skips the map keys of children:any components", () => {
+    const root = mkdtempSync(join(tmpdir(), "mewged-compsurvey-map-"));
+    mkdirSync(join(root, "characters"));
+    writeFileSync(join(root, "characters", "c.gon"), "Boss { passives { FormChanger { Rain { ai { brain x } passives { CatchProjectiles { chance 1 } } } } } }\n");
+    const u = surveyVanilla(root, (n) => ["FormChanger", "Rain", "CatchProjectiles"].includes(n), () => false, (n) => n === "FormChanger");
+    eq(u.Rain, undefined, "the form named Rain is not a Rain block");
+    eq(u.CatchProjectiles!.objUses, 1, "the passives inside the form are still surveyed");
+  });
   test("component schema build: surveyVanilla counts object uses and literal keys per component (synthetic tree)", () => {
     const root = mkdtempSync(join(tmpdir(), "mewged-compsurvey-"));
     mkdirSync(join(root, "passives"));
@@ -202,7 +272,7 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
 
   // ---- validator integration (synthetic base) ----------------------------------------
   const FIX = join(HERE, "fixtures", "validator");
-  const COMPONENTS = ["PlayerBrain", "Uncontrollable", "Metal", "CatchProjectiles", "OnHitEffects", "Mystery", "SpawnThing", "Passive", "Bleed", "Conditional_Enemy"];
+  const COMPONENTS = ["PlayerBrain", "Uncontrollable", "Metal", "CatchProjectiles", "OnHitEffects", "Mystery", "SpawnThing", "Passive", "Bleed", "Conditional_Enemy", "FormChanger", "Rain"];
   const run = (mod: string) => validateMod(mod, undefined, {
     modDir: join(FIX, "mods", mod), extractedData: join(FIX, "base"), components: COMPONENTS, registeredNames: ["JokersLuck"], nativeBuild: null, componentSchema: syntheticSchema(),
   });
@@ -221,6 +291,11 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(hits[0]!.severity, "error", "error");
     eq(hits[0]!.location?.path, "Zop.1.passives.SpawnThing", "path");
     assert(!r.ok, "an error fails the mod");
+  });
+  test("validator fixture: an unread key is an ignored-key info (not unknown-key); a map key named like a class is not a block", () => {
+    const r = run("ignored-key");
+    eq(r.findings.map((f) => `${f.code}:${f.severity}:${f.location?.path}`).join(" | "), "ignored-key:info:Zip.1.passives.SpawnThing.numbr", "one info, no unknown-key for the form named Rain");
+    assert(/never reads/.test(r.findings[0]?.message ?? "") && /vanilla typo of number/.test(r.findings[0]?.message ?? ""), `message carries the note: ${r.findings[0]?.message}`);
   });
   test("validator fixture: the clean mod stays clean with a schema loaded", () => {
     const r = run("clean");
