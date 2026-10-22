@@ -8287,6 +8287,11 @@
             "ordinal": 1360,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
+          },
+          {
+            "ordinal": 188,
+            "name": "Character_init_clip",
+            "target": "0xf1150"
           }
         ],
         "cfgLite": {
@@ -11673,6 +11678,743 @@
         ".analysis/decompiled/Character_SetOrientation_0x10ce50.c"
       ],
       "note": "the grid direction the unit faces (int x, int y); graphics.start_orientation seeds it"
+    },
+    {
+      "name": "Character_init_clip",
+      "kind": "function",
+      "rva": "0xf1150",
+      "anchors": {
+        "note": "Character::init(std::string movieclip, std::string shadow) (engine-map 'CharacterGraphics_build'): the _CAT branch stores the CatParts component at Character+0x90 right after AddComponent<CatParts> (call 0x90a70 / 0x121a70: `mov [rsi+0x90],rax; mov [rax+0x70],r12`, 3 sites at 0xf1229/0xf1ddc/0xf1e7c, all 0x90); later `cmp qword [rsi+0x90],0` = has a doll. The witness host of Character_catParts",
+        "strings": [],
+        "callees": [
+          {
+            "ordinal": 9,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 10,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 21,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 22,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 23,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 26,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 35,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 36,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 37,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 43,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 44,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 50,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 51,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 61,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 62,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 63,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 64,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 65,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 75,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 76,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 77,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 78,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 79,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 87,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 88,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 89,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 90,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 98,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 99,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 100,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 101,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 104,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 107,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 110,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 113,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 116,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 119,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 122,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 125,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 128,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 131,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 138,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 141,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 148,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 151,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 158,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 161,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 168,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 171,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 178,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 182,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 189,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 194,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 195,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 203,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 204,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 205,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 213,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 214,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 215,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 227,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 232,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 237,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 243,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 249,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 256,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 263,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 269,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 275,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 277,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 282,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 288,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 294,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 300,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 313,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 320,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 327,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 329,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 331,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 332,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 336,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 337,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 342,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 343,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 354,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 355,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 356,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 357,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 362,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 363,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 433,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 434,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 441,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 442,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 447,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 448,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 461,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 462,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 475,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 476,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 477,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 480,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 485,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 486,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 518,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 519,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 13456,
+          "calls": 529,
+          "ripRefs": 193,
+          "resyncs": 0
+        },
+        "prologue": "4C 89 44 24 18 48 89 54 24 10 55 53"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md",
+        ".analysis/decompiled/CharacterGraphics_build_0xf1150.c",
+        ".analysis/notes-catA.md"
+      ],
+      "signature": {
+        "pattern": "4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 F8 FE FF FF 48 81 EC 08 02 00 00 4C",
+        "exactLen": 38,
+        "offset": 0,
+        "wildcards": []
+      }
+    },
+    {
+      "name": "CatParts_Refresh",
+      "kind": "function",
+      "rva": "0x73f7d0",
+      "anchors": {
+        "note": "CatParts_Refresh (32 callers): re-sets the uniform `palette` of the doll's `paletted` material CatParts+0x160 to the base row +0x1b4 (`mov edx,[rdi+0x1b4]` at 0x73fcdf), then to the override +0x1b8 when it is not -1 (`mov ecx,[rdi+0x1b8]; cmp ecx,-1` at 0x73fd4b), and builds the 14 per-part materials when the override is -69 (`cmp dword [rdi+0x1b8],-0x45; jne` at 0x73fdea). The witness host of the palette offsets and the sentinel",
+        "strings": [],
+        "callees": [
+          {
+            "ordinal": 23,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 26,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 27,
+            "name": "Rng_SeedState",
+            "target": "0x94ee40"
+          },
+          {
+            "ordinal": 34,
+            "name": "GonObject_Int",
+            "target": "0x941540"
+          },
+          {
+            "ordinal": 37,
+            "name": "ShaderManager_GetOrCreateMaterial",
+            "target": "0x9bb5d0"
+          },
+          {
+            "ordinal": 41,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 2726,
+          "calls": 50,
+          "ripRefs": 25,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 48 89 48 08 55 53 56 57 41"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md",
+        ".analysis/decompiled/CatParts_Refresh_0x73f7d0.c",
+        ".analysis/notes-catC.md"
+      ],
+      "signature": {
+        "pattern": "48 8B C4 48 89 48 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 68 B8 48 81 EC 08 01 00 00 0F 29 70 A8 0F 29 78 98 48 8B F9",
+        "exactLen": 41,
+        "offset": 0,
+        "wildcards": []
+      }
+    },
+    {
+      "name": "Character_catParts",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x90",
+      "ctype": "CatParts* (glaiel::CatParts component; NULL when the unit's clip is not _CAT = not a cat)",
+      "anchors": {
+        "witness": {
+          "function": "Character_init_clip",
+          "pattern": "E8 ?? ?? ?? ?? 48 89 86 ?? ?? ?? ?? 4C 89 60 70",
+          "dispAt": 8,
+          "dispSize": 4
+        },
+        "note": "call AddComponent<CatParts> (0x90a70); mov [rsi+0x90],rax; mov [rax+0x70],r12 (0xf1224): the new doll stored at Character+0x90 (3 matches, all 0x90)"
+      },
+      "consumers": [
+        "native/framework/src/fw_unit_palette.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_CATPARTS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#cat-parts-entry-path-palette-faces-mirroring-2026-10-21",
+        ".analysis/notes-catC.md",
+        ".analysis/notes-mesh3pal.md"
+      ]
+    },
+    {
+      "name": "CatParts_palette",
+      "kind": "offset",
+      "struct": "CatParts",
+      "value": "0x1b4",
+      "ctype": "int32: the cat's base palette row (palette.png row; from the CatData `palette` property = classes[class].graphics.palette / custom_cats palette)",
+      "anchors": {
+        "witness": {
+          "function": "CatParts_Refresh",
+          "pattern": "8B 97 ?? ?? ?? ?? 4C 89 64 24 28",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov edx,[rdi+0x1b4] (0x73fcdf): the base row handed to Material_SetUniform(\"palette\") of the paletted material"
+      },
+      "consumers": [
+        "native/framework/src/fw_unit_palette.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CATPARTS_PALETTE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#cat-parts-entry-path-palette-faces-mirroring-2026-10-21",
+        ".analysis/notes-catC.md",
+        ".analysis/notes-mesh3pal.md"
+      ]
+    },
+    {
+      "name": "CatParts_paletteOverride",
+      "kind": "offset",
+      "struct": "CatParts",
+      "value": "0x1b8",
+      "ctype": "int32: the override row (OverridePalette passive / the CatParts `palette` prop / JesterPaletteCycler); -1 unset, -69 multi-palette",
+      "anchors": {
+        "witness": {
+          "function": "CatParts_Refresh",
+          "pattern": "8B 8F ?? ?? ?? ?? 83 F9 FF",
+          "dispAt": 2,
+          "dispSize": 4
+        },
+        "note": "mov ecx,[rdi+0x1b8]; cmp ecx,-1 (0x73fd4b): the override replaces the base row unless it is -1"
+      },
+      "consumers": [
+        "native/framework/src/fw_unit_palette.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CATPARTS_PAL_OVERRIDE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#cat-parts-entry-path-palette-faces-mirroring-2026-10-21",
+        ".analysis/notes-catC.md",
+        ".analysis/notes-mesh3pal.md"
+      ]
+    },
+    {
+      "name": "CatPartsMultiPalette",
+      "kind": "constant",
+      "value": "-0x45",
+      "anchors": {
+        "witness": {
+          "function": "CatParts_Refresh",
+          "pattern": "83 BF ?? ?? ?? ?? ?? 0F 85",
+          "dispAt": 6,
+          "dispSize": 1
+        },
+        "note": "cmp dword [rdi+0x1b8],-0x45; jne (0x73fdea): -69 in the override = one paletted material per part with the class's graphics.palette list (CatParts::init skips it as a row too)"
+      },
+      "consumers": [
+        "native/framework/src/fw_unit_palette.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_CAT_MULTI_PALETTE"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#cat-parts-entry-path-palette-faces-mirroring-2026-10-21",
+        ".analysis/notes-catC.md",
+        ".analysis/notes-mesh3pal.md"
+      ],
+      "note": "the multi-palette sentinel of CatParts+0x1b8"
     }
   ]
 }
