@@ -1,185 +1,199 @@
-# Web UI inventory — input for the design / UX review
+# Web UI inventory — the editor's web UI after the 2026-10-22 overhaul
 
-Snapshot of the editor's web UI (`editor/web/`, served by `npm run web`) as of 2026-10-22: what ships on `main`
-(95dcaa5), what each open PR adds, and what is planned. Written for a later design and UX review, so each item says
-what it is and where it lives; the last section collects the UX issues already visible.
+Snapshot of the editor's web UI (`editor/web/`, served by `npm run web`) as it stands at the top of the UX overhaul
+stack (PRs #141 → #148, 2026-10-22). It says what each part is and where it lives, so a later review can start
+from facts; §7 records what the overhaul resolved or deferred and §8 maps the design boards to the PRs.
 
-Status markers: **[main]** on `main` · **[PR #N]** in an open, unmerged PR · **[planned]** not built.
+Status markers: **[main]** merged · **[ux-N]** in the overhaul stack (`feat/ux-1-primitives` … `feat/ux-6-onboarding`,
+`docs/ux-7-inventory`; each PR's base is the previous branch, merge in order) · **[planned]** not built.
 
-## 1. Shell and global UI [main]
+## 1. Shell and global UI
 
-Files: `editor/web/src/App.tsx`, `components/TopBar.tsx`, `components/StatusBar.tsx`, `actions.ts`.
+Files: `editor/web/src/App.tsx`, `components/TopBar.tsx`, `StatusBar.tsx`, `ui.tsx` (the primitives), `boundary.ts`,
+`hooks/`, `shortcuts.ts`, `dirty.ts`, `deeplink.ts`, `prefs.ts`, `actions.ts`, `state.ts`, `store.ts`, `app.css`.
 
-- **Layout** — three panes (explorer · center · right panel; the right panel only shows with a mod open), a bottom
-  status bar, and a toast. Data or Art mode decides what fills the panes.
-- **Brand** — "Mewgenics Mod Editor".
-- **Mode switch: Data | Art** — the first entry into Art mode opens the Art tour automatically (remembered in
-  localStorage `mewged.onboard.artTour*`). Deep link `?mode=art` opens Art mode with no tours.
-- **Mod switcher dropdown** — lists `mods/`; picking one loads its files and art. Also **＋ New mod…**, which opens
-  the template modal with an empty mod name.
-- **Status pill** — "● N errors · M warnings" from the last validation, or "idle".
-- **Validate** — runs validation and the merge preview on the open file; disabled with no file open.
-- **Save** — writes the open overlay (`POST /api/write`) and reloads the mod.
-- **Launch dev ▸** — shows a toast telling you to run `launch-dev.bat` with `-modpaths mods/<mod> -savesuffix dev`;
-  it does not launch anything.
-- **Help (?) menu** — Guided tour (Data, 5 steps) · Worked example: Joker's Luck · Art mode tour (6 steps) · Art
-  worked example (SVG → preview → SWF, 5 steps) · Concepts explainer.
-- **First-run Data tour** — shown once unless "don't show again" is ticked.
-- **Status bar** — `mod/file`, the overlay-mode note (e.g. ".merge → deep-merge onto base"), and the static labels
-  "build dev · ● local server · save: dev".
+- **Layout** — three panes (explorer · center · right panel; the right panel only with a mod open), a bottom status
+  bar, a toast queue. The mode decides what fills the panes; Art and Rooms panes are lazy chunks (`art/ArtPanes.tsx`,
+  `rooms/RoomPanes.tsx`), as are the tours, examples and concepts (`components/Onboarding.tsx`). Each pane and overlay
+  sits in a `PaneBoundary` (an error boundary with "Reload pane"). **[ux-1, ux-4, ux-5, ux-6]**
+- **Primitives** (`ui.tsx`) — `Button`, `IconButton`, `Pill`, `Tabs`/`SubTabs` (`role=tablist`, arrow keys),
+  `Segmented`, `SearchBox`, `SectionHeader`, `EmptyState`, `Summary` + `FindingsList`, `Field` (label ↔ control by
+  id), `Checkbox`, `Select`, `Modal`, `Drawer`, `Menu` (`aria-expanded`, Esc, arrow keys). Every modal, drawer, tour
+  and example goes through `useDialog` (`role=dialog aria-modal`, focus trap, autofocus, focus return, Esc). **[ux-1]**
+- **Mode switch: Data | Art | Rooms** — a `Segmented` control; a dot on a mode marks unsaved work there. Deep links
+  `?mode=art|rooms`, `?mod=`, `?file=` are read at startup and written back with `replaceState`. **[ux-2]**
+- **Mod menu** — lists `mods/`; `New mod…`, `⇩ Export…`, `⇧ Import mod…`. Switching mods while anything is unsaved
+  asks first (the dirty guard, below). **[main, ux-2]**
+- **Status pill** — `● N errors · M warnings` from the current mode's findings (Data report / Art scene findings /
+  Rooms `lvl-*` findings); click opens that mode's findings tab. **[ux-2]**
+- **Validate** and **Save** — one of each in every mode; `saveCurrent()` dispatches to the overlay / scene / room;
+  `Ctrl+S` saves; Save shows an unsaved dot and its tooltip names what it saves. **[ux-2]**
+- **Launch…** — a popover with the exact `launch-dev.bat mods\<mod>` line, a Copy button and the `-savesuffix dev`
+  note. The editor never starts the game (owner decision 2026-10-22). **[ux-2]**
+- **Help (?) menu** — Data mode: Guided tour (5 steps) · Worked example: Joker's Luck. Art mode: Art mode tour (7
+  steps) · Art worked example. Rooms mode: Rooms mode tour (5 steps) · Rooms concepts. Concepts explainer. **[ux-6]**
+- **Dirty guard** (`dirty.ts`) — a registry of the four dirty scopes (overlay buffer, scene, VectorCraft drawing,
+  room); switching mods, files, scenes or rooms while something is unsaved opens the Unsaved changes dialog (Cancel /
+  Discard / Save and continue); `beforeunload` warns too. Mode switches lose nothing, so they are not guarded;
+  browsing palette rows does not dirty a scene. **[ux-2]**
+- **Status bar** — `<mod>/<file>` (scene or room path per mode) · the overlay-mode note · `build <id>` from
+  `GET /api/status` (warn style on an unknown build; the tooltip lists the framework dll, Mewjector, extracted data)
+  · `extracted ✓/–` · `framework ✓/–` · `● local server` (red when the last fetch failed) · `save: dev`. **[ux-2]**
+- **Toast** — one queue (`toast()`), `role=status aria-live=polite`, click to dismiss. **[ux-1]**
+- **Shortcuts** (`shortcuts.ts`) — `Ctrl/Cmd+S` save (never the browser's save page), `Esc` closes the topmost
+  overlay (menu > tour > modal > drawer). **[ux-1]**
 
-## 2. Data mode [main]
+## 2. Data mode
 
-- **Explorer → Mod files** — collapsible folder tree of the mod's overlays with `.append` / `.merge` / `.patch` chips
-  (`description.json` hidden). **+ New overlay** opens the template modal. With no mod open: a **+ New mod** card.
-- **Explorer → Base data (read-only)** — debounced filter; category rows with counts; a category lists its entries
-  (capped at 300 with a "refine the search" note); an entry opens the **Base entry drawer** (read-only GON).
-- **Explorer → components row** — opens the Components tab (or the Components drawer with no mod open).
-- **Center → empty states** — no mod: hero with four cards (Create your first overlay · Browse base data · Take the
-  guided tour · Rebuild Joker's Luck) and a concepts link. No file: "+ New overlay" and "How overlays work".
-- **Center → file tab bar** — filename with ✕, a mode chip (".merge → Merge"), and a breadcrumb.
-- **GON editor** (`Editor.tsx` + `gon-highlight.ts`) — textarea with a syntax-highlight overlay and line gutter
-  (only visible lines painted, once per frame); typing re-validates and re-previews after 350 ms.
-- **Editor status line** — Saved/Unsaved, byte count, UTF-8, file type (GON/CSV/TXT), "Live validation on".
-- **Right → Validation tab** — summary badge and findings (code, path, line, message).
-- **Right → Preview tab** — merge preview: GON base vs effective per touched key with added/changed chips; CSV
-  added and changed rows.
-- **Right → Components tab** — debounced search of `glaiel::` component class names (limit 40); clicking a name
-  searches that exact name. Shows names only: the where-used data the API returns is not rendered.
-- **Template modal "Scaffold an overlay"** — mod, kind (`ability` / `passive` / `item` / `status-data`), entry name,
-  display name, description; ability only: `variant_of` parent and an optional status effect. **Scaffold** shows
-  the result as raw JSON.
-- **Drawers** — Base entry viewer; Components drawer (same search, used with no mod open).
-- **Concepts drawer** — cards for append / merge / patch and the validation checks, plus Art concepts.
-- **Worked example (Joker's Luck)** — step list; one step pre-fills the template modal with JokersGambit.
+- **Explorer → Mod files** — collapsible tree (`aria-expanded`) with `.append` / `.merge` / `.patch` chips; `.lvl`
+  rows carry a `room ↗` chip ("Opens in Rooms mode"). **+ New overlay** opens the template modal. No mod: a
+  **+ New mod** card. **[main, ux-2, ux-3]**
+- **Explorer → Base data (read-only)** — the filter names the selected category ("Filter entries in abilities…");
+  categories with counts; a category lists its entries paged 300 at a time (`showing 300 of 3,076 · Show 300 more`);
+  an entry opens the **Base entry drawer**. **[ux-3]**
+- **Center → empty states** — `EmptyState` cards: Create your first overlay · Browse base data (focuses the filter,
+  expands the first category) · Take the guided tour (hidden once "Don't show again" is ticked) · Rebuild Joker's
+  Luck; a concepts button. No file: "+ New overlay" and "How overlays work". **[ux-3, ux-6]**
+- **Center → file tab bar** — filename with ✕, a mode chip, breadcrumb. **GON editor** (`Editor.tsx` +
+  `gon-highlight.ts`): textarea + windowed highlight overlay + gutter; typing re-validates after 350 ms. **Editor
+  status line** — Saved/Unsaved · byte count · GON/CSV/TXT · `validating…` / `validated` / `validation off`. **[ux-3]**
+- **Right → Validation** — `Summary` card + `FindingsList` (code, path, line, message). **Preview** — merge preview
+  per touched key with added/changed chips; CSV rows. **Components** — debounced search of `glaiel::` class names;
+  each result shows a where-used count with the first entries ("show all"); an exact match shows the **reads** box
+  (`data-testid=component-keys`: key, type, default, required, inherited-from, children, "vanilla writes it; the
+  game ignores it" for unread keys). **[ux-3]**
+- **Template modal** — title "New mod" from the mod menu / explorer card, "Scaffold an overlay" otherwise; fields
+  mod, kind, entry name, display name, description, plus per-kind extras (`variant_of` + status effect for abilities,
+  colour for `glowing-character`, source tileset for `tileset-variant`); the kind list is the one shared constant
+  `src/core/template-kinds.ts` (`ability, passive, item, status-data, room, tileset-variant, particle, vfx-ability,
+  glowing-character`). **Scaffold** (Enter submits) shows "Created N files in mods/<name>" with an **Open** button per
+  file, "Open first file & validate", and the raw response behind a disclosure. **[ux-3]**
+- **Drawers** — Base entry viewer; Components drawer (same search, with no mod open). **Concepts drawer** — the
+  current mode's section first: Data (append / merge / patch, the four checks, the data ↔ native seam), Art, Rooms.
 
-## 3. Art mode [main]
+## 3. Art mode
 
-- **Art explorer** — **Art scenes** (`art/*.scene.json`) with **+ New scene**; **Built SWFs** (click to inspect in
-  the Build tab) with a `swflist.gon.append` chip; **Assets** (`art/` SVGs and PNGs).
-- **New scene modal** — name; creates `art/<name>.scene.json` from a starter (a bobbing gray square).
-- **Empty hero** — "+ New scene" card, an SVG drop zone (creates a scene if none is open), "Take the Art tour".
-- **Scene tab bar** — name with ✕, "scene → .swf" chip, Saved/Unsaved, **Save scene**, **Build SWF**.
-- **Scene header** — name, fps, stage size, shape/sprite/export counts; a findings pill jumps to Findings.
-- **Overview sub-tab** — name, frameRate, stage width/height/background, curveResolution; SVG drop zone; a "How
-  it ships" note.
-- **Shapes sub-tab**
-  - Per shape: 16-level gray-ramp usage strip; chips baked / passthrough / bitmap / gradient.
-  - Per-shape buttons: **Preview** · **→ Sprite** (wrap in a 1-frame sprite and export) · **VectorCraft** ·
-    **Export SVG** (`art/<shape>.svg`) · **Bake glow…** (inline form: glow or drop shadow, colour, blur, dx/dy;
-    Bake / Re-bake) · **Replace…** (from SVG) · **Delete**.
-  - "show raw gray" checkbox; SVG drop zone.
-  - **Texts** — **New text**; per text: words, game font (fixed `GAME_FONTS` list), size, colour, align, Delete.
-  - **Path editor** for the previewed shape — per-path fill (gray 0–15, gradients, keep, none), stroke chip,
-    Delete path.
-- **Sprites sub-tab** — **+ New sprite**; per sprite: frames, labels (`idle:0, attack:6`), Preview, Delete; layer
-  rows (depth, keys summary, mask chip, Delete); "+ layer from" a shape/sprite; baked-frames count.
-- **Timeline sub-tab** — sprite select; label pills (click to seek, × to remove); frame ruler; layer × frame grid
-  (key / hold / tween cells; click scrubs the preview); key inspector: Add key, Delete key, Insert frame, Delete
-  frame, Layer up/down; key fields ref, x, y, sx, sy, rot, alpha, "to next" hold/tween; **Add label**.
-- **Rig sub-tab** — **New cat rig** (7 slots tail, leg2, arm2, body, leg1, arm1, head, with placeholder parts); per
-  rig: Preview, Animate, `rig-*` findings, per-slot select (disabled for `parts: game` rigs). **Cat animations**:
-  name + **New cat animation** (adds `<name>F/B` on the `_Append_CatTest` donor); donor card with Preview, Timeline,
-  `cat-anim*` findings, facing pills, **Animate pose**.
-- **VectorCraft sub-tab** — the vendored VectorCraft web build in an iframe (stays mounted across tabs); shape
-  select, **Open in VectorCraft**, **Apply to shape** (enabled when changed), **Retry with WebGL2**, status line,
-  "not vendored" message when missing.
-- **Exports sub-tab** — export → ref list with Remove; new linkage name + target + **+ Add export**.
-- **JSON sub-tab** — the whole scene as editable JSON; **Apply**; parse errors shown.
-- **Right → Preview** — engine-faithful renderer (WebGL, canvas2d fallback); target select; **Fit**; transport
-  (|◀ ◀ Play/Pause ▶, frame counter, loop); scrubber with label ticks and label chips; palette row (number,
-  **Browse rows…**, 16-colour ramp, hint), "show raw gray", background (checker / stage / black / white).
-- **Palette drawer** — `palette.png` row browser with a filter; clicking a row sets the preview row.
-- **Right → Findings** — scene validation summary and findings.
-- **Right → Build** — DoABC radio (none / stub); **Build SWF**, **Dry run**, **Prepare SWF gate**; result card
-  (bytes, frames, characters, exports, tag histogram, `swflist.gon.append` text, findings); Inspect card for a built
-  SWF (header, DoABC, exports, labels, tags, loader findings).
-- **Right → Ruffle** — pick a mod SWF or an extracted vanilla SWF, **Load**, play it, show its metadata.
-- **Dev page** — `web/art/preview-dev.html`: a standalone renderer harness (second Vite entry).
+- **Art explorer** — **Art scenes** (`art/*.scene.json`, **+ New scene**); **Built SWFs** (click → Build tab's
+  Inspect); **Assets** (`art/` SVGs and PNGs). Switching scenes while one is unsaved asks first.
+- **Scene tab bar** — name with ✕, "scene → .swf" chip, Saved/Unsaved, **Build SWF** (Save lives in the top bar).
+- **Scene header** — name, fps, stage size, counts; a findings button jumps to Findings. **Sub-tabs** (`SubTabs`):
+  Overview · Shapes · Sprites · Timeline · Rig · VectorCraft · Exports · JSON.
+- **Shapes** — per shape: id, chips (baked / passthrough / bitmap / gradient), the 16-level ramp, meta, **Preview**,
+  and a `…` menu (`More actions for <id>`): Open in VectorCraft · Export SVG · Bake glow… (inline form: kind, colour,
+  blur, dx/dy) · Replace from SVG… · Wrap in a sprite · Delete. **Import** card: drop or pick an SVG or PNG; a PNG
+  shows its options (mode sprite / background plate / bitmap fill, scale, pixel art, tile) and an **Import** button —
+  the options apply to dropped PNGs too. **Texts** — New text; per text words, font, size, colour, align, plain
+  (localized), Delete. **Path editor** for the previewed shape. **[ux-4]**
+- **Sprites** — New sprite; per sprite frames, labels, Preview, Delete; layers (depth, keys, mask, Delete); "+ layer
+  from". **Timeline** — label pills, frame ruler, layer × frame grid, key inspector (Add key, Delete key, Insert /
+  Delete frame, Layer up/down, key fields, Add label). **Rig** — New cat rig (7 slots), per rig Preview / Open in
+  Timeline / findings / slot selects; **Cat animations**: name + Four-way + New cat animation, the donor card with
+  Preview, Open in Timeline, findings, facing pills, Animate pose. **VectorCraft** — the vendored app in an iframe
+  mounted once per Art session (it survives scene switches and a broken scene file); Apply to shape is disabled
+  when the drawing belongs to another scene. **Exports** — export → ref list, Remove, New export (a controlled form).
+  **JSON** — the scene as editable JSON; unapplied text is kept when the scene changes underneath (a Reload / Keep
+  banner). **[ux-4]**
+- **Right → Preview** — target select, **Fit**, the engine-faithful canvas (WebGL, canvas2d fallback), transport
+  (first / previous / Play–Pause / next, frame counter, loop), scrubber with label ticks, label chips, **View
+  options** (show raw gray · background checker/stage/black/white · ghost cat for `parts: game` rigs; all remembered
+  under `mewged.prefs.art.*`), palette row (number input, Browse rows… → the **Palette drawer**, the 16-colour ramp;
+  browsing never marks the scene unsaved). **Findings** — scene validation. **Build** — DoABC radio (none / stub),
+  **Build SWF**, **Dry run**, **Prepare SWF gate**; the result card and the Inspect card; one sentence on
+  SymbolClass/DoABC instead of the old gate prose. **Ruffle** — a mod SWF or an extracted vanilla SWF, Load, play,
+  metadata. **[main, ux-4]**
+- **Dev page** — `web/art/preview-dev.html`, a standalone renderer harness.
 
-## 4. Added by open PRs (not merged)
+## 4. Rooms mode
 
-- **[PR #96] "plain (localized)" checkbox** on each text row (Shapes tab) — sets `html: false` so the game swaps a
-  localization key for its text; the new `text-loc-key-html` finding points at it.
-- **[PR #97] "ghost cat" checkbox** in the Preview target row — only for `parts: "game"` rigs; draws translucent
-  grey part outlines with slot labels in the empty slots, preview only; outlines from `catparts.swf` when extracted,
-  else built-in shapes; remembered in localStorage `mewged.art.ghostCat`.
-- **[PR #98]** Rig tab note reworded to "OBSERVED in the game"; no new controls.
-- **[PR #105] "Four-way" checkbox** next to New cat animation (`<name>LF/RF/LB/RB`); New cat animation also makes a
-  back rig (`<name>PoseBack` with `head_back`); rig cards show "back-facing"; slot rows follow the rig's facing;
-  animation rows list four-way quartets.
-- **[PR #116] Mod menu ⇩ Export…** — packs the mod into a zip and downloads it; offers to draft a `mod.json` if
-  missing and to force past validation / SWF / DLL refusals. **⇧ Import mod…** — zip picker that installs into
-  `mods/<name>/`, confirming on a game-build mismatch (limit ~6 MB in the browser). `mod.json` hidden from the tree.
-- **[PR #120] Template kinds `particle` and `vfx-ability`** in the template dropdown. No particle editor.
-- **[PR #124] Import PNG… row** (Shapes tab) — mode: sprite (origin at the feet) / background plate (top-left) /
-  bitmap fill; scale; "pixel art" (no smoothing); "tile" (repeat). The drop zone accepts PNG too. The preview honours
-  repeat and pixel-snap. Texts using a scene-embedded font draw from its glyphs in the preview (no font-import UI;
-  the font select still lists only game fonts).
-- **[PR #125] Rooms mode** (third mode; `?mode=rooms`; clicking a `.lvl` in Data mode opens it)
-  - **Room explorer** — `levels/` list, **+ New room**; **Tiles** palette (`tiles.gon`) and **Objects** palette
-    (`spawns.gon`), base plus the mod's overlays, each with a filter, a 200-row cap and tint-colour letter swatches.
-  - **Toolbar** — path with a dirty dot; tools Select / Tile / Object / Erase; brush label; **Close**; **Save room**.
-    Validate and Save of the top bar are hidden in Rooms mode.
-  - **10×10 grid painter** — click or drag to paint; cell tooltips; markers for random cells and object stacks.
-  - **Cell inspector** (right) — tile pick with a "random" toggle and a weighted-list table (+ choice, weight, ✕);
-    per-object pick editor, Remove, "+ add <brush> here".
-  - **Findings** (right) — live `lvl-*` findings while painting.
-  - **New room modal** — folder and name; uses the room template (4 player spawns, 2 Rats).
-- **[PR #126] Component "reads" box** (Components tab) — when the search equals one class name, lists the GON keys
-  that class reads: type, default, required, inherited-from, children kind, and an "open" note when the list may
-  be incomplete.
-- **[PR #130, in progress] Tile art in Rooms** — palette rows and grid cells show rendered clip thumbnails (frame 1,
-  cached in `editor/data/level-art/`), swatches stay as the fallback with the reason in the tooltip; a **tileset
-  select**; a **Flat | Iso** switch (2:1 diamonds, sprites on cell centres, nearer cells drawn last, paintable).
+Files: `editor/web/src/rooms/` (`RoomPanes.tsx`, `RoomExplorer.tsx`, `RoomToolbar.tsx`, `RoomGrid.tsx`, `RoomIso.tsx`,
+`RoomInspector.tsx`, `NewRoomModal.tsx`, `RoomBits.tsx`, `grid-input.ts`, `room-state.ts`). **[main #125/#130, ux-5]**
 
-PRs with no web UI change: #99–#104, #106–#115, #117–#119, #121–#123, #127–#129.
+- **Room explorer** — **Rooms** (`levels/*.lvl`, **+ New room**) and one **Palette** with a `Tiles | Objects`
+  switch, a filter, thumbnails (from `/api/level-tile-art`, cached in `editor/data/level-art/`) or tint swatches.
+  Picking the Tile / Object tool or a brush switches the palette to that kind.
+- **Toolbar** — path with a dirty dot · Select / Tile / Object / Erase · Flat | Iso · tileset select · brush label ·
+  Close. The status line under the grid reads `10×10 · tileset <name>` and the input hints.
+- **Grid** — click or drag to paint (pointer events, one shared `pointerup`), keyboard painting (arrows move the
+  selection, Enter / Space apply the tool), cell tooltips, random-cell and object-stack markers; the Iso view (2:1
+  diamonds, sprites on cell centres, nearer cells last) paints the same way. Cells are memoised, so painting one cell
+  re-renders one cell.
+- **Right → Inspector | Findings** — real tabs; the Inspector has the tile pick with "random" + the weighted list
+  (+ choice, weight, ✕) and per-object pick editors; Findings shows a `Summary` card and the live `lvl-*` rows, with
+  the count in the tab label. The status pill opens Findings.
+- **New room modal** — folder + name, Enter creates (the room template: 4 player spawns, 2 Rats).
 
-## 5. Planned, not built
+## 5. Onboarding **[ux-6]**
 
-- **[planned] 3D model card in Data mode** — wireframe and bounds next to a `model` key, with `model-*` findings
-  (`docs/3d-importer-design.md` §3.3; the SVG builder exists in `editor/src/core/art/model-read.ts` on PR #128).
-  MCP `read_model` and `extract_model_texture` come with it.
-- **[planned] TTF/OTF font import** into scene fonts (PR #124 TODO).
-- **[planned] "Swap rig for <entry>" control** for the native cat-rig redirect (plan A3; PR #118 TODO).
-- **[planned] Particle editor** — only the templates exist (PR #120 notes the gap; not scheduled).
-- **[planned] Room and tileset-variant kinds in the template modal** — the core and MCP have them (PR #121); the UI
-  dropdown does not; Rooms uses its own New room dialog.
-- **[planned] Design artboards** for Art mode, Preview and the Palette drawer (`docs/art-preview-plan.md` §6, §8
-  item 4) — need the owner to run `/design`.
-- **[planned, partly stale] Part-indexed cat assembly preview** (art-preview-plan §8 item 12) — mostly covered by
-  the Rig tab and the ghost cat (#97).
+- **Anchored tours** — one `GuidedTour` for the three tours; a step may name a `data-tour` target
+  (`tour-anchors.ts`, 20 anchors on the real controls); when it is on screen the step spotlights it and the card sits
+  beside it (flipping when it would overflow, re-measured on resize); off-screen targets are scrolled into view once;
+  otherwise, or with `?tour=center`, the centred card. Skip / Done / Esc mark the tour seen; "Don't show again" also
+  hides the empty-state "Take the tour" nudge. Keys `mewged.onboard.{tour,artTour,roomTour}{Seen,DontShow}`.
+- **Data tour** (5) — Browse the base game · Create an overlay · Edit with live validation · Read the merge preview ·
+  Launch on the dev save (the Launch… popover). Auto-opens on the first run.
+- **Art tour** (7) — Switch to Art · Scenes & shapes explorer · Import an SVG or PNG · Grayscale → palette ·
+  In-game-faithful preview · Build the SWF · Timeline, Rig, VectorCraft. Auto-opens on the first Art entry.
+- **Rooms tour** (5) — Switch to Rooms, open or create a room · Pick a brush · Paint the grid · Inspect a cell ·
+  Findings, save, test it in a fight. Auto-opens on the first Rooms entry. `?mode=art|rooms` suppress the auto-open.
+- **Worked examples** — `components/examples/` (`steps.ts` holds the step data; `Stepper.tsx` renders it). Data:
+  Create the mod folder · Add the ability overlay ("Insert this overlay (open scaffolder)") · Add localization rows
+  (a real `combined.csv.append` row) · Register the native name · Validate & launch dev; it opens on step 1. Art:
+  Switch to Art mode · Create a scene · Import an SVG · Preview it faithfully · Build the SWF; each step drops into
+  the live Art UI (it opens a mod first when none is open).
+- **Concepts drawer** — Data, Art and Rooms sections, the current mode's first; Help → Rooms concepts scrolls to
+  Rooms. The stale "no gradients/text" and "DoABC unresolved" cards are gone.
 
 ## 6. MCP tools (they share `editor/src/core/api.ts` with the UI)
 
-- **[main] 26** — list_base_data, read_base_entry, search_components, read_mod, write_overlay, validate_mod,
-  preview_merge, list_registered_native_names, new_from_template, list_ingame_tests, list_art_scenes,
-  read_art_scene, write_art_scene, new_art_scene, import_svg, export_svg, bake_glow, build_swf, inspect_swf,
-  run_ingame_test, check_game_build, start_ingame_session, ingame_exec, stop_ingame_session, port_bindings,
-  vectorcraft_exec.
-- **[PRs] +5 → 31** — `pack_mod`, `install_mod` (#116) · `import_bitmap` (#124) · `read_level`, `write_level`
-  (#125). #126 extends `search_components` with the key schema.
-- **[planned]** `read_model`, `extract_model_texture`.
+**32** on `main` (#144): list_base_data, read_base_entry, search_components, read_mod, write_overlay, validate_mod,
+preview_merge, list_registered_native_names, new_from_template, list_ingame_tests, list_art_scenes, read_art_scene,
+write_art_scene, new_art_scene, import_svg, export_svg, bake_glow, build_swf, inspect_swf, run_ingame_test,
+check_game_build, start_ingame_session, ingame_exec, stop_ingame_session, port_bindings, vectorcraft_exec, pack_mod,
+install_mod, import_bitmap, read_level, write_level, extract_model_texture. The UI's `GET /api/status`
+(`api.editorStatus`) and the paged `GET /api/base` (`offset`/`limit`) are web routes over the same core; the MCP
+tools are unchanged by the overhaul.
 
-## 7. UX issues already visible (for the review)
+## 7. The 2026-10-22 UX issues — resolved or deferred
 
-- **Launch dev ▸ does not launch** — it only shows a toast with a command to run by hand; the in-game runner already
-  knows how to launch safely (`-savesuffix dev`, save hashing).
-- **Components tab shows names only** — the API returns where-used data that is never rendered; #126's reads box
-  helps but only on an exact name match.
-- **Template result is raw JSON** — Scaffold shows the API response instead of opening the written files.
-- **Template dropdown is incomplete** — `room` and `tileset-variant` exist in the core but not in the UI; #120 and
-  #121 edit the same dropdown line (merge conflict).
-- **Font select ignores embedded fonts** — after #124 a scene can carry its own font, but the text row's select
-  still lists only the game fonts.
-- **Mode-specific top bar** — Validate and Save disappear in Rooms mode in favour of the Rooms toolbar's own Save;
-  three modes now use three save patterns (top-bar Save, Save scene, Save room).
-- **Static status bar labels** — "build dev · ● local server · save: dev" never change, so they carry no state.
-- **Base data list capped at 300** with only a "refine the search" note; no paging.
-- **Import mod… limited to ~6 MB** in the browser (request body limit); larger zips need the CLI.
-- **Validation without key help in Data mode** — no autocomplete or inline hints for component keys while typing,
-  although the key schema (#126) now exists.
-- **Many separate checkboxes in Art mode** ("show raw gray" in two places, ghost cat, plain (localized), Four-way,
-  pixel art, tile) — candidates for a consistent options pattern.
-- **Human look-checks** — `editor/t3-looks.json` and the gallery (`npm run t3`) list the T3 checks per PR; the
-  design review can reuse them as its checklist.
+| Issue (as listed before the overhaul) | Outcome |
+|---|---|
+| Launch dev ▸ does not launch | Replaced by the Launch… copy-command popover (owner's choice: no process from the browser) |
+| Components tab shows names only | Where-used rendered next to the reads box **[ux-3]** |
+| Template result is raw JSON | "Created N files" with Open buttons; raw response behind a disclosure **[ux-3]** |
+| Template dropdown incomplete | All kinds from one shared constant (`src/core/template-kinds.ts`) **[ux-3]** |
+| Font select ignores embedded fonts | **Deferred** — font import is its own feature (see §8 planned) |
+| Mode-specific top bar, three save patterns | One command bar; `saveCurrent()` by mode; Ctrl+S **[ux-2]** |
+| Static status bar labels | Real values from `/api/status`; a real server dot **[ux-2]** |
+| Base data capped at 300 | Paged: Show 300 more **[ux-3]** |
+| Import mod… limited to ~6 MB | **Deferred** (server body limit; the CLI path `npm run pack -- --install` is documented) |
+| No key help while typing GON | **Deferred** — the key schema exists (`editor/component-schema.json`); wiring it into the editor is a follow-up |
+| Many separate checkboxes in Art mode | One View options row + persisted prefs; the Shapes-tab duplicate removed **[ux-4]** |
+| Human look-checks | `editor/t3-looks.json` entries `ux-*` (12) **[ux-7]** |
+
+Also fixed on the way: saving a GON file closed the open scene and room (Data `save()` re-ran `selectMod`) and
+Build SWF closed the open scene (`build()` reloaded the mod's art) — both **[ux-2]**; the Data worked example opened
+on the wrong step **[ux-6]**; the VectorCraft iframe reloaded on every scene switch **[ux-4]**.
+
+## 8. Overhaul 2026-10-22 — the design boards and where each landed
+
+The design canvas "Mewgenics Mod Editor UI" (https://claude.ai/artifact/WmQ9kVrbuCvEc72uNgJuSa) gained a fourth row
+on 2026-10-22 (title note "Overhaul 2026-10-22"); each board is the spec for one PR. Owner decisions the same day:
+artboards first, then code; "Launch dev" becomes a copy-command popover; a stack of seven PRs, each TDD red → green;
+the UI follows the React conventions in `docs/editor-ts-react-plan.md` "UI primitives and conventions" (enforced by
+`editor/test/web-conventions-tests.ts`, whose allow-list shrank from 65 store writes in views to 0 across the stack).
+
+| Board | PR |
+|---|---|
+| `Shell.dc.html` — one command bar for Data \| Art \| Rooms, status bar, dirty guard, Launch… | #142 `feat/ux-2-shell` |
+| `TemplateResult.dc.html` — files, not JSON; the full kind list | #145 `feat/ux-3-data-mode` |
+| `ArtOptions.dc.html` — shape row menu, Import card, View options | #146 `feat/ux-4-art-mode` |
+| `RoomsMode.dc.html` — one palette, real tabs, keyboard painting | #147 `feat/ux-5-rooms-mode` |
+| `Coachmark.dc.html` — anchored tours, the Rooms tour | #148 `feat/ux-6-onboarding` |
+| (no board) primitives, dialogs, shortcuts, toast, boundaries, StrictMode, apiFetch, conventions test | #141 `feat/ux-1-primitives` |
+| (no board) this inventory, counts, T3 looks | `docs/ux-7-inventory` |
+
+Bundle: the eager bundle went from 509 kB to about 318 kB; Art, Rooms and onboarding are lazy chunks.
+
+**[planned]** — unchanged from before: the 3D model card in Data mode (`docs/3d-importer-design.md` §3.3), TTF/OTF
+font import into scene fonts, "Swap rig for <entry>", a particle editor, room / tileset-variant kinds in the Rooms
+New room dialog (the template modal has them), GON key help while typing.
