@@ -781,5 +781,44 @@
       ],
       "additionalProperties": false
     }
+  },
+  {
+    "name": "pack_mod",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "force": {
+          "type": "boolean"
+        },
+        "init": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mod"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "install_mod",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "zip": {
+          "type": "string"
+        },
+        "acceptBuildMismatch": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "zip"
+      ],
+      "additionalProperties": false
+    }
   }
 ]

@@ -33,7 +33,7 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
   const codes = (r: Report): string => r.findings.map((f) => f.code).join(",") || "(none)";
   const only = (r: Report, code: string): Finding[] => r.findings.filter((f) => f.code === code);
   /** exactly `n` findings with `code`; returns the first */
-  const expectCode = (r: Report, code: string, severity: "error" | "warning", n = 1): Finding => {
+  const expectCode = (r: Report, code: string, severity: "error" | "warning" | "info", n = 1): Finding => {
     const hits = only(r, code);
     assert(hits.length === n, `expected ${n} x ${code}, got ${hits.length} (all: ${codes(r)})`);
     for (const h of hits) eq(h.severity, severity, `${code} severity`);
@@ -205,5 +205,31 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     const f = expectCode(v("csv-column-count"), "csv-column-count", "warning");
     eq(f.location?.line, 1);
     assert(/KEY_X.*has 3 columns; expected 12/.test(f.message), f.message);
+  });
+  // ---- mod.json (docs/data-mods.md "Shipping a mod") ----
+  test("validator fixture: clean has a valid mod.json, and mod.json is not read as an overlay (no whole-file-replace for it)", () => {
+    const r = v("clean");
+    eq(only(r, "whole-file-replace").length, 0, codes(r));
+    eq(only(r, "manifest-missing").length, 0, codes(r));
+  });
+  test("validator fixture: manifest-missing is an info (a mod without mod.json still loads; it just cannot be packed)", () => {
+    const r = v("manifest-missing");
+    const f = expectCode(r, "manifest-missing", "info");
+    assert(r.ok && /mod.json/.test(f.message), f.message);
+    eq(f.location?.file, "mods/manifest-missing/mod.json");
+  });
+  test("validator fixture: manifest-invalid is an error naming each bad field (name vs folder, version, gameBuild)", () => {
+    const r = v("manifest-invalid");
+    const f = expectCode(r, "manifest-invalid", "error");
+    assert(!r.ok, "error");
+    assert(/name/.test(f.message) && /version/.test(f.message) && /gameBuild/.test(f.message), f.message);
+  });
+  test("validator fixture: manifest-build-mismatch warns when the installed build is another known build or unknown; never on a match or without an exe", () => {
+    const other = expectCode(v("manifest-build-mismatch", { nativeBuild: { known: true, matched: { steamBuildId: "25200000" } } }), "manifest-build-mismatch", "warning");
+    assert(/25143593/.test(other.message) && /25200000/.test(other.message), other.message);
+    eq(other.location?.file, "mods/manifest-build-mismatch/mod.json");
+    expectCode(v("manifest-build-mismatch", { nativeBuild: { known: false, identity: { timeDateStamp: "0x6b000000", sizeOfImage: "0x01580000" }, matched: null } }), "manifest-build-mismatch", "warning");
+    eq(only(v("manifest-build-mismatch", { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } }), "manifest-build-mismatch").length, 0, "match");
+    eq(only(v("manifest-build-mismatch", { nativeBuild: null }), "manifest-build-mismatch").length, 0, "no exe");
   });
 }

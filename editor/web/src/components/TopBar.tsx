@@ -17,6 +17,8 @@ import {
   openExample,
   openArtExample,
   openConcepts,
+  exportMod,
+  importModFile,
 } from "../actions.ts";
 
 function StatusPill(): React.JSX.Element {
@@ -56,6 +58,23 @@ function ModMenu(): React.JSX.Element {
       <button className="item" onClick={() => openTemplate({ mod: "" })}>
         ＋ New mod…
       </button>
+      <div className="sep" />
+      <button className="item" disabled={!mod} title="Pack this mod into editor/data/dist/<name>-<version>.zip (builds SWFs, validates)" onClick={() => void exportMod()}>
+        ⇩ Export…
+      </button>
+      <label className="item" title="Install a mod zip into mods/<name>/ (checked first; never overwrites)">
+        ⇧ Import mod…
+        <input
+          type="file"
+          accept=".zip,application/zip"
+          style={sx("display:none")}
+          onChange={(e) => {
+            const f = e.currentTarget.files?.[0];
+            e.currentTarget.value = "";
+            if (f) void importModFile(f);
+          }}
+        />
+      </label>
     </div>
   );
 }

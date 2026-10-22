@@ -308,6 +308,73 @@ returns it for the top matches; the web UI's component search shows it when you 
 Data recombines ~1,750 existing C++ behavior components (the keys each one reads: "Component keys" above). A mechanic that no component expresses
 (new status tick logic, new systems, new UI) needs the native layer (`native/`).
 
+## Shipping a mod
+
+A mod folder is all a player needs, but handing one over takes three more things: a manifest that says what it is and
+which game build it was tested on, a zip with the right contents, and install steps. The editor does all three
+(`editor/src/core/mod-manifest.ts`, `pack.ts`, `zip.ts`; Node built-ins only).
+
+**`mods/<name>/mod.json`** — the game never reads it (like `description.json`, a root file no pack file is named
+after); the validator, `pack` and `install` do:
+
+```json
+{
+  "name": "jokers-luck",
+  "version": "0.1.0",
+  "author": "MeyerZon",
+  "description": "A status that rerolls luck every turn.",
+  "gameBuild": "25143593",
+  "native": ["jokers_luck.dll"],
+  "frameworkApi": 4,
+  "license": "MIT",
+  "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
+}
+```
+
+`name` must equal the folder; `version` is semver; `gameBuild` is the **Steam build id** the mod was tested on (the
+`bindings/<id>.json` name, not the version string); `native` lists the mod's own DLLs and then needs `frameworkApi`
+(mewframework's `FW_API_VERSION`); `license` and `attribution` are optional — the attribution line is the
+`ATTRIBUTION.md` ask, suggested, never required. `npm run pack -- <mod> --init` (MCP `pack_mod { init: true }`, the web
+UI offers it) drafts one from `description.json`, the installed build and, for a repo mod with
+`native/mods/<mod>/build.bat`, its DLL name and the framework's API version. Validator findings:
+`manifest-missing` (info — the mod loads, it just cannot be packed), `manifest-invalid` (error, every bad field named),
+`manifest-build-mismatch` (warning — the installed exe is another known build, or one no `bindings/*.json` knows; said
+only when an exe is installed, `check_game_build`'s identity).
+
+**Pack** — `cd editor && npm run pack -- <mod> [--force] [--init] [--out <dir>]`, MCP `pack_mod { mod, force?, init? }`,
+web UI mod menu → *Export…*:
+1. rebuilds every `art/**/*.scene.json` through `build_swf` (so `swfs/` matches the sources);
+2. runs `validate_mod` and **refuses on any error** unless `--force` (warnings pass);
+3. copies each `native` DLL from `native/dist/` (refuses when one is missing, unless `--force`);
+4. writes `editor/data/dist/<name>-<version>.zip` (git-ignored) holding `<name>/` — the mod folder **minus** `tests/`,
+   `art/` (scene sources; the game loads the built `swfs/`), dot-files and editor clutter, plus `native/<dll>` — and at
+   the zip root `README-INSTALL.txt` (where to unzip, the `-modpaths` launch line, the save advice, the Mewjector /
+   mewframework step when there is a native part; CRLF) and `MANIFEST.sha256` (`sha256sum -c` format, every other
+   entry). Entries are timestamped 1980-01-01, so the same mod packs to the same bytes.
+Refusal codes: `mod-missing`, `manifest-missing`, `manifest-invalid`, `swf-build-failed`, `validation-errors`,
+`native-dll-missing`, `out-dir-unsafe` (an output dir under `saves/` or inside the mod).
+
+**Install** — `npm run pack -- --install <zip> [--into <dir>] [--yes]`, MCP `install_mod { zip, acceptBuildMismatch? }`
+(always into `mods/`), web UI → *Import mod…* (zips up to ~6 MB, the `/api` body cap; bigger ones through the CLI).
+Everything is checked before a byte is written, and a refusal writes nothing:
+- size: the zip ≤ 64 MiB, the declared unpacked total ≤ 256 MiB, ≤ 5000 entries; each entry inflates at most to its
+  declared size (a zip bomb stops there) and must match its CRC-32;
+- names: no absolute path, drive letter, backslash, `.`/`..`/empty segment, NUL, symlink entry, `saves` segment, or two
+  names that differ only by case;
+- layout: exactly one top folder `<name>/` holding a valid `mod.json` whose `name` is that folder, and nothing else at the
+  root but `README-INSTALL.txt` / `MANIFEST.sha256`; when `MANIFEST.sha256` is present every file must be listed and match;
+- the destination `<into>/<name>/` must not exist (install never overwrites; remove or rename the old version first),
+  `<into>` must not be under `saves/` or the game folder.
+Then the game build: `mod.json` `gameBuild` vs the installed exe. On a mismatch install returns
+`{ verdict: "build-mismatch", prompt }` and writes nothing — the CLI asks `[y/N]` on a terminal (or needs `--yes`, exit
+3 otherwise), the web UI shows a confirm, an MCP caller shows the prompt to the user and calls again with
+`acceptBuildMismatch: true`. Files are written into a temp sibling and renamed into place; the installed mod is then
+validated and the report returned. `README-INSTALL.txt` and `MANIFEST.sha256` stay out of the mod folder.
+
+**Saves.** The generated README tells players to back up the saves folder and to pass `-savesuffix`, and says plainly
+that the suffix is not a protection on the builds examined (`docs/engine-map.md` "Save safety": it never reaches a save
+path); the framework does need it to activate.
+
 ## Test-only overlays
 
 `mods/_autoplay/` is not content: its one overlay, `data/characters/player_cat.gon.merge`, gives `PlayerCat` the

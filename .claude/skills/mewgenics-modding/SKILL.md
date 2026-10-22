@@ -50,6 +50,13 @@ Tools, by purpose:
   from `registered-names.json` (seeded with `JokersLuck`).
 - `new_from_template` — scaffold an ability/passive/item/status-data overlay
   plus matching localization rows.
+- `pack_mod` — ship a mod: needs `mods/<mod>/mod.json` (`init: true` drafts
+  it), rebuilds the SWFs, refuses on validation errors unless `force`, writes
+  `editor/data/dist/<name>-<version>.zip` (+ `README-INSTALL.txt`,
+  `MANIFEST.sha256`).
+- `install_mod` — install a mod zip into `mods/<name>/` after checking it; a
+  `build-mismatch` verdict carries a `prompt` for the user — call again with
+  `acceptBuildMismatch: true` only if they agree.
 
 A web UI (`node editor/web/server.ts`, opened in a browser) browses base data
 and components and shows inline validation and merge-preview. It is for a human;
@@ -218,6 +225,14 @@ Not for `_CAT` characters.
 5. **Human play-check, always the last step of a mod:** the PR's T3 list names
    exactly what the owner should play and judge (the ability in a fight, feel,
    pacing, balance). The owner's verdict closes the loop; nothing else needs them.
+6. **Ship it** (when the owner wants it shared): give the mod a `mod.json`
+   (`name` = folder, semver `version`, `author`, `description`, `gameBuild` =
+   the Steam build id it was tested on, `native` + `frameworkApi` for a mod
+   with DLLs, `license`; the attribution line is suggested, never required),
+   then `pack_mod` (or `npm run pack -- <mod>`). Validator codes:
+   `manifest-missing` (info), `manifest-invalid` (error),
+   `manifest-build-mismatch` (warning). Full rules: `docs/data-mods.md`
+   "Shipping a mod".
 
 ## References
 

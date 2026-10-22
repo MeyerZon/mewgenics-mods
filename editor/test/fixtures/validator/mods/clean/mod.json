@@ -1,0 +1,8 @@
+{
+  "name": "clean",
+  "version": "0.1.0",
+  "author": "fixture",
+  "description": "validator fixture: triggers clean",
+  "gameBuild": "25143593",
+  "license": "MIT"
+}

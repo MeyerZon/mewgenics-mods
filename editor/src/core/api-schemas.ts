@@ -89,6 +89,11 @@ export const PrepareSwfGateBody = z.object({
   variant: SwfGateVariant.default("flat"),
 });
 
+/** Export… (docs/data-mods.md "Shipping a mod"): pack mods/<mod>/ into editor/data/dist/. */
+export const ModPackBody = z.object({ mod: str, force: z.boolean().optional(), init: z.boolean().optional() });
+/** Import mod…: the zip's bytes; always installs into the repo's mods/ (strict: no `into`). */
+export const ModInstallBody = z.strictObject({ base64: str, fileName: str.optional(), acceptBuildMismatch: z.boolean().optional() });
+
 /** Route → body schema. Keys are the exact POST paths web/server serves. */
 export const API_BODY = {
   "/api/write": WriteBody,
@@ -103,6 +108,8 @@ export const API_BODY = {
   "/api/art/build": ArtBuildBody,
   "/api/art/asset": ArtAssetBody,
   "/api/art/prepare-swf-gate": PrepareSwfGateBody,
+  "/api/mod/pack": ModPackBody,
+  "/api/mod/install": ModInstallBody,
 } as const;
 
 export type PostRoute = keyof typeof API_BODY;

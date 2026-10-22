@@ -33,6 +33,7 @@ import type { LocKeySource } from "../art/text.ts";
 import { identifyExe } from "../bindings/check.ts";
 import { listManifests } from "../bindings/manifest.ts";
 import { locateGameDir } from "../ingame/launch.ts";
+import { MOD_MANIFEST_FILE, readModManifest, compareBuild, describeMismatch } from "../mod-manifest.ts";
 import type { VObject, VNode } from "../gon/types.ts";
 import type { Report, SourceLocation } from "./result.ts";
 import type { OverlayMode, FileType } from "../overlay/overlay.ts";
@@ -116,7 +117,7 @@ function collectOverlays(modDir: string, override?: TextOverride): OverlayFile[]
   const texts = new Map<string, string>();
   for (const f of files) {
     // art/*.scene.json is not a pack file but is validated as a scene (validateSceneFile); everything else off-pack is skipped
-    if (f.relPath === "description.json" || (!isPackPath(f.relPath) && !f.relPath.endsWith(SCENE_SUFFIX))) continue;
+    if (f.relPath === "description.json" || f.relPath === MOD_MANIFEST_FILE || (!isPackPath(f.relPath) && !f.relPath.endsWith(SCENE_SUFFIX))) continue;
     try {
       texts.set(f.relPath, readFileSync(f.abs, "utf8"));
     } catch {
@@ -223,6 +224,8 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     return rb.build();
   }
   const overlays = collectOverlays(modDir, override);
+  const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
+  checkManifest(modDir, modName, nativeBuild, rb);
   if (overlays.length === 0) {
     rb.warn("mod-empty", `mods/${modName} has no overlay files`);
   }
@@ -235,7 +238,6 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   });
   const local = modLocalNames(overlays);
   const loc = loadLocalization(root);
-  const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
   const componentSchema = opts.componentSchema !== undefined ? opts.componentSchema : loadComponentSchema();
   if (!sets.componentListKnown) {
     // Without a list every component would be "unknown": say once why they are not checked instead.
@@ -273,6 +275,29 @@ function validateSceneFile(o: OverlayFile, rb: ReportBuilder, file: string, locK
     return;
   }
   for (const f of validateScene(json, { locKey }).findings) rb.add(finding(f.severity, f.code, f.message, f.path ? { file, path: f.path } : { file }));
+}
+
+/**
+ * mods/<name>/mod.json (docs/data-mods.md "Shipping a mod"): manifest-missing (info: the mod still loads, it just
+ * cannot be packed), manifest-invalid (error, every bad field named), manifest-build-mismatch (warning: the installed
+ * exe is not the build the mod says it was tested on; nothing is said without an exe).
+ */
+function checkManifest(modDir: string, modName: string, nativeBuild: NativeBuild | null, rb: ReportBuilder): void {
+  const file = `mods/${modName}/${MOD_MANIFEST_FILE}`;
+  const m = readModManifest(modDir, modName);
+  if (!m.present) {
+    rb.info("manifest-missing", `no ${MOD_MANIFEST_FILE}: the mod loads, but packing it for others (npm run pack -- ${modName}, MCP pack_mod) needs one with name, version, author, description and gameBuild (--init / init: true drafts it)`, { file });
+    return;
+  }
+  if (!m.ok) {
+    rb.error("manifest-invalid", `${MOD_MANIFEST_FILE}: ${m.errors.join("; ")}`, { file });
+    return;
+  }
+  const c = compareBuild(m.manifest.gameBuild, nativeBuild);
+  if (c.status === "mismatch") {
+    const native = m.manifest.native?.length ? " (its native DLLs only run on a build the framework knows)" : "";
+    rb.warn("manifest-build-mismatch", `${describeMismatch(c)}; re-test the mod on this build and update gameBuild${native}`, { file, path: "gameBuild" });
+  }
 }
 
 /** @param nativeBuild installed-exe identity; null = no exe */
