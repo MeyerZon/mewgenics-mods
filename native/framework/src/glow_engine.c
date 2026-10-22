@@ -13,10 +13,16 @@
  * We ride that mask instead of building our own: every frame, after the game's own `TacticsTest::LateRender`
  * (vftable slot VT_TT_LATERENDER) has run, the engine (1) puts every registered unit into layer 0x18 with the game's
  * `vec_u32_AddUnique` — re-done every frame because `StatusMenu::update` strips 0x18 from the unit the hover just
- * left — (2) keeps ONE mod-owned composite (material "fw_unit_glow" / mods/fw-glow/shaders/fw_unit_glow.shader: the
- * band is computed from the mask's alpha in the shader itself, no game pass needed) on the main camera at layer 0x1a
- * with `framebuf` = the mask camera's texture and `glow_color` = the registered colour, re-finding its Pass* in the
- * camera's per-layer vector each frame (passes die with the camera when the fight scene ends), and (3) keeps the
+ * left — (2) keeps mod-owned composites (mods/fw-glow/shaders/fw_unit_glow.shader: the band is computed from the
+ * mask's alpha in the shader itself, no game pass needed) on the main camera at layer 0x1a with `framebuf` = the mask
+ * camera's texture, re-finding their Pass* in the camera's per-layer vector each frame (passes die with the camera
+ * when the fight scene ends): v2 (per-unit colours) groups the units by colour, one material per colour group
+ * ("fw_unit_glow", "fw_unit_glow_1", … — a Material holds one `glow_color` when the passes run, so a colour needs its
+ * own), and draws ONE full-screen pass when every unit shares a colour (exactly v1) or, with several colours, one pass
+ * per unit with its group's material, scissored (pass rect B) to the unit's screen rect computed the way LateRender
+ * computes the hovered unit's (clip bounds -> clip matrix -> Renderer_GetScreenMatrix -> inverse of the mask camera's
+ * Position_GetViewMatrix x zoom -> the 1280x720 canvas; fw_glow_unit_rect) — the mask itself carries no unit identity,
+ * so the scissor is what keeps one unit's colour off its neighbours; and (3) keeps the
  * game's white composite_outlines off while units are registered (its predicate is "the mask had content", so it
  * would wash every glowing unit's body white). Running after the original is what makes our writes win; the hook
  * therefore wraps the function rather than replacing it.
@@ -27,8 +33,9 @@
  * refuses the hook unless `TacticsTest_vftable[VT_TT_LATERENDER]` is the signature-resolved address (the vtable
  * binding is the second witness of the hook target).
  *
- * v1 limits (documented in engine-map): one composite, hence one shared colour (the first registered unit's); combat
- * scenes only (TacticsTest); the rim shader ships as data (mods/fw-glow must be on the mod path, else the material
+ * Limits (documented in engine-map): with several colours, units whose screen rects overlap share pixels of both
+ * rims inside the overlap, and a unit whose rect cannot be computed (no clip of the two kinds LateRender takes) loses
+ * its rim rather than painting it on everyone; combat scenes only (TacticsTest); the rim shader ships as data (mods/fw-glow must be on the mod path, else the material
  * has no shader and nothing is drawn); the game's white hover rim is off while any unit glows; registrations
  * are per fight scene (a new TacticsTest resets the registry) and a unit whose pool slot was reused is dropped
  * (generation check, the game's own idiom); main thread only (the harness and turn callbacks are).
@@ -50,59 +57,94 @@ typedef void  (*fn_SetUniformVec4)(void *mat, MsvcString *name, float x, float y
 typedef void  (*fn_SetUniformFloat)(void *mat, MsvcString *name, float v);
 typedef void  (*fn_SetTexture)(void *mat, MsvcString *name, void *tex, int slot);
 typedef void *(*fn_AddPass)(void *camera, void *material, int layer);
+typedef float *(*fn_GetScreenMatrix)(void *renderer, float out[16]);
+typedef float *(*fn_GetViewMatrix)(void *position, float out[16], double interp);
 
-#define GLOW_MATERIAL "fw_unit_glow"           /* ours, so the game's composite_outlines (and its hover rim) keep their colour */
 #define GLOW_SHADER   "fw_unit_glow.shader"   /* ours (mods/fw-glow/shaders/): the rim computed from the mask's alpha, no blur chain needed */
 #define GLOW_RADIUS   12.0f                    /* band width in mask texels (the mask texture is window-sized at scale 1.0) */
+#define GLOW_MARGIN   20.0                     /* canvas px (1280x720) added around a unit's rect: the band (GLOW_RADIUS mask texels, <= 1 canvas px each from 1280 wide up) plus slack */
 
 static fn_LateRender g_orig;
 static FwGlowRegistry g_reg;
 static void *g_tt;              /* the TacticsTest of the last frame: another one = a new fight scene */
-static void *g_mat;             /* fw_unit_glow, created once; the ShaderManager keeps it for the process lifetime */
-static void *g_matTexture;      /* the mask texture framebuf is currently bound to (per fight) */
-static float g_matColour[4];
-static int g_matColourSet;
+/* one material per colour slot (fw_glow_material_name: "fw_unit_glow", "fw_unit_glow_1", …), created on first need;
+ * the ShaderManager keeps them for the process lifetime. A Material has one value per uniform when the passes run,
+ * so a colour needs its own material. */
+static void *g_mats[FW_GLOW_MAX_GROUPS];
+static int g_nmats;
+static void *g_matTexture[FW_GLOW_MAX_GROUPS];   /* the mask texture each material's framebuf is bound to (per fight) */
+static float g_matColour[FW_GLOW_MAX_GROUPS][4];
+static int g_matColourSet[FW_GLOW_MAX_GROUPS];
 static int g_matFailed;         /* material creation failed once: say so once, never retry every frame */
+static int g_rectFailLogged;    /* a unit's screen rect could not be computed: said once */
 static int g_gameCompositeOff;  /* we disabled the game's composite_outlines pass; restore it when the last unit goes */
 
 static int make_str(MsvcString *s, const char *text) {
     return fw_msvc_init(s, text, (FwStringAlloc)g_sym[FW_SYM_string_Allocate]);
 }
 
-static int ensure_material(void) {
-    if (g_mat) return 1;
-    if (g_matFailed) return 0;
-    uintptr_t slot = fw_resolve_data_addr(1, g_build, g_base, FW_DATA_ShaderManager);
-    void *mgr = slot ? *(void **)slot : NULL;
-    MsvcString name, file, uni;
-    if (!mgr || !make_str(&name, GLOW_MATERIAL) || !make_str(&file, GLOW_SHADER)) {
-        fw_log("glow: no ShaderManager (%p) or no string memory; glow disabled", mgr);
-        g_matFailed = 1;
-        return 0;
+/* materials for slots 0..k, in order */
+static int ensure_material(int k) {
+    while (g_nmats <= k) {
+        if (g_matFailed) return 0;
+        char nameBuf[32];
+        const char *matName = fw_glow_material_name(g_nmats, nameBuf, sizeof nameBuf);
+        uintptr_t slot = fw_resolve_data_addr(1, g_build, g_base, FW_DATA_ShaderManager);
+        void *mgr = slot ? *(void **)slot : NULL;
+        MsvcString name, file, uni;
+        if (!matName || !mgr || !make_str(&name, matName) || !make_str(&file, GLOW_SHADER)) {
+            fw_log("glow: no ShaderManager (%p) or no string memory; glow disabled", mgr);
+            g_matFailed = 1;
+            return 0;
+        }
+        void *mat = ((fn_GetOrCreateMaterial)g_sym[FW_SYM_ShaderManager_GetOrCreateMaterial])(mgr, &name, &file);   /* destroys both strings */
+        if (!mat) { fw_log("glow: GetOrCreateMaterial(%s, %s) returned null; glow disabled", matName, GLOW_SHADER); g_matFailed = 1; return 0; }
+        make_str(&uni, "glow_radius");
+        ((fn_SetUniformFloat)g_sym[FW_SYM_Material_SetUniformFloat])(mat, &uni, GLOW_RADIUS);
+        g_mats[g_nmats] = mat;
+        g_matTexture[g_nmats] = NULL;
+        g_matColourSet[g_nmats] = 0;
+        fw_log("glow: material %s (%s) = %p, glow_radius %.0f", matName, GLOW_SHADER, mat, (double)GLOW_RADIUS);
+        g_nmats++;
     }
-    g_mat = ((fn_GetOrCreateMaterial)g_sym[FW_SYM_ShaderManager_GetOrCreateMaterial])(mgr, &name, &file);   /* destroys both strings */
-    if (!g_mat) { fw_log("glow: GetOrCreateMaterial(%s, %s) returned null; glow disabled", GLOW_MATERIAL, GLOW_SHADER); g_matFailed = 1; return 0; }
-    make_str(&uni, "glow_radius");
-    ((fn_SetUniformFloat)g_sym[FW_SYM_Material_SetUniformFloat])(g_mat, &uni, GLOW_RADIUS);
-    fw_log("glow: material %s (%s) = %p, glow_radius %.0f", GLOW_MATERIAL, GLOW_SHADER, g_mat, (double)GLOW_RADIUS);
     return 1;
 }
 
-static void bind_mask_texture(void *tex) {
+static void bind_mask_texture(int k, void *tex) {
     MsvcString uni;
     if (!tex) return;
     make_str(&uni, "framebuf");
-    ((fn_SetTexture)g_sym[FW_SYM_Material_SetTexture])(g_mat, &uni, tex, CONST_GLOW_FRAMEBUF_SLOT);
-    g_matTexture = tex;
+    ((fn_SetTexture)g_sym[FW_SYM_Material_SetTexture])(g_mats[k], &uni, tex, CONST_GLOW_FRAMEBUF_SLOT);
+    g_matTexture[k] = tex;
 }
 
-static void set_colour(const float c[4]) {
+static void set_colour(int k, const float c[4]) {
     MsvcString uni;
     make_str(&uni, "glow_color");
-    ((fn_SetUniformVec4)g_sym[FW_SYM_Material_SetUniformVec4])(g_mat, &uni, c[0], c[1], c[2], c[3]);
-    memcpy(g_matColour, c, sizeof g_matColour);
-    g_matColourSet = 1;
-    fw_log("glow: glow_color = %.2f %.2f %.2f %.2f", (double)c[0], (double)c[1], (double)c[2], (double)c[3]);
+    ((fn_SetUniformVec4)g_sym[FW_SYM_Material_SetUniformVec4])(g_mats[k], &uni, c[0], c[1], c[2], c[3]);
+    memcpy(g_matColour[k], c, sizeof g_matColour[k]);
+    g_matColourSet[k] = 1;
+    fw_log("glow: slot %d glow_color = %.2f %.2f %.2f %.2f", k, (double)c[0], (double)c[1], (double)c[2], (double)c[3]);
+}
+
+/* the unit's screen rect exactly as LateRender computes the hovered unit's (fw_glow_unit_rect: 1 ok, -1 off screen, 0 failed) */
+static int unit_rect(void *tt, void *character, FwGlowRect *out) {
+    void *rnd = fw_glow_renderer(character);
+    void *clip = fw_glow_unit_clip(rnd);
+    void *maskCam = fw_glow_mask_camera(tt);
+    void *pos = maskCam ? fw_glow_camera_position(maskCam) : NULL;
+    if (!clip || !pos) return 0;
+    float raw[4], screen[16], view[16];
+    fw_glow_clip_raw_bounds(clip, raw);
+    ((fn_GetScreenMatrix)g_sym[FW_SYM_Renderer_GetScreenMatrix])(rnd, screen);
+    ((fn_GetViewMatrix)g_sym[FW_SYM_Position_GetViewMatrix])(pos, view, fw_glow_camera_interp(maskCam));
+    return fw_glow_unit_rect(raw, fw_glow_clip_matrix(clip), screen, view, fw_glow_camera_zoom(maskCam), fw_glow_camera_zoom_y(maskCam), GLOW_MARGIN, out);
+}
+
+static void disable_our_passes(void *mainCam) {
+    void *passes[FW_GLOW_MAX_UNITS];
+    int n = fw_glow_collect_passes(mainCam, CONST_COMPOSITE_LAYER, g_mats, g_nmats, passes, FW_GLOW_MAX_UNITS);
+    for (int i = 0; i < n; i++) fw_glow_pass_force(passes[i], 0, 0);
 }
 
 /* the per-frame plan, after the game's LateRender */
@@ -110,16 +152,16 @@ static void glow_frame(void *tt) {
     if (tt != g_tt) {
         if (g_tt) { fw_log("glow: new fight scene (TacticsTest %p -> %p): %d registration(s) dropped", g_tt, tt, g_reg.count); fw_glow_reset(&g_reg); }
         g_tt = tt;
-        g_matTexture = NULL;   /* a new scene has new cameras: re-bind framebuf when our pass is re-added */
+        for (int k = 0; k < FW_GLOW_MAX_GROUPS; k++) g_matTexture[k] = NULL;   /* a new scene has new cameras: re-bind framebuf */
     }
     int dropped = fw_glow_prune(&g_reg);
     if (dropped) fw_log("glow: %d unit(s) dropped (pool generation moved)", dropped);
-    FwGlowFrame f;
+    static FwGlowFrame f;   /* ~1.4 KB: kept off the game thread's stack */
     fw_glow_frame(&g_reg, &f);
     void *mainCam = fw_glow_main_camera(tt), *maskCam = fw_glow_mask_camera(tt);
     if (!mainCam || !maskCam) return;
     if (!f.active) {
-        if (g_mat) fw_glow_pass_force(fw_glow_find_pass(mainCam, CONST_COMPOSITE_LAYER, g_mat), 0, 0);
+        if (g_nmats) disable_our_passes(mainCam);
         if (g_gameCompositeOff) { fw_glow_pass_force(fw_glow_composite_pass(tt), 1, 0); g_gameCompositeOff = 0; }
         return;
     }
@@ -134,22 +176,35 @@ static void glow_frame(void *tt) {
         void *rnd = fw_glow_renderer(g_reg.units[i].character);
         if (rnd && !fw_glow_layers_has(rnd, layer)) ((fn_AddUnique)g_sym[FW_SYM_vec_u32_AddUnique])(fw_glow_extra_layers(rnd), &layer);
     }
-    /* 2. our composite on the main camera, reading the mask camera's texture */
-    if (!ensure_material()) return;
+    /* 2. one material per colour group, reading the mask camera's texture, with the group's colour */
+    if (!ensure_material(f.groups.count - 1)) return;
     void *tex = fw_glow_camera_texture(maskCam);
-    void *pass = fw_glow_find_pass(mainCam, CONST_COMPOSITE_LAYER, g_mat);
-    if (!pass) {
-        pass = ((fn_AddPass)g_sym[FW_SYM_Camera_AddPostProcessPass])(mainCam, g_mat, CONST_COMPOSITE_LAYER);
-        if (!pass) { fw_log("glow: AddPostProcessPass failed"); return; }
-        fw_glow_pass_adopt(pass);
-        bind_mask_texture(tex);
-        fw_log("glow: pass %p added on camera %p at layer 0x%x, framebuf = mask texture %p (slot %d)", pass, mainCam, CONST_COMPOSITE_LAYER, tex, CONST_GLOW_FRAMEBUF_SLOT);
-    } else if (tex != g_matTexture) {
-        bind_mask_texture(tex);
+    for (int k = 0; k < f.groups.count; k++) {
+        if (tex != g_matTexture[k]) bind_mask_texture(k, tex);
+        if (!g_matColourSet[k] || !fw_glow_colour_eq(g_matColour[k], f.groups.g[k].colour)) set_colour(k, f.groups.g[k].colour);
     }
-    fw_glow_pass_force(pass, 1, 0);
-    /* 3. the shared colour (the band itself is the shader's: no game pass is touched) */
-    if (!g_matColourSet || !fw_glow_colour_eq(g_matColour, f.colour)) set_colour(f.colour);
+    /* 3. one composite pass per draw on the main camera (re-found every frame: passes die with the camera): one colour
+     *    = one full-screen pass (v1), several = one pass per unit scissored to its screen rect */
+    void *passes[FW_GLOW_MAX_UNITS];
+    int n = fw_glow_collect_passes(mainCam, CONST_COMPOSITE_LAYER, g_mats, g_nmats, passes, FW_GLOW_MAX_UNITS);
+    while (n < f.ndraws) {
+        void *pass = ((fn_AddPass)g_sym[FW_SYM_Camera_AddPostProcessPass])(mainCam, g_mats[f.draws[n].group], CONST_COMPOSITE_LAYER);
+        if (!pass) { fw_log("glow: AddPostProcessPass failed"); break; }
+        fw_glow_pass_adopt(pass);
+        fw_log("glow: pass %p added on camera %p at layer 0x%x (%d of ours), framebuf = mask texture %p (slot %d)", pass, mainCam, CONST_COMPOSITE_LAYER, n + 1, tex, CONST_GLOW_FRAMEBUF_SLOT);
+        passes[n++] = pass;
+    }
+    for (int i = 0; i < n; i++) {
+        if (i >= f.ndraws) { fw_glow_pass_force(passes[i], 0, 0); continue; }
+        const FwGlowDraw *d = &f.draws[i];
+        fw_glow_pass_set_material(passes[i], g_mats[d->group]);
+        if (d->unit < 0) { fw_glow_pass_set_rect(passes[i], NULL); fw_glow_pass_force(passes[i], 1, 0); continue; }
+        FwGlowRect r;
+        int rc = unit_rect(tt, g_reg.units[d->unit].character, &r);
+        if (rc == 0 && !g_rectFailLogged) { fw_log("glow: no screen rect for unit %p (no clip of kind %d/%d, or a singular view); its rim is skipped", g_reg.units[d->unit].character, CONST_CLIP_KIND_A, CONST_CLIP_KIND_B); g_rectFailLogged = 1; }
+        if (rc == 1) fw_glow_pass_set_rect(passes[i], &r);
+        fw_glow_pass_force(passes[i], rc == 1, 0);   /* off screen or no rect: this pass draws nothing (never another unit's rim in this colour) */
+    }
 }
 
 static void hook_TacticsTest_LateRender(void *tt) {

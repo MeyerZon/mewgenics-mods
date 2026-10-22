@@ -7,9 +7,11 @@
  * MASK by its own renderer when the renderer's extra-layer vector (+OFF_RND_EXTRA_LAYERS) lists layer
  * CONST_MASK_LAYER; the mask camera (TacticsTest+OFF_TT_MASK_CAMERA) renders that layer (the sprite multiplied by
  * white: rgb = its luminance, alpha = its coverage) into its texture (+OFF_CAM_RTT_TEXTURE), and composite passes on
- * the main camera (+OFF_TT_MAIN_CAMERA, layer CONST_COMPOSITE_LAYER) read it. The engine owns one such composite
- * (material fw_unit_glow / mods/fw-glow/shaders/fw_unit_glow.shader, which computes the band from the mask's alpha
- * by itself), re-finds its pass in the camera's per-layer vector every frame (passes die with the camera) and keeps
+ * the main camera (+OFF_TT_MAIN_CAMERA, layer CONST_COMPOSITE_LAYER) read it. The engine owns such composites
+ * (materials fw_unit_glow[_<k>] / mods/fw-glow/shaders/fw_unit_glow.shader, which computes the band from the mask's
+ * alpha by itself; v2: one material per colour group, one pass per draw of fw_glow_plan, scissored to a unit's screen
+ * rect when colours differ), re-finds its passes in the camera's per-layer vector every frame (they die with the
+ * camera) and keeps
  * the game's own white composite (TacticsTest+OFF_TT_COMPOSITE_PASS) off while units glow. The game's blur chain
  * (+OFF_TT_BLUR_PASS) is only read for tests. Every field is reached through the generated offsets.h macros. */
 #pragma once
@@ -81,7 +83,11 @@ void *fw_glow_unit_clip(const void *renderer);
 void  fw_glow_clip_raw_bounds(void *clip, float out[4]);                        /* vtable slot VT_CLIP_BOUNDS */
 const float *fw_glow_clip_matrix(const void *clip);                             /* clip+OFF_CLIP_MATRIX, 6 floats */
 static inline void  *fw_glow_camera_position(const void *camera) { return *(void *const *)((const char *)camera + OFF_CAM_POSITION); }
-static inline double fw_glow_camera_interp(const void *camera) { return *(const double *)(*(const char *const *)((const char *)camera + OFF_COMPONENT_SCENEMANAGER) + OFF_SCENEMANAGER_INTERP); }
+/* the scene manager's frame interpolation factor (Component+OFF_COMPONENT_SCENEMANAGER -> +OFF_SCENEMANAGER_INTERP); 1.0 without one */
+static inline double fw_glow_camera_interp(const void *camera) {
+    const char *sm = *(const char *const *)((const char *)camera + OFF_COMPONENT_SCENEMANAGER);
+    return sm ? *(const double *)(sm + OFF_SCENEMANAGER_INTERP) : 1.0;
+}
 static inline double fw_glow_camera_zoom(const void *camera) { return *(const double *)((const char *)camera + OFF_CAM_ZOOM); }
 static inline int    fw_glow_camera_zoom_y(const void *camera) { return *(const int *)((const char *)camera + OFF_CAM_ZOOM_Y); }
 

@@ -14,7 +14,7 @@
 /* fake sizes are test choices, not game facts; the asserts keep them above every offset the rules touch */
 #define FAKE_CHAR_BYTES 0x60
 #define FAKE_RND_BYTES  0x90
-#define FAKE_CAM_BYTES  0xc0
+#define FAKE_CAM_BYTES  0x180
 #define FAKE_TT_BYTES   0xa0
 #define FAKE_PASS_BYTES 0xa0
 #define FAKE_LAYERS     0x30
@@ -425,6 +425,24 @@ TEST(v2_pass_writes_material_swap_and_scissor_rect_b_null_rect_is_full_screen) {
     fw_glow_pass_set_material(NULL, &m1);                                 /* NULL-safe */
     fw_glow_pass_set_rect(NULL, &r);
     CHECK(fw_glow_pass_first_material(NULL) == NULL);
+}
+
+_Static_assert(OFF_CAM_ZOOM_Y + 4 <= FAKE_CAM_BYTES && OFF_CAM_POSITION + 8 <= FAKE_CAM_BYTES, "camera fake too small for the view fields");
+
+TEST(v2_camera_view_accessors_position_zoom_zoomY_and_the_scene_managers_interpolation) {
+    FakeCamera cam; void *c = make_camera(&cam, NULL);
+    int pos = 0;
+    unsigned char sm[OFF_SCENEMANAGER_INTERP + 8]; memset(sm, 0, sizeof sm);
+    *(double *)(sm + OFF_SCENEMANAGER_INTERP) = 0.25;
+    *(void **)(cam.bytes + OFF_CAM_POSITION) = &pos;
+    *(double *)(cam.bytes + OFF_CAM_ZOOM) = 1.5;
+    *(int *)(cam.bytes + OFF_CAM_ZOOM_Y) = -1;
+    CHECK(fw_glow_camera_position(c) == &pos);
+    CHECK(fw_glow_camera_zoom(c) == 1.5);
+    CHECK_EQ(fw_glow_camera_zoom_y(c), -1);
+    CHECK(fw_glow_camera_interp(c) == 1.0);                               /* no scene manager: no interpolation */
+    *(void **)(cam.bytes + OFF_COMPONENT_SCENEMANAGER) = sm;
+    CHECK(fw_glow_camera_interp(c) == 0.25);
 }
 
 int main(void) { return MT_RUN_ALL(); }
