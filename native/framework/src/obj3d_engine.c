@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include "fw_unit_model.h"
 #include "fw_unit_face.h"     /* M3: the model turns with Character::Face */
+#include "fw_unit_palette.h"  /* M3 pal: a cat's palette row for `palette true` */
 #include "fw_glow_rules.h"    /* fw_glow_renderer */
 #include "fw_obs3d_rules.h"   /* fw_obs3d_renderer_position / _position_xz / _is_masked_renderer_iso */
 #include "fw_model_names.h"   /* M3 "@Name": data/models.gon */
@@ -124,7 +125,7 @@ static FwUnitSeen g_seen;
 static int g_atLogged;
 #define UNIT_LOG_FACE_MAX 64      /* face lines per process */
 static int g_faceLogged;
-typedef struct UnitTrack { int handle; int logged; double last[2]; char entry[48]; int faceLogged; double faceYaw; } UnitTrack;
+typedef struct UnitTrack { int handle; int logged; double last[2]; char entry[48]; int faceLogged; double faceYaw; int palLogged, palRow; } UnitTrack;
 static UnitTrack g_track[FW_OBJ3D_MAX];
 static int g_ntrack;
 
@@ -235,12 +236,38 @@ static void discover(void *tc) {
     }
 }
 
+/* M3 pal: a GON `palette true` object takes its unit's palette row every frame (a cat's CatParts row; OverridePalette /
+ * the Jester cycle change it live), logged when it changes (fw_unit_palette.h) */
+static void unit_palette(const Fw3dObject *o) {
+    FwUnitPalette p;
+    fw_unit_palette_read(guarded_read, NULL, o->character, &p);
+    int row = fw_unit_model_palette(o->usePalette, o->palette, &p);
+    if (row != o->palette) {
+        char tex[FW_OBJ3D_MODEL_MAX];
+        memcpy(tex, o->texture, sizeof tex);
+        fw_obj3d_set_material(reg(), o->handle, tex, row);
+    }
+    for (int k = 0; k < g_ntrack; k++) {
+        UnitTrack *t = &g_track[k];
+        if (t->handle != o->handle) continue;
+        if (!t->palLogged || t->palRow != row) {
+            char line[256];
+            fw_unit_fmt_palette(line, sizeof line, t->entry, o->handle, &p);
+            fw_log("%s", line);
+            t->palLogged = 1;
+            t->palRow = row;
+        }
+        break;
+    }
+}
+
 static void follow(void) {
     void *getScreen = (void *)g_sym[FW_SYM_Renderer_GetScreenMatrix];
     uintptr_t vft = g_base + g_build->rva_MaskedRendererIso_vftable;
     for (int i = 0; i < fw_obj3d_count(reg()); i++) {
         const Fw3dObject *o = fw_obj3d_at(reg(), i);
         if (!o || o->byTile || !o->fromGon || !o->character) continue;
+        if (o->usePalette == 1) unit_palette(o);
         void *rnd = fw_glow_renderer(o->character);
         void *pos = rnd ? fw_obs3d_renderer_position(rnd) : NULL;
         if (!pos) continue;
