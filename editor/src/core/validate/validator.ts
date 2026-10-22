@@ -7,6 +7,8 @@
 //   3. Overlay-target existence - .merge/.patch target existing paths; .append
 //      adds non-colliding keys; positional CSV .merge is flagged fragile.
 //   4. (Merge preview is provided separately by preview-merge.ts.)
+//   5. Mod-shipped shaders (shaders/*.shader) - the game's .shader dialect (shader/dialect.ts): #version first,
+//      the vert()/frag() entry points and COMPILING_* guards, #includes that resolve, uniforms native code sets.
 //
 // Findings are returned as a tagged Report (ok/warning/error with location).
 
@@ -26,6 +28,7 @@ import { ReportBuilder } from "./result.ts";
 import { identifyExe } from "../bindings/check.ts";
 import { listManifests } from "../bindings/manifest.ts";
 import { locateGameDir } from "../ingame/launch.ts";
+import { checkShaderSource, includesOf, EXPECTED_UNIFORMS } from "../shader/dialect.ts";
 import type { VObject, VNode } from "../gon/types.ts";
 import type { Report, SourceLocation } from "./result.ts";
 import type { OverlayMode, FileType } from "../overlay/overlay.ts";
@@ -185,6 +188,8 @@ export interface ValidateOptions {
   components?: Iterable<string>;
   /** native-registered names (tests/fixtures); default editor/registered-names.json */
   registeredNames?: Iterable<string>;
+  /** the base shaders dir an #include resolves against (tests/fixtures); default the pack's shaders/ next to extractedData */
+  baseShaderDir?: string;
 }
 
 /**
@@ -222,9 +227,25 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   // Union of localization keys available: base + mod-added.
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
 
+  // shaders/*.shader: a file the game compiles by name (ShaderManager_GetOrCreateMaterial), not a data overlay
+  const isShader = (o: OverlayFile): boolean => /^shaders\/[^/]+\.shader$/.test(o.relPath);
+  const shaders = overlays.filter(isShader);
+  const baseShaderDir = opts.baseShaderDir ?? packPath("shaders", root);
+  const modShaderNames = new Set(shaders.map((o) => o.relPath.slice("shaders/".length)));
+  const included = new Set<string>();
+  for (const o of shaders) for (const inc of includesOf(o.text)) included.add(inc.name);
+  const resolveInclude = (name: string): boolean | null =>
+    modShaderNames.has(name) ? true : existsSync(baseShaderDir) ? existsSync(join(baseShaderDir, name)) : null;
+
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
-    if (o.fileType === "gon") {
+    if (isShader(o)) {
+      const name = o.relPath.slice("shaders/".length);
+      for (const f of checkShaderSource(o.text, { file: fileLoc.file, library: included.has(name), resolveInclude, requiredUniforms: EXPECTED_UNIFORMS[name] })) rb.add(f);
+      if (existsSync(join(baseShaderDir, name))) {
+        rb.warn("whole-file-replace", `${o.relPath} replaces the game's own ${name} for every material that loads it`, fileLoc);
+      }
+    } else if (o.fileType === "gon") {
       validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);

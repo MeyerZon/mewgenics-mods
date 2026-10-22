@@ -1543,7 +1543,11 @@ entries of `bindings/25143593.json`). RVAs.
   0x1413c19a0[], 0x1412f713c) and the instance VBO / indirect buffer / VAO bindings are what a functor must restore.
 - **Depth (OBSERVED, r3dD):** sprite shaders never discard and always write `gl_FragDepth`; depth is tested and written
   only while flags bit 2 is set (mode-1 layers, drawn in reverse). `Shader_compile` 0xa55470 = text replacement
-  (`" vert()"`/`" frag()"` → `" main()"`, `COMPILING_*_PROGRAM`, `MATRICES_AS_ATTRIBS`).
+  (`" vert()"`/`" frag()"` → `" main()"`, `COMPILING_*_PROGRAM`, `MATRICES_AS_ATTRIBS`). Precisely (decompile
+  re-read 2026-10-22): the entry rename is ONE find + replace of the **first** `" vert()"` / `" frag()"` (a comment
+  holding that text before the definition steals it); the three flags are replace-all loops; then
+  `glBindAttribLocation` binds `position` 0, `color` 1, `texcoord` 2, `mvp` 3, `color_xform` 7, `depth_bias` 9 **by name**
+  on every program before linking. Pinned by `editor/src/core/shader/dialect.ts` + `editor/test/shader-tests.ts`.
 - **Assets (OBSERVED, r3dE):** `ResourceManager_GetBinaryResource` 0x973750 serves any path (first `-modpaths` entry
   that has it, then the gpak; overlays alone apply last-to-first); `App_GetTexture` 0x9bb490 loads `textures/<name>`
   through stb_image and crashes on a missing file (check `FileManager_FileExists` first).
