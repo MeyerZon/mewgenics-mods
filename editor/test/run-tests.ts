@@ -417,6 +417,10 @@ if (BASE_READY) {
   let vt: typeof import("./validator-tests.ts") | null = null;
   try { vt = await import("./validator-tests.ts"); } catch (e) { test("validator-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (vt) vt.runValidatorTests(test, assert, eq);
+  // the game's .shader dialect (Shader::compile 0xa55470) + the validator's mod-shader rule (mods/*/shaders/)
+  let st: typeof import("./shader-tests.ts") | null = null;
+  try { st = await import("./shader-tests.ts"); } catch (e) { test("shader-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (st) st.runShaderTests(test, assert, eq);
 }
 
 // ---- 5. MCP smoke test ------------------------------------------------------
