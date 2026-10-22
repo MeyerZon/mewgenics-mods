@@ -62,6 +62,24 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     for (const h of hits) eq(h.severity, "warning");
     assert(r.ok, "warnings only");
   });
+  test("validator fixture: text-loc-key-html warns for an HTML scene text that is a base key or a key the mod's combined.csv.append adds; not for html: false, a plain word or a wrapper of several words", () => {
+    const r = v("text-loc-key-html");
+    const hits = only(r, "text-loc-key-html");
+    eq(hits.map((f) => f.location?.path).sort().join("|"), "texts.htmlKey|texts.htmlModKey", `all: ${codes(r)}`);
+    for (const h of hits) {
+      eq(h.severity, "warning");
+      eq(h.location?.file, "mods/text-loc-key-html/art/loc.scene.json");
+    }
+    const mod = hits.find((f) => f.location?.path === "texts.htmlModKey")!;
+    assert(/combined\.csv\.append/.test(mod.message), mod.message);
+    const base = hits.find((f) => f.location?.path === "texts.htmlKey")!;
+    assert(/base combined\.csv/.test(base.message), base.message);
+    assert(r.ok, "warnings only");
+  });
+  test("validator fixture: a scene file (art/*.scene.json) is validated as a scene, not warned as a whole-file replace", () => {
+    const r = v("text-loc-key-html");
+    eq(only(r, "whole-file-replace").length, 0, `all: ${codes(r)}`);
+  });
   test("validator fixture: gon-parse-error is an error carrying line and col", () => {
     const r = v("gon-parse-error");
     const f = expectCode(r, "gon-parse-error", "error");
