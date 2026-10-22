@@ -12,6 +12,7 @@ GCC=${GCC:-gcc}
 CFLAGS="-std=c11 -O1 -g -Wall -Wextra -Werror -Wno-format-truncation"
 FW="$HERE/framework"
 HS="$HERE/mods/test-harness"
+JL="$HERE/mods/jokers-luck"
 
 run_suite() { # name, output, sources...
   name=$1; out=$2; shift 2
@@ -20,7 +21,7 @@ run_suite() { # name, output, sources...
   if ! "$out"; then echo "TESTS FAILED"; exit 1; fi
 }
 
-mkdir -p "$FW/build" "$HS/build"
+mkdir -p "$FW/build" "$HS/build" "$JL/build"
 run_suite "mewframework signature scanner" "$FW/build/test_sig" -I"$FW/src" "$FW/test/test_sig.c" "$FW/src/fw_sig.c"
 run_suite "mewframework build gate + generated tables" "$FW/build/test_build" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_build.c" "$FW/src/fw_build.c" "$FW/src/fw_sig.c"
 run_suite "mewframework status rules" "$FW/build/test_status_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_status_rules.c" "$FW/src/fw_status_rules.c" "$FW/src/fw_glow_rules.c"
@@ -28,6 +29,8 @@ run_suite "mewframework vtable clone + thunks" "$FW/build/test_vtable" -DFW_NO_W
 run_suite "mewframework entity/component walks" "$FW/build/test_walk" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_walk.c" "$FW/src/fw_walk.c"
 run_suite "mewframework resolve + hook plan" "$FW/build/test_resolve" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_resolve.c" "$FW/src/fw_resolve.c" "$FW/src/fw_sig.c"
 run_suite "mewframework per-unit glow rules" "$FW/build/test_glow_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_glow_rules.c" "$FW/src/fw_glow_rules.c"
+run_suite "mewframework random stream" "$FW/build/test_rng" -I"$FW/src" "$FW/test/test_rng.c" "$FW/src/fw_rng.c"
+run_suite "jokers_luck reroll" "$JL/build/test_roll" -I"$JL/src" -I"$FW/src" "$JL/test/test_roll.c" "$JL/src/jl_roll.c" "$FW/src/fw_rng.c"
 run_suite "mewtest harness pure modules" "$HS/build/test_mewtest" -DMT_HOST_TEST -I"$HS/src" -I"$FW/src" "$HS/test/test_mewtest.c" \
   "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c"
 echo "=== all native suites passed"
