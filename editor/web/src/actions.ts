@@ -6,6 +6,7 @@ import { S, tpl, lsGet, lsSet, onboarding, type OpenMenu, type Tab } from "./sta
 import { getJson, post, url } from "./api.ts";
 import { editorCtl } from "./components/Editor.tsx";
 import { loadArtForMod } from "./art/art-state.ts";
+import { loadRoomsForMod, openLevel } from "./rooms/room-state.ts";
 import type {
   ListModsResult,
   ListBaseResult,
@@ -70,8 +71,15 @@ export async function selectMod(name: string): Promise<void> {
   const files = r.ok ? r.files : [];
   S.set({ files: files.filter((f) => f.relPath !== "description.json") });
   await loadArtForMod(name);
+  await loadRoomsForMod(name);
 }
 export async function openFile(relPath: string): Promise<void> {
+  // a level file is binary: it opens in the Room editor, not the text editor
+  if (/.lvl$/i.test(relPath)) {
+    enterRoomMode();
+    await openLevel(relPath);
+    return;
+  }
   S.set({ file: relPath });
   const r = await getJson<ReadFileResult>(url("/api/mod-file", { mod: S.get().mod, path: relPath }));
   editorCtl.setValue(r.ok ? r.text : `// ${r.error || "could not read file"}`);
@@ -196,11 +204,15 @@ function maybeOpenArtTour(): void {
   }
 }
 export function enterArtMode(): void {
-  S.set({ artMode: true });
+  S.set({ artMode: true, roomMode: false });
   maybeOpenArtTour();
 }
 export function leaveArtMode(): void {
-  S.set({ artMode: false });
+  S.set({ artMode: false, roomMode: false });
+}
+/** Rooms mode: the Room editor (levels/**.lvl grid painter). */
+export function enterRoomMode(): void {
+  S.set({ roomMode: true, artMode: false });
 }
 export function openExample(): void {
   S.set({ openMenu: "", exampleStep: 2, exampleOpen: true });
@@ -274,5 +286,9 @@ export function startup(): void {
   if (typeof location !== "undefined" && new URLSearchParams(location.search).get("mode") === "art") {
     S.set({ artMode: true, tourOpen: false });
     onboarding.artTourTriggered = true; // don't auto-pop the art tour over a deep-linked session
+  }
+  // ?mode=rooms opens straight into the Room editor (no tour over it)
+  if (typeof location !== "undefined" && new URLSearchParams(location.search).get("mode") === "rooms") {
+    S.set({ roomMode: true, tourOpen: false });
   }
 }

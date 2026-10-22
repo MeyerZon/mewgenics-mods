@@ -174,3 +174,20 @@ export function paletteLetter(name: string): string {
   if (!words.length) return "?";
   return words.slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
 }
+
+/**
+ * A fallback colour for a spawns.gon entry without an image_tint, by its editor.category (the groups listed at the top
+ * of spawns.gon): 1 player spawns, 2-5 enemies, 8-9 minibosses, 10-11 bosses, 105 pickups, 106 interactives,
+ * 107 statics.
+ */
+export function categoryColor(category: number | null): string | null {
+  if (category === null) return null;
+  if (category === 1) return TINTS.blue!;
+  if (category >= 2 && category <= 5) return TINTS.red!;
+  if (category === 8 || category === 9) return TINTS.orange!;
+  if (category === 10 || category === 11) return TINTS.purple!;
+  if (category === 105) return TINTS.yellow!;
+  if (category === 106) return TINTS.brown!;
+  if (category === 107) return TINTS.grey!;
+  return null;
+}

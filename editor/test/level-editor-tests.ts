@@ -98,7 +98,7 @@ export async function runLevelEditorTests(test: TestFn, assert: AssertFn, eq: Eq
     for (const bad of ["data/room.lvl", "levels/../x.lvl", "levels\\a\\x.lvl", "levels/a/x.lvl.bak", "levels/a/x.gon", "/levels/a.lvl", "levels/a b/x.lvl", "levels//x.lvl"]) assert(ed.isLevelPath(bad) === false, bad);
   });
 
-  test("level edit: swatchColor maps image_tint names and [r g b] floats to CSS; paletteLetter takes the name's initials", () => {
+  test("level edit: swatchColor maps image_tint names and [r g b] floats to CSS; categoryColor colours untinted objects; paletteLetter takes the name's initials", () => {
     need(ed, "src/core/level/edit.ts");
     same(ed.swatchColor("blue"), "#3b6fd8");
     same(ed.swatchColor(["green", "green"]), "#3f9b45");
@@ -109,6 +109,7 @@ export async function runLevelEditorTests(test: TestFn, assert: AssertFn, eq: Eq
     same(ed.paletteLetter("Tall Grass"), "TG");
     same(ed.paletteLetter("Water"), "W");
     same(ed.paletteLetter(""), "?");
+    same([1, 3, 9, 10, 105, 106, 107, 42, null].map((c) => ed.categoryColor(c)), ["#3b6fd8", "#d0413c", "#e08a2c", "#8a4fc6", "#e3c63a", "#8a5a2b", "#8c8c8c", null, null], "objects without a tint: a colour per spawns.gon category");
   });
 
   test("level edit: an edit and its undo re-encode to the original bytes", () => {
@@ -194,7 +195,7 @@ export async function runLevelEditorTests(test: TestFn, assert: AssertFn, eq: Eq
       const spawn = p.objects.find((o: { id: number }) => o.id === 1);
       same([spawn.kind, spawn.cls, spawn.name], ["utility", "PlayerSpawn", "Player Cat Spawn"]);
       const big = p.objects.find((o: { id: number }) => o.id === 9001);
-      same([big.kind, big.cls, big.source, big.category], ["object", "BigRat", "mod", 3]);
+      same([big.kind, big.cls, big.source, big.category, big.color], ["object", "BigRat", "mod", 3, "#d0413c"]);
     });
 
     test("level io: validateLevel runs the lvl-* rules on unsaved content (no player spawn, unknown tile id; mod ids resolve)", () => {

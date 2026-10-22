@@ -18,7 +18,7 @@ import { writeModBinary } from "../mod-io.ts";
 import { validateLevelBytes } from "../validate/validator.ts";
 import { decodeLvl, encodeLvl, buildRoom } from "./lvl.ts";
 import { spawnIdsByName } from "./level-templates.ts";
-import { isLevelPath, structuralErrors, paintTiles, placeObject, removeObjects, swatchColor, paletteLetter } from "./edit.ts";
+import { isLevelPath, structuralErrors, paintTiles, placeObject, removeObjects, swatchColor, paletteLetter, categoryColor } from "./edit.ts";
 import type { LvlFile, LvlPick } from "./lvl.ts";
 import type { Finding, Report } from "../validate/result.ts";
 import type { VNode } from "../gon/types.ts";
@@ -238,7 +238,7 @@ function readEntries(abs: string): Array<{ id: number; value: Record<string, unk
   return out;
 }
 
-function paletteOf(pack: string, modName: string, dataRoot: string, classKeys: string[]): { entries: PaletteEntry[]; hasBase: boolean } {
+function paletteOf(pack: string, modName: string, dataRoot: string, classKeys: string[], byCategory: boolean): { entries: PaletteEntry[]; hasBase: boolean } {
   const modDir = join(MODS_DIR, modName);
   const leaf = pack.slice("data/".length);
   const whole = join(modDir, "data", leaf);
@@ -264,7 +264,9 @@ function paletteOf(pack: string, modName: string, dataRoot: string, classKeys: s
     const cls = classes.length === 1 && typeof raw === "string" ? classes[0]!.name : classes.map((c) => `${c.name} ${c.weight}`).join(" · ");
     const name = typeof editor.name === "string" && editor.name ? editor.name : cls || `#${id}`;
     const kind: PaletteEntry["kind"] = id === 0 ? "empty" : key === "utility" ? "utility" : key === "object" ? "object" : key === "tile" ? "tile" : "other";
-    return { id, name, kind, cls, classes, color: swatchColor(editor.image_tint), letter: id === 0 ? "" : paletteLetter(name), category: typeof editor.category === "number" ? editor.category : null, source };
+    const category = typeof editor.category === "number" ? editor.category : null;
+    const color = swatchColor(editor.image_tint) ?? (byCategory ? categoryColor(category) : null);
+    return { id, name, kind, cls, classes, color, letter: id === 0 ? "" : paletteLetter(name), category, source };
   });
   return { entries, hasBase: existsSync(baseAbs) };
 }
@@ -272,7 +274,7 @@ function paletteOf(pack: string, modName: string, dataRoot: string, classKeys: s
 /** The tile and object palettes a level of this mod can use (base + the mod's overlays). */
 export function levelPalette(modName: string, opts: LevelIoOptions = {}): LevelPalette {
   const dataRoot = opts.extractedData ?? EXTRACTED_DATA;
-  const t = paletteOf("data/tiles.gon", modName, dataRoot, ["tile"]);
-  const o = paletteOf("data/spawns.gon", modName, dataRoot, ["utility", "object"]);
+  const t = paletteOf("data/tiles.gon", modName, dataRoot, ["tile"], false);
+  const o = paletteOf("data/spawns.gon", modName, dataRoot, ["utility", "object"], true);
   return { ok: true, hasBase: t.hasBase && o.hasBase, tiles: t.entries, objects: o.entries };
 }
