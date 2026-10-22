@@ -26,10 +26,13 @@ These are enforced in code and in the launch flow; keep them intact.
   `launch-dev.bat`) so it writes isolated `*dev*` saves. The editor refuses any write outside `mods/<name>/` and any
   write under a `saves/` path — with one owner-approved exception (2026-10-20): before a `.mewtest` script that
   says `enter Campaign`, the in-game runner moves the harness's own disposable slot `mewtest01.sav` aside into the
-  run dir (`savecheck.resetCampaignSlot`: a rename of that one name, never a delete, never another file).
+  run dir (`savecheck.resetCampaignSlot`: a rename of that one name, never a delete, never another file); extended
+  by the owner (2026-10-22) to the game's own backups of that slot: the runner may move `saves/backups/mewtest01_*.savbackup`
+  (only those names) into the run dir the same way, by rename, never a delete.
 - **Never commit game bytes or assets.** `.gitignore` excludes `.extracted/`, `.analysis/`, `*.gpak/exe/dll/wav/ogg/swf/sav`,
   `editor/node_modules/`, and `editor/data/`. Keep it that way; the only game-derived data tracked is short byte
-  signatures in `bindings/`.
+  signatures in `bindings/`, plus `editor/component-schema.json` (owner, 2026-10-22: it stays tracked), which holds
+  names and format facts derived from RE (class and key names, defaults, evidence paths), not game bytes.
 - Keep Steam launch options empty so plain (non-dev) launches stay vanilla and never see mod data.
 
 ### Flagged sources — do not fetch

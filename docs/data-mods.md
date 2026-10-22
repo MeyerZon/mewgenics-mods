@@ -397,6 +397,10 @@ returns it for the top matches; the web UI's component search shows it when you 
   (reads `pool`, `duration`), `DamageReductionAura { allies_only … }` (hard-coded), `MoveTowardsDamageSource { ability … }`
   (reads `move_ability`), `SpawnThingOnDamage { number … }` (spawns one), `AbilityHealthThreshold { aux … }` (an item-entry
   key), and `AddAdvantageToEvent { type options add }` (nothing reads that block: INFERRED not implemented).
+- **Vanilla typos: documented, not fixed** (owner, 2026-10-22: no fix mod). What each one means in play: `theshold`
+  changes nothing (`threshold` has the same default 5); `even_of_stunned` has no key behind it; `TourettesMeows` reads
+  `duration`, so its `cooldown [8 15]` is ignored and the default of 10 s applies; `DamageReductionAura` reads no keys;
+  `MoveTowardsDamageSource`'s `ability` is not read.
 - **Coverage (build 25143593, after the compclose follow-up).** 1741 classes with a vftable (of the 2007 `glaiel::`
   names; the other 266 are not components: templates, lambdas, helpers): 504 mapped from decompiles, 987 read no keys
   of their own, 250 carry only the objdump seed keys (engine / UI / ability-hierarchy classes that never appear as a

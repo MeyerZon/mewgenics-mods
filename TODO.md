@@ -22,13 +22,13 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr86-glow-width` (#86) — Is glow_radius 12 the band width you want for the per-unit rim (and is the white hover rim being off while a unit glows acceptable)?
 - [ ] `pr99-glow-colours` (#99) — In shot-two, does the cat carry a cyan rim and the Rat a magenta one, each hugging its own sprite (no cross-colour bleed), and is the cat's rim whole among the other cats (no straight scissor edge)?
 - [ ] `pr104-data-glow` (#104) — In shot-glow, does FwGlowRat (glowing from DATA: the status FwGlow_ff00ff, no DLL) carry the same magenta band hugging its sprite as the native-API Rat, with nothing over its body (and none in shot-noglow)?
-- [ ] `pr104-glow-icon` (#104) — The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip "Glowing"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?
-- [ ] `glow-decide-icon` (glow v3) — **Decide:** a FwGlow_ status shows LuckUp's four-leaf clover on the unit's status bar (see shot-glow of `*-fw-glow-data-glow`). Keep the clover, or ask for a follow-up that hides the icon (or gives the glow status its own)?
-- [ ] `glow-decide-hover` (glow v3) — **Decide:** while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?
+- [x] `pr104-glow-icon` (#104) — **Owner, 2026-10-22:** hide the icon (follow-up under "Planned" → "Owner decisions 2026-10-22"). Was: The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip "Glowing"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?
+- [x] `glow-decide-icon` (glow v3) — **Owner, 2026-10-22:** hide it (follow-up planned). Was: **Decide:** a FwGlow_ status shows LuckUp's four-leaf clover on the unit's status bar (see shot-glow of `*-fw-glow-data-glow`). Keep the clover, or ask for a follow-up that hides the icon (or gives the glow status its own)?
+- [x] `glow-decide-hover` (glow v3) — **Owner, 2026-10-22:** redraw the hover rim on top of the glow (follow-up planned). Was: **Decide:** while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?
 - [ ] `pr109-rig-cat` (#109) — In shot-rig-1, does the cat under the yellow marker (our _CatRig_ clip) look like a real cat with Mangy's parts in the idle pose, the same cat as the marker-less control in shot-vanilla?
-- [ ] `pr109-rig-labels` (#109) — A swap rig without a label for an animation (hits, attack) keeps the cat on its frame: acceptable, or should a swap rig fall back to the vanilla labels it lacks?
+- [x] `pr109-rig-labels` (#109) — **Owner, 2026-10-22:** a swap rig falls back to the vanilla cat's labels it lacks (native follow-up planned). Was: A swap rig without a label for an animation (hits, attack) keeps the cat on its frame: acceptable, or should a swap rig fall back to the vanilla labels it lacks?
 - [ ] `pr118-rig-sample` (#118) — In shot-rig-1 (rig-dll), is the cat beside the small yellow marker (bound only by catrig_sample.dll) a real cat with Mangy's parts, the same as the marker-less control?
-- [ ] `pr118-rig-dead` (#118) — A killed swap-rig cat with no death label stays STANDING (rig-labels shot-l20) where the vanilla cat lies dead (rig-labels-ctl shot-l20): acceptable, or should a swap rig fall back to the vanilla labels it lacks?
+- [x] `pr118-rig-dead` (#118) — **Owner, 2026-10-22:** fall back to the vanilla cat's labels, so a killed rig cat dies normally (native follow-up planned). Was: A killed swap-rig cat with no death label stays STANDING (rig-labels shot-l20) where the vanilla cat lies dead (rig-labels-ctl shot-l20): acceptable, or should a swap rig fall back to the vanilla labels it lacks?
 - [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
 - [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
 - [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
@@ -99,7 +99,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
-- **Track `editor/component-schema.json`?** (component-schema PR, 2026-10-22) It is RE-derived (1741 `glaiel::` class
+- **Track `editor/component-schema.json`?** **Owner, 2026-10-22:** it stays tracked; CLAUDE.md's "Never commit game bytes" rule now says it holds RE-derived names and format facts, not game bytes. (component-schema PR, 2026-10-22) It is RE-derived (1741 `glaiel::` class
   names, ~1.3k key names, `.analysis/` evidence paths; ~0.9 MB) and tracked so CI and fresh clones get the
   validator checks. CLAUDE.md says the only tracked game-derived data is byte signatures in `bindings/`; this is names
   and format facts, not game bytes, but it is your call: keep it tracked, or git-ignore it and build it in
@@ -108,18 +108,22 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
   `AbilityOnRoundEndOnce { even_of_stunned }`, `TourettesMeows { cooldown }`, `DamageReductionAura { allies_only }`,
   `MoveTowardsDamageSource { ability }` (+ `SpawnThingOnDamage { number }`, `AbilityHealthThreshold { aux }`; now
   `unread` keys, reported as `ignored-key` infos). A mod could fix them with a .patch; worth a sample mod?
+  **Owner, 2026-10-22:** document only, no mod — `docs/data-mods.md` "Component keys" → "Vanilla typos: documented, not fixed".
 
 Owner: "we will decide on it later". Everything through PR #72 is merged; the 2026-10-21/22 run answered most of
 these without a decision (status per bullet below; the PR map follows).
 
-- [ ] **Campaign-walk save backups (2026-10-22, branch `feat/harness-campaign-walk`).** Starting an adventure
+- [x] **Campaign-walk save backups (2026-10-22, branch `feat/harness-campaign-walk`).** **Owner, 2026-10-22:** approved — the runner
+      moves only `saves/backups/mewtest01_*.savbackup` into the run dir, by rename, never a delete (the slot exception
+      in CLAUDE.md's safety rules is extended; implementation is a follow-up under "Planned"). Starting an adventure
       (`run start`) makes the game back the disposable slot up as `saves/backups/mewtest01_<date>_<time>.savbackup`
       (one per minute of runs; two exist from the T2 runs of 2026-10-22). The real save is never touched. Options:
       leave them (they are the harness slot's own backups), or extend the owner-approved slot exception so the runner
       also moves `backups/mewtest01_*.savbackup` into the run dir (a rename, never a delete). Agents may not touch
       `saves/` beyond the existing exception, so this needs your say-so.
 
-- [ ] **Developers' stance on mods — contact them? remove anything?** (added 2026-10-22) Research and repo audit in
+- [x] **Developers' stance on mods — contact them? remove anything?** **Owner, 2026-10-22:** no outreach for now; the repo is
+      already public. New planned item: a community adoption strategy ("Planned" → "Owner decisions 2026-10-22"). (added 2026-10-22) Research and repo audit in
       [`docs/legal-and-community.md`](docs/legal-and-community.md): no Mewgenics policy exists yet (Workshop/launcher
       "eventually"); the same developer's TEIN terms are non-commercial, require the game, no exe or unmodified assets;
       Edmund made the Antibirth EXE mod canon; REPENTOGON publishes the same kind of signatures for Isaac; takedowns
@@ -171,7 +175,8 @@ these without a decision (status per bullet below; the PR map follows).
       (brightness) — engine-map "Glow and outline passes", `data-mods` "Lighting and tint knobs". A **native per-unit
       rim** (a mask + the game's blur/composite passes with a per-unit colour) is in PR (branch
       `feat/native-unit-glow`, session rim).
-- [ ] **Native per-unit glow — what next?** The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
+- [x] **Native per-unit glow — what next?** **Owner, 2026-10-22:** (b) redraw the hover rim on top of the glow, and hide the
+      glow status's icon (both follow-ups planned). The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
       draws a rim through the game's outline mask (combat only, the rim shader shipped by `mods/fw-glow`). Decide: (a)
       a data-level way to ask for it — **done (glow v3, `feat/glow-data-seam`)**: a status named `FwGlow_<rrggbb[aa]>`
       granted by any vanilla mechanism (StatusOnSpawnIn, an ability's effects, …) glows its carrier while it lasts, no DLL;
@@ -201,7 +206,9 @@ these without a decision (status per bullet below; the PR map follows).
       Remaining: T3 — the owner's look at the tab and at a `vectorcraft_exec` drawing in game.
 - [x] **T3 looks** (owner, 2026-10-21: he will do these later) — moved to **"Requires a human (T3 looks)"** at the
       top of this file (the gallery: `cd editor && npm run t3`; the list: `editor/t3-looks.json`).
-- [ ] **Game speed — what to use it for?** (2026-10-22, PR "feat: game speed") The vanilla Combat Speed dropdown
+- [x] **Game speed — what to use it for?** **Owner, 2026-10-22:** automated tests run as fast as possible without changing
+      results; target 16x. Follow-up planned: a runner default + a `speed:` header, results verified identical at 16x;
+      where `wait turns|rounds` sampling breaks above 12x, fix the sampling rather than lower the speed. (2026-10-22, PR "feat: game speed") The vanilla Combat Speed dropdown
       offers 1..4, but the game reads `combat_speed` as an unclamped float (engine-map "Frame timing and game speed").
       Decisions: (1) **for your own play**: try `combat_speed 8` in `settings.txt` (close the game first; it rewrites
       the file on exit) — untested in-game by an agent; it speeds combat only, keeps `bypass_combatspeed` animations
@@ -306,7 +313,8 @@ Things no test can see: they need a human at the game, a decision, or an account
   `node tools/bindings/cross-build.ts --old <installed exe> --new .analysis/exe/23372843/Mewgenics.exe --build 23372843
   --gameVersion 1.1.21039` and confirm the `old` column shows 25143593's values, the 14 anchor rows read `size +0 /
   calls +0 vs old`, and `LuckUp_typeid` is `ported-derived … (agree)` with `0x4d5` from both sources (T3 of #29, #32).
-- [ ] **Remove the leftover agent worktree safely**: `.claude/worktrees/agent-ac7ac5f970624f89d` (PR #27's branch) still
+- [x] **Remove the leftover agent worktree safely** **Owner, 2026-10-22:** worktree cleanup approved after the merges
+  (junctions unlinked first; follow-up planned). Was: `.claude/worktrees/agent-ac7ac5f970624f89d` (PR #27's branch) still
   holds junctions to `.analysis` and `.extracted`. Only after #27 is merged: `cmd /c rmdir` each junction, confirm the
   targets still have contents, then `git worktree remove` (`CLAUDE.md` "Worktrees with junctions"). Never before.
 - [x] **Delete the merged local/remote branches** — pruned 2026-10-20 (29 remote branches, every one 0 commits
@@ -318,7 +326,7 @@ Things no test can see: they need a human at the game, a decision, or an account
 - [ ] **Permission rule for merges** (optional): the harness's auto-mode classifier blocked `gh pr merge` once tonight
   even with your go-ahead in the chat; if you want agents to merge on your word without a retry, add a Bash allow rule
   for `gh pr merge` in `.claude/settings.json` — otherwise keep merging yourself.
-- [ ] **Merge policy for autonomy** (your goal 2026-10-20: out of the loop except for viewing results). Today your
+- [x] **Merge policy for autonomy** **Owner, 2026-10-22:** unchanged — agents need the owner's word for each merge. (your goal 2026-10-20: out of the loop except for viewing results). Today your
   global rule is "never merge without my per-PR word"; on 2026-10-20 you merged the whole stack #39–#48 on one word.
   If you want agents to merge on their own, the rule to put in `~/.claude/CLAUDE.md` is: *agents may merge a PR
   when the T0 workflow is green, the PR body carries the T2 verdict lines (`in-game: N passed, 0 failed`) and its
@@ -355,7 +363,8 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **Optional PR 15 — runtime anchor locator in the DLL**: **skipped** (owner, 2026-10-19). The offline port tool
   plus the fail-closed build gate already give "broken binding = disabled mod, not a crash"; a game update needs a
   rebuild and a T2 pass anyway, so in-process string→xref resolution is not worth the native surface.
-- [ ] **`FW_API_VERSION` bump policy** when the manifest exposes new `FW_SYM_*`/`FW_DATA_*` entries (append-only enums).
+- [x] **`FW_API_VERSION` bump policy** when the manifest exposes new `FW_SYM_*`/`FW_DATA_*` entries (append-only enums).
+  **Owner, 2026-10-22:** `FW_API_VERSION` goes up on every API addition (policy).
 
 ### Verify by eye / by playing
 - [x] **Joker's Luck still rerolls luck every turn** on the `dev` save after the rebuilt DLLs (owner play-check
@@ -481,6 +490,22 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **SWF-loader crash RE** → `docs/swf-emitter-fix-spec.md` (final; 6 decompiles in `.analysis/decompiled/`). Crash is NOT a malformed SWF — it parses fine. Our clip merges into the live `AbilityIcon` sprite (`process_animation_merges` 0x9bc070); a **structurally-naive appended frame** triggers a post-load scripted call into the adventure-cutscene handler with no active run → null double-deref. `_Append_AbilityIcon` name CORRECT; **char-ID collision ruled out**. Method: static PE decoding + Ghidra (2nd attempt; 1st lost to memory contention from an orphaned container).
 
 ## Planned (not started)
+
+### Owner decisions 2026-10-22 — follow-ups (agent-doable)
+- [ ] **Campaign-walk save backups:** after a campaign-walk run the runner moves `saves/backups/mewtest01_*.savbackup`
+      (only those names) into the run dir by rename, never a delete; test-first against the fake game
+      (`savecheck`); the whole-saves-dir hash still guards the real save.
+- [ ] **Glow status icon:** hide the `FwGlow_` status's icon on the unit's status bar (no LuckUp clover).
+- [ ] **Hover rim while a unit glows:** redraw the game's white hover rim on top of the glow.
+- [ ] **Swap rig label fallback (native):** a swap rig that lacks an animation label falls back to the vanilla cat's
+      labels, so a killed rig cat dies normally (`pr118-rig-dead`, `pr109-rig-labels`).
+- [ ] **Game speed for automated tests (target 16x):** a runner default and a `speed:` header; verify results are
+      identical at 16x; where `wait turns|rounds` sampling breaks above 12x, fix the sampling, do not lower the speed.
+- [ ] **Community adoption strategy:** make the toolkit the standard for Mewgenics mods, e.g. build showcase mods and
+      share them with content creators (no developer outreach for now; the repo is public).
+- [ ] **Worktree cleanup** after the merges: unlink every junction first (`cmd /c rmdir`), confirm the targets still
+      have contents, then `git worktree remove` (`CLAUDE.md` "Worktrees with junctions").
+
 
 ### TDD coverage targets — make every layer test-backed (in priority order)
 1. [x] **Enter a run from the main menu through the harness** (2026-10-20): the `.mewtest` directive `enter
@@ -822,6 +847,9 @@ Every unticked box below "Requires a human (T3 looks)" is open; this is the shor
 leftovers that live inside ticked items. The boxes stay where they are (history kept); tick them there.
 
 ### Still open (agent-doable)
+- The owner-decision follow-ups of 2026-10-22 ("Planned" → "Owner decisions 2026-10-22"): campaign-walk backup
+  moves, hide the glow status icon, hover rim over a glow, swap-rig label fallback, 16x test speed, community
+  adoption strategy, worktree cleanup after the merges.
 - Cat animations not authored yet: the back facing's `head_back` layout and the four-way `LF/RF/LB/RB` quartet
   ("Open decisions" → "Cat parts in a rig").
 - `.append` on an existing key (duplicate children) in-game (TDD target 8's last gap).
@@ -833,12 +861,10 @@ leftovers that live inside ticked items. The boxes stay where they are (history 
 - Watch for the one-off early exit ("Verification still owed").
 
 ### Still open (owner)
-- Native per-unit glow — what next? (a data-level way to ask for it; the hover rim while units glow) — "Open decisions".
 - Hidden window on a non-NVIDIA machine; dev-play policy after the save-suffix decode; eyeball the saves dir after a
-  dev run; watch one clean-mode run end; a fuller `debug.log`; the optional `gh pr merge` permission rule; the merge
-  policy for autonomy — "Owner checks".
+  dev run; watch one clean-mode run end; a fuller `debug.log`; the optional `gh pr merge` permission rule — "Owner
+  checks" (the merge policy stays: the owner's word per merge, 2026-10-22).
 - Re-fetch build 23372843 (and optionally rerun the cross-build); a body-changing second build to exercise the port
   rungs on a real recompile.
-- Remove the leftover agent worktree `agent-ac7ac5f970624f89d` safely (junctions first).
-- `FW_API_VERSION` bump policy for new `FW_SYM_*` / `FW_DATA_*` entries; does the `port-bindings` skill trigger on
+- Does the `port-bindings` skill trigger on
   "the game updated"; read `docs/binding-port.md` once as the next porter — "Owner checklist".
