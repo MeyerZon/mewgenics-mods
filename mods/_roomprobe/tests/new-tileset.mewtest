@@ -1,0 +1,20 @@
+mods: _roomprobe
+timeout: 90s
+hide: false
+# Tileset probe (2026-10-22): data/tilesets.gon.append adds a NEW tileset name, roomprobe_yard (a copy of vanilla
+# junkyard written by new_from_template kind tileset-variant). The console's `tileset roomprobe_yard` selects it
+# and the next `load` builds the fight in it: the shot shows the junkyard background around the probe room (T3),
+# where TacticsTest's default tileset is alley.
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+cmd tileset roomprobe_yard
+expect console "Executed: tileset" within 10
+cmd load roomprobe/probe
+expect console "Executed: load" within 10
+wait ms 3000
+shot "roomprobe_yard"
+dump
+expect gon 4 properties.health == 77
+quit

@@ -1,0 +1,13 @@
+// test-only (room probe, 2026-10-22): a new spawn-palette id. A .lvl names its objects by these numeric ids
+// (spawns.gon is the object palette every vanilla .lvl header names); 9001 is unused in vanilla.
+9001 {
+    editor {
+        category 3
+        image ["rat.png"]
+        paint false
+        name "Room Probe Rat"
+    }
+
+    object RoomProbeRat
+    value 1
+}

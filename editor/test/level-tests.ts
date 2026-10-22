@@ -234,6 +234,26 @@ export function runLevelTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     assert(!ok.some((x) => x.includes(":map-")), ok.join(", "));
   });
 
+  // ---- T2 evidence: mods/_roomprobe in the real game (fixture written from the run dirs) ----
+  test("roomprobe (T2 fixture): the mod's new levels were the fights the game built — 9001 placements = 77-hp RoomProbeRats", () => {
+    const fx = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", "ingame", "roomprobe-summary.json"), "utf8")) as {
+      runs: Array<{ test: string; verdict: string; saveUnchanged: boolean; cmds: string[]; units: Array<{ namekey: string; faction: number }>; expects: Array<{ ok: boolean }> }>;
+    };
+    const mod = join(import.meta.dirname, "..", "..", "mods", "_roomprobe", "levels", "roomprobe");
+    const count = (rel: string, id: number): number => decodeLvl(readFileSync(join(mod, rel))).objects.filter((o) => o.id === id).length;
+    for (const r of fx.runs) {
+      same([r.verdict, r.saveUnchanged, r.expects.every((e) => e.ok)], ["pass", true, true], r.test);
+    }
+    const by = (t: string) => fx.runs.find((r) => r.test === t)!;
+    const rats = (t: string): number => by(t).units.filter((u) => u.namekey === "ENEMY_LILRAT_NAME").length;
+    same(by("new-room").cmds, ["load roomprobe/probe"]);
+    same(rats("new-room"), count("probe.lvl", 9001), "new-room: one RoomProbeRat per id-9001 object of probe.lvl");
+    same(by("new-room").units.filter((u) => u.namekey === "ENEMY_POOTER_NAME").length, count("probe.lvl", 26));
+    same(by("find-room").cmds, ["load rp_nested_find"], "a bare name: found by the recursive levels/ listing");
+    same(rats("find-room"), count("deep/rp_nested_find.lvl", 9001));
+    same(by("new-tileset").cmds, ["tileset roomprobe_yard", "load roomprobe/probe"]);
+  });
+
   // ---- T1: every vanilla level round-trips ----
   const root = extractedPath("levels");
   if (!existsSync(root)) {

@@ -1,0 +1,7 @@
+{
+  "title": "Room / level probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: ships a NEW level file levels/roomprobe/probe.lvl (an encounter layout), a new spawn-palette id 9001 (data/spawns.gon.append) and the enemy it places (RoomProbeRat, 77 hp). Proves a data mod can add a room the game loads. Never for play.",
+  "requirements": []
+}

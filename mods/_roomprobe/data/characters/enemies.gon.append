@@ -1,0 +1,11 @@
+// test-only (room probe, 2026-10-22): the enemy spawn id 9001 places. Rat's own health is 5, so a unit with 77 hp
+// can only come from this entry, placed by the mod's own levels/roomprobe/probe.lvl.
+RoomProbeRat {
+    variant_of Rat
+    properties {
+        tag rat
+        faction enemies
+        movement 3
+        health 77
+    }
+}
