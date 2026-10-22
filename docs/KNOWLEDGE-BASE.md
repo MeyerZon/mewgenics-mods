@@ -85,6 +85,15 @@ the linked docs; this page is the map.
   `npm run build` / `dev` into the git-ignored `editor/web/public/ruffle/`; Art mode's **Ruffle tab** plays built mod
   SWFs and extracted vanilla SWFs from bytes, networking off. A reference player, not the game: what the game does
   differently is pinned in `editor/src/core/art/engine-behaviour.ts`. Owner's look at the tab is still an unticked T3.
+- **VectorCraft (WASM) vendored** — owner decision 2026-10-22 (YES to a build-time download, nothing installed):
+  `editor/scripts/vendor-vectorcraft.ts` downloads the one pinned release asset `vectorcraft-web-0.14.0.zip`
+  (27,734,185 bytes, SHA-256 `6f28a8bc…ba075e`, MIT OR Apache-2.0, from GitHub Releases) at `npm run build` / `dev`,
+  verifies size + hash BEFORE extracting, unpacks it with its own zip reader (central directory, `inflateRawSync`,
+  CRC-32, path-escape refusal) into the git-ignored `editor/web/public/vectorcraft/` (35 files, 75.4 MB on disk:
+  a 73.7 MB `.wasm`, the 176 KB wasm-bindgen glue, `index.html`, three Noto `.ttf` + every licence text) and writes
+  `VENDORED.json` (per-file SHA-256; `npm run vendor:vectorcraft:check`). The zip is cached in `editor/data/vendor/`;
+  offline the script prints `(skipped: …)` and the build goes on. Served from the editor's own origin (`.wasm` as
+  `application/wasm`, `.ttf` as `font/ttf`), embedded as a same-origin `<iframe>` per upstream `HOSTING.md`.
 - Built since 2026-10-20: art MCP tools (#62), clip authoring / Timeline tab (#66), the cat rig / Rig tab (#67), text
   (#69), the SVG round trip (#70). Not possible: PlaceObject3 filters (#65) and `ImportAssets2` imports (#71) — see
   `docs/art-preview-plan.md` §8 item 10.

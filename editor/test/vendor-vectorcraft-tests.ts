@@ -65,18 +65,19 @@ function makeZip(specs: ZipSpec[]): Buffer {
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 
 /** The release layout in miniature: a top folder, the glue, the wasm, licences, a font with its OFL. */
-const RELEASE: ZipSpec[] = [
-  { name: "vectorcraft-web-9.9.9/", dir: true },
-  { name: "vectorcraft-web-9.9.9/index.html", data: "<canvas id=\"vectorcraft_canvas\"></canvas>", deflate: true },
-  { name: "vectorcraft-web-9.9.9/vectorcraft-web-abc.js", data: "export default function init(){}", deflate: true },
-  { name: "vectorcraft-web-9.9.9/vectorcraft-web-abc_bg.wasm", data: "\0asm\x01\0\0\0", deflate: true },
-  { name: "vectorcraft-web-9.9.9/LICENSE-MIT", data: "MIT" },
-  { name: "vectorcraft-web-9.9.9/NOTICE", data: "Copyright ArtCraft Team" },
-  { name: "vectorcraft-web-9.9.9/fonts/", dir: true },
-  { name: "vectorcraft-web-9.9.9/fonts/abc/", dir: true },
-  { name: "vectorcraft-web-9.9.9/fonts/abc/Noto.ttf", data: "ttf-bytes", deflate: true },
-  { name: "vectorcraft-web-9.9.9/fonts/abc/OFL.txt", data: "OFL 1.1" },
+const release = (v: string): ZipSpec[] => [
+  { name: `vectorcraft-web-${v}/`, dir: true },
+  { name: `vectorcraft-web-${v}/index.html`, data: "<canvas id=\"vectorcraft_canvas\"></canvas>", deflate: true },
+  { name: `vectorcraft-web-${v}/vectorcraft-web-abc.js`, data: "export default function init(){}", deflate: true },
+  { name: `vectorcraft-web-${v}/vectorcraft-web-abc_bg.wasm`, data: "\0asm\x01\0\0\0", deflate: true },
+  { name: `vectorcraft-web-${v}/LICENSE-MIT`, data: "MIT" },
+  { name: `vectorcraft-web-${v}/NOTICE`, data: `Copyright ArtCraft Team (${v})` },
+  { name: `vectorcraft-web-${v}/fonts/`, dir: true },
+  { name: `vectorcraft-web-${v}/fonts/abc/`, dir: true },
+  { name: `vectorcraft-web-${v}/fonts/abc/Noto.ttf`, data: "ttf-bytes", deflate: true },
+  { name: `vectorcraft-web-${v}/fonts/abc/OFL.txt`, data: "OFL 1.1" },
 ];
+const RELEASE = release("9.9.9");
 const EXPECTED_FILES = ["LICENSE-MIT", "NOTICE", "fonts/abc/Noto.ttf", "fonts/abc/OFL.txt", "index.html", "vectorcraft-web-abc.js", "vectorcraft-web-abc_bg.wasm"];
 
 export async function runVendorVectorcraftTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
@@ -113,7 +114,7 @@ export async function runVendorVectorcraftTests(test: TestFn, assert: AssertFn, 
   test("readZipEntry inflates a deflated entry and copies a stored one; the CRC is checked", () => {
     const es = mod.listZip(zip);
     eq(Buffer.from(mod.readZipEntry(zip, es.find((e) => e.name.endsWith("/index.html"))!)).toString("utf8"), RELEASE[1]!.data);
-    eq(Buffer.from(mod.readZipEntry(zip, es.find((e) => e.name.endsWith("/NOTICE"))!)).toString("utf8"), "Copyright ArtCraft Team");
+    eq(Buffer.from(mod.readZipEntry(zip, es.find((e) => e.name.endsWith("/NOTICE"))!)).toString("utf8"), "Copyright ArtCraft Team (9.9.9)");
     const bad = Buffer.from(zip);
     const lic = es.find((e) => e.name.endsWith("/LICENSE-MIT"))!;
     bad[lic.dataOffset] = "X".charCodeAt(0); // "XIT": stored bytes changed, CRC in the directory unchanged
@@ -216,11 +217,13 @@ export async function runVendorVectorcraftTests(test: TestFn, assert: AssertFn, 
     assert(!existsSync(dst4) || readdirSync(dst4).length === 0, "nothing extracted");
     assert(!existsSync(join(root, "nocache2", "vectorcraft-web-9.9.9.zip")), "a bad zip is never cached");
   });
-  const pin2 = { ...pin, version: "9.9.10", url: "https://example.invalid/vectorcraft-web-9.9.10.zip" };
-  const r6 = await mod.vendorVectorcraft({ pin: pin2, dst, cacheDir, download: good, log: (s) => logs.push(s) });
+  const zip2 = makeZip(release("9.9.10"));
+  const pin2 = { version: "9.9.10", bytes: zip2.length, sha256: sha(zip2), url: "https://example.invalid/vectorcraft-web-9.9.10.zip" };
+  const r6 = await mod.vendorVectorcraft({ pin: pin2, dst, cacheDir, download: async () => Buffer.from(zip2), log: (s) => logs.push(s) });
   test("a different pin replaces the vendored copy (stale files of the previous version are removed)", () => {
     eq(r6.status, "vendored", JSON.stringify(r6));
     eq(mod.readVendoredManifest(dst)?.version, "9.9.10");
+    eq(readFileSync(join(dst, "NOTICE"), "utf8"), "Copyright ArtCraft Team (9.9.10)", "the new build's files");
   });
   test("checkVendored (--check) re-hashes the extracted files: ok after vendoring, names a tampered or missing file", () => {
     const ok = mod.checkVendored(dst);
