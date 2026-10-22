@@ -270,6 +270,31 @@ picker (visual 16-swatch ramps from the real table), gray-level overlay (shows t
 un-remapped 16-level art), background colour, zoom/fit. Playback runs at the scene's
 `frameRate` (60) using `requestAnimationFrame` with frame accumulation.
 
+### 3.1 Ghost cat (preview only, 2026-10-22)
+
+A `parts: "game"` cat rig (the Rig tab, `new_art_scene template cat-animation`) has seven EMPTY slot sprites the game
+fills with the cat's own parts in-game, so the model has nothing to draw there. The preview overlays a **ghost cat**:
+one translucent grey silhouette per empty slot, labelled with the slot name, placed with the slot's baked matrix (so
+keys and tweens move it) under every enclosing placement (a donor such as `CatAnim_wave` shows its rig's ghosts
+through `ani`, on the preview's clock like any nested sprite); the slot's alpha carries over.
+- **Core, pure** (`src/core/art/ghost-cat.ts`): `GHOST_SLOT_PART` (tail → `CatTail`, arm1/arm2/leg1/leg2 → `CatLeg`,
+  body → `CatBody`, head → `CatHead` — CatParts' holders, engine-map "How a cat clip's slots are filled"),
+  `BUILTIN_GHOST_PARTS` (our own ellipses/capsules sized like the vanilla parts), `ghostCatFor(scene, rig, frame)`,
+  `ghostCatsIn(scene, target, frame, clock, parts)` → `{ slot, part, d, matrix, alpha, source, label, at }`,
+  `hasGhostRig`, `ghostBounds`. A drawn rig (no `parts`) and a slot that holds art get no ghost.
+- **Outlines**: `src/core/art/ghost-cat-swf.ts` reads frame 1's mask shape (the part silhouette, `clipDepth` set) of
+  `CatBody` / `CatHead` / `CatLeg` / `CatTail` from the extracted `catparts.swf` (`source: "catparts.swf"`; computed
+  per request, cached, never written — no game art in the repo); without it, the built-ins (`source: "builtin"`, with
+  a `note`). Served by `GET /api/art/ghost-parts`.
+- **Drawing**: an SVG overlay (`svg.ghost-cat` › `g.ghost-part` + `text.ghost-label`) over the canvas, redrawn from
+  `preview-gl`'s `onRender(view)` (frame, clock, zoom, centre); `setExtraBounds` makes Fit include the ghosts of every
+  frame. Toggle "ghost cat" next to the target picker, shown only for a target holding a `parts: "game"` rig; on by
+  default, remembered per viewer (`localStorage` `mewged.art.ghostCat`).
+- **Never emitted**: nothing is added to the scene; the SWF, `build_swf` and the validator are unchanged —
+  `test/art-ghostcat-tests.ts` pins the `_artprobe` and `dev-sandbox` builds byte-for-byte and checks that computing
+  ghosts leaves the scene and its findings untouched; `tests/e2e/art-mode.spec.ts` "Ghost cat" checks the overlay and
+  the toggle. The Ruffle tab (a built SWF) shows no ghosts.
+
 ---
 
 ## 4. Editor integration
@@ -623,4 +648,5 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     contract and `src/mcp/` untouched.
 12. Part-indexed cat assembly as a first-class preview mode (slots `body/head/tail/leg1/
     leg2/arm1/arm2`, OBSERVED as named instances on `MinecartCat`): the data model
-    supports it as a sprite with named layers; a dedicated "cat rig" UI is a follow-up.
+    supports it as a sprite with named layers; a dedicated "cat rig" UI is a follow-up. (Since 2026-10-20 the Rig tab;
+    since 2026-10-22 a `parts: "game"` rig previews with a ghost cat in its empty slots, §3.1.)

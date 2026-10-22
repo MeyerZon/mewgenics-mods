@@ -11,6 +11,7 @@ import { newFromTemplate as scaffold } from "./templates.ts";
 import { loadRegisteredNames } from "./names.ts";
 import * as artio from "./art/art-io.ts";
 import { readPalette, knownRowHints } from "./art/palette.ts";
+import { readGhostCatParts as readGhostParts } from "./art/ghost-cat-swf.ts";
 import { validateScene, exampleScene, DEFAULT_ABC_MODE } from "./art/scene.ts";
 import { newCatAnimation as catAnim } from "./art/cat-rig.ts";
 import type { NewCatAnimationOptions } from "./art/cat-rig.ts";
@@ -189,6 +190,10 @@ export function writeArtAsset(modName: string, relPath: string, bytes: Uint8Arra
 export function readArtPalette(which?: Parameters<typeof readPalette>[0]) {
   const p = readPalette(which);
   return { ...p, hints: knownRowHints(), defaultAbc: DEFAULT_ABC_MODE };
+}
+/** The ghost cat's part outlines for the preview: catparts.swf's silhouettes when extracted, else built-in (ghost-cat-swf.ts). */
+export function readGhostCatParts() {
+  return readGhostParts();
 }
 /** Write (or remove, for `control`) the SWF-gate files in mods/<mod>/swfs/ (docs/swf-emitter-fix-spec.md §8). */
 export function prepareSwfGate(o: Parameters<typeof artio.prepareSwfGate>[0]) {
