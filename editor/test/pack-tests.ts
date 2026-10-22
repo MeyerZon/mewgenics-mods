@@ -276,6 +276,22 @@ export async function runPackTests(test: TestFn, assert: AssertFn, eq: EqFn): Pr
     eq(r.manifest?.version, "1.2.0");
     assert(r.initialized === true, "reports it initialised the manifest");
   });
+  test("pack: detectNativeHalf finds native/mods/<mod>/build.bat's output DLL and the framework's FW_API_VERSION (init drafts native + frameworkApi)", () => {
+    const p = need(P, pErr, "src/core/pack.ts");
+    const root = mkdtempSync(join(tmpdir(), "pack-repo-"));
+    mkdirSync(join(root, "native", "mods", "cool-mod"), { recursive: true });
+    mkdirSync(join(root, "native", "framework", "src"), { recursive: true });
+    writeFileSync(join(root, "native", "mods", "cool-mod", "build.bat"), '@echo off\r\n"%GCC%" -shared ^\r\n  "%HERE%src\\cool.c" ^\r\n  -o "%OUT%\\cool_mod.dll"\r\n');
+    writeFileSync(join(root, "native", "framework", "src", "framework_api.h"), "#define FW_API_VERSION 4   /* bumped */\n");
+    const d = p.detectNativeHalf("cool-mod", root);
+    eq(JSON.stringify(d), JSON.stringify({ native: ["cool_mod.dll"], frameworkApi: 4 }));
+    eq(p.detectNativeHalf("data-only", root), null, "no native/mods/<mod>/ -> null");
+    const { mods, dir } = makeModsDir(null);
+    const r = p.initModManifest("cool-mod", { modsDir: mods, gameBuild: "25143593", repoRoot: root });
+    assert(r.ok, JSON.stringify(r));
+    const written = JSON.parse(readFileSync(join(dir, "mod.json"), "utf8")) as { native?: string[]; frameworkApi?: number };
+    eq(JSON.stringify([written.native, written.frameworkApi]), JSON.stringify([["cool_mod.dll"], 4]));
+  });
   test("pack: validation errors refuse (validation-errors, report returned) unless force; force packs and says so", () => {
     const p = need(P, pErr, "src/core/pack.ts");
     const { mods } = makeModsDir();
