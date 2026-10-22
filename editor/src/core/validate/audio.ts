@@ -3,8 +3,11 @@
 //     mono/stereo like every vanilla WAV (sound-format, warning); .ogg must be an Ogg stream (sound-not-ogg, error);
 //     a file at a pack path replaces the vanilla one (sound-replaces, info).
 //   - sound-set overlays (audio/<set>.gon[.merge|.patch]): every group's files resolve at audio/<Folder>/<file> in the
-//     mod or the pack (sound-missing, error); `.append` on a pack set duplicates SoundEffectGroups (sound-set-append).
-//   - music_info.gon overlays: every track file resolves at audio/music/<path> (sound-missing).
+//     mod or the pack (sound-missing, error) and are *.wav / *.ogg (sound-unsupported, error: SoundData::load 0x9718a0
+//     memcmps the extension and asserts); `.append` on a pack set hides its vanilla groups (sound-set-append); a new
+//     set file the game never loads (sound-set-not-loaded).
+//   - music_info.gon overlays: every track file resolves at audio/music/<path> (sound-missing) and is .ogg (or .mid
+//     under midi) (music-not-ogg: SoundStream::QueueSongChunk 0xb511b0 opens it with stb_vorbis).
 //   - data refs: a sound event key names a group of some set, pack or mod (sound-event-unknown, warning); an
 //     ambient_sound file resolves at audio/ambience/<file> (sound-missing); music / override_music / new_music name a
 //     music_info track (music-unknown, warning).
@@ -66,9 +69,28 @@ export function makeAudioContext(index: AudioIndex | null, overlays: AudioOverla
   };
 }
 
+/**
+ * Is a sound-set file loaded by the game? App init 0x750f90 loads audio/combat_sfx.gon, ui_sfx.gon, house_sfx.gon,
+ * audio/voices/<n>.gon for each n in data/catgen.gon voice_sets / special_voice_sets, and every .gon that
+ * FileManager_ListDir 0x9a1900 lists under audio/npcvoices (pak + every mod path). `catgenText`: the mod's catgen
+ * overlay texts (a new voice set must be named there).
+ */
+export function soundSetIsLoaded(packPath: string, inPack: boolean, catgenText: string): boolean {
+  const p = packPath.toLowerCase();
+  if (inPack) return true;
+  if (/^audio\/(combat_sfx|ui_sfx|house_sfx)\.gon$/.test(p)) return true;
+  if (/^audio\/npcvoices\/[^/]+\.gon$/.test(p)) return true;
+  const voice = /^audio\/voices\/([^/]+)\.gon$/.exec(p);
+  if (!voice) return false;
+  // the name must appear as a word in the mod's catgen overlay (voice_sets [ ... name ... ])
+  const words = catgenText.replace(/\/\/[^\n]*|#[^\n]*/g, " ").split(/[\s[\],"{}]+/).map((w) => w.toLowerCase());
+  return words.includes(voice[1]!);
+}
+
 /** Checks on the mod's audio files and its sound-set / music_info overlays. */
 export function validateAudioFiles(modName: string, overlays: AudioOverlay[], modFiles: ModAudioFile[], ctx: AudioContext, rb: ReportBuilder): void {
   const fileOf = (rel: string): string => `mods/${modName}/${rel}`;
+  const catgenText = overlays.filter((o) => o.baseName.toLowerCase() === "data/catgen.gon").map((o) => o.text).join("\n");
   const touchesAudio = modFiles.length > 0 || overlays.some((o) => isSoundSetPath(o.baseName) || o.baseName.toLowerCase() === MUSIC_INFO);
   if (!ctx.index && touchesAudio) rb.info("audio-index-missing", `the pack's audio list is not cached, so sound files and groups are only checked against this mod: ${AUDIO_INDEX_HINT}`);
 
@@ -94,7 +116,11 @@ export function validateAudioFiles(modName: string, overlays: AudioOverlay[], mo
       const own = scanSoundSet(o.text);
       const base: SoundSet | undefined = ctx.index?.sets.get(o.baseName.toLowerCase());
       if (o.mode === "append" && base) {
-        rb.warn("sound-set-append", `${o.relPath} appends to the pack set ${o.baseName}: a second SoundEffectGroups block is a duplicate name, not a merge — use ${o.baseName}.merge to add groups`, at());
+        rb.warn("sound-set-append", `${o.relPath} appends to the pack set ${o.baseName}: LoadSoundEffectSet reads SoundEffectGroups by name, so the appended block hides every vanilla group of the set — use ${o.baseName}.merge to add groups`, at());
+      }
+      const inPack = base !== undefined || ctx.index?.files.has(o.baseName.toLowerCase()) === true;
+      if (ctx.index && !soundSetIsLoaded(o.baseName, inPack, catgenText)) {
+        rb.warn("sound-set-not-loaded", `${o.baseName} is a new sound set the game never loads: only audio/combat_sfx.gon, ui_sfx.gon, house_sfx.gon, audio/npcvoices/*.gon and audio/voices/<n>.gon named in data/catgen.gon voice_sets / special_voice_sets are read — add your groups to one of those (e.g. audio/combat_sfx.gon.merge)`, at());
       }
       const folder = own.folder ?? base?.folder ?? null;
       if (folder === null) {
@@ -103,6 +129,7 @@ export function validateAudioFiles(modName: string, overlays: AudioOverlay[], mo
       }
       for (const [ev, files] of own.events) {
         for (const file of files) {
+          if (!/\.(wav|ogg)$/.test(file)) rb.error("sound-unsupported", `${file} (group ${ev}): the game loads only *.wav and *.ogg (lower-case extension) and stops with "Unsupported Sound File" otherwise`, at(`SoundEffectGroups.${ev}.files`));
           const p = soundFilePath(folder, file);
           if (ctx.exists(p) === false) rb.error("sound-missing", `group ${ev} plays ${file}, but ${p} is neither in this mod nor in the pack`, at(`SoundEffectGroups.${ev}.files`));
         }
@@ -110,6 +137,7 @@ export function validateAudioFiles(modName: string, overlays: AudioOverlay[], mo
     } else if (o.baseName.toLowerCase() === MUSIC_INFO) {
       for (const [track, files] of scanMusicInfo(o.text)) {
         for (const file of files) {
+          if (!/\.(ogg|mid)$/.test(file)) rb.error("music-not-ogg", `music track ${track} names ${file}: songs are Ogg Vorbis streams (SoundStream::QueueSongChunk opens them with stb_vorbis); .mid is only for the midi field`, at(track));
           const p = `audio/music/${file}`.toLowerCase();
           if (ctx.exists(p) === false) rb.error("sound-missing", `music track ${track} names ${file}, but ${p} is neither in this mod nor in the pack`, at(track));
         }
