@@ -122,6 +122,24 @@ static const char *parse_unit(MtScript *s, const char *p, MtDirective *d, char *
     return p + ul;
 }
 
+/* a colour component: digits with at most one '.', no sign, 0 <= v <= 1 */
+static int parse_unit_float(const char *p, size_t n, float *out) {
+    char tmp[32];
+    int digits = 0, dots = 0;
+    if (n == 0 || n >= sizeof tmp) return 0;
+    for (size_t i = 0; i < n; i++) {
+        if (p[i] >= '0' && p[i] <= '9') digits++;
+        else if (p[i] == '.') dots++;
+        else return 0;
+    }
+    if (!digits || dots > 1) return 0;
+    memcpy(tmp, p, n); tmp[n] = 0;
+    double v = strtod(tmp, NULL);
+    if (v < 0.0 || v > 1.0) return 0;
+    *out = (float)v;
+    return 1;
+}
+
 static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, char *err, size_t errCap, int *errLine) {
     char tmp[MT_MAX_LINE + 1];
     if (len > MT_MAX_LINE) return fail(err, errCap, errLine, lineNo, "line longer than 4096 bytes");
@@ -353,6 +371,37 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             if (d.scene != MT_SCENE_CAMPAIGN || ml != 5 || strncmp(modeTok, "house", 5)) return fail(err, errCap, errLine, lineNo, "enter: the only mode is: enter Campaign house");
             if (*skip_ws(modeTok + ml)) return fail(err, errCap, errLine, lineNo, "enter takes a scene name and at most one mode word");
             d.enterMode = MT_ENTER_HOUSE;
+        }
+    } else if (wl == 4 && !strncmp(p, "glow", 4)) {
+        /* glow <idx|bareword|"name"> (<r> <g> <b> <a> | off) */
+        d.kind = MT_D_GLOW;
+        if (!*rest) return fail(err, errCap, errLine, lineNo, "glow needs: <unit> <r> <g> <b> <a> | <unit> off");
+        if (!(d.a = arena_add(s, rest, strlen(rest)))) return fail(err, errCap, errLine, lineNo, "script too large");
+        const char *unit = rest, *tail;
+        if (*unit == '"') {
+            tail = parse_quoted(unit, q, sizeof q, &qn);
+            if (!tail) return fail(err, errCap, errLine, lineNo, "glow: bad quoted unit name");
+            if (!(d.b = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
+        } else {
+            size_t ul = tok_len(unit);
+            long idx;
+            if (parse_uint(unit, ul, &idx)) { d.unitIsIndex = 1; d.n = idx; }
+            else if (!(d.b = arena_add(s, unit, ul))) return fail(err, errCap, errLine, lineNo, "script too large");
+            tail = unit + ul;
+        }
+        tail = skip_ws(tail);
+        size_t tl = tok_len(tail);
+        if (tl == 3 && !strncmp(tail, "off", 3)) {
+            if (*skip_ws(tail + tl)) return fail(err, errCap, errLine, lineNo, "glow: unexpected text after off");
+            d.glowOff = 1;
+        } else {
+            const char *t = tail;
+            for (int k = 0; k < 4; k++) {
+                size_t nl = tok_len(t);
+                if (!nl || !parse_unit_float(t, nl, &d.rgba[k])) return fail(err, errCap, errLine, lineNo, "glow needs four colour values 0..1 (r g b a) or off");
+                t = skip_ws(t + nl);
+            }
+            if (*t) return fail(err, errCap, errLine, lineNo, "glow: unexpected text after the colour");
         }
     } else if (wl == 4 && !strncmp(p, "quit", 4)) {
         d.kind = MT_D_QUIT;

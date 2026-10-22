@@ -81,6 +81,7 @@ const FwHookSpec FW_HOOK_PLAN[] = {
     LK_ROW(7), LK_ROW(8), LK_ROW(9), LK_ROW(10), LK_ROW(11), LK_ROW(12),
     { FW_HOOK_STATUS_BARRIER, 0, 0, "status hooks", FW_HOOK_ABORT },
     { FW_HOOK_SYMBOL, FW_SYM_TurnControl_NextTurn, 100, "TurnControl::NextTurn", FW_HOOK_ABORT },
+    { FW_HOOK_SYMBOL, FW_SYM_TacticsTest_LateRender, 100, "TacticsTest::LateRender (unit glow)", FW_HOOK_ABORT },
 };
 const size_t FW_HOOK_PLAN_COUNT = sizeof FW_HOOK_PLAN / sizeof FW_HOOK_PLAN[0];
 

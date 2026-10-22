@@ -17,7 +17,7 @@ export const HEADER_PATHS = Object.freeze({
 });
 
 /** BuildInfo scalar fields, in struct order, with the manifest exposure.field that supplies each. */
-const BUILD_FIELDS = ["rva_LuckUp_vftable", "rva_Status_vftable", "rva_DefaultStatusSource", "luckUpTypeId"];
+const BUILD_FIELDS = ["rva_LuckUp_vftable", "rva_Status_vftable", "rva_DefaultStatusSource", "luckUpTypeId", "rva_TacticsTest_vftable"];
 
 export class GenError extends Error {
   constructor(message: string) {
@@ -82,6 +82,7 @@ typedef struct BuildInfo {
     uint32_t rva_Status_vftable;       /* glaiel::Status::vftable */
     uint32_t rva_DefaultStatusSource;  /* default applier source when the caller passes null */
     uint32_t luckUpTypeId;             /* value returned by LuckUp vtable slot 1 */
+    uint32_t rva_TacticsTest_vftable;  /* glaiel::TacticsTest::vftable (slot 19 = the glow engine's hook target) */
     uint32_t rva_data[FW_DATA_COUNT_]; /* FwData order */
     const SymbolSig *symbols;          /* FW_SYMBOL_COUNT_ entries, FwSymbol order */
     const uint32_t *lkRvas;            /* FW_LK_COUNT entries, status_engine lookup order */

@@ -25,6 +25,20 @@ int fw_msvc_eq(const MsvcString *s, const char *lit) {
     return s->size == n && memcmp(msvc_str(s), lit, n) == 0;
 }
 
+int fw_msvc_init(MsvcString *s, const char *text, FwStringAlloc alloc) {
+    size_t n = strlen(text);
+    if (n <= 15) {
+        memcpy(s->u.buf, text, n); s->u.buf[n] = 0; s->size = n; s->cap = 15;
+        return 1;
+    }
+    size_t cap = n | 15;
+    char *p = alloc ? (char *)alloc(cap + 1) : NULL;
+    if (!p) return 0;
+    memcpy(p, text, n); p[n] = 0;
+    s->u.ptr = p; s->size = n; s->cap = cap;
+    return 1;
+}
+
 MsvcString *fw_vtable_get_type_name(const FwVtableIdentity *id, MsvcString *out) {
     fw_msvc_init_sso(out, id->name);
     return out;

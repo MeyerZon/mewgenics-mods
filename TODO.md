@@ -1,43 +1,37 @@
 # TODO — Mewgenics modding toolkit
 
-Living status snapshot (last updated 2026-10-19 evening: owner ran the game-side checks; every PR through #23 is merged, none open). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
+Living status snapshot (last updated 2026-10-22: the 2026-10-21/22 parallel RE run is in PRs #73–#83 + two in flight, none merged yet; everything through #72 is merged). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 
-## Open decisions — return to these next time (parked 2026-10-21)
+## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
-Owner: "we will decide on it later". Everything through PR #71 is merged; the docs sweep at the end of this list is
-done (2026-10-21). Owner's answers of 2026-10-21 are recorded under each item; cat parts and filters stay open.
+Owner: "we will decide on it later". Everything through PR #72 is merged; the 2026-10-21/22 run answered most of
+these without a decision (status per bullet below; the PR map follows).
 
-- [ ] **Cat parts in a rig — which route, if any?** Still under discussion (owner, 2026-10-21). The import route is closed (#71: `ImportAssets2` entries are never
-      linked, placing one crashes — engine-map "Imports are not linked"). Options:
-      (a) copy part geometry from catparts.swf into the mod — ~1 day, 1–2 PRs; frozen copies that do not follow each
-      cat's look, and publishing the mod redistributes game art;
-      (b) native swap (the game puts its own per-cat parts into our rig's slots) — several RE sessions, 3–6 PRs,
-      uncertain;
-      (c) neither — keep drawing our own parts (Rig tab + SVG round trip).
-      Either way the editor now authors cat *animations* in the engine's shape (`_Append_CatTest` frames `<name>F`/`<name>B`
-      placing a rig as the child `ani` at depth 1: `newCatAnimation`, `new_art_scene template cat-animation`, the Rig
-      tab) with EMPTY slot sprites (`parts: "game"`) that the game fills with the cat's own parts (catB decompile; a
-      visible non-empty slot is the A0 crash) — OBSERVED in PR #74 once its empty-slot run lands; the back facing's
-      `head_back` layout and the four-way `LF/RF/LB/RB` quartet are not authored yet; an opt-in for a deliberate
-      `CatTest` export (now refused: `cat-clip-override`) is not built; the preview draws nothing for empty slots (a
-      ghost cat would help).
-      **Appended cat animations work at the data layer with empty slots — OBSERVED 2026-10-22** (experiment A0,
-      `npm run test:artprobe -- --cat-append`, engine-map "CatTest and the cat animation clips"): a `_Append_CatTest`
-      frame placing a rig whose seven slots are EMPTY 1-frame sprites is filled by the game with the cat's own parts
-      (CatParts' create path; the 2026-10-21 crash at `+0x741f5d` was the visible non-empty placeholder — catB). So
-      route (b) costs nothing for cat animations; a native hook is only needed for scoped standalone rig clips (a
-      non-`_CAT` character getting a cat's parts), and (a)/(c) stay the options for drawn parts on such a character.
-- [x] **Localized text?** Texts (#69) are the literal initial string in a game font. Should mods get localized text
-      (loc keys / per-language strings), and is Peralta the right default font?
-      **Owner, 2026-10-21: deferred; Peralta is fine as the default for now.** No work queued.
-- [x] **Filters / glows** — answered 2026-10-21: the game refuses any PlaceObject3 filter ("FILTERS NOT SUPPORTED",
-      #65; the loader has no filter renderer at all, `PlaceObject::decode3` 0xb78210 stops on the flag bit), so the
-      validator keeps blocking them and the **bake helper is done**: `bakeGlow` / `bakeDropShadow`
-      (`editor/src/core/art/glow.ts`), MCP `bake_glow`, the shape row's "Bake glow…" — a halo shape `<id>_glow` of
-      concentric outline bands placed under the source; `glow-baked` info findings; docs in `engine-map` "Glow and
-      outline passes", `art-pipeline` §6, `data-mods` "Lighting and tint knobs". Engine-side, data has only
-      `CharacterLightSource.glow` (ground disc) and `AdvancedTint` (brightness). A native per-unit rim (the combat
-      outline pass with a per-unit colour and an always-on mask) is being pursued in session `rim`.
+- [x] **Cat parts in a rig — which route, if any?** **Resolved 2026-10-22 as data-only for cat animations** (PR #74:
+      experiment A0 — a `_Append_CatTest` frame placing a rig whose seven slots are EMPTY 1-frame sprites is filled by
+      the game with the cat's own parts, palette, texture and face; the 2026-10-21 crash at `+0x741f5d` was a visible
+      non-empty placeholder — `CatParts::prerender` decompile, session catB; PR #76: the editor authors exactly that
+      shape — `new_art_scene template cat-animation`, `parts: "game"` rigs, `cat-anim-*` validator codes, the Rig tab).
+      The import route stays closed (#71). What remains native or copied: a non-`_CAT` character wearing a cat's parts
+      (hook seam S1 in engine-map "Cat parts: entry path, palette, faces, mirroring" — parked, optional) and new part
+      art in catparts.swf. Not authored yet: the back facing's `head_back` layout, the four-way `LF/RF/LB/RB` quartet,
+      a ghost cat in the preview for empty slots.
+- [x] **Localized text?** **Owner, 2026-10-21: deferred; Peralta is fine as the default font.** Since then session
+      `loc` found it **looks data-only** (the text-box ctor 0x98d910 localizes an initial text that is a loc key; every
+      `data/text/*.csv` is loaded — engine-map "Localization and text fields", INFERRED for mods, untested). A probe
+      script is queued as agent work (`docs/data-mods.md` "Localized text for mods"); no editor change until it passes.
+- [x] **Filters / glows** — answered 2026-10-21 (PR #80): the game refuses any PlaceObject3 filter (the loader has no
+      filter renderer; `PlaceObject::decode3` 0xb78210 stops on the flag bit), so the validator keeps blocking them and
+      the **bake helper is done**: `bakeGlow` / `bakeDropShadow` (`editor/src/core/art/glow.ts`), MCP `bake_glow`, the
+      shape row's "Bake glow…"; engine-side data has only `CharacterLightSource.glow` (ground disc) and `AdvancedTint`
+      (brightness) — engine-map "Glow and outline passes", `data-mods` "Lighting and tint knobs". A **native per-unit
+      rim** (a mask + the game's blur/composite passes with a per-unit colour) is in PR (branch
+      `feat/native-unit-glow`, session rim).
+- [ ] **Native per-unit glow — what next?** The rim landed (#86, stacked on #79): `FW_SetUnitGlow(Character*, rgba)`
+      draws a rim through the game's outline mask (one shared colour, combat only, the rim shader shipped by
+      `mods/fw-glow`). Decide: (a) a data-level way to ask for it (a `registered-names.json` kind `glow` a
+      status/passive names?) and per-unit colours (v2: one material + pass per unit, or a camera per colour); (b)
+      whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
       **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly).
@@ -48,16 +42,55 @@ done (2026-10-21). Owner's answers of 2026-10-21 are recorded under each item; c
       `vectorcraft_exec` (the same `window.vectorcraft` API in Playwright's headless Chromium, ~0.5–4 s to boot;
       skips when not vendored). The native `vectorcraft-cli mcp --headless` route needs an install and stays unasked.
       Remaining: T3 — the owner's look at the tab and at a `vectorcraft_exec` drawing in game.
-- [ ] **T3 looks** (owner, 2026-10-21: he will do these later) still unticked from the art PRs — the shots are in `editor/data/ingame-runs/` (`npm run
-      test:artprobe`, `npm run test:artprobe -- --cat` rebuild them):
+- [ ] **T3 looks** (owner, 2026-10-21: he will do these later) still unticked from the art PRs — the shots are in
+      `editor/data/ingame-runs/` (`npm run test:artprobe`, `-- --cat`, `-- --cat-append` rebuild them):
       gradient square red → black (#63); top green line shorter than the bottom one (#64); the add square a lightened
       dark red (#65); Timeline and Rig tabs readable and usable (#66, #67); PROBE in the game's lettering (#69); an
-      Export SVG → edit in VectorCraft/Inkscape → Replace… round trip (#70); the Ruffle tab (#59).
-- [x] **Agent, next session (no decision needed):** the deferred docs sweep — the modding skill's art section (root
-      timeline is game-driven, filters crash, imports crash, text, SVG round trip, export_svg = 24 MCP tools),
-      binding-port.md "Known limits", KNOWLEDGE-BASE's Ruffle line, CLAUDE.md's tool count. Done 2026-10-21
-      (`docs/sweep-art-bindings`); the sweep also found the "46 unanchored entries" items stale (closed by #53–#56:
-      every manifest entry is anchored) and ticked them below.
+      Export SVG → edit in VectorCraft/Inkscape → Replace… round trip (#70); the Ruffle tab (#59); the baked glow halo
+      (#80); the real cat standing in our appended frame under our marker (#74).
+- [x] **Agent, next session (no decision needed):** the deferred docs sweep — done 2026-10-21 in PR #73 (the modding
+      skill's art section, binding-port.md "Known limits", KNOWLEDGE-BASE's Ruffle line, CLAUDE.md's tool count; also
+      ticked the stale "46 unanchored entries" items, closed by #53–#56). The RE notes of 2026-10-21/22 are folded by
+      the docs PR in the map below.
+
+### 2026-10-21/22 parallel run — PR map (merge in this order; stacks noted)
+
+All open against `main` unless noted; CI is T0 only. Each line: what it ships, and the RE session behind it.
+
+- **#73** `docs/sweep-art-bindings` — the deferred docs sweep (skill art section, binding-port limits, KB Ruffle line,
+  tool count 24). Docs only.
+- **#74** `feat/cat-append-probe` — experiment A0 resolved: `_Append_CatTest` frames with EMPTY slot sprites get the
+  cat's own parts; parts `"game"` rigs; engine-map "CatTest and the cat animation clips" (session catB).
+- **#75** `fix/overlay-deepmerge-fidelity` — `.patch` engine fidelity to 0x946680 / 0x944cc0 / 0x944f50; the
+  row-by-row table in `data-mods.md`.
+- **#76** `feat/cat-animation-authoring` — cat animation authoring in the engine's shape (`newCatAnimation`,
+  `template: cat-animation`, `cat-anim-*` codes, Rig tab control); catA's animation driver facts in
+  art-preview-plan / the skill.
+- **#77** `fix/worktree-env-paths` — `MEWGENICS_EXTRACTED_DATA` honoured by the merge preview, `MEWGENICS_EDITOR_DATA`
+  added; tdd-procedure "Running the editor from a git worktree".
+- **#78** `fix/overlay-append-merge-fidelity` — **stacked on #75**: `.append` / `.merge` fidelity to `Gon_Append`
+  0x945410 / `Gon_DeepMerge_plain` 0x945c30 (dispatch 0x9a64a0, session loc's extra task); `merge-suffix-literal`.
+- **#79** `refactor/framework-pure-parts` — the framework's vtable clone + thunks, entity/component walks, symbol
+  resolution + hook plan become host-tested modules (149 native checks).
+- **#80** `feat/glow-bake` — baked glows / drop shadows (`bake_glow`, 25 MCP tools); engine-map "Glow and outline
+  passes"; `data-mods` "Lighting and tint knobs" (session glow).
+- **#81** `feat/swf-engine-rules` — the closed SWF display path as editor rules (`swf-rules.ts`, 12 codes, even-odd
+  preview); engine-map "SWF loader and display path"; the `tilesets.gon` redirect note (session disp).
+- **#82** `feat/bindings-hardening` — siggen fixes, null signatures as raw RVAs, five new port rungs with harvest
+  verification, `FrameBegin` body signature; engine-map "Status effects" additions (session bind).
+- **#83** `fix/gon-parser-fidelity` — editor GON typing matches the game's parser (quotes never type, `: =`
+  whitespace, strtol/strtod numbers, bool/null); engine-map "Data model", `data-mods` "GON typing fidelity"
+  (session gon).
+- **in flight** `feat/harness-hp-gon` — "GON at runtime": Character HP / shield / stats / GON entry + the GonObject
+  node layout in the manifest (15 offsets, 7 witness functions); `expect gon <unit> <path> …` and `expect unit … hp`
+  in the harness; engine-map "GON at runtime" (session gon). Against `main`.
+- **in flight** `feat/native-unit-glow` — **stacked on #79**: the per-unit glow bindings (7 FwSymbol functions, the
+  ShaderManager global, the TacticsTest vftable, 16 offsets) and the native rim; engine-map "Per-unit glow (native)"
+  (session rim).
+- **this PR** `docs/re-notes-2026-10-21` — folds what no PR above covers: engine-map "Cat parts: entry path, palette,
+  faces, mirroring" (catA + catC) and "Localization and text fields" (loc), the REA session lessons, the KB refresh,
+  `data-mods` "Localized text for mods", art-pipeline §4, this block. **Merge it last**: its TODO / KB / skill / §4
+  edits already fold in #73, #74, #76 and #80's wording, so on a conflict take this PR's version of those hunks.
 
 ## Owner checks — only you can do these (agents cannot)
 
