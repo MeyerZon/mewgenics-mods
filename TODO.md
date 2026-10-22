@@ -46,6 +46,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] **New tileset shot** (`cd editor && npm run test:ingame -- _roomprobe new-tileset`, run
       `20261022-131707-_roomprobe-new-tileset`, `shot-roomprobe-yard.png`): does the probe room sit in the junkyard
       art (the new tileset `roomprobe_yard`), with the three water puddles and the trash bag where `probe.lvl` puts them?
+- [ ] `pr-room-editor` (#125) — Rooms mode on `_roomprobe` → `probe.lvl`: does the grid read as the room, can you paint / place a spawn / edit a random list unaided, and are the tint swatches (not tileset art) enough?
 - [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)

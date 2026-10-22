@@ -222,5 +222,13 @@
     "shots": [],
     "regenerate": "ask an agent: MCP vectorcraft_exec { mod: dev-sandbox, shape body, shape.ellipse }, then Build SWF and look in the Ruffle tab or cd editor && npm run test:artprobe",
     "status": "open"
+  },
+  {
+    "id": "pr-room-editor",
+    "pr": 125,
+    "question": "Rooms mode on _roomprobe → probe.lvl: does the grid read as the room (puddles, trash bag, rats, 4 spawns where the in-game shot has them), can you paint a tile, place a spawn and edit a random list unaided, and are the tint swatches (not tileset art) enough?",
+    "shots": [],
+    "regenerate": "cd editor && npm run build && npm run web → http://127.0.0.1:4173/?mode=rooms → mod _roomprobe → roomprobe/probe.lvl (do not Save the probe room)",
+    "status": "open"
   }
 ]
