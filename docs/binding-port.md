@@ -12,12 +12,12 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 | Pinned fact | Count on 25143593 | Where it is used |
 |---|---|---|
 | PE identity (TimeDateStamp + SizeOfImage) | 1 | `fw_identify_build` |
-| Byte signatures of hooked/called functions | 15 FwSymbol + 20 reference functions | `resolve_symbols` |
+| Byte signatures of hooked/called functions | 28 FwSymbol + 27 reference functions (7 of them, since 2026-10-22, only as witness hosts for the Character/GonObject offsets) | `resolve_symbols` |
 | Raw RVAs of the 13 status-name lookups (`FW_LK`) | 13 (12 of them have no unique signature) | `status_engine.c` |
 | Data RVAs: App global, SDL3 DYNAPI jump table + 8 slots, default status source | 11 | `BuildInfo.rva_data`, `FW_GetData` |
 | Vftables (LuckUp, Status) and the LuckUp type id | 3 | vtable cloning, sanity check |
 | Vtable slot indices / count | 6 | `offsets.h` |
-| Struct offsets | 40 | `offsets.h` (`status_engine.c`, `mewtest.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG) |
+| Struct offsets | 55 (+ `GON_NODE_SIZE`) | `offsets.h` (`status_engine.c`, `mewtest.c`, `mt_gon.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG), +15 on 2026-10-22 (Character HP/stats/GON entry, the GonObject node layout — `docs/engine-map.md` "GON at runtime") |
 
 ## The manifest: `bindings/<steamBuildId>.json`
 
