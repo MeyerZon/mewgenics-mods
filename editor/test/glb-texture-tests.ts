@@ -124,4 +124,39 @@ export function runGlbTextureTests(test: TestFn, assert: AssertFn, eq: EqFn, fix
       eq(api.extractModelTexture(tmpMod, "models/plain.glb").code, "model-texture-missing");
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
+  // ---- OBSERVED (T2) ----
+  const observed = (name: string): string | null => (fixture ? fixture(name) : null);
+  test("OBSERVED (T2 2026-10-22, mesh-glb-tex-log.txt + summary): models/totem.glb with NO textures/models/totem.png — its embedded PNG decoded in the DLL (source embedded), uploaded by our functor (a GL name), the purple + lime checker drawn around the object's anchor, the crate's colours absent; no GL error", () => {
+    const log = observed("mesh-glb-tex-log.txt"), sum = observed("mesh-glb-tex-summary.json");
+    assert(!!log && !!sum, "fixtures present");
+    if (!log || !sum) return;
+    assert(/mesh: models\/totem\.glb: loaded 24 vertices, 12 triangles.*model-texture-embedded/.test(log), "the model load line names model-texture-embedded");
+    assert(/mesh: texture embedded:models\/totem\.glb for models\/totem\.glb: decoded 16x16 \(source embedded/.test(log), "decoded in the DLL, source embedded");
+    assert(/mesh: texture embedded:models\/totem\.glb gl name [1-9]\d* \(our glTexImage2D/.test(log), "our upload: a non-zero GL name at replay");
+    assert(!/model-texture-missing|untextured/.test(log), "no texture-missing / untextured line: the conventional file was not looked for");
+    assert(/mesh object f=\d+ handle=\d+ model=models\/totem\.glb tile .* tex=embedded:models\/totem\.glb palette=-1/.test(log), "the object line names the embedded texture");
+    const j = JSON.parse(sum);
+    eq(j.mode, "embedded");
+    eq(j.conventionPngPresent, false, "no textures/models/totem.png in the mod");
+    eq(j.judgement.verdict, "match", JSON.stringify(j.judgement.counts));
+    eq(j.judgement.staleChecked, true);
+    assert(j.otherJudgement.verdict === "absent", `the crate's colours are not there: ${JSON.stringify(j.otherJudgement.counts)}`);
+    eq(j.glErrors.length, 0);
+    eq(j.run.verdict, "pass");
+    assert(/1 real save file\(s\) unchanged/.test(j.run.save), "save guard");
+  });
+  test("OBSERVED (T2 2026-10-22, mesh-glb-explicit-log.txt + summary): MEWFW_MESH_PROBE_TEXTURE=models/crate.png on totem.glb — the explicit texture wins over the embedded image (source explicit): the crate's orange + grey around the anchor, the totem's purple + lime absent", () => {
+    const log = observed("mesh-glb-explicit-log.txt"), sum = observed("mesh-glb-explicit-summary.json");
+    assert(!!log && !!sum, "fixtures present");
+    if (!log || !sum) return;
+    assert(/mesh: texture models\/crate\.png for models\/totem\.glb: loaded 16x16 .*\(source explicit\)/.test(log), "App_GetTexture load, source explicit");
+    assert(!/texture embedded:models\/totem\.glb/.test(log), "the embedded image was never decoded");
+    const j = JSON.parse(sum);
+    eq(j.mode, "explicit");
+    eq(j.judgement.verdict, "match", JSON.stringify(j.judgement.counts));
+    assert(j.otherJudgement.verdict === "absent", `no purple / lime: ${JSON.stringify(j.otherJudgement.counts)}`);
+    eq(j.glErrors.length, 0);
+    eq(j.run.verdict, "pass");
+    assert(/1 real save file\(s\) unchanged/.test(j.run.save), "save guard");
+  });
 }
