@@ -126,6 +126,34 @@ room, else `default_tileset`, i.e. `alley`).
   "tileset art and the iso view" specs in `tests/e2e/rooms.spec.ts` (the swatch fallback runs everywhere; the art
   check skips without `.extracted/swfs`).
 
+## UI primitives and conventions (2026-10-22)
+
+PR 1 of the UX overhaul adds the shared building blocks; later PRs move the screens onto them.
+
+- **Tokens** (`web/src/app.css` `:root`, with light-theme values): spacing `--sp-1..6` (4–32 px), radii
+  `--r-sm/md/lg`, stacking `--z-menu/scrim/example/toast`, `--shadow-pop`, and the colours that used to be
+  hard-coded (`--gutter`, `--link-hover`, `--vc-bg`, `--merge`, the GON syntax palette `--syn-*`, used once by
+  `.hl .*`).
+- **Primitives** (`web/src/components/ui.tsx`): `Button`, `IconButton` (needs `aria-label`), `Pill`, `Tabs` /
+  `SubTabs` (`role=tablist`, ←/→), `Segmented` (`.modeswitch`, `aria-pressed`), `SearchBox`, `SectionHeader`,
+  `EmptyState`, `Summary`, `FindingsList`, `Field` (label then control, `useId`), `Checkbox`, `Select`, `Modal`,
+  `Drawer`, `Menu`, `PaneBoundary`. They render the existing classes, so a screen moved onto them keeps its DOM.
+  `EmptyState` and `PaneBoundary` live JSX-free in `components/boundary.ts` so Node can unit-test them.
+- **Hooks / modules**: `hooks/useDialog.ts` (role + aria-modal, focus in, Tab trap, focus restore, Esc, scroll
+  lock); `shortcuts.ts` (the one window keydown listener: Ctrl/Cmd+S is always default-prevented, then the handler
+  set with `setSaveHandler`; Esc closes the topmost overlay of the `pushOverlay` stack, menu > tour > modal >
+  drawer); `toast(text, {kind, ms})` over the `S.messages` queue (`state.ts`); `apiFetch` (`api.ts`) throws an
+  `ApiError {status, message, issues}` and toasts it; `useStoreShallow` (`store.ts`) for selectors that build
+  objects or arrays; `S.busy` / `setBusy`. `main.tsx` renders under `React.StrictMode`.
+- **Conventions test** (`test/web-conventions-tests.ts`, run by `npm test`): source-text rules over `web/src`:
+  no `S./A./R.set(` in `components/`, `art/`, `rooms/` views (the `*-state.ts` actions may), no `window.confirm`
+  outside `actions.ts`, no clickable `<span>`/`<div>` (the scrim click-outside shells are exempt), no
+  `defaultValue`/`defaultChecked` outside `art/Bits.tsx`, every `useEffect` has a dependency array, no index keys.
+  Today's violations are listed per file in `test/fixtures/web-conventions-allow.json`. **The allow-list only
+  shrinks:** a file over its allowance fails, and so does an allowance above the real count, so fixing a violation
+  means lowering its number in the same PR. It never grows; the goal is an empty list.
+- e2e: `tests/e2e/a11y.spec.ts` pins the dialog, menu, toast and Ctrl+S behaviour.
+
 ## Follow-ups (not in this stack)
 
 - Response-shape schemas for the `/api` GETs (today the client types them by hand in `web/src/types.ts`).
