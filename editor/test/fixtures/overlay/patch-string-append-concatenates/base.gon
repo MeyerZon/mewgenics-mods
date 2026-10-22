@@ -1,0 +1,8 @@
+# 0x946680 type-1 branch: policy 1 (append) or 4 (add) on string+string calls std::string::append (FUN_140051920);
+# any other policy assigns. Bools (type 5) and numbers (type 2) have no append rule: numbers add/multiply or
+# overwrite, bools overwrite.
+name "abc"
+tag foo
+flag true
+n 1
+qflag "true"   # quoted, still a bool (type 5): quotes are dropped before typing

@@ -2,7 +2,7 @@ mods: _golden-merge, _autoplay
 timeout: 120s
 # Golden through dump (TDD target 8): the same seeded fight as vanilla.mewtest, WITH the overlays.
 #   .merge  -> Rat's name is the appended loc row ("Golden Rat") and its faction is allies (1)
-#   .patch  -> Pooter's faction.overwrite allies (1); speed.add is not observable here (T0 only)
+#   .patch  -> Pooter's faction.overwrite allies (1); speed.add / health.multiply are pinned by numeric.mewtest (expect gon)
 #   .append -> GoldenRat exists as a new entry, spawnable, with its own loc row and the vanilla faction (enemies 2)
 wait frames 120
 seed 42

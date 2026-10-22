@@ -7,7 +7,7 @@
 #define FW_SIG_MAX_BYTES 128
 
 /* Parse an IDA-style pattern ("48 8B ?? C4") into bytes + mask (1 = must match).
- * Returns the byte count, 0 for an empty pattern, -1 on bad hex or more than `cap` bytes. */
+ * Returns the byte count, 0 for an empty pattern, -1 on a NULL pattern, bad hex or more than `cap` bytes. */
 int fw_parse_pattern(const char *sig, uint8_t *bytes, uint8_t *mask, size_t cap);
 
 /* Scan `len` bytes for the masked pattern. Returns the FIRST hit (or NULL) and ADDS the

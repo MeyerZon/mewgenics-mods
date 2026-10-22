@@ -12,7 +12,8 @@
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA } from "../repo.ts";
+import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, packPath } from "../repo.ts";
+import { COMPONENT_CACHE_HINT } from "../components.ts";
 import { parse, GonParseError } from "../gon/parser.ts";
 import { toValue } from "../gon/value.ts";
 import { parseOverlayName } from "../overlay/overlay.ts";
@@ -135,7 +136,9 @@ function modLocalNames(overlays: OverlayFile[]): ModLocalNames {
         continue;
       }
       if (root.t !== "obj") continue;
-      const names = root.entries.map((e) => parsePolicy(e.key).name);
+      // Only the `.patch` engine (0x946680) strips a key suffix; `.append` (0x945410) and `.merge` (0x945c30 under
+      // the constant MERGE policy) register the key as written, so "NewCat.overwrite" is the name the game sees.
+      const names = root.entries.map((e) => (o.mode === "patch" ? parsePolicy(e.key).name : e.key));
       if (o.category === "statuses") for (const n of names) statuses.add(n);
       if (o.category) {
         if (!byCategory.has(o.category)) byCategory.set(o.category, new Set());
@@ -211,6 +214,10 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   const local = modLocalNames(overlays);
   const loc = loadLocalization(root);
   const nativeBuild = opts.nativeBuild !== undefined ? opts.nativeBuild : installedNativeBuild(opts.env);
+  if (!sets.componentListKnown) {
+    // Without a list every component would be "unknown": say once why they are not checked instead.
+    rb.info("component-list-missing", `no component class names are known, so passives / ai brains / classes are not checked: ${COMPONENT_CACHE_HINT}`);
+  }
 
   // Union of localization keys available: base + mod-added.
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
@@ -240,6 +247,7 @@ function validateGonOverlay(
   dataRoot: string,
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
+  const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
   let root;
   try {
     root = parse(o.text);
@@ -282,7 +290,7 @@ function validateGonOverlay(
     if (key === "passives") {
       if (value.t === "obj") {
         for (const pe of value.entries) {
-          if (!sets.components.has(pe.key)) {
+          if (hasComponentList && !sets.components.has(pe.key)) {
             rb.warn("unknown-component", `unknown component class "${pe.key}" in passives`, { file, path: [...here, pe.key].join(".") });
           }
           if (/Status/.test(pe.key) && pe.value.t === "obj") {
@@ -313,7 +321,7 @@ function validateGonOverlay(
       return;
     }
     if (key === "brain") {
-      if (value.t === "str" && !sets.components.has(value.raw)) {
+      if (value.t === "str" && hasComponentList && !sets.components.has(value.raw)) {
         rb.warn("unknown-component", `ai brain "${value.raw}" is not a known component class`, at);
       }
       return;
@@ -325,7 +333,7 @@ function validateGonOverlay(
           if (sets.classes.size > 0 && !sets.classes.has(value.raw)) {
             rb.warn("unknown-class", `class "${value.raw}" is not a known cat class`, at);
           }
-        } else if (!sets.components.has(value.raw)) {
+        } else if (hasComponentList && !sets.components.has(value.raw)) {
           rb.warn("unknown-component", `class "${value.raw}" is not a known component`, at);
         } else checkNative(value.raw, at);
       }
@@ -378,8 +386,29 @@ function validateGonOverlay(
 
   for (const e of overlay.entries) handleField(e.key, e.value, []);
 
+  // ---- Literal suffixes outside .patch ------------------------------------------
+  // Only the `.patch` engine (0x946680) reads key suffixes. A `.merge` file runs Gon_DeepMerge_plain 0x945c30 under
+  // the constant MERGE policy (Gon_DefaultMergeMode 0x9451c0 returns 2) and `.append` runs Gon_Append 0x945410: in
+  // both, `faction.overwrite` is a child literally named "faction.overwrite", at any depth. Almost always a mistake.
+  if (o.mode === "merge" || o.mode === "append") {
+    const walkSuffixes = (node: VNode, path: string[]): void => {
+      if (node.t === "obj") {
+        for (const e of node.entries) {
+          const here = [...path, e.key];
+          if (parsePolicy(e.key).policy !== "default") {
+            rb.warn("merge-suffix-literal", `.${o.mode} files do not interpret key suffixes: "${here.join(".")}" is a literal child name, not a .${parsePolicy(e.key).policy} policy — use a .patch file for per-field policies, or drop the suffix`, { file, path: here.join(".") });
+          }
+          walkSuffixes(e.value, here);
+        }
+      } else if (node.t === "arr") {
+        node.items.forEach((it, i) => walkSuffixes(it, [...path, `[${i}]`]));
+      }
+    };
+    walkSuffixes(overlay, []);
+  }
+
   // ---- Overlay-target existence --------------------------------------------
-  const baseAbs = basePath(dataRoot, o.baseName);
+  const baseAbs = packPath(o.baseName, dataRoot);
   const baseExists = existsSync(baseAbs);
   if ((o.mode === "merge" || o.mode === "patch") && !baseExists) {
     rb.warn("base-missing", `${o.relPath} is a ${o.mode} overlay but base file ${o.baseName} was not found in the extracted base data (cannot verify targets)`, { file });
@@ -405,16 +434,6 @@ function validateGonOverlay(
       }
     }
   }
-}
-
-/**
- * Where a pack-relative base file lives on disk. `root` is the extracted `data/` tree, so
- * `data/<x>` maps straight under it; any other pack directory (`swfs/…`) is a sibling of it
- * (with the default root `.extracted/data` that is the old `.extracted/<baseName>` path).
- */
-function basePath(root: string, baseName: string): string {
-  const p = baseName.replace(/\\/g, "/");
-  return p.startsWith("data/") ? join(root, p.slice("data/".length)) : join(root, "..", p);
 }
 
 /**

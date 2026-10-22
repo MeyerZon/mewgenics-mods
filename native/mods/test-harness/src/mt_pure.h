@@ -66,11 +66,18 @@ typedef enum MtDirKind {
     MT_D_EXPECT_STACKS, /* expect stacks <Status> on <unit> (<op> N | varied) */
     MT_D_SHOT,          /* shot "<label>": emit a shot event, then hold MT_SHOT_HOLD_MS so the runner can capture the window */
     MT_D_SEED,          /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
-    MT_D_EXPECT_UNIT    /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
+    MT_D_EXPECT_UNIT,   /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
+    MT_D_EXPECT_GON     /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
 } MtDirKind;
-/* expect unit: which MtUnit field; name|class compare as strings (== !=), the rest as integers (any op) */
-typedef enum MtUnitField { MT_F_NAME, MT_F_CLASS, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND } MtUnitField;
+/* expect unit: which MtUnit field; name|class|namekey compare as strings (== !=), the rest as integers (any op).
+ * Order = mt_script.c UNIT_FIELDS = script.ts UNIT_FIELDS; the stat fields follow MT_STAT_* (data/characters order). */
+typedef enum MtUnitField {
+    MT_F_NAME, MT_F_CLASS, MT_F_NAMEKEY, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND, MT_F_HP, MT_F_SHIELD, MT_F_DIVINESHIELD,
+    MT_F_STRENGTH, MT_F_DEXTERITY, MT_F_CONSTITUTION, MT_F_INTELLIGENCE, MT_F_SPEED, MT_F_CHARISMA, MT_F_LUCK
+} MtUnitField;
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
+/* expect gon: how the value is compared (decided by the literal's shape at parse time) */
+typedef enum MtGonCheck { MT_G_NUM, MT_G_STR, MT_G_BOOL, MT_G_EXISTS, MT_G_MISSING } MtGonCheck;
 const char *mt_unit_field_name(MtUnitField f);
 #define MT_SHOT_HOLD_MS 700
 typedef enum MtOp { MT_OP_EQ, MT_OP_NE, MT_OP_GE, MT_OP_LE, MT_OP_GT, MT_OP_LT } MtOp;
@@ -103,6 +110,9 @@ typedef struct MtDirective {
     unsigned long long seed;   /* seed: the value (full 64-bit) */
     int enterMode;      /* enter: MT_ENTER_* */
     MtUnitField field;  /* expect unit: the field; a string value lives in a, an integer one in value */
+    const char *c;      /* expect gon: the quoted string value (a = the path, b/n = the unit) */
+    double dvalue;      /* expect gon: the numeric value; a bool value lives in value */
+    MtGonCheck gonCheck;
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
@@ -144,13 +154,35 @@ void       mt_queue_release(MtRequest *r);                                      
 int        mt_pipe_parse_request(const char *line, long *id, MtQOp *op, char *text, size_t cap, int *frames, char *err, size_t errCap);
 int        mt_pipe_error_reply(char *out, size_t cap, long id, const char *msg);        /* {"ev":"exec","id":N,"ok":false,"error":"..."} (no newline) */
 
+/* ---- mt_gon.c: a read-only walk of the game's GonObject tree (layout: the generated offsets.h OFF_GON_* / GON_NODE_SIZE) ---- */
+#define MT_STAT_COUNT 7           /* Character+OFF_CH_STATS: strength dexterity constitution intelligence speed charisma luck */
+#define MT_STAT_SPEED 4
+const char *mt_stat_name(int k);  /* the data/characters key of stat k, "?" out of range */
+#define MT_GON_TEXT 256
+typedef int (*MtMemRead)(void *u, const void *addr, void *out, size_t n);   /* guarded copy: 1 ok, 0 unreadable */
+typedef struct MtGonValue {
+    int type;               /* 0 null, 1 string, 2 number, 3 object, 4 array, 5 bool */
+    int i; double d; int b; /* the int / double / bool fields (valid for the matching type; read regardless) */
+    char text[MT_GON_TEXT]; /* the raw token text (every scalar keeps it) */
+    long childCount;        /* object / array */
+} MtGonValue;
+const char *mt_gon_type_name(int type);
+/* Walk `path` ("properties.health", "abilities.spells.0"; "" = the node itself) from `node`: an all-digit segment
+ * indexes the children vector, any other segment is the first child whose name (+OFF_GON_NAME) equals it — the
+ * linear scan of the game's child_by_name, without calling it. Returns 1 found (out filled), 0 missing (detail
+ * names the segment), -1 unreadable (detail says where; a NULL node is unreadable). */
+int mt_gon_get(MtMemRead rd, void *u, const void *node, const char *path, MtGonValue *out, char *detail, size_t cap);
+
 /* ---- mt_runner.c ------------------------------------------------------- */
 #define MT_UNIT_NAME 64
 #define MT_UNIT_STATUSES 24
 #define MT_STATUS_NAME 32
 typedef struct MtUnit {
     char name[MT_UNIT_NAME], cls[MT_UNIT_NAME];
+    char nameKey[MT_UNIT_NAME];            /* the display-name loc key, graphics.name (Character+OFF_CH_NAME_KEY; OBSERVED 2026-10-22, not the entry name) */
     int faction, move, act, turnKind;
+    int hp, shield, divineShield;          /* Character+OFF_CH_HP / OFF_CH_SHIELD / OFF_CH_DIVINE_SHIELD */
+    int stats[MT_STAT_COUNT];              /* Character+OFF_CH_STATS, mt_stat_name order */
     int statusCount;
     char statuses[MT_UNIT_STATUSES][MT_STATUS_NAME];
     int stacks[MT_UNIT_STATUSES];          /* parallel to statuses (Status+OFF_STATUS_STACKS) */
@@ -183,6 +215,10 @@ typedef struct MtHost {
     /* interactive mode: hand a reply to the pipe right now (used for quit, which exits before the pipe thread
      * would get to it); NULL when there is no pipe */
     void     (*pipe_reply)(void *u, const char *jsonLine);
+    /* GON at runtime (expect gon): a guarded memory copy and the unit's entry node (Character+OFF_CH_GON_ENTRY;
+     * NULL when the unit or the pointer is unreadable). The walker reads through mem_read only. */
+    int         (*mem_read)(void *u, const void *addr, void *out, size_t n);
+    const void *(*unit_gon)(void *u, int i);
 } MtHost;
 
 typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_IDLE } MtState;

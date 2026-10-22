@@ -106,6 +106,11 @@ TEST(scan_stops_counting_at_two) {
     CHECK_EQ(matches, 2);
 }
 
+TEST(parse_null_pattern_is_rejected) {
+    uint8_t b[8], m[8];
+    CHECK_EQ(fw_parse_pattern(NULL, b, m, sizeof b), -1);
+}
+
 TEST(scan_zero_length_pattern_is_rejected) {
     uint8_t b[4] = { 0 }, m[4] = { 0 };
     int matches = 0;

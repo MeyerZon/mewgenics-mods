@@ -20,8 +20,8 @@ For structured text files (`.gon`, `.csv`, `.txt`) a mod file is named `<origina
 | File | Semantics (from GON's `gon.h`) |
 |---|---|
 | `X.gon` (no suffix) | Replaces the whole file. Avoid; conflicts with every other mod touching it. |
-| `X.gon.append` | `Append`: objects and arrays get the mod's children added at the end. Use for new entries. |
-| `X.gon.merge` | `DeepMerge`: fields with matching names are merged recursively, new fields appended, mismatched types overwritten. Use for value changes. |
+| `X.gon.append` | `Append` (0x945410): every mod child is added at the end of the base object (arrays concatenate). A name the base already has is **kept twice** — nothing is merged or replaced, and the game's by-name lookup then sees the appended copy. Key suffixes are not read. Use for new entries. |
+| `X.gon.merge` | `DeepMerge` (0x945c30 under the constant MERGE policy): fields with matching names are merged recursively (the nth mod field named X into the nth base field named X), new fields appended, **arrays merged element-wise by index with the extra mod items appended**, strings/numbers and mismatched types overwritten. Key suffixes are **not** read (`foo.overwrite` is a field literally named `foo.overwrite`; the validator warns `merge-suffix-literal`). Use for value changes. |
 | `X.gon.patch` | `PatchMerge`: like merge, but each field in the patch chooses its policy with a suffix: `field.overwrite`, `field.append`, `field.merge` (default), `field.add`, `field.multiply` (numbers). |
 
 Examples in this repo: `mods/dev-sandbox/data/difficulties.gon.merge` (changes `wallet_size` on difficulty 0)
@@ -29,6 +29,131 @@ and `mods/dev-sandbox/data/abilities/fighter_abilities.gon.append` (adds `SpinDe
 
 CSV merge works by position: a `combined.csv.merge` row `,5,,` changes only column 2 of that row, so it is
 fragile when the base game adds rows. Prefer `.append` with new localization keys.
+
+## GON typing fidelity (2026-10-22)
+
+How the game reads a `.gon` file, OBSERVED in `Gon_LoadText` 0x940840 → `Gon_Tokenize` 0x93f090 →
+`Gon_ParseTokens` 0x93fcf0 (`.analysis/decompiled/`, notes in `.analysis/notes-gon.md` "Parser scalar typing"), and
+how the editor (`editor/src/core/gon/`) compares. The editor's AST keeps every byte (`serialize(parse(x)) === x`
+for all 210 vanilla files); its *typing* now follows the game's rules below. Pinned by `editor/test/gon-tests.ts`.
+
+**Tokenizer.** The text is wrapped in `{ … }` and split into tokens: `{` `}` `[` `]` are single-character tokens
+(no space needed: `a{b 1}`); `,` `:` `=` are whitespace, exactly like space / tab / CR / LF (`a=5`, `a:5`,
+`[1,2,3]`); `#` starts a comment to end of line, even mid-token; `"` opens a quoted token (any pending bare token
+is flushed first), inside it `\` escapes the next character — **only `\n` becomes a newline**, `\t` is a plain `t`,
+`\"` → `"`, `\\` → `\` — and the closing `"` ends the token. **The quotes are dropped and no "was quoted" flag
+survives**: `"5"` and `5` reach the parser as the same token. Unclosed quote / comment → `GON ERROR: didn't close
+a quote/comment somewhere`. `//` and `/* */` are **not** in this tokenizer, yet 188 / 35 of the 210 vanilla
+`data/*.gon` files use them (comments containing `"`, `{`, `:` that would otherwise break parsing), so an earlier
+pass must strip them (INFERRED; not located — a candidate is the text pass at 0xa50bd0 before parsing).
+
+**Parser.** `{` → object (type 3, children are `name value` pairs; `GON ERROR: missing a '}'`), `[` → array
+(type 4; `missing a ']'`), anything else is a scalar typed **from its text alone**: type starts as string (1) and
+the raw text is stored on the node (`+0x68`); `strtol(text, &end, 0)` → if `*end == 0` the node is a number (2)
+with the int view at `+0x50`; `strtod(text, &end)` → if `*end == 0` number with the double view at `+0x58` (both
+views are always stored: `1.5` → int 1 + double 1.5, `017` → int 15 + double 17, `1e3` → int 1 + double 1000);
+then exactly `null` → null (0), `true` / `false` → bool (5). `Int()` returns the strtol view, `Number()` the
+double, `String()` the stored text for strings, numbers and bools alike, `Percent()` reads `5%` as 0.05 from a
+string; `.add` / `.multiply` (Gon_DeepMerge 0x946680) add / multiply the **double** views and re-render the text
+(integers without a decimal point). `Bool()` on a non-bool logs `is not a bool`.
+
+| Rule | Game (OBSERVED) | Editor before | Editor now |
+|---|---|---|---|
+| `"5"` vs `5` | identical number nodes (quotes dropped before typing); 12 vanilla `animation_suffix "2"` are numbers whose `String()` is `"2"` | quoted → string, `.add`/`.multiply` refused it, `patch-nonnumeric` warned | **DIVERGED → fixed**: `type: "number"`, `num 5`; `quoted` kept for the pretty-printer only; references still compare text |
+| `0x10` / `0X1f` | number 16 / 31 (`strtol` base 0; `strtod` hex float) | string | **DIVERGED → fixed**: number |
+| `1e3`, `-3`, `.25`, `5.`, `+7`, `1.5` | numbers (`strtod`) | numbers | MATCH |
+| `017` | number; int view 15, double 17 | number 17 | MATCH (double view); the int view is not modelled — editor-only representation (only `Int()` sees it) |
+| `""` (104 vanilla uses, e.g. `tooltip ""`) | **number 0** (`strtol` consumes nothing, `*end` is the NUL); `String()` still returns `""` | string | **DIVERGED → fixed**: `type: "number"`, `num 0`, `raw ""` |
+| `" 5"` / `"5 "` | number / string (`strtol`/`strtod` skip leading whitespace only) | string / string | **DIVERGED → fixed** |
+| `inf`, `-Infinity`, `nan` | numbers (UCRT `strtod`, C99; none in vanilla) | strings | **DIVERGED → fixed** (libc inference) |
+| `true` / `false` | bool only with exactly these spellings, quoted or not | no bool type: both were strings | **DIVERGED → fixed**: `type: "bool"`, quoted or not |
+| `True`, `TRUE`, `yes`, `no` (46 vanilla `no`), `1` | string / string / string / string / number | same | MATCH |
+| `null` / `"null"` | null type (absent for every getter) | string | **DIVERGED → fixed**: `type: "null"` |
+| `5%` (463 vanilla), `3+bonus…`, `pt-br`, `2-X`, `1.2.3`, `0x`, `+`, `-` | strings | strings | MATCH |
+| `,` as whitespace | yes | yes | MATCH |
+| `:` `=` as whitespace (`a=5`, `a:5`, `[1:2=3]`) | yes (no vanilla line has either outside a comment or a quoted string) | no — `a=5` was one bare token | **DIVERGED → fixed**; they live in the trivia, round trip intact; a string holding `=` `:` `,` is now pretty-printed quoted |
+| `{ } [ ]` adjacency (`a{b 1}`, `c[2]`, `"a"5`) | single-char tokens; a quote flushes the pending token | same | MATCH |
+| `#` line comment, also mid-token (`5#c` → `5`) | yes | yes | MATCH |
+| `//` line and `/* */` block comments | not in the tokenizer; stripped earlier (INFERRED from 188 / 35 vanilla files) | comments | MATCH (inferred); editor-only until the pass is located |
+| `#include "standard_nodes.gon"` (the 20 `maps/*.gon`, inside `nodes { … }`; the only vanilla `#` use) | to the tokenizer a `#` comment — so the same pre-pass must be a preprocessor that inlines the file (INFERRED) | a comment; the included nodes are invisible to the editor | gap (not fixed here): the editor neither inlines nor validates includes — a mod overlaying `maps/*.gon` nodes sees fewer base children than the game |
+| `\n` in quotes | newline (5 vanilla uses) | newline | MATCH |
+| `\t`, `\r` in quotes | plain `t`, `r` | tab, CR | **DIVERGED → fixed**; the pretty-printer emits raw tabs / CRs and escapes only `\` `"` `\n` |
+| `\"`, `\\`, `\/`, `\z` | `"`, `\`, `/`, `z` | same | MATCH |
+| scalar keeps its source text | yes (`+0x68`) | yes (`raw` + the exact token bytes) | MATCH |
+| "was quoted" | no such flag | `quoted` drove typing | editor-only representation: `quoted` survives for byte-faithful output, never for typing |
+| unclosed `"` / `{` / `[` | `GON ERROR: didn't close …` / `missing a '}'` / `missing a ']'` | `GonParseError` | MATCH (as a `gon-parse-error` finding) |
+
+Consequences for mods: `.add` / `.multiply` work on `"10"`; a quoted numeric is **not** a way to force a string
+(write `"5x"` or a non-numeric text if a string is needed, or check how the field is read — `String()` works on a
+number node, so `palette "9"` and `animation_suffix "2"` are fine as they are). Reference checks in the validator
+compare the text (`raw`), which is what `String()` returns, so quoted numeric names resolve as before.
+
+## Fidelity to the decompiled merges (2026-10-21)
+
+The GON decompiles on disk (`.analysis/decompiled/`, build 25143593) are, for the `.patch` side:
+`Gon_PatchMerge_a_0x944cc0.c`, the **key-suffix → policy parser** (returns 3 `.overwrite`, 1 `.append`, 2 `.merge`,
+4 `.add`, 5 `.multiply`, 0 none — checked in that order, and a key whose length *equals* the suffix length counts),
+`Gon_PatchMerge_b_0x944f50.c`, the **recursive suffix stripper** (removes each of the five once, in that order, on
+a node's own name and, for objects, all descendants; for arrays it recurses into the items), and
+`Gon_DeepMerge_0x946680.c`, the **policy-driven merge** `(this, other)` that reads `other`'s suffix. A GON node is
+0xb0 bytes: children vector at `+0x38/+0x40`, `int` at `+0x50`, `double` at `+0x58`, `bool` at `+0x60`, string
+value at `+0x68`, name at `+0x88`, type at `+0xa8` (0 null, 1 string, 2 number, 3 object, 4 array, 5 bool).
+
+The second pass (Ghidra session `loc`, `.analysis/notes-loc.md` "GON overlay functions") added the dispatch and the
+other two engines. The file manager (`FileManager_ResolveWithOverlays_0x9a09f0.c`) tags each overlay path by
+file-name suffix (`.append` → 1, `.merge` → 2, `.patch` → 3; `Gon_overlay_suffix_dispatch_0x9a1790.c` is only the
+"has one of the three suffixes" predicate), and **`Gon_overlay_apply` 0x9a64a0** (`Gon_overlay_apply_0x9a64a0.c`)
+parses each overlay and applies it to the resource's root: mode 0 swaps the whole object in, **mode 1 →
+`Gon_Append` 0x945410**, **mode 2 → `Gon_DeepMerge_plain` 0x945c30** with the `MergeMode` callback
+**`Gon_DefaultMergeMode` 0x9451c0, which returns the constant 2 (MERGE) for every node**, and **mode 3 →
+0x946680**. The helpers both engines share are `GonObject_assign` 0x30cd0 (copy-assign: children, int, double,
+bool, string, name, type), `GonObject_has_child_name` 0x942910 and `GonObject_child_by_name` 0x942b50 (`(this,
+name, nth)` — an occurrence counter; with `nth == 0` they defer to the undecompiled 0x942880 / 0x942da0, presumably
+the name index) and `FUN_14012a310(this, name) = index` (the name index write, repointed at every pushed child).
+
+The editor's engine is `editor/src/core/overlay/merge.ts` (+ `policy.ts`); the table is pinned by
+`editor/test/overlay-tests.ts` over `editor/test/fixtures/overlay/<case>/` (base + overlay → expected, compared
+structurally). Rows marked *fixed* diverged before an audit and were brought in line test-first.
+
+| Aspect | Decompiled behaviour (0x946680 unless noted) | Editor | Verdict |
+|---|---|---|---|
+| Which function serves which file kind | 0x9a64a0: `.append` → 0x945410, `.merge` → 0x945c30 with the constant policy 2, `.patch` → 0x946680. | `.append` → `append`; `.merge` → `deepMerge`; `.patch` → `patchMerge` (`overlay.ts`). | **MATCH** (was UNKNOWN). |
+| `.append` file, object + object (0x945410) | Every overlay child is pushed as a copy (`FUN_140028830` / `FUN_140947a30`) and the name index repointed at it. A name the base has is **kept twice**: nothing recurses, merges or overwrites; a by-name lookup resolves to the appended (last) child. No suffix is read. | `append` pushes every entry; the value model keeps both; `preview_merge` / `touchedEntries` resolve a name to its last occurrence and report `occurrences`. | **MATCH** (pinned by `append-duplicate-name-keeps-both`); the by-name resolution of the preview was *fixed* (first occurrence). |
+| `.append` file, array + array | Push a copy of every overlay item (concatenate). | Concatenate. | **MATCH** |
+| `.append` file, string + string | `std::string::append` (`FUN_140051920`) — concatenation. | Concatenate. | **MATCH** (*fixed*: overlay won). Only reachable below a file root, i.e. never through a file, since a root is an object. |
+| `.append` file, any other pair (number + number, object + array, …) | Logs `GON ERROR: Append incompatible types`, `this` unchanged. (A null `this` is first copy-assigned from `other` — INFERRED, Ghidra dropped the call's arguments — and would then append `other` onto itself; a parsed file root is never null.) | Base returned unchanged. | **MATCH** (*fixed*: overlay won). |
+| `.merge` file, policy | `Gon_DefaultMergeMode` 0x9451c0 returns 2 for every node, so 0x945c30 never runs the suffix parser: `foo.overwrite` is a child literally named `foo.overwrite` (pushed if absent), at any depth. | `deepMerge` never parses suffixes; the validator warns `merge-suffix-literal` on any suffixed key in a `.merge`/`.append` file and registers the literal key as the mod-local name. | **MATCH** (pinned by `merge-suffix-is-literal`; was UNKNOWN). The validator's mod-local name was *fixed* (it stripped suffixes for every mode). |
+| `.merge` file, object + object (0x945c30, mode 2 = mask `0x25` branch) | Per-call map name → count (`FUN_140123a00`); `has_child_name(this, name, nth)` → recurse `0x945c30(child_by_name(this, name, nth), other child, policy, policy)`; absent → push a copy + name index; the count bumps either way. | `mergeValue` with the same counter (`findNthIndex`). | **MATCH** (*fixed*: first occurrence always; pinned by `merge-duplicate-keys-nth-occurrence`). Same caveat as the `.patch` row: the `nth == 0` helpers are not decompiled. |
+| `.merge` file, array + array | Mode 2: for each overlay index `i`, `i < this.size` → recurse into `this[i]`; else push a copy. Neither replace nor concatenate (public GON's `DeepMerge(other, OVERWRITE, APPEND)` would concatenate — the game does not). | Element-wise by index, extras appended. | **MATCH** (pinned by `merge-array-elementwise-appends-extras`; was UNKNOWN). |
+| `.merge` file, string + string / number + number | Mode 2 is neither 4 nor 5: string assign; number copies double, int, string and bool views. | Overwrite. | **MATCH** |
+| `.merge` file, type mismatch (object vs array/scalar, bool, null) | Falls to `GonObject_assign` 0x30cd0: `this = other` whole (children, scalars, name, type). | `clone(overlay)`. | **MATCH** |
+| Suffix parser (`.patch`) | Order `.overwrite`, `.append`, `.merge`, `.add`, `.multiply`; first hit wins; `len >= suffix` (so a key that is exactly `.add` has the add policy and an empty name). | `policyOf` — same order, `>=`. | **MATCH** (*fixed*: was `>`). |
+| Stacked suffixes | Policy from the parser (first hit on the full key); lookup name from the sequential strip (0x944f50 order, each once): `x.add.overwrite` → overwrite, `x`; `x.overwrite.add` → add, `x.overwrite`. | `parsePolicy` = `policyOf` + `stripName`. | **MATCH** (*fixed*: one suffix was stripped). |
+| Key matching | Exact `std::string` compare on the stripped name; case-sensitive (the suffix compare is byte-exact; the lookup `FUN_140942910` is not decompiled but is keyed by the string). | `===` on the decoded key. | **MATCH** |
+| Duplicate keys | Per-call map name → count (`FUN_140123a00` `operator[]`, `+1` after each child); `FUN_140942910(this, name, nth)` / `FUN_140942b50(this, name, nth)`: the nth patch child named X merges into the nth base child named X, past the base's count it is appended. Suffixed children count under their stripped name. Children appended under an `.append`/`.add` parent do not touch the map. | `findNthIndex` + the same counter. | **MATCH** (*fixed*: first occurrence always). Inference: the two helpers' `(name, nth)` reading is the only one consistent with the counter; a probe (base `a a`, patch `a a`) would confirm. |
+| Type mismatch (obj/arr/scalar/bool/null in any mix) | Falls through every typed branch to `LAB_140947159`: copy-assign the patch node, then 0x944f50 strips its suffixes. | `overwriteWith` = clone + `stripPolicySuffixes`. | **MATCH** (*fixed*: suffixes were kept). |
+| Object, `.overwrite` | Same copy + strip. | Same. | **MATCH** (*fixed*). |
+| Object, default / `.merge` / `.multiply` | Per child: own suffix → own policy; no suffix → nth lookup, recurse (default) if present else push + strip. `.multiply` on an object is the default behaviour (mask `0x25` = {0, 2, 5}). | Same. | **MATCH** |
+| Object, `.append` / `.add` | Unsuffixed children pushed (+ strip) even when the name exists (duplicates); suffixed children still follow their own policy. `.add` on an object is `.append` (`uVar4 == 1 || uVar4 == 4`). | Same. | **MATCH** |
+| New field (absent in base) | Pushed with suffixes stripped recursively (object keys at every depth, including inside array items). | `stripPolicySuffixes(clone)`. | **MATCH** |
+| Bare suffix key (`.add { … }`) | Stripped name empty → `FUN_140946680(this, child)`: the child's value is merged into the parent itself under the child's policy (so `o { .add { a 5 } }` appends a duplicate `a`). A self-`.overwrite` also renames the node to `""` and later children land on whatever the node became. | Same recursion; the entry keeps its key, and once the node stops being an object the remaining children are dropped (they would be invisible on the game's side too). | **MATCH** (*fixed*: was a field named `.add`); the post-self-overwrite tail is a documented approximation. |
+| Array, `.append` / `.add` | Push copies of every item (`FUN_140028830` / `FUN_140947a30`) — **no** suffix strip on array branches. | Concat, no strip. | **MATCH** (pinned by `patch-array-push-keeps-item-suffixes`). |
+| Array, default / `.merge` / `.multiply` | Element-wise by index (`FUN_140942f30` = size): `merge(this[i], other[i])` with the item's own (empty) name → default; extra items pushed, not stripped. | Same. | **MATCH** |
+| Array, `.overwrite` | Copy + strip. | `overwriteWith`. | **MATCH** (*fixed*). |
+| Numbers, `.add` / `.multiply` | `double` arithmetic on `+0x58` (`other + this`, `other * this`); `int_data = (int)result`; string re-rendered as an integer when `result == (double)(int)result`, else as a double; `bool = result != 0`. Ints vs floats are the same double path. | JS doubles; `numberNode` renders `String(n)`. | **MATCH** on value. Text of a non-integral result (preview only) may differ from the game's formatting — irrelevant to the game, which reads `number_data`. |
+| Numbers, other policies | `.append`/`.merge`/`.overwrite`/default → copy value, int, string, bool. | Overwrite. | **MATCH** |
+| Strings, `.append` / `.add` | `std::string::append` (`FUN_140051920`) — concatenation. Other policies assign. | Concatenate when both sides are GON strings; else overwrite. | **MATCH** (*fixed*: was overwrite). |
+| Bools | No type-5 branch → any policy overwrites. | Bare `true`/`false` are treated as bools and overwrite. | **MATCH**, assuming the parser makes bare `true`/`false` bools (public GON does). |
+| Scalar typing (`"5"` quoted, `true`) | Decided by the GON parser, not by these three functions. | Quoted tokens are strings (`num: null`); bare numerics are numbers. | **UNKNOWN**: public GON's tokenizer drops the quotes, so `"5"` may be a number for `.add`. Settle by decompiling the tokenizer/`LoadFromTokens`, or a `.patch` `.add` on a numeric the units event shows (`move`). |
+| Recursion depth | Unbounded recursion. | Unbounded. | **MATCH** |
+| Order and comments | GON nodes carry no comments (dropped at tokenize); children keep insertion order, new ones at the end. | Value model drops trivia, pretty-prints; order preserved, new fields appended. Comments survive only in the AST used for file editing. | **MATCH** (the merged preview having no comments is by design — the game sees none either). |
+| Root policy | The file root has an empty name → default. | `patchMerge` starts at `default`. | **MATCH** |
+| Null type (0) | Counted as having no children; null vs anything → overwrite. | No null node exists in the value model. | n/a |
+
+Probe recipe for the remaining UNKNOWN row (scalar typing) and for the inferred `nth == 0` lookup: a test-only mod
+under `mods/_golden-merge/` (see "Test-only overlays") with the overlay in question, `seed 42`, `enter TacticsTest`,
+`spawn`, `dump`, and `expect unit` on `faction` / `move`; compare with MCP `preview_merge` for the same file. Keep
+this section in sync with `merge.ts` and the fixtures.
 
 ## Content shapes seen in the pack
 
@@ -42,6 +167,30 @@ fragile when the base game adds rows. Prefer `.append` with new localization key
   In this repo `mods/<mod>/swfs/` is **build output** of the editor's art pipeline (the SWF and the generated
   `swflist.gon.append`) and is git-ignored; the source is `mods/<mod>/art/*.scene.json`.
 - **Text** (`data/text/combined.csv`): `KEY,en,notes,sp,fr,de,it,pt-br,ru,ko,ja,zh-cn`.
+- **Tilesets** (`data/tilesets.gon`): one flat object per tileset (`alley`, `junkyard`, `sewers`, …, `house`,
+  `tutorial`, `finalboss`; 22 in this build) of `key value` string pairs plus `global_objects` / `reverb`
+  sub-objects, keyed by `default_tileset`. The game also uses it as a per-tileset **clip-name indirection** (below).
+
+### Redirecting a vanilla character's clip via tilesets.gon (INFERRED, untested)
+
+Decompiled 2026-10-21 (`ResolveClipName` 0x7bdbb0, called by `CharacterGraphics_build` 0xf1150 with
+`(graphics.movieclip, "auto")` before the SymbolClass lookup; `docs/engine-map.md` "SWF loader and display path"):
+for every **non-cat** character the game first looks `graphics.movieclip` up as a key in the *current* tileset's
+object of `tilesets.gon` and, when the value is a string, uses that string as the clip name instead. Vanilla uses this
+for `non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. Since the table is loaded once at boot
+(`SpawnDatabase_init` 0x7a74b0), a mod overlay applies, so a data-only redirect should exist:
+
+```
+// data/tilesets.gon.patch — draw the Rat with the mod's SymbolClass MyModRat, without touching enemies.gon
+alley    { Rat MyModRat }
+junkyard { Rat MyModRat }
+// … one row per tileset the character can appear in (incl. house if it shows there)
+```
+
+Caveats: the key namespace is shared with the tileset slots (`combat_background`, `static_*`, `debris`,
+`event_piece_frame`, `reverb`, `global_objects`), the `_CAT` branch does not pass through this function, and the
+validator does not model it. Not run in-game yet; the alternative is a mod SWF exporting the vanilla name itself
+(by-name lookup prefers the last-loaded file; validator info `export-shadows-vanilla`), equally INFERRED.
 
 Extract reference copies with `python -I tools/gpak.py extract .extracted --prefix data/` (git-ignored).
 
@@ -98,7 +247,16 @@ units event with `expect unit`. OBSERVED: `enemies.gon.merge` (`Rat { graphics {
 { faction allies } }`) → the spawned Rat dumps as `Golden Rat`, faction 1; `enemies.gon.patch` (`Pooter { properties
 { faction.overwrite allies } stats { speed.add 10 } }`) → Pooter faction 1; `enemies.gon.append` (a new entry
 `GoldenRat { variant_of Rat … }`) → `spawn GoldenRat` works and it dumps as `Appended Rat`, faction 2 (the vanilla
-enemies value); `text/combined.csv.append` rows (no header line in an append file) supply both names. What the dump
-cannot see: `.add` / `.multiply` on stats (`speed.add 10` is pinned at T0 only, against the editor's engine, by
-`run-tests.ts` 4d) — the units event carries no stat or HP field; the follow-up is in `TODO.md` target 8. Fixtures:
+enemies value); `text/combined.csv.append` rows (no header line in an append file) supply both names. Fixtures:
 `editor/test/fixtures/ingame/result-golden-{vanilla,merge}.jsonl`.
+
+The numeric policies (2026-10-22, `tests/numeric.mewtest` / `tests/numeric-vanilla.mewtest`): the harness's `expect
+gon` reads the merged entry the game holds for a spawned unit (`Character+0x240`, `docs/ingame-testing.md`), so
+`.add` / `.multiply` are pinned against the game itself. OBSERVED on build 25143593 (`enemies.gon.patch`: `Pooter {
+properties { faction.overwrite allies  health.multiply 2 } stats { speed.add 10 } }`): `properties.health` = number 12
+(int 12, double 12, text "12"; vanilla 6/6/"6"), `stats.speed` = number 15 (vanilla 5) — PatchMerge rewrites the int,
+the double **and** the token text of the node; `properties.faction` = string "allies"; and what `Character::init` made
+of it in the units event: `hp` 12 (vanilla 6: current HP right after a spawn is `properties.health`), `speed` 15,
+`constitution` 5. The `.merge`d Rat keeps `health` 5 / `hp` 5 / `strength` 4 while its `namekey` is `GOLDEN_RAT_NAME`.
+The editor's preview agrees (`run-tests.ts` 4d: speed 15, health 12). Fixtures:
+`editor/test/fixtures/ingame/result-golden-numeric{,-vanilla}.jsonl`.

@@ -1,0 +1,32 @@
+mods: _autoplay
+timeout: 120s
+# The differential baseline for numeric.mewtest: the same seeded fight WITHOUT the _golden-merge overlays.
+# Pooter's data/characters entry says health 6, speed 5 (data/characters/enemies.gon); Rat's says health 5, strength 4.
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+expect units == 8
+cmd spawn Pooter
+expect console "Spawned Pooter" within 10
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 10
+dump
+expect units == 10
+expect unit 8 namekey == "ENEMY_POOTER_NAME"
+expect gon 8 properties.health == 6
+expect gon 8 stats.speed == 5
+expect gon 8 properties.faction == "enemies"
+expect gon 8 properties.flying == true
+expect gon 8 properties.nope missing
+expect unit 8 hp == 6
+expect unit 8 speed == 5
+expect unit 8 constitution == 5
+expect unit 8 faction == 2
+expect unit 9 namekey == "ENEMY_LILRAT_NAME"
+expect gon 9 properties.health == 5
+expect unit 9 hp == 5
+expect unit 9 strength == 4
+expect unit 9 name == "Lil' Rat"
+quit

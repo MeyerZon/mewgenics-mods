@@ -1,0 +1,12 @@
+// A `.merge` file never interprets key suffixes (Gon_DeepMerge_plain 0x945c30 under the constant policy 2 from
+// Gon_DefaultMergeMode 0x9451c0): "brain.overwrite" and "NewCat.overwrite" are literal child names.
+PlayerCat {
+	ai {
+		brain.overwrite PlayerBrain
+	}
+}
+NewCat.overwrite {
+	ai {
+		brain PlayerBrain
+	}
+}
