@@ -10,10 +10,10 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
     type Px = [number, number, number];
     const Y: Px = [255, 255, 0], M: Px = [255, 0, 255], C: Px = [0, 255, 255];
     /** a synthetic shot: background, the probe clip drawn at scale s from (ox, oy), optionally mirrored, with knobs */
-    const shot = (o: { s: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round"; blend?: "honoured" | "ignored"; walker?: number; text?: boolean }) => {
+    const shot = (o: { s: number; oy?: number; mirrored?: boolean; edge?: "clamp" | "repeat"; smooth?: boolean; blink?: Px; control?: Px; cx?: Px; grad?: "drawn" | "flat"; caps?: "honoured" | "round"; blend?: "honoured" | "ignored"; walker?: number; text?: boolean }) => {
       const W = 1800, H = 400, img = new Uint8Array(W * H * 4);
       for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
-      const s = o.s, ox = o.mirrored ? 1550 : 200, oy = 100;
+      const s = o.s, ox = o.mirrored ? 1550 : 200, oy = o.oy ?? 100;
       const put = (cx: number, cy: number, c: Px) => { // clip px -> screen px
         const x = Math.round(o.mirrored ? ox - cx * s : ox + cx * s), y = Math.round(oy + cy * s);
         if (x >= 0 && y >= 0 && x < W && y < H) img.set([c[0], c[1], c[2], 255], (y * W + x) * 4);
@@ -86,6 +86,19 @@ export function runProbeTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       eq(pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", grad: "flat" })).gradient, "flat");
       const none = pc.analyzeProbeShot({ width: 10, height: 10, rgba: new Uint8Array(400) });
       eq(none.found, false);
+    });
+    // OBSERVED 2026-10-22 (run 20261022-124301, shot-shown-2): the back rig's checker was drawn with its top third above
+    // the window's top edge and the analyzer said "not found", which reads the same as "not drawn". A marker region that
+    // touches a shot edge with the wrong aspect is now reported as clipped at that edge.
+    test("analyzeProbeShot: a marker cut by the shot's edge is not found but reported clipped (top / bottom / left / right); a whole marker is clipped null", () => {
+      const whole = pc.analyzeProbeShot(shot({ s: 2, edge: "clamp" }));
+      eq(whole.found, true); eq(whole.clipped, null);
+      const top = pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", oy: -40 }));
+      eq(top.found, false); eq(top.clipped, "top");
+      assert(!!top.box && top.box.y0 === 0, JSON.stringify(top.box));
+      const bottom = pc.analyzeProbeShot(shot({ s: 2, edge: "clamp", oy: 330 }));
+      eq(bottom.found, false); eq(bottom.clipped, "bottom");
+      eq(pc.analyzeProbeShot({ width: 10, height: 10, rgba: new Uint8Array(400) }).clipped, null);
     });
     test("summarizeProbe: across shots — child framing (free-running when the blink colour changes), sampling, edge, cxform applied, orientation", () => {
       const shots = ([[255, 32, 32], [32, 255, 32], [32, 32, 255]] as Px[]).map((b) => pc.analyzeProbeShot(shot({ s: 2, mirrored: true, edge: "clamp", smooth: true, blink: b })));

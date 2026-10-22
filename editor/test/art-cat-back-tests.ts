@@ -275,6 +275,26 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
     eq(bad.map((f: any) => f.code + " " + (/"(\w+)"/.exec(f.message) || [])[1]).join(","), "cat-anim-back-facing probeBackShowF");
   });
 
+  // OBSERVED 2026-10-22 (backmarker; engine-map "The back facing and the four-way quartet"): the back rig's depth-15
+  // marker IS drawn. The slot visitor 0x742bd0 returns 0 for a non-slot name and never writes that child, and run
+  // 20261022-124301's shot-shown-2 holds the checker's lower two thirds at the window's top edge (gone in
+  // shot-turned-back once unit 9 faces front). It was out of frame: (−48, −330) in a rig placed at 1.5x lands 1.5x as far
+  // above the feet.
+  test("probe.scene.json: every rig marker's top edge lands at the same height in the donor (ani y + sy·marker y = the 1x front rigs' −377.95), so the 1.5x back rig's marker stays in frame like the front rigs'", () => {
+    const d = scene.sprites[scene.exports._Append_CatTest];
+    const ani = d.layers.find((l: any) => l.name === "ani");
+    const tops: Record<string, number> = {};
+    for (const [label, frame] of Object.entries(d.labels as Record<string, number>)) {
+      const k = ani.keys.find((x: any) => x.frame === frame);
+      const rig = scene.sprites[k.ref];
+      const m = rig && rig.layers.find((l: any) => l.keys.some((x: any) => x.ref === "CatProbeMc_marker"));
+      if (!m) continue;
+      tops[label] = Math.round((k.y + (k.sy ?? 1) * m.keys[0].y) * 100) / 100;
+    }
+    assert(tops.probeIdleF !== undefined && tops.probeBackB !== undefined && tops.probeBackShowF !== undefined, JSON.stringify(tops));
+    for (const [label, top] of Object.entries(tops)) eq(top, -377.95, label);
+  });
+
   if (!existsSync(caPath)) console.log(`  (skipped: vanilla catanis.swf not extracted at ${VANILLA_DIR})`);
   else test("T1: probeBackPoseBack's slot matrices (and cxforms) are vanilla idleB's frame 0, probeBackPose's are idleF's, and the `ani` offset is idleB's (77, -959) twips", () => {
     const c = clipOf(caPath, "CatTest");
