@@ -49,6 +49,8 @@ TEST(obj_triangle_with_v_vt_vn) {
     PARSE_OK("v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nvn 0 0 1\nf 1/1/1 2/2/1 3/3/1\n");
     CHECK_EQ(m.nverts, 3); CHECK_EQ(m.nindices, 3);
     CHECK_EQ(m.has_normals, 1); CHECK_EQ(m.has_uvs, 1);
+    CHECK(feq(m.base_color[0], 1) && feq(m.base_color[1], 1) && feq(m.base_color[2], 1) && feq(m.base_color[3], 1));
+    CHECK_STR(m.texture, "");
     CHECK(veq(m.verts[m.indices[1]].pos, 1, 0, 0));
     CHECK(veq(m.verts[m.indices[2]].nrm, 0, 0, 1));
     CHECK(feq(m.verts[m.indices[2]].uv[0], 0) && feq(m.verts[m.indices[2]].uv[1], 1));
@@ -472,10 +474,36 @@ TEST(model_path_accepts_models_name_obj) {
     CHECK_STR(out, "crate");
     CHECK_EQ(fw_mesh_name_from_path("models/Big_Crate-2.obj", out, sizeof out), 1);
     CHECK_STR(out, "Big_Crate-2");
+    CHECK_EQ(fw_mesh_model_kind("models/crate.obj"), FW_MESH_KIND_OBJ);
+}
+
+TEST(model_path_accepts_gltf_and_glb) {
+    char out[96];
+    CHECK_EQ(fw_mesh_model_path("models/crate.gltf", out, sizeof out), 1);
+    CHECK_STR(out, "models/crate.gltf");
+    CHECK_EQ(fw_mesh_model_path("models/crate.glb", out, sizeof out), 1);
+    CHECK_EQ(fw_mesh_name_from_path("models/crate.gltf", out, sizeof out), 1);
+    CHECK_STR(out, "crate");
+    CHECK_EQ(fw_mesh_name_from_path("models/barrel_2.glb", out, sizeof out), 1);
+    CHECK_STR(out, "barrel_2");
+    CHECK_EQ(fw_mesh_model_kind("models/crate.gltf"), FW_MESH_KIND_GLTF);
+    CHECK_EQ(fw_mesh_model_kind("models/crate.glb"), FW_MESH_KIND_GLB);
+    CHECK_EQ(fw_mesh_model_kind("models/crate.fbx"), 0);
+    CHECK_EQ(fw_mesh_model_kind("../crate.glb"), 0);
+    CHECK_EQ(fw_mesh_model_kind(NULL), 0);
+}
+
+TEST(unit_cube_and_obj_have_the_default_material) {
+    FwMesh m;
+    CHECK_EQ(fw_mesh_unit_cube(&m), 1);
+    for (int k = 0; k < 4; k++) CHECK(feq(m.base_color[k], 1.0f));
+    CHECK_STR(m.texture, "");
+    fw_mesh_free(&m);
 }
 
 TEST(model_path_rejects_everything_else) {
-    const char *bad[] = { "", "crate.obj", "models/.obj", "models/crate", "models/crate.OBJ", "models/crate.gltf",
+    const char *bad[] = { "", "crate.obj", "models/.obj", "models/crate", "models/crate.OBJ", "models/crate.GLB",
+                          "models/crate.fbx", "models/crate.gltf.bak", "models/.gltf", "models/crate.glbx",
                           "models/crate.obj.bak", "models/../crate.obj", "../models/crate.obj", "/models/crate.obj",
                           "C:/models/crate.obj", "models\\crate.obj", "models/sub/crate.obj", "models//crate.obj",
                           "Models/crate.obj", "models/cr ate.obj", "models/cr.ate.obj", "./models/crate.obj",

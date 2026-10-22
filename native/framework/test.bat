@@ -6,7 +6,8 @@ REM (test_vtable), the entity/component walks + apply/merge writes (test_walk), 
 REM policy: symbol resolution, the launch gate, API bounds and the hook plan (test_resolve) and the
 REM per-unit glow rules: registry, pruning, layer vector, pass lookup and writes (test_glow_rules) and the
 REM phase-0 3D observer: budget, camera/layer/item accessors, log line formats (test_obs3d_rules) and the
-REM phase-M mesh rules: OBJ parser, game axes, unit cube, model registry, model paths (test_mesh_rules).
+REM phase-M mesh rules: OBJ parser, game axes, unit cube, model registry, model paths (test_mesh_rules), the
+REM JSON tokenizer (test_json) and the glTF 2.0 loader (test_mesh_gltf).
 REM Builds build\test_*.exe with w64devkit GCC and runs them; exit code = failures.
 setlocal
 if not defined GCC set "GCC=C:\raylib\w64devkit\bin\gcc.exe"
@@ -66,5 +67,17 @@ if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
   -o "%OUT%\test_mesh_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_rules.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_json.c" "%HERE%src\fw_json.c" ^
+  -o "%OUT%\test_json.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_json.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_mesh_gltf.c" "%HERE%src\fw_mesh_gltf.c" "%HERE%src\fw_json.c" "%HERE%src\fw_mesh_rules.c" ^
+  -o "%OUT%\test_mesh_gltf.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_mesh_gltf.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal
