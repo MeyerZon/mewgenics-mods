@@ -26,8 +26,13 @@ layer, which tier of test covers what, where a human still has to look, and what
   finding code is pinned at T0 by `editor/test/validator-tests.ts` on the synthetic base and fixture mods under
   `editor/test/fixtures/validator/` (one mod per code, plus a clean one); the sample mods against the real
   `.extracted/` remain the T1 check.
-- **Native framework**: the signature scanner is a pure unit with 13 host tests; everything else is verified by the
-  harness run (the symbols resolve, hooks install, Joker's Luck registers) and, since 2026-10-20, in a real fight:
+- **Native framework**: the pure modules have 70 host tests (`native/framework/test/`): the signature scanner (13),
+  the build gate + generated tables (6), the status definition rules + alias rewrite (14), the custom-status vtable
+  clone + thunk bodies (12, incl. a T1 clone of the real `.analysis/luckup-vtable.hex`), the entity/component walks
+  + apply/merge/set-stacks writes over fake objects (11) and symbol resolution / the launch gate / API bounds / the
+  hook plan (14). The glue (`framework.c`, `status_engine.c`: PE header, Mewjector calls, the game-ABI thunks and
+  the calls into the game) is verified by the harness run (the symbols resolve, hooks install, Joker's Luck
+  registers) and, since 2026-10-20, in a real fight:
   `mods/jokers-luck/tests/luck-rerolls.mewtest` enters a test fight (`enter TacticsTest`), gives the cats the status
   at battle start (`mods/_jokersluck-test/`, test-only) and asserts the stacks change across rounds
   (`expect stacks JokersLuck on 0 varied`).
@@ -76,6 +81,35 @@ layer, which tier of test covers what, where a human still has to look, and what
 Fixtures are hand-written excerpts shaped like the real thing (log lines, JSONL, scripts, synthetic byte buffers).
 Never commit game assets, saves or exe bytes; the only game-derived data in git is the short byte signatures in
 `bindings/`. T1 tests read the real files in place and skip when they are absent.
+
+## Running the editor from a git worktree
+
+Several agents work in this repo at once, each in its own `git worktree` under `.claude/worktrees/<tag>`. A fresh
+worktree has none of the git-ignored inputs the main checkout accumulated — `editor/node_modules/`, `.extracted/`,
+`editor/data/` (the `build:index` caches) — so point it at the main checkout's copies instead of rebuilding them:
+
+1. **One junction, for the dependencies only** (PowerShell):
+   `New-Item -ItemType Junction -Path "<worktree>\editor\node_modules" -Target "<main>\editor\node_modules"`.
+   Do not junction `.extracted`, `.analysis` or `editor/data`: the variables below replace those, and every junction
+   is a removal hazard (`CLAUDE.md` "Worktrees with junctions are a data-loss trap").
+2. **Env vars, for every `npm` command run in the worktree:**
+   - `MEWGENICS_EXTRACTED_DATA=<main>\.extracted\data` — the base data (T1 tests, the validator, the merge preview).
+   - `MEWGENICS_EDITOR_DATA=<main>\editor\data` — the caches: `component-names.json` (the component class list;
+     `build:index` can only rebuild it from `.analysis/list_names.tsv`, which is not on disk since the 2026-10-19
+     wipe) and `base-index.json`. Without it the component-dependent check logs
+     `(skipped: editor/data/component-names.json missing …)`, the validator reports one `component-list-missing`
+     info instead of an `unknown-component` warning per passive, and `npm run build:index` writes a fresh
+     `base-index.json` into the worktree's own `editor/data/` (and says why it kept or skipped the component list).
+     An override under any `saves/` path is refused at load.
+   - `MEWGENICS_VANILLA_SWF_DIR=<main>\.extracted\swfs` — the vanilla SWF reads (art T1 tests; they skip without
+     it). The palette textures (`.extracted/textures/`) still resolve against the worktree root and skip there.
+3. **Before removing the worktree:** `cmd /c rmdir "<worktree>\editor\node_modules"` (unlinks the junction without
+   following it), confirm `<main>\editor\node_modules` still has contents, then `git worktree remove`. The full rule
+   and the incident behind it: `CLAUDE.md` "Worktrees with junctions are a data-loss trap".
+
+With the variables set, `npm test` and `npm run typecheck` in a worktree match the main checkout; without them the
+suite still exits 0 with `(skipped: …)` lines (the nested runs in `run-tests.ts` sections 4 and 10 check both
+variables on every run).
 
 ## Enforcement (mechanical since 2026-10-20, plus convention)
 

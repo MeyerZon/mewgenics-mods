@@ -10,6 +10,7 @@ import { locateGameDir } from "../src/core/ingame/launch.ts";
 import { REPO_ROOT, SafetyError } from "../src/core/repo.ts";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 import type { Entry, EnumExposure, TableExposure, MacroExposure } from "../src/core/bindings/manifest.ts";
 import type { PortRow, PortResult } from "../src/core/bindings/port.ts";
@@ -38,7 +39,7 @@ function realExe(): Buffer|null {
 }
 
 /** One item of a fake function body: a byte, or a placeholder resolved after layout. */
-type CodeItem = number | { call: string } | { lea: string } | { mov: string };
+type CodeItem = number | { call: string } | { lea: string } | { mov: string } | { leaRax: string } | { leaRdx: string };
 interface LinkSpec {
   textPad?: number;
   rdataPad?: number;
@@ -46,6 +47,8 @@ interface LinkSpec {
   fns: { name: string; code: CodeItem[] }[];
   strings?: Record<string, string>;
   globs?: string[];
+  /** fake vftables with a full x64 RTTI chain (TypeDescriptor in .data, COL + vftable in .rdata); slots name functions */
+  vtables?: Record<string, { td: string; slots: string[] }>;
 }
 
 export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
@@ -381,7 +384,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (22, incl. the v4 run-entry symbols), each with a signature", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (28, incl. the v4 run-entry symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
     eq(want.length, 28);
@@ -400,9 +403,14 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Component_GetGame")!.rva, "0x908e0");
     const got = symbolTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
-    for (const e of got) assert(!!(e.signature && e.signature.pattern), `${e.name} needs a signature`);
+    // 2026-10-21 (notes-bind): LuckUp_ctor is a byte-twin of two sibling ctors modulo relocations, Status_GetCategory and
+    // Status_ApplyLuckUp are unique only through a __LINE__ immediate / the type id -> null + anchors, raw RVA in the DLL
+    const NULL_SIGNED = ["LuckUp_ctor", "Status_GetCategory", "Status_ApplyLuckUp"];
+    for (const e of got) if (!NULL_SIGNED.includes(e.name)) assert(!!(e.signature && e.signature.pattern), `${e.name} needs a signature`);
+    for (const n of NULL_SIGNED) eq(entry(m, n)!.signature, null, `${n}: no relocation-free unique window on this build`);
     eq(entry(m, "TurnControl_NextTurn")!.rva, "0x8e3c60");
-    eq(entry(m, "Status_GetCategory")!.signature!.exactLen, 126);
+    const sp = entry(m, "SaveProps_GetOrCreate")!.signature!;
+    assert(sp.offset < 0 && sp.wildcards.length >= 5, `SaveProps_GetOrCreate regenerated on an instruction boundary with its relocations masked: ${JSON.stringify(sp)}`);
   });
   test("25143593.json: FwData table == framework_api.h FW_DATA_* order (10, incl. the MewDirector global); App_global first", () => {
     const m = loadManifest(realPath);
@@ -540,8 +548,9 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(first > 0 && second > first && last > second, "FwSymbol order");
     const nt = entry(m25, "TurnControl_NextTurn")!;
     assert(h.includes(`"TurnControl_NextTurn", "${nt.signature!.pattern}", ${nt.signature!.offset}, 0x8e3c60u`), "pattern, offset, expectedRva from the manifest");
-    const lc = entry(m25, "LuckUp_ctor")!;
-    assert(h.includes(`"LuckUp_ctor", "${lc.signature!.pattern}", ${lc.signature!.offset}, 0x711c90u`) && lc.signature!.offset < 0, "negative SymbolSig.offset carried through");
+    const sp = entry(m25, "SaveProps_GetOrCreate")!;
+    assert(h.includes(`"SaveProps_GetOrCreate", "${sp.signature!.pattern}", ${sp.signature!.offset}, 0x61ea0u`) && sp.signature!.offset < 0, "negative SymbolSig.offset carried through");
+    assert(h.includes(`{ "LuckUp_ctor", NULL, 0, 0x711c90u },`), "a null-signature FwSymbol ships as NULL + raw RVA");
     assert(h.includes("#define FW_LK_COUNT 13"), "lk count");
     assert(h.includes("static const uint32_t FW_LK_RVAS_25143593[FW_LK_COUNT]"), "lk table");
     assert(/FW_LK_RVAS_25143593\[FW_LK_COUNT\] = \{\s*0x4929c0u,[^\n]*\n\s*0x492c20u,[\s\S]*0x502b40u,[^\n]*\n\s*\}/.test(h), "lk order");
@@ -578,6 +587,17 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(err instanceof GenError, `expected GenError, got ${String(err)}`);
     assert(/Status_stacks/.test(String(err)) && /25143593/.test(String(err)) && /99/.test(String(err)), String(err));
     eq(typeof genOffsetsH([m25, cloneBuild()]), "string", "agreeing manifests are fine");
+  });
+  test("genSignaturesH: an FwSymbol entry with signature: null is emitted with a NULL pattern and its raw RVA (the DLL falls back to expectedRva on the identified build)", () => {
+    // 2026-10-21: LuckUp_ctor has no relocation-free unique window (notes-bind §1.2), so a null signature must be a
+    // first-class state for a symbol the DLL resolves, not a GenError.
+    const m = cloneBuild();
+    const nt = entry(m, "TurnControl_NextTurn")!;
+    nt.signature = null;
+    const h = genSignaturesH([m]);
+    assert(h.includes(`{ "TurnControl_NextTurn", NULL, 0, 0x8e3c60u },  /* FW_SYM_TurnControl_NextTurn (raw RVA: no signature on this build) */`), h.split("\n").filter((l) => l.includes("TurnControl_NextTurn")).join("\n"));
+    const cb = entry(m, "Character_BeginTurn")!;
+    assert(h.includes(`{ "Character_BeginTurn", "${cb.signature!.pattern}", 0, 0x`), "signed entries unchanged");
   });
   test("generateHeaders returns both files keyed by repo-relative path", () => {
     const out = generateHeaders([m25]);
@@ -710,6 +730,67 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(hit.count, 1);
     eq(hit.hits[0] + r.signature!.offset, f.rva(".text", 0x10), "hit + offset == function start");
   });
+  test("decodeRelocs: a relocation that straddles the window end is clamped, never dropped (the first bytes of a cut disp32 are not exact bytes)", () => {
+    // 2026-10-21 (notes-bind §2.1): LuckUp_ctor's committed pattern ended in `48 8D 05 95 5D` and Status_GetCategory's in
+    // `48 8D 0D 6F` because a reloc whose 4 bytes ran past the window was discarded, so the window's last bytes stayed exact.
+    const cut = u8([
+      0x40, 0x53,                                     // push rbx
+      0x48, 0x83, 0xec, 0x20,                         // sub rsp,0x20
+      0x48, 0x8d, 0x05, 0x95, 0x5d,                   // lea rax,[rip+disp32] cut after 2 of its 4 disp bytes -> [9..10]
+    ]);
+    eq(decodeRelocs(cut).map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "9+2");
+    const callCut = u8([0x40, 0x53, 0xe8, 0x11]);    // call rel32 cut after 1 byte -> [3..3]
+    eq(decodeRelocs(callCut).map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "3+1");
+    const opcodeOnly = u8([0x40, 0x53, 0x48, 0x8d]); // the lea's ModRM is outside the window: nothing to clamp
+    eq(decodeRelocs(opcodeOnly).length, 0);
+  });
+  test("decodeRelocs: the 66 operand-size prefix shrinks imm32 to imm16 (mov word [reg+disp32], imm16 must not swallow the next instruction)", () => {
+    // LuckUp_ctor +131: `66 C7 83 E8 00 00 00 01 00` (mov word [rbx+0xe8],1) is followed by the vftable lea; decoding the
+    // immediate as 4 bytes desynced the decoder and the lea's disp32 was never masked (found 2026-10-21 by the clamp test)
+    const code = u8([
+      0x66, 0xc7, 0x83, 0xe8, 0x00, 0x00, 0x00, 0x01, 0x00,   // mov word [rbx+0xe8], 1   (9 bytes)
+      0x48, 0x8d, 0x05, 0x11, 0x22, 0x33, 0x44,               // lea rax,[rip+disp32]     -> [12..15]
+      0x66, 0x81, 0x7b, 0x0c, 0x02, 0x00,                     // cmp word [rbx+0xc], 2    (6 bytes)
+      0x66, 0xb8, 0x01, 0x00,                                 // mov ax, 1                (4 bytes)
+      0x66, 0x3d, 0x02, 0x00,                                 // cmp ax, 2                (4 bytes)
+      0xe8, 0x01, 0x02, 0x03, 0x04,                           // call rel32               -> [31..34]
+      0xc3,
+    ]);
+    eq(decodeRelocs(code).map((x: { at: number; len: number }) => `${x.at}+${x.len}`).join(" "), "12+4 31+4");
+  });
+  test("makeSignature: a clamped tail reloc is masked, so the window must extend to the next fixed byte (or move on)", () => {
+    // two functions identical up to a lea whose disp32 differs, then one differing byte; a 24-byte cap cuts the first
+    // window inside the disp32: the old generator returned those two disp bytes as exact (unique only through a relocation)
+    const head = [0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8b, 0xd9, 0x48, 0x8b, 0xfa, 0x48, 0x8b, 0xf1, 0x90, 0x90, 0x90, 0x90];
+    const a = [...head, 0x48, 0x8d, 0x05, 0x11, 0x22, 0x33, 0x44, 0x48, 0x8b, 0xd8, 0xc3];
+    const b = [...head, 0x48, 0x8d, 0x05, 0x55, 0x66, 0x77, 0x88, 0x48, 0x8b, 0xf8, 0xc3];
+    const f = twoFns(a, b);
+    const p = parsePe(f.buf);
+    const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 24, maxOffset: 0 });
+    assert(!r.ok, `a 24-byte window ends inside the disp32 and the bytes before it are shared: must fail, got ${r.ok ? r.signature.pattern : ""}`);
+    const r2 = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 32, maxOffset: 0 });
+    assert(r2.ok, r2.ok ? "" : r2.reason);
+    if (!r2.ok) return;
+    eq(r2.signature.pattern, "40 53 48 83 EC 20 48 8B D9 48 8B FA 48 8B F1 90 90 90 90 48 8D 05 ?? ?? ?? ?? 48 8B D8");
+  });
+  test("makeSignature: every tried window starts on an instruction boundary of the function (never inside an instruction)", () => {
+    // Status_ApplyLuckUp's committed signature started at +40, inside `49 8B F1` (+38): the lite decoder stopped at once and
+    // nothing in the 35-byte pattern was masked (a raw jmp rel32 and two disp32 bytes). Starts are instruction boundaries now.
+    const shared = Array.from({ length: 36 }, (_, i) => [0x48, 0x8b, 0xc1][i % 3]);   // 36 bytes: 12 x mov rax,rcx (3-byte instructions)
+    const a = [...shared, 0x90, 0x90, 0x48, 0x8d, 0x05, 0x11, 0x22, 0x33, 0x44, 0x48, 0x8b, 0xd8, 0xc3];
+    const b = [...shared, 0x90, 0x90, 0x48, 0x8d, 0x05, 0x55, 0x66, 0x77, 0x88, 0x48, 0x8b, 0xf8, 0xc3];
+    const f = twoFns(a, b);
+    const p = parsePe(f.buf);
+    const r = makeSignature(p, f.buf, f.rva(".text", 0x10), { minLen: 12, cap: 32, maxOffset: 64 });
+    assert(r.ok, r.ok ? "" : r.reason);
+    if (!r.ok) return;
+    const start = -r.signature.offset;
+    assert(start % 3 === 0 && start <= 36, `window start +${start} is inside a 3-byte mov (the step-8 generator picked +16)`);
+    assert(r.signature.pattern.includes("48 8D 05 ?? ?? ?? ??"), `the lea's disp32 is masked: ${r.signature.pattern}`);
+    const hit = scanExec(p, f.buf, parsePattern(r.signature.pattern));
+    eq(hit.count, 1);
+    eq(hit.hits[0] + r.signature.offset, f.rva(".text", 0x10));
+  });
   if (exe) {
     test("T1 real exe: every manifest function signature regenerates unique at its rva; >= 5 carry wildcards; Status_GetCategory fits the cap or is reported", () => {
       const m = loadManifest(realPath);
@@ -718,12 +799,25 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       let wild = 0;
       let n = 0;
       let cat = "";
+      // Twins whose only distinguishing bytes are RIP-relative displacements: the hardened generator (2026-10-22)
+      // masks those and finds no window, but their manifest patterns (made before the hardening) still scan unique
+      // at their RVAs on this build; a new build needs a hand-made seed (docs/binding-port.md "Known limits").
+      const LEGACY_WINDOWS = new Set(["GonObject_Int", "GonObject_Number"]);
+      let legacy = 0;
       for (const e of m.entries) {
         if (e.kind !== "function" || !e.signature) continue;
         n++;
         const rva = parseInt(e.rva!, 16);
         const r = makeSignature(p, exe, rva, { minLen: 12, cap: m.sigCap });
-        if (!r.ok) { if (e.name === "Status_GetCategory") cat = r.reason; else bad.push(`${e.name}: ${r.reason}`); continue; }
+        if (!r.ok) {
+          if (e.name === "Status_GetCategory") cat = r.reason;
+          else if (LEGACY_WINDOWS.has(e.name)) {
+            const own = scanExec(p, exe, parsePattern(e.signature.pattern, m.sigCap));
+            if (own.count !== 1 || own.hits[0] + e.signature.offset !== rva) bad.push(`${e.name}: legacy pattern ${own.count} hits`);
+            else legacy++;
+          } else bad.push(`${e.name}: ${r.reason}`);
+          continue;
+        }
         if (r.signature!.wildcards.length) wild++;
         const hit = scanExec(p, exe, parsePattern(r.signature!.pattern, m.sigCap));
         if (hit.count !== 1 || hit.hits[0] + r.signature!.offset !== rva) bad.push(`${e.name}: ${hit.count} hits`);
@@ -733,7 +827,8 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       assert(bad.length === 0, bad.join("; "));
       assert(n >= 34, `functions with signatures: ${n}`);
       assert(wild >= 5, `only ${wild} of ${n} signatures needed wildcards (6 on build 25143593)`);
-      console.log(`      Status_GetCategory: ${cat}; ${wild}/${n} signatures carry wildcards`);
+      eq(legacy, LEGACY_WINDOWS.size, "both legacy windows still scan unique at their RVAs");
+      console.log(`      Status_GetCategory: ${cat}; ${wild}/${n} signatures carry wildcards; ${legacy} legacy windows verified`);
     });
   }
   // ---- check.ts: is the installed exe a known build, and do the signatures still hold? ----
@@ -811,6 +906,19 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
       eq(r.exePath, join(tmp, "Mewgenics.exe"));
       eq(typeof r.sha256, "string");
       eq(r.sha256.length, 64);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  });
+  test("make-signature.ts --manifest: a signature-less entry is listed as `skipped (null)` instead of vanishing from the report", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "mewsig-"));
+    try {
+      writeFileSync(join(tmp, "fake.exe"), fakeKnownPe.buf);
+      writeFileSync(join(tmp, "m.json"), JSON.stringify(fakeManifest));
+      const r = spawnSync(process.execPath, [join(REPO_ROOT, "tools", "bindings", "make-signature.ts"), join(tmp, "fake.exe"), "--manifest", join(tmp, "m.json")], { encoding: "utf8" });
+      const out = (r.stdout || "") + (r.stderr || "");
+      eq(r.status, 0, out.slice(-400));
+      assert(/skipped \(null\)\s+FnRaw/.test(out), `expected a "skipped (null)  FnRaw" line, got:\n${out}`);
+      assert(/unchanged\s+FnA/.test(out) && /unchanged\s+FnB/.test(out), out);
+      assert(/0 changed, 2 unchanged, 0 failed, 1 skipped \(null\)/.test(out), `summary counts the skipped entries: ${out.split("\n").slice(-3).join(" | ")}`);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
   test("api.checkGameBuild forwards env/manifests and never throws on a missing exe", () => {
@@ -1121,7 +1229,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   }
   const { portManifest, renderPortReport, PORT_STATUSES } = pt;
 
-    /** Mini linker for fake builds. Items in `code` are bytes or placeholders resolved after layout: { call: "Fn" } -> E8 rel32, { lea: "str:NAME" } -> 48 8D 0D disp32, { mov: "glob:NAME" } -> 48 8B 05 disp32 */
+    /** Mini linker for fake builds. Items in `code` are bytes or placeholders resolved after layout: { call: "Fn" } -> E8 rel32, { lea: "str:NAME" } -> 48 8D 0D disp32 (lea rcx), { leaRdx: "str:NAME" } -> 48 8D 15 disp32, { leaRax: "vt:NAME" } -> 48 8D 05 disp32 (lea rax, vftable), { mov: "glob:NAME" } -> 48 8B 05 disp32 */
   const link = (spec: LinkSpec) => {
     const TEXT = 0x1000, RDATA = 0x2000, DATA = 0x3000;
     const size = (it: CodeItem) => (typeof it === "number" ? 1 : "call" in it ? 5 : 7);
@@ -1134,6 +1242,13 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const globAt: Record<string, number> = {};
     let gp = DATA + 0x10;
     for (const g of spec.globs || []) { globAt[g] = gp; gp += 8; }
+    // vtables: COL (24 B) then [&COL][slot0][slot1]... in .rdata after the strings; TypeDescriptor (16 B header + name) in .data from +0x80
+    const vtAt: Record<string, number> = {};
+    const colAt: Record<string, number> = {};
+    const tdAt: Record<string, number> = {};
+    let vp = (sp + 7) & ~7;
+    let tp = DATA + 0x80;
+    for (const [k, v] of Object.entries(spec.vtables || {})) { colAt[k] = vp; vp += 24; vtAt[k] = vp + 8; vp += 8 + 8 * v.slots.length; vp = (vp + 7) & ~7; tdAt[k] = tp; tp += 16 + v.td.length + 1; tp = (tp + 7) & ~7; }
     const textBytes = new Uint8Array(0x400);
     const pdata: { section: string; begin: number; end: number }[] = [];
     for (const f of spec.fns) {
@@ -1144,6 +1259,8 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
         let bytes: number[];
         if ("call" in it) { const next = at + 5; bytes = [0xe8, ...le32(fnAt[it.call]! - next)]; }
         else if ("lea" in it) { const next = at + 7; bytes = [0x48, 0x8d, 0x0d, ...le32(strAt[it.lea.slice(4)]! - next)]; }
+        else if ("leaRdx" in it) { const next = at + 7; bytes = [0x48, 0x8d, 0x15, ...le32(strAt[it.leaRdx.slice(4)]! - next)]; }
+        else if ("leaRax" in it) { const next = at + 7; bytes = [0x48, 0x8d, 0x05, ...le32(vtAt[it.leaRax.slice(3)]! - next)]; }
         else { const next = at + 7; bytes = [0x48, 0x8b, 0x05, ...le32(globAt[it.mov.slice(5)]! - next)]; }
         textBytes.set(bytes, at - TEXT);
         at += bytes.length;
@@ -1152,9 +1269,18 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     }
     const rdataBytes = Buffer.alloc(0x400);
     for (const [k, v] of Object.entries(spec.strings || {})) rdataBytes.write(v + "\0", strAt[k]! - RDATA, "latin1");
-    const dataBytes = Buffer.alloc(0x100);
+    const dataBytes = Buffer.alloc(0x200);
+    for (const [k, v] of Object.entries(spec.vtables || {})) {
+      const col = colAt[k]! - RDATA;
+      rdataBytes.writeUInt32LE(1, col); rdataBytes.writeUInt32LE(0, col + 4); rdataBytes.writeUInt32LE(0, col + 8);
+      rdataBytes.writeUInt32LE(tdAt[k]!, col + 12); rdataBytes.writeUInt32LE(0, col + 16); rdataBytes.writeUInt32LE(colAt[k]!, col + 20);
+      rdataBytes.writeBigUInt64LE(BigInt(0x140000000 + colAt[k]!), vtAt[k]! - 8 - RDATA);
+      v.slots.forEach((fn, i) => rdataBytes.writeBigUInt64LE(BigInt(0x140000000 + fnAt[fn]!), vtAt[k]! + 8 * i - RDATA));
+      dataBytes.writeBigUInt64LE(BigInt(0x140000000 + RDATA), tdAt[k]! - DATA);
+      dataBytes.write(v.td + "\0", tdAt[k]! + 16 - DATA, "latin1");
+    }
     const img = buildFakePe({ timeDateStamp: spec.stamp ?? 0x51515151, sections: [{ name: ".text", bytes: textBytes, exec: true }, { name: ".rdata", bytes: rdataBytes }, { name: ".data", bytes: dataBytes, write: true }], pdata });
-    return { img, pe: parsePe(img.buf), fnAt, strAt, globAt };
+    return { img, pe: parsePe(img.buf), fnAt, strAt, globAt, vtAt };
   };
   const SIG_A = "int __cdecl glaiel::alpha(void)";
   const SIG_B = "int __cdecl glaiel::beta(int)";
@@ -1417,6 +1543,209 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(/0x4d6/.test(r2.detail ?? "") && /0x4d7/.test(r2.detail ?? ""), r2.detail ?? "");
     eq(entry(split.manifest, "Foo_typeid")!.value, "0x4d6", "old value kept until a human decides");
   });
+  // ---- the 2026-10-21 rungs: vtable-store, imm32 witness, caller-after-lea, tolerance-filtered string xrefs, .pdata neighbours, shared data ref ----
+  console.log("\n# Bindings: port rungs (vtable-store, imm32-witness, caller-after-lea, pdata-predecessor, shared-data-ref) + harvest verification");
+  /*
+   * A fake build modelled on notes-bind: Target = Status_ApplyLuckUp (lea rdx,"LuckUp"; call Cmp; mov r8d,typeid; call FindBy; call Ctor),
+   * Caller = apply_status (lea rdx,"LuckUp"; call Cmp; test al,al; jz; call Target), Ctor/Ctor2 = byte-twin ctors storing Foo/Bar vftables,
+   * NE/NE2 = NameExists twins referencing MAP/MAP2, GV = GetValue (funcsig + MAP), Helper/HelperB = string-less .pdata neighbours of FindBy
+   * with byte-twins elsewhere, Decoy (v2 only) = a third function lea'ing "LuckUp" far outside Target's size tolerance.
+   */
+  const nops = (n: number) => Array.from({ length: n }, () => 0x90);
+  const LIT = "LuckUp";
+  const SIG_GV = "double __cdecl glaiel::get_status_value(void)";
+  const SIG_CALLER = "class glaiel::Status *__cdecl glaiel::apply_status(void)";
+  const rungFns = (pro: number[], withDecoy: boolean) => [
+    { name: "HelperBTwin", code: [...PRO, 0x48, 0x8b, 0xc1, 0x48, 0x8b, 0xd1, ...EPI] },
+    { name: "HelperB", code: [...PRO, 0x48, 0x8b, 0xc1, 0x48, 0x8b, 0xd1, ...EPI] },
+    { name: "FindBy", code: [...PRO, 0x48, 0x8b, 0xc1, 0x48, 0x8b, 0xd1, 0x48, 0x8b, 0xd9, ...EPI] },
+    { name: "Helper", code: [...PRO, 0x48, 0x8b, 0xc1, 0x48, 0x8b, 0xf1, ...EPI] },
+    { name: "HelperTwin", code: [...PRO, 0x48, 0x8b, 0xc1, 0x48, 0x8b, 0xf1, ...EPI] },
+    { name: "Cmp", code: [...PRO, 0x31, 0xc0, ...EPI] },
+    { name: "SlotFoo", code: [0xb8, 0xd6, 0x04, 0x00, 0x00, 0xc3] },
+    { name: "SlotBar", code: [0xb8, 0xd7, 0x04, 0x00, 0x00, 0xc3] },
+    { name: "GV", code: [...pro, { mov: "glob:MAP" }, { lea: "str:GV" }, 0x48, 0x8b, 0xd0, ...EPI] },
+    { name: "Caller", code: [...pro, { lea: "str:CALLER" }, { leaRdx: "str:LIT" }, { call: "Cmp" }, 0x84, 0xc0, 0x74, 0x05, { call: "Target" }, ...nops(60), ...EPI] },
+    { name: "Target", code: [...pro, { leaRdx: "str:LIT" }, { call: "Cmp" }, 0x84, 0xc0, 0x74, 0x10, 0x41, 0xb8, 0xd6, 0x04, 0x00, 0x00, 0x48, 0x8b, 0xcb, { call: "FindBy" }, { call: "Ctor" }, 0x48, 0x8b, 0xd8, ...EPI] },
+    ...(withDecoy ? [{ name: "Decoy", code: [...pro, { leaRdx: "str:LIT" }, ...nops(60), ...EPI] as CodeItem[] }] : []),
+    { name: "Ctor", code: [...pro, { leaRax: "vt:Foo" }, 0x48, 0x89, 0x03, { mov: "glob:POOL" }, ...EPI] },
+    { name: "Ctor2", code: [...pro, { leaRax: "vt:Bar" }, 0x48, 0x89, 0x03, { mov: "glob:POOL2" }, ...EPI] },
+    { name: "NE", code: [...pro, { mov: "glob:MAP" }, 0x48, 0x8b, 0xc8, ...EPI] },
+    { name: "NE2", code: [...pro, { mov: "glob:MAP2" }, 0x48, 0x8b, 0xc8, ...EPI] },
+  ];
+  const rungSpec = (pro: number[], withDecoy: boolean, extra: Partial<LinkSpec> = {}): LinkSpec => ({
+    fns: rungFns(pro, withDecoy), strings: { LIT, GV: SIG_GV, CALLER: SIG_CALLER }, globs: ["MAP", "MAP2", "POOL", "POOL2"],
+    vtables: { Foo: { td: ".?AVFoo@glaiel@@", slots: ["SlotFoo"] }, Bar: { td: ".?AVBar@glaiel@@", slots: ["SlotBar"] } }, ...extra,
+  });
+  const rv1 = link(rungSpec(PRO, false, { stamp: 0x61616161 }));
+  const rungManifest = (anchors: Record<string, Record<string, unknown>> = {}) => {
+    // prologue-anchored signatures only (maxOffset 0), so v2's recompiled prologues break every one of them
+    const sig = (rva: number) => { const r = makeSignature(rv1.pe, rv1.img.buf, rva, { minLen: 12, maxOffset: 0 }); return r.ok ? r.signature : null; };
+    const fn = (name: string, a: Record<string, unknown> = {}) => ({ name, kind: "function", rva: hex(rv1.fnAt[name]!), signature: sig(rv1.fnAt[name]!), anchors: { ...a, ...(anchors[name] || {}) }, consumers: [], exposure: [], evidence: [] });
+    const m = parseManifest({
+      format: 1,
+      build: { steamBuildId: "600", gameVersion: "6.0.0", name: "6.0.0 (steam 600)", timeDateStamp: "0x61616161", sizeOfImage: "0x" + rv1.pe.sizeOfImage.toString(16), imageBase: "0x140000000", exeSha256: "f".repeat(64), exeSize: rv1.img.buf.length, sdlVersion: "3.2.12" },
+      sigCap: 128,
+      entries: [
+        fn("FindBy"), fn("Cmp"), fn("GV"), fn("Caller"),
+        fn("Target", { strings: [{ text: LIT, role: "literal", unique: true }], imm32Witness: { pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, equals: "Foo_typeid", callee: "FindBy", maxForward: 4 }, callers: [{ function: "Caller", ordinal: 1, afterStringLea: LIT }] }),
+        fn("Ctor", { vtableStore: { vtable: "Foo_vftable", pattern: "48 8D 05 ?? ?? ?? ?? 48 89 03" }, dataRefs: [{ rva: hex(rv1.globAt.POOL!), role: "pool" }] }),
+        fn("Ctor2", { vtableStore: { vtable: "Bar_vftable", pattern: "48 8D 05 ?? ?? ?? ?? 48 89 03" } }),
+        fn("Helper", { after: { function: "FindBy" } }),
+        fn("HelperB", { before: { function: "FindBy" } }),
+        fn("NE", { sharedDataRef: { with: "GV", ripRefOrdinal: 0 } }),
+        fn("NE2"),
+        { name: "Foo_vftable", kind: "vtable", rva: hex(rv1.vtAt.Foo!), slots: 1, anchors: { rtti: { typeDescriptorName: ".?AVFoo@glaiel@@" } }, consumers: [], exposure: [{ field: "rva_Foo_vftable" }], evidence: [] },
+        { name: "Bar_vftable", kind: "vtable", rva: hex(rv1.vtAt.Bar!), slots: 1, anchors: { rtti: { typeDescriptorName: ".?AVBar@glaiel@@" } }, consumers: [], exposure: [], evidence: [] },
+        { name: "Foo_typeid", kind: "constant", value: "0x4d6", anchors: { derive: { vtable: "Foo_vftable", slot: 0, bodyPattern: "B8 ?? ?? ?? ?? C3", imm32At: 1 } }, consumers: [], exposure: [{ field: "fooTypeId" }], evidence: [] },
+      ],
+    });
+    return m;
+  };
+  const rungOld = () => harvestManifest(rv1.pe, rv1.img.buf, rungManifest()).manifest;
+  /** v2: every prologue recompiled (signatures of the anchored functions break), layout shifted, Decoy added */
+  const rv2 = link(rungSpec(PRO2, true, { stamp: 0x62626262, textPad: 0x40, rdataPad: 0x18 }));
+  const stripAnchors = (m: ReturnType<typeof rungOld>, name: string, keys: string[]) => { const c = JSON.parse(JSON.stringify(m)) as typeof m; const e = entry(c, name)!; for (const k of keys) delete e.anchors[k]; return c; };
+  const portRung = (m: ReturnType<typeof rungOld>, v = rv2) => portManifest(m, v.pe, v.img.buf, { steamBuildId: "601", gameVersion: "6.0.1" });
+
+  test("validateManifest: the new anchors must reference existing entries of the right kind (vtableStore.vtable, imm32Witness.equals/.callee, callers[].function, after/before.function, sharedDataRef.with)", () => {
+    const base = () => { const m = mini(); m.entries[1].anchors = {}; return m; };
+    const bad = (anchors: Record<string, unknown>, re: RegExp, what: string) => { const m = base(); m.entries[1].anchors = anchors; rejects(m, re, what); };
+    const good = (anchors: Record<string, unknown>, what: string) => { const m = base(); m.entries[1].anchors = anchors; eq(problems(m).length, 0, `${what}: ${JSON.stringify(problems(m))}`); };
+    good({ vtableStore: { vtable: "Foo_vftable", pattern: "48 8D 05 ?? ?? ?? ?? 48 89 03" } }, "vtableStore");
+    bad({ vtableStore: { vtable: "Nope", pattern: "48 8D 05 ?? ?? ?? ?? 48 89 03" } }, /FnB.*vtableStore.*Nope/, "unknown vtable");
+    bad({ vtableStore: { vtable: "FnA", pattern: "48 8D 05 ?? ?? ?? ?? 48 89 03" } }, /FnB.*vtableStore.*FnA.*vtable/, "not a vtable entry");
+    bad({ vtableStore: { vtable: "Foo_vftable", pattern: "48 ZZ" } }, /FnB.*vtableStore.*pattern/, "bad pattern");
+    good({ imm32Witness: { pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, equals: "Foo_typeid", callee: "FnA", maxForward: 4 } }, "imm32Witness");
+    bad({ imm32Witness: { pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, equals: "Glob", callee: "FnA" } }, /FnB.*imm32Witness\.equals.*Glob.*constant/, "equals must be a constant");
+    bad({ imm32Witness: { pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, equals: "Foo_typeid", callee: "Nope" } }, /FnB.*imm32Witness\.callee.*Nope/, "unknown callee");
+    bad({ imm32Witness: { pattern: "41 B8 ?? ?? ?? ??", equals: "Foo_typeid", callee: "FnA" } }, /FnB.*imm32Witness.*imm32At/, "imm32At required");
+    good({ callers: [{ function: "FnA", ordinal: 3, afterStringLea: "LuckUp" }] }, "callers");
+    bad({ callers: [{ function: "Nope", ordinal: 3 }] }, /FnB.*callers.*Nope/, "unknown caller");
+    bad({ callers: [{ function: "Glob", ordinal: 3 }] }, /FnB.*callers.*Glob.*function/, "caller must be a function");
+    good({ after: { function: "FnA" }, before: { function: "FnA" } }, "after/before");
+    bad({ before: { function: "Nope" } }, /FnB.*before.*Nope/, "unknown before");
+    bad({ after: { function: "Glob" } }, /FnB.*after.*Glob.*function/, "after must be a function");
+    good({ sharedDataRef: { with: "FnA", ripRefOrdinal: 0 } }, "sharedDataRef");
+    bad({ sharedDataRef: { with: "Nope", ripRefOrdinal: 0 } }, /FnB.*sharedDataRef.*Nope/, "unknown with");
+    bad({ sharedDataRef: { with: "FnA" } }, /FnB.*sharedDataRef.*ripRefOrdinal/, "ripRefOrdinal required");
+  });
+  test("harvestManifest verifies the new function anchors on the current exe: verified when each resolves to the entry itself, mismatch when one points elsewhere; a caller ordinal and a dataRef ordinal are (re)harvested", () => {
+    const { manifest: out, report } = harvestManifest(rv1.pe, rv1.img.buf, rungManifest({ Target: { callers: [{ function: "Caller", ordinal: 0, afterStringLea: LIT }] } }));
+    const r = (n: string) => { const x = report.find((x) => x.name === n); if (!x) throw new Error(`no row ${n}`); return x; };
+    for (const n of ["Ctor", "Ctor2", "Helper", "HelperB", "NE"]) eq(r(n).status, "verified", `${n}: ${r(n).detail}`);
+    assert(/vtable-store/.test(r("Ctor").detail) && /dataRefs/.test(r("Ctor").detail), r("Ctor").detail);
+    assert(/pdata-successor/.test(r("Helper").detail) && /pdata-predecessor/.test(r("HelperB").detail) && /shared-data-ref/.test(r("NE").detail), `${r("Helper").detail} | ${r("HelperB").detail} | ${r("NE").detail}`);
+    eq(r("Target").status, "harvested", r("Target").detail);
+    assert(/imm32-witness/.test(r("Target").detail) && /caller-after-lea/.test(r("Target").detail), r("Target").detail);
+    eq(entry(out, "Target")!.anchors.callers![0].ordinal, 1, "the stale caller ordinal is re-harvested (call #1 of Caller)");
+    eq(entry(out, "Ctor")!.anchors.dataRefs![0].ripRefOrdinal, 1, "the dataRef is located by rip-ref ordinal (#0 is the vftable lea)");
+    eq(r("FindBy").status, "harvested", "an entry without such anchors stays harvested");
+    const wrong = harvestManifest(rv1.pe, rv1.img.buf, rungManifest({ Ctor: { vtableStore: { vtable: "Bar_vftable", pattern: "48 8D 05 ?? ?? ?? ?? 48 89 03" } }, Helper: { after: { function: "Cmp" } } })).report;
+    const w = (n: string) => wrong.find((x) => x.name === n)!;
+    eq(w("Ctor").status, "mismatch", w("Ctor").detail);
+    assert(/Ctor2|0x[0-9a-f]+/.test(w("Ctor").detail), `names where the anchor leads: ${w("Ctor").detail}`);
+    eq(w("Helper").status, "mismatch", w("Helper").detail);
+  });
+  test("port: vtable-store rung — a byte-twin constructor is found as the only code site that lea's its RTTI-derived vftable (vtables port before the function ladder); its dataRef follows by rip-ref ordinal", () => {
+    const r = portRung(rungOld());
+    for (const n of ["Ctor", "Ctor2"]) { eq(row(r, n).status, "ported-anchor", `${n}: ${row(r, n).detail}`); eq(row(r, n).method, "vtable-store", n); eq(entry(r.manifest, n)!.rva, hex(rv2.fnAt[n]!), n); }
+    assert(/vtable store of Foo_vftable/.test(row(r, "Ctor").detail), row(r, "Ctor").detail);
+    eq(entry(r.manifest, "Ctor")!.anchors.dataRefs![0].rva, hex(rv2.globAt.POOL!), "dataRef rva refreshed on the new image");
+    eq(row(r, "Foo_vftable").status, "ported-derived");
+  });
+  test("port: imm32-witness rung — the function whose `mov r8d, <typeid>` precedes a call to a ported callee within maxForward instructions (the type id is re-derived from the vftable slot, never read from the old manifest)", () => {
+    const r = portRung(rungOld());
+    eq(row(r, "Target").status, "ported-anchor", row(r, "Target").detail);
+    eq(row(r, "Target").method, "imm32-witness");
+    eq(entry(r.manifest, "Target")!.rva, hex(rv2.fnAt.Target!));
+    assert(/imm32 0x4d6 .*FindBy/.test(row(r, "Target").detail), row(r, "Target").detail);
+    // a build whose slot body says 0x4d7 while the call site still passes 0x4d6: the witness must not find it
+    const patched = link(rungSpec(PRO2, true, { stamp: 0x63636363, textPad: 0x40, rdataPad: 0x18 }));
+    patched.img.buf[patched.pe.rvaToOff(patched.fnAt.SlotFoo!) + 1] = 0xd7;
+    const r2 = portManifest(stripAnchors(rungOld(), "Target", ["callers", "strings"]), parsePe(patched.img.buf), patched.img.buf, { steamBuildId: "602", gameVersion: "6.0.2" });
+    assert(row(r2, "Target").status !== "ported-anchor" || row(r2, "Target").method !== "imm32-witness", `must not port by a stale immediate: ${row(r2, "Target").detail}`);
+    eq(row(r2, "Target").method, "caller-ordinal", `the next rung (the caller's call #1) takes over: ${row(r2, "Target").detail}`);
+    eq(entry(r2.manifest, "Target")!.rva, hex(patched.fnAt.Target!));
+  });
+  test("port: caller-after-lea rung — the first in-tolerance E8 after `lea rdx,[rip+\"LuckUp\"]` inside a ported caller (the compare call before it is skipped by the size tolerance); the caller ordinal is refreshed", () => {
+    const r = portRung(stripAnchors(rungOld(), "Target", ["imm32Witness"]));
+    eq(row(r, "Caller").method, "funcsig-xref", row(r, "Caller").detail);
+    eq(row(r, "Target").status, "ported-anchor", row(r, "Target").detail);
+    eq(row(r, "Target").method, "caller-after-lea");
+    eq(entry(r.manifest, "Target")!.rva, hex(rv2.fnAt.Target!));
+    assert(/after lea "LuckUp" in Caller/.test(row(r, "Target").detail), row(r, "Target").detail);
+    eq(entry(r.manifest, "Target")!.anchors.callers![0].ordinal, 1, "ordinal re-harvested on the new image");
+  });
+  test("port: several string-xref candidates are filtered by the cfgLite tolerance before anything is called ambiguous (Decoy and Caller lea the same literal but are far too big)", () => {
+    const r = portRung(stripAnchors(rungOld(), "Target", ["imm32Witness", "callers"]));
+    eq(row(r, "Target").status, "ported-anchor", row(r, "Target").detail);
+    eq(row(r, "Target").method, "funcsig-xref");
+    eq(entry(r.manifest, "Target")!.rva, hex(rv2.fnAt.Target!));
+    assert(/literal xref/.test(row(r, "Target").detail) && /3 candidates?, 1 within tolerance|2 of 3 .*tolerance/.test(row(r, "Target").detail), row(r, "Target").detail);
+  });
+  test("port: .pdata neighbours by index — `after` ports the successor, `before` the predecessor of a ported entry (string-less byte-twins)", () => {
+    const r = portRung(rungOld());
+    eq(row(r, "FindBy").status, "ported-rescan", row(r, "FindBy").detail);
+    eq(row(r, "Helper").status, "ported-anchor", row(r, "Helper").detail); eq(row(r, "Helper").method, "pdata-successor");
+    eq(entry(r.manifest, "Helper")!.rva, hex(rv2.fnAt.Helper!));
+    eq(row(r, "HelperB").status, "ported-anchor", row(r, "HelperB").detail); eq(row(r, "HelperB").method, "pdata-predecessor");
+    eq(entry(r.manifest, "HelperB")!.rva, hex(rv2.fnAt.HelperB!));
+    assert(/\.pdata predecessor of FindBy/.test(row(r, "HelperB").detail), row(r, "HelperB").detail);
+  });
+  test("port: shared-data-ref rung — the other .pdata function referencing rip ref #k of a ported function (NameExists shares GetValue's map); its twin on another map stays failed", () => {
+    const r = portRung(rungOld());
+    eq(row(r, "GV").method, "funcsig-xref", row(r, "GV").detail);
+    eq(row(r, "NE").status, "ported-anchor", row(r, "NE").detail); eq(row(r, "NE").method, "shared-data-ref");
+    eq(entry(r.manifest, "NE")!.rva, hex(rv2.fnAt.NE!));
+    assert(/rip ref #0 of GV/.test(row(r, "NE").detail), row(r, "NE").detail);
+    eq(row(r, "NE2").status, "failed", row(r, "NE2").detail);
+    eq(validateManifest(r.manifest).ok, true, JSON.stringify(validateManifest(r.manifest).problems));
+  });
+  test("the committed manifest carries the notes-bind anchors: Status_ApplyLuckUp (literals, imm32 witness, callers after lea, null signature), LuckUp_ctor (vtable store, pool dataRef), the 11 lookups' .pdata chain, NameExists before/shared map, FrameBegin/FrameEnd neighbours", () => {
+    const m = loadManifest(realPath);
+    const a = entry(m, "Status_ApplyLuckUp")!;
+    eq(a.signature, null);
+    eq((a.anchors.strings || []).filter((s) => s.role === "literal" && s.unique).map((s) => s.text).sort().join(","), "LuckUp,None");
+    eq(JSON.stringify({ ...a.anchors.imm32Witness, note: undefined }), JSON.stringify({ pattern: "41 B8 ?? ?? ?? ??", imm32At: 2, equals: "LuckUp_typeid", callee: "Entity_FindComponentsByTypeId", maxForward: 4 }));
+    eq((a.anchors.callers || []).map((c) => `${c.function}#${c.ordinal}@${c.afterStringLea}`).join(","), "Status_ApplyByName#1261@LuckUp,Status_AttachPassive#3439@LuckUp");
+    const c = entry(m, "LuckUp_ctor")!;
+    eq(c.signature, null);
+    eq(JSON.stringify({ ...c.anchors.vtableStore, note: undefined }), JSON.stringify({ vtable: "LuckUp_vftable", pattern: "48 8D 05 ?? ?? ?? ?? 48 89 03" }));
+    eq((c.anchors.dataRefs || []).map((d) => `${d.rva}:${d.role}`).join(","), "0x1414e40:pool");
+    eq((c.anchors.callers || []).map((x) => `${x.function}#${x.ordinal}`).join(","), "Status_ApplyLuckUp#6");
+    const chain: [string, string][] = [["Status_GetCategory", "Status_ApplyByName"], ["Status_GetStackMode", "Status_GetCategory"], ["Status_NameExists", "Status_GetStackMode"], ["Status_GetValue", "Status_NameExists"], ["Status_GetFlags", "Status_GetValue"], ["Status_GetIcon", "Status_GetFlags"], ["Status_OnAppliedToDamageInstance", "Status_GetIcon"], ["Status_OnAppliedToTile", "Status_OnAppliedToDamageInstance"], ["Status_OnKilledCharacter", "Status_OnAppliedToTile"], ["Status_OnDamageReport", "Status_OnKilledCharacter"], ["Status_AttachPassive", "Status_OnDamageReport"], ["Status_SpawnTile", "Status_IsHitEffect"], ["ApplicationBase_FrameEnd", "ApplicationBase_FrameBegin"]];
+    for (const [n, prev] of chain) eq(entry(m, n)!.anchors.after?.function, prev, `${n}.after`);
+    eq(entry(m, "Status_NameExists")!.anchors.before?.function, "Status_GetValue");
+    eq(JSON.stringify({ ...entry(m, "Status_NameExists")!.anchors.sharedDataRef, note: undefined }), JSON.stringify({ with: "Status_GetValue", ripRefOrdinal: 0 }));
+    eq(entry(m, "ApplicationBase_FrameBegin")!.anchors.before?.function, "ApplicationBase_FrameEnd");
+    for (const n of ["Status_GetStackMode", "Status_IsHitEffect", "Status_OnKilledCharacter"]) eq(entry(m, n)!.signature, null, `${n}: a __LINE__-anchored body signature would port a twin silently when the line shifts; stays null`);
+  });
+  if (exe) {
+    test("T1 real exe: every new anchor in the committed manifest verifies on the installed exe (harvest reports no mismatch, and the vtable-store / imm32 / caller-after-lea / neighbour / shared-ref anchors resolve to their own entries)", () => {
+      const m = loadManifest(realPath);
+      const rep = harvestManifest(parsePe(exe), exe, m).report;
+      const byName = (n: string) => rep.find((r) => r.name === n)!;
+      for (const n of ["Status_ApplyLuckUp", "LuckUp_ctor", "Status_NameExists", "Status_GetCategory", "Status_SpawnTile", "ApplicationBase_FrameBegin", "ApplicationBase_FrameEnd"]) eq(byName(n).status, "verified", `${n}: ${byName(n).detail}`);
+      assert(/vtable-store ok/.test(byName("LuckUp_ctor").detail), byName("LuckUp_ctor").detail);
+      assert(/imm32-witness 0x4d6 ok/.test(byName("Status_ApplyLuckUp").detail) && /caller-after-lea ok \(Status_ApplyByName\)/.test(byName("Status_ApplyLuckUp").detail) && /caller-after-lea ok \(Status_AttachPassive\)/.test(byName("Status_ApplyLuckUp").detail), byName("Status_ApplyLuckUp").detail);
+      assert(/shared-data-ref ok/.test(byName("Status_NameExists").detail) && /pdata-predecessor of Status_GetValue ok/.test(byName("Status_NameExists").detail), byName("Status_NameExists").detail);
+      eq(rep.filter((r) => r.status === "mismatch").map((r) => `${r.name}: ${r.detail}`).join("; "), "");
+    });
+    test("T1 real exe: with the signature rung disabled, the three null-signature functions port by their new anchors onto the installed exe (vtable-store, imm32-witness, funcsig-xref) with their known RVAs", () => {
+      const m = loadManifest(realPath);
+      const p = parsePe(exe);
+      const r = portManifest(m, p, exe, { steamBuildId: "25143593", gameVersion: "1.1.21239" });
+      const want: [string, string][] = [["LuckUp_ctor", "vtable-store"], ["Status_ApplyLuckUp", "imm32-witness"], ["Status_GetCategory", "funcsig-xref"], ["Status_NameExists", "pdata-successor"]];
+      for (const [n, method] of want) { eq(row(r, n).status, "ported-anchor", `${n}: ${row(r, n).detail}`); eq(row(r, n).method, method, `${n}: ${row(r, n).detail}`); eq(entry(r.manifest, n)!.rva, entry(m, n)!.rva, n); }
+      // the callers rung agrees with the ordinal rung when forced (imm32 witness removed)
+      const c = JSON.parse(JSON.stringify(m)) as typeof m;
+      delete entry(c, "Status_ApplyLuckUp")!.anchors.imm32Witness;
+      const r2 = portManifest(c, p, exe, { steamBuildId: "25143593", gameVersion: "1.1.21239" });
+      eq(row(r2, "Status_ApplyLuckUp").method, "caller-after-lea", row(r2, "Status_ApplyLuckUp").detail);
+      eq(entry(r2.manifest, "Status_ApplyLuckUp")!.rva, "0x5f9760");
+    });
+  }
   // ---- evidence truth: every manifest evidence path is a doc section or a file that exists under .analysis/ ----
   test("every manifest evidence string is a doc section or an .analysis/ path (optionally :line)", () => {
     const m = loadManifest(realPath);

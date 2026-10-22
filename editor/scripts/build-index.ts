@@ -7,7 +7,7 @@
 import { writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { ensureDataCacheDir, ANALYSIS_DIR } from "../src/core/repo.ts";
-import { distillFromTsv } from "../src/core/components.ts";
+import { distillFromTsv, COMPONENT_CACHE_HINT } from "../src/core/components.ts";
 import { buildIndex, hasBaseData } from "../src/core/base-data.ts";
 
 const dataDir = ensureDataCacheDir();
@@ -18,8 +18,10 @@ if (existsSync(tsv)) {
   const names = distillFromTsv(tsv);
   writeFileSync(join(dataDir, "component-names.json"), JSON.stringify(names));
   console.log(`component-names.json: ${names.length} glaiel:: classes`);
+} else if (existsSync(join(dataDir, "component-names.json"))) {
+  console.log(`component-names.json: kept the existing cache (no ${tsv} to rebuild it from)`);
 } else {
-  console.log(`component-names.json: SKIPPED (no ${tsv})`);
+  console.log(`component-names.json: SKIPPED (no ${tsv}); ${COMPONENT_CACHE_HINT}`);
 }
 
 // Base-data index.
