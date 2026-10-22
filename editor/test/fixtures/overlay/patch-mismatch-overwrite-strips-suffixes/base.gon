@@ -1,0 +1,3 @@
+# 0x946680: this=number, other=object falls through every typed branch to LAB_140947159 (copy + strip).
+x 5
+y { a 1 }

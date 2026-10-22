@@ -160,9 +160,11 @@ is a disabled mod, not a crash. Harvest anchors (`tools/bindings/harvest.ts --wr
 copy first, then applies mod overlays (later paths override earlier) named `X.gon.append` / `.merge` / `.patch` →
 GON's Append / DeepMerge / PatchMerge. The exact behavior (incl. `.patch` per-field policy suffixes
 `.overwrite`/`.append`/`.merge`/`.add`/`.multiply`) is documented in `docs/data-mods.md` and decompiled in
-`.analysis/decompiled/Gon_PatchMerge_a_0x944cc0.c` / `Gon_PatchMerge_b_0x944f50.c` (DeepMerge 0x946680 is not
-on disk yet). The editor's `editor/src/core/overlay/` re-implements these; changes there
-must stay faithful to the decompiled functions.
+`.analysis/decompiled/Gon_PatchMerge_a_0x944cc0.c` (the suffix parser), `Gon_PatchMerge_b_0x944f50.c` (the suffix
+stripper) and `Gon_DeepMerge_0x946680.c` (the policy-driven merge `.patch` runs through; GON's `Append` and the
+suffix-blind `DeepMerge` behind `.append` / `.merge` are not decompiled yet). The editor's `editor/src/core/overlay/`
+re-implements these; changes there must stay faithful to the decompiled functions — the row-by-row comparison is
+`docs/data-mods.md` "Fidelity to the decompiled merges", pinned by `editor/test/fixtures/overlay/`.
 
 **The editor's core is the single source of truth.** `editor/src/core/api.ts` is the one app surface; the MCP server
 (`editor/src/mcp/`) and the web UI (`editor/web/`) are thin adapters over it and must not re-implement GON parsing or

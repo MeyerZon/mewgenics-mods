@@ -1,0 +1,4 @@
+name.append "def"
+tag.add bar
+flag.append false
+n.append 2

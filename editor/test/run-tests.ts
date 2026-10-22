@@ -21,6 +21,7 @@ import { componentCacheStatus } from "../src/core/components.ts";
 import { EXTRACTED_DATA, REPO_ROOT, MODS_DIR } from "../src/core/repo.ts";
 import { makeTestFilter } from "./filter.ts";
 import { runGonRoundTripTests } from "./gon-roundtrip-tests.ts";
+import { runOverlayTests } from "./overlay-tests.ts";
 
 /** The harness contract every suite is written against (`runXTests(test, assert, eq)`). */
 export type TestFn = (name: string, fn: () => void) => void;
@@ -208,6 +209,9 @@ test("parsePolicy matches suffixes in the decompiled order", () => {
   eq(parsePolicy("boss_health_multiplier").policy, "default");
   eq(parsePolicy("wallet_size").policy, "default");
 });
+
+// Fixture pairs pinned against the decompiled merge functions (docs/data-mods.md "Fidelity to the decompiled merges").
+runOverlayTests(test, assert, eq);
 
 // ---- 3. Real mods against real base ----------------------------------------
 console.log("\n# Real overlays applied to extracted base data");

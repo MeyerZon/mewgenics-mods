@@ -69,7 +69,9 @@ recombine existing behaviors; new behaviors need native code.
   is the loose-files entry. Each path is logged as "Mod Path: ...".
 - The file manager (RVA `0x9a09f0`) resolves a requested relative path by taking the pack copy first, then walking
   the mod-path list from last to first; for each path it looks for the plain file and for `.append`, `.merge` and
-  `.patch` variants, applied through GON's Append / DeepMerge / PatchMerge (RVAs `0x944cc0`, `0x944f50`, `0x946680`).
+  `.patch` variants and returns their paths; the GON side that applies them is only partly decompiled: `0x944cc0` is the
+  key-suffix -> policy parser, `0x944f50` the recursive suffix stripper, `0x946680` the policy-driven merge `.patch`
+  needs (`.analysis/decompiled/Gon_*.c`; row-by-row in `docs/data-mods.md` "Fidelity to the decompiled merges").
 - Live check: `launch-dev.bat` produced log lines `Save File Suffix: dev` and `Mod Path: <repo>\mods\dev-sandbox`
   with no GON errors; the main save file hash was unchanged; the game added default `debug_*` keys to
   `settings.txt` but did not persist `enable_debugconsole` or `dev_mode`.
