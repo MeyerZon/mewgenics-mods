@@ -387,9 +387,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face, the 4 campaign-walk symbols the 2 glow-v2 screen-matrix symbols the 3 v7 cat-rig hook targets the 3 observe3d camera symbols and the 4 M1 mesh symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 52);   // +4: M1 promoted Batch_SubmitFunctor, ResourceManager_GetBinaryResource, App_GetTexture, Material_Bind (48..51)
+    eq(want.length, 53);   // +4: M1 promoted Batch_SubmitFunctor, ResourceManager_GetBinaryResource, App_GetTexture, Material_Bind (48..51); +1 M3 Gon_LoadFile (52)
     // API v7 (2026-10-22): the cat rig redirect hooks the entry scope, the by-name clip lookup and the SWF post-load pass
     eq(want.slice(42, 45).join(","), "FW_SYM_Character_init,FW_SYM_Swf_GetCharacterByName,FW_SYM_ApplicationBase_ProcessAnimationMerges");
+    eq(want[52], "FW_SYM_Gon_LoadFile");
     eq(entry(m, "Character_init")!.rva, "0xf70f0");
     eq(entry(m, "Swf_GetCharacterByName")!.rva, "0x9bb890");
     eq(entry(m, "ApplicationBase_ProcessAnimationMerges")!.rva, "0x9bc070");
@@ -420,7 +421,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   test("25143593.json: FwData table == framework_api.h FW_DATA_* order (19, incl. the MewDirector and ShaderManager globals and the 8 render globals of the 3D block); App_global first", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_DATA_");
-    eq(want.length, 19);
+    eq(want.length, 20);   // +1: M3 ResourceMap (19), the resource manager Gon_LoadFile caches in
     eq(entry(m, "MewDirector_global")!.rva, "0x13dac30");
     const got = dataTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
@@ -494,7 +495,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 127, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects) + 2 effective stats + App_timescale (game speed) + 3 cat rig (the SymbolClass list: SwfFile_symbolList, SymNode_name, SymNode_idFromName) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures) + 3 sprite/mesh order (M2 occlusion)");
+    eq(offs.length, 131, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects) + 2 effective stats + App_timescale (game speed) + 3 cat rig (the SymbolClass list: SwfFile_symbolList, SymNode_name, SymNode_idFromName) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures) + 3 sprite/mesh order (M2 occlusion) + 1 GonResource root (M3 named models) + 3 cat palette row (M3 pal)");
   });
   test("25143593.json: effective stats (2026-10-22) — Character::recompute_stats (RTTI of its std::function lambdas) is a signed function entry; the effective stat block +0x5bc and max HP +0x4bc are offsets witnessed in it", () => {
     const m = loadManifest(realPath);
@@ -1924,7 +1925,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const WALK_NAMES = new Set([...WALK_SYMBOLS.map((x) => x[0]), ...WALK_REFERENCE.map((x) => x[0]), ...WALK_OFFSETS.map((x) => x[0])]);
   test("the committed manifest carries the campaign-walk bindings (2026-10-22) as one contiguous block at its end: 4 FwSymbol functions (GoOnAnAdventure, MapScreen::init, MapScreen::EnterNode, StartMapBattle), 3 reference functions, 8 witnessed offsets; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(enumerators("FW_SYM_").length, 52);
+    eq(enumerators("FW_SYM_").length, 53);   // + M3 Gon_LoadFile (52), appended after the walk symbols
     for (const [name, rva, index] of WALK_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
@@ -1996,7 +1997,9 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   // and the palette shader path binds its material with Material_Bind and the palette texture from App_GetTexture), and the
   // matrix stack data pointer is FwData 18 (MatStackData, witnessed by rip ref #14 of Batch_AddInstance)
   const R3D_SYMBOLS: [string, string, number][] = [["Camera_render", "0x9787c0", 45], ["Camera_GetViewProjection", "0x9785e0", 46], ["Camera_RenderOneLayer", "0x979210", 47],
-    ["Batch_SubmitFunctor", "0xa47820", 48], ["ResourceManager_GetBinaryResource", "0x973750", 49], ["App_GetTexture", "0x9bb490", 50], ["Material_Bind", "0x9bda20", 51]];
+    ["Batch_SubmitFunctor", "0xa47820", 48], ["ResourceManager_GetBinaryResource", "0x973750", 49], ["App_GetTexture", "0x9bb490", 50], ["Material_Bind", "0x9bda20", 51],
+    // M3 named models ("@Name"): data/models.gon through the game loader (overlays of every mod merged)
+    ["Gon_LoadFile", "0x611a0", 52]];
   const R3D_REFERENCE: [string, string][] = [["Layer_Draw", "0x9896f0"], ["Position_GetInterpolated", "0x9b4a30"],
     ["Batch_Replay", "0xa481d0"], ["Batch_AddInstance", "0xa47e50"], ["Batch_ApplyGroupState", "0xa497d0"],
     ["Swf_DisplayObject_Render", "0x9b0a50"], ["MatStack_Ortho", "0x9fec80"], ["MatStack_Push", "0x9feaf0"], ["Mat4_IsMirrored", "0xa082b0"], ["Camera_MouseToCamera2D", "0x9796d0"],
@@ -2011,8 +2014,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     // M2 occlusion (sprite/mesh painter order): the witness host of the layer item key (the .pdata chunk of Scene_SubmitDraw
     // that stores the built item; its first chunk only computes the key)
     ["Scene_SubmitDraw_tail", "0x989c96"]];
+  // (M3 face: Character_Face, the witness host of Character_orientation, is the facing block's FW_SYM_Character_Face 35)
   const R3D_DATA: [string, string, number][] = [["Iso", "0x12f7a00", 11], ["IsoInverse", "0x12f79c0", 12], ["RenderStateFlags", "0x12f714c", 13], ["CullDisableCounter", "0x13c5c90", 14],
-    ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17], ["MatStackData", "0x13c5bd8", 18]];
+    ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17], ["MatStackData", "0x13c5bd8", 18],
+    ["ResourceMap", "0x13c61e0", 19]];
   const R3D_OFFSETS: [string, string, string][] = [["Camera_rtt", "OFF_CAM_RTT", "0x80"], ["Camera_hdr", "OFF_CAM_HDR", "0x81"], ["Camera_queue", "OFF_CAM_QUEUE", "0x40"],
     ["Camera_layerBits", "OFF_CAM_LAYER_BITS", "0xc8"], ["RenderQueue_layers", "OFF_RQ_LAYERS", "0x38"], ["RenderQueue_layersEnd", "OFF_RQ_LAYERS_END", "0x40"],
     ["Layer_count", "OFF_LAYER_COUNT", "0xc"], ["Layer_items", "OFF_LAYER_ITEMS", "0x10"], ["Layer_mode", "OFF_LAYER_MODE", "0x24"], ["Renderer_position", "OFF_RND_POSITION", "0x40"],
@@ -2024,12 +2029,60 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["Texture2D_glName", "OFF_TEX2D_GLNAME", "0x8"],
     // M2 occlusion: the camera's per-item filter std::function (impl pointer) Layer_Draw calls before every item, the layer's
     // sorted flag and the item's sort key (descending = farther first) the mesh engine interleaves its draws by
-    ["Camera_layerFilter", "OFF_CAM_LAYER_FILTER", "0x120"], ["Layer_sorted", "OFF_LAYER_SORTED", "0x20"], ["LayerItem_key", "OFF_ITEM_KEY", "0x10"]];
+    ["Camera_layerFilter", "OFF_CAM_LAYER_FILTER", "0x120"], ["Layer_sorted", "OFF_LAYER_SORTED", "0x20"], ["LayerItem_key", "OFF_ITEM_KEY", "0x10"],
+    // (M3 face reads Character_orientation, the facing block's entry: it stays there, see FACING_OFFSETS)
+    // M3 named models: the merged root GonObject inside the GonResource Gon_LoadFile returns
+    ["GonResource_object", "OFF_GONRES_OBJECT", "0x28"]];
   const R3D_CONSTANTS: [string, string, string][] = [["LayerStride", "CONST_LAYER_STRIDE", "0xe8"], ["LayerItemShift", "CONST_LAYER_ITEM_SHIFT", "5"],
     ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
+  // M3 pal (2026-10-22): a GON `palette true` model on a cat takes the cat's own palette row, read exactly as CatParts
+  // picks the uniform `palette` of its `paletted` material: the override CatParts+0x1b8 unless it is -1 (unset) or the
+  // multi-palette sentinel -69, else the base row CatParts+0x1b4; the CatParts is Character+0x90 (NULL = not a cat).
+  const PAL_REFERENCE: [string, string][] = [["Character_init_clip", "0xf1150"], ["CatParts_Refresh", "0x73f7d0"]];
+  const PAL_OFFSETS: [string, string, string, string][] = [["Character_catParts", "OFF_CH_CATPARTS", "0x90", "Character_init_clip"],
+    ["CatParts_palette", "OFF_CATPARTS_PALETTE", "0x1b4", "CatParts_Refresh"], ["CatParts_paletteOverride", "OFF_CATPARTS_PAL_OVERRIDE", "0x1b8", "CatParts_Refresh"]];
+  const PAL_CONSTANTS: [string, string, string, string][] = [["CatPartsMultiPalette", "CONST_CAT_MULTI_PALETTE", "-0x45", "(-0x45)"]];
+  const PAL_NAMES = [...PAL_REFERENCE.map((x) => x[0]), ...PAL_OFFSETS.map((x) => x[0]), ...PAL_CONSTANTS.map((x) => x[0])];
   const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",
-    ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]);
-  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 25 reference functions (all signed; 3 are witness-host .pdata chunks, 1 the BinaryResource offsets' host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 25 offsets (2 BinaryResource by M2, the Texture2D GL name by M2 textures, 3 for the M2 sprite/mesh order) and 4 constants with witnesses; the generated headers expose them", () => {
+    ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0]), ...PAL_NAMES]);
+  test("the committed manifest carries the M3 cat palette bindings at the end of the 3D block: 2 signed witness-host functions (Character::init(clip) 0xf1150, CatParts_Refresh 0x73f7d0), Character+0x90 CatParts*, CatParts+0x1b4 / +0x1b8 base / override palette rows and the -69 multi-palette sentinel, every one with a witness; the generated offsets.h exposes them", () => {
+    const m = loadManifest(realPath);
+    for (const [name, rva] of PAL_REFERENCE) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(e!.exposure.length, 0, `${name} is reference only (a witness host)`);
+    }
+    for (const [name, macro, value, host] of PAL_OFFSETS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset" && e.value === value, `${name} is an offset ${value}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      eq(e!.anchors.witness?.function, host, `${name} witnessed in ${host}`);
+    }
+    for (const [name, macro, value] of PAL_CONSTANTS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "constant" && e.value === value, `${name} is a constant ${value}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      assert(hv.constantHasSources(e!.anchors), `${name} carries a witness the harvest can verify`);
+    }
+    const names = m.entries.map((e) => e.name);
+    const r3dEnd = names.findIndex((n) => n === PAL_NAMES[PAL_NAMES.length - 1]) + 1;
+    eq(names.slice(r3dEnd - PAL_NAMES.length, r3dEnd).join(","), PAL_NAMES.join(","), "the palette entries close the 3D block (the campaign-walk block closes the manifest)");
+    eq(R3D_NAMES.has(names[r3dEnd] ?? ""), false, "nothing of the 3D block follows them");
+    const oh = genOffsetsH([m]);
+    for (const [, macro, value] of PAL_OFFSETS) assert(new RegExp(`^#define ${macro}\\s+${value}\\s`, "m").test(oh), `${macro} ${value} in offsets.h`);
+    for (const [, macro, , shown] of PAL_CONSTANTS) assert(oh.split(/\r?\n/).some((l) => l.startsWith(`#define ${macro} `) && l.includes(` ${shown} `)), `${macro} ${shown} in offsets.h`);
+  });
+  if (exe) {
+    test("T1 real exe: the M3 cat palette bindings verify on the installed exe (harvest): both witness hosts' signatures, Character+0x90 / CatParts+0x1b4 / +0x1b8 and the -69 sentinel read from their witnesses", () => {
+      const rep = harvestManifest(parsePe(exe), exe, loadManifest(realPath)).report;
+      for (const n of PAL_NAMES) {
+        const x = rep.find((r) => r.name === n);
+        const fn = PAL_REFERENCE.some((p) => p[0] === n);
+        assert(x?.status === "verified" || (fn && x?.status === "harvested"), `${n}: ${x?.status} ${x?.detail}`);
+      }
+    });
+  }
+  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block (the M3 palette entries close it): 8 FwSymbol (4 of them promoted from reference by M1, Gon_LoadFile by M3) + 25 reference functions (all signed; 3 are witness-host .pdata chunks, 1 the BinaryResource offsets' host), 9 FwData globals (MatStackData by M1, ResourceMap by M3) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 26 offsets (2 BinaryResource by M2, the Texture2D GL name by M2 textures, 3 for the M2 sprite/mesh order, GonResource_object for the M3 named models) and 4 constants with witnesses; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     for (const [name, rva, index] of R3D_SYMBOLS) {
       const e = entry(m, name);

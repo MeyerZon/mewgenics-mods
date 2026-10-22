@@ -1,0 +1,29 @@
+unit model: TomTom 0000014bfe0f7708 -> models/grey-box.gltf (block scale=1 yaw=45 offset=(0 0 0))
+Register3DObject(0000014bfe0f7708, models/grey-box.gltf): ok handle 1 (1 object(s))
+unit model: Mangy 0000014bfe0f85e8 -> models/grey-box.gltf (block scale=1 yaw=45 offset=(0 0 0))
+Register3DObject(0000014bfe0f85e8, models/grey-box.gltf): ok handle 2 (2 object(s))
+unit palette: TomTom handle=1 row=9 base=9 override=-1
+unit model at: TomTom handle=1 world=(6.500 4.500) screen=(1.789 4.919) facing=-1 m0=-1.1 ms=1792685227022
+unit palette: Mangy handle=2 row=16 base=16 override=-1
+unit model at: Mangy handle=2 world=(3.500 2.500) screen=(0.894 2.683) facing=-1 m0=-1 ms=1792685227022
+mesh: models/grey-box.gltf: loaded 24 vertices, 12 triangles, bounds x -0.30..0.30 h 0.00..0.60 z -0.30..0.30
+mesh: model models/grey-box.gltf: untextured (no textures/models/grey-box.png): base colour
+mesh: palette.png 16x256 (Texture2D 0000013d05eeb300, gl name 8 at load)
+mesh object f=1 handle=1 model=models/grey-box.gltf unit world=(6.50 0.00 4.50) ndc=(0.19 0.106 0.0659) tex=none palette=9
+mesh object f=1 handle=2 model=models/grey-box.gltf unit world=(3.50 0.00 2.50) ndc=(0.0951 -0.317 0.0352) tex=none palette=16
+mesh: palette.png gl name 8 row 9 (unit 1)
+mesh: palette.png gl name 8 row 16 (unit 1)
+mesh: palette.png gl name 8 row 9 (unit 1)
+mesh: palette.png gl name 8 row 16 (unit 1)
+unit model: Rat 0000014bfe0f94c8 -> models/grey-box.gltf (block scale=1 yaw=45 offset=(0 0 0))
+Register3DObject(0000014bfe0f94c8, models/grey-box.gltf): ok handle 3 (3 object(s))
+unit palette: Rat handle=3 row=-1 (no CatParts: not a cat, colours as authored)
+unit model at: Rat handle=3 world=(5.500 9.500) screen=(-3.578 6.708) facing=+1 m0=1 ms=1792685227035
+mesh: palette.png gl name 8 row 9 (unit 1)
+mesh: palette.png gl name 8 row 16 (unit 1)
+mesh object f=61 handle=1 model=models/grey-box.gltf unit world=(6.50 0.00 4.50) ndc=(0.19 0.141 0.0659) tex=none palette=9
+mesh object f=61 handle=2 model=models/grey-box.gltf unit world=(3.50 0.00 2.50) ndc=(0.0951 -0.282 0.0352) tex=none palette=16
+mesh object f=61 handle=3 model=models/grey-box.gltf unit world=(5.50 0.00 9.50) ndc=(-0.38 0.479 0.0904) tex=none palette=-1
+mesh object f=121 handle=1 model=models/grey-box.gltf unit world=(6.50 0.00 4.50) ndc=(0.19 0.141 0.0659) tex=none palette=9
+mesh object f=121 handle=2 model=models/grey-box.gltf unit world=(3.50 0.00 2.50) ndc=(0.0951 -0.282 0.0352) tex=none palette=16
+mesh object f=121 handle=3 model=models/grey-box.gltf unit world=(5.50 0.00 9.50) ndc=(-0.38 0.479 0.0904) tex=none palette=-1

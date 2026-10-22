@@ -32,6 +32,8 @@ and fast to author.
 
 ## Start here (docs)
 
+- **[`docs/feature-inventory.md`](docs/feature-inventory.md)** — everything the toolkit can do today, one line per
+  feature (data mods, native API, 3D, harness, editor, MCP tools, tooling), each marked observed in-game or not.
 - **[`docs/engine-map.md`](docs/engine-map.md)** — what the binary is, verified facts, build identity, function RVAs,
   the status-system model.
 - **[`docs/data-mods.md`](docs/data-mods.md)** — GON overlay semantics (`.append`/`.merge`/`.patch`), content shapes

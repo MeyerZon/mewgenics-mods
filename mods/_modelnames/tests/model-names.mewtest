@@ -1,0 +1,22 @@
+mods: fw-3d, _modelnames, dev-sandbox
+timeout: 150s
+hide: false
+# 3D phase M3 "@Name": the Rat's graphics.model is { file "@NameBox" scale 1.25 }; mewframework reads data/models.gon
+# through the game's own GON loader (fw-3d's base + this mod's .append, merged) and draws NameBox's
+# models/name-box.gltf (a magenta box) on the Rat. Two Pooters name the undeclared @NoSuchModel: exactly ONE
+# "mesh: @NoSuchModel: model-name-unknown: ..." line, and the Pooters keep their sprites.
+# fw-3d is listed FIRST on purpose: the loader applies a file's overlays only from the mod path holding its base and the
+# paths listed after it (run 20261022-160622 with fw-3d second read FwCrate only: _modelnames's .append was dropped).
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+cmd spawn Pooter
+cmd spawn Pooter
+wait frames 120
+shot "names-a"
+wait frames 90
+shot "names-b"
+quit

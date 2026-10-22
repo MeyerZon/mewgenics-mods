@@ -40,9 +40,15 @@ typedef struct Fw3dObject {
     int usePalette;                     /* GON `palette`: -1 not given, 0 false, 1 true (the row itself is `palette` above) */
     int doubleSided;                    /* -1 not given, 0 false, 1 true */
     /* the unit's facing (+1, or -1 = its sprite is mirrored; fw_unit_facing), refreshed every combat frame by
-     * obj3d_engine.c for objects attached to a Character; -1 mirrors the model x <-> z about its anchor */
+     * obj3d_engine.c for objects attached to a Character; logged only since M3 (the model turns by faceYaw instead) */
     int facing;
     int fromGon;                        /* 1 = registered from the unit's GON graphics.model (not by a mod's API call) */
+    int hideSprite;                     /* M3 GON `hide_sprite true`: 1 = the unit's 2D sprite is not drawn while this model
+                                         * draws (fw_mesh_hide.h); 0 = drawn as before (the default, every API object) */
+    /* 3D phase M3 `face`: degrees about the height axis, applied between the anchor and the object's own transform
+     * (fw_unit_face.h: the unit's Character::Face direction); 0 for new objects. Set every combat frame by obj3d_engine.c
+     * for GON unit models; the facing sign above is then informational (it no longer mirrors the model). */
+    float faceYaw;
 } Fw3dObject;
 
 typedef struct Fw3dRegistry { Fw3dObject objs[FW_OBJ3D_MAX]; int count; int nextHandle; } Fw3dRegistry;
@@ -67,7 +73,10 @@ int  fw_obj3d_count(const Fw3dRegistry *r);
 int  fw_obj3d_set_look(Fw3dRegistry *r, int handle, const char *texture, const float tint[4], int usePalette, int doubleSided);
 /* facing of object `handle`: < 0 -> -1, else +1; 1 set, 0 unknown handle */
 int  fw_obj3d_set_facing(Fw3dRegistry *r, int handle, int facing);
+/* face yaw of object `handle` (degrees, fw_unit_face.h); 1 set, 0 unknown handle */
+int  fw_obj3d_set_face_yaw(Fw3dRegistry *r, int handle, double yawDeg);
 int  fw_obj3d_mark_gon(Fw3dRegistry *r, int handle);   /* fromGon = 1; 1 set, 0 unknown handle */
+int  fw_obj3d_set_hide(Fw3dRegistry *r, int handle, int hideSprite);   /* hideSprite = (hideSprite == 1); 1 set, 0 unknown handle */
 const Fw3dObject *fw_obj3d_at(const Fw3dRegistry *r, int i);                     /* NULL out of range */
 
 /* the object's texture (NULL / "" = the convention) and palette row (< 0 = off); 1 ok, 0 unknown handle or a texture
@@ -84,7 +93,7 @@ void fw_obj3d_identity(float out[16]);
 void fw_obj3d_mat4_mul(const float a[16], const float b[16], float out[16]);   /* out = a x b (column-major); out may alias neither */
 /* the tile centre in world (x, height, z): (col + 0.5, 0, row + 0.5) */
 void fw_obj3d_tile_centre(int col, int row, float out[3]);
-/* the object's model matrix in world space: translation to its anchor x [the x <-> z mirror when facing < 0] x its own transform. The anchor is the tile
+/* the object's model matrix in world space: translation to its anchor x Ry(faceYaw) (M3 face; M2's x <-> z mirror on facing < 0 is gone) x its own transform. The anchor is the tile
  * centre for a tile object, (unitXZ[0], 0, unitXZ[1]) for a Character object (the unit's world position, read by the
  * caller this frame); a Character object with unitXZ NULL is anchored at the origin. */
 void fw_obj3d_model_matrix(const Fw3dObject *o, const double unitXZ[2], float out[16]);

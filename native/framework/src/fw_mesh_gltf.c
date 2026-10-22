@@ -271,6 +271,52 @@ static int node_local(G *g, int node, int ni, float m[16]) {
     return 1;
 }
 
+/* ---------------------------------------------------------------- embedded images (M3) */
+/* The model's own texture: a copy of the PNG bytes an image stores in a bufferView (.glb) or a data: URI, kept on the
+ * mesh for the DLL to decode (fw_mesh_embtex.c). Never fatal: a problem here is a WARNING and the model still loads
+ * (untextured, or with the convention texture) — model-image-format for a non-PNG mimeType (JPEG: the DLL decodes PNG
+ * only), model-image-embedded-invalid for a dangling / out-of-range bufferView or bad base64. */
+static void keep_image(G *g, const uint8_t *p, size_t n) {
+    if (!n) { fw_mesh_warn(g->err, FW_MC_IMAGE_EMBEDDED_INVALID); return; }
+    uint8_t *copy = (uint8_t *)malloc(n);
+    if (!copy) { fw_mesh_warn(g->err, FW_MC_IMAGE_EMBEDDED_INVALID); return; }
+    memcpy(copy, p, n);
+    free(g->out.image);
+    g->out.image = copy; g->out.image_len = n;
+}
+static void embed_view(G *g, int im, int si, long long bv) {
+    (void)si;
+    char mime[32] = "";
+    if (fw_json_str_copy(g->js, g->t, find(g, im, "mimeType"), mime, sizeof mime) < 0 || strcmp(mime, "image/png") != 0) {
+        fw_mesh_warn(g->err, FW_MC_IMAGE_FORMAT);
+        return;
+    }
+    /* view() reports through gerr (a hard error); for an image keep the model: snapshot the error and put it back */
+    FwMeshError keep;
+    if (g->err) keep = *g->err;
+    const uint8_t *p = NULL; size_t n = 0, stride = 0;
+    if (bv < 0 || bv > 0x7fffffff || !view(g, (int)bv, &p, &n, &stride)) {
+        if (g->err) *g->err = keep;
+        fw_mesh_warn(g->err, FW_MC_IMAGE_EMBEDDED_INVALID);
+        return;
+    }
+    keep_image(g, p, n);
+}
+static void embed_data_uri(G *g, const char *uri) {
+    static const char pre[] = "data:image/png;base64,";
+    if (strncmp(uri, pre, sizeof pre - 1) != 0) {
+        if (strncmp(uri, "data:image/", 11) == 0 && !strstr(uri, ";base64,")) fw_mesh_warn(g->err, FW_MC_IMAGE_EMBEDDED_INVALID);
+        else fw_mesh_warn(g->err, FW_MC_IMAGE_FORMAT);
+        return;
+    }
+    size_t n = 0;
+    const char *b64 = uri + sizeof pre - 1;
+    uint8_t *bytes = b64_decode(b64, strlen(b64), &n);
+    if (!bytes) { fw_mesh_warn(g->err, FW_MC_IMAGE_EMBEDDED_INVALID); return; }
+    keep_image(g, bytes, n);
+    free(bytes);
+}
+
 /* ---------------------------------------------------------------- materials */
 static int material(G *g, int mi) {
     int m = elem(g, g->aMaterials, mi);
@@ -295,7 +341,12 @@ static int material(G *g, int mi) {
     if (u >= 0) {
         char *uri = str_dup(g, u);
         if (!uri) return gerr(g, FW_MC_URI_UNSUPPORTED, "image %lld: uri must be a string", si);
-        if (strncmp(uri, "data:", 5) == 0) { snprintf(g->out.texture, sizeof g->out.texture, "embedded:data-uri"); free(uri); return 1; }
+        if (strncmp(uri, "data:", 5) == 0) {
+            snprintf(g->out.texture, sizeof g->out.texture, "embedded:data-uri");
+            embed_data_uri(g, uri);
+            free(uri);
+            return 1;
+        }
         if (!pct_decode(uri) || !safe_rel(uri) || strlen(uri) >= sizeof g->out.texture) {
             gerr(g, FW_MC_URI_UNSUPPORTED, "image %lld: uri '%.60s' is not a safe relative path", si, uri);
             free(uri);
@@ -309,6 +360,7 @@ static int material(G *g, int mi) {
     if (find(g, im, "bufferView") < 0) return gerr(g, FW_MC_NODE_INVALID, "image %lld has neither uri nor bufferView", si);
     if (!get_int(g, im, "bufferView", 0, 1, &bv, "image", (int)si)) return 0;
     snprintf(g->out.texture, sizeof g->out.texture, "embedded:%lld", bv);
+    embed_view(g, im, (int)si, bv);
     return 1;
 }
 

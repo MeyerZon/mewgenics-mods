@@ -1,0 +1,7 @@
+{
+  "title": "hide_sprite control (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only control of _unithide: the vanilla Rat's magenta box at scale 0.4 with `hide_sprite false`, so the Rat's 2D sprite draws next to the box. Load with fw-3d: `mods: dev-sandbox, fw-3d, _unithideoff`. Never for play.",
+  "requirements": []
+}

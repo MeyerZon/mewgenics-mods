@@ -25,6 +25,8 @@
 //              fw_cx_mul/fw_cx_add vec4  colour transform (identity = (1,1,1,1) / (0,0,0,0))
 //              fw_tex        sampler2D the model's texture (unit 0): App_GetTexture's upload, PREMULTIPLIED RGBA
 //              fw_has_tex    int    1 = sample fw_tex with the mesh's uvs (c = fw_base_color * texel), 0 = base colour only
+//              fw_clip       vec2   [lo, hi) of world x + z this draw keeps (M3: a tile mesh is drawn once per sort band, each
+//                                  slice at its own place in the painter order; +-1e30 = open; hi <= lo, e.g. an unset (0,0) = no clip)
 // A texel with alpha < .5 is cut out (discard): no blending, no sorting (alphaMode MASK). The palette rule applies to
 // the textured colour: a grey texel x a grey base colour is a palette index.
 // Depth is left fixed-function: the sprites' bias_depth() writes gl_FragCoord.z - depth_bias * .001, which with no
@@ -43,6 +45,7 @@ uniform vec4 fw_cx_mul;
 uniform vec4 fw_cx_add;
 uniform sampler2D fw_tex;
 uniform int fw_has_tex;
+uniform vec2 fw_clip;
 
 #if COMPILING_VERTEX_PROGRAM
     in vec3 position;
@@ -50,19 +53,24 @@ uniform int fw_has_tex;
     in vec2 texcoord;
     out vec3 v_normal;
     out vec2 v_uv;
+    out float v_depth;
 
     void vert(){
         v_normal = mat3(fw_model) * color;
         v_uv = texcoord;
+        vec4 w = fw_model * vec4(position, 1.0);
+        v_depth = w.x + w.z;
         gl_Position = fw_mvp * vec4(position, 1.0);
     }
 
 #elif COMPILING_FRAGMENT_PROGRAM
     in vec3 v_normal;
     in vec2 v_uv;
+    in float v_depth;
     out vec4 frag_color;
 
     void frag(){
+        if (fw_clip.y > fw_clip.x && (v_depth < fw_clip.x || v_depth >= fw_clip.y)) discard;   // (0,0), never set: no clip
         if (fw_flat != 0) {
             frag_color = fw_base_color;
             return;

@@ -1,0 +1,7 @@
+{
+  "title": "hide_sprite probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for the 3D phase M3 `hide_sprite`: the vanilla Rat wears a magenta box (models/unit-box.gltf, a copy of _unitmodel's) at scale 0.4, and `hide_sprite true` leaves the Rat's 2D sprite undrawn while the box draws. Load with fw-3d: `mods: dev-sandbox, fw-3d, _unithide`. The control is _unithideoff (hide_sprite false). Never for play.",
+  "requirements": []
+}

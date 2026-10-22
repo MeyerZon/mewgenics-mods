@@ -1,0 +1,334 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "script": "mods/dev-sandbox/tests/mesh-slices.mewtest",
+  "note": "coverage = tint px of a band inside its visible box / (its visible area x the 16:9 area/4), last shot; under <= 0.85, over >= 0.9 (mesh-slices.ts judgeSlices). Fight: TacticsTest seed 42, cats on (2,6) key 9, (2,5) 8, (1,5) 7, (1,4) 6.",
+  "runs": [
+    {
+      "name": "slab2x1",
+      "model": "models/slab2x1.obj@0,6",
+      "order": null,
+      "run": "20261022-160819-dev-sandbox-mesh-slices",
+      "note": "the 2x1 slab on (0,6)+(1,6): its middle band [7,8) goes in before the cat on (1,5) (key 7), which is drawn over it; its back band [8,9) after the cat on (2,6) (key 9)",
+      "expect": {
+        "0": "over",
+        "1": "under",
+        "2": "over"
+      },
+      "judgement": {
+        "verdict": "as-expected",
+        "pass": true,
+        "obj": 1,
+        "frame": 541,
+        "shot": 1,
+        "bands": [
+          {
+            "band": 0,
+            "key": 6.5,
+            "tint": "blue",
+            "expect": "over",
+            "coverage": 1.001683478501415,
+            "expectedPx": 20914.790399999998,
+            "px": 20950,
+            "pass": true
+          },
+          {
+            "band": 1,
+            "key": 7.5,
+            "tint": "cyan",
+            "expect": "under",
+            "coverage": 0.7289753932906182,
+            "expectedPx": 21623.5008,
+            "px": 15763,
+            "pass": true
+          },
+          {
+            "band": 2,
+            "key": 8.5,
+            "tint": "magenta",
+            "expect": "over",
+            "coverage": 0.9664498460344271,
+            "expectedPx": 6002.380799999999,
+            "px": 5801,
+            "pass": true
+          }
+        ]
+      },
+      "plan": "mesh order f=301 items=10 meshes=3 groups=3 unsorted=0 | d0 key=6.500 before item 6 key=6.000 | d1 key=7.500 before item 4 key=7.030 | d2 key=8.500 before item 3 key=8.000",
+      "glErrors": [],
+      "shotsCheck": {
+        "status": "ok",
+        "detail": "2 distinct of 2"
+      },
+      "shots": [
+        {
+          "label": "slices-a",
+          "path": "editor/data/ingame-runs/20261022-160819-dev-sandbox-mesh-slices/shot-slices-a.png"
+        },
+        {
+          "label": "slices-b",
+          "path": "editor/data/ingame-runs/20261022-160819-dev-sandbox-mesh-slices/shot-slices-b.png"
+        }
+      ],
+      "verdict": "pass",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+    },
+    {
+      "name": "slab2x1-m2",
+      "model": "models/slab2x1.obj@0,6",
+      "order": "m2",
+      "run": "20261022-160902-dev-sandbox-mesh-slices",
+      "note": "MEWFW_MESH_ORDER=m2 control: every slice keyed by the origin (7), the tie with the cat on (1,5) went to the mesh: the slab is drawn over that cat (wrong: the cat stands in front of its middle band)",
+      "expect": {
+        "0": "over",
+        "1": "over",
+        "2": "over"
+      },
+      "judgement": {
+        "verdict": "as-expected",
+        "pass": true,
+        "obj": 1,
+        "frame": 541,
+        "shot": 1,
+        "bands": [
+          {
+            "band": 0,
+            "key": 6.5,
+            "tint": "blue",
+            "expect": "over",
+            "coverage": 1.00201816987848,
+            "expectedPx": 20914.790399999998,
+            "px": 20957,
+            "pass": true
+          },
+          {
+            "band": 1,
+            "key": 7.5,
+            "tint": "cyan",
+            "expect": "over",
+            "coverage": 1.0078849027073358,
+            "expectedPx": 21623.5008,
+            "px": 21794,
+            "pass": true
+          },
+          {
+            "band": 2,
+            "key": 8.5,
+            "tint": "magenta",
+            "expect": "over",
+            "coverage": 1.0354224776941845,
+            "expectedPx": 6002.380799999999,
+            "px": 6215,
+            "pass": true
+          }
+        ]
+      },
+      "plan": "mesh order f=301 items=10 meshes=3 groups=1 unsorted=0 | d0 key=7.000 before item 7 key=6.000 | d1 key=7.000 before item 7 key=6.000 | d2 key=7.000 before item 7 key=6.000",
+      "glErrors": [],
+      "shotsCheck": {
+        "status": "ok",
+        "detail": "2 distinct of 2"
+      },
+      "shots": [
+        {
+          "label": "slices-a",
+          "path": "editor/data/ingame-runs/20261022-160902-dev-sandbox-mesh-slices/shot-slices-a.png"
+        },
+        {
+          "label": "slices-b",
+          "path": "editor/data/ingame-runs/20261022-160902-dev-sandbox-mesh-slices/shot-slices-b.png"
+        }
+      ],
+      "verdict": "pass",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+    },
+    {
+      "name": "slab3x3",
+      "model": "models/slab3x3.obj@3,3",
+      "order": null,
+      "run": "20261022-160912-dev-sandbox-mesh-slices",
+      "note": "the 3x3 slab centred on (3,3): six bands at six insertion points (4.5 .. 9.5); the cats on (1,4) and (2,5), in front of its left corner, cover small parts of bands [6,7) and [7,8)",
+      "expect": {},
+      "judgement": {
+        "verdict": "as-expected",
+        "pass": true,
+        "obj": 1,
+        "frame": 421,
+        "shot": 1,
+        "bands": [
+          {
+            "band": 0,
+            "key": 4.5,
+            "tint": "blue",
+            "expect": null,
+            "coverage": 0.9962327903606436,
+            "expectedPx": 20914.790399999998,
+            "px": 20836,
+            "pass": null
+          },
+          {
+            "band": 1,
+            "key": 5.5,
+            "tint": "cyan",
+            "expect": null,
+            "coverage": 1.001652034508022,
+            "expectedPx": 37318.3488,
+            "px": 37380,
+            "pass": null
+          },
+          {
+            "band": 2,
+            "key": 6.5,
+            "tint": "magenta",
+            "expect": null,
+            "coverage": 0.9136225648904286,
+            "expectedPx": 52138.5984,
+            "px": 47635,
+            "pass": null
+          },
+          {
+            "band": 3,
+            "key": 7.5,
+            "tint": "blue",
+            "expect": null,
+            "coverage": 0.9612261771098733,
+            "expectedPx": 35569.151999999995,
+            "px": 34190,
+            "pass": null
+          },
+          {
+            "band": 4,
+            "key": 8.5,
+            "tint": "cyan",
+            "expect": null,
+            "coverage": 1.0114751901286114,
+            "expectedPx": 20748.9024,
+            "px": 20987,
+            "pass": null
+          },
+          {
+            "band": 5,
+            "key": 9.5,
+            "tint": "magenta",
+            "expect": null,
+            "coverage": 1.026592648037259,
+            "expectedPx": 6002.380799999999,
+            "px": 6162,
+            "pass": null
+          }
+        ]
+      },
+      "plan": "mesh order f=301 items=10 meshes=6 groups=6 unsorted=0 | d0 key=4.500 before item 9 key=0.500 | d1 key=5.500 before item 8 key=5.030 | d2 key=6.500 before item 7 key=6.000 | d3 key=7.500 before item 5 key=7.030 | d4 key=8.500 before item 4 key=8.000 | d5 key=9.500 before item 3 key=9.000",
+      "glErrors": [],
+      "shotsCheck": {
+        "status": "ok",
+        "detail": "2 distinct of 2"
+      },
+      "shots": [
+        {
+          "label": "slices-a",
+          "path": "editor/data/ingame-runs/20261022-160912-dev-sandbox-mesh-slices/shot-slices-a.png"
+        },
+        {
+          "label": "slices-b",
+          "path": "editor/data/ingame-runs/20261022-160912-dev-sandbox-mesh-slices/shot-slices-b.png"
+        }
+      ],
+      "verdict": "pass",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+    },
+    {
+      "name": "backpost",
+      "model": "models/backpost.obj@2,6",
+      "order": null,
+      "run": "20261022-161058-dev-sandbox-mesh-slices",
+      "note": "the post on the back quarter of (2,6), where a cat stands (key 9): one band [9,10) keyed 9.5, in before the cat, which covers it",
+      "expect": {
+        "0": "under"
+      },
+      "judgement": {
+        "verdict": "as-expected",
+        "pass": true,
+        "obj": 1,
+        "frame": 541,
+        "shot": 1,
+        "bands": [
+          {
+            "band": 0,
+            "key": 9.5,
+            "tint": "blue",
+            "expect": "under",
+            "coverage": 0.15564921918632124,
+            "expectedPx": 14301.3888,
+            "px": 2226,
+            "pass": true
+          }
+        ]
+      },
+      "plan": "mesh order f=301 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.500 before item 3 key=9.000",
+      "glErrors": [],
+      "shotsCheck": {
+        "status": "ok",
+        "detail": "2 distinct of 2"
+      },
+      "shots": [
+        {
+          "label": "slices-a",
+          "path": "editor/data/ingame-runs/20261022-161058-dev-sandbox-mesh-slices/shot-slices-a.png"
+        },
+        {
+          "label": "slices-b",
+          "path": "editor/data/ingame-runs/20261022-161058-dev-sandbox-mesh-slices/shot-slices-b.png"
+        }
+      ],
+      "verdict": "pass",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+    },
+    {
+      "name": "backpost-m2",
+      "model": "models/backpost.obj@2,6",
+      "order": "m2",
+      "run": "20261022-161108-dev-sandbox-mesh-slices",
+      "note": "M2 control: keyed by its origin (9), the tie went to the mesh: the post is drawn over the cat standing in front of it (wrong)",
+      "expect": {
+        "0": "over"
+      },
+      "judgement": {
+        "verdict": "as-expected",
+        "pass": true,
+        "obj": 1,
+        "frame": 541,
+        "shot": 1,
+        "bands": [
+          {
+            "band": 0,
+            "key": 9.5,
+            "tint": "blue",
+            "expect": "over",
+            "coverage": 0.95871807918403,
+            "expectedPx": 14301.3888,
+            "px": 13711,
+            "pass": true
+          }
+        ]
+      },
+      "plan": "mesh order f=301 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 3 key=8.000",
+      "glErrors": [],
+      "shotsCheck": {
+        "status": "ok",
+        "detail": "2 distinct of 2"
+      },
+      "shots": [
+        {
+          "label": "slices-a",
+          "path": "editor/data/ingame-runs/20261022-161108-dev-sandbox-mesh-slices/shot-slices-a.png"
+        },
+        {
+          "label": "slices-b",
+          "path": "editor/data/ingame-runs/20261022-161108-dev-sandbox-mesh-slices/shot-slices-b.png"
+        }
+      ],
+      "verdict": "pass",
+      "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+    }
+  ]
+}
