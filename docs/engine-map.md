@@ -1515,3 +1515,39 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   `.pdata` chunks (0x9787c0..dc, 0x9787dc..c42, 0x978ded..f98, ...) and the harvester reads only the first, so `Camera+0x9c`
   (had-content) has no witness — the engine never writes it (the predicate reads it). Following chained chunks is an
   improvement candidate for `readOffsetWitness`.
+
+## 3D rendering path (2026-10-22)
+
+Ghidra sessions `r3dA`..`r3dE` (containers `rea_ghidra_r3dA`..`E`; notes `.analysis/notes-r3dA.md`..`notes-r3dE.md`,
+build design `.analysis/notes-r3dF.md`, decompiles named there under `.analysis/decompiled/`) and the first T2 run of
+the phase-0 observer (`MEWFW_OBSERVE3D=3`, `mods/dev-sandbox/tests/observe3d.mewtest`, lines pinned in
+`editor/test/fixtures/ingame/observe3d-log.txt`). The full fact list, the remaining unknowns and the build steps are
+[`possible_3d_work.md`](possible_3d_work.md); every address below is an entry of the manifest's 3D block (the last 61
+entries of `bindings/25143593.json`). RVAs.
+
+- **Two camera lists (OBSERVED, T2 + RenderCore 0x989020 asm 0x1409892c0..0x140989330).** List 1 → `Camera_render`
+  0x9787c0 per camera (the 5 RTT side cameras of a fight; 5 calls per frame). List 2 → for every layer index × every
+  camera, `Camera_RenderOneLayer` 0x979210 `(Camera*, int layer)` (unless `cam+0x58 == 1`): the world camera
+  `TacticsTest+0x68`, the UI camera and other scenes' cameras. Both push `stack top × Camera_GetViewProjection` 0x9785e0
+  (`K × inverse(Position_GetViewMatrix)`, zoom `+0x168`, y-flip int `+0x170`) and set the current camera 0x13c6d88.
+- **World camera in a fight (OBSERVED, T2):** rtt 0, hdr 0, **zoom 78.2624**, flip −1, bitset 0x41fde1ffff1, VP m0 =
+  68.0542 = zoom / 1.15 (the camera Position's scale), det < 0; non-empty layers 0x0, 0xa (shadows), 0xd, 0x12, 0x19
+  (units), 0x23, all draw mode 0. A unit's `Renderer_GetScreenMatrix`: m12/m13 = ISO projection of its tile centre,
+  m14 = 0. Render globals: flags 0x9, cull counter 0, depth bias 0, stack top 0.
+- **Main RT (OBSERVED, r3dD + T2):** `App+0xc10` (RGBA8 + D24S8 MSAA, FBO `rt+0x1c`, samples `rt+0x50` = the
+  `antialias` setting `App+0xdf4`, 32 on the owner's machine) is the target of every non-RTT camera; FrameBegin clears
+  it once per frame with `App+0xd98/0xd99/0xd9a` = 1/1/1 (COLOR|DEPTH|STENCIL). Resolve blits colour only.
+- **Frame model (OBSERVED, r3dA):** `Batch_SubmitFunctor` 0xa47820 copies a `std::function<void()>` (impl slot 0
+  `_Copy`, slot 4 `_Delete_this`) into a state-only group; `Batch_Replay` 0xa481d0 calls slot 2 `_Do_call` in FrameEnd.
+  The force bit (flags bit 0) stays set all frame, so the material/shader/texture caches (0x1413c1980, 0x1413c42b8,
+  0x1413c19a0[], 0x1412f713c) and the instance VBO / indirect buffer / VAO bindings are what a functor must restore.
+- **Depth (OBSERVED, r3dD):** sprite shaders never discard and always write `gl_FragDepth`; depth is tested and written
+  only while flags bit 2 is set (mode-1 layers, drawn in reverse). `Shader_compile` 0xa55470 = text replacement
+  (`" vert()"`/`" frag()"` → `" main()"`, `COMPILING_*_PROGRAM`, `MATRICES_AS_ATTRIBS`).
+- **Assets (OBSERVED, r3dE):** `ResourceManager_GetBinaryResource` 0x973750 serves any path (first `-modpaths` entry
+  that has it, then the gpak; overlays alone apply last-to-first); `App_GetTexture` 0x9bb490 loads `textures/<name>`
+  through stb_image and crashes on a missing file (check `FileManager_FileExists` first).
+- **Binding notes.** `Camera_render`'s and `Swf_DisplayObject_Render`'s witnesses live in their second `.pdata`
+  chunks, entered as the witness hosts `Camera_render_body` 0x9787dc and `Swf_DisplayObject_Render_cull` 0x9b0b78;
+  `MaskedRendererIso_RefreshSortKey` 0x78d480 and `Renderer_UpdateRootScale` 0x97ac40 are pdata-less leaves (documented,
+  not entered; the Position offsets are witnessed in `Position_GetInterpolated` 0x9b4a30).

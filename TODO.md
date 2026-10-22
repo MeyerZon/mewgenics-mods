@@ -503,6 +503,14 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
 (owner decision first) → VectorCraft handoff (owner info first). Plan: the session's plan file; progress: the PR list.
 
 ### Larger build-out
+- [~] **3D — full true 3D (owner's goal: "put there 3D models, and it will work")**: the buildable plan is
+      `docs/possible_3d_work.md` (known facts, remaining unknowns with their next step, the hook table by manifest name,
+      phases M meshes / P perspective). Agent-doable next, in order: **M0** pure modules (OBJ/glTF loaders, JSON, 3D math,
+      the std::function-in-C, GL state save/restore, shader dialect; files and red tests in `.analysis/notes-r3dF.md` §6)
+      → **M1** a cube on a tile (functor through `Batch_SubmitFunctor` from a `Camera_RenderOneLayer` post-hook, T2 shot)
+      → **M2** depth against sprites → **M3** assets + `FW_Register3DObject` + GON `model` / `render3d {}` →
+      **M4** palette shader → P1..P6. Phase 0 done 2026-10-22 (branch `feat/3d-investigation`): the 3D block in the
+      manifest, the `MEWFW_OBSERVE3D` observer, its T2 run pinned in `editor/test/fixtures/ingame/observe3d-log.txt`.
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
 - [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
 - [ ] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-22: the append route (`_Append_CatTest` frame placing a rig with EMPTY slot sprites, experiment A0) works — the game draws the cat's own parts into our frame; the 2026-10-21 crash was the visible non-empty placeholder (engine-map "CatTest and the cat animation clips").

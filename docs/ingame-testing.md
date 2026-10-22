@@ -231,6 +231,7 @@ run on demand, because they need Steam, a window and a save, and several agents 
 | `MEWTEST_RESULTS_DIR` | where run dirs go (default `editor/data/ingame-runs/`, git-ignored) |
 | `MEWTEST_SAVECHECK=0` | disable the read-only hash of the real save (default on) |
 | `MEWTEST_FAKE_GAME=<path>` | spawn `node <path>` instead of the exe (tests only) |
+| `MEWFW_OBSERVE3D=<n>` | read by `mewframework.dll` itself (passed through the environment): the phase-0 3D observer logs `obs3d …` lines for n windows of 60 world-camera frames per fight (`mods/dev-sandbox/tests/observe3d.mewtest`; parser `editor/src/core/ingame/obs3d.ts`; `docs/possible_3d_work.md`); unset or 0 = no hook installed |
 
 ## Artifacts
 
