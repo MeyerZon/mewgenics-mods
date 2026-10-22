@@ -86,6 +86,7 @@ void fw_mesh_to_game_axes(FwMesh *m, float scale);
  * triangles get 0,1,0); uvs are kept, has_normals is left as is. nverts becomes nindices. 0 on allocation failure
  * (the mesh is then unchanged), else 1. */
 int fw_mesh_flat_normals(FwMesh *m);
+void fw_mesh_default_material(FwMesh *m);    /* base_color = 1,1,1,1, texture = "" */
 void fw_mesh_bounds(FwMesh *m);               /* recomputes bmin/bmax from verts (all 0 for an empty mesh) */
 void fw_mesh_free(FwMesh *m);                 /* frees and zeroes; NULL and an already-freed mesh are fine */
 
