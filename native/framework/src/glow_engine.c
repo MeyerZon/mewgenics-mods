@@ -210,6 +210,7 @@ static void glow_frame(void *tt) {
 static void hook_TacticsTest_LateRender(void *tt) {
     if (g_orig) g_orig(tt);
     glow_frame(tt);
+    obs3d_on_late_render(tt);   /* the 3D observer learns the fight's TacticsTest (a no-op unless MEWFW_OBSERVE3D) */
 }
 
 /* ----------------------------------------------------------------------- */

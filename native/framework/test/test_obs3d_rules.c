@@ -174,7 +174,7 @@ TEST(item_and_globals_lines) {
     CHECK(strstr(buf, " pos=(3.5 7.5) screen=[60 0 0 0 0 -60 0 0 0 0 1 0 640 360 0 1]") != NULL);
     float iso[16] = { 0.894427f, 0.447214f, 0, 0, 0, 1, 0, 0, -0.894427f, 0.447214f, 1, 0, 0, 0, 0, 1 };
     fw_obs3d_fmt_globals(buf, sizeof buf, iso, NULL, 0x9, 0, 2.0f, 1);
-    CHECK(strncmp(buf, "obs3d globals iso=[0.894427 0.447214 0 0 0 1 0 0 -0.894427 0.447214 1 0 0 0 0 1] isoinv=[0 0", 95) == 0);
+    CHECK(strncmp(buf, "obs3d globals iso=[0.894427 0.447214 0 0 0 1 0 0 -0.894427 0.447214 1 0 0 0 0 1] isoinv=[0 0", 92) == 0);
     CHECK(strstr(buf, "] flags=0x9 cull=0 depthbias=2 stacktop=1") != NULL);
 }
 

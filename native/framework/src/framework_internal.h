@@ -28,3 +28,7 @@ void status_engine_on_begin_turn(void *character);
 int glow_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_TacticsTest_LateRender step of FW_HOOK_PLAN */
 int glow_engine_set(void *character, const float rgba[4]);
 int glow_engine_clear(void *character);
+
+/* obs3d_engine.c (phase-0 3D observer, log-only, MEWFW_OBSERVE3D) */
+int obs3d_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_Camera_render step: a no-op success when off */
+void obs3d_on_late_render(void *tacticsTest);        /* called by the glow engine's LateRender hook every combat frame */

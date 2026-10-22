@@ -127,10 +127,12 @@ static void hook_Character_BeginTurn(void *character, int kind) {
     if (g_next_Character_BeginTurn) g_next_Character_BeginTurn(character, kind);
 }
 
-/* One step of FW_HOOK_PLAN: this file's two observer hooks, the glow engine's render hook; everything else is the status engine's. */
+/* One step of FW_HOOK_PLAN: this file's two observer hooks, the glow engine's render hook, the 3D observer's camera hook;
+ * everything else is the status engine's. */
 static int install_step(const FwHookSpec *spec, int ordinal, int failuresSoFar, void *user) {
     (void)ordinal; (void)failuresSoFar; (void)user;
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_TacticsTest_LateRender) return glow_engine_hook_step(spec);
+    if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Camera_render) return obs3d_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Character_BeginTurn) {
         uintptr_t rva = g_sym[spec->index] - g_base;
         void *tramp = NULL;
