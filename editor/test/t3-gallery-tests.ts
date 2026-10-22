@@ -17,11 +17,13 @@ const item = (over: Partial<T3Item> = {}): T3Item => ({
 });
 
 export function runT3GalleryTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
+  /** eq is strict (===): compare structured values by their JSON */
+  const deq = (a: unknown, b: unknown, msg?: string) => eq(JSON.stringify(a), JSON.stringify(b), msg);
   console.log("\n# T3 looks gallery (t3-looks.json → editor/data/t3-gallery/index.html)");
 
   test("parseLooks: a well-formed list parses with no errors", () => {
     const r = parseLooks(JSON.stringify([item(), item({ id: "pr59-ruffle", pr: 59, shots: [] })]));
-    eq(r.errors, []);
+    deq(r.errors, []);
     eq(r.items.length, 2);
   });
 
@@ -36,14 +38,14 @@ export function runT3GalleryTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
 
   test("parseLooks: not an array is one error, not a throw", () => {
     const r = parseLooks("{}");
-    eq(r.items, []);
+    deq(r.items, []);
     eq(r.errors.length, 1);
   });
 
   test("resolveShot: an exact path that exists resolves to itself; one that does not is null", () => {
     const fs = { exists: (p: string) => p === "glow-shots/after.png", list: (_d: string) => [] as string[] };
-    eq(resolveShot("glow-shots/after.png", fs), "glow-shots/after.png");
-    eq(resolveShot("glow-shots/before.png", fs), null);
+    deq(resolveShot("glow-shots/after.png", fs), "glow-shots/after.png");
+    deq(resolveShot("glow-shots/before.png", fs), null);
   });
 
   test("resolveShot: a `*` segment picks the newest (lexicographically last) run dir that holds the file", () => {
@@ -53,8 +55,8 @@ export function runT3GalleryTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
       list: (d: string) => d === "ingame-runs" ? ["20261020-1-_artprobe-render-probe", "20261021-1-_artprobe-render-probe", "20261022-1-_artprobe-render-probe", "20261023-1-_artprobe-render-cat"] : [],
     };
     // 20261022 matches the pattern but has no shot (a crashed run) → the newest one that has it
-    eq(resolveShot("ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", fs), "ingame-runs/20261021-1-_artprobe-render-probe/shot-probe-1.png");
-    eq(resolveShot("ingame-runs/*-dev-sandbox-unit-glow/shot-glow.png", fs), null);
+    deq(resolveShot("ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", fs), "ingame-runs/20261021-1-_artprobe-render-probe/shot-probe-1.png");
+    deq(resolveShot("ingame-runs/*-dev-sandbox-unit-glow/shot-glow.png", fs), null);
   });
 
   test("copiedName: flattens the data-relative path into one file name under shots/ (run stamp kept, no separators)", () => {
@@ -102,13 +104,13 @@ export function runT3GalleryTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
   });
 
   test("summarize: counts items with shots / needing a re-run / hands-on", () => {
-    eq(summarize(resolved), { total: 3, withShots: 1, needsRerun: 1, handsOn: 1 });
+    deq(summarize(resolved), { total: 3, withShots: 1, needsRerun: 1, handsOn: 1 });
   });
 
   const exp = buildAnswersExport([{ id: "a", pr: 1, question: "Q1?" }, { id: "b", pr: 2, question: "Q2?" }, { id: "c", pr: 3, question: "Q3?" }], { a: "yes", b: "unsure", zz: "no" }, "2026-10-22T12:00:00Z");
 
   test("buildAnswersExport: the answers JSON shape (kind, version, exportedAt, counts, one row per item; unknown ids dropped)", () => {
-    eq(exp, {
+    deq(exp, {
       kind: "mewgenics-t3-answers", version: 1, exportedAt: "2026-10-22T12:00:00Z",
       counts: { yes: 1, no: 0, unsure: 1, unanswered: 1 },
       answers: [{ id: "a", pr: 1, question: "Q1?", answer: "yes" }, { id: "b", pr: 2, question: "Q2?", answer: "unsure" }, { id: "c", pr: 3, question: "Q3?", answer: null }],
@@ -119,14 +121,14 @@ export function runT3GalleryTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     const m = /function buildAnswersExport\([^]*?\n\}/.exec(html);
     assert(!!m, "buildAnswersExport embedded in the page script");
     const fn = new Function(`${m![0]}; return buildAnswersExport;`)() as typeof buildAnswersExport;
-    eq(fn([{ id: "a", pr: 1, question: "Q1?" }, { id: "b", pr: 2, question: "Q2?" }, { id: "c", pr: 3, question: "Q3?" }], { a: "yes", b: "unsure", zz: "no" }, "2026-10-22T12:00:00Z"), exp);
+    deq(fn([{ id: "a", pr: 1, question: "Q1?" }, { id: "b", pr: 2, question: "Q2?" }, { id: "c", pr: 3, question: "Q3?" }], { a: "yes", b: "unsure", zz: "no" }, "2026-10-22T12:00:00Z"), exp);
   });
 
   test("editor/t3-looks.json (tracked) parses with no errors, every item open or done, and `npm run t3` is wired", () => {
     const p = join(EDITOR, "t3-looks.json");
     assert(existsSync(p), "editor/t3-looks.json exists");
     const r = parseLooks(readFileSync(p, "utf8"));
-    eq(r.errors, []);
+    deq(r.errors, []);
     assert(r.items.length >= 10, `expected the collected T3 items, got ${r.items.length}`);
     const pkg = JSON.parse(readFileSync(join(EDITOR, "package.json"), "utf8"));
     eq(pkg.scripts.t3, "node scripts/t3-gallery.ts");
