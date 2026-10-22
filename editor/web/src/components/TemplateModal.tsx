@@ -7,7 +7,7 @@ import { sx, JsonView } from "./ui.tsx";
 import { scaffold } from "../actions.ts";
 import type { TemplateKindName } from "../types.ts";
 
-const KINDS: TemplateKindName[] = ["ability", "passive", "item", "status-data"];
+const KINDS: TemplateKindName[] = ["ability", "passive", "item", "status-data", "particle", "vfx-ability"];
 
 function Field({ name }: { name: keyof Omit<TemplateForm, "kind" | "result"> }): React.JSX.Element {
   const value = useStore(tpl, (t) => t[name]);

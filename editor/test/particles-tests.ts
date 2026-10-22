@@ -2,7 +2,7 @@
 //  A. probe-vfx.ts — the pure measure behind `npm run test:artprobe -- --vfx` (synthetic images): the NEW system's
 //     #ff0090 dots and the re-pointed SparkleBuff's marker pixels per shot, the motion between shots, and the refusal
 //     when the shots are byte-identical (the stale-shot caveat of 2026-10-22);
-//  B. particles.ts — the content model the ParticleSystemData decoder (0x9c5b00) reads, pinned against vanilla (T1);
+//  B. particles.ts — the content model the ParticleSystemData decoder (0x9c5970) reads, pinned against vanilla (T1);
 //  C. the validator's particle checks (particle-missing, clip-missing, particle-unknown-key) on fixture mods;
 //  D. new_from_template particle / vfx-ability;
 //  E. mods/_vfxprobe's shape, and the OBSERVED run fixture (editor/test/fixtures/ingame/vfxprobe-summary.json).
@@ -84,6 +84,7 @@ export async function runParticlesTests(test: TestFn, assert: AssertFn, eq: EqFn
 
   // ---- B. the content model ----
   test("particles.ts: PARTICLE_KEYS holds the decoder's emitter keys; curve keys expand to X / X_start / X_end / X_in / X_out; there is no colour key", () => {
+    assert(!P.isParticleKey("continual_emission") && P.PARTICLE_DEAD_KEYS.includes("continual_emission"), "continual_emission is dead (no such string in the exe)");
     for (const k of ["movieclip", "emit_rate", "emit_amount", "emit_box", "particle_lifetime", "live_bounds", "render_mode", "render_layer", "simulation_space", "ownership", "scripts", "combo", "chain", "variant_of", "max_particles", "material", "unlit", "depth_bias"]) assert(P.isParticleKey(k), k);
     for (const c of ["size", "alpha", "speed", "friction", "force", "rotation", "rotation_speed"]) for (const s of ["", "_start", "_end", "_in", "_out"]) assert(P.isParticleKey(c + s), c + s);
     for (const k of ["color", "colour", "tint", "emit_rat", "size_middle"]) assert(!P.isParticleKey(k), k);
@@ -106,7 +107,7 @@ export async function runParticlesTests(test: TestFn, assert: AssertFn, eq: EqFn
         for (const e of root.entries) {
           if (e.value.t !== "obj") continue;
           for (const k of e.value.entries) {
-            if (!P.isParticleKey(k.key)) bad.push(`${f}:${e.key}.${k.key}`);
+            if (!P.isParticleKey(k.key) && !P.PARTICLE_DEAD_KEYS.includes(k.key)) bad.push(`${f}:${e.key}.${k.key}`);
             if (k.key === "combo" && k.value.t === "arr") for (const it of k.value.items) if (it.t === "str") refs.push(it.raw);
             if (k.key === "chain" && k.value.t === "str") refs.push(k.value.raw);
           }

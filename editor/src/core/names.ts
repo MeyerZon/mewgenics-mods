@@ -72,6 +72,8 @@ export interface ResolutionSets {
   characters: Set<string>;
   classes: Set<string>;
   templates: Set<string>;
+  /** particle system names: data/particles.gon + data/particles2d.gon */
+  particles: Set<string>;
   components: Set<string>;
   /** false when no component class list was available at all (the editor/data cache is missing or empty) */
   componentListKnown: boolean;
@@ -96,6 +98,7 @@ export function resolutionSets(src: ResolutionSources = {}): ResolutionSets {
     characters: new Set([...entryNameSet("characters", root), ...registered]),
     classes: entryNameSet("classes", root),
     templates: entryNameSet("ability_templates", root),
+    particles: new Set([...entryNameSet("particles", root), ...entryNameSet("particles2d", root)]),
     components: new Set([...components, ...registered]),
     componentListKnown: components.size > 0,
     registered,

@@ -23,6 +23,8 @@ import { findIndex } from "../gon/value.ts";
 import { resolutionSets } from "../names.ts";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.ts";
 import { ReportBuilder } from "./result.ts";
+import { isParticleKey, PARTICLE_DEAD_KEYS, isNoneName, PARTICLE_REF_KEYS, ABILITY_CLIP_KEYS, NON_CLIP_PROJECTILE_VALUES } from "../particles.ts";
+import { vanillaClipNames, modClipNames } from "../art/swf-exports.ts";
 import { identifyExe } from "../bindings/check.ts";
 import { listManifests } from "../bindings/manifest.ts";
 import { locateGameDir } from "../ingame/launch.ts";
@@ -47,6 +49,7 @@ function categoryForPath(baseName: string): string | null {
   const p = baseName.replace(/\\/g, "/");
   if (p === "data/keyword_tooltips.gon") return "statuses";
   if (p === "data/difficulties.gon") return "difficulties";
+  if (p === "data/particles.gon" || p === "data/particles2d.gon") return "particles";
   if (p.startsWith("data/abilities/")) return "abilities";
   if (p.startsWith("data/ability_templates/")) return "ability_templates";
   if (p.startsWith("data/passives/")) return "passives";
@@ -185,6 +188,8 @@ export interface ValidateOptions {
   components?: Iterable<string>;
   /** native-registered names (tests/fixtures); default editor/registered-names.json */
   registeredNames?: Iterable<string>;
+  /** vanilla SWF clip (export) names (tests/fixtures); default every extracted vanilla SWF (src/core/art/swf-exports.ts); empty = unknown */
+  clips?: Iterable<string>;
 }
 
 /**
@@ -222,10 +227,11 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   // Union of localization keys available: base + mod-added.
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
 
+  const clips: ClipNames = { vanilla: opts.clips ? new Set(opts.clips) : vanillaClipNames(), mod: modClipNames(modDir), listMissingReported: false };
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
     if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, clips);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -233,6 +239,12 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     }
   }
   return rb.build();
+}
+
+interface ClipNames {
+  vanilla: Set<string>;
+  mod: Set<string>;
+  listMissingReported: boolean;
 }
 
 /** @param nativeBuild installed-exe identity; null = no exe */
@@ -245,6 +257,7 @@ function validateGonOverlay(
   modName: string,
   nativeBuild: NativeBuild | null,
   dataRoot: string,
+  clips: ClipNames,
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
   const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
@@ -293,13 +306,31 @@ function validateGonOverlay(
           if (hasComponentList && !sets.components.has(pe.key)) {
             rb.warn("unknown-component", `unknown component class "${pe.key}" in passives`, { file, path: [...here, pe.key].join(".") });
           }
-          if (/Status/.test(pe.key) && pe.value.t === "obj") {
+          if ((PARTICLE_REF_KEYS as readonly string[]).includes(pe.key)) {
+            checkParticleRefs(pe.value, { file, path: [...here, pe.key].join(".") });
+          } else if (/Status/.test(pe.key) && pe.value.t === "obj") {
             for (const ss of pe.value.entries) checkStatus(ss.key, { file, path: [...here, pe.key, ss.key].join(".") });
           } else if (pe.value.t === "obj" || pe.value.t === "arr") {
             walk(pe.value, [...here, pe.key]);
           }
         }
       }
+      return;
+    }
+    // ---- particles (src/core/particles.ts; docs/data-mods.md "Particles and VFX") ----
+    if (o.category === "particles" && path.length === 1) {
+      if (!isParticleKey(key)) rb.warn("particle-unknown-key", (PARTICLE_DEAD_KEYS as readonly string[]).includes(key) ? `particle system key "${key}" is read by nothing (vanilla writes it once, but the exe has no such string); it has no effect` : `particle system key "${key}" is not one the game reads (ParticleSystemData decode 0x9c5970 and the loader); it is ignored — colour is not a key: it comes from the clip art`, at);
+      if (key === "movieclip" && value.t === "str") { checkClip(value.raw, at); return; }
+      if (key === "combo" || key === "chain") { checkParticleRefs(value, at); return; }
+      if (key === "variant_of") { checkParticleRefs(value, at); return; }
+      if (key === "scripts") return;
+    }
+    if (o.category !== "particles" && (key === "EliteParticle" || key === "ParticleBurst" || key === "global_particles" || (key === "particles" && /weather/.test(o.baseName)) || (key === "particle" && path[path.length - 1] === "FormChangeOnElementInfluence"))) {
+      checkParticleRefs(value, at);
+      return;
+    }
+    if (o.category === "abilities" && path[path.length - 1] === "graphics" && (ABILITY_CLIP_KEYS as readonly string[]).includes(key) && value.t === "str") {
+      if (!(key === "projectile" && (NON_CLIP_PROJECTILE_VALUES as readonly string[]).includes(value.raw))) checkClip(value.raw, at);
       return;
     }
     if (key === "variant_of") {
@@ -345,6 +376,26 @@ function validateGonOverlay(
     }
     // recurse into structure
     if (value.t === "obj" || value.t === "arr") walk(value, here);
+  };
+
+  const particleSet = new Set([...sets.particles, ...(local.byCategory.get("particles") ?? [])]);
+  /** a particle SYSTEM name (or an array of them): base particles.gon / particles2d.gon or this mod */
+  const checkParticleRefs = (value: VNode, at: SourceLocation): void => {
+    const one = (name: string, where: SourceLocation) => {
+      if (isNoneName(name) || particleSet.has(name)) return;
+      rb.error("particle-missing", `particle system "${name}" is not defined in data/particles.gon or particles2d.gon (base or this mod); the game finds no system by that name`, where);
+    };
+    if (value.t === "str") one(value.raw, at);
+    else if (value.t === "arr") value.items.forEach((it, i) => { if (it.t === "str") one(it.raw, { file: at.file, path: `${at.path}.[${i}]` }); });
+  };
+  /** an SWF clip (export) name: a vanilla SWF or this mod (its art scenes / built swfs) */
+  const checkClip = (name: string, at: SourceLocation): void => {
+    if (isNoneName(name) || clips.mod.has(name) || clips.vanilla.has(name)) return;
+    if (!clips.vanilla.size) {
+      if (!clips.listMissingReported) { clips.listMissingReported = true; rb.info("clip-list-missing", `no vanilla SWF exports are known (extract the SWFs: python -I tools/gpak.py extract .extracted --prefix swfs/), so clip names are not checked`, at); }
+      return;
+    }
+    rb.warn("clip-missing", `clip "${name}" is exported by no vanilla SWF and by none of this mod's art scenes; the game then draws nothing (a particle system draws its ParticleError clip and logs "No Movieclip Named") — unless another loaded mod exports it`, at);
   };
 
   /** names provided only by native mod code (editor/registered-names.json), warned once per file */

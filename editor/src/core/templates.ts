@@ -11,7 +11,7 @@ import { parseCsv, serializeCsv } from "./overlay/csv.ts";
 import { LOC_COLUMNS } from "./base-data.ts";
 import { writeOverlay } from "./mod-io.ts";
 
-export type TemplateKind = "ability" | "passive" | "item" | "status-data";
+export type TemplateKind = "ability" | "passive" | "item" | "status-data" | "particle" | "vfx-ability";
 
 /** Scaffold knobs; every field is optional and comes from untyped JSON (MCP args / HTTP body). */
 export interface TemplateOptions {
@@ -28,18 +28,24 @@ export interface TemplateOptions {
   kind?: string;
   frame?: number | string;
   gonFile?: string;
+  /** particle: the SWF clip each particle draws; vfx-ability: the effect clip its graphics.particle plays */
+  movieclip?: string;
   fillTranslations?: boolean;
   write?: boolean;
   dryRun?: boolean;
 }
 
-const LOC_PREFIX: Record<TemplateKind, string> = { ability: "ABILITY", passive: "PASSIVE", item: "ITEM", "status-data": "KEYWORD" };
+const LOC_PREFIX: Record<TemplateKind, string> = { ability: "ABILITY", passive: "PASSIVE", item: "ITEM", "status-data": "KEYWORD", particle: "", "vfx-ability": "ABILITY" };
 const DEFAULT_GON_FILE: Record<TemplateKind, string> = {
   ability: "data/abilities/mod_abilities.gon.append",
   passive: "data/passives/mod_passives.gon.append",
   item: "data/items/mod_items.gon.append",
   "status-data": "data/keyword_tooltips.gon.append",
+  particle: "data/particles.gon.append",
+  "vfx-ability": "data/abilities/mod_abilities.gon.append",
 };
+/** kinds with no localization rows (a particle system has no player-visible text) */
+const NO_LOC = new Set<TemplateKind>(["particle"]);
 
 function toKeyToken(s: string): string {
   return s.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
@@ -60,6 +66,55 @@ function locRow(key: string, en: string, fillTranslations: boolean): string[] {
 
 function scaffoldGon(kind: TemplateKind, name: string, o: TemplateOptions): string {
   const base = `${LOC_PREFIX[kind]}_${toKeyToken(name)}`;
+  if (kind === "particle") {
+    // a gentle rising aura (VfxProbeAura, OBSERVED in-game 2026-10-22); every key is one the decoder reads
+    // (src/core/particles.ts). There is no colour key: the colour is the clip art. Wear it with
+    // `passives { EliteParticle ${name} }` on a character, or name it in ParticleBurst / global_particles.
+    return `${name} {
+    movieclip ${o.movieclip || "ParticlePuff"}
+    unlit true
+
+    render_mode separate
+    simulation_space global
+    ownership local
+    projection_matrix default
+
+    emit_rate 30
+    emit_amount 1
+    emit_direction [0, 1, 0]
+    emit_spread 30
+    emit_box [-.3 .3 0 1 -.3 .3]
+    live_bounds [-999 999 -999 999 -999 999]
+
+    particle_lifetime 1.5
+    speed_start .6
+    size .4
+    alpha 1
+}
+`;
+  }
+  if (kind === "vfx-ability") {
+    const parent = o.parent || "Spin";
+    // graphics.particle: the SWF clip played once on the target (SpellParticle); a vanilla one is e.g. Explosion
+    return `${name} {
+    variant_of ${parent}
+
+    meta {
+        name "${base}_NAME"
+        desc "${base}_DESC"
+    }
+
+    graphics {
+        particle ${o.movieclip || "Explosion"}
+    }
+
+    cost {
+        infcantrip true
+        mana ${o.mana ?? 1}
+    }
+}
+`;
+  }
   if (kind === "ability") {
     const parent = o.parent || "Spin";
     const mana = o.mana ?? 1;
@@ -153,7 +208,7 @@ export type TemplateResult =
  * @param options displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations, write, dryRun
  */
 export function newFromTemplate(modName: string, kind: TemplateKind, name: string, options: TemplateOptions = {}): TemplateResult {
-  if (!LOC_PREFIX[kind]) return { ok: false, error: `unknown template kind: ${kind}` };
+  if (!Object.hasOwn(LOC_PREFIX, kind)) return { ok: false, error: `unknown template kind: ${kind}` };
   if (!name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     return { ok: false, error: `invalid entry name: ${JSON.stringify(name)} (letters, digits, underscore; not starting with a digit)` };
   }
@@ -191,14 +246,16 @@ export function newFromTemplate(modName: string, kind: TemplateKind, name: strin
   const allRows = existingRows.filter((r) => !(r.length === 1 && r[0] === "")).concat(newRows);
   const csvText = serializeCsv(allRows) + (allRows.length ? "\n" : "");
 
+  const noLoc = NO_LOC.has(kind);
+  const locKeys = noLoc ? [] : [nameKey, descKey];
   const plan = {
     kind,
     name,
-    files: [
+    files: (noLoc ? [{ relPath: gonRel, content: gonText }] : [
       { relPath: gonRel, content: gonText },
       { relPath: csvRel, content: csvText },
-    ] as TemplatePlanFile[],
-    localizationKeys: [nameKey, descKey],
+    ]) as TemplatePlanFile[],
+    localizationKeys: locKeys,
   };
 
   if (options.dryRun === true) {
@@ -211,5 +268,5 @@ export function newFromTemplate(modName: string, kind: TemplateKind, name: strin
     if (!r.ok) return { ok: false, error: r.error, partial: written };
     written.push(r.path);
   }
-  return { ok: true, kind, name, written, localizationKeys: [nameKey, descKey] };
+  return { ok: true, kind, name, written, localizationKeys: locKeys };
 }

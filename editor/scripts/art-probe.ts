@@ -20,7 +20,9 @@
 // look-alike literal. --tileset: run _tileprobe's render-tileset-redirect.mewtest (`alley { Rat ArtProbe }`) and the
 // control _artprobe/render-tileset-control.mewtest (no overlay) and write tileset-summary.json: the marker per shot
 // (baseline before `spawn Rat`, two after) and the outcome (probe-outcomes.ts tilesetOutcome). `--loctext --from <runDir>`
-// re-reads an earlier run's report.json and shots instead of launching the game.
+// re-reads an earlier run's report.json and shots instead of launching the game. --vfx (2026-10-22): run _vfxprobe's
+// vfx-probe.mewtest (a NEW particles.gon system with our clip, and SparkleBuff re-pointed to our marker clip) and write
+// vfx-summary.json (probe-vfx.ts measureVfx; refuses a verdict when every shot is byte-identical); also takes --from.
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
@@ -30,6 +32,7 @@ import * as api from "../src/core/api.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { decodePng } from "../src/core/art/png.ts";
 import { measureLocText, summarizeLocText, tilesetOutcome } from "../src/core/art/probe-outcomes.ts";
+import { measureVfx, VFX_DOT_COLOUR } from "../src/core/art/probe-vfx.ts";
 import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
 
 /** the CatProbe rig's slot colours (mods/_artprobe/art/probe.scene.json) */
@@ -59,6 +62,28 @@ if (process.argv.includes("--tileset")) {
   const line = (k: string) => { const r = runs[k]!; return `${k} (${r.mod}/${r.test}): ${r.verdict} — ${r.reason}; ${r.save}\n  baseline marker ${r.baseline ? (r.baseline.found ? "FOUND" : "none") : "no shot"}; after spawn: ${r.after.map((s) => `${s.label} ${s.found ? `FOUND (scale ${s.scale.toFixed(2)}, ${s.mirrored ? "mirrored" : "as authored"})` : "none"}`).join(", ")}\n  artifacts: ${r.runDir}`; };
   console.log([line("redirect"), line("control"), `outcome: ${outcome}`].join("\n"));
   process.exit(outcome === "redirected" ? 0 : 1);
+}
+if (process.argv.includes("--vfx")) {
+  // the VFX probe (2026-10-22): mods/_vfxprobe — a NEW particles.gon system with our clip, and the vanilla SparkleBuff
+  // re-pointed to our marker clip, each worn by a Rat through EliteParticle (probe-vfx.ts measureVfx)
+  const bv = buildSwf("_vfxprobe", "art/vfx.scene.json", {});
+  if (!bv.ok) { console.error(`build failed: ${JSON.stringify(bv).slice(0, 400)}`); process.exit(1); }
+  const fromAt = process.argv.indexOf("--from");
+  const r = fromAt > 0 ? (JSON.parse(readFileSync(join(process.argv[fromAt + 1]!, "report.json"), "utf8")) as Awaited<ReturnType<typeof api.runIngameTest>>) : await api.runIngameTest({ mod: "_vfxprobe", test: "vfx-probe", hide: false });
+  if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
+  if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
+  const shots = r.artifacts.shots.filter((s) => s.path).map((s) => ({ label: s.label, img: decodePng(readFileSync(s.path!)) }));
+  const m = measureVfx(shots);
+  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: r.artifacts.runDir || null, dotColour: VFX_DOT_COLOUR, ...m };
+  writeFileSync(join(r.artifacts.runDir || ".", "vfx-summary.json"), JSON.stringify(out, null, 2) + "\n");
+  console.log([
+    ...m.perShot.map((s) => `${s.label}: dot ${s.dot} px, marker ${s.marker} px`),
+    `aura motion ${m.auraMotion.toFixed(2)}${m.identical ? " (every shot byte-identical: no verdict)" : ""}`,
+    `outcomes: aura ${m.outcomes.aura}, repoint ${m.outcomes.repoint}`,
+    `run: ${r.verdict} — ${r.reason}; ${out.save}`,
+    `artifacts: ${r.artifacts.runDir}`,
+  ].join("\n"));
+  process.exit(r.verdict === "pass" && m.outcomes.aura === "drawn" && m.outcomes.repoint === "drawn" ? 0 : 1);
 }
 if (process.argv.includes("--loctext")) {
   const fromAt = process.argv.indexOf("--from");

@@ -29,7 +29,7 @@ export const PreviewBody = z.object({
 });
 
 /** Mirrors TemplateKind in src/core/templates. */
-export const TemplateKind = z.enum(["ability", "passive", "item", "status-data"]);
+export const TemplateKind = z.enum(["ability", "passive", "item", "status-data", "particle", "vfx-ability"]);
 /** Mirrors the abc modes buildSwf accepts (src/core/art/art-io). */
 export const AbcMode = z.enum(["none", "stub"]);
 /** Mirrors SWF_GATE_VARIANTS in src/core/art/art-io. */

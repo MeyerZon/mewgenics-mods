@@ -24,6 +24,9 @@ const CATEGORY_SOURCES: Record<string, { dir?: string; file?: string }> = {
   classes: { file: join("classes", "classes.gon") },
   difficulties: { file: "difficulties.gon" },
   statuses: { file: "keyword_tooltips.gon" },
+  // particle systems (src/core/particles.ts): 3D combat systems and the 2D scenes ones, one namespace each
+  particles: { file: "particles.gon" },
+  particles2d: { file: "particles2d.gon" },
 };
 
 export interface CategoryIndex {

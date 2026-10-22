@@ -1,0 +1,52 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "verdict": "pass",
+  "reason": "all 2 expectation(s) passed; 7 shot(s)",
+  "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+  "runDir": "editor/data/ingame-runs/20261022-131810-_vfxprobe-vfx-probe",
+  "dotColour": "#ff0090",
+  "identical": false,
+  "perShot": [
+    {
+      "label": "baseline",
+      "dot": 0,
+      "marker": 0
+    },
+    {
+      "label": "aura 1",
+      "dot": 10552,
+      "marker": 0
+    },
+    {
+      "label": "aura 2",
+      "dot": 21422,
+      "marker": 0
+    },
+    {
+      "label": "aura 3",
+      "dot": 22714,
+      "marker": 0
+    },
+    {
+      "label": "repoint 1",
+      "dot": 22607,
+      "marker": 12283
+    },
+    {
+      "label": "repoint 2",
+      "dot": 21836,
+      "marker": 10944
+    },
+    {
+      "label": "repoint 3",
+      "dot": 18174,
+      "marker": 3877
+    }
+  ],
+  "auraMotion": 0.6357046582300845,
+  "outcomes": {
+    "aura": "drawn",
+    "repoint": "drawn"
+  },
+  "capture": "in-process GL back buffer (mewtest.dll built from PR #117, swapped into native/dist for this run and restored); the same mod data run with the window capture (20261022-130918 … 131412) came back byte-identical (stale-shots), and run 20261022-130301 (window capture, before the 240-frame waits) showed the aura already in the baseline (capture lag)"
+}

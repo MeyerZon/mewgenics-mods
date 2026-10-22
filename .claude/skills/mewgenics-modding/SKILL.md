@@ -45,7 +45,9 @@ Tools, by purpose:
 - `list_registered_native_names` — list native-registered status/ability names
   from `registered-names.json` (seeded with `JokersLuck`).
 - `new_from_template` — scaffold an ability/passive/item/status-data overlay
-  plus matching localization rows.
+  plus matching localization rows; `particle` scaffolds a `particles.gon.append`
+  system (`options.movieclip` = the SWF clip each particle draws, no loc rows) and
+  `vfx-ability` an ability whose `graphics.particle` plays your effect clip.
 
 A web UI (`node editor/web/server.ts`, opened in a browser) browses base data
 and components and shows inline validation and merge-preview. It is for a human;
@@ -88,6 +90,14 @@ characters, classes, difficulties, the SWF art list, and the localization CSV),
 plus GON syntax rules. Read
 [references/content-shapes.md](references/content-shapes.md) before authoring,
 and confirm real field names with `read_base_entry` rather than guessing.
+
+Particles / VFX (docs/data-mods.md "Particles and VFX"): a particle SYSTEM is a
+`data/particles.gon` entry (emitter keys, `movieclip <clip>`; no colour key: draw
+the clip in the colour you want) worn by `passives { EliteParticle <system> }` or
+named by `ParticleBurst` / `global_particles`; an ability's `graphics { particle /
+affected_particle / … }` names an SWF CLIP directly. A clip your mod builds
+(`build_swf`) works wherever a vanilla clip name does. The validator reports
+`particle-missing`, `clip-missing`, `particle-unknown-key`.
 
 ## Validate and test safely
 
