@@ -246,8 +246,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    — a synthetic base and one minimal mod per finding code (all 20: `mod-missing` … `csv-column-count`, plus a clean
    mod), driven through injectable `ValidateOptions` (`modDir`, `extractedData`, `components`, `registeredNames`), so
    the checks run at T0 without game data. Found on the way: the overlay-target check joined a hardcoded `.extracted/`
-   and ignored `MEWGENICS_EXTRACTED_DATA` (fixed). Follow-up: `preview-merge.ts` still joins `.extracted` directly
-   (same fix, when the merge preview gets its own fixtures).
+   and ignored `MEWGENICS_EXTRACTED_DATA` (fixed). Follow-up done 2026-10-21 (`fix/worktree-env-paths`):
+   `preview-merge.ts` resolves the base through the shared `packPath` / `EXTRACTED_DATA` with an injectable
+   `extractedData` (`editor/test/preview-merge-tests.ts`); `MEWGENICS_EDITOR_DATA` redirects the `editor/data`
+   caches and a missing component list is one `component-list-missing` info / a logged skip
+   (`docs/tdd-procedure.md` "Running the editor from a git worktree").
 8. [ ] **Golden merge cases** (owner 2026-10-20: "tdd 8 - ok" — the "golden through `dump`" sub-item is approved and
    queued as agent work, first of the 2026-10-20 run): freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
    so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1
