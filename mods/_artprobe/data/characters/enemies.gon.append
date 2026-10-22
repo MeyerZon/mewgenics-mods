@@ -64,3 +64,17 @@ ArtProbeCatMissing {
         tooltip "ENEMY_TOMTOM_DESC"
     }
 }
+
+// test-only (loc-key probe, 2026-10-22): a Rat drawn by ArtProbeLoc — the probe marker plus ten DefineEditTexts whose
+// initial texts are a vanilla key (ENEMY_TOMTOM_NAME), a key this mod adds (ARTPROBE_LOCTEST, text/combined.csv.append),
+// each in vanilla's HTML wrapper and plain, their one-letter-off look-alikes and the two English values;
+// npm run test:artprobe -- --loctext reads which key boxes the game localized
+ArtProbeLoc {
+    variant_of Rat
+    graphics {
+        movieclip ArtProbeLoc
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}

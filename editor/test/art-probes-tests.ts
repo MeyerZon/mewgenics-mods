@@ -51,7 +51,7 @@ export async function runArtProbesTests(test: TestFn, assert: AssertFn, eq: EqFn
   /** screen centre of a LOC_PROBE_BOXES entry under `geom` */
   const at = (b: { x: number; y: number }) => ({ x: geom.box.x0 + b.x * geom.scale, y: geom.box.y0 + b.y * geom.scale });
   const synth = (shown: (b: { id: string; text: string; html: boolean }) => string | null) => {
-    const img = blank(2600, 1440);
+    const img = blank(3440, 1440);
     for (const b of P.LOC_PROBE_BOXES as Array<{ id: string; text: string; html: boolean; x: number; y: number }>) { const s = shown(b); if (s) { const c = at(b); fakeText(img, c.x, c.y, s); } }
     return img;
   };
@@ -90,7 +90,7 @@ export async function runArtProbesTests(test: TestFn, assert: AssertFn, eq: EqFn
   test("measureLocText mirrors the box layout with the clip (enemy clips are drawn mirrored: OBSERVED 2026-10-20)", () => {
     need();
     const g = { ...geom, mirrored: true };
-    const img = blank(2600, 1440);
+    const img = blank(3440, 1440);
     for (const b of P.LOC_PROBE_BOXES as Array<{ text: string; x: number; y: number }>) fakeText(img, g.box.x1 + 1 - b.x * g.scale, g.box.y0 + b.y * g.scale, english[b.text] || b.text);
     const m = P.measureLocText(img, g);
     for (const k of ["vanillaHtml", "vanillaPlain", "modHtml", "modPlain"]) eq(m.outcomes[k], "substituted", k);

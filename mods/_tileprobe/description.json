@@ -1,0 +1,7 @@
+{
+  "title": "Tileset redirect probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: data/tilesets.gon.merge adds `alley { Rat ArtProbe }` so a plain Rat in the alley tileset draws _artprobe's ArtProbe clip (the clip-name remap ResolveClipName). Needs _artprobe loaded for the clip. Never for play.",
+  "requirements": []
+}
