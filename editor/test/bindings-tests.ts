@@ -1461,6 +1461,96 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const left = m.entries.filter((e) => e.anchors.unanchored).length;
     assert(left <= 46 - WITNESSED_OFFSETS_BATCH1.length, `unanchored count dropped by at least the batch: ${left}`);
   });
+  // ---- per-unit glow bindings (2026-10-22): the combat outline mask mewframework's glow engine rides ----
+  /** FwSymbol functions the glow engine calls or hooks: name, rva, enumerator index (appended after SaveProps_GetOrCreate = 27) */
+  const GLOW_SYMBOLS: [string, string, number][] = [
+    ["TacticsTest_LateRender", "0x88d780", 28], ["vec_u32_AddUnique", "0x72cd0", 29], ["ShaderManager_GetOrCreateMaterial", "0x9bb5d0", 30],
+    ["Material_SetUniformVec4", "0x9bde70", 31], ["Material_SetUniformFloat", "0x9bddc0", 32], ["Material_SetTexture", "0x9bdcd0", 33],
+    ["Camera_AddPostProcessPass", "0x979880", 34],
+  ];
+  /** reference-only functions (witness carriers, never called): name, rva */
+  const GLOW_REFERENCE: [string, string][] = [["Scene_SubmitDraw", "0x989be0"], ["MaskedRendererIso_Submit", "0x78d4c0"], ["StatusMenu_update", "0x81aee0"], ["Camera_SetRenderToTexture", "0x979d50"]];
+  /** struct offsets: name, macro, value, the function whose bytes witness it */
+  const GLOW_OFFSETS: [string, string, string, string][] = [
+    ["TacticsTest_maskCamera", "OFF_TT_MASK_CAMERA", "0x58", "TacticsTest_LateRender"],
+    ["TacticsTest_mainCamera", "OFF_TT_MAIN_CAMERA", "0x68", "TacticsTest_LateRender"],
+    ["TacticsTest_blurPass", "OFF_TT_BLUR_PASS", "0x90", "TacticsTest_init"],
+    ["Camera_rttTexture", "OFF_CAM_RTT_TEXTURE", "0x50", "Camera_SetRenderToTexture"],
+    ["Camera_passes", "OFF_CAM_PASSES", "0xb0", "Camera_AddPostProcessPass"],
+    ["Character_renderer", "OFF_CH_RENDERER", "0x40", "StatusMenu_update"],
+    ["Character_generation", "OFF_CH_GENERATION", "-0x8", "StatusMenu_update"],
+    ["Renderer_extraLayers", "OFF_RND_EXTRA_LAYERS", "0x68", "StatusMenu_update"],
+    ["Renderer_extraCount", "OFF_RND_EXTRA_COUNT", "0x6c", "MaskedRendererIso_Submit"],
+    ["Renderer_extraData", "OFF_RND_EXTRA_DATA", "0x70", "MaskedRendererIso_Submit"],
+    ["Pass_materialCount", "OFF_PASS_MAT_COUNT", "0x4", "Camera_AddPostProcessPass"],
+    ["Pass_materials", "OFF_PASS_MATERIALS", "0x8", "Camera_AddPostProcessPass"],
+    ["Pass_enabled", "OFF_PASS_ENABLED", "0x10", "Camera_AddPostProcessPass"],
+    ["Pass_rectA", "OFF_PASS_RECT_A", "0x18", "Camera_AddPostProcessPass"],
+    ["Pass_rectB", "OFF_PASS_RECT_B", "0x38", "Camera_AddPostProcessPass"],
+    ["Pass_flags", "OFF_PASS_FLAGS", "0x58", "Camera_AddPostProcessPass"],
+  ];
+  /** layer / slot constants: name, macro, value */
+  const GLOW_CONSTANTS: [string, string, string][] = [["MaskLayer", "CONST_MASK_LAYER", "0x18"], ["CompositeLayer", "CONST_COMPOSITE_LAYER", "0x1a"], ["GlowFramebufSlot", "CONST_GLOW_FRAMEBUF_SLOT", "6"]];
+  const GLOW_NAMES = new Set([...GLOW_SYMBOLS.map((x) => x[0]), ...GLOW_REFERENCE.map((x) => x[0]), "ShaderManager_global", "TacticsTest_vftable", ...GLOW_OFFSETS.map((x) => x[0]), ...GLOW_CONSTANTS.map((x) => x[0])]);
+  test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 16 witnessed offsets, 3 witnessed constants; the generated headers expose them", () => {
+    const m = loadManifest(realPath);
+    eq(m.entries.length, 121 + GLOW_NAMES.size, "121 pre-existing entries + the glow block");
+    for (const [name, rva, index] of GLOW_SYMBOLS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ enum: `FW_SYM_${name}`, index }]), `${name} enumerator`);
+    }
+    for (const [name, rva] of GLOW_REFERENCE) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(e!.exposure.length, 0, `${name} is reference only`);
+    }
+    const vt = entry(m, "TacticsTest_vftable");
+    assert(!!vt && vt.kind === "vtable" && vt.rva === "0xf0f4b8", "TacticsTest_vftable 0xf0f4b8");
+    eq(vt!.anchors.rtti?.typeDescriptorName, ".?AVTacticsTest@glaiel@@");
+    eq(vt!.slots, 28, "28 consecutive code pointers (slot 28 is the COL, 29 another class's slot 0)");
+    eq(JSON.stringify(vt!.exposure), JSON.stringify([{ field: "rva_TacticsTest_vftable" }]));
+    const sm = entry(m, "ShaderManager_global");
+    assert(!!sm && sm.kind === "data" && sm.rva === "0x13c4a30", "the ShaderManager is the App global itself (material map at +0x278)");
+    eq(JSON.stringify(sm!.exposure), JSON.stringify([{ enum: "FW_DATA_ShaderManager", index: 10 }]));
+    eq(sm!.anchors.witness?.function, "TacticsTest_init", "witnessed by the material creation sites of TacticsTest::init");
+    assert(Number.isInteger(sm!.anchors.witness?.ripRefOrdinal) && sm!.anchors.witness?.needsHarvest === false, "harvested rip-ref ordinal");
+    for (const [name, macro, value, fn] of GLOW_OFFSETS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset", `${name} is an offset entry`);
+      eq(e!.value, value, `${name} value`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      const w = e!.anchors.witness;
+      assert(!!w && w.function === fn && typeof w.pattern === "string" && Number.isInteger(w.dispAt), `${name}: witness {function ${fn}, pattern, dispAt}: ${JSON.stringify(w)}`);
+    }
+    for (const [name, macro, value] of GLOW_CONSTANTS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "constant", `${name} is a constant entry`);
+      eq(e!.value, value, `${name} value`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      assert(hv.constantHasSources(e!.anchors), `${name} carries a witness the harvest can verify`);
+    }
+    const names = m.entries.map((e) => e.name);
+    const start = names.indexOf("DevMenu_TacticsTest_lambda") + 1;
+    eq(names.slice(start).filter((n) => !GLOW_NAMES.has(n)).join(","), "", "nothing but glow entries after the pre-existing block (one contiguous block eases the 3-way merge with feat/bindings-hardening)");
+    eq(names.slice(start).length, GLOW_NAMES.size, "every glow entry sits in that block");
+    const oh = genOffsetsH([m]);
+    for (const [, macro, value] of [...GLOW_OFFSETS, ...GLOW_CONSTANTS]) assert(new RegExp(`^#define ${macro}\\s+\\(?${value.replace(/[-]/g, "\\-")}\\)?\\s`, "m").test(oh), `${macro} ${value} in offsets.h`);
+    const sh = genSignaturesH([m]);
+    assert(sh.includes("uint32_t rva_TacticsTest_vftable;") && sh.includes("0x00f0f4b8u"), "BuildInfo.rva_TacticsTest_vftable in signatures.h");
+    assert(/0x013c4a30u,?\s*\/\* FW_DATA_ShaderManager \*\//.test(sh), "rva_data[FW_DATA_ShaderManager]");
+    assert(sh.includes('"TacticsTest_LateRender", "') && sh.includes("0x88d780u },  /* FW_SYM_TacticsTest_LateRender */"), "the hook symbol's signature row");
+  });
+  if (exe) {
+    test("T1 real exe: the glow block verifies on the installed exe (harvest): the TacticsTest vftable by RTTI, the three constants by their witnesses, the ShaderManager global by its rip ref; every glow offset witness reads its value", () => {
+      const m = loadManifest(realPath);
+      const rep = harvestManifest(parsePe(exe), exe, m).report;
+      for (const n of ["TacticsTest_vftable", "ShaderManager_global", ...GLOW_CONSTANTS.map((x) => x[0]), ...GLOW_OFFSETS.map((x) => x[0])]) {
+        const x = rep.find((r) => r.name === n);
+        eq(x?.status, "verified", `${n}: ${x?.detail}`);
+      }
+    });
+  }
   if (exe) {
     test("T1 real exe: every offset witness in the committed manifest is verified by the harvest (its pattern reads the manifest value)", () => {
       const m = loadManifest(realPath);
