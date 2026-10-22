@@ -661,7 +661,7 @@ MyGlowingRat {
 ```
 
 - **How it works.** mewframework recognises the name in its `apply_status` hook (no registration, no Mewjector name)
-  and builds a LuckUp-template status with the glow vtable, **without** LuckUp's luck bonus; the 13 name-keyed lookups
+  and builds a LuckUp-template status with the glow vtable, **without** LuckUp's luck bonus (asserted in-game: `mods/_effective-stats/tests/effective-luck.mewtest`, `expect unit <glowing unit> luck.effective == 5` on a luck-5 Rat); the 13 name-keyed lookups
   read it as LuckUp, so nothing reports `NO STATUS NAMED`. Removing the status by any vanilla route (expiry of a
   Temporary, stacks to 0, a cleanse, death) ends the rim on the next frame. One glow status per unit: a second
   `FwGlow_` apply merges into it and the **latest colour wins**. Several units in different colours work (glow v2).

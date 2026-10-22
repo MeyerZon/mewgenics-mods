@@ -763,7 +763,7 @@ TEST(runner_dump_with_and_without_units) {
     fk_two_units();
     steps_until_done(5);
     CHECK(has(ev(0), "\"available\":true")); CHECK(has(ev(0), "\"count\":2"));
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"effective\":{\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"maxhp\":0},\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
     CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\""));
 }
 
@@ -808,7 +808,7 @@ TEST(runner_dump_emits_stacks_parallel_to_statuses) {
     fk_two_units_with_stacks();
     steps_until_done(5);
     CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[],\"stacks\":[],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"effective\":{\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"maxhp\":0},\"statuses\":[],\"stacks\":[],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
 }
 
 TEST(runner_wait_rounds_advances_on_round_counter) {
@@ -1390,6 +1390,10 @@ static void fk_units_with_numbers(void) {
     fk.units[1].hp = 12;
     for (int k = 0; k < MT_STAT_COUNT; k++) fk.units[1].stats[k] = 5;
     fk.units[1].stats[MT_STAT_SPEED] = 15;
+    /* effective (recompute_stats): unit 0 carries a LuckUp 3 (luck 10 -> 13), unit 1 nothing (effective == base) */
+    for (int k = 0; k < MT_STAT_COUNT; k++) { fk.units[0].eff[k] = fk.units[0].stats[k]; fk.units[1].eff[k] = fk.units[1].stats[k]; }
+    fk.units[0].eff[6] = 13;
+    fk.units[0].maxHp = 30; fk.units[1].maxHp = 12;
     fg_tree();
     fk.gon[1] = fg_node(0);    /* unit 1 carries the fake entry; unit 0 has none (an unreadable +0x240) */
 }
@@ -1473,12 +1477,12 @@ TEST(script_expect_unit_accepts_hp_shield_divineshield_stats_namekey_and_negativ
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
 }
 
-TEST(runner_dump_emits_namekey_hp_shield_divineshield_and_the_seven_stats) {
+TEST(runner_dump_emits_namekey_hp_shield_divineshield_the_seven_stats_and_the_effective_block) {
     fk_reset("dump\nquit\n");
     fk_units_with_numbers();
     steps_until_done(5);
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"statuses\":[],\"stacks\":[],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"effective\":{\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":13,\"maxhp\":30},\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"effective\":{\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"maxhp\":12},\"statuses\":[],\"stacks\":[],\"facing\":\"\",\"dir\":[0,0],\"lock\":[0,0],\"sign\":0,\"flip\":0,\"fourway\":0}"));
 }
 
 TEST(runner_expect_unit_hp_shield_stats_and_namekey) {
@@ -1797,6 +1801,53 @@ TEST(runner_expect_level_without_a_fight_fails_and_run_failures_end_the_script) 
     fk_reset("run start\nquit\n");
     fk.ready = 0; fk.runResult = 1;
     CHECK_EQ(mt_runner_step(&rr, &HOST), 1); CHECK_EQ(fk.runCalls, 0);                 /* like enter: waits for the console */
+}
+
+/* ====================================================================== */
+/* Effective stats (2026-10-22): Character::recompute_stats' results —     */
+/* the units event's "effective" block and expect unit <stat>.effective     */
+/* ====================================================================== */
+TEST(script_expect_unit_accepts_stat_dot_effective_and_maxhp_effective) {
+    char err[256]; int line = 0;
+    const char *s = "expect unit 0 luck.effective == 13\nexpect unit \"Lil' Rat\" luck.effective == 5\nexpect unit 1 strength.effective >= 4\nexpect unit 0 maxhp.effective > 1\n"
+                    "expect unit 0 speed.effective != -2\nexpect unit 0 dexterity.effective == 5\nexpect unit 0 constitution.effective == 6\nexpect unit 0 intelligence.effective == 7\nexpect unit 0 charisma.effective < 10\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 10);
+    CHECK_EQ(g_s.d[0].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[0].field, MT_F_LUCK_EFF); CHECK_EQ(g_s.d[0].value, 13);
+    CHECK_EQ(g_s.d[1].field, MT_F_LUCK_EFF); CHECK_STR(g_s.d[1].b, "Lil' Rat");
+    CHECK_EQ(g_s.d[2].field, MT_F_STRENGTH_EFF); CHECK_EQ(g_s.d[2].op, MT_OP_GE);
+    CHECK_EQ(g_s.d[3].field, MT_F_MAXHP_EFF); CHECK_EQ(g_s.d[3].op, MT_OP_GT); CHECK_EQ(g_s.d[3].value, 1);
+    CHECK_EQ(g_s.d[4].field, MT_F_SPEED_EFF); CHECK_EQ(g_s.d[4].value, -2);
+    CHECK_EQ(g_s.d[5].field, MT_F_DEXTERITY_EFF); CHECK_EQ(g_s.d[6].field, MT_F_CONSTITUTION_EFF); CHECK_EQ(g_s.d[7].field, MT_F_INTELLIGENCE_EFF); CHECK_EQ(g_s.d[8].field, MT_F_CHARISMA_EFF);
+    CHECK_STR(mt_unit_field_name(MT_F_LUCK_EFF), "luck.effective"); CHECK_STR(mt_unit_field_name(MT_F_STRENGTH_EFF), "strength.effective");
+    CHECK_STR(mt_unit_field_name(MT_F_MAXHP_EFF), "maxhp.effective"); CHECK_STR(mt_unit_field_name(MT_F_LUCK), "luck");
+    /* the field order is the contract with script.ts UNIT_FIELDS: the seven <stat>.effective follow luck in stat order, then maxhp.effective */
+    for (int k = 0; k < MT_STAT_COUNT; k++) {
+        char want[40]; snprintf(want, sizeof want, "%s.effective", mt_stat_name(k));
+        CHECK_STR(mt_unit_field_name((MtUnitField)(MT_F_STRENGTH_EFF + k)), want);
+    }
+    const char *bad[] = { "expect unit 0 luck.effectiv == 1\n", "expect unit 0 maxhp == 1\n", "expect unit 0 hp.effective == 1\n", "expect unit 0 name.effective == \"x\"\n",
+                          "expect unit 0 .effective == 1\n", "expect unit 0 luck.effective == \"x\"\n", "expect unit 0 luck.effective.effective == 1\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_expect_unit_effective_stats_and_maxhp) {
+    fk_reset("expect unit 0 luck.effective == 13\nexpect unit 0 luck == 10\nexpect unit 1 luck.effective == 5\nexpect unit Rat speed.effective == 15\nexpect unit 0 maxhp.effective == 30\n"
+             "expect unit 1 maxhp.effective == 12\nexpect unit 0 luck.effective > 13\nexpect unit 0 strength.effective == 4\nquit\n");
+    fk_units_with_numbers();
+    steps_until_done(12);
+    CHECK(has(ev(0), "\"kind\":\"unit\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"0 luck.effective == 13\"")); CHECK(has(ev(0), "\"detail\":\"unit 0 \\\"Lumee\\\": luck.effective 13\""));
+    CHECK(has(ev(1), "\"ok\":true")); CHECK(has(ev(1), "luck 10"));
+    CHECK(has(ev(2), "\"ok\":true")); CHECK(has(ev(2), "luck.effective 5"));
+    CHECK(has(ev(3), "\"ok\":true")); CHECK(has(ev(3), "speed.effective 15"));
+    CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(4), "maxhp.effective 30"));
+    CHECK(has(ev(5), "\"ok\":true")); CHECK(has(ev(5), "maxhp.effective 12"));
+    CHECK(has(ev(6), "\"ok\":false")); CHECK(has(ev(6), "luck.effective 13"));
+    CHECK(has(ev(7), "\"ok\":true")); CHECK(has(ev(7), "strength.effective 4"));
+    CHECK(has(last_ev(), "\"expect_pass\":7")); CHECK(has(last_ev(), "\"expect_fail\":1"));
+    fk_reset("expect unit 0 luck.effective == 5\nquit\n");      /* no combat */
+    steps_until_done(5);
+    CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "no combat (units unavailable)"));
 }
 
 int main(void) { return MT_RUN_ALL(); }

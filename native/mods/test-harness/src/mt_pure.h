@@ -87,7 +87,12 @@ typedef enum MtUnitField {
     MT_F_FACING,        /* string: the animation suffix the clip labels get (AnimStateMachine+OFF_ANIMSM_FACING: "F" / "B", four-way "LF".."RB") */
     MT_F_DIRX, MT_F_DIRY, /* Character+OFF_CH_ORIENTATION: the grid direction Character::Face stored */
     MT_F_FLIP,          /* AnimStateMachine+OFF_ANIMSM_FLIP: +-art_flip, negative = mirrored (two-way only) */
-    MT_F_SIGN           /* Character+OFF_CH_FACE_SIGN: the facing sign Face multiplies the direction by */
+    MT_F_SIGN,          /* Character+OFF_CH_FACE_SIGN: the facing sign Face multiplies the direction by */
+    /* <stat>.effective (2026-10-22): the value after Character::recompute_stats folded every passive's / status's
+     * ApplyStatModifiers in (Character+OFF_CH_STATS_EFF, what the status menu and deval read); maxhp.effective =
+     * Character+OFF_CH_MAX_HP, max(1, base health + 4 * effective constitution) */
+    MT_F_STRENGTH_EFF, MT_F_DEXTERITY_EFF, MT_F_CONSTITUTION_EFF, MT_F_INTELLIGENCE_EFF, MT_F_SPEED_EFF, MT_F_CHARISMA_EFF, MT_F_LUCK_EFF,
+    MT_F_MAXHP_EFF
 } MtUnitField;
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
 int mt_unit_field_is_string(MtUnitField f);                           /* name|class|namekey|facing: a quoted value, == / != */
@@ -238,7 +243,9 @@ typedef struct MtUnit {
     char nameKey[MT_UNIT_NAME];            /* the display-name loc key, graphics.name (Character+OFF_CH_NAME_KEY; OBSERVED 2026-10-22, not the entry name) */
     int faction, move, act, turnKind;
     int hp, shield, divineShield;          /* Character+OFF_CH_HP / OFF_CH_SHIELD / OFF_CH_DIVINE_SHIELD */
-    int stats[MT_STAT_COUNT];              /* Character+OFF_CH_STATS, mt_stat_name order */
+    int stats[MT_STAT_COUNT];              /* Character+OFF_CH_STATS, mt_stat_name order (base: what Character::init stored) */
+    int eff[MT_STAT_COUNT];                /* Character+OFF_CH_STATS_EFF, same order (effective: after recompute_stats) */
+    int maxHp;                             /* Character+OFF_CH_MAX_HP (effective max HP, written by recompute_stats) */
     int statusCount;
     char statuses[MT_UNIT_STATUSES][MT_STATUS_NAME];
     int stacks[MT_UNIT_STATUSES];          /* parallel to statuses (Status+OFF_STATUS_STACKS) */

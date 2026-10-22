@@ -65,7 +65,9 @@ static int parse_op(const char *p, size_t n, MtOp *out) {
 /* MtUnitField order; the units event's keys; script.ts UNIT_FIELDS */
 static const char *const UNIT_FIELDS[] = { "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
                                            "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck",
-                                           "facing", "dirx", "diry", "flip", "sign" };
+                                           "facing", "dirx", "diry", "flip", "sign",
+                                           "strength.effective", "dexterity.effective", "constitution.effective", "intelligence.effective",
+                                           "speed.effective", "charisma.effective", "luck.effective", "maxhp.effective" };
 int mt_unit_field_is_string(MtUnitField f) { return f == MT_F_NAME || f == MT_F_CLASS || f == MT_F_NAMEKEY || f == MT_F_FACING; }
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out) {
     for (size_t i = 0; i < sizeof UNIT_FIELDS / sizeof UNIT_FIELDS[0]; i++) {
@@ -282,7 +284,7 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             }
             const char *field = skip_ws(tail);
             size_t fl = tok_len(field);
-            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|namekey|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck|facing|dirx|diry|flip|sign)");
+            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|namekey|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck|facing|dirx|diry|flip|sign, <stat>.effective, maxhp.effective)");
             const char *opp = skip_ws(field + fl);
             size_t ol = tok_len(opp);
             const char *val = skip_ws(opp + ol);

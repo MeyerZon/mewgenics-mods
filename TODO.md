@@ -487,6 +487,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
      `speed` 15 (vanilla 5); fixtures `result-golden-numeric{,-vanilla}.jsonl`. Found on the way: `Character+0x248` is
      the `graphics.name` loc key, not the entry name (the entry name's home is still unknown). Target 8 is complete;
      `.append` on an existing key (duplicate children) stays untested in-game (indexed in "Still open (agent-doable)").
+   - [x] effective stats in-game (2026-10-22, `feat/harness-effective-stats`, stacked on #104): the units event's
+     `effective` block (`Character+0x5bc..` + max HP `+0x4bc`, written by `Character::recompute_stats` 0x102520, found
+     through the RTTI of its std::function lambdas) and `expect unit <unit> <stat>.effective|maxhp.effective <op> N`.
+     `mods/_effective-stats/tests/effective-luck.mewtest`: LuckUp 3 on a Rat → luck 5 / luck.effective 8, the data glow
+     `FwGlow_ff00ff` → luck.effective 5 (the #104 regression, now asserted); fixture `result-effective-stats.jsonl`.
 9. [x] **`npm test` without `.extracted/`** (done 2026-10-19, leftovers PR 3: round-trip, real-overlay, validator and the two
    base-data MCP calls skip with a logged `(skipped: …)`; a nested run with `MEWGENICS_EXTRACTED_DATA` = empty dir is
    itself a test). Was: the GON round-trip section fails instead of skipping; make it a logged

@@ -178,12 +178,12 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     });
 
     test("expect unit: the facing fields (2026-10-22) — facing (string, == !=), dirx|diry|flip|sign (integers); UNIT_FIELDS == mt_script.c order", () => {
-      eq(script.UNIT_FIELDS.slice(17).join(","), "facing,dirx,diry,flip,sign");
+      eq(script.UNIT_FIELDS.slice(17, 22).join(","), "facing,dirx,diry,flip,sign");
       // the DLL's table (mt_script.c UNIT_FIELDS, MtUnitField order) is the same list, in the same order
       const c = readFileSync(join(REPO_ROOT, "native", "mods", "test-harness", "src", "mt_script.c"), "utf8");
       const table = /UNIT_FIELDS\[\]\s*=\s*\{([^}]*)\}/.exec(c);
       assert(!!table, "mt_script.c has a UNIT_FIELDS table");
-      eq([...table![1]!.matchAll(/"([a-z]+)"/g)].map((m) => m[1]).join(","), script.UNIT_FIELDS.join(","), "mt_script.c UNIT_FIELDS == script.ts UNIT_FIELDS");
+      eq([...table![1]!.matchAll(/"([a-z.]+)"/g)].map((m) => m[1]).join(","), script.UNIT_FIELDS.join(","), "mt_script.c UNIT_FIELDS == script.ts UNIT_FIELDS");
       for (const s of ["facing"]) assert((script.UNIT_STRING_FIELDS as readonly string[]).includes(s), `${s} is a string field`);
       const f = parseDirective('expect unit 8 facing == "B"', 1) as { field: string; op: string; value: string };
       eq(f.field, "facing"); eq(f.op, "=="); eq(f.value, "B");
@@ -230,7 +230,9 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     });
 
     test("expect unit: the GON-at-runtime fields (2026-10-22) — namekey (string), hp|shield|divineshield and the seven stats (integers, negatives allowed); UNIT_FIELDS == mt_script.c order", () => {
-      eq(script.UNIT_FIELDS.slice(0, 17).join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck");
+      eq(script.UNIT_FIELDS.join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck," +
+        "facing,dirx,diry,flip,sign," +
+        "strength.effective,dexterity.effective,constitution.effective,intelligence.effective,speed.effective,charisma.effective,luck.effective,maxhp.effective");
       const a = parseDirective("expect unit 8 hp == 12", 1) as { what: string; unit: string; field: string; op: string; value: number };
       eq(a.what, "unit"); eq(a.unit, "8"); eq(a.field, "hp"); eq(a.op, "=="); eq(a.value, 12);
       eq((parseDirective("expect unit Pooter speed >= 15", 1) as { field: string; value: number }).field, "speed");
@@ -239,6 +241,14 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(e.field, "namekey"); eq(e.op, "=="); eq(e.value, "ENEMY_POOTER_NAME");
       for (const f of ["shield", "divineshield", "strength", "dexterity", "constitution", "intelligence", "charisma"]) eq((parseDirective(`expect unit 1 ${f} > 0`, 1) as { field: string }).field, f);
       for (const bad of ['expect unit 1 hp == "x"', "expect unit 1 namekey == bare", 'expect unit 1 namekey > "x"', "expect unit 1 divine_shield == 0", "expect unit 1 hp == -"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+    });
+    test("expect unit: <stat>.effective and maxhp.effective (2026-10-22) — what Character::recompute_stats wrote (the units event's effective block); integers, any op", () => {
+      const a = parseDirective("expect unit 6 luck.effective == 8", 1) as { what: string; unit: string; field: string; op: string; value: number };
+      eq(a.what, "unit"); eq(a.unit, "6"); eq(a.field, "luck.effective"); eq(a.op, "=="); eq(a.value, 8);
+      eq((parseDirective(`expect unit "Lil' Rat" maxhp.effective > 1`, 1) as { field: string; unit: string }).field, "maxhp.effective");
+      for (const f of ["strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck"]) eq((parseDirective(`expect unit 1 ${f}.effective >= -3`, 1) as { field: string; value: number }).field, `${f}.effective`);
+      for (const bad of ["expect unit 0 luck.effectiv == 1", "expect unit 0 maxhp == 1", "expect unit 0 hp.effective == 1", 'expect unit 0 name.effective == "x"', 'expect unit 0 luck.effective == "x"', "expect unit 0 luck.effective.effective == 1"])
+        assert("error" in parseDirective(bad, 1), `${bad} is an error`);
     });
 
     test("expect gon directive parses (2026-10-22): <unit> <path> then <op> <number> | ==|!= \"<string>\" | ==|!= true|false | exists | missing; bad paths, operators and values are line errors; DLL-side", () => {
@@ -519,6 +529,35 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(gons(g).some((x) => x.arg === "8 properties.nope missing" && /missing: no child named "nope"/.test(x.detail)), "a missing key reports the scan");
       eq(v.expects.failed, 0); eq(g.expects.failed, 0);
       eq(v.end!.code, 0); eq(g.end!.code, 0);
+    });
+    test("OBSERVED 2026-10-22 fixture: effective stats — LuckUp 3 on a spawned Rat gives luck 5 / luck.effective 8; FwGlow_ff00ff (LuckUp's vtable, slot 82 replaced by #104) gives luck.effective 5; every unit carries the effective block (result-effective-stats.jsonl, mods/_effective-stats/tests/effective-luck.mewtest)", () => {
+      type Eff = { strength: number; dexterity: number; constitution: number; intelligence: number; speed: number; charisma: number; luck: number; maxhp: number };
+      type U = { i: number; name: string; namekey: string; hp: number; strength: number; constitution: number; luck: number; statuses: string[]; stacks: number[]; effective: Eff };
+      type R = { units: { count: number; list: U[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null };
+      const r = parseResults(fixture("result-effective-stats.jsonl")) as unknown as R;
+      eq(r.units!.count, 11, "seed 42: 4 cats + 4 coins + Rat + LuckyRat + FwGlowRat");
+      for (const u of r.units!.list) {
+        const keys = Object.keys(u.effective).join(",");
+        eq(keys, "strength,dexterity,constitution,intelligence,speed,charisma,luck,maxhp", `unit ${u.i}: the effective block's keys`);
+      }
+      const [rat, lucky, glow] = [8, 9, 10].map((i) => r.units!.list[i]!);
+      eq(rat.statuses.length, 0); eq(rat.luck, 5); eq(rat.effective.luck, 5, "a plain Rat: effective == base");
+      eq(rat.effective.strength, 4); eq(rat.effective.maxhp, 5, "max HP = max(1, (health 5 - 4*con 5) + 4*con 5) = 5 (Character+0x4bc)");
+      eq(lucky.statuses.join(","), "LuckUp"); eq(lucky.stacks[0], 3); eq(lucky.luck, 5, "base luck (+0x5b8) untouched by the status");
+      eq(lucky.effective.luck, 8, "LuckUp's ApplyStatModifiers added its 3 stacks to the effective luck (+0x5d4)");
+      eq(glow.statuses.join(","), "FwGlow_ff00ff"); eq(glow.effective.luck, 5, "the glow status adds no luck (its slot 82 keeps only the removal)");
+      for (const u of r.units!.list.slice(0, 8)) eq(u.effective.luck, u.luck, `${u.name}: no status, effective luck == base`);
+      for (const u of r.units!.list) if (u.namekey === "PLAYER_CAT_NAME") eq(u.effective.maxhp, u.hp, `${u.name}: a fresh cat is at full HP (hp == maxhp.effective)`);
+      eq(r.expects.failed, 0); eq(r.expects.passed, 17); eq(r.end!.code, 0);
+    });
+    test("mods/_effective-stats: LuckyRat is a Rat variant with StatusOnSpawnIn LuckUp 3; effective-luck.mewtest loads it with fw-glow and _autoplay and asserts through the .effective fields", () => {
+      const gon = readFileSync(join(MODS_DIR, "_effective-stats", "data", "characters", "enemies.gon.append"), "utf8");
+      assert(/LuckyRat\s*\{\s*variant_of Rat[\s\S]*StatusOnSpawnIn\s*\{\s*LuckUp 3\s*\}/.test(gon), "LuckyRat { variant_of Rat passives { StatusOnSpawnIn { LuckUp 3 } } }");
+      if ("__error" in script) throw new Error(script.__error);
+      const plan = script.parseScript(readFileSync(join(MODS_DIR, "_effective-stats", "tests", "effective-luck.mewtest"), "utf8"), { owningMod: "_effective-stats", name: "effective-luck" }) as { mods: string[]; directives: { kind: string; what?: string; field?: string; unit?: string; value?: unknown }[] };
+      eq(plan.mods.join(","), "_effective-stats,fw-glow,_autoplay");
+      const eff = plan.directives.filter((d) => d.kind === "expect" && d.what === "unit" && String(d.field).endsWith(".effective")).map((d) => `${d.unit} ${d.field} ${d.value}`);
+      for (const want of ["8 luck.effective 5", "9 luck.effective 8", "10 luck.effective 5", "8 maxhp.effective 5"]) assert(eff.includes(want), `${want} in ${eff.join("; ")}`);
     });
     test("OBSERVED 2026-10-20 fixture: enter Campaign house -> the real House (no intro), the campaign director's 57 commands pinned, a house command executes (result-enter-house.jsonl + console-campaign-listcmds.txt)", () => {
       const r = parseResults(fixture("result-enter-house.jsonl")) as unknown as { enter: { ok: boolean; name: string; mode: string; detail: string } | null; expects: { passed: number; failed: number }; end: { code: number } | null; popups: unknown[]; shots: unknown[] };

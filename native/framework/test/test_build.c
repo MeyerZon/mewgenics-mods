@@ -139,6 +139,9 @@ TEST(build_25143593_values_match_the_manifest) {
     CHECK_EQ(OFF_GON_NAME, 0x88);
     CHECK_EQ(OFF_GON_TYPE, 0xa8);
     CHECK_EQ(GON_NODE_SIZE, 0xb0);
+    /* effective stats (2026-10-22): what Character::recompute_stats (0x102520) writes — the harness's effective block */
+    CHECK_EQ(OFF_CH_STATS_EFF, 0x5bc);
+    CHECK_EQ(OFF_CH_MAX_HP, 0x4bc);
 }
 
 /* facing (2026-10-22): Character::Face and the fields the harness's `face` / units event read (docs/engine-map.md

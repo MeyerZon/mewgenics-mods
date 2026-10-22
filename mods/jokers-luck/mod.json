@@ -7,7 +7,7 @@
   "native": [
     "jokers_luck.dll"
   ],
-  "frameworkApi": 4,
+  "frameworkApi": 5,
   "license": "MIT",
   "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
 }

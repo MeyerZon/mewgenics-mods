@@ -1,0 +1,36 @@
+mods: _effective-stats, fw-glow, _autoplay
+timeout: 120s
+# Effective stats (2026-10-22): the units event's `effective` block is what Character::recompute_stats wrote (the base
+# block +0x5a0 copied to +0x5bc, then every live passive's / status's ApplyStatModifiers, vtable slot 82). Three Rats
+# with base luck 5 (Rat sets no luck; the default is 5):
+#   8  Rat        nothing                       -> luck.effective 5
+#   9  LuckyRat   LuckUp 3 (StatusOnSpawnIn)    -> luck.effective 8 (LuckUp's slot 82 adds the stacks)
+#   10 FwGlowRat  FwGlow_ff00ff 1 (fw-glow)      -> luck.effective 5: the glow status is built on LuckUp's vtable but its
+#                                                   slot 82 keeps only the removal (PR #104), so it must add no luck
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+expect units == 8
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+cmd spawn LuckyRat
+expect console "Spawned LuckyRat" within 10
+cmd spawn FwGlowRat
+expect console "Spawned FwGlowRat" within 10
+wait frames 10
+dump
+expect units == 11
+expect unit 8 luck == 5
+expect unit 8 luck.effective == 5
+expect unit 8 strength.effective == 4
+expect unit 8 maxhp.effective == 5
+expect status LuckUp on 9
+expect stacks LuckUp on 9 == 3
+expect unit 9 luck == 5
+expect unit 9 luck.effective == 8
+expect unit 9 strength.effective == 4
+expect status FwGlow_ff00ff on 10
+expect unit 10 luck == 5
+expect unit 10 luck.effective == 5
+quit
