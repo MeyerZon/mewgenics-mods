@@ -74,7 +74,12 @@ typedef enum MtDirKind {
  * Order = mt_script.c UNIT_FIELDS = script.ts UNIT_FIELDS; the stat fields follow MT_STAT_* (data/characters order). */
 typedef enum MtUnitField {
     MT_F_NAME, MT_F_CLASS, MT_F_NAMEKEY, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND, MT_F_HP, MT_F_SHIELD, MT_F_DIVINESHIELD,
-    MT_F_STRENGTH, MT_F_DEXTERITY, MT_F_CONSTITUTION, MT_F_INTELLIGENCE, MT_F_SPEED, MT_F_CHARISMA, MT_F_LUCK
+    MT_F_STRENGTH, MT_F_DEXTERITY, MT_F_CONSTITUTION, MT_F_INTELLIGENCE, MT_F_SPEED, MT_F_CHARISMA, MT_F_LUCK,
+    /* <stat>.effective (2026-10-22): the value after Character::recompute_stats folded every passive's / status's
+     * ApplyStatModifiers in (Character+OFF_CH_STATS_EFF, what the status menu and deval read); maxhp.effective =
+     * Character+OFF_CH_MAX_HP, max(1, base health + 4 * effective constitution) */
+    MT_F_STRENGTH_EFF, MT_F_DEXTERITY_EFF, MT_F_CONSTITUTION_EFF, MT_F_INTELLIGENCE_EFF, MT_F_SPEED_EFF, MT_F_CHARISMA_EFF, MT_F_LUCK_EFF,
+    MT_F_MAXHP_EFF
 } MtUnitField;
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
 /* expect gon: how the value is compared (decided by the literal's shape at parse time) */
@@ -185,7 +190,9 @@ typedef struct MtUnit {
     char nameKey[MT_UNIT_NAME];            /* the display-name loc key, graphics.name (Character+OFF_CH_NAME_KEY; OBSERVED 2026-10-22, not the entry name) */
     int faction, move, act, turnKind;
     int hp, shield, divineShield;          /* Character+OFF_CH_HP / OFF_CH_SHIELD / OFF_CH_DIVINE_SHIELD */
-    int stats[MT_STAT_COUNT];              /* Character+OFF_CH_STATS, mt_stat_name order */
+    int stats[MT_STAT_COUNT];              /* Character+OFF_CH_STATS, mt_stat_name order (base: what Character::init stored) */
+    int eff[MT_STAT_COUNT];                /* Character+OFF_CH_STATS_EFF, same order (effective: after recompute_stats) */
+    int maxHp;                             /* Character+OFF_CH_MAX_HP (effective max HP, written by recompute_stats) */
     int statusCount;
     char statuses[MT_UNIT_STATUSES][MT_STATUS_NAME];
     int stacks[MT_UNIT_STATUSES];          /* parallel to statuses (Status+OFF_STATUS_STACKS) */

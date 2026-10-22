@@ -180,7 +180,8 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
     });
 
     test("expect unit: the GON-at-runtime fields (2026-10-22) — namekey (string), hp|shield|divineshield and the seven stats (integers, negatives allowed); UNIT_FIELDS == mt_script.c order", () => {
-      eq(script.UNIT_FIELDS.join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck");
+      eq(script.UNIT_FIELDS.join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck," +
+        "strength.effective,dexterity.effective,constitution.effective,intelligence.effective,speed.effective,charisma.effective,luck.effective,maxhp.effective");
       const a = parseDirective("expect unit 8 hp == 12", 1) as { what: string; unit: string; field: string; op: string; value: number };
       eq(a.what, "unit"); eq(a.unit, "8"); eq(a.field, "hp"); eq(a.op, "=="); eq(a.value, 12);
       eq((parseDirective("expect unit Pooter speed >= 15", 1) as { field: string; value: number }).field, "speed");
@@ -189,6 +190,14 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(e.field, "namekey"); eq(e.op, "=="); eq(e.value, "ENEMY_POOTER_NAME");
       for (const f of ["shield", "divineshield", "strength", "dexterity", "constitution", "intelligence", "charisma"]) eq((parseDirective(`expect unit 1 ${f} > 0`, 1) as { field: string }).field, f);
       for (const bad of ['expect unit 1 hp == "x"', "expect unit 1 namekey == bare", 'expect unit 1 namekey > "x"', "expect unit 1 divine_shield == 0", "expect unit 1 hp == -"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+    });
+    test("expect unit: <stat>.effective and maxhp.effective (2026-10-22) — what Character::recompute_stats wrote (the units event's effective block); integers, any op", () => {
+      const a = parseDirective("expect unit 6 luck.effective == 8", 1) as { what: string; unit: string; field: string; op: string; value: number };
+      eq(a.what, "unit"); eq(a.unit, "6"); eq(a.field, "luck.effective"); eq(a.op, "=="); eq(a.value, 8);
+      eq((parseDirective(`expect unit "Lil' Rat" maxhp.effective > 1`, 1) as { field: string; unit: string }).field, "maxhp.effective");
+      for (const f of ["strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck"]) eq((parseDirective(`expect unit 1 ${f}.effective >= -3`, 1) as { field: string; value: number }).field, `${f}.effective`);
+      for (const bad of ["expect unit 0 luck.effectiv == 1", "expect unit 0 maxhp == 1", "expect unit 0 hp.effective == 1", 'expect unit 0 name.effective == "x"', 'expect unit 0 luck.effective == "x"', "expect unit 0 luck.effective.effective == 1"])
+        assert("error" in parseDirective(bad, 1), `${bad} is an error`);
     });
 
     test("expect gon directive parses (2026-10-22): <unit> <path> then <op> <number> | ==|!= \"<string>\" | ==|!= true|false | exists | missing; bad paths, operators and values are line errors; DLL-side", () => {

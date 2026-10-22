@@ -489,7 +489,23 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 78, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects)");
+    eq(offs.length, 80, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 2 effective stats");
+  });
+  test("25143593.json: effective stats (2026-10-22) — Character::recompute_stats (RTTI of its std::function lambdas) is a signed function entry; the effective stat block +0x5bc and max HP +0x4bc are offsets witnessed in it", () => {
+    const m = loadManifest(realPath);
+    const macro = (n: string) => (entry(m, n)!.exposure[0] as MacroExposure).macro;
+    const witness = (n: string) => entry(m, n)!.anchors.witness!;
+    const rs = entry(m, "Character_recompute_stats")!;
+    eq(rs.kind, "function"); eq(rs.rva, "0x102520");
+    assert(!!(rs.signature && rs.signature.pattern), "a byte signature");
+    assert(/recompute_stats@Character@glaiel/.test(rs.anchors.note ?? ""), "the note names the RTTI lambda type that identifies it");
+    assert((rs.anchors.callees ?? []).length >= 2, "callee witnesses (harvest)");
+    assert(rs.evidence.some((e) => e.includes("Character_recompute_stats_0x102520.c")), "the decompile is evidence");
+    eq(entry(m, "Character_statsEffective")!.value, "0x5bc"); eq(entry(m, "Character_statsEffective")!.ctype, "int32[7]"); eq(macro("Character_statsEffective"), "OFF_CH_STATS_EFF");
+    eq(witness("Character_statsEffective").function, "Character_recompute_stats");
+    eq(entry(m, "Character_maxHp")!.value, "0x4bc"); eq(entry(m, "Character_maxHp")!.ctype, "int32"); eq(macro("Character_maxHp"), "OFF_CH_MAX_HP");
+    eq(witness("Character_maxHp").function, "Character_recompute_stats");
+    for (const n of ["Character_statsEffective", "Character_maxHp"]) assert(entry(m, n)!.consumers.some((c) => c.includes("h_unit_info")), `${n} is read by the harness's h_unit_info`);
   });
   if (exe) {
     const m = loadManifest(realPath);
