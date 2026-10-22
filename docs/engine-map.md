@@ -370,6 +370,106 @@ character lookup with lazy init: `table = file+0x28` (`Character*[]` by id), `en
 - Pinned: `editor/test/fixtures/ingame/artprobe-cat-summary.json` `importParts`; the validator refuses any
   `scene.imports` (`import-unsupported`).
 
+### CatTest and the cat animation clips (2026-10-21)
+
+Facts from a read-only parse of `.extracted/swfs/*.swf` with `editor/src/core/art/swf-reader.ts` (the slot layout is
+T1-pinned in `editor/test/fixtures/art/cat-rig-slots.json`):
+
+- **`_CAT` is not a SymbolClass in any vanilla SWF**; it is an engine-reserved `graphics.movieclip` value. Every real
+  cat uses `movieclip _CAT` plus `custom_cat_data <Name>` (part indices in `custom_cats.gon`): `player_cat.gon`,
+  `cat_enemies.gon` (e.g. `TomTom { graphics { movieclip _CAT; name "ENEMY_TOMTOM_NAME"; custom_cat_data TomTom;
+  scale 1.1; shadow_size 1.1 } … properties { tag cat; type cat; faction enemies } }`).
+- **The vanilla cat clip is `CatTest`** (catanis.swf SymbolClass id 1614, 854 frames, 776 labels). Each labeled frame
+  places **one nested sprite at depth 1** (instance name `pawing` in 423 frames, none in 252, an animation name in the
+  rest; `idleF` → sprite 9, 180 frames, matrix translation (77, −959) twips). Labels are facing pairs `<anim>F` /
+  `<anim>B` (`idleF/idleB`, `FighterIdleF/B`, `StartTurnF/B`, `dashF/B`, …) plus `_R` variants. The nested sprites
+  carry the seven named slots `tail@1 leg2@3 arm2@5 body@7 leg1@9 arm1@11 head@13` (= `CAT_SLOTS` in `cat-rig.ts`),
+  and **every slot instance is a 1-frame DefineSprite wrapping one placeholder DefineShape** (ids 2/4/6/8; the four
+  limbs share id 4) — never a bare shape.
+- **Vanilla extends `CatTest` with the append mechanism:** catanis2.swf exports `_Append_CatTest` (id 590, 296 frames,
+  239 labels such as `crawlingIdleF`, `cultistIdleF`, `robotWalkF`) — the same `_Append_<Target>` merge
+  (`process_animation_merges` 0x9bc070 → `Swf_Merge` 0xa58440) our emitter uses for `_Append_AbilityIcon`. Its frames
+  place the nested sprite **unnamed** (215 of 217; `pawing` twice; `splitfileidleF` places a bare DefineShape); its
+  nested sprites have the same seven slot sprites (depths vary per frame: `crawlingIdleF` has head@11, arm1@13),
+  placed with ~0.6-scale matrices. Both files carry one `DoABC`.
+- **`Swf_Merge`** (`.analysis/decompiled/Swf_Merge_0xa58440.c`) builds a merged copy at `original+0x130` on first
+  use, appends the donor's frames (frame numbers offset by the original's frame count, place records' character index
+  offset by the original's character count), adds the donor's labels to the map at `+0x20` and copies the donor's
+  character table (`+0xa0/+0xa4/+0xa8`). `process_animation_merges` walks **every** SymbolClass entry (list at
+  `+0x78`), so an `_Append_` export need not be a file's first entry.
+- `alt_animations [[idle <label>]]` on a character entry is valid (cat_enemies.gon `CatCaller`: `girlyIdle`,
+  `GlassSpitter`: `twitchyIdle`); the engine appends the facing suffix. catparts.swf exports `CatBody#8845 CatHead#7132
+  CatLeg#9925 CatTail#10982 CatEar CatEye CatEyebrow CatMouth CatEyeClosed CatMouthOpen CatMouthSmile
+  CatHeadPlacements#11006`.
+
+**How a cat clip's slots are filled — `glaiel::CatParts` (OBSERVED, Ghidra session catB 2026-10-21,
+`.analysis/notes-catB.md`; decompiles in `.analysis/decompiled/CatParts_*.c`).** Nothing is keyed to `CatTest`: the
+fill is by instance name, on whatever clip the renderer plays, on every prerender.
+
+- **`CatParts::prerender()` 0x742350** (vftable 0xed6a30 slot 19; type id 0x1cc, size 0xa90) walks the renderer's root
+  clip with `DisplayObjectContainer::IterateChildren(fn, namedOnly = 1)` 0x99c270 (vtable slot 14 — recursive through
+  nested and unnamed sprites, visiting named instances only; a matched slot's subtree is skipped; re-resolved every
+  prerender, no cache). The visitor `prerender::<lambda_2>` 0x742bd0 dispatches on `DisplayObject+0x48` (the name):
+  `body tail arm1 arm2 arm1_claws arm2_claws leg1 leg2 head bhead head<face> headblend<face> weapon trinket`
+  (optionally prefixed, e.g. `other_`); unknown names return 0 (ignored); a missing slot is simply not drawn.
+- **The slot helper 0x741f10 `(holder, child, material, CatParts*, flip)`** makes the slot sprite host a
+  `glaiel::swf::ReferenceRenderer` (vftable 0x112ed30) whose target `+0x98/+0xa0` is CatParts' own per-part holder
+  container (`this+0x8b0…`, one per part, holding the `catparts.swf` symbol instance — `CatBody/CatLeg/CatTail/CatHead`
+  … — already `gotoFrame`'d to the cat's part index, with `tex`/`scars`/`aux` children, palette and face applied):
+  ```
+  if ((child+8 & 0x20) == 0 || child->childCount(+0xac) == 0) {   // hidden, or no children: the CREATE path
+      child+8 |= 0x20; removeChildren(child);                      // drop the placeholder art
+      ref = new ReferenceRenderer (DisplayObject ctor 0x9b08b0); ref+0x98 = holder container; ref+0xa0 = generation;
+      addChild(child, ref, true);                                  // children[0]
+  } else {                                                         // the ELSE path: "already converted"
+      ref = child->children[0];   ref+0x98 = holder container;     // 0x741f5a / 0x741f5d
+  }
+  ```
+  The slot child keeps its own timeline matrix and cxform; the reference draws the cat's actual part in place.
+- **Why A0 crashed.** `DisplayObject_ctor` 0x9b08b0 sets bit 0x20 (visible) by default; children are stored by depth
+  (`setChildAtDepth` 0x999e40: `children[depth] = child`, holes zero-filled). Our slot sprites were visible and
+  non-empty (a shape at depth 1 → `children[0]` is a depth hole, NULL) → the else path → `MOV [RBX+0x98],RAX` at
+  `+0x741f5d`; a bare DefineShape in a slot has no child vector → the read fault at `+0x741f5a`. Vanilla's slot
+  sprites are visible and non-empty too, but each is bound by SymbolClass to a Flash class (`catanis_fla.AniTail_5`,
+  `AniLeg_6`, `AniBody_7`, `AniFace1_8`) whose frame-1 script calls `setInvisible()` — `Swf_RunFrameScript5` 0xa51fd0
+  clears bit 0x20 for that call name — so a vanilla slot arrives **hidden** → the create path.
+- **The rule for mods: every slot is an EMPTY named 1-frame DefineSprite** (ShowFrame + End; `count == 0` → the
+  create path; the placeholder would be deleted by `removeChildren` anyway). No native code is involved: the
+  ReferenceRenderer is created by CatParts itself. The editor emits exactly that for a `parts: "game"` cat rig
+  (`cat-rig.ts` `addCatRig(scene, name, { parts: "game" })`; validator `rig-slot-not-empty` / `cat-anim-slot-not-empty`
+  for a slot that holds art). The named child the animation driver restarts on every play is `ani`
+  (`Character::PlayAnimation` 0x9abda0 → 0x9ac790, `.analysis/notes-catA.md`); vanilla's `pawing` name is never read.
+
+**Experiment A0, resolved (OBSERVED 2026-10-22, `npm run test:artprobe -- --cat-append`; fixture
+`editor/test/fixtures/ingame/artprobe-cat-append-summary.json`): appended cat animations work at the data layer with
+empty slots.** `mods/_artprobe` exports `_Append_CatTest` (`CatAppendRoot`: `probeIdleF` / `probeIdleB`, each placing
+the `CatProbe` rig as the child `ani` at depth 1 at vanilla `idleF`'s offset (77, −959) twips); `CatProbe` is a
+`parts: "game"` rig — seven empty slot sprites at the vanilla depths with `idleF`'s own slot matrices (pinned T1 against
+catanis.swf) and the checker marker at the non-slot depth 15; `ArtProbeCatReal` = TomTom + `alt_animations [[idle
+probeIdle]]`.
+
+- `spawn ArtProbeCatReal`: **no crash** — a second TomTom (gray cat, palette 9, the real parts: face, texture, the
+  tail) stands in our frame with our marker above it, mirrored like every enemy clip, at the vanilla idle layout. The
+  controls (a vanilla appended label, a missing label) pass as before; the primer (the coloured `CatProbeColours` rig
+  as a plain `movieclip` on a Rat, no CatParts) still draws its colours — the fill happens only on a unit that has
+  CatParts, i.e. a `_CAT` cat.
+- The measure: our marker (a yellow box that is not the primer's; it sits at clip (−48, −330) so it cannot merge
+  with the primer's) in the rig shots, and the new near-black pixels in a 350 px window centred on the cat under it
+  vs the primer shot (a real cat's outline) compared with TomTom's outline vs the baseline, TomTom located as the
+  largest new dark blob inside the arena (`probe-compare.ts` `darkPixelsNear`, `largestChangedRegion { dark, within }`).
+  Plain diffs and colour counts are noise here: the move-range overlay toggles between shots and re-tints the units
+  it touches, and the HUD (End Turn, portraits) animates (OBSERVED in all three runs; kept in the fixture for the
+  record). Run 20261022-063637: TomTom's outline **10946** px; under our marker **11088** (rig 1) and **11695**
+  (rig 2) — the same parts; in rig 3 (+160 frames) the cat is in the vanilla hit animation (a `-5` from
+  `_autoplay`'s party; the appended idle is replaced for its duration, then comes back), so only the primer's marker
+  is found — the fixture asks for our marker in at least two of three shots.
+- Earlier runs: 20261021-194143 (our marker in rig 1 and 2 with the cat under it; rig 3 at +200 frames: the cat dead
+  in the vanilla death pose) and 20261022-063154 (rig 2 mid-hit). The controls passed every time; every run:
+  `real save file(s) unchanged`.
+- Conclusion: **the game fills a mod-appended cat frame's slots by name; the only requirement is that each slot is an
+  empty (or hidden) sprite.** A native hook is needed only for scoped standalone rig clips (a non-`_CAT` character
+  that should get a cat's parts), not for appended cat animations.
+
 ### SWF loader and display path (closed, 2026-10-21)
 
 RE session `disp` (Ghidra 12.1.4, static scans, the shipped shaders in `.extracted/shaders/`); every decompile cited

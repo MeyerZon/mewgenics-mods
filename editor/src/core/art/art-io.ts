@@ -10,6 +10,7 @@ import { join, dirname, relative } from "node:path";
 import { MODS_DIR, REPO_ROOT, resolveModWritePath, isInside, touchesSaves } from "../repo.ts";
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
 import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
+import { newCatAnimation } from "./cat-rig.ts";
 import { importSvg } from "./svg-import.ts";
 import { adoptGradients } from "./gradient.ts";
 import { shapeToSvg } from "./svg-export.ts";
@@ -150,8 +151,18 @@ export interface NewSceneResult extends SceneWriteResult {
   scene?: Scene;
 }
 
-/** Create a new scene file from the starter example (or empty). */
-export function newArtScene(modName: string, name: string, opts: { starter?: boolean } = {}): NewSceneResult {
+export type NewSceneTemplate = "cat-animation";
+
+export interface NewSceneOptions {
+  starter?: boolean;
+  /** "cat-animation": an empty scene plus newCatAnimation(animation ?? name) — a rig and the _Append_CatTest donor */
+  template?: NewSceneTemplate;
+  /** the animation name for the cat-animation template (default: the scene name, which must then be an identifier) */
+  animation?: string;
+}
+
+/** Create a new scene file from the starter example (or empty), or from a template. */
+export function newArtScene(modName: string, name: string, opts: NewSceneOptions = {}): NewSceneResult {
   if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(name)) return { ok: false, error: `invalid scene name ${JSON.stringify(name)}`, findings: [] };
   const relPath = `${ART_DIR}/${name}${SCENE_SUFFIX}`;
   let abs: string;
@@ -161,7 +172,16 @@ export function newArtScene(modName: string, name: string, opts: { starter?: boo
     return { ok: false, error: errText(e), findings: [] };
   }
   if (existsSync(abs)) return { ok: false, error: `already exists: mods/${modName}/${relPath}`, findings: [] };
-  const scene = opts.starter === false ? newScene(name) : exampleScene(name);
+  let scene: Scene;
+  if (opts.template === "cat-animation") {
+    scene = newScene(name);
+    const anim = newCatAnimation(scene, opts.animation ?? name);
+    const e = anim.findings.find((f) => f.severity === "error");
+    if (e) return { ok: false, error: e.message + (opts.animation === undefined ? " (pass `animation` to name the animation independently of the scene)" : ""), findings: anim.findings };
+    scene = anim.scene;
+    scene.stage_instances = [{ frame: 0, ref: anim.donor!, x: Math.round((scene.stage?.width ?? 1280) / 2), y: Math.round(((scene.stage?.height ?? 720) * 2) / 3) }];
+  } else if (opts.template !== undefined) return { ok: false, error: `unknown template ${JSON.stringify(String(opts.template))} (cat-animation)`, findings: [] };
+  else scene = opts.starter === false ? newScene(name) : exampleScene(name);
   const r = writeArtScene(modName, relPath, scene);
   return r.ok ? { ...r, relPath, scene } : r;
 }
