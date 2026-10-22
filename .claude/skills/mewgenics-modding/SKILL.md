@@ -45,10 +45,20 @@ Tools, by purpose:
 - `list_registered_native_names` — list native-registered status/ability names
   from `registered-names.json` (seeded with `JokersLuck`).
 - `new_from_template` — scaffold an ability/passive/item/status-data overlay
-  plus matching localization rows.
+  plus matching localization rows; kind `room` writes a new
+  `levels/<folder>/<name>.lvl`, kind `tileset-variant` a new tileset.
+- `read_level` / `write_level` — rooms (binary `levels/**.lvl`: a 10x10 grid of
+  `tiles.gon` ids + objects placed by `spawns.gon` id, any id may be a weighted
+  random list). `read_level { mod, path?, palette? }` decodes one (or lists the
+  mod's rooms; `palette: true` adds the tile/object palettes with names and
+  classes). `write_level { mod, path, level | base64 | edits }` writes only under
+  `levels/` inside the mod, byte-identical when unedited; edits are
+  `{ op: tile|object|remove, x, y, id | object: "Rat" | random: [{id|object, weight}] }`.
+  It returns the `lvl-*` findings. See docs/data-mods.md "Maps, rooms and encounters".
 
 A web UI (`node editor/web/server.ts`, opened in a browser) browses base data
-and components and shows inline validation and merge-preview. It is for a human;
+and components and shows inline validation and merge-preview; its Rooms mode is a
+10x10 grid painter for the same `.lvl` files. It is for a human;
 as an agent, drive the MCP tools.
 
 ## How mods load

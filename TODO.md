@@ -262,6 +262,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   vanilla levels round-trip), validator rules for a mod's levels and maps, `new_from_template` kinds `room` and
   `tileset-variant`, `mods/_roomprobe` proven in-game (new room + new spawn id, nested-name search, new tileset). Docs:
   `data-mods.md` "Maps, rooms and encounters", `engine-map.md` "Maps, rooms and level files".
+  - [x] **Room editor** (2026-10-22, branch `feat/room-editor-ui`, stacked on the rooms PR): the web UI's Rooms mode
+    (10x10 grid painter, tile/object palettes from tiles.gon/spawns.gon + the mod's overlays, weighted random lists in
+    the inspector, live `lvl-*` findings, New room from the `room` template, byte-identical save under `levels/**`)
+    and MCP `read_level` / `write_level`. Docs: `editor-ts-react-plan.md` "Rooms mode", `data-mods.md`.
+    - [ ] Tileset art in the swatches (the grid shows the dev editor's `image_tint`, not the map tileset's look).
   - [ ] Open: prove a **campaign** battle node drawing a mod room from a map pool (needs the harness to walk a run
     from the House to a map node; decompiled, not run). Then a new map behind alley's exit (`next_map`).
 

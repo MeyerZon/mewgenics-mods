@@ -371,6 +371,14 @@ decompiles (engine-map "Maps, rooms and level files").
 nodes { exit0 { next_map mymap.gon } }
 ```
 
+**Editing rooms by hand:** the editor's **Rooms** mode (`npm run web`, top-bar Data | Art | **Rooms**, or
+`?mode=rooms`) paints a room on its 10x10 grid: the tile palette is `tiles.gon` and the object palette `spawns.gon`
+(base + the mod's `.append`/`.merge`/`.patch`), each entry labelled by its `editor { name … }` and coloured by its
+`image_tint` (objects without one by category). Click or drag to paint, place or erase; the inspector edits a cell's
+tile and objects, each as an id or a weighted random list; the `lvl-*` findings update as you paint; **+ New room**
+uses the `room` template; Save writes only `mods/<mod>/levels/**.lvl` and an unedited room byte for byte. Agents use
+MCP `read_level` / `write_level` (edit ops) for the same thing (`editor/src/core/level/edit.ts`, `level-io.ts`).
+
 The validator checks rooms (`lvl-bad-format`, `lvl-unknown-spawn-id`, `lvl-unknown-tile-id`, `lvl-no-player-spawn`,
 `lvl-outside-levels`, `whole-file-replace` when a room shadows a vanilla one) and maps (`map-node-type-unknown`,
 `map-next-map-missing`, `map-tileset-unknown`, `map-chapter-id-unknown`, `map-level-pool-empty` for easy/hard pools).
