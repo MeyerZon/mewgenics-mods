@@ -444,6 +444,63 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     eq(dl.writeDeepLink("", { mode: "data", mod: "", file: "" }), "?mode=data");
   });
 
+  // prefs.ts: per-viewer view options over localStorage (mewged.prefs.<key>, JSON values), with the old
+  // mewged.art.ghostCat key migrated on first read. A fake storage stands in for window.localStorage.
+  const pf = await load("../web/src/prefs.ts");
+  test("web/src/prefs.ts loads", () => assert(!pf.__error, pf.__error ?? ""));
+  if (!pf.__error) {
+    test("prefs: getPref returns the fallback when unset; setPref/getPref round-trip booleans and strings under mewged.prefs.<key> as JSON", () => {
+      const mem = new Map<string, string>();
+      pf.setPrefStorage({ get: (k: string) => (mem.has(k) ? mem.get(k)! : null), set: (k: string, v: string) => void mem.set(k, v) });
+      try {
+        eq(pf.getPref("art.showGray", false), false);
+        eq(pf.getPref("art.background", "checker"), "checker");
+        pf.setPref("art.showGray", true);
+        pf.setPref("art.background", "#000000");
+        pf.setPref("art.loop", false);
+        eq(pf.getPref("art.showGray", false), true);
+        eq(pf.getPref("art.background", "checker"), "#000000");
+        eq(pf.getPref("art.loop", true), false);
+        eq(mem.get("mewged.prefs.art.showGray"), "true");
+        eq(mem.get("mewged.prefs.art.background"), '"#000000"');
+        mem.set("mewged.prefs.art.loop", '"yes"');
+        eq(pf.getPref("art.loop", true), true, "a stored value of the wrong type reads as the fallback");
+        mem.set("mewged.prefs.art.showGray", "{not json");
+        eq(pf.getPref("art.showGray", false), false, "unparseable → fallback");
+      } finally {
+        pf.setPrefStorage(null);
+      }
+    });
+    test("prefs: art.ghostCat migrates the old mewged.art.ghostCat key (\"0\" = off) on first read and writes the new key", () => {
+      const mem = new Map<string, string>([["mewged.art.ghostCat", "0"]]);
+      pf.setPrefStorage({ get: (k: string) => (mem.has(k) ? mem.get(k)! : null), set: (k: string, v: string) => void mem.set(k, v) });
+      try {
+        eq(pf.getPref("art.ghostCat", true), false);
+        eq(mem.get("mewged.prefs.art.ghostCat"), "false");
+        mem.set("mewged.art.ghostCat", "1");
+        eq(pf.getPref("art.ghostCat", true), false, "the new key wins once written");
+      } finally {
+        pf.setPrefStorage(null);
+      }
+    });
+    test("prefs: subscribePrefs listeners hear setPref; unsubscribe stops them; with no storage (Node) getPref is the fallback", () => {
+      const mem = new Map<string, string>();
+      pf.setPrefStorage({ get: (k: string) => (mem.has(k) ? mem.get(k)! : null), set: (k: string, v: string) => void mem.set(k, v) });
+      let n = 0;
+      const off = pf.subscribePrefs(() => n++);
+      try {
+        pf.setPref("art.loop", false);
+        eq(n, 1);
+        off();
+        pf.setPref("art.loop", true);
+        eq(n, 1);
+      } finally {
+        pf.setPrefStorage(null);
+      }
+      eq(pf.getPref("art.background", "checker"), "checker");
+    });
+  }
+
   // PaneBoundary lives in a JSX-free module so Node can load it (ui.tsx re-exports it). React's server renderer does
   // not run error boundaries, so this covers the two halves the boundary is made of: the static
   // getDerivedStateFromError (error → state) and render() for both states, rendered to HTML; reset() clears it.

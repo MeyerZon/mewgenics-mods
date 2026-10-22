@@ -76,3 +76,15 @@ export async function readFrame(page: Page): Promise<[number, number]> {
   const m = /(\d+)\s*\/\s*(\d+)/.exec(txt);
   return m ? [Number(m[1]), Number(m[2])] : [NaN, NaN];
 }
+
+/**
+ * Open the `…` overflow menu of a shape row in the Art Shapes tab (its trigger is "More actions for <id>") and wait
+ * for the menu; the row's actions (Open in VectorCraft, Export SVG, Bake glow, Replace from SVG, Wrap in a sprite,
+ * Delete) live there.
+ */
+export async function openShapeMenu(page: Page, id: string): Promise<void> {
+  const trigger = page.locator(`button[aria-label="More actions for ${id}"]`);
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(trigger.locator("xpath=..").locator(".menu")).toBeVisible();
+}
