@@ -9186,8 +9186,15 @@
         },
         "prologue": "48 89 5C 24 18 48 89 54 24 10 48 89"
       },
-      "consumers": [],
-      "exposure": [],
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Batch_SubmitFunctor",
+          "index": 40
+        }
+      ],
       "evidence": [
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
@@ -9323,8 +9330,15 @@
         },
         "prologue": "40 53 57 41 54 41 57 48 83 EC 28 48"
       },
-      "consumers": [],
-      "exposure": [],
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Material_Bind",
+          "index": 43
+        }
+      ],
       "evidence": [
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
@@ -9984,8 +9998,15 @@
         },
         "prologue": "48 89 54 24 10 48 89 4C 24 08 55 53"
       },
-      "consumers": [],
-      "exposure": [],
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_ResourceManager_GetBinaryResource",
+          "index": 41
+        }
+      ],
       "evidence": [
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
@@ -10036,8 +10057,15 @@
         },
         "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56"
       },
-      "consumers": [],
-      "exposure": [],
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_App_GetTexture",
+          "index": 42
+        }
+      ],
       "evidence": [
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
@@ -10389,6 +10417,35 @@
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
         ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "MatStackData",
+      "kind": "data",
+      "rva": "0x13c5bd8",
+      "anchors": {
+        "witness": {
+          "function": "Batch_AddInstance",
+          "needsHarvest": false,
+          "ripRefOrdinal": 14,
+          "kind": "rip-mov"
+        },
+        "note": "float*: the matrix stack's data (0x40-byte column-major matrices; the top is data + MatStackTop * 0x40). MatStack object at 0x13c5bd0: +0x08 data, +0x28 per-level mirrored flags, +0x30 top index (MatStack_Ortho 0x9fec80; Camera_RenderOneLayer 0x979210 reads it as DAT_1413c5bd8)"
+      },
+      "consumers": [
+        "native/framework/src/mesh_engine.c",
+        "native/framework/src/fw_mesh_draw.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_MatStackData",
+          "index": 18
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        ".analysis/decompiled/Camera_RenderOneLayer_0x979210.c",
+        ".analysis/decompiled/MatStack_Ortho_0x9fec80.c"
       ]
     },
     {
