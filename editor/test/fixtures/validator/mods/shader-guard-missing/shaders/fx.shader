@@ -1,0 +1,8 @@
+#version 150
+#include "std_in.shader"
+#if COMPILING_VERTEX_PROGRAM
+    void vert(){ gl_Position = mvp * vec4(position.xy, 0.0, 1.0); }
+#else
+    out vec4 frag_color;
+    void frag(){ frag_color = vec4(1.0); }
+#endif

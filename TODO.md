@@ -82,6 +82,10 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       if you exported glTF Separate) to an agent, or drop it at `mods/<mod>/models/<name>.glb`. The agent runs the
       editor's reader on it (`editor/src/core/art/model-read.ts`); expected: no `model-*` error findings.
 
+- [ ] `3d-m1-cube` (#127) — Run `MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/crate.obj` (`npm run test:artprobe -- --mesh`, needs PR #117's in-process shots): does the magenta cube on tile (3,3) and the grey crate on (4,3) read as solid 3D blocks standing on their tiles, lit from the top-left, under the HUD?
+- [ ] `3d-occlusion` (#127) — Known wrong, for the record: with `MEWFW_MESH_PROBE=2,6` the cube (on a tile BEHIND the cats) is drawn over them. Confirm that is the only artefact before phase M2 fixes it.
+- [ ] Provide a test glTF per docs/data-mods.md "3D models" spec ("glTF models": glTF 2.0 .glb, triangulated, Y up, 1 unit = 1 tile, origin at the feet, ≤ a few thousand vertices, one material, no Draco/meshopt/KHR_texture_transform, external PNG ≤ 512²) — drop it in `mods/fw-3d/models/` and an agent wires it.
+
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
 - **Track `editor/component-schema.json`?** (component-schema PR, 2026-10-22) It is RE-derived (1741 `glaiel::` class
@@ -690,9 +694,11 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
       `editor/src/core/art/{obj,gltf,model}-read.ts` are built and tested. Next: wire them into `checkModel` once
       `feat/3d-meshes-api` merges (§3.3), `fw_json.c` + `fw_gltf.c` (§2), and the §5 deltas (OBJ vt flip, one model-path
       rule for engine and validator).
-- [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
-- [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
-- [ ] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-22: the append route (`_Append_CatTest` frame placing a rig with EMPTY slot sprites, experiment A0) works — the game draws the cat's own parts into our frame; the 2026-10-21 crash was the visible non-empty placeholder (engine-map "CatTest and the cat animation clips").
+      **2026-10-22 evening (branch `feat/3d-meshes-m1`): M0 + M1 done, M3/M4 partly** — a cube and a mod OBJ drew in a
+      fight through a submitted draw functor + the mod shader (OBSERVED, `mesh-probe-log.txt` / `mesh-model-log.txt`);
+      OBJ + glTF loaders, API v8 `FW_Register3DObject` / `FW_Place3DObjectOnTile` drawn, GON `graphics.model` validated.
+      Next: **M2** sprite/mesh occlusion (a farther cube is drawn over the cats today), the per-unit GON `model` walk,
+      the palette texture + textures, a real glTF in-game.
 - [x] Clip authoring (Timeline tab, timeline-edit.ts) and the cat rig (Rig tab, cat-rig.ts) — 2026-10-20, art build-out G + H; the game drives a character's root timeline, units are tinted by position
 - [x] Emitter (all four done: #63, #64, #69, #65): ~~gradient fills~~ (done 2026-10-20, art build-out C: gradient.ts, gate `gradient`, probe square drawn in-game), ~~LineStyle2~~ (done 2026-10-20, art build-out E: DefineShape4, stroke.ts, gate `shape4`, caps honoured in-game), ~~fonts/text~~ (done 2026-10-21: DefineEditText in a game font class + ImportAssets2 fonts.swf, like vanilla; drawn in-game), ~~PlaceObject3~~ (done 2026-10-20, art build-out F: blends load and apply in-game; filters crash the game and are a validation error)
 - [x] MCP tools for art (so agents can author art, not just data) — done in #62 (16 → 23 tools, 2026-10-20), then

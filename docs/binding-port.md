@@ -24,7 +24,11 @@ The **3D block** (2026-10-22, the last 61 entries; `docs/possible_3d_work.md` §
 (`Camera_render`, `Camera_GetViewProjection`, `Camera_RenderOneLayer`; 40 in all), 27 signed reference functions (2 of them
 witness-host `.pdata` chunks of PGO-split functions: `Camera_render_body`, `Swf_DisplayObject_Render_cull`), 7 FwData
 render globals (18 in all), the `MaskedRendererIso` vftable (`BuildInfo.rva_MaskedRendererIso_vftable`), 19 offsets
-(97 in all) and 4 constants, every witness harvest-verified on 25143593.
+(97 in all) and 4 constants, every witness harvest-verified on 25143593. Phase M1/M2 (2026-10-22, branch
+`feat/3d-meshes-m1`) promoted 4 of its reference functions to FwSymbol 40..43 (`Batch_SubmitFunctor`,
+`ResourceManager_GetBinaryResource`, `App_GetTexture`, `Material_Bind`; 44 in all), added FwData 18 `MatStackData`
+(rip ref #14 of `Batch_AddInstance`; 19 in all), the witness host `Texture2D_LoadFromFile` 0xa0ad40 and its 2 offsets
+`OFF_BINRES_DATA` 0x28 / `OFF_BINRES_SIZE` 0x30 (99 in all).
 
 ## The manifest: `bindings/<steamBuildId>.json`
 

@@ -34,6 +34,12 @@ run_suite "jokers_luck reroll" "$JL/build/test_roll" -I"$JL/src" -I"$FW/src" "$J
 run_suite "mewframework game-speed rules" "$FW/build/test_speed_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_speed_rules.c" "$FW/src/fw_speed_rules.c" -lm
 run_suite "mewframework cat rig rules" "$FW/build/test_catrig_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_catrig_rules.c" "$FW/src/fw_catrig_rules.c"
 run_suite "mewframework 3D observer rules" "$FW/build/test_obs3d_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_obs3d_rules.c" "$FW/src/fw_obs3d_rules.c"
+run_suite "mewframework mesh draw (M1)" "$FW/build/test_mesh_draw" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_draw.c" "$FW/src/fw_m4.c" "$FW/src/fw_functor.c" "$FW/src/fw_gl_state.c" "$FW/src/fw_mesh_draw.c" "$FW/src/fw_mesh_rules.c" "$FW/src/fw_mesh_gltf.c" "$FW/src/fw_json.c" -lm
+run_suite "mewframework mesh rules" "$FW/build/test_mesh_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_rules.c" "$FW/src/fw_mesh_rules.c" -lm
+run_suite "mewframework 3D object registry" "$FW/build/test_obj3d_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_obj3d_rules.c" "$FW/src/fw_obj3d_rules.c" "$FW/src/fw_mesh_rules.c" -lm
+run_suite "mewframework GON walker" "$FW/build/test_gon" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_gon.c" "$FW/src/fw_gon.c"
+run_suite "mewframework JSON tokenizer" "$FW/build/test_json" -I"$FW/src" "$FW/test/test_json.c" "$FW/src/fw_json.c"
+run_suite "mewframework glTF loader" "$FW/build/test_mesh_gltf" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_gltf.c" "$FW/src/fw_mesh_gltf.c" "$FW/src/fw_json.c" "$FW/src/fw_mesh_rules.c" -lm
 run_suite "mewtest harness pure modules" "$HS/build/test_mewtest" -DMT_HOST_TEST -I"$HS/src" -I"$FW/src" "$HS/test/test_mewtest.c" \
   "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c" "$HS/src/mt_face.c" "$HS/src/mt_walk.c" "$HS/src/mt_shot.c"
 CS="$HERE/mods/catrig-sample"

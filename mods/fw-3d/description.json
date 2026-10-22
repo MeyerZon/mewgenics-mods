@@ -1,0 +1,7 @@
+{
+  "title": "Framework 3D (data half, preview)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "The data half of mewframework's 3D meshes (preview, API v8): models/crate.obj, a hand-written 0.8-unit crate, and data/characters/inanimate_objects.gon.merge, which gives the vanilla Crate a `graphics.model` key. The framework reads that key from a unit's live GON entry and a mod places objects with FW_Register3DObject / FW_Place3DObjectOnTile; the vanilla game ignores the key and keeps drawing the Crate's movieclip. Load it next to any mod that uses 3D objects: `mods: <mod>, fw-3d` / -modpaths. Drawing needs mewframework's mesh engine (phase M); without it nothing changes.",
+  "requirements": []
+}

@@ -126,8 +126,9 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
   walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the `FW_Random` stream, the game-speed rules,
-  the cat rig redirect rules (registry, `_CatRig_` exports, the SymbolClass list scan), Joker's Luck's reroll, the 3D observer's rules, the harness's modules, the
-  cat rig sample's bind loop; NATIVECOUNT checks, `-Werror`),
+  the cat rig redirect rules (registry, `_CatRig_` exports, the SymbolClass list scan), Joker's Luck's reroll, the 3D observer's rules, the
+  mesh draw (4x4 maths, the C std::function, GL save/restore, shader dialect), the OBJ / glTF loaders + JSON tokenizer,
+  the 3D-object registry, the GON walker, the harness's modules, the cat rig sample's bind loop; NATIVECOUNT checks, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.

@@ -358,5 +358,25 @@
     "shots": ["ingame-runs/*-catrig-sample-rig-labels/shot-l20.png","ingame-runs/*-catrig-sample-rig-labels-ctl/shot-l20.png"],
     "regenerate": "cd editor && npm run test:catrigsample",
     "status": "open"
+  },
+  {
+    "id": "3d-m1-cube",
+    "pr": 127,
+    "question": "Does the magenta cube on tile (3,3) and the grey crate (models/crate.obj) on (4,3) read as solid 3D blocks standing on their tiles, lit from the top-left, under the HUD?",
+    "shots": [
+      "ingame-runs/*-dev-sandbox-mesh-probe/shot-mesh-b.png"
+    ],
+    "regenerate": "MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/crate.obj, cd editor && npm run test:artprobe -- --mesh (needs PR #117 in-process shots)",
+    "status": "open"
+  },
+  {
+    "id": "3d-occlusion",
+    "pr": 127,
+    "question": "Known wrong (phase M2): with the cube on tile (2,6), BEHIND the cats, it is drawn over them. Is that the only artefact?",
+    "shots": [
+      "ingame-runs/*-dev-sandbox-mesh-probe/shot-mesh-b.png"
+    ],
+    "regenerate": "MEWFW_MESH_PROBE=2,6, cd editor && npm run test:artprobe -- --mesh --tile 2,6",
+    "status": "open"
   }
 ]

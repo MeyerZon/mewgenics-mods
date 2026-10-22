@@ -384,10 +384,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face, the 4 campaign-walk symbols the 2 glow-v2 screen-matrix symbols the 3 v7 cat-rig hook targets and the 3 observe3d camera symbols); each has a signature except the three with no relocation-free unique window", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face, the 4 campaign-walk symbols the 2 glow-v2 screen-matrix symbols the 3 v7 cat-rig hook targets the 3 observe3d camera symbols and the 4 M1 mesh symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 48);
+    eq(want.length, 52);   // +4: M1 promoted Batch_SubmitFunctor, ResourceManager_GetBinaryResource, App_GetTexture, Material_Bind (48..51)
     // API v7 (2026-10-22): the cat rig redirect hooks the entry scope, the by-name clip lookup and the SWF post-load pass
     eq(want.slice(42, 45).join(","), "FW_SYM_Character_init,FW_SYM_Swf_GetCharacterByName,FW_SYM_ApplicationBase_ProcessAnimationMerges");
     eq(entry(m, "Character_init")!.rva, "0xf70f0");
@@ -417,10 +417,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const sp = entry(m, "SaveProps_GetOrCreate")!.signature!;
     assert(sp.offset < 0 && sp.wildcards.length >= 5, `SaveProps_GetOrCreate regenerated on an instruction boundary with its relocations masked: ${JSON.stringify(sp)}`);
   });
-  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (18, incl. the MewDirector and ShaderManager globals and the 7 render globals of the 3D block); App_global first", () => {
+  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (19, incl. the MewDirector and ShaderManager globals and the 8 render globals of the 3D block); App_global first", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_DATA_");
-    eq(want.length, 18);
+    eq(want.length, 19);
     eq(entry(m, "MewDirector_global")!.rva, "0x13dac30");
     const got = dataTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
@@ -494,7 +494,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 121, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects) + 2 effective stats + App_timescale (game speed) + 3 cat rig (the SymbolClass list: SwfFile_symbolList, SymNode_name, SymNode_idFromName) + 19 3D block (observe3d)");
+    eq(offs.length, 123, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects) + 2 effective stats + App_timescale (game speed) + 3 cat rig (the SymbolClass list: SwfFile_symbolList, SymNode_name, SymNode_idFromName) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes)");
   });
   test("25143593.json: effective stats (2026-10-22) — Character::recompute_stats (RTTI of its std::function lambdas) is a signed function entry; the effective stat block +0x5bc and max HP +0x4bc are offsets witnessed in it", () => {
     const m = loadManifest(realPath);
@@ -1924,7 +1924,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const WALK_NAMES = new Set([...WALK_SYMBOLS.map((x) => x[0]), ...WALK_REFERENCE.map((x) => x[0]), ...WALK_OFFSETS.map((x) => x[0])]);
   test("the committed manifest carries the campaign-walk bindings (2026-10-22) as one contiguous block at its end: 4 FwSymbol functions (GoOnAnAdventure, MapScreen::init, MapScreen::EnterNode, StartMapBattle), 3 reference functions, 8 witnessed offsets; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(enumerators("FW_SYM_").length, 48);
+    eq(enumerators("FW_SYM_").length, 52);
     for (const [name, rva, index] of WALK_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
@@ -1991,29 +1991,37 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   // T2 (2026-10-22, the first observe3d run): RenderCore 0x989020 calls Camera_render only for its first camera list (the
   // 5 RTT cameras); the world and UI cameras are drawn layer by layer through Camera_RenderOneLayer 0x979210 (second
   // list, every layer index x every camera), which pushes the same VP. Both are hooked.
-  const R3D_SYMBOLS: [string, string, number][] = [["Camera_render", "0x9787c0", 45], ["Camera_GetViewProjection", "0x9785e0", 46], ["Camera_RenderOneLayer", "0x979210", 47]];
+  // M1 (2026-10-22, the first mesh draw, docs/possible_3d_work.md phase M): four reference functions became FwSymbol 40..43 (the
+  // mesh engine submits its draw functor through Batch_SubmitFunctor, loads models/*.obj with ResourceManager_GetBinaryResource,
+  // and the palette shader path binds its material with Material_Bind and the palette texture from App_GetTexture), and the
+  // matrix stack data pointer is FwData 18 (MatStackData, witnessed by rip ref #14 of Batch_AddInstance)
+  const R3D_SYMBOLS: [string, string, number][] = [["Camera_render", "0x9787c0", 45], ["Camera_GetViewProjection", "0x9785e0", 46], ["Camera_RenderOneLayer", "0x979210", 47],
+    ["Batch_SubmitFunctor", "0xa47820", 48], ["ResourceManager_GetBinaryResource", "0x973750", 49], ["App_GetTexture", "0x9bb490", 50], ["Material_Bind", "0x9bda20", 51]];
   const R3D_REFERENCE: [string, string][] = [["Layer_Draw", "0x9896f0"], ["Position_GetInterpolated", "0x9b4a30"],
-    ["Batch_SubmitFunctor", "0xa47820"], ["Batch_Replay", "0xa481d0"], ["Batch_AddInstance", "0xa47e50"], ["Batch_ApplyGroupState", "0xa497d0"], ["Material_Bind", "0x9bda20"],
+    ["Batch_Replay", "0xa481d0"], ["Batch_AddInstance", "0xa47e50"], ["Batch_ApplyGroupState", "0xa497d0"],
     ["Swf_DisplayObject_Render", "0x9b0a50"], ["MatStack_Ortho", "0x9fec80"], ["MatStack_Push", "0x9feaf0"], ["Mat4_IsMirrored", "0xa082b0"], ["Camera_MouseToCamera2D", "0x9796d0"],
     ["Component_GetSceneCamera", "0x1b1070"], ["TacticsGrid_PickTileUnderMouse", "0x8abc50"], ["Character_SetRenderLayer", "0xf4890"],
     ["Shadow_Update", "0x794850"], ["RenderTarget_create", "0xa28a80"], ["RenderTarget_resolve", "0xa29150"], ["RenderTarget_unbind_lambda1_DoCall", "0xa29d20"],
-    ["RenderTarget_bind_lambda1_DoCall", "0xa29d90"], ["Shader_compile", "0xa55470"], ["ResourceManager_GetBinaryResource", "0x973750"], ["App_GetTexture", "0x9bb490"],
+    ["RenderTarget_bind_lambda1_DoCall", "0xa29d90"], ["Shader_compile", "0xa55470"],
     ["ParticleSystemDepthSorter_Update", "0x78dfe0"], ["DepthTrackingBehindEffect_Update", "0x8d08a0"],
     // witness hosts: .pdata chunks of functions whose first chunk is only the prologue (chained unwind)
-    ["Camera_render_body", "0x9787dc"], ["Swf_DisplayObject_Render_cull", "0x9b0b78"]];
+    ["Camera_render_body", "0x9787dc"], ["Swf_DisplayObject_Render_cull", "0x9b0b78"],
+    // M2 (model bytes): the witness host of the BinaryResource data/size offsets (it reads both right after GetBinaryResource)
+    ["Texture2D_LoadFromFile", "0xa0ad40"]];
   const R3D_DATA: [string, string, number][] = [["Iso", "0x12f7a00", 11], ["IsoInverse", "0x12f79c0", 12], ["RenderStateFlags", "0x12f714c", 13], ["CullDisableCounter", "0x13c5c90", 14],
-    ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17]];
+    ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17], ["MatStackData", "0x13c5bd8", 18]];
   const R3D_OFFSETS: [string, string, string][] = [["Camera_rtt", "OFF_CAM_RTT", "0x80"], ["Camera_hdr", "OFF_CAM_HDR", "0x81"], ["Camera_queue", "OFF_CAM_QUEUE", "0x40"],
     ["Camera_layerBits", "OFF_CAM_LAYER_BITS", "0xc8"], ["RenderQueue_layers", "OFF_RQ_LAYERS", "0x38"], ["RenderQueue_layersEnd", "OFF_RQ_LAYERS_END", "0x40"],
     ["Layer_count", "OFF_LAYER_COUNT", "0xc"], ["Layer_items", "OFF_LAYER_ITEMS", "0x10"], ["Layer_mode", "OFF_LAYER_MODE", "0x24"], ["Renderer_position", "OFF_RND_POSITION", "0x40"],
     ["Renderer_layer", "OFF_RND_LAYER", "0x54"], ["Position_x", "OFF_POS_X", "0x80"], ["Position_z", "OFF_POS_Z", "0x90"], ["App_mainRT", "OFF_APP_MAIN_RT", "0xc10"],
     ["App_antialias", "OFF_APP_ANTIALIAS", "0xdf4"], ["App_clearColor", "OFF_APP_CLEAR_COLOR", "0xd98"], ["App_clearDepth", "OFF_APP_CLEAR_DEPTH", "0xd99"],
-    ["App_clearStencil", "OFF_APP_CLEAR_STENCIL", "0xd9a"], ["RenderTarget_samples", "OFF_RT_SAMPLES", "0x50"]];
+    ["App_clearStencil", "OFF_APP_CLEAR_STENCIL", "0xd9a"], ["RenderTarget_samples", "OFF_RT_SAMPLES", "0x50"],
+    ["BinaryResource_data", "OFF_BINRES_DATA", "0x28"], ["BinaryResource_size", "OFF_BINRES_SIZE", "0x30"]];
   const R3D_CONSTANTS: [string, string, string][] = [["LayerStride", "CONST_LAYER_STRIDE", "0xe8"], ["LayerItemShift", "CONST_LAYER_ITEM_SHIFT", "5"],
     ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
   const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",
     ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]);
-  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 3 FwSymbol + 27 reference functions (all signed; 2 are witness-host .pdata chunks), 7 FwData render globals with harvested witnesses, the MaskedRendererIso vftable (RTTI), 19 offsets and 4 constants with witnesses; the generated headers expose them", () => {
+  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 7 FwSymbol (4 of them promoted from reference by M1) + 24 reference functions (all signed; 2 are witness-host .pdata chunks, 1 the BinaryResource offsets' host), 8 FwData render globals (MatStackData by M1) with harvested witnesses, the MaskedRendererIso vftable (RTTI), 21 offsets (2 BinaryResource by M2) and 4 constants with witnesses; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     for (const [name, rva, index] of R3D_SYMBOLS) {
       const e = entry(m, name);

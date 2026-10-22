@@ -1,0 +1,467 @@
+/*
+ * mesh_engine.c — phase M of docs/possible_3d_work.md: real triangle meshes drawn into the vanilla (orthographic)
+ * tactics scene.
+ *
+ * What draws:
+ *  - the probe (M1): MEWFW_MESH_PROBE=1 (tile 3,3) or "<col>,<row>": a magenta unit cube (0.8 tiles) on that tile in
+ *    every fight; MEWFW_MESH_PROBE_MODEL=models/<name>.obj|.gltf|.glb additionally places that model one tile to the
+ *    right through the API v8 registry (obj3d_engine_place, the same path FW_Place3DObjectOnTile takes);
+ *  - every object of the API v8 registry (obj3d_engine.c: FW_Register3DObject on a unit, FW_Place3DObjectOnTile):
+ *    its `model` is a mod path (models/...), loaded once through ResourceManager_GetBinaryResource (0x973750: -modpaths
+ *    first, then the gpak) and parsed by fw_mesh_load_bytes (OBJ or glTF, the game's left-handed axes); "@Name" models
+ *    (native-registered) are not resolved yet.
+ *
+ * How (every fact OBSERVED, .analysis/notes-r3dA.md + the T2 runs of 2026-10-22):
+ *  - record time: obs3d_engine.c's hook on Camera_RenderOneLayer (0x979210) calls mesh_engine_after_layer() after the
+ *    original. For the fight's world camera (TacticsTest+OFF_TT_MAIN_CAMERA) drawing the units layer (CONST_UNITS_LAYER)
+ *    every draw's mvp = stack top (the base canvas ortho; the original popped its own push) x
+ *    Camera_GetViewProjection(cam) x the ISO basis with a view-depth row x the object's world matrix
+ *    (fw_mesh_object_mvp) is captured into a static per-frame list, and ONE draw functor is submitted with
+ *    Batch_SubmitFunctor (0xa47820): a hand-built MSVC std::function<void()> (fw_functor.c). It lands in the frame
+ *    recording right after the unit layer's groups.
+ *  - replay time (FrameEnd -> Batch_Replay 0xa481d0, the game's GL context current, the main RT App+0xc10 bound —
+ *    OBSERVED fbo 1): the functor loads the GL entry points itself (opengl32 for 1.1, wglGetProcAddress for the rest:
+ *    the game imports neither glDrawElements nor glDepthFunc), compiles mods/fw-3d/shaders/fw_mesh.shader with the
+ *    game's dialect (fw_shader_stage) when that file is on the mod path (else an inline flat shader), uploads each
+ *    mesh's VAO/VBO/IBO once, then saves the GL state (fw_gl_save), draws depth-tested (GL_LESS, writes on,
+ *    blend/cull/stencil off) against the main RT's D24S8 (cleared by FrameBegin) and restores every saved value
+ *    (fw_gl_restore): the engine's own caches stay truthful, no engine global is written. glGetError is drained before
+ *    and after the draws (bounded logs).
+ * Limits (M1/M2 so far): the units layer neither tests nor writes depth, so meshes are drawn OVER the sprites of the
+ * units layer and below and UNDER everything drawn later (UI, overlays) — sprite/mesh occlusion is phase M2; no
+ * textures and no palette yet (palette = -1: base colour x Lambert); a unit's GON graphics.model is read by
+ * obj3d_engine_unit_model but not walked per unit yet.
+ */
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "framework_internal.h"
+#include "fw_m4.h"
+#include "fw_functor.h"
+#include "fw_gl_state.h"
+#include "fw_mesh_draw.h"
+#include "fw_mesh_rules.h"
+#include "fw_obj3d_rules.h"
+#include "fw_glow_rules.h"    /* fw_glow_renderer: Character -> its renderer */
+#include "fw_obs3d_rules.h"   /* fw_obs3d_renderer_position / fw_obs3d_position_xz */
+#include "fw_vtable.h"        /* fw_msvc_init: the by-value std::string the resource getter destroys */
+
+typedef float *(*fn_GetVP)(void *cam, float out[16]);
+typedef void (*fn_SubmitFunctor)(void *unused, FwStdFunction *fn);
+typedef void *(*fn_GetBinaryResource)(void *unused, MsvcString *path);
+
+/* GL beyond the save/restore table */
+typedef struct MeshGl {
+    uint32_t (*CreateShader)(uint32_t type);
+    void (*ShaderSource)(uint32_t sh, int n, const char *const *src, const int *len);
+    void (*CompileShader)(uint32_t sh);
+    void (*GetShaderiv)(uint32_t sh, uint32_t pname, int *out);
+    void (*GetShaderInfoLog)(uint32_t sh, int cap, int *len, char *log);
+    uint32_t (*CreateProgram)(void);
+    void (*AttachShader)(uint32_t prog, uint32_t sh);
+    void (*BindAttribLocation)(uint32_t prog, uint32_t loc, const char *name);
+    void (*LinkProgram)(uint32_t prog);
+    void (*GetProgramiv)(uint32_t prog, uint32_t pname, int *out);
+    void (*GetProgramInfoLog)(uint32_t prog, int cap, int *len, char *log);
+    int (*GetUniformLocation)(uint32_t prog, const char *name);
+    void (*UniformMatrix4fv)(int loc, int n, uint8_t transpose, const float *m);
+    void (*Uniform4f)(int loc, float x, float y, float z, float w);
+    void (*Uniform3f)(int loc, float x, float y, float z);
+    void (*Uniform1f)(int loc, float x);
+    void (*Uniform1i)(int loc, int x);
+    void (*GenVertexArrays)(int n, uint32_t *out);
+    void (*GenBuffers)(int n, uint32_t *out);
+    void (*BufferData)(uint32_t target, ptrdiff_t size, const void *data, uint32_t usage);
+    void (*VertexAttribPointer)(uint32_t loc, int size, uint32_t type, uint8_t norm, int stride, const void *off);
+    void (*EnableVertexAttribArray)(uint32_t loc);
+    void (*DrawElements)(uint32_t mode, int count, uint32_t type, const void *off);
+} MeshGl;
+
+static FwGlFns g_gl;
+static MeshGl g_mg;
+static int g_glState;            /* 0 not loaded, 2 loaded (program pending), 1 ready, -1 failed (logged once, never retried) */
+static uint32_t g_prog;
+static int g_progIsMod;          /* 1 = mods/fw-3d/shaders/fw_mesh.shader, 0 = the inline fallback */
+enum { U_MVP, U_MODEL, U_LIGHT, U_AMBIENT, U_BANDS, U_COLOUR, U_PALETTE, U_FLAT, U_CXMUL, U_CXADD, U_COUNT };
+static const char *const UNIFORMS[U_COUNT] = { "fw_mvp", "fw_model", "fw_light_dir", "fw_ambient", "fw_bands", "fw_base_color", "palette", "fw_flat", "fw_cx_mul", "fw_cx_add" };
+static int g_loc[U_COUNT];
+
+/* meshes: slot 0 = the built-in unit cube, then models by path (g_models.names = the path) */
+static FwMeshRegistry g_models;
+#define MESH_CUBE 0
+#define MESH_SLOTS (FW_MESH_MAX_MODELS + 1)
+static struct { uint32_t vao, vbo, ibo; int nindices; int uploaded; } g_gpu[MESH_SLOTS];
+static FwMesh g_cube;
+static int g_cubeBuilt;
+static char g_failed[8][FW_MESH_NAME_MAX + 1];   /* paths that failed to load (never retried) */
+static int g_nfailed;
+
+static char *g_modShader;        /* fw_mesh.shader's text, read at record time once (NULL: not on the mod path) */
+static int g_modShaderRead;
+
+static int g_probe = -1;         /* -1 setting not read yet, 0 off, 1 on */
+static int g_probeCol, g_probeRow;
+static char g_probeModel[FW_MESH_NAME_MAX + 1];
+static void *g_tt;
+static int g_worldFrame;         /* world-camera units-layer calls this fight */
+static int g_probeLogged, g_drawLogged, g_errLogged, g_objLogged;
+static long g_draws;
+
+#define MESH_MAX_DRAWS 64
+typedef struct MeshDraw { int mesh; float mvp[16]; float world[16]; float colour[4]; } MeshDraw;
+typedef struct MeshFrame { int frame; int n; MeshDraw d[MESH_MAX_DRAWS]; } MeshFrame;
+static MeshFrame g_frame;        /* captured at record time, drawn by the functor at replay */
+
+#define MESH_LOG_PROBE_EVERY 60
+#define MESH_LOG_PROBE_MAX   6
+#define MESH_LOG_DRAW_MAX    4
+#define MESH_LOG_ERR_MAX     8
+#define MESH_LOG_OBJ_MAX     8
+
+static void *data_ptr(int id) { return (void *)fw_resolve_data_addr(1, g_build, g_base, id); }
+
+/* ------------------------------------------------------------------ GL loading */
+static void *glproc(HMODULE gl32, PROC (WINAPI *wglGet)(LPCSTR), const char *name) {
+    void *p = wglGet ? (void *)wglGet(name) : NULL;
+    /* wglGetProcAddress returns 0, 1, 2, 3 or -1 for a failure on some drivers, and nothing for 1.1 entry points */
+    if (p == NULL || p == (void *)1 || p == (void *)2 || p == (void *)3 || p == (void *)-1) p = gl32 ? (void *)GetProcAddress(gl32, name) : NULL;
+    return p;
+}
+
+#define LOAD(dst, name) do { *(void **)&(dst) = glproc(gl32, wglGet, name); if (!(dst)) { fw_log("mesh: GL entry point %s not found", name); ok = 0; } } while (0)
+
+static int load_gl(void) {
+    HMODULE gl32 = GetModuleHandleA("opengl32.dll");
+    PROC (WINAPI *wglGet)(LPCSTR) = gl32 ? (PROC (WINAPI *)(LPCSTR))(void *)GetProcAddress(gl32, "wglGetProcAddress") : NULL;
+    if (!gl32 || !wglGet) { fw_log("mesh: opengl32.dll (%p) / wglGetProcAddress (%p) not available", (void *)gl32, (void *)wglGet); return 0; }
+    int ok = 1;
+    LOAD(g_gl.GetIntegerv, "glGetIntegerv"); LOAD(g_gl.GetBooleanv, "glGetBooleanv"); LOAD(g_gl.IsEnabled, "glIsEnabled");
+    LOAD(g_gl.Enable, "glEnable"); LOAD(g_gl.Disable, "glDisable"); LOAD(g_gl.DepthFunc, "glDepthFunc");
+    LOAD(g_gl.DepthMask, "glDepthMask"); LOAD(g_gl.ColorMask, "glColorMask"); LOAD(g_gl.CullFace, "glCullFace");
+    LOAD(g_gl.FrontFace, "glFrontFace"); LOAD(g_gl.UseProgram, "glUseProgram"); LOAD(g_gl.BindVertexArray, "glBindVertexArray");
+    LOAD(g_gl.BindBuffer, "glBindBuffer"); LOAD(g_gl.ActiveTexture, "glActiveTexture"); LOAD(g_gl.BindTexture, "glBindTexture");
+    LOAD(g_gl.BlendFuncSeparate, "glBlendFuncSeparate"); LOAD(g_gl.BlendEquationSeparate, "glBlendEquationSeparate");
+    LOAD(g_gl.GetError, "glGetError");
+    LOAD(g_mg.CreateShader, "glCreateShader"); LOAD(g_mg.ShaderSource, "glShaderSource"); LOAD(g_mg.CompileShader, "glCompileShader");
+    LOAD(g_mg.GetShaderiv, "glGetShaderiv"); LOAD(g_mg.GetShaderInfoLog, "glGetShaderInfoLog"); LOAD(g_mg.CreateProgram, "glCreateProgram");
+    LOAD(g_mg.AttachShader, "glAttachShader"); LOAD(g_mg.BindAttribLocation, "glBindAttribLocation"); LOAD(g_mg.LinkProgram, "glLinkProgram");
+    LOAD(g_mg.GetProgramiv, "glGetProgramiv"); LOAD(g_mg.GetProgramInfoLog, "glGetProgramInfoLog"); LOAD(g_mg.GetUniformLocation, "glGetUniformLocation");
+    LOAD(g_mg.UniformMatrix4fv, "glUniformMatrix4fv"); LOAD(g_mg.Uniform4f, "glUniform4f"); LOAD(g_mg.Uniform3f, "glUniform3f");
+    LOAD(g_mg.Uniform1f, "glUniform1f"); LOAD(g_mg.Uniform1i, "glUniform1i"); LOAD(g_mg.GenVertexArrays, "glGenVertexArrays");
+    LOAD(g_mg.GenBuffers, "glGenBuffers"); LOAD(g_mg.BufferData, "glBufferData"); LOAD(g_mg.VertexAttribPointer, "glVertexAttribPointer");
+    LOAD(g_mg.EnableVertexAttribArray, "glEnableVertexAttribArray"); LOAD(g_mg.DrawElements, "glDrawElements");
+    return ok && fw_gl_fns_complete(&g_gl);
+}
+
+/* ------------------------------------------------------------------ program */
+/* the fallback when mods/fw-3d is not on the mod path: a fixed shade per face orientation (the M1 probe shader) */
+static const char *VS_INLINE =
+    "#version 150\n"
+    "in vec3 position;\n"
+    "in vec3 color;\n"
+    "uniform mat4 fw_mvp;\n"
+    "out vec3 v_n;\n"
+    "void main(){ v_n = color; gl_Position = fw_mvp * vec4(position, 1.0); }\n";
+static const char *FS_INLINE =
+    "#version 150\n"
+    "uniform vec4 fw_base_color;\n"
+    "in vec3 v_n;\n"
+    "out vec4 frag_color;\n"
+    "void main(){ float s = v_n.y > 0.5 ? 1.0 : (abs(v_n.x) > 0.5 ? 0.8 : 0.62); frag_color = vec4(fw_base_color.rgb * s, 1.0); }\n";
+
+static uint32_t compile(uint32_t type, const char *src) {
+    uint32_t sh = g_mg.CreateShader(type);
+    g_mg.ShaderSource(sh, 1, &src, NULL);
+    g_mg.CompileShader(sh);
+    int ok = 0;
+    g_mg.GetShaderiv(sh, FW_GL_COMPILE_STATUS, &ok);
+    if (!ok) { char log[512] = { 0 }; int n = 0; g_mg.GetShaderInfoLog(sh, sizeof log - 1, &n, log); fw_log("mesh: %s shader compile failed: %s", type == FW_GL_VERTEX_SHADER ? "vertex" : "fragment", log); return 0; }
+    return sh;
+}
+
+static uint32_t link(const char *vsrc, const char *fsrc) {
+    uint32_t vs = compile(FW_GL_VERTEX_SHADER, vsrc), fs = compile(FW_GL_FRAGMENT_SHADER, fsrc);
+    if (!vs || !fs) return 0;
+    uint32_t prog = g_mg.CreateProgram();
+    g_mg.AttachShader(prog, vs); g_mg.AttachShader(prog, fs);
+    /* the engine's own attribute names (Shader_compile binds position 0 / color 1 / texcoord 2 by name): color = the normal */
+    g_mg.BindAttribLocation(prog, 0, "position");
+    g_mg.BindAttribLocation(prog, 1, "color");
+    g_mg.BindAttribLocation(prog, 2, "texcoord");
+    g_mg.LinkProgram(prog);
+    int ok = 0;
+    g_mg.GetProgramiv(prog, FW_GL_LINK_STATUS, &ok);
+    if (!ok) { char log[512] = { 0 }; int n = 0; g_mg.GetProgramInfoLog(prog, sizeof log - 1, &n, log); fw_log("mesh: program link failed: %s", log); return 0; }
+    return prog;
+}
+
+static int build_program(void) {
+    g_prog = 0;
+    if (g_modShader) {
+        size_t len = strlen(g_modShader), cap = len + 64;
+        char *v = malloc(cap), *f = malloc(cap);
+        if (v && f && fw_shader_stage(g_modShader, len, 1, v, cap) > 0 && fw_shader_stage(g_modShader, len, 0, f, cap) > 0) {
+            g_prog = link(v, f);
+            g_progIsMod = g_prog != 0;
+            if (!g_prog) fw_log("mesh: shaders/fw_mesh.shader did not build; falling back to the inline shader");
+        } else fw_log("mesh: shaders/fw_mesh.shader is not in the game's dialect (no vert()/frag() or an #include); falling back to the inline shader");
+        free(v); free(f);
+    }
+    if (!g_prog) { g_prog = link(VS_INLINE, FS_INLINE); g_progIsMod = 0; }
+    if (!g_prog) return 0;
+    for (int i = 0; i < U_COUNT; i++) g_loc[i] = g_mg.GetUniformLocation(g_prog, UNIFORMS[i]);
+    fw_log("mesh: program %u ready (%s; fw_mvp %d, fw_base_color %d, fw_light_dir %d)", g_prog,
+           g_progIsMod ? "mods/fw-3d/shaders/fw_mesh.shader" : "inline flat shader", g_loc[U_MVP], g_loc[U_COLOUR], g_loc[U_LIGHT]);
+    return 1;
+}
+
+/* ------------------------------------------------------------------ meshes */
+static const FwMesh *mesh_at(int slot) {
+    if (slot == MESH_CUBE) return g_cubeBuilt ? &g_cube : NULL;
+    return fw_mesh_reg_get(&g_models, slot - 1);
+}
+
+/* inside the functor: VAO/VBO/IBO once per mesh (our VAO is bound before the element buffer, so the game's VAOs are never touched) */
+static int upload(int slot) {
+    if (g_gpu[slot].uploaded) return g_gpu[slot].uploaded > 0;
+    const FwMesh *m = mesh_at(slot);
+    g_gpu[slot].uploaded = -1;
+    if (!m || !m->nindices) return 0;
+    g_mg.GenVertexArrays(1, &g_gpu[slot].vao);
+    g_mg.GenBuffers(1, &g_gpu[slot].vbo);
+    g_mg.GenBuffers(1, &g_gpu[slot].ibo);
+    g_gl.BindVertexArray(g_gpu[slot].vao);
+    g_gl.BindBuffer(FW_GL_ARRAY_BUFFER, g_gpu[slot].vbo);
+    g_mg.BufferData(FW_GL_ARRAY_BUFFER, (ptrdiff_t)m->nverts * (ptrdiff_t)sizeof(FwMeshVertex), m->verts, FW_GL_STATIC_DRAW);
+    g_gl.BindBuffer(FW_GL_ELEMENT_ARRAY_BUFFER, g_gpu[slot].ibo);
+    g_mg.BufferData(FW_GL_ELEMENT_ARRAY_BUFFER, (ptrdiff_t)m->nindices * 4, m->indices, FW_GL_STATIC_DRAW);
+    g_mg.VertexAttribPointer(0, 3, FW_GL_FLOAT, 0, sizeof(FwMeshVertex), (const void *)0);
+    g_mg.VertexAttribPointer(1, 3, FW_GL_FLOAT, 0, sizeof(FwMeshVertex), (const void *)12);
+    g_mg.VertexAttribPointer(2, 2, FW_GL_FLOAT, 0, sizeof(FwMeshVertex), (const void *)24);
+    g_mg.EnableVertexAttribArray(0); g_mg.EnableVertexAttribArray(1); g_mg.EnableVertexAttribArray(2);
+    g_gpu[slot].nindices = (int)m->nindices;
+    g_gpu[slot].uploaded = 1;
+    fw_log("mesh: uploaded %s: %u verts / %u indices (vao %u)", slot == MESH_CUBE ? "the unit cube" : fw_mesh_reg_name(&g_models, slot - 1), m->nverts, m->nindices, g_gpu[slot].vao);
+    return 1;
+}
+
+static int make_str(MsvcString *s, const char *text) { return fw_msvc_init(s, text, (FwStringAlloc)g_sym[FW_SYM_string_Allocate]); }
+
+/* a file's bytes through -modpaths (ResourceManager_GetBinaryResource; borrowed, NULL when missing) */
+static const uint8_t *read_resource(const char *path, size_t *len) {
+    MsvcString s;
+    if (!g_sym[FW_SYM_ResourceManager_GetBinaryResource] || !make_str(&s, path)) return NULL;
+    void *res = ((fn_GetBinaryResource)g_sym[FW_SYM_ResourceManager_GetBinaryResource])(NULL, &s);   /* destroys s */
+    if (!res) return NULL;
+    const uint8_t *data = *(const uint8_t *const *)((const char *)res + OFF_BINRES_DATA);
+    int32_t size = *(const int32_t *)((const char *)res + OFF_BINRES_SIZE);
+    if (!data || size <= 0) return NULL;
+    *len = (size_t)size;
+    return data;
+}
+
+/* record time: a model path -> mesh slot (loaded once), -1 when it cannot be drawn */
+static int resolve_model(const char *path) {
+    char p[FW_MESH_NAME_MAX + 1];
+    if (!path || !fw_mesh_model_path(path, p, sizeof p)) {
+        for (int i = 0; i < g_nfailed; i++) if (!strcmp(g_failed[i], path ? path : "")) return -1;
+        if (g_nfailed < 8) { snprintf(g_failed[g_nfailed++], sizeof g_failed[0], "%s", path ? path : ""); fw_log("mesh: model \"%s\" is not a models/<name>.obj|.gltf|.glb path (\"@Name\" models are not resolved yet)", path ? path : "(null)"); }
+        return -1;
+    }
+    int i = fw_mesh_reg_find(&g_models, p);
+    if (i >= 0) return i + 1;
+    for (int k = 0; k < g_nfailed; k++) if (!strcmp(g_failed[k], p)) return -1;
+    size_t len = 0;
+    const uint8_t *bytes = read_resource(p, &len);
+    FwMesh m;
+    FwMeshError e;
+    memset(&e, 0, sizeof e);
+    int ok = bytes && fw_mesh_load_bytes(p, bytes, len, &m, &e);
+    if (ok) {
+        i = fw_mesh_reg_add(&g_models, p, &m);
+        if (i < 0) { fw_mesh_free(&m); ok = 0; snprintf(e.text, sizeof e.text, "model registry full (%d)", FW_MESH_MAX_MODELS); }
+    }
+    if (!ok) {
+        if (g_nfailed < 8) snprintf(g_failed[g_nfailed++], sizeof g_failed[0], "%s", p);
+        fw_log("mesh: model %s not loaded: %s%s", p, bytes ? e.text : "not found on the mod path", e.line ? " (see the line number)" : "");
+        if (e.line) fw_log("mesh: model %s: error at line %d", p, e.line);
+        return -1;
+    }
+    const FwMesh *mm = fw_mesh_reg_get(&g_models, i);
+    fw_log("mesh: model %s loaded: %u verts, %u indices, bounds (%.2f %.2f %.2f)-(%.2f %.2f %.2f)%s", p, mm->nverts, mm->nindices,
+           (double)mm->bmin[0], (double)mm->bmin[1], (double)mm->bmin[2], (double)mm->bmax[0], (double)mm->bmax[1], (double)mm->bmax[2],
+           mm->bmin[1] < -0.01f ? " — below the floor (origin = the ground point)" : "");
+    return i + 1;
+}
+
+/* ------------------------------------------------------------------ the functor (replay time) */
+static void mesh_draw(void *user) {
+    MeshFrame *fr = (MeshFrame *)user;
+    if (!fr->n || g_glState < 0) return;
+    if (g_glState == 0) {
+        if (!load_gl()) { g_glState = -1; fw_log("mesh: GL entry points missing; meshes disabled"); return; }
+        g_glState = 2;
+    }
+    FwGlState st;
+    uint32_t err = 0;
+    int pre = fw_gl_drain_errors(&g_gl, &err, 16);
+    if (pre && g_errLogged < MESH_LOG_ERR_MAX) { g_errLogged++; fw_log("mesh: %d pre-existing GL error(s) at functor entry, first 0x%x (frame %d)", pre, err, fr->frame); }
+    fw_gl_save(&g_gl, &st);
+    if (g_glState == 2) {
+        if (!build_program()) { fw_gl_restore(&g_gl, &st); g_glState = -1; fw_log("mesh: no program; meshes disabled"); return; }
+        g_glState = 1;
+    }
+    g_gl.UseProgram(g_prog);
+    float l[3] = { -0.4f, 1.0f, -0.6f };
+    g_mg.Uniform3f(g_loc[U_LIGHT], l[0], l[1], l[2]);
+    g_mg.Uniform1f(g_loc[U_AMBIENT], 0.45f);
+    g_mg.Uniform1f(g_loc[U_BANDS], 0.0f);
+    g_mg.Uniform1i(g_loc[U_PALETTE], -1);
+    g_mg.Uniform1i(g_loc[U_FLAT], 0);
+    g_mg.Uniform4f(g_loc[U_CXMUL], 1, 1, 1, 1);
+    g_mg.Uniform4f(g_loc[U_CXADD], 0, 0, 0, 0);
+    g_gl.Enable(FW_GL_DEPTH_TEST);
+    g_gl.DepthFunc(FW_GL_LESS);
+    g_gl.DepthMask(1);
+    g_gl.ColorMask(1, 1, 1, 1);
+    g_gl.Disable(FW_GL_BLEND);
+    g_gl.Disable(FW_GL_CULL_FACE);
+    g_gl.Disable(FW_GL_STENCIL_TEST);
+    int drawn = 0;
+    for (int i = 0; i < fr->n; i++) {
+        const MeshDraw *d = &fr->d[i];
+        if (!upload(d->mesh)) continue;
+        g_gl.BindVertexArray(g_gpu[d->mesh].vao);
+        g_mg.UniformMatrix4fv(g_loc[U_MVP], 1, 0, d->mvp);
+        g_mg.UniformMatrix4fv(g_loc[U_MODEL], 1, 0, d->world);
+        g_mg.Uniform4f(g_loc[U_COLOUR], d->colour[0], d->colour[1], d->colour[2], d->colour[3]);
+        g_mg.DrawElements(FW_GL_TRIANGLES, g_gpu[d->mesh].nindices, FW_GL_UNSIGNED_INT, (const void *)0);
+        drawn++;
+    }
+    int post = fw_gl_drain_errors(&g_gl, &err, 16);
+    fw_gl_restore(&g_gl, &st);
+    g_draws++;
+    if (post && g_errLogged < MESH_LOG_ERR_MAX) { g_errLogged++; fw_log("mesh: %d GL error(s) after the draw, first 0x%x (frame %d)", post, err, fr->frame); }
+    if (g_drawLogged < MESH_LOG_DRAW_MAX) {
+        g_drawLogged++;
+        fw_log("mesh draw f=%d n=%ld fbo=%d viewport=(%d %d %d %d) depthTest=%d depthFunc=0x%x blend=%d prog=%d vao=%d meshes=%d/%d errors=%d",
+               fr->frame, g_draws, st.drawFramebuffer, st.viewport[0], st.viewport[1], st.viewport[2], st.viewport[3],
+               st.depthTest, st.depthFunc, st.blend, st.program, st.vao, drawn, fr->n, post);
+    }
+    fr->n = 0;   /* one draw per recorded frame */
+}
+
+/* ------------------------------------------------------------------ record time */
+static void read_settings(void) {
+    if (g_probe >= 0) return;
+    g_probe = fw_mesh_probe_parse(getenv("MEWFW_MESH_PROBE"), &g_probeCol, &g_probeRow);
+    const char *pm = getenv("MEWFW_MESH_PROBE_MODEL");
+    if (g_probe && pm && *pm) snprintf(g_probeModel, sizeof g_probeModel, "%s", pm);
+    if (g_probe) fw_log("mesh: probe cube on tile (%d,%d) (MEWFW_MESH_PROBE)%s%s", g_probeCol, g_probeRow, g_probeModel[0] ? "; probe model " : "", g_probeModel);
+}
+
+void mesh_engine_on_late_render(void *tt) {
+    obj3d_engine_on_fight(tt);   /* first: a new TacticsTest clears the API registry, freed units are pruned */
+    if (tt != g_tt) {
+        g_tt = tt;
+        g_worldFrame = 0;
+        read_settings();
+        if (g_probe > 0 && g_probeModel[0]) {
+            float identity[16];
+            fw_m4_identity(identity);
+            obj3d_engine_place(g_probeCol + 1, g_probeRow, g_probeModel, identity);   /* the API v8 path (FW_Place3DObjectOnTile) */
+        }
+    }
+}
+
+int mesh_engine_wants_layer_hook(void) {
+    read_settings();
+    /* the probe needs it now; API v8 objects can be registered by any native mod later, so the hook is installed
+     * whenever the framework is active (a pass-through when there is nothing to draw) */
+    return 1;
+}
+
+static void add_draw(int mesh, const float top[16], const float vp[16], const float iso[16], const float world[16], const float colour[4]) {
+    if (g_frame.n >= MESH_MAX_DRAWS) return;
+    MeshDraw *d = &g_frame.d[g_frame.n++];
+    d->mesh = mesh;
+    fw_mesh_object_mvp(top, vp, iso, world, d->mvp);
+    memcpy(d->world, world, sizeof d->world);
+    memcpy(d->colour, colour, sizeof d->colour);
+}
+
+/* after Camera_RenderOneLayer(cam, layer) returned (record time) */
+void mesh_engine_after_layer(void *cam, int layer) {
+    if (g_glState < 0 || !fw_mesh_draw_after_layer(g_tt, cam, layer)) return;
+    int nobj = obj3d_engine_count();
+    if (g_probe <= 0 && nobj == 0) return;
+    g_worldFrame++;
+    const float *top = fw_mesh_stack_top((const void *const *)data_ptr(FW_DATA_MatStackData), (const int *)data_ptr(FW_DATA_MatStackTop));
+    const float *iso = (const float *)data_ptr(FW_DATA_Iso);
+    if (!top || !iso || !g_sym[FW_SYM_Batch_SubmitFunctor]) return;
+    if (!g_modShaderRead) {   /* once, at record time (the resource getter is a game call; the functor only does GL) */
+        g_modShaderRead = 1;
+        size_t len = 0;
+        const uint8_t *src = read_resource("shaders/fw_mesh.shader", &len);
+        if (src && (g_modShader = malloc(len + 1))) { memcpy(g_modShader, src, len); g_modShader[len] = 0; }
+        fw_log("mesh: shaders/fw_mesh.shader %s", g_modShader ? "found on the mod path" : "not on the mod path (mods/fw-3d): the inline shader draws");
+    }
+    if (!g_cubeBuilt) g_cubeBuilt = fw_mesh_unit_cube(&g_cube);
+    float vp[16];
+    ((fn_GetVP)g_sym[FW_SYM_Camera_GetViewProjection])(cam, vp);
+    g_frame.n = 0;
+    g_frame.frame = g_worldFrame;
+    if (g_probe > 0 && g_cubeBuilt) {
+        double c[3];
+        float world[16];
+        const float magenta[4] = { FW_MESH_PROBE_R, FW_MESH_PROBE_G, FW_MESH_PROBE_B, 1.0f };
+        fw_m4_tile_centre(g_probeCol, g_probeRow, c);
+        fw_m4_identity(world);
+        world[0] = world[5] = world[10] = (float)FW_MESH_PROBE_SIZE;
+        world[12] = (float)c[0]; world[13] = (float)c[1]; world[14] = (float)c[2];
+        add_draw(MESH_CUBE, top, vp, iso, world, magenta);
+        if ((g_worldFrame - 1) % MESH_LOG_PROBE_EVERY == 0 && g_probeLogged < MESH_LOG_PROBE_MAX) {
+            g_probeLogged++;
+            const float mid[3] = { 0.0f, 0.5f, 0.0f };   /* the cube's centre in its local unit space (h 0..1) */
+            float ndc[3] = { 0 }, model[16], vpm[16], cv[3] = { 0 };
+            fw_m4_project(g_frame.d[g_frame.n - 1].mvp, mid, ndc);
+            fw_m4_place(iso, c[0], c[1], c[2], FW_MESH_PROBE_SIZE, model);
+            fw_m4_mul(vp, model, vpm);
+            fw_m4_project(vpm, mid, cv);
+            const double canvas[2] = { cv[0], cv[1] };
+            char buf[200];
+            fw_mesh_fmt_probe(buf, sizeof buf, g_worldFrame, g_probeCol, g_probeRow, ndc, canvas);
+            fw_log("%s", buf);
+        }
+    }
+    for (int i = 0; i < nobj; i++) {
+        const Fw3dObject *o = obj3d_engine_get(i);
+        if (!o) continue;
+        int slot = resolve_model(o->model);
+        if (slot < 0) continue;
+        double xz[2], *at = NULL;
+        if (!o->byTile) {
+            void *rnd = o->character ? fw_glow_renderer(o->character) : NULL;
+            void *pos = rnd ? fw_obs3d_renderer_position(rnd) : NULL;
+            if (!pos) continue;
+            fw_obs3d_position_xz(pos, xz);
+            at = xz;
+        }
+        float world[16];
+        fw_obj3d_model_matrix(o, at, world);
+        const FwMesh *m = mesh_at(slot);
+        add_draw(slot, top, vp, iso, world, m ? m->base_color : (const float[4]){ 1, 1, 1, 1 });
+        if (g_objLogged < MESH_LOG_OBJ_MAX && g_worldFrame % MESH_LOG_PROBE_EVERY == 1) {
+            g_objLogged++;
+            fw_log("mesh object f=%d handle=%d model=%s %s world=(%.2f %.2f %.2f)", g_worldFrame, o->handle, o->model,
+                   o->byTile ? "tile" : "unit", (double)world[12], (double)world[13], (double)world[14]);
+        }
+    }
+    if (!g_frame.n) return;
+    FwStdFunction f;
+    fw_functor_make(&f, mesh_draw, &g_frame);
+    ((fn_SubmitFunctor)g_sym[FW_SYM_Batch_SubmitFunctor])(NULL, &f);
+    if (fw_functor_unexpected_deallocs()) { fw_log("mesh: the engine asked our functor to free itself; meshes disabled"); g_glState = -1; }
+}

@@ -10,10 +10,15 @@
 //   5. Component keys - a key under a component block that the component never
 //      reads (unknown-key, warning) or a required key missing from a new block
 //      (missing-required-key, error), per editor/component-schema.json.
+//   6. Mod-shipped shaders (shaders/*.shader) - the game's .shader dialect (shader/dialect.ts): #version first,
+//      the vert()/frag() entry points and COMPILING_* guards, #includes that resolve, uniforms native code sets.
+//   7. The 3D data seam: a character's graphics.model is a mod file models/<...>.obj (model-path-invalid,
+//      model-file-missing) or a native-registered "@Name" (model-unregistered); files under models/ are assets,
+//      not overlays (model3d.ts, docs/data-mods.md "3D models in a mod (preview)").
 //
 // Findings are returned as a tagged Report (ok/warning/error with location).
 
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, DATA_CACHE_DIR, packPath, vanillaSwfDir } from "../repo.ts";
 import { appendsOfSwf, appendsOfScene, crossModAppendFindings, vanillaAppendLabels, type ModAppends, type ModAppendFile } from "../art/append-conflicts.ts";
@@ -29,6 +34,7 @@ import { parseCsv } from "../overlay/csv.ts";
 import { parsePolicy } from "../overlay/policy.ts";
 import { findIndex } from "../gon/value.ts";
 import { resolutionSets, matchRegisteredPattern, malformedRegisteredPattern, catRigPrefix } from "../names.ts";
+import { MODEL_KEY, MODEL_PARENT, modelPathProblem, isRegisteredModelRef } from "../model3d.ts";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.ts";
 import { ReportBuilder, finding } from "./result.ts";
 import { validateScene } from "../art/scene.ts";
@@ -43,6 +49,7 @@ import { identifyExe } from "../bindings/check.ts";
 import { listManifests } from "../bindings/manifest.ts";
 import { locateGameDir } from "../ingame/launch.ts";
 import { MOD_MANIFEST_FILE, readModManifest, compareBuild, describeMismatch } from "../mod-manifest.ts";
+import { checkShaderSource, includesOf, EXPECTED_UNIFORMS } from "../shader/dialect.ts";
 import type { VObject, VNode } from "../gon/types.ts";
 import type { Report, SourceLocation } from "./result.ts";
 import type { OverlayMode, FileType } from "../overlay/overlay.ts";
@@ -130,6 +137,7 @@ function collectOverlays(modDir: string, override?: TextOverride): OverlayFile[]
     // art/*.scene.json is not a pack file but is validated as a scene (validateSceneFile); everything else off-pack is skipped
     if (f.relPath === "description.json" || f.relPath === MOD_MANIFEST_FILE || (!isPackPath(f.relPath) && !f.relPath.endsWith(SCENE_SUFFIX))) continue;
     if (AUDIO_FILE_RE.test(f.relPath)) continue; // binary audio: checked by validateAudioFiles, never an overlay
+    if (f.relPath.startsWith("models/")) continue; // 3D model assets (graphics.model), not overlays of a pack file
     try {
       texts.set(f.relPath, readFileSync(f.abs, "utf8"));
     } catch {
@@ -234,6 +242,10 @@ export interface ValidateOptions {
   vanillaSwfs?: string;
   /** native-registered name PATTERNS (tests/fixtures; entries with `pattern`); default the pattern entries of editor/registered-names.json */
   registeredPatterns?: RegisteredName[];
+  /** the base shaders dir an #include resolves against (tests/fixtures); default the pack's shaders/ next to extractedData */
+  baseShaderDir?: string;
+  /** native-registered 3D model names (tests/fixtures); default editor/registered-names.json entries of kind "model" */
+  registeredModels?: Iterable<string>;
 }
 
 /** A mod's SWFs as the game would load them: the built swfs/*.swf, else the scenes the editor would build. */
@@ -313,6 +325,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     components: opts.components ? new Set(opts.components) : undefined,
     registered: opts.registeredNames ? new Set(opts.registeredNames) : undefined,
     registeredPatterns: opts.registeredPatterns,
+    models: opts.registeredModels ? new Set(opts.registeredModels) : undefined,
   });
   const local = modLocalNames(overlays);
   const loc = loadLocalization(root);
@@ -331,12 +344,28 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   // Union of localization keys available: base + mod-added.
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
 
+  // shaders/*.shader: a file the game compiles by name (ShaderManager_GetOrCreateMaterial), not a data overlay
+  const isShader = (o: OverlayFile): boolean => /^shaders\/[^/]+\.shader$/.test(o.relPath);
+  const shaders = overlays.filter(isShader);
+  const baseShaderDir = opts.baseShaderDir ?? packPath("shaders", root);
+  const modShaderNames = new Set(shaders.map((o) => o.relPath.slice("shaders/".length)));
+  const included = new Set<string>();
+  for (const o of shaders) for (const inc of includesOf(o.text)) included.add(inc.name);
+  const resolveInclude = (name: string): boolean | null =>
+    modShaderNames.has(name) ? true : existsSync(baseShaderDir) ? existsSync(join(baseShaderDir, name)) : null;
+
   const fragments = includeFragments(overlays, root, modDir);
   let palettes: LvlPalettes | null = null;
   const clips: ClipNames = { vanilla: opts.clips ? new Set(opts.clips) : vanillaClipNames(), mod: modClipNames(modDir), listMissingReported: false };
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
-    if (o.relPath.endsWith(SCENE_SUFFIX)) {
+    if (isShader(o)) {
+      const name = o.relPath.slice("shaders/".length);
+      for (const f of checkShaderSource(o.text, { file: fileLoc.file, library: included.has(name), resolveInclude, requiredUniforms: EXPECTED_UNIFORMS[name] })) rb.add(f);
+      if (existsSync(join(baseShaderDir, name))) {
+        rb.warn("whole-file-replace", `${o.relPath} replaces the game's own ${name} for every material that loads it`, fileLoc);
+      }
+    } else if (o.relPath.endsWith(SCENE_SUFFIX)) {
       // an art scene is a source the editor builds into a SWF, not a game file: run the scene validator on it
       validateSceneFile(o, rb, fileLoc.file, (k) => (local.locRows.has(k) ? "mod" : loc.rows.has(k) ? "base" : null));
     } else if (/\.lvl$/i.test(o.relPath)) {
@@ -695,6 +724,10 @@ function validateGonOverlay(
     const here = [...path, key];
     const at: SourceLocation = { file, path: here.join(".") };
     checkAudioField(key, value, path, audio, rb, file);
+    if (isModelField(o, key, path)) {
+      checkModel(value, at);
+      return;
+    }
     if (key === "effects" || key === "temporary_effects") {
       if (value.t === "obj") for (const se of value.entries) checkStatus(se.key, { file, path: [...here, se.key].join(".") });
       return;
@@ -823,6 +856,30 @@ function validateGonOverlay(
     checkNative(name, at);
   };
 
+  /** graphics.model: "@Name" against the registered models, else a models/<...>.obj file in this mod */
+  const checkModel = (value: VNode, at: SourceLocation): void => {
+    if (value.t !== "str") {
+      rb.error("model-path-invalid", `graphics.model must be a string ("models/<name>.obj" or "@RegisteredModel")`, at);
+      return;
+    }
+    const raw = value.raw;
+    if (isRegisteredModelRef(raw)) {
+      if (!sets.models.has(raw.slice(1))) {
+        rb.error("model-unregistered", `model "${raw}" is not a native-registered model (editor/registered-names.json, kind "model")`, at);
+      }
+      return;
+    }
+    const why = modelPathProblem(raw);
+    if (why) {
+      rb.error("model-path-invalid", `model "${raw}": ${why}`, at);
+      return;
+    }
+    const abs = join(modDir, ...raw.split("/"));
+    if (!existsSync(abs) || !statSync(abs).isFile()) {
+      rb.error("model-file-missing", `model "${raw}" not found: mods/${modName}/${raw} is not a file (models are mod-only; the base game has none)`, at);
+    }
+  };
+
   const checkLoc = (key: string, at: SourceLocation): void => {
     const row = findLocRow(key);
     if (!row) {
@@ -915,7 +972,7 @@ function validateGonOverlay(
           }
         }
       } else if (o.mode === "merge") {
-        checkMergeTargets(overlay, baseRoot, [], rb, file);
+        checkMergeTargets(overlay, baseRoot, [], rb, file, o);
       } else {
         checkPatchTargets(overlay, baseRoot, [], rb, file);
       }
@@ -968,17 +1025,25 @@ function semanticParse(o: OverlayFile, rb: ReportBuilder, file: string, dataRoot
  * Warn about merge fields whose target does not exist in the base (merge would
  * silently add them, which usually indicates a value-change mistake).
  */
-function checkMergeTargets(overlay: VObject, base: VObject, path: string[], rb: ReportBuilder, file: string): void {
+function checkMergeTargets(overlay: VObject, base: VObject, path: string[], rb: ReportBuilder, file: string, o: OverlayFile): void {
   for (const e of overlay.entries) {
     const i = findIndex(base, e.key);
     const here = [...path, e.key];
     if (i < 0) {
+      if (isModelField(o, e.key, path)) continue; // graphics.model is a framework key: a .merge adds it on purpose
       rb.warn("merge-target-missing", `.merge target "${here.join(".")}" does not exist in the base file; it will be ADDED, not changed`, { file, path: here.join(".") });
     } else {
       const bv = base.entries[i]!.value;
-      if (e.value.t === "obj" && bv.t === "obj") checkMergeTargets(e.value, bv, here, rb, file);
+      if (e.value.t === "obj" && bv.t === "obj") checkMergeTargets(e.value, bv, here, rb, file, o);
     }
   }
+}
+
+/** `<Entry>.graphics.model` of a data/characters overlay (key suffixes stripped in a .patch, as the game does). */
+function isModelField(o: OverlayFile, key: string, path: string[]): boolean {
+  if (o.category !== "characters" || path.length !== 2) return false;
+  const bare = (k: string): string => (o.mode === "patch" ? parsePolicy(k).name : k);
+  return bare(key) === MODEL_KEY && bare(path[1]!) === MODEL_PARENT;
 }
 
 /** Warn about patch policies whose target does not exist. */

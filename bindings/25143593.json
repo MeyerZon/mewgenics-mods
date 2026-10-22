@@ -9545,8 +9545,15 @@
         },
         "prologue": "48 89 5C 24 18 48 89 54 24 10 48 89"
       },
-      "consumers": [],
-      "exposure": [],
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Batch_SubmitFunctor",
+          "index": 48
+        }
+      ],
       "evidence": [
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
@@ -9682,8 +9689,15 @@
         },
         "prologue": "40 53 57 41 54 41 57 48 83 EC 28 48"
       },
-      "consumers": [],
-      "exposure": [],
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Material_Bind",
+          "index": 51
+        }
+      ],
       "evidence": [
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
@@ -10343,8 +10357,15 @@
         },
         "prologue": "48 89 54 24 10 48 89 4C 24 08 55 53"
       },
-      "consumers": [],
-      "exposure": [],
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_ResourceManager_GetBinaryResource",
+          "index": 49
+        }
+      ],
       "evidence": [
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
@@ -10377,6 +10398,11 @@
             "target": "0x61ea0"
           },
           {
+            "ordinal": 5,
+            "name": "Texture2D_LoadFromFile",
+            "target": "0xa0ad40"
+          },
+          {
             "ordinal": 6,
             "name": "SaveProps_GetOrCreate",
             "target": "0x61ea0"
@@ -10395,8 +10421,15 @@
         },
         "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56"
       },
-      "consumers": [],
-      "exposure": [],
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_App_GetTexture",
+          "index": 50
+        }
+      ],
       "evidence": [
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
@@ -10748,6 +10781,129 @@
         "docs/possible_3d_work.md",
         "docs/engine-map.md#3d-rendering-path-2026-10-22",
         ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "MatStackData",
+      "kind": "data",
+      "rva": "0x13c5bd8",
+      "anchors": {
+        "witness": {
+          "function": "Batch_AddInstance",
+          "needsHarvest": false,
+          "ripRefOrdinal": 14,
+          "kind": "rip-mov"
+        },
+        "note": "float*: the matrix stack's data (0x40-byte column-major matrices; the top is data + MatStackTop * 0x40). MatStack object at 0x13c5bd0: +0x08 data, +0x28 per-level mirrored flags, +0x30 top index (MatStack_Ortho 0x9fec80; Camera_RenderOneLayer 0x979210 reads it as DAT_1413c5bd8)"
+      },
+      "consumers": [
+        "native/framework/src/mesh_engine.c",
+        "native/framework/src/fw_mesh_draw.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_MatStackData",
+          "index": 18
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        ".analysis/decompiled/Camera_RenderOneLayer_0x979210.c",
+        ".analysis/decompiled/MatStack_Ortho_0x9fec80.c"
+      ]
+    },
+    {
+      "name": "Texture2D_LoadFromFile",
+      "kind": "function",
+      "rva": "0xa0ad40",
+      "signature": {
+        "pattern": "44 88 44 24 18 48 89 54 24 10 55 53 56 57 41 56",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Texture2D*, std::string name, bool): 'textures/'+name -> ResourceManager_GetBinaryResource -> stbi -> glTexImage2D; reads the BinaryResource data pointer +0x28 / int32 size +0x30 right after the call (0x140a0ae39 / 0x140a0ae4e) — the witness host of the BinaryResource offsets (notes-r3dE G13f; the decode slot 0x9a59a0 is a pdata-less leaf)",
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "ResourceManager_GetBinaryResource",
+            "target": "0x973750"
+          },
+          {
+            "ordinal": 5,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 825,
+          "calls": 7,
+          "ripRefs": 15,
+          "resyncs": 0
+        },
+        "prologue": "44 88 44 24 18 48 89 54 24 10 55 53"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        ".analysis/notes-r3dE.md"
+      ]
+    },
+    {
+      "name": "BinaryResource_data",
+      "kind": "offset",
+      "struct": "BinaryResource",
+      "value": "0x28",
+      "ctype": "const uint8_t*: the file's bytes (borrowed from the FileManager cache)",
+      "anchors": {
+        "witness": {
+          "function": "Texture2D_LoadFromFile",
+          "pattern": "48 8B 48 28 4C 89 75",
+          "dispAt": 3,
+          "dispSize": 1
+        },
+        "note": "mov rcx,[rax+0x28] (0x140a0ae39)"
+      },
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_BINRES_DATA"
+        }
+      ],
+      "evidence": [
+        ".analysis/notes-r3dE.md"
+      ]
+    },
+    {
+      "name": "BinaryResource_size",
+      "kind": "offset",
+      "struct": "BinaryResource",
+      "value": "0x30",
+      "ctype": "int32: the file's size in bytes",
+      "anchors": {
+        "witness": {
+          "function": "Texture2D_LoadFromFile",
+          "pattern": "48 63 40 30 48 03 C8",
+          "dispAt": 3,
+          "dispSize": 1
+        },
+        "note": "movsxd rax,[rax+0x30] (0x140a0ae51)"
+      },
+      "consumers": [
+        "native/framework/src/mesh_engine.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_BINRES_SIZE"
+        }
+      ],
+      "evidence": [
+        ".analysis/notes-r3dE.md"
       ]
     },
     {

@@ -1,0 +1,9 @@
+{
+  "name": "fw-3d",
+  "version": "0.1.0",
+  "author": "MeyerZon",
+  "description": "The data half of mewframework's 3D meshes (preview): models/crate.obj and a graphics.model key on the vanilla Crate. Load it next to any mod that places 3D objects; drawing needs mewframework's mesh engine.",
+  "gameBuild": "25143593",
+  "license": "MIT",
+  "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
+}

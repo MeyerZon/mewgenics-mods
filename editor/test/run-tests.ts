@@ -425,6 +425,17 @@ if (BASE_READY) {
   let vt: typeof import("./validator-tests.ts") | null = null;
   try { vt = await import("./validator-tests.ts"); } catch (e) { test("validator-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (vt) vt.runValidatorTests(test, assert, eq);
+  // the game's .shader dialect (Shader::compile 0xa55470) + the validator's mod-shader rule (mods/*/shaders/)
+  let st: typeof import("./shader-tests.ts") | null = null;
+  try { st = await import("./shader-tests.ts"); } catch (e) { test("shader-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (st) st.runShaderTests(test, assert, eq);
+}
+
+// ---- 4f. The 3D data seam: graphics.model (validator codes, registered model names, mods/fw-3d; T0 + T1) ----
+{
+  let m3: typeof import("./model3d-tests.ts") | null = null;
+  try { m3 = await import("./model3d-tests.ts"); } catch (e) { test("model3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (m3) m3.runModel3dTests(test, assert, eq);
 }
 
 // ---- 4b'. Component key schema (editor/component-schema.json; T0 synthetic + T1 vanilla zero findings) ----
@@ -658,6 +669,9 @@ await mcpSmoke();
   let gm: typeof import("./glow-measure-tests.ts") | null = null;
   try { gm = await import("./glow-measure-tests.ts"); } catch (e) { test("glow-measure-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (gm) gm.runGlowMeasureTests(test, assert, eq, (n) => readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"));
+  let mpt: typeof import("./mesh-probe-tests.ts") | null = null;
+  try { mpt = await import("./mesh-probe-tests.ts"); } catch (e) { test("mesh-probe-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mpt) mpt.runMeshProbeTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let o3t: typeof import("./obs3d-tests.ts") | null = null;
   try { o3t = await import("./obs3d-tests.ts"); } catch (e) { test("obs3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (o3t) o3t.runObs3dTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });

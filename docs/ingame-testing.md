@@ -306,6 +306,8 @@ run on demand, because they need Steam, a window and a save, and several agents 
 | `MEWTEST_SAVECHECK=0` | disable the read-only hash of the real save (default on) |
 | `MEWTEST_FAKE_GAME=<path>` | spawn `node <path>` instead of the exe (tests only) |
 | `MEWFW_OBSERVE3D=<n>` | read by `mewframework.dll` itself (passed through the environment): the phase-0 3D observer logs `obs3d …` lines for n windows of 60 world-camera frames per fight (`mods/dev-sandbox/tests/observe3d.mewtest`; parser `editor/src/core/ingame/obs3d.ts`; `docs/possible_3d_work.md`); unset or 0 = no hook installed |
+| `MEWFW_MESH_PROBE=1` / `<col>,<row>` | read by `mewframework.dll` (3D phase M): a magenta unit cube (0.8 tiles, lit per face) on tile (3,3) / that tile in every fight, drawn by the mesh engine's functor after the world camera's units layer; logs `mesh probe f=… tile=(c,r) ndc=(x y z) canvas=(x y)` and `mesh draw …` (`mods/dev-sandbox/tests/mesh-probe.mewtest`; measured by `npm run test:artprobe -- --mesh [--tile c,r]`, `editor/src/core/art/mesh-measure.ts`, which refuses a verdict on byte-identical shots) |
+| `MEWFW_MESH_PROBE_MODEL=models/<name>.obj` | with the probe on: also places that model (`.obj`/`.gltf`/`.glb`, read through `-modpaths`) one tile right of the cube through the API v8 registry (`FW_Place3DObjectOnTile`'s path); put the mod that ships it on the `mods:` line (`fw-3d` ships `models/crate.obj` and `shaders/fw_mesh.shader`) |
 
 ## Artifacts
 

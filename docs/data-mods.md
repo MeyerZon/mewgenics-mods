@@ -776,6 +776,118 @@ mod decides which entry gets which rig (or wants an export name of its own):
   `rig-dll`, `rig-champion`, `rig-elite`, `rig-labels` and its vanilla control `rig-labels-ctl`; writes
   `catrig-sample-summary.json`, fixture `editor/test/fixtures/ingame/catrig-sample-summary.json`).
 
+### Mod-shipped shaders (validator, 2026-10-22)
+
+A file `mods/<mod>/shaders/<name>.shader` is compiled by the game when native code asks for it by name
+(`ShaderManager_GetOrCreateMaterial(mgr, "<material>", "<name>.shader")`; `fw-glow`'s `fw_unit_glow.shader`, `fw-3d`'s
+`fw_mesh.shader`). It is not a data overlay, so the validator checks it against the game's shader dialect
+(`editor/src/core/shader/dialect.ts`, from `Shader::compile` 0xa55470; `docs/engine-map.md`) instead of warning
+`whole-file-replace`:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `shader-version-first` | error | the first non-comment line is not `#version` (the engine adds none) |
+| `shader-entry-missing` | error | no `" vert()"` / `" frag()"`: that stage gets no `main()` |
+| `shader-entry-shadowed` | error | the first `" vert()"` / `" frag()"` (e.g. in a comment) is not the `void vert() {` definition; only the first is renamed |
+| `shader-guard-missing` | error | no `#if`/`#elif COMPILING_VERTEX_PROGRAM` (or `..._FRAGMENT_...`) guard |
+| `shader-include-missing` | error | an `#include` that is neither in the mod's `shaders/` nor a base shader |
+| `shader-include-unchecked` | info | no `.extracted/shaders` to look in (CI) |
+| `shader-uniform-missing` / `shader-uniform-type` | error | a uniform native code sets by name is undeclared / of another type (`EXPECTED_UNIFORMS`: `fw_mesh.shader` → `FW_MESH_UNIFORMS`) |
+| `shader-attribute-unbound` | warning | a vertex `in` not named `position`/`color`/`texcoord`/`mvp`/`color_xform`/`depth_bias` (the engine binds locations by those names only) |
+| `whole-file-replace` | warning | the name is a base shader: the mod replaces it for every material |
+
+A shader that another shader in the same mod `#include`s is a library: it needs no `#version`, entry points or
+guards. Not settled: whether the loader resolves an `#include` against the `-modpaths` as well as the pack (the
+validator accepts both); `fw_mesh.shader` avoids the question by including nothing.
+## 3D models in a mod (preview)
+
+Phase M of `docs/possible_3d_work.md`: real meshes in the vanilla (orthographic) combat scene, drawn by mewframework.
+This section is the **data seam and the API**; what draws today is listed at the end.
+
+**The GON key.** A `data/characters/*.gon` entry (inanimate objects such as `Crate` are characters there) names its
+model inside its `graphics { }` block, next to `movieclip`:
+
+```
+Crate {
+    graphics {
+        movieclip Crate           // vanilla, stays: the 2D fallback whenever the framework is inactive
+        model "models/crate.obj"  // the 3D model mewframework draws for this unit
+    }
+}
+```
+
+Why `graphics`: that block is where the game keeps everything about how a unit looks (`movieclip`, `name`,
+`water_mask`, `tooltip`, `depth_offset`), so the 3D look sits next to its 2D fallback and a `.merge` touches one block.
+The game's own GON getters look keys up by name and never ask for `model`, so vanilla ignores it — **INFERRED** (no
+reader of the key exists in the pack's data or the decompiles seen so far; no T2 run has checked the GON log for it
+yet). Add it with a `.merge` (`mods/fw-3d/data/characters/inanimate_objects.gon.merge`); the validator knows
+`graphics.model` is a framework key and does not warn `merge-target-missing` for it.
+
+**The value.** Either a file in the mod — `models/<name>.obj` (sub-folders allowed: `models/props/tire.obj`) — or
+`"@Name"`, a model a native mod registers with the mesh engine and declares in `editor/registered-names.json` as
+`{ "name": "Name", "kind": "model", "mod": "<mod>" }` (kind `model` names resolve only `@` references, never a status
+or ability). Path rule (the editor's `editor/src/core/model3d.ts` and the DLL's `fw_obj3d_model_path_ok` apply the
+same one): relative to the mod folder, starts `models/`, ends `.obj`, `.gltf` or `.glb` (lowercase; one rule with the DLL's loader, `fw_mesh_model_kind`, so a path that validates also loads; see "glTF models" below), no `..`, no empty
+segment, no backslash, not absolute, printable ASCII, under 64 bytes. Model files are served through `-modpaths` like
+any pack file (`ResourceManager_GetBinaryResource`, the first mod path that has the file; `possible_3d_work.md` §1
+"Mesh bytes") and are **mod-only**: the pack has none, so nothing is looked up in base data. Files under a mod's
+`models/` are assets, not overlays (no `whole-file-replace`). World units: 1 = one tile, axes = the game's
+(x, height, z), +height up, the model's origin = the anchor (tile centre / the unit's position) on the ground.
+
+**Validator codes** (all errors, on `<Entry>.graphics.model`): `model-path-invalid` (the rule above, or not a
+string), `model-file-missing` (`mods/<mod>/models/...` is not a file), `model-unregistered` (`@Name` without a
+`kind: "model"` registration). A `model` key anywhere else is not checked.
+
+**The native API (framework API v8, `native/framework/src/framework_api.h`).** A native mod places objects itself:
+
+| Function | Does |
+|---|---|
+| `int FW_Register3DObject(void *character, const char *model, const float transform[16])` | attach a model to a unit (it follows the unit); one per unit, registering again replaces it; dropped when the unit's pool slot is reused (the glow registry's generation check). Handle > 0, 0 refused. |
+| `int FW_Place3DObjectOnTile(int col, int row, const char *model, const float transform[16])` | place a model on a tile, anchored at the tile centre (col + 0.5, 0, row + 0.5); any number per tile. Handle > 0. |
+| `int FW_Unregister3DObject(void *character_or_null, int handle)` | remove a unit's object (character given) or the object with `handle` (character NULL). 1 when removed. |
+
+`transform` is the object's own model matrix (column-major, world units), applied after the translation to the anchor;
+NULL = identity. Up to 64 objects; they belong to the current fight scene (a new `TacticsTest` clears them); main
+thread only. The registry is `native/framework/src/fw_obj3d_rules.c` (host-tested by `test_obj3d_rules.c`) behind
+`obj3d_engine.c`. The GON key is read at run time from the unit's live, overlay-merged entry at
+`Character+OFF_CH_GON_ENTRY` (0x240, the pointer the harness's `expect gon` walks) by `fw_gon.c`'s walker
+(`fw_gon_model`, promoted from the harness's `mt_gon.c`, host-tested by `test_gon.c`) through a VirtualQuery-guarded
+reader (`obj3d_engine_unit_model`).
+
+**What draws today vs not (2026-10-22, OBSERVED in a fight).** The mesh engine (`native/framework/src/mesh_engine.c`)
+draws every object of the API v8 registry: tile objects (`FW_Place3DObjectOnTile`) and unit objects
+(`FW_Register3DObject`, following the unit's position), with `mods/fw-3d/shaders/fw_mesh.shader` (Lambert, base colour;
+an inline flat shader when `fw-3d` is not on the mod path). Seen in-game: `models/crate.obj` read from `mods/fw-3d`
+through the mod path and drawn on a tile next to the probe cube (`docs/engine-map.md` "Mod models and the mod shader").
+Not yet: a unit's GON `graphics.model` is read (`obj3d_engine_unit_model`) but no per-unit walk draws it; meshes are
+drawn OVER the sprites of the units layer (no sprite/mesh occlusion: phase M2) and under the HUD; no textures, no palette
+remap; `@Name` models; animation; `render3d` modes (floor / billboard / upright); perspective (phase P). Tile entries
+(`data/tiles.gon`) have no runtime entry pointer yet, so tiles get models through `FW_Place3DObjectOnTile` only.
+
+**glTF models (the DLL's loader, `fw_mesh_gltf.c`).** What a `.gltf` / `.glb` must be to load on the first try:
+- glTF **2.0** (`asset.version` "2.x"); one `.glb` (preferred), or `.gltf` + `.bin` side by side in `mods/<mod>/models/`,
+  or a `.gltf` with the buffer as a `data:` URI; name `<name>.gltf|.glb`, letters/digits/`_`/`-`, at most 63 bytes
+  for the whole `models/...` path, lowercase extension, sub-folders fine; OBJ texture v is flipped on load (`v' = 1 - v`).
+- **Triangles only** (Blender: Triangulate modifier or the exporter's option); points/lines/strips are refused.
+- At most 1 048 576 vertices / 3 145 728 indices for the whole model (a prop: a few thousand).
+- **Y up** (the glTF / Blender exporter default "+Y Up"); **1 unit = 1 m = 1 tile**; origin = the feet / ground contact,
+  centred on the tile, nothing below y = 0. The loader mirrors z (the game's axes are left-handed) and keeps the winding.
+- Node transforms and hierarchies are baked (applying transforms first is optional; mirrors are handled); several
+  meshes / primitives are merged into one model.
+- POSITION (float) required; NORMAL recommended (else flat shading); TEXCOORD_0 float or normalized u8/u16.
+- **Refused by name:** Draco (`KHR_draco_mesh_compression`), meshopt, `KHR_texture_transform`,
+  `KHR_mesh_quantization`, KTX2/Basis/WebP textures, any other *required* extension, sparse accessors, morph targets.
+  **Ignored:** skins (bind pose drawn), animations, cameras, lights, a second UV set, vertex colours, tangents.
+- One material: only `baseColorFactor` and the `baseColorTexture` image are read (metallic/roughness/normal/occlusion/
+  emissive ignored); textures are recorded but **not drawn yet** — prefer an external power-of-two sRGB PNG (≤ 512²)
+  next to the model.
+
+**Loading.** Needs a framework built with API v8 (mewframework 0.6) on a known build, and `mods/fw-3d` on the mod
+path next to the mod that uses it (`mods: <mod>, fw-3d` in a `.mewtest` header, `-modpaths … mods/fw-3d` in a
+launch): `mods/fw-3d` ships `models/crate.obj` (a hand-written 0.8-unit crate with normals and UVs) and gives the
+vanilla `Crate` its `graphics.model`. The API version is v6 because two open PRs (#109 CatRig, #111 `FW_Random`)
+each claim v5; their `FwApi` fields go before the v6 ones when they merge (the owner settles the order).
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components (the keys each one reads: "Component keys" above). A mechanic that no component expresses

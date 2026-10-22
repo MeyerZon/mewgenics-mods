@@ -11,9 +11,9 @@
 
 #define FW_OWNER "mewframework"
 #define FW_VERSION_MAJOR 0
-#define FW_VERSION_MINOR 5
+#define FW_VERSION_MINOR 6
 #define FW_VERSION_PATCH 0
-#define FW_API_VERSION 7   /* bumped when functions are added; existing signatures never change */
+#define FW_API_VERSION 8   /* bumped when functions are added; existing signatures never change */
 
 /* Code symbols located by byte signature (see signatures.h). APPEND ONLY: mods compiled against an
  * older header keep working because the existing values never move. */
@@ -75,6 +75,11 @@ typedef enum FwSymbol {
     FW_SYM_Camera_render,               /* void (Camera*) — binds the RT (RTT cameras), stack top *= Camera_GetViewProjection, draws the enabled layers + passes */
     FW_SYM_Camera_GetViewProjection,    /* float* (Camera*, float out[16]) — K x inverse(view): zoom +0x168, y-flip int +0x170, 1280x720 canvas centre 640,360 */
     FW_SYM_Camera_RenderOneLayer,       /* void (Camera*, int layer) — how the world (TacticsTest+0x68) and UI cameras draw: one layer, own VP push */
+    /* M1 meshes (docs/possible_3d_work.md phase M): the draw functor, model bytes, the palette texture and material binding */
+    FW_SYM_Batch_SubmitFunctor,         /* void (unused, std::function<void()>* fn) — copies fn into the frame recording (run at replay via slot 2), destroys the argument */
+    FW_SYM_ResourceManager_GetBinaryResource, /* BinaryResource* (unused, std::string path by value) — bytes via -modpaths then the gpak; data +0x28, int32 size +0x30; NULL when missing */
+    FW_SYM_App_GetTexture,              /* Texture2D* (unused, std::string name by value) — cached "textures/"+name; a missing file is dereferenced */
+    FW_SYM_Material_Bind,               /* void (Material*) — program, uniforms, textures through the engine caches */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -100,6 +105,7 @@ typedef enum FwData {
     FW_DATA_DepthBias,                         /* float: global depth_bias (+1 per depth-tested layer) */
     FW_DATA_MatStackTop,                       /* int: matrix stack top index */
     FW_DATA_CurrentCamera,                     /* Camera*: the camera rendering right now */
+    FW_DATA_MatStackData,                      /* float*: matrix stack data (top = data + MatStackTop * 16 floats) */
     FW_DATA_COUNT_
 } FwData;
 
@@ -180,6 +186,20 @@ typedef struct FwCatRigDef {
 } FwCatRigDef;
 FW_EXPORT int FW_RegisterCatRig(const FwCatRigDef *def);
 FW_EXPORT const char *FW_CatRigFor(const char *character);   /* the rig clip registered for that entry, NULL if none */
+/* --- API v8: 3D objects (preview; docs/data-mods.md "3D models in a mod (preview)", docs/possible_3d_work.md phase M).
+ * Registers WHAT to draw and WHERE; mewframework's mesh engine resolves `model` (a model name registered with the mesh
+ * engine, or a mod path "models/<name>.obj" served through -modpaths) and draws it — until that engine ships these
+ * calls only record. `transform` is the object's own model matrix in world units (1 = one tile; axes = the game's
+ * (x, height, z)), column-major float[16], applied after the translation to the anchor; NULL = identity. Up to 64
+ * objects; they belong to the current fight scene (a new TacticsTest clears them); main thread only. --- */
+/* attach to a unit: the object follows it; one object per unit (registering again replaces model + transform and keeps
+ * the handle); dropped when the unit's pool slot is reused (generation check, like FW_SetUnitGlow). Returns the
+ * handle (> 0), 0 when refused (inactive, NULL unit, bad model name, 64 objects already). */
+FW_EXPORT int FW_Register3DObject(void *character, const char *model, const float transform[16]);
+/* place on a tile: anchored at the tile centre (col + 0.5, 0, row + 0.5); any number per tile. Handle > 0, 0 refused. */
+FW_EXPORT int FW_Place3DObjectOnTile(int col, int row, const char *model, const float transform[16]);
+/* remove a unit's object (character non-NULL; handle ignored) or the object with `handle` (character NULL). 1 when removed. */
+FW_EXPORT int FW_Unregister3DObject(void *character_or_null, int handle);
 
 typedef int (*FW_fn_GetVersion)(void);
 typedef int (*FW_fn_IsActive)(void);
@@ -197,6 +217,9 @@ typedef double (*FW_fn_SetTimeScale)(double);
 typedef double (*FW_fn_GetTimeScale)(void);
 typedef int (*FW_fn_RegisterCatRig)(const FwCatRigDef *);
 typedef const char *(*FW_fn_CatRigFor)(const char *);
+typedef int (*FW_fn_Register3DObject)(void *, const char *, const float *);
+typedef int (*FW_fn_Place3DObjectOnTile)(int, int, const char *, const float *);
+typedef int (*FW_fn_Unregister3DObject)(void *, int);
 
 typedef struct FwApi {
     FW_fn_GetVersion GetVersion;
@@ -214,7 +237,10 @@ typedef struct FwApi {
     FW_fn_SetTimeScale SetTimeScale;   /* v6 */
     FW_fn_GetTimeScale GetTimeScale;   /* v6 */
     FW_fn_RegisterCatRig RegisterCatRig; /* v7 */
-    FW_fn_CatRigFor CatRigFor;           /* v7; new fields are appended so older layouts stay valid prefixes */
+    FW_fn_CatRigFor CatRigFor;           /* v7 */
+    FW_fn_Register3DObject Register3DObject;       /* v8 */
+    FW_fn_Place3DObjectOnTile Place3DObjectOnTile; /* v8 */
+    FW_fn_Unregister3DObject Unregister3DObject;   /* v8; new fields are appended so older layouts stay valid prefixes */
 } FwApi;
 
 /* Resolve the framework's exports from the loaded module. Returns 1 when every function of
@@ -230,7 +256,7 @@ static inline int FW_Resolve(FwApi *api) {
     FW__R(RegisterStatus) FW__R(SetStatusStacks) FW__R(CharacterHasStatus)
     FW__R(GetData)
     FW__R(SetUnitGlow) FW__R(ClearUnitGlow)
-    FW__R(Random) FW__R(SeedRandom) FW__R(SetTimeScale) FW__R(GetTimeScale) FW__R(RegisterCatRig) FW__R(CatRigFor)
+    FW__R(Random) FW__R(SeedRandom) FW__R(SetTimeScale) FW__R(GetTimeScale) FW__R(RegisterCatRig) FW__R(CatRigFor) FW__R(Register3DObject) FW__R(Place3DObjectOnTile) FW__R(Unregister3DObject)
 #undef FW__R
     return 1;
 }
