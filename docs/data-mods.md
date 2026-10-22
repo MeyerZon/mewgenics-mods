@@ -316,8 +316,10 @@ Recipe:
 
 The validator warns **`text-loc-key-html`** (scene findings in `read_art_scene` / `write_art_scene` / Art mode, and
 `validate_mod` for every `art/*.scene.json`) when a text is exactly a key and not `"html": false`: a key of the base
-`combined.csv` (that half is empty without `.extracted/`), one this mod's `data/text/*.csv` overlays add, or a string
-of the key shape `^[A-Z][A-Z0-9_]{2,}$`; the message names which matched. A wrapper of several words that merely
+`combined.csv` (that half is empty without `.extracted/`) or one this mod's `data/text/*.csv` overlays add; the message
+names which matched. A text that only has the key shape `^[A-Z][A-Z0-9_]{2,}$` and is in neither table is an
+**info** ("looks like a loc key but no such key exists …; if it is meant to be localized, add the key and set
+html: false"), so plain capitals like `PROBE` do not raise a warning. A wrapper of several words that merely
 contains a key is not a key text. Fix it with `"html": false` or Art mode's **plain (localized)** box on the text row.
 Not done: the editor does not switch a key text to plain by itself (the warning asks instead); the preview draws the
 key, not the localized value. Measure and its limits:

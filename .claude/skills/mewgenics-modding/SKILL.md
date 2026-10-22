@@ -157,7 +157,7 @@ report what the game's loader would do (`editor/src/core/art/swf-rules.ts`; erro
 - `morph-shape-skipped` (warning, SWF): DefineMorphShape is skipped (no shape tweens); key shapes on a timeline instead.
 - `place-cxform-ignored` (warning, SWF): a PlaceObject (v1) colour transform is ignored; use PlaceObject2.
 - `fill-rule-ignored` (warning, scene + SWF): the engine fills each fill style even-odd; a `nonzero` path whose sub-paths cross or self-overlap gets a hole in-game — set `fillRule` `evenodd` or split the overlap into separate paths.
-- `text-loc-key-html` (warning, scene; also `validate_mod` on `art/*.scene.json`): a text that is exactly a loc key (base `combined.csv`, this mod's csv overlays, or the key shape `^[A-Z][A-Z0-9_]{2,}$`) but still HTML is drawn as the key; set `"html": false` (Art mode: **plain (localized)**).
+- `text-loc-key-html` (warning, scene; also `validate_mod` on `art/*.scene.json`): a text that is exactly a loc key (base `combined.csv` or this mod's csv overlays) but still HTML is drawn as the key; set `"html": false` (Art mode: **plain (localized)**). An **info** when the text only has the key shape `^[A-Z][A-Z0-9_]{2,}$` and no such key exists (add the key and set `html: false` if it is meant to be localized).
 - `export-shadows-vanilla` (info, scene + SWF): an export named like a vanilla export (e.g. `CatTail`) replaces it for every by-name lookup, last-loaded file first (INFERRED, untested).
 - `jpeg-bitmap` (info, SWF): JPEG bitmaps decode but the game logs a warning; prefer PNG (DefineBitsLossless2).
 - `tag-ignored` (info, SWF): a tag outside the loader's switch is skipped silently.

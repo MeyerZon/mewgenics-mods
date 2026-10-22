@@ -192,8 +192,8 @@ structure → Publish uncompressed, strict-AS off → ship the `.swf`.
   (`scene.texts.<id>.html: false`, flags 0xeca1); in the HTML wrapper the key is drawn as written
   (`render-loctext.mewtest`, `docs/data-mods.md` "Localized text for mods"). The scene validator warns
   **`text-loc-key-html`** for an HTML text that is exactly a key — a key of the base `combined.csv`, one the mod adds
-  in its own `data/text/*.csv` overlays, or any string of the key shape `^[A-Z][A-Z0-9_]{2,}$` (the message says which
-  matched); a wrapper of several words that merely contains a key is not a key text. Fix: `"html": false` on that
+  in its own `data/text/*.csv` overlays (the message says which matched); a string that only has the key shape
+  `^[A-Z][A-Z0-9_]{2,}$` with no such key in either table is an **info** instead ("looks like a loc key …"); a wrapper of several words that merely contains a key is not a key text. Fix: `"html": false` on that
   text, or tick **plain (localized)** on its row in Art mode (Shapes tab, Texts). `validate_mod` reports it for every
   `art/*.scene.json` too.
 - **Native:** the SWF *player itself* (`glaiel::swf::*`) and which SWFs load are C++; new load

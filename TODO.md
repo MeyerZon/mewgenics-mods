@@ -66,7 +66,8 @@ these without a decision (status per bullet below; the PR map follows).
       localized — for a vanilla key and for a key a mod adds via `combined.csv.append` — **only when it is emitted
       without the HTML flag** (`scene.texts[].html: false`); in vanilla's `<p><font>` wrapper the key is drawn as
       written. **Done 2026-10-22: validator rule `text-loc-key-html`** (warning: an HTML text that is exactly a key —
-      base `combined.csv`, the mod's own csv overlays, or the key shape; scene findings and `validate_mod`) and a
+      base `combined.csv` or the mod's own csv overlays; an info for the key shape alone; scene findings and
+      `validate_mod`) and a
       **plain (localized)** box on Art mode's text row that writes `html: false`. Not automatic by design.
 - [x] **`tilesets.gon` clip redirect** — probed 2026-10-22 (OBSERVED, `mods/_tileprobe`): `alley { Rat ArtProbe }`
       makes every plain Rat in the alley tileset draw the mod clip `ArtProbe` (marker found after `spawn Rat`, none
