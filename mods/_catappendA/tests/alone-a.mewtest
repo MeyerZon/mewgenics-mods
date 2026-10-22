@@ -1,0 +1,25 @@
+mods: _catappendA
+timeout: 120s
+hide: true
+# Multi-append probe (2026-10-22): _catappendA and _catappendB each export _Append_CatTest from their own SWF
+# (catappendA.swf: probeA MAGENTA + probeC BLUE; catappendB.swf: probeB CYAN + probeC GREEN). ProbeCatA/B/C are
+# TomTom with alt_animations [[idle probeA|probeB|probeC]]. editor/scripts/art-probe.ts --multi-append counts each
+# marker colour per shot (probe-multiappend.ts): A and B both present = both appends merged; which of BLUE / GREEN
+# shows on ProbeCatC = which mod wins a label collision. No _autoplay: nothing attacks the cats, so they stay idle.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+cmd spawn ProbeCatA
+expect console "Spawned ProbeCatA" within 10
+wait frames 90
+shot "after ProbeCatA"
+cmd spawn ProbeCatC
+expect console "Spawned ProbeCatC" within 10
+wait frames 90
+shot "after ProbeCatC"
+wait frames 60
+shot "all"
+dump
+quit
