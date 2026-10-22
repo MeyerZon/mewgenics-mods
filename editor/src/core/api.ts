@@ -93,7 +93,7 @@ export interface ComponentKeyInfo {
   children: string | null;
   scalar: string | null;
   required: string[];
-  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string; confidence: string; evidence?: string; note?: string }>;
+  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string; confidence: string; unread?: boolean; evidence?: string; note?: string }>;
 }
 
 /** Search C++ component class names, optionally with where-used. */

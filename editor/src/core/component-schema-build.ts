@@ -7,8 +7,8 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "./gon/parser.ts";
 import { toValue } from "./gon/value.ts";
-import { componentSpecErrors, forEachComponentBlock, resolveComponent, SCHEMA_VERSION, validateSchemaShape } from "./component-schema.ts";
-import type { ComponentSchema, ComponentSpec, SharedSpec, SchemaCoverage } from "./component-schema.ts";
+import { CHILDREN, STATUSES, componentSpecErrors, forEachComponentBlock, keySpecErrors, resolveComponent, SCHEMA_VERSION, validateSchemaShape } from "./component-schema.ts";
+import type { ChildrenKind, ComponentSchema, ComponentSpec, KeySpec, ScalarSpec, SharedSpec, SchemaCoverage, SpecStatus } from "./component-schema.ts";
 
 export interface Fragment {
   schema: number;
@@ -17,6 +17,24 @@ export interface Fragment {
   last?: string;
   components: Record<string, ComponentSpec>;
   shared?: Record<string, SharedSpec>;
+  /**
+   * Follow-up sessions' changes to components another fragment defines (applied after every fragment's components,
+   * in fragment order): `keys` adds / replaces a key (`null` deletes it), `includes` are added, `notes` appended,
+   * the other fields replace. `open: false` also clears the fragment's `vanillaMissed` — the cross-check re-adds any
+   * vanilla key still not accounted for, so a premature close cannot hide one.
+   */
+  amend?: Record<string, ComponentAmend>;
+}
+
+export interface ComponentAmend {
+  base?: string | null;
+  status?: SpecStatus;
+  open?: boolean;
+  children?: ChildrenKind | null;
+  scalar?: string | ScalarSpec | null;
+  keys?: Record<string, KeySpec | null>;
+  includes?: string[];
+  notes?: string;
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
@@ -36,6 +54,29 @@ export function validateFragment(f: unknown, label: string): string[] {
       if (!isObj(s) || !isObj(s.keys)) e.push(`${label}: shared.${n}.keys must be an object`);
     }
   }
+  if (f.amend !== undefined) {
+    if (!isObj(f.amend)) e.push(`${label}: amend must be an object`);
+    else for (const [n, a] of Object.entries(f.amend)) e.push(...amendErrors(a, `${label}: amend.${n}`));
+  }
+  return e;
+}
+
+function amendErrors(a: unknown, where: string): string[] {
+  if (!isObj(a)) return [`${where}: not an object`];
+  const e: string[] = [];
+  const known = new Set(["base", "status", "open", "children", "scalar", "keys", "includes", "notes"]);
+  for (const k of Object.keys(a)) if (!known.has(k)) e.push(`${where}.${k}: not an amendable field`);
+  if (a.base !== undefined && !(a.base === null || typeof a.base === "string")) e.push(`${where}.base: must be a class name or null`);
+  if (a.status !== undefined && !STATUSES.includes(a.status as SpecStatus)) e.push(`${where}.status: ${JSON.stringify(a.status)} is not one of ${STATUSES.join("|")}`);
+  if (a.open !== undefined && typeof a.open !== "boolean") e.push(`${where}.open: must be a boolean`);
+  if (a.children !== undefined && !(a.children === null || CHILDREN.includes(a.children as ChildrenKind))) e.push(`${where}.children: ${JSON.stringify(a.children)} is not null|${CHILDREN.join("|")}`);
+  if (a.scalar !== undefined && !(a.scalar === null || typeof a.scalar === "string" || isObj(a.scalar))) e.push(`${where}.scalar: must be a string, an object or null`);
+  if (a.includes !== undefined && !(Array.isArray(a.includes) && a.includes.every((x) => typeof x === "string" && x.startsWith("@")))) e.push(`${where}.includes: must be an array of @names`);
+  if (a.notes !== undefined && typeof a.notes !== "string") e.push(`${where}.notes: must be a string`);
+  if (a.keys !== undefined) {
+    if (!isObj(a.keys)) e.push(`${where}.keys: must be an object`);
+    else for (const [k, v] of Object.entries(a.keys)) if (v !== null) e.push(...keySpecErrors(v, `${where}.keys.${k}`));
+  }
   return e;
 }
 
@@ -46,7 +87,7 @@ export type VanillaUsage = Record<string, { objUses: number; keys: Record<string
  * Survey the vanilla data tree through the same traversal the validator uses (forEachComponentBlock).
  * A child whose name is a component (or `isDynamic`) is a nested block / dynamic child, not a literal key.
  */
-export function surveyVanilla(dataRoot: string, isComponent: (n: string) => boolean, isDynamic: (n: string) => boolean = () => false): VanillaUsage {
+export function surveyVanilla(dataRoot: string, isComponent: (n: string) => boolean, isDynamic: (n: string) => boolean = () => false, isMap: (n: string) => boolean = () => false): VanillaUsage {
   const out: VanillaUsage = {};
   if (!existsSync(dataRoot)) return out;
   const files: string[] = [];
@@ -73,7 +114,7 @@ export function surveyVanilla(dataRoot: string, isComponent: (n: string) => bool
         if (isComponent(e.key) || isDynamic(e.key)) u.dynamicChildren![e.key] = (u.dynamicChildren![e.key] ?? 0) + 1;
         else u.keys[e.key] = (u.keys[e.key] ?? 0) + 1;
       }
-    });
+    }, isMap);
   }
   return out;
 }
@@ -124,6 +165,34 @@ export function mergeFragments(frags: Fragment[], o: MergeOptions): MergeResult 
       shared[n] = { ...structuredClone(s), keys: sortObj(structuredClone(s.keys)) };
     }
   }
+  for (const f of frags) {
+    for (const [n, a] of Object.entries(f.amend ?? {})) {
+      const c = components[n];
+      if (!c) {
+        errors.push(`${f.agent} amends ${n}, which no fragment defines`);
+        continue;
+      }
+      const keys = { ...c.keys };
+      for (const [k, v] of Object.entries(a.keys ?? {})) {
+        if (v === null) delete keys[k];
+        else keys[k] = structuredClone(v);
+      }
+      components[n] = {
+        ...c,
+        ...(a.base !== undefined ? { base: a.base } : {}),
+        ...(a.status !== undefined ? { status: a.status } : {}),
+        ...(a.children !== undefined ? { children: a.children } : {}),
+        ...(a.scalar !== undefined ? { scalar: a.scalar } : {}),
+        ...(a.open !== undefined ? { open: a.open } : {}),
+        ...(a.open === false ? { vanillaMissed: [] } : {}),
+        keys: sortObj(keys),
+        includes: [...new Set([...c.includes, ...(a.includes ?? [])])],
+        notes: a.notes ? [c.notes, a.notes].filter(Boolean).join(" | ") : c.notes,
+        agent: c.agent?.split("+").includes(f.agent) ? c.agent : `${c.agent}+${f.agent}`,
+      };
+      owner[n] = `${owner[n]}+${f.agent}`;
+    }
+  }
   for (const [n, c] of Object.entries(components)) {
     for (const inc of c.includes) if (!(inc in shared)) errors.push(`${n} (${owner[n]}) includes ${inc}, which no fragment defines under shared`);
   }
@@ -139,6 +208,7 @@ export function mergeFragments(frags: Fragment[], o: MergeOptions): MergeResult 
   // ---- vanilla cross-check -----------------------------------------------------------------
   let vanillaKeys = 0;
   let vanillaKeysFound = 0;
+  let vanillaKeysUnread = 0;
   let vanillaMapKeys = 0;
   if (o.vanilla) {
     for (const [name, u] of Object.entries(o.vanilla).sort(([a], [b]) => (a < b ? -1 : 1))) {
@@ -152,6 +222,10 @@ export function mergeFragments(frags: Fragment[], o: MergeOptions): MergeResult 
           continue;
         }
         vanillaKeys++;
+        if (r.keys[k]?.unread) {
+          vanillaKeysUnread++;
+          continue;
+        }
         if (top.has(k)) {
           vanillaKeysFound++;
           continue;
@@ -179,13 +253,15 @@ export function mergeFragments(frags: Fragment[], o: MergeOptions): MergeResult 
       }
     }
   }
-  schema.coverage = coverage(schema, o.vanilla, vanillaKeys, vanillaKeysFound, vanillaMapKeys);
+  schema.coverage = coverage(schema, o.vanilla, vanillaKeys, vanillaKeysFound, vanillaKeysUnread, vanillaMapKeys);
   errors.push(...validateSchemaShape(schema));
   return { schema, errors, adjustments };
 }
 
-function coverage(s: ComponentSchema, vanilla: VanillaUsage | undefined, vanillaKeys: number, vanillaKeysFound: number, vanillaMapKeys: number): SchemaCoverage {
+function coverage(s: ComponentSchema, vanilla: VanillaUsage | undefined, vanillaKeys: number, vanillaKeysFound: number, vanillaKeysUnread: number, vanillaMapKeys: number): SchemaCoverage {
   const cs = Object.values(s.components);
+  const vanillaObj = vanilla ? Object.keys(vanilla).filter((n) => n in s.components && vanilla[n]!.objUses > 0) : [];
+  const vanillaOpen = vanillaObj.filter((n) => resolveComponent(s, n)!.open).length;
   const allKeys = [...cs.flatMap((c) => Object.values(c.keys)), ...Object.values(s.shared).flatMap((x) => Object.values(x.keys))];
   return {
     components: cs.length,
@@ -200,6 +276,9 @@ function coverage(s: ComponentSchema, vanilla: VanillaUsage | undefined, vanilla
     vanillaComponents: vanilla ? Object.keys(vanilla).filter((n) => n in s.components).length : 0,
     vanillaKeys,
     vanillaKeysFound,
+    vanillaKeysUnread,
+    vanillaOpen,
+    vanillaClosed: vanillaObj.length - vanillaOpen,
     vanillaMapKeys,
   };
 }

@@ -16,7 +16,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { ANALYSIS_DIR, EXTRACTED_DATA } from "../src/core/repo.ts";
-import { SCHEMA_PATH } from "../src/core/component-schema.ts";
+import { SCHEMA_PATH, resolveComponent } from "../src/core/component-schema.ts";
 import { validateFragment, mergeFragments, surveyVanilla } from "../src/core/component-schema-build.ts";
 import type { Fragment } from "../src/core/component-schema-build.ts";
 import { componentNameSet } from "../src/core/components.ts";
@@ -61,7 +61,11 @@ const effectNames: string[] = existsSync(dispatchFile) ? (JSON.parse(readFileSyn
 const comps = componentNameSet();
 const effect = new Set(effectNames);
 const haveVanilla = existsSync(EXTRACTED_DATA) && comps.size > 0;
-const vanilla = haveVanilla ? surveyVanilla(EXTRACTED_DATA, (n) => comps.has(n), (n) => effect.has(n)) : undefined;
+// a first merge (no vanilla) tells which components take an arbitrary child map (children "any"), so the survey
+// skips their map keys exactly as the validator does (a FormChanger form named Rain is not a Rain block)
+const pre = mergeFragments(frags, { build });
+const isMap = (n: string): boolean => resolveComponent(pre.schema, n)?.children === "any";
+const vanilla = haveVanilla ? surveyVanilla(EXTRACTED_DATA, (n) => comps.has(n), (n) => effect.has(n), isMap) : undefined;
 if (!haveVanilla) console.log(`(vanilla cross-check skipped: ${existsSync(EXTRACTED_DATA) ? "no component-name cache" : `no ${EXTRACTED_DATA}`})`);
 
 const m = mergeFragments(frags, { build, vanilla, effectNames: effectNames.filter((n) => !comps.has(n)) });
@@ -74,7 +78,7 @@ const c = m.schema.coverage!;
 const uncovered = [...comps].filter((n) => !(n in m.schema.components)).length;
 console.log(`fragments: ${files.join(", ")}`);
 console.log(`components ${c.components} (of ${comps.size} glaiel:: names; ${uncovered} not in any fragment): mapped ${c.mapped}, no-keys ${c.noKeys}, mechanical ${c.mechanical}, unresolved ${c.unresolved}; open ${c.open}`);
-console.log(`keys ${c.keys}: observed ${c.keysObserved}, inferred ${c.keysInferred}; vanilla: ${c.vanillaComponents} components with object blocks, literal keys found ${c.vanillaKeysFound}/${c.vanillaKeys} (+${c.vanillaMapKeys} map keys under children:any components)`);
+console.log(`keys ${c.keys}: observed ${c.keysObserved}, inferred ${c.keysInferred}; vanilla: ${c.vanillaComponents} components with object blocks, literal keys found ${c.vanillaKeysFound}/${c.vanillaKeys}, unread (vanilla-only, ignored by the game) ${c.vanillaKeysUnread} (+${c.vanillaMapKeys} map keys under children:any components); vanilla object-form components closed ${c.vanillaClosed}, open ${c.vanillaOpen}`);
 console.log(`vanilla cross-check adjustments: ${m.adjustments.length}${m.adjustments.length ? `\n  ${m.adjustments.slice(0, 25).join("\n  ")}${m.adjustments.length > 25 ? "\n  …" : ""}` : ""}`);
 if (check) {
   const cur = existsSync(out) ? readFileSync(out, "utf8").replace(/\r\n/g, "\n") : "";

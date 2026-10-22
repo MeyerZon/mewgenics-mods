@@ -370,6 +370,10 @@ returns it for the top matches; the web UI's component search shows it when you 
   that is `open` (its key set may be incomplete) is never flagged; a component whose `children` are `effects` or
   `passives` also accepts status / effect / passive names as children (`AddStatusToBasicAttack { Bleed 1 }`), and
   `children: any` accepts every key (an arbitrary map: `FormChanger { 0 {…} 1 {…} }`, element names, part names).
+  A child of such a map is a map key even when it is named like a class (a FormChanger form called `Rain`, an
+  ElementalAttunement element `Shadow`): it is not checked as that class's block (`forEachComponentBlock(…, isMap)`).
+  `ignored-key` (info): a key marked `unread` — vanilla writes it, but no code reads it (typos such as `theshold`);
+  it is never `unknown-key` (so vanilla stays clean) and never required.
 - **Proof on vanilla (T1).** Every vanilla component block passes with zero findings (`editor/test/
   component-schema-tests.ts`: 210 files, 7728 component blocks, 2204 object blocks checked, 0 findings; and four
   vanilla files copied as renamed `.append` mods give 0 `unknown-key` / `missing-required-key`). The generator
@@ -387,18 +391,25 @@ returns it for the top matches; the web UI's component search shows it when you 
   is a status application — scalar = stacks, `[stacks chance]`, or `{ stacks chance }`), `@BrainGon` (0x134400:
   `decision_weights move_weights animate_choice auto_orient`), `@FormChangerForm`, `@Passive_QueueAbility`
   (`even_if_stunned`, `force_display_name`, which every ability-casting passive reads).
-- **Vanilla quirks it surfaced** (the game ignores these vanilla values): `LowHealthAllyDodgeChanceAura { theshold … }`
-  (the engine reads `threshold`, default 5), `AbilityOnRoundEndOnce { even_of_stunned … }` (reads `even_if_stunned`),
-  `TourettesMeows { cooldown … }` (reads `pool`, `duration`), `DamageReductionAura { allies_only … }` (hard-coded),
-  `MoveTowardsDamageSource { ability … }` (reads `move_ability`). They stay `open` so vanilla stays clean.
-- **Coverage (build 25143593).** 1741 classes with a vftable (of the 2007 `glaiel::` names; the other 266 are not
-  components: templates, lambdas, helpers): 473 mapped from decompiles, 898 read no keys of their own, 369 carry only
-  the objdump seed keys (engine / UI / ability-hierarchy classes that never appear as a block; `confidence:
-  inferred`), 1 unresolved (`AddAdvantageToEvent`). 1314 keys: 767 observed with a decompile, 547 inferred. Vanilla:
-  of 384 components vanilla writes as object blocks, 345 are closed (unknown keys flagged), 39 open; vanilla literal
-  keys found 589 / 635 (+188 keys of arbitrary maps).
+- **Vanilla quirks it surfaced** (the game ignores these vanilla values; marked `unread`, reported as `ignored-key`):
+  `LowHealthAllyDodgeChanceAura { theshold … }` (the engine reads `threshold`, default 5; `theshold` exists nowhere in
+  the binary), `AbilityOnRoundEndOnce { even_of_stunned … }` (reads `even_if_stunned`), `TourettesMeows { cooldown … }`
+  (reads `pool`, `duration`), `DamageReductionAura { allies_only … }` (hard-coded), `MoveTowardsDamageSource { ability … }`
+  (reads `move_ability`), `SpawnThingOnDamage { number … }` (spawns one), `AbilityHealthThreshold { aux … }` (an item-entry
+  key), and `AddAdvantageToEvent { type options add }` (nothing reads that block: INFERRED not implemented).
+- **Coverage (build 25143593, after the compclose follow-up).** 1741 classes with a vftable (of the 2007 `glaiel::`
+  names; the other 266 are not components: templates, lambdas, helpers): 504 mapped from decompiles, 987 read no keys
+  of their own, 250 carry only the objdump seed keys (engine / UI / ability-hierarchy classes that never appear as a
+  `passives` block; `confidence: inferred`), 0 unresolved. 1325 keys: 838 observed with a decompile, 487 inferred.
+  Vanilla: **all 393 components vanilla writes as object blocks are closed** (unknown keys flagged; was 356 closed /
+  38 open); vanilla literal keys read 603 / 613 and the other 10 are `unread` (+205 keys of arbitrary maps). Every
+  Passive / Status / GlobalModifier class a mod can name has been decompiled (the compclose2 pass verified the 110 that
+  were seed-only).
 - **Regenerating.** Fragments are `.analysis/component-schema-<tag>.json` (one per RE session, shape checked by
-  `validateFragment` in `editor/src/core/component-schema-build.ts`; `.analysis/compmap/` holds the work lists and
+  `validateFragment` in `editor/src/core/component-schema-build.ts`; a follow-up session writes an `amend` section
+  instead of redefining a component: `keys` add / replace (`null` deletes), `includes` added, `notes` appended, other
+  fields replace, and `open: false` clears the old `vanillaMissed` so the cross-check re-opens it only for a vanilla key
+  still unaccounted for; `.analysis/compmap/` holds the work lists and
   `dispatch-names.json`, the names the by-name dispatch chains accept). `cd editor && npm run build:component-schema`
   merges them, runs the vanilla cross-check and writes the file; `-- --check` fails when the tracked file is stale.
   After a game update the keys are string literals and usually survive; re-run the RE for classes whose vftable

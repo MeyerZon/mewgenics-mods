@@ -125,7 +125,7 @@ export interface ComponentKeyInfo {
   open: boolean;
   children: string | null;
   required: string[];
-  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string }>;
+  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string; unread?: boolean }>;
 }
 
 // ---- template scaffolder (templates) -------------------------------------------------------

@@ -1359,6 +1359,17 @@ is `editor/component-schema.json` (data-mods.md "Component keys"), pinned by `ed
   `_Func_impl_no_alloc<…lambda…>::vftable` rows in `list_names.tsv`, `vftable+0x10` = `_Do_call` → the body (compB
   followed 309 of them across 75 classes). INFERRED: classes whose vanilla keys were not found (`vanillaMissed` in
   the schema) mostly hide them in a lambda not yet located.
+- **Follow-up (compclose / compclose2, notes `.analysis/notes-compclose{,2}.md`).** Found by xref of each missing
+  key's string literal (and inline immediate) -> containing function -> the vftables holding it (RTTI names lambdas by
+  their enclosing method, e.g. `<lambda_1>@?1??OnDodgedDamage@Terminator2Run@glaiel@@`). `Passive::GetStackKey` 0x7698d0
+  reads `stack_key` from `this+0x68` (`same_type` = the class name); `Passive::GetAllWithStackKey` and
+  `RemoveStatusByStackKey` scan it on every passive, so it is a `Passive` key. Keys in lambdas: Terminator2Run
+  `move_weights` (body 0x7ec1e0), MotherTumorPassive `Cat`/`NonCat` (0x7f17b0), StatusAlliesScaledByCursedOnDeath
+  `max` (0x26f0f0), SmiteEnemiesWhoKill -> 0x7691d0 (`damage_instance`-or-self -> `DamageInstance::FromGon`).
+  `FinalBossHitCountdown` slot33 0x7f7c40 `icon` (800) / `icon_ready` (801). `SpecialGodRays` 0x90b4e0 and
+  `AddTilesetObjects` 0x90a0e0 read per-child keys (`children: any`). Ghidra drops the `xmm1` default of `PercentOr`
+  in some pseudo-code (0 printed where the disassembly loads 0.5): defaults are taken from the disassembly. Pinned by
+  `editor/component-schema.json` + `editor/test/component-schema-tests.ts` (T1: vanilla 0 findings).
 - **Dispatch names.** The names `apply_status` 0x483120, `attach_passive` 0x494080 and 0x4ccb20 compare against
   (`lea rdx,[rip+str]` before `std::string == const char*` 0x52560): 1923 names, 386 of them not `glaiel::` classes
   (`HealthGain`, `Conditional_*`, `TakeExtraTurn`, …) — `.analysis/compmap/dispatch-names.json` →
