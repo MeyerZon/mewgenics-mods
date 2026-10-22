@@ -297,8 +297,14 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   open), `AddAdvantageToEvent` resolved (its block is read by nothing), the 110 seed-only Passive / Status /
   GlobalModifier classes verified by decompile; `ignored-key` info for vanilla keys no code reads. Left: 250 seed-only
   engine / UI / ability-hierarchy classes (never a `passives` block; the Ability* ones read the ability entry at
-  `this+0x28`, which the schema cannot express yet); `PercentOr` defaults other sessions took from Ghidra pseudo-code
-  may print 0 for a 0.5 (re-check against the disassembly).
+  `this+0x28`, which the schema cannot express yet).
+- [x] **Component key defaults from the disassembly** (2026-10-22, branch `fix/component-schema-defaults`): 328 key
+  defaults + 20 scalar defaults re-read from the instruction that produces them (`.analysis/component-schema-defaults.json`,
+  `defaultEvidence: disasm|pseudo`, builder `keyPatches` + `@shared` amends): 42 corrected, 31 `null` filled,
+  SizeScale scalar 0 → 1, phantom `@DamageInstance.incident_ally_collects_pickups` deleted. Left (`defaultEvidence:
+  pseudo`): `InfiniteRebirth.playercat_health`, `@DamageInstance.knockback` (no getter at the key site: read through an
+  evaluator); MovementReaction `enemies_only` (two reads in slot42 disagree: absent = false in the first, true in the
+  second — which one gates what is not decoded) and AddTilesetObjects `*.count` (a second `count` read defaults to 376).
 
 ### Repo / docs / ops
 - [x] Private GitHub repo `MeyerZon/mewgenics-mods` created + pushed

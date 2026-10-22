@@ -33,9 +33,15 @@ export interface ComponentAmend {
   children?: ChildrenKind | null;
   scalar?: string | ScalarSpec | null;
   keys?: Record<string, KeySpec | null>;
+  /** field-level fixes merged into keys the component already has (`default`, `note`, `defaultEvidence` …) */
+  keyPatches?: Record<string, Partial<KeySpec>>;
   includes?: string[];
   notes?: string;
 }
+
+/** Fields an amend of a shared key set (`@Name`) may carry. */
+const SHARED_AMEND_FIELDS = new Set(["keys", "keyPatches", "notes"]);
+const KEY_FIELDS = new Set(["type", "default", "required", "accessor", "confidence", "evidence", "note", "unread", "defaultEvidence"]);
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
 
@@ -56,16 +62,31 @@ export function validateFragment(f: unknown, label: string): string[] {
   }
   if (f.amend !== undefined) {
     if (!isObj(f.amend)) e.push(`${label}: amend must be an object`);
-    else for (const [n, a] of Object.entries(f.amend)) e.push(...amendErrors(a, `${label}: amend.${n}`));
+    else for (const [n, a] of Object.entries(f.amend)) e.push(...amendErrors(a, `${label}: amend.${n}`, n.startsWith("@")));
   }
   return e;
 }
 
-function amendErrors(a: unknown, where: string): string[] {
+function amendErrors(a: unknown, where: string, shared = false): string[] {
   if (!isObj(a)) return [`${where}: not an object`];
   const e: string[] = [];
-  const known = new Set(["base", "status", "open", "children", "scalar", "keys", "includes", "notes"]);
-  for (const k of Object.keys(a)) if (!known.has(k)) e.push(`${where}.${k}: not an amendable field`);
+  const known = shared ? SHARED_AMEND_FIELDS : new Set(["base", "status", "open", "children", "scalar", "keys", "keyPatches", "includes", "notes"]);
+  for (const k of Object.keys(a)) if (!known.has(k)) e.push(`${where}.${k}: not an amendable field${shared ? " of a shared key set" : ""}`);
+  if (a.keyPatches !== undefined) {
+    if (!isObj(a.keyPatches)) e.push(`${where}.keyPatches: must be an object`);
+    else for (const [k, p] of Object.entries(a.keyPatches)) {
+      if (!isObj(p)) { e.push(`${where}.keyPatches.${k}: not an object`); continue; }
+      for (const f of Object.keys(p)) if (!KEY_FIELDS.has(f)) e.push(`${where}.keyPatches.${k}.${f}: not a key field`);
+      // check the patched fields on a neutral base; report only the fields the patch sets
+      const base = { type: "any", default: null, required: false, confidence: "inferred" };
+      const fields = new Set(Object.keys(p));
+      const at = `${where}.keyPatches.${k}`;
+      for (const err of keySpecErrors({ ...base, ...p }, at)) {
+        const f = err.startsWith(`${at}.`) ? /^\w+/.exec(err.slice(at.length + 1))?.[0] : undefined;
+        if (f && fields.has(f)) e.push(err);
+      }
+    }
+  }
   if (a.base !== undefined && !(a.base === null || typeof a.base === "string")) e.push(`${where}.base: must be a class name or null`);
   if (a.status !== undefined && !STATUSES.includes(a.status as SpecStatus)) e.push(`${where}.status: ${JSON.stringify(a.status)} is not one of ${STATUSES.join("|")}`);
   if (a.open !== undefined && typeof a.open !== "boolean") e.push(`${where}.open: must be a boolean`);
@@ -132,6 +153,19 @@ export interface MergeResult {
   adjustments: string[];
 }
 
+/** Merge `keyPatches` into existing keys (in place); a patch of a key that is not there is an error. */
+function patchKeys(keys: Record<string, KeySpec>, patches: Record<string, Partial<KeySpec>> | undefined, who: string): string[] {
+  const errs: string[] = [];
+  for (const [k, p] of Object.entries(patches ?? {})) {
+    if (!keys[k]) {
+      errs.push(`${who}: keyPatches.${k} patches a key it does not have`);
+      continue;
+    }
+    keys[k] = { ...keys[k]!, ...structuredClone(p) };
+  }
+  return errs;
+}
+
 const sortObj = <T>(o: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 
 /** Merge fragments into one schema (deterministic order; no timestamps, so `--check` is stable). */
@@ -167,6 +201,21 @@ export function mergeFragments(frags: Fragment[], o: MergeOptions): MergeResult 
   }
   for (const f of frags) {
     for (const [n, a] of Object.entries(f.amend ?? {})) {
+      if (n.startsWith("@")) {
+        const s = shared[n];
+        if (!s) {
+          errors.push(`${f.agent} amends ${n}, which no fragment defines under shared`);
+          continue;
+        }
+        const keys = { ...s.keys };
+        for (const [k, v] of Object.entries(a.keys ?? {})) {
+          if (v === null) delete keys[k];
+          else keys[k] = structuredClone(v);
+        }
+        errors.push(...patchKeys(keys, a.keyPatches, `${f.agent} amends ${n}`));
+        shared[n] = { ...s, keys: sortObj(keys), ...(a.notes ? { notes: [s.notes, a.notes].filter(Boolean).join(" | ") } : {}) };
+        continue;
+      }
       const c = components[n];
       if (!c) {
         errors.push(`${f.agent} amends ${n}, which no fragment defines`);
@@ -177,6 +226,7 @@ export function mergeFragments(frags: Fragment[], o: MergeOptions): MergeResult 
         if (v === null) delete keys[k];
         else keys[k] = structuredClone(v);
       }
+      errors.push(...patchKeys(keys, a.keyPatches, `${f.agent} amends ${n}`));
       components[n] = {
         ...c,
         ...(a.base !== undefined ? { base: a.base } : {}),
