@@ -50,8 +50,8 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       Rat a magenta one, each hugging its own sprite (no cyan on the Rat, no magenta on the cat), and is the cat's rim
       whole where it stands among the other cats (a scissor cut would show as a straight edge)?
 
-- [ ] `3d-m1-cube` (feat/3d-meshes-m1) — Run `MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/crate.obj` (`npm run test:artprobe -- --mesh`, needs PR #117's in-process shots): does the magenta cube on tile (3,3) and the grey crate on (4,3) read as solid 3D blocks standing on their tiles, lit from the top-left, under the HUD?
-- [ ] `3d-occlusion` (feat/3d-meshes-m1) — Known wrong, for the record: with `MEWFW_MESH_PROBE=2,6` the cube (on a tile BEHIND the cats) is drawn over them. Confirm that is the only artefact before phase M2 fixes it.
+- [ ] `3d-m1-cube` (#127) — Run `MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/crate.obj` (`npm run test:artprobe -- --mesh`, needs PR #117's in-process shots): does the magenta cube on tile (3,3) and the grey crate on (4,3) read as solid 3D blocks standing on their tiles, lit from the top-left, under the HUD?
+- [ ] `3d-occlusion` (#127) — Known wrong, for the record: with `MEWFW_MESH_PROBE=2,6` the cube (on a tile BEHIND the cats) is drawn over them. Confirm that is the only artefact before phase M2 fixes it.
 - [ ] Provide a test glTF per docs/data-mods.md "3D models" spec ("glTF models": glTF 2.0 .glb, triangulated, Y up, 1 unit = 1 tile, origin at the feet, ≤ a few thousand vertices, one material, no Draco/meshopt/KHR_texture_transform, external PNG ≤ 512²) — drop it in `mods/fw-3d/models/` and an agent wires it.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
