@@ -44,3 +44,38 @@ void fw_functor_make(FwStdFunction *f, FwFunctorFn fn, void *user) {
 }
 
 int fw_functor_unexpected_deallocs(void) { return g_unexpectedDeallocs; }
+
+/* ---- M2: the per-item filter (fw_functor.h) */
+static const char g_filterTag[] = "fw_filter";
+static void *flt_copy(void *self, void *where) { memcpy(where, self, sizeof(FwFilterImpl)); return where; }
+static unsigned char flt_docall(void *self, void **itemRef, int *layerRef) {
+    const FwFilterImpl *impl = (const FwFilterImpl *)self;
+    return (unsigned char)(impl->fn ? impl->fn(impl->user, itemRef, layerRef) != 0 : 1);
+}
+static const void *flt_target(void *self) { (void)self; return g_filterTag; }
+static void flt_delete(void *self, unsigned char dealloc) { (void)self; if (dealloc) g_unexpectedDeallocs++; }
+
+static const void *const g_filterVtbl[FW_FUNC_SLOTS] = {
+    (const void *)flt_copy,     /* 0 _Copy */
+    (const void *)flt_copy,     /* 1 _Move */
+    (const void *)flt_docall,   /* 2 _Do_call(self, Item* const&, int const&) -> bool */
+    (const void *)flt_target,   /* 3 _Target_type */
+    (const void *)flt_delete,   /* 4 _Delete_this */
+    (const void *)fn_get,       /* 5 _Get */
+};
+
+const void *const *fw_filter_vtable(void) { return g_filterVtbl; }
+
+void fw_filter_make(FwFilterImpl *impl, FwFilterFn fn, void *user) {
+    if (!impl) return;
+    impl->vtbl = g_filterVtbl;
+    impl->fn = fn;
+    impl->user = user;
+}
+
+int fw_filter_call(void *impl, void **itemRef, int *layerRef) {
+    if (!impl) return 1;
+    const void *const *vt = *(const void *const *const *)impl;
+    if (!vt || !vt[FW_FUNC_SLOT_DOCALL]) return 1;
+    return ((FwFuncFilterCallFn)vt[FW_FUNC_SLOT_DOCALL])(impl, itemRef, layerRef) != 0;
+}

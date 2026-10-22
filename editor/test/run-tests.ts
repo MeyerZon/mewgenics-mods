@@ -453,6 +453,13 @@ console.log("\n# Audio (sounds and music)");
   if (at) at.runAudioTests(test, assert, eq);
 }
 
+// ---- 4g. The model codes (design §2.6): one list with the DLL (fw_mesh_rules.c FW_MESH_CODES), the header reader, the validator ----
+{
+  let mc: typeof import("./model-codes-tests.ts") | null = null;
+  try { mc = await import("./model-codes-tests.ts"); } catch (e) { test("model-codes-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mc) mc.runModelCodesTests(test, assert, eq);
+}
+
 // ---- 5. MCP smoke test ------------------------------------------------------
 /** The `tools/call` result shape the smoke reads (MCP content blocks). */
 interface ToolCallResult {
@@ -672,6 +679,15 @@ await mcpSmoke();
   let mpt: typeof import("./mesh-probe-tests.ts") | null = null;
   try { mpt = await import("./mesh-probe-tests.ts"); } catch (e) { test("mesh-probe-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (mpt) mpt.runMeshProbeTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mtt: typeof import("./mesh-tex-tests.ts") | null = null;
+  try { mtt = await import("./mesh-tex-tests.ts"); } catch (e) { test("mesh-tex-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mtt) mtt.runMeshTexTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let umt: typeof import("./unit-model-tests.ts") | null = null;
+  try { umt = await import("./unit-model-tests.ts"); } catch (e) { test("unit-model-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (umt) umt.runUnitModelTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mot: typeof import("./mesh-occlusion-tests.ts") | null = null;
+  try { mot = await import("./mesh-occlusion-tests.ts"); } catch (e) { test("mesh-occlusion-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mot) mot.runMeshOcclusionTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let o3t: typeof import("./obs3d-tests.ts") | null = null;
   try { o3t = await import("./obs3d-tests.ts"); } catch (e) { test("obs3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (o3t) o3t.runObs3dTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });

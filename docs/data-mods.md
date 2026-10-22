@@ -859,9 +859,7 @@ draws every object of the API v8 registry: tile objects (`FW_Place3DObjectOnTile
 (`FW_Register3DObject`, following the unit's position), with `mods/fw-3d/shaders/fw_mesh.shader` (Lambert, base colour;
 an inline flat shader when `fw-3d` is not on the mod path). Seen in-game: `models/crate.obj` read from `mods/fw-3d`
 through the mod path and drawn on a tile next to the probe cube (`docs/engine-map.md` "Mod models and the mod shader").
-Not yet: a unit's GON `graphics.model` is read (`obj3d_engine_unit_model`) but no per-unit walk draws it; meshes are
-drawn OVER the sprites of the units layer (no sprite/mesh occlusion: phase M2) and under the HUD; no textures, no palette
-remap; `@Name` models; animation; `render3d` modes (floor / billboard / upright); perspective (phase P). Tile entries
+Since phase M2 (below): per-unit GON models, sorting with the sprites, textures and the palette. Not yet: `@Name` models; animation; `render3d` modes (floor / billboard / upright); perspective (phase P). Tile entries
 (`data/tiles.gon`) have no runtime entry pointer yet, so tiles get models through `FW_Place3DObjectOnTile` only.
 
 **glTF models (the DLL's loader, `fw_mesh_gltf.c`).** What a `.gltf` / `.glb` must be to load on the first try:
@@ -879,14 +877,138 @@ remap; `@Name` models; animation; `render3d` modes (floor / billboard / upright)
   `KHR_mesh_quantization`, KTX2/Basis/WebP textures, any other *required* extension, sparse accessors, morph targets.
   **Ignored:** skins (bind pose drawn), animations, cameras, lights, a second UV set, vertex colours, tangents.
 - One material: only `baseColorFactor` and the `baseColorTexture` image are read (metallic/roughness/normal/occlusion/
-  emissive ignored); textures are recorded but **not drawn yet** — prefer an external power-of-two sRGB PNG (≤ 512²)
-  next to the model.
+  emissive ignored); the texture is drawn from `textures/models/<name>.png` (see "What draws (phase M2)"), not from the glTF's own image
+  yet.
 
 **Loading.** Needs a framework built with API v8 (mewframework 0.6) on a known build, and `mods/fw-3d` on the mod
 path next to the mod that uses it (`mods: <mod>, fw-3d` in a `.mewtest` header, `-modpaths … mods/fw-3d` in a
 launch): `mods/fw-3d` ships `models/crate.obj` (a hand-written 0.8-unit crate with normals and UVs) and gives the
 vanilla `Crate` its `graphics.model`. The API version is v6 because two open PRs (#109 CatRig, #111 `FW_Random`)
 each claim v5; their `FwApi` fields go before the v6 ones when they merge (the owner settles the order).
+
+### The block form (phase M2)
+
+The value of `model` may also be a block, so one `.merge` still touches one key and the string form stays valid:
+
+```
+Rat {
+    graphics {
+        model {
+            file "models/rat.glb"      // required: models/<...>.obj|.gltf|.glb, or "@Name"
+            scale 1                    // uniform, > 0; 1 model unit (1 Blender metre) = 1 tile
+            yaw 45                     // degrees about the height axis; 0 = the model's front (glTF +Z, Blender -Y)
+                                       // faces the lower right; +45 = straight down, +90 = lower left (clockwise on
+                                       // screen); multiples of 45 match the iso view
+            offset [0 0 0]             // (x, height, z) in tiles, applied after scale and yaw
+            texture "models/rat.png"   // under the mod's textures/ (default: textures/models/<model name>.png)
+            tint [1 1 1 1]             // multiplies the base colour (3 numbers = alpha 1)
+            palette true               // stored; a palette row source for GON units is not wired yet
+            double_sided false         // stored
+        }
+    }
+}
+```
+
+Validator codes for the block: `model-path-invalid` (also a block without `file`), `model-file-missing`,
+`model-unregistered`, `model-scale`, `model-yaw` (error; warning when not a multiple of 45), `model-offset`,
+`model-tint`, `model-flag` (palette / double_sided not a bool), `model-texture-missing` (warning),
+`model-key-unknown` (warning).
+
+### What draws (phase M2, OBSERVED in fights 2026-10-22)
+
+- **Per unit from GON:** every unit of the fight whose entry has `graphics.model` (string or block) gets its model,
+  anchored at the unit's position on the floor and following it as it moves (the position is interpolated, so the
+  model slides with the sprite); it mirrors with the unit's sprite. Units present at the start of a fight are picked
+  up at the first turn, units spawned later on the next frame. The 2D sprite still draws next to the model for now.
+  Try it: `mods/_unitmodel` (the vanilla Rat with a magenta box), `npm run test:ingame -- _unitmodel unit-model`.
+- **Sorting with the sprites:** a model takes its place in the units layer like a unit standing at its origin — a
+  model on a tile is hidden behind units nearer to the camera and drawn over units farther away; a model on a unit is
+  drawn right after that unit's sprite. A model larger than one tile is sorted by its origin only, so a long model can
+  still be drawn over a unit next to its far end; a model and a unit on the same tile: the model is on top. Models are
+  drawn under the HUD and anything on the layers above the units layer.
+- **Textures:** a model `models/<...>/<name>.obj|.gltf|.glb` uses `textures/models/<name>.png` of the same mod when
+  that file exists (sub-folders dropped), or the block's `texture`. Ship **8-bit RGB or RGBA PNGs**, at most 2048 px a
+  side (grey / indexed / 16-bit PNGs are refused, `model-texture-format`). Texels are used as stored (the game
+  premultiplies alpha on load); alpha < 0.5 is cut out. glTF uvs as exported; OBJ `vt` is flipped on load. The glTF's
+  embedded image is not read yet — put the PNG at the conventional path. A named texture that is missing = one
+  `model-texture-missing` line and the base colour.
+- **The palette rule** (like cat art): with a palette row ≥ 0, every pixel whose colour (texel × base colour, before
+  lighting) is grey (r, g, b within 0.001) becomes `palette.png`'s texel at column `round(grey × shade × 15)` of that
+  row (shade = the face's light, 0.45..1); coloured pixels pass through. Paint the parts that should take a cat's
+  colours in exact greys. Today a row is set by the probe (`MEWFW_MESH_PROBE_PALETTE`) and inside the framework
+  (`fw_obj3d_set_material`); an exported API call and a cat's own row for GON units come next.
+- **Probe knobs** (`mods/dev-sandbox/tests/mesh-probe.mewtest`, `mods: dev-sandbox, fw-3d`): `MEWFW_MESH_PROBE=1`
+  (or `<col>,<row>`) draws the magenta cube; `MEWFW_MESH_PROBE_MODEL=models/crate.obj|models/pillar.glb` places that
+  model one tile to the right; `MEWFW_MESH_PROBE_TEXTURE=models/x.png`, `MEWFW_MESH_PROBE_PALETTE=<row>` set its
+  material. `cd editor && node scripts/make-fw3d-assets.ts` regenerates `mods/fw-3d/textures/models/crate.png` and
+  `mods/fw-3d/models/pillar.glb` (`--check` compares).
+
+### 3D models: error codes
+
+
+A model that cannot be loaded is a missing model, never a crash: the unit keeps drawing its 2D `movieclip`. The
+framework writes **one line per model per game session** to `mod_logs/mewframework.log`, and the editor's validator
+reports the same codes at `<Entry>.graphics.model`. One list serves both (`native/framework/src/fw_mesh_rules.c`
+`FW_MESH_CODES` = `editor/src/core/model-codes.ts`, pinned identical by a test).
+
+What the log says:
+
+```
+mesh: models/crate.glb: model-glb-header: glb version 1 is not 2 — drawing the 2D clip
+mesh: models/crate.obj: model-parse-error: face index 7 out of range (3 vertices) at line 4 — drawing the 2D clip
+mesh: models/crate.obj: loaded 24 vertices, 12 triangles, bounds x -0.40..0.40 h 0.00..0.80 z -0.40..0.40
+mesh: models/tree.gltf: loaded 812 vertices, 1204 triangles, bounds x -0.42..0.42 h -0.20..0.90 z -0.40..0.40; model-no-normals, model-below-floor
+```
+
+A loaded model's warnings / info codes are appended to its `loaded` line after `; `.
+
+Errors (the model is refused; the unit draws its 2D clip):
+
+| Code | Log (mewframework.log) | Validator | How to fix |
+|---|---|---|---|
+| `model-path-invalid` | `mesh: <path>: model-path-invalid: not a models/<name>.obj\|.gltf\|.glb path ...` | error, with the reason | Use `models/<sub/folders/>name.obj\|.gltf\|.glb`, forward slashes, relative to the mod folder, < 64 bytes. |
+| `model-file-missing` | `... not found on the mod path (mods/<mod>/<path>) nor in the game's resources, or empty` | error | Put the file at `mods/<mod>/<path>` (exact case); a 0-byte file counts as missing in the game. |
+| `model-unregistered` | (editor only) | error | Declare the `@Name` in `editor/registered-names.json` with `kind: "model"`, or use a file path. |
+| `model-parse-error` | the parser's words, OBJ with `at line N` | error (JSON / GLB JSON only) | Fix the OBJ line named; re-export a glTF whose JSON parses. |
+| `model-extension` | `not a .obj, .gltf or .glb file` | error | Export OBJ, glTF (.gltf) or GLB. |
+| `model-glb-header` | `glb version N is not 2`, `not a GLB file (no glTF magic ...)`, `... not 4-byte aligned`, `... past the end` | error | Re-export the .glb (glTF 2.0 binary); a truncated download or a renamed .gltf gives this. |
+| `model-gltf-version` | `no asset object (not a glTF file)` / `asset.version must be 2.x` | error | Export glTF 2.0. |
+| `model-extension-required` | `glTF extension required but not supported: KHR_draco_mesh_compression` | error, naming it | Export without that compression / extension (Blender: untick Draco). |
+| `model-uri-unsupported` | `buffer N: uri '...' is not a safe relative path`, `data URI is not base64` | — (game only, until #128) | Keep buffers / images relative to the model, no `..`, no `http:`; or export .glb. |
+| `model-buffer-missing` | `buffer N: no reader for x.bin` / `... has no uri and there is no .glb BIN chunk` | — | v1 does not read external `.bin` files: export .glb or "glTF Embedded". |
+| `model-buffer-range` | `bufferView N ... is outside buffer`, `accessor N ... is outside bufferView` | — | The file is truncated or corrupt: re-export. |
+| `model-accessor-invalid` | `accessor N: bad componentType`, `byteStride ...`, `accessor N does not exist` | — | Re-export; this is an exporter bug. |
+| `model-sparse-unsupported` | `accessor N: sparse accessors are not supported` | — | Apply morphs / disable sparse output on export. |
+| `model-primitive-mode` | `mode 1 is not TRIANGLES (4)`, `unsupported OBJ statement 'l'` | — | Export triangles only (no loose edges / points). |
+| `model-attribute-missing` | `mesh N primitive N has no POSITION` | — | Re-export. |
+| `model-attribute-format` | `POSITION accessor N must be VEC3 float`, `TEXCOORD_0 ... integer components must be normalized` | — | Turn off mesh quantization (KHR_mesh_quantization) on export. |
+| `model-index-range` | `index 7 out of range (3 vertices)`, `N indices is not a multiple of 3` | — | Re-export / triangulate. |
+| `model-node-invalid` | `node N does not exist`, `mesh N does not exist`, `material N does not exist` | — | Re-export; a dangling index. |
+| `model-node-cycle` | `node N is reached twice (a cycle or a shared child)` | — | Give every node one parent. |
+| `model-empty` | `no faces` (OBJ) / `no triangles to draw` | error (OBJ with no `f`) | Make sure the mesh object is exported (selection only? hidden?). |
+| `model-limit` | `more than 1048576 vertices (limit)`, `node tree is too deep`, `the model registry is full (32 models per process)` | — | Decimate the model; use fewer distinct models. |
+
+Warnings / info (the model loads):
+
+| Code | Sev. | Where | Meaning / fix |
+|---|---|---|---|
+| `model-multi-material` | warning | game | More than one material: v1 draws every part with the first one. Join materials / bake to one texture. |
+| `model-morph-ignored` | warning | game | Morph targets (shape keys) are skipped: the base mesh draws. |
+| `model-skin-ignored` | warning | game + validator | Skins are skipped: the bind pose draws. |
+| `model-animation-ignored` | warning | game + validator | Animations are skipped: the model draws still. |
+| `model-below-floor` | warning | game | Part of the model is under height 0 (more than 0.01): the origin is the ground point, so it sinks into the floor. Move the origin to the feet. |
+| `model-texture-no-uvs` | warning | game | A texture is named but the model has no UVs. Unwrap it. |
+| `model-no-normals` | info | game | No normals in the file: flat ones are computed. |
+| `model-texture-embedded` | info | game | The texture is inside the file (GLB bufferView / data URI). |
+| `model-mtl-ignored` | info | game + validator | OBJ `mtllib` / `usemtl`: .mtl files are not read. |
+| `model-extension-ignored` | info | game + validator | `extensionsUsed` (not required): ignored by v1. |
+| (reserved) `model-ngon-concave`, `model-texcoord-set`, `model-texture-transform-ignored`, `model-alpha-blend`, `model-image-format`, `model-heavy`, `model-footprint`, `model-texture-missing`, `model-texture-format`, `model-texture-size`, `model-attribute-ignored` | | — | In the list (so both halves agree) but not raised yet: they arrive with the texture / budget phases and PR #128's reader. |
+
+"—" in the Validator column: the editor's reader is header-level for now (extension, GLB container, `asset.version`,
+`extensionsRequired`, OBJ faces, ignored extensions / skins / animations / mtl); these codes appear only in
+mewframework.log until PR #128's full reader lands. Note: a refused model reports its error only — warnings are not
+listed for it (the log has one line).
+
 
 ## Limits of the data layer
 

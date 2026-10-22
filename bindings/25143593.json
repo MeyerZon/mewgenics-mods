@@ -10907,6 +10907,34 @@
       ]
     },
     {
+      "name": "Texture2D_glName",
+      "kind": "offset",
+      "struct": "Texture2D",
+      "value": "0x8",
+      "ctype": "uint32: the GL texture name (glGenTextures(1, tex+8) in Texture2D_LoadFromFile); 0 until uploaded",
+      "anchors": {
+        "witness": {
+          "function": "Texture2D_LoadFromFile",
+          "pattern": "8B 53 08 8B 4B 0C FF 15",
+          "dispAt": 2,
+          "dispSize": 1
+        },
+        "note": "mov edx,[rbx+0x8]; mov ecx,[rbx+0xc]; call [glBindTexture] (0x140a0ada7): glBindTexture(tex->target, tex->glName) (notes-r3dE G13f)"
+      },
+      "consumers": [
+        "native/framework/src/fw_mesh_tex.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TEX2D_GLNAME"
+        }
+      ],
+      "evidence": [
+        ".analysis/notes-r3dE.md",
+        ".analysis/decompiled/Texture2D_LoadFromFile_0xa0ad40.c"
+      ]
+    },
+    {
       "name": "MaskedRendererIso_vftable",
       "kind": "vtable",
       "rva": "0xed81e8",
@@ -11631,6 +11659,128 @@
         ".analysis/notes-r3dC.md"
       ],
       "note": "the layer a unit is moved to when it lies flat"
+    },
+    {
+      "name": "Scene_SubmitDraw_tail",
+      "kind": "function",
+      "rva": "0x989c96",
+      "signature": {
+        "pattern": "89 5C 37 0C EB 02 8B D8 48 8B 44 37",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "witness host: the third .pdata chunk of Scene_SubmitDraw 0x989be0 (0x989c96..0x989cd0, chained unwind; the first chunk computes the key with the layer's sorter std::function at layer+0x60, the second grows the item vector): the store of the built 0x20-byte item {renderable, Position*, double key, u32 flags} (movups [rcx+rax],xmm0 / [rcx+rax+0x10],xmm1)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 58,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "89 5C 37 0C EB 02 8B D8 48 8B 44 37"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Scene_SubmitDraw_0x989be0.c"
+      ]
+    },
+    {
+      "name": "Camera_layerFilter",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0x120",
+      "ctype": "std::function impl*: bool (Item* const&, int const& layer) — Layer_Draw calls slot 2 before every item and skips the item on false (NULL = draw all)",
+      "anchors": {
+        "witness": {
+          "function": "Layer_Draw",
+          "pattern": "48 8B 8F 20 01 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rcx,[rdi+0x120] (0x1409898e0) then test rcx,rcx / mov eax,[rdi+0xa4] (the layer index, passed by pointer) / call [rax+0x10]; the post-item twin is [rdi+0x160]"
+      },
+      "consumers": [
+        "native/framework/src/mesh_engine.c",
+        "native/framework/src/fw_mesh_order.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_LAYER_FILTER"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c"
+      ]
+    },
+    {
+      "name": "Layer_sorted",
+      "kind": "offset",
+      "struct": "Layer",
+      "value": "0x20",
+      "ctype": "u8: sort the items before drawing (Layer_SetYSorted 0x989440 sets it with the key functor; no comparator at +0xa0 = the default 0x988dd0: descending key)",
+      "anchors": {
+        "witness": {
+          "function": "Layer_Draw",
+          "pattern": "80 7E 20 00",
+          "dispAt": 2,
+          "dispSize": 1
+        },
+        "note": "cmp byte [rsi+0x20],0 (0x14098972d) before the sort"
+      },
+      "consumers": [
+        "native/framework/src/mesh_engine.c",
+        "native/framework/src/fw_mesh_order.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_LAYER_SORTED"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c",
+        ".analysis/decompiled/Layer_SetYSorted_0x989440.c"
+      ]
+    },
+    {
+      "name": "LayerItem_key",
+      "kind": "offset",
+      "struct": "LayerItem",
+      "value": "0x10",
+      "ctype": "double: the sort key (the layer sorter's value: the Position's interpolated x+z+offsets key, larger = farther = drawn first)",
+      "anchors": {
+        "witness": {
+          "function": "Scene_SubmitDraw_tail",
+          "pattern": "0F 11 4C 01 10",
+          "dispAt": 4,
+          "dispSize": 1
+        },
+        "note": "movups [rcx+rax+0x10],xmm1 (0x140989cbc): {key, flags} of the item built at rsp+0x20 (key stored at rsp+0x30 by 0x140989c30); the comparator 0x988dd0 (movsd xmm0,[rdx+0x10]; comisd xmm0,[rcx+0x10]; setb al) is a .pdata-less leaf"
+      },
+      "consumers": [
+        "native/framework/src/mesh_engine.c",
+        "native/framework/src/fw_mesh_order.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_ITEM_KEY"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Scene_SubmitDraw_0x989be0.c",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c"
+      ]
     },
     {
       "name": "App_timescale",

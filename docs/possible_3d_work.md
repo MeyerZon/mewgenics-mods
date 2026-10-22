@@ -20,6 +20,9 @@ is signed into the manifest (harvest-verified), the log-only observer (`MEWFW_OB
 lines are pinned. **2026-10-22 evening (branch `feat/3d-meshes-m1`): M1 done in-game** — a cube and a mod-shipped OBJ
 drew in a real fight through a submitted draw functor and the mod shader (`engine-map.md` "Meshes drawn in a fight");
 the remaining M work is sprite/mesh occlusion (M2), palette + textures, the per-unit GON `model` walk, glTF in-game.
+**Later the same evening (branch `feat/3d-meshes-m2`): M2 done in-game** — sprite/mesh occlusion by painter-order
+interleave, textures + palette, a glTF in a fight, per-unit GON models that follow their unit, the §2.6 error codes.
+Next: phase P (perspective).
 
 ---
 
@@ -127,8 +130,9 @@ the remaining M work is sprite/mesh occlusion (M2), palette + textures, the per-
   never sample it).
 - **Sprites vs depth (OBSERVED, r3dD).** No sprite shader discards on alpha; every `swf_lib` sprite shader writes
   `gl_FragDepth = gl_FragCoord.z − depth_bias·.001` (except `distortion_ring/_scream`). Depth is tested and written
-  only while flags bit 2 is set (`Layer_Draw` sets it for mode-1 layers, which it also draws in **reverse** order);
-  normal layers neither test nor write depth.
+  only while flags value 2 (bit 1) is set (`Layer_Draw` sets it for mode-1 layers, which it also draws in **reverse**
+  order); normal layers neither test nor write depth. `Batch_ApplyGroupState` couples the depth mask with the colour
+  mask (bit 3), so a depth-tested sprite always writes depth — why M2 interleaves instead (engine-map "Sprites vs meshes").
 - **Shaders (OBSERVED, r3dD).** `Shader_compile` 0xa55470 (the on-disk name `Swf_RenderBatch_BuildVertices` was
   wrong): one `.shader` source, copied twice and text-replaced (`" vert()"`/`" frag()"` → `" main()"`,
   `COMPILING_VERTEX/FRAGMENT_PROGRAM` → 1/0, `MATRICES_AS_ATTRIBS` → 1 with ARB_base_instance); attribs position 0,
@@ -162,7 +166,7 @@ the remaining M work is sprite/mesh occlusion (M2), palette + textures, the per-
 | What | Blocks | Next step |
 |---|---|---|
 | ~~Does a hand-built C `_Func_impl` vtable survive the game's copy/replay?~~ | M1 | **settled 2026-10-22: yes** (T2 cube run, no dealloc, no GL error; `fw_functor.c`) |
-| Translucent sprite pixels write depth when a unit layer is depth-tested (no discard) | M2 | M2: patch `swf_lib.shader`'s fragment with `if (a < 0.02) discard;` via `-modpaths` and compare shots |
+| ~~Translucent sprite pixels write depth when a unit layer is depth-tested (no discard)~~ | M2 | **moot 2026-10-22**: M2 does not depth-test sprites (painter-order interleave, engine-map "Sprites vs meshes"); returns with P (a real per-sprite depth) |
 | Depth precision of the stock 1e-4 z scale under perspective | P1 | P1: put near/far tight around the board; if layering breaks, rewrite m10 of the base ortho after FrameBegin |
 | The 12 unclassified `Camera_GetViewProjection` callers | P1 | key the VP override to the world camera + `Camera_RenderOneLayer`/`Camera_render` return addresses; log the rest with the observer |
 | Splatter renderer's own layer (no `+0x54` write found) | P2 | observer: log layer 0xb items' owner vftables |
@@ -217,17 +221,38 @@ look matters). Task-level detail (files, red test names, gotchas) is in `.analys
       (or a free layer's custom draw functor `Layer+0xa8`): capture the stack top (base ortho × VP) at record time,
       submit one functor via `Batch_SubmitFunctor`; in `_Do_call` bind our program/VAO, draw, restore per §1 "What a
       functor must restore". Proof: T2 `shot` + a T3 picture.
-- [ ] **M2 depth against sprites** (OBSERVED need, 2026-10-22: a cube on a farther tile is drawn over the cats; `engine-map.md` "Sprites vs meshes"): around the unit layer set `RenderStateFlags` bit 2 (not mode 1: that reverses the
-      draw order), give sprites a view depth through m14 in `Renderer_GetScreenMatrix` (scaled into ±10 000), patch the
-      sprite fragment's `discard` via `-modpaths` if translucent edges punch holes; draw meshes before the unit layer
-      with depth writes on. The main RT already has a cleared D24S8 buffer (§1).
-- [~] **M3 assets + data seam** — done: model bytes via `ResourceManager_GetBinaryResource` (OBSERVED, `mesh-model-log.txt`), OBJ + glTF parsing, API v8 `FW_Register3DObject` / `FW_Place3DObjectOnTile` / `FW_Unregister3DObject` drawn by the mesh engine (tile objects OBSERVED; unit-attached follow the unit's Position, not yet seen in-game), GON `graphics.model` validated by the editor and ignored by vanilla (OBSERVED: no GON error); open: the per-unit GON walk (`obj3d_engine_unit_model` exists), textures, `@Name` models, `render3d {}`. Planned as: bytes via `ResourceManager_GetBinaryResource`, textures via `App_GetTexture`
-      (`textures/models/…png`, existence-checked); API v5 `FW_Register3DObject` / `FW_Attach3DObject`; GON `model` /
-      `render3d {}` keys validated by the editor (schema + checks + a `model3d` kind in `registered-names.json`).
-      The importer design for both halves (glTF subset v1–v3, `model-*` codes, axes/UV/texture/colour rules, the GON
-      `model {}` block, the Blender export recipe) is [`3d-importer-design.md`](3d-importer-design.md).
-- [~] **M4 palette shader** — `mods/fw-3d/shaders/fw_mesh.shader` ships and compiles in-game through our own compile path (`fw_shader_stage`, OBSERVED); Lambert lighting draws; open: the `palettemap` texture (`App_GetTexture("palette.png")` + `Texture+8`, an offset to add) so `palette >= 0` remaps, the T3 side-by-side. Planned as: `mods/fw-mesh/shaders/fw_mesh.shader` — lambert + the palettemap rule (§1) + the colour
-      transform; T3 side-by-side with a cat of the same palette.
+- [x] **M2 sprite/mesh occlusion — OBSERVED 2026-10-22** (`mods/dev-sandbox/tests/mesh-occlusion.mewtest`,
+      `MEWFW_MESH_PROBE=2,6` behind / `1,3` in front; fixtures `mesh-occlusion-log.txt` / `mesh-occlusion-summary.json`):
+      not a depth-tested units layer (rejected from the evidence: `Batch_ApplyGroupState` couples the depth mask with
+      the colour mask, every part of a cat sits at one depth, the game never sets glDepthFunc) but a painter-order
+      interleave: the world camera's per-item filter std::function (Camera+0x120, NULL in vanilla) is ours for the one
+      units-layer call and submits each mesh's draw functor right before the first item whose sort key (x+z) is not
+      larger (`fw_mesh_order.c`, `test_mesh_order.c`). Measured: behind coverage 0.748 (0.728 with the integrated DLL,
+      the textured crate interleaved too), in front 1.009. Open for P: a mesh larger than a tile is keyed by its origin
+      (split per row/column later); a unit and a mesh on the SAME tile tie (the mesh goes on top); perspective needs a
+      real per-sprite depth (m14).
+- [x] **M2 textures + palette + glTF in a fight — OBSERVED 2026-10-22** (`fw_mesh_tex.c`; fixtures
+      `mesh-tex-{crate,palette,glb}-*`): the model's PNG (`textures/models/<stem>.png`, or a named one) existence-checked
+      through `ResourceManager_GetBinaryResource`, header-gated, loaded once with `App_GetTexture`, its GL name read at
+      `Texture2D+8` (`OFF_TEX2D_GLNAME`) in the functor and bound on unit 0; `palette.png` on unit 1 with a palette row
+      remaps grey (measured: row 63 = palette.png's texel); `mods/fw-3d/models/pillar.glb` (generated by
+      `editor/scripts/make-fw3d-assets.ts`) drawn from the mod path.
+- [x] **M2 per-unit models from GON — OBSERVED 2026-10-22** (`fw_unit_model.c`, `fw_gon_model_block`, `mods/_unitmodel`):
+      `graphics.model` (string, or the block `model { file scale yaw offset texture tint palette double_sided }`) is read
+      for every unit of the fight (the NextTurn hook's TurnControl → the entity list) and registered on the unit; the
+      model follows the interpolated Position (the Rat's box moved with it: `follows`, 0.09° off) and is drawn right
+      after its unit's sprite (`d0 key=9.000 before item 5`, the Rat being item 4); the vanilla Crate draws crate.obj.
+      Open: hide the 2D clip (`hide_sprite`); a GON `palette true` has no row source yet (a cat's `CatParts+0x1b4`);
+      a facing change was not seen.
+- [x] **M2 model error codes** (design §2.6): one table `FW_MESH_CODES` = `editor/src/core/model-codes.ts`; one log line
+      per model per process; a broken .glb in a fight is one line and the fight runs on (OBSERVED,
+      `mesh-model-codes-log.txt`); the validator reports the header-level codes until PR #128's reader lands.
+- [x] **M3 assets + data seam** — model bytes, OBJ + glTF, API v8 objects (tile + unit, OBSERVED), GON `graphics.model`
+      per unit (OBSERVED), textures (OBSERVED); open: `@Name` models, `render3d {}`, an exported
+      `FW_Set3DObjectMaterial` (the API version decision with #109/#111), a .glb's embedded image. The importer design for both halves (glTF subset v1–v3, `model-*` codes, axes/UV/texture/colour
+      rules, the GON `model {}` block, the Blender export recipe) is [`3d-importer-design.md`](3d-importer-design.md).
+- [x] **M4 palette shader** — `fw_mesh.shader` with `fw_tex` + the palettemap rule, OBSERVED remapping; open: the T3
+      side-by-side with a cat of the same palette.
 
 ### Phase P — true perspective
 - [ ] **P1 VP hook** on `Camera_GetViewProjection` for the world camera's draw pushes only (callers

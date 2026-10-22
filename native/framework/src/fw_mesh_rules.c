@@ -10,8 +10,9 @@
 #include "fw_mesh_rules.h"
 
 /* ------------------------------------------------------------------ small helpers */
-static void set_err(FwMeshError *err, int line, const char *fmt, ...) {
+static void set_err(FwMeshError *err, FwMeshCodeId code, int line, const char *fmt, ...) {
     if (!err) return;
+    err->code = fw_mesh_code(code);
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(err->text, sizeof err->text, fmt, ap);
@@ -196,12 +197,12 @@ static int obj_corner_vertex(ObjState *s, int32_t pi, int32_t ti, int32_t ni, ui
 static int32_t resolve_index(long long v, uint32_t count, const char *what, const char *plural, int line,
                              FwMeshError *err) {
     if (v == 0) {
-        set_err(err, line, "face %sindex 0 is invalid (OBJ indices start at 1) at line %d", what, line);
+        set_err(err, FW_MC_PARSE_ERROR, line, "face %sindex 0 is invalid (OBJ indices start at 1) at line %d", what, line);
         return -1;
     }
     long long r = v > 0 ? v - 1 : (long long)count + v;
     if (r < 0 || r >= (long long)count) {
-        set_err(err, line, "face %sindex %lld out of range (%u %s) at line %d", what, v, count, plural, line);
+        set_err(err, FW_MC_PARSE_ERROR, line, "face %sindex %lld out of range (%u %s) at line %d", what, v, count, plural, line);
         return -1;
     }
     return (int32_t)r;
@@ -213,7 +214,7 @@ static int parse_corner(ObjState *s, const char *ts, const char *te, int line, F
     int nparts = 1;
     for (const char *q = ts; q < te; q++) {
         if (*q != '/') continue;
-        if (nparts == 3) { set_err(err, line, "bad face corner '%.*s' at line %d", (int)(te - ts) > 40 ? 40 : (int)(te - ts), ts, line); return 0; }
+        if (nparts == 3) { set_err(err, FW_MC_PARSE_ERROR, line, "bad face corner '%.*s' at line %d", (int)(te - ts) > 40 ? 40 : (int)(te - ts), ts, line); return 0; }
         pend[nparts - 1] = q;
         part[nparts] = q + 1; pend[nparts] = te;
         nparts++;
@@ -223,11 +224,11 @@ static int parse_corner(ObjState *s, const char *ts, const char *te, int line, F
     for (int i = 0; i < nparts; i++) {
         if (part[i] == pend[i]) {
             if (i == 1 && nparts == 3) continue;   /* i//k */
-            set_err(err, line, "bad face corner '%.*s' at line %d", (int)(te - ts) > 40 ? 40 : (int)(te - ts), ts, line);
+            set_err(err, FW_MC_PARSE_ERROR, line, "bad face corner '%.*s' at line %d", (int)(te - ts) > 40 ? 40 : (int)(te - ts), ts, line);
             return 0;
         }
         if (!parse_int(part[i], pend[i], &v[i])) {
-            set_err(err, line, "not an index '%.*s' at line %d", (int)(te - ts) > 40 ? 40 : (int)(te - ts), ts, line);
+            set_err(err, FW_MC_PARSE_ERROR, line, "not an index '%.*s' at line %d", (int)(te - ts) > 40 ? 40 : (int)(te - ts), ts, line);
             return 0;
         }
         has[i] = 1;
@@ -248,22 +249,22 @@ static int parse_numbers(const char **p, const char *e, float *dst, int keep, in
     while (next_tok(p, e, &ts, &te)) {
         float f;
         if (!parse_float(ts, te, &f)) {
-            set_err(err, line, "not a number '%.*s' in '%s' at line %d", (int)(te - ts) > 40 ? 40 : (int)(te - ts), ts, kw, line);
+            set_err(err, FW_MC_PARSE_ERROR, line, "not a number '%.*s' in '%s' at line %d", (int)(te - ts) > 40 ? 40 : (int)(te - ts), ts, kw, line);
             return -1;
         }
-        if (n >= max) { set_err(err, line, "too many numbers in '%s' (max %d) at line %d", kw, max, line); return -1; }
+        if (n >= max) { set_err(err, FW_MC_PARSE_ERROR, line, "too many numbers in '%s' (max %d) at line %d", kw, max, line); return -1; }
         if (n < keep) dst[n] = f;
         n++;
     }
-    if (n < min) { set_err(err, line, "'%s' needs %d numbers, got %d at line %d", kw, min, n, line); return -1; }
+    if (n < min) { set_err(err, FW_MC_PARSE_ERROR, line, "'%s' needs %d numbers, got %d at line %d", kw, min, n, line); return -1; }
     return n;
 }
 
 int fw_mesh_obj_parse(const char *text, size_t len, FwMesh *out, FwMeshError *err) {
-    if (err) { err->text[0] = 0; err->line = 0; }
-    if (!out) { set_err(err, 0, "no output mesh"); return 0; }
+    fw_mesh_err_reset(err);
+    if (!out) { set_err(err, FW_MC_PARSE_ERROR, 0, "no output mesh"); return 0; }
     memset(out, 0, sizeof *out);
-    if (!text && len) { set_err(err, 0, "no text"); return 0; }
+    if (!text && len) { set_err(err, FW_MC_PARSE_ERROR, 0, "no text"); return 0; }
     ObjState s;
     memset(&s, 0, sizeof s);
     s.allNormals = 1;
@@ -277,25 +278,25 @@ int fw_mesh_obj_parse(const char *text, size_t len, FwMesh *out, FwMeshError *er
         p = le < end ? le + 1 : le;
         for (const char *q = ls; q < le; q++) if (*q == '#') { le = q; break; }
         while (le > ls && is_ws(le[-1])) le--;
-        if (le > ls && le[-1] == '\\') { set_err(err, line, "line continuation '\\' is not supported at line %d", line); goto fail; }
+        if (le > ls && le[-1] == '\\') { set_err(err, FW_MC_PARSE_ERROR, line, "line continuation '\\' is not supported at line %d", line); goto fail; }
         const char *cur = ls, *ks, *ke;
         if (!next_tok(&cur, le, &ks, &ke)) continue;
         if (tok_is(ks, ke, "v")) {
             float f[3];
-            if (s.npos >= FW_MESH_MAX_VERTS) { set_err(err, line, "more than %u vertices (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
+            if (s.npos >= FW_MESH_MAX_VERTS) { set_err(err, FW_MC_LIMIT, line, "more than %u vertices (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
             if (parse_numbers(&cur, le, f, 3, 3, 7, "v", line, err) < 0) goto fail;
             if (!grow((void **)&s.pos, &s.cpos, 3 * (s.npos + 1), sizeof *s.pos)) goto oom;
             memcpy(&s.pos[3 * s.npos++], f, sizeof f);
         } else if (tok_is(ks, ke, "vt")) {
             float f[2] = { 0.0f, 0.0f };
-            if (s.ntex >= FW_MESH_MAX_VERTS) { set_err(err, line, "more than %u texcoords (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
+            if (s.ntex >= FW_MESH_MAX_VERTS) { set_err(err, FW_MC_LIMIT, line, "more than %u texcoords (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
             if (parse_numbers(&cur, le, f, 2, 1, 3, "vt", line, err) < 0) goto fail;
             if (!grow((void **)&s.tex, &s.ctex, 2 * (s.ntex + 1), sizeof *s.tex)) goto oom;
             f[1] = 1.0f - f[1];   /* OBJ's texture origin is bottom-left, glTF's / the game's top-left (Godot's OBJ importer does the same) */
             memcpy(&s.tex[2 * s.ntex++], f, sizeof f);
         } else if (tok_is(ks, ke, "vn")) {
             float f[3];
-            if (s.nnrm >= FW_MESH_MAX_VERTS) { set_err(err, line, "more than %u normals (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
+            if (s.nnrm >= FW_MESH_MAX_VERTS) { set_err(err, FW_MC_LIMIT, line, "more than %u normals (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
             if (parse_numbers(&cur, le, f, 3, 3, 3, "vn", line, err) < 0) goto fail;
             if (!grow((void **)&s.nrm, &s.cnrm, 3 * (s.nnrm + 1), sizeof *s.nrm)) goto oom;
             memcpy(&s.nrm[3 * s.nnrm++], f, sizeof f);
@@ -310,28 +311,29 @@ int fw_mesh_obj_parse(const char *text, size_t len, FwMesh *out, FwMeshError *er
                 uint32_t vi;
                 int r = obj_corner_vertex(&s, c[0], c[1], c[2], &vi);
                 if (r == 0) goto oom;
-                if (r < 0) { set_err(err, line, "more than %u mesh vertices (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
+                if (r < 0) { set_err(err, FW_MC_LIMIT, line, "more than %u mesh vertices (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
                 if (!grow((void **)&s.face, &s.cface, nc + 1, sizeof *s.face)) goto oom;
                 s.face[nc++] = vi;
             }
-            if (nc < 3) { set_err(err, line, "a face needs at least 3 corners, got %u at line %d", nc, line); goto fail; }
+            if (nc < 3) { set_err(err, FW_MC_PARSE_ERROR, line, "a face needs at least 3 corners, got %u at line %d", nc, line); goto fail; }
             uint32_t add = 3 * (nc - 2);
-            if ((uint64_t)s.nidx + add > FW_MESH_MAX_INDICES) { set_err(err, line, "more than %u indices (limit) at line %d", FW_MESH_MAX_INDICES, line); goto fail; }
+            if ((uint64_t)s.nidx + add > FW_MESH_MAX_INDICES) { set_err(err, FW_MC_LIMIT, line, "more than %u indices (limit) at line %d", FW_MESH_MAX_INDICES, line); goto fail; }
             if (!grow((void **)&s.idx, &s.cidx, s.nidx + add, sizeof *s.idx)) goto oom;
             for (uint32_t i = 1; i + 1 < nc; i++) {   /* fan: 0, i, i+1 (convex faces only) */
                 s.idx[s.nidx++] = s.face[0]; s.idx[s.nidx++] = s.face[i]; s.idx[s.nidx++] = s.face[i + 1];
             }
         } else if (tok_in(ks, ke, kIgnored)) {
+            if (tok_is(ks, ke, "mtllib") || tok_is(ks, ke, "usemtl")) fw_mesh_warn(err, FW_MC_MTL_IGNORED);   /* v1: no .mtl */
             continue;
         } else if (tok_in(ks, ke, kUnsupported)) {
-            set_err(err, line, "unsupported OBJ statement '%.*s' at line %d", (int)(ke - ks), ks, line);
+            set_err(err, FW_MC_PRIMITIVE_MODE, line, "unsupported OBJ statement '%.*s' at line %d", (int)(ke - ks), ks, line);
             goto fail;
         } else {
-            set_err(err, line, "unknown OBJ statement '%.*s' at line %d", (int)(ke - ks) > 24 ? 24 : (int)(ke - ks), ks, line);
+            set_err(err, FW_MC_PARSE_ERROR, line, "unknown OBJ statement '%.*s' at line %d", (int)(ke - ks) > 24 ? 24 : (int)(ke - ks), ks, line);
             goto fail;
         }
     }
-    if (s.nidx == 0) { set_err(err, 0, "no faces"); goto fail; }
+    if (s.nidx == 0) { set_err(err, FW_MC_EMPTY, 0, "no faces"); goto fail; }
     out->verts = s.verts; out->nverts = s.nverts;
     out->indices = s.idx; out->nindices = s.nidx;
     out->has_uvs = s.anyUv;
@@ -339,11 +341,11 @@ int fw_mesh_obj_parse(const char *text, size_t len, FwMesh *out, FwMeshError *er
     out->has_normals = s.allNormals;
     s.verts = NULL; s.idx = NULL;
     obj_state_free(&s);
-    if (!out->has_normals && !fw_mesh_flat_normals(out)) { fw_mesh_free(out); set_err(err, 0, "out of memory"); return 0; }
+    if (!out->has_normals && !fw_mesh_flat_normals(out)) { fw_mesh_free(out); set_err(err, FW_MC_LIMIT, 0, "out of memory"); return 0; }
     fw_mesh_bounds(out);
     return 1;
 oom:
-    set_err(err, line, "out of memory at line %d", line);
+    set_err(err, FW_MC_LIMIT, line, "out of memory at line %d", line);
 fail:
     obj_state_free(&s);
     memset(out, 0, sizeof *out);
@@ -535,4 +537,77 @@ int fw_mesh_name_from_path(const char *path, char *out, size_t cap) {
     memcpy(out, path + at, nl);
     out[nl] = 0;
     return 1;
+}
+
+/* ------------------------------------------------------------------ model codes (design §2.6) */
+/* THE list. editor/src/core/model-codes.ts mirrors it entry for entry (editor/test/model-codes-tests.ts parses this
+ * initializer, so keep one `[FW_MC_X] = { "model-x", "severity" },` per line). */
+const FwMeshCode FW_MESH_CODES[FW_MC_COUNT] = {
+    [FW_MC_PATH_INVALID] = { "model-path-invalid", "error" },
+    [FW_MC_FILE_MISSING] = { "model-file-missing", "error" },
+    [FW_MC_UNREGISTERED] = { "model-unregistered", "error" },
+    [FW_MC_PARSE_ERROR] = { "model-parse-error", "error" },
+    [FW_MC_EXTENSION] = { "model-extension", "error" },
+    [FW_MC_GLB_HEADER] = { "model-glb-header", "error" },
+    [FW_MC_GLTF_VERSION] = { "model-gltf-version", "error" },
+    [FW_MC_EXTENSION_REQUIRED] = { "model-extension-required", "error" },
+    [FW_MC_URI_UNSUPPORTED] = { "model-uri-unsupported", "error" },
+    [FW_MC_BUFFER_MISSING] = { "model-buffer-missing", "error" },
+    [FW_MC_BUFFER_RANGE] = { "model-buffer-range", "error" },
+    [FW_MC_ACCESSOR_INVALID] = { "model-accessor-invalid", "error" },
+    [FW_MC_SPARSE_UNSUPPORTED] = { "model-sparse-unsupported", "error" },
+    [FW_MC_PRIMITIVE_MODE] = { "model-primitive-mode", "error" },
+    [FW_MC_ATTRIBUTE_MISSING] = { "model-attribute-missing", "error" },
+    [FW_MC_ATTRIBUTE_FORMAT] = { "model-attribute-format", "error" },
+    [FW_MC_INDEX_RANGE] = { "model-index-range", "error" },
+    [FW_MC_NODE_INVALID] = { "model-node-invalid", "error" },
+    [FW_MC_NODE_CYCLE] = { "model-node-cycle", "error" },
+    [FW_MC_EMPTY] = { "model-empty", "error" },
+    [FW_MC_LIMIT] = { "model-limit", "error" },
+    [FW_MC_MULTI_MATERIAL] = { "model-multi-material", "warning" },
+    [FW_MC_NGON_CONCAVE] = { "model-ngon-concave", "warning" },
+    [FW_MC_SKIN_IGNORED] = { "model-skin-ignored", "warning" },
+    [FW_MC_ANIMATION_IGNORED] = { "model-animation-ignored", "warning" },
+    [FW_MC_MORPH_IGNORED] = { "model-morph-ignored", "warning" },
+    [FW_MC_TEXCOORD_SET] = { "model-texcoord-set", "warning" },
+    [FW_MC_TEXTURE_TRANSFORM_IGNORED] = { "model-texture-transform-ignored", "warning" },
+    [FW_MC_ALPHA_BLEND] = { "model-alpha-blend", "warning" },
+    [FW_MC_IMAGE_FORMAT] = { "model-image-format", "warning" },
+    [FW_MC_TEXTURE_NO_UVS] = { "model-texture-no-uvs", "warning" },
+    [FW_MC_HEAVY] = { "model-heavy", "warning" },
+    [FW_MC_BELOW_FLOOR] = { "model-below-floor", "warning" },
+    [FW_MC_FOOTPRINT] = { "model-footprint", "warning" },
+    [FW_MC_TEXTURE_MISSING] = { "model-texture-missing", "warning" },
+    [FW_MC_TEXTURE_FORMAT] = { "model-texture-format", "warning" },
+    [FW_MC_TEXTURE_SIZE] = { "model-texture-size", "warning" },
+    [FW_MC_NO_NORMALS] = { "model-no-normals", "info" },
+    [FW_MC_TEXTURE_EMBEDDED] = { "model-texture-embedded", "info" },
+    [FW_MC_MTL_IGNORED] = { "model-mtl-ignored", "info" },
+    [FW_MC_EXTENSION_IGNORED] = { "model-extension-ignored", "info" },
+    [FW_MC_ATTRIBUTE_IGNORED] = { "model-attribute-ignored", "info" },
+};
+
+const char *fw_mesh_code(FwMeshCodeId id) {
+    return (int)id >= 0 && (int)id < FW_MC_COUNT ? FW_MESH_CODES[id].code : NULL;
+}
+
+const char *fw_mesh_code_severity(const char *code) {
+    if (!code) return NULL;
+    for (int i = 0; i < FW_MC_COUNT; i++) if (FW_MESH_CODES[i].code && !strcmp(FW_MESH_CODES[i].code, code)) return FW_MESH_CODES[i].severity;
+    return NULL;
+}
+
+void fw_mesh_err_reset(FwMeshError *e) { if (e) memset(e, 0, sizeof *e); }
+
+int fw_mesh_has_warning(const FwMeshError *e, FwMeshCodeId id) {
+    const char *c = fw_mesh_code(id);
+    if (!e || !c) return 0;
+    for (int i = 0; i < e->nwarnings && i < FW_MESH_MAX_WARNINGS; i++) if (e->warnings[i] == c) return 1;
+    return 0;
+}
+
+void fw_mesh_warn(FwMeshError *e, FwMeshCodeId id) {
+    const char *c = fw_mesh_code(id);
+    if (!e || !c || fw_mesh_has_warning(e, id) || e->nwarnings < 0 || e->nwarnings >= FW_MESH_MAX_WARNINGS) return;
+    e->warnings[e->nwarnings++] = c;
 }

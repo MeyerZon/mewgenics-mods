@@ -128,7 +128,8 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the `FW_Random` stream, the game-speed rules,
   the cat rig redirect rules (registry, `_CatRig_` exports, the SymbolClass list scan), Joker's Luck's reroll, the 3D observer's rules, the
   mesh draw (4x4 maths, the C std::function, GL save/restore, shader dialect), the OBJ / glTF loaders + JSON tokenizer,
-  the 3D-object registry, the GON walker, the harness's modules, the cat rig sample's bind loop; NATIVECOUNT checks, `-Werror`),
+  the 3D-object registry, per-unit models, the GON walker, the glTF loader, mesh textures + palette, the sprite/mesh
+  painter order, the harness's modules, the cat rig sample's bind loop; NATIVECOUNT checks, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.

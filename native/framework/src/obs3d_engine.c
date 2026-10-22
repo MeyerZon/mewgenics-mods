@@ -121,8 +121,9 @@ static void hook_Camera_render(void *cam) {
 static void hook_Camera_RenderOneLayer(void *cam, int layer) {
     g_layerCalls++;
     if (g_budget > 0 && cam && layer == 0 && g_windows <= g_budget) observe(cam);
+    mesh_engine_before_layer(cam, layer);  /* phase M2: the mesh draws are interleaved into the units layer's painter order */
     g_origOneLayer(cam, layer);
-    mesh_engine_after_layer(cam, layer);   /* phase M: the mesh draw functor goes in after the world camera's units layer */
+    mesh_engine_after_layer(cam, layer);   /* ... and the camera's per-item filter is put back, the nearest meshes go last */
 }
 
 /* the FW_SYM_Camera_render / FW_SYM_Camera_RenderOneLayer steps of FW_HOOK_PLAN: a no-op success when the observer is off

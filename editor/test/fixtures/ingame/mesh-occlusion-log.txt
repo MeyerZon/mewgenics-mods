@@ -1,0 +1,87 @@
+# OBSERVED 2026-10-22 (build 25143593): mods/dev-sandbox/tests/mesh-occlusion.mewtest, the mesh lines of mod_logs/mewframework.log.
+# behind: MEWFW_MESH_PROBE=2,6 (run 20261022-152022): coverage 0.748 (22966 of 30694 px) — the cat on (2,5) is drawn over the cube.
+mesh: probe cube on tile (2,6) (MEWFW_MESH_PROBE)
+hook installed: Camera::RenderOneLayer (observe3d) rva 0x979210 (observe3d: 0 window(s) of 60 world frames; meshes: on)
+mesh: shaders/fw_mesh.shader found on the mod path
+mesh occ f=1 tile=(2,6) key=9.000 hull=(-0.4565 -0.1522 -0.3043 0.1343) area=0.033305
+mesh probe f=1 tile=(2,6) ndc=(-0.38 -0.00893 0.0531) canvas=(396.52 363.21)
+mesh order: world camera filter before ours = 0000000000000000 (units layer sorted=1 mode=0: interleaving)
+mesh order f=1 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 4 key=8.000
+mesh order keys f=1 18.030 12.529 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.000
+mesh order item f=1 i=0 key=18.030 at=(8.50 9.50)
+mesh order item f=1 i=2 key=11.030 at=(3.50 7.50)
+mesh order item f=1 i=3 key=9.000 at=(2.50 6.50)
+mesh order item f=1 i=4 key=8.000 at=(2.50 5.50)
+mesh order item f=1 i=5 key=7.030 at=(5.50 1.50)
+mesh order item f=1 i=6 key=7.000 at=(1.50 5.50)
+mesh order item f=1 i=7 key=6.000 at=(1.50 4.50)
+mesh order item f=1 i=8 key=5.030 at=(3.50 1.50)
+mesh: program 102 ready (mods/fw-3d/shaders/fw_mesh.shader; fw_mvp 8, fw_base_color 2, fw_light_dir 6)
+mesh: uploaded the unit cube: 24 verts / 36 indices (vao 76)
+mesh draw f=1 n=1 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=2 n=2 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=3 n=3 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=4 n=4 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh occ f=61 tile=(2,6) key=9.000 hull=(-0.4565 -0.1738 -0.3043 0.1127) area=0.033305
+mesh probe f=61 tile=(2,6) ndc=(-0.38 -0.0305 0.0531) canvas=(396.52 370.99)
+mesh order f=61 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 4 key=8.000
+mesh order keys f=61 18.030 12.425 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=121 tile=(2,6) key=9.000 hull=(-0.4565 -0.1523 -0.3043 0.1342) area=0.033305
+mesh probe f=121 tile=(2,6) ndc=(-0.38 -0.00903 0.0531) canvas=(396.52 363.25)
+mesh order f=121 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 4 key=8.000
+mesh order keys f=121 18.030 12.766 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=181 tile=(2,6) key=9.000 hull=(-0.4565 -0.1523 -0.3043 0.1342) area=0.033305
+mesh probe f=181 tile=(2,6) ndc=(-0.38 -0.00903 0.0531) canvas=(396.52 363.25)
+mesh order f=181 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 4 key=8.000
+mesh order keys f=181 18.030 12.635 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=241 tile=(2,6) key=9.000 hull=(-0.4565 -0.1523 -0.3043 0.1342) area=0.033305
+mesh probe f=241 tile=(2,6) ndc=(-0.38 -0.00903 0.0531) canvas=(396.52 363.25)
+mesh order f=241 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 4 key=8.000
+mesh order keys f=241 18.030 12.933 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=301 tile=(2,6) key=9.000 hull=(-0.4565 -0.1523 -0.3043 0.1342) area=0.033305
+mesh probe f=301 tile=(2,6) ndc=(-0.38 -0.00903 0.0531) canvas=(396.52 363.25)
+mesh order f=301 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 4 key=8.000
+mesh order keys f=301 18.030 13.087 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+# --- front: MEWFW_MESH_PROBE=1,3 (run 20261022-152131): coverage 1.009 (30960 of 30694 px) — the cube is drawn over the cat on (1,4).
+mesh: probe cube on tile (1,3) (MEWFW_MESH_PROBE)
+hook installed: Camera::RenderOneLayer (observe3d) rva 0x979210 (observe3d: 0 window(s) of 60 world frames; meshes: on)
+mesh: shaders/fw_mesh.shader found on the mod path
+mesh occ f=1 tile=(1,3) key=5.000 hull=(-0.2663 -0.4903 -0.1141 -0.2038) area=0.033305
+mesh probe f=1 tile=(1,3) ndc=(-0.19 -0.347 0.0286) canvas=(518.26 484.95)
+mesh order: world camera filter before ours = 0000000000000000 (units layer sorted=1 mode=0: interleaving)
+mesh order f=1 items=10 meshes=1 groups=1 unsorted=0 | d0 key=5.000 before item 9 key=0.000
+mesh order keys f=1 18.030 14.224 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.000
+mesh order item f=1 i=0 key=18.030 at=(8.50 9.50)
+mesh order item f=1 i=2 key=11.030 at=(3.50 7.50)
+mesh order item f=1 i=3 key=9.000 at=(2.50 6.50)
+mesh order item f=1 i=4 key=8.000 at=(2.50 5.50)
+mesh order item f=1 i=5 key=7.030 at=(5.50 1.50)
+mesh order item f=1 i=6 key=7.000 at=(1.50 5.50)
+mesh order item f=1 i=7 key=6.000 at=(1.50 4.50)
+mesh order item f=1 i=8 key=5.030 at=(3.50 1.50)
+mesh: program 102 ready (mods/fw-3d/shaders/fw_mesh.shader; fw_mvp 8, fw_base_color 2, fw_light_dir 6)
+mesh: uploaded the unit cube: 24 verts / 36 indices (vao 76)
+mesh draw f=1 n=1 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=2 n=2 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=3 n=3 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh draw f=4 n=4 fbo=1 viewport=(0 0 2560 1440) depthTest=0 depthFunc=0x201 blend=1 prog=3 vao=2 meshes=1/1 errors=0
+mesh occ f=61 tile=(1,3) key=5.000 hull=(-0.2663 -0.5115 -0.1141 -0.2250) area=0.033305
+mesh probe f=61 tile=(1,3) ndc=(-0.19 -0.368 0.0286) canvas=(518.26 492.58)
+mesh order f=61 items=10 meshes=1 groups=1 unsorted=0 | d0 key=5.000 before item 9 key=0.500
+mesh order keys f=61 18.030 14.521 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=121 tile=(1,3) key=5.000 hull=(-0.2663 -0.4904 -0.1141 -0.2039) area=0.033305
+mesh probe f=121 tile=(1,3) ndc=(-0.19 -0.347 0.0286) canvas=(518.26 484.99)
+mesh order f=121 items=10 meshes=1 groups=1 unsorted=0 | d0 key=5.000 before item 9 key=0.500
+mesh order keys f=121 18.030 14.944 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=181 tile=(1,3) key=5.000 hull=(-0.2663 -0.4904 -0.1141 -0.2039) area=0.033305
+mesh probe f=181 tile=(1,3) ndc=(-0.19 -0.347 0.0286) canvas=(518.26 484.99)
+mesh order f=181 items=10 meshes=1 groups=1 unsorted=0 | d0 key=5.000 before item 9 key=0.500
+mesh order keys f=181 18.030 15.403 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=241 tile=(1,3) key=5.000 hull=(-0.2663 -0.4904 -0.1141 -0.2039) area=0.033305
+mesh probe f=241 tile=(1,3) ndc=(-0.19 -0.347 0.0286) canvas=(518.26 484.99)
+mesh order f=241 items=10 meshes=1 groups=1 unsorted=0 | d0 key=5.000 before item 9 key=0.500
+mesh order keys f=241 18.030 15.550 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh occ f=301 tile=(1,3) key=5.000 hull=(-0.2663 -0.4904 -0.1141 -0.2039) area=0.033305
+mesh probe f=301 tile=(1,3) ndc=(-0.19 -0.347 0.0286) canvas=(518.26 484.99)
+mesh order f=301 items=10 meshes=1 groups=1 unsorted=0 | d0 key=5.000 before item 9 key=0.500
+mesh order keys f=301 18.030 14.955 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500

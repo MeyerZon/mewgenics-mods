@@ -23,6 +23,10 @@
 //              palette       int    palette row; < 0 = no remap
 //              fw_flat       int    1 = output fw_base_color unlit and untransformed (the M1 probe)
 //              fw_cx_mul/fw_cx_add vec4  colour transform (identity = (1,1,1,1) / (0,0,0,0))
+//              fw_tex        sampler2D the model's texture (unit 0): App_GetTexture's upload, PREMULTIPLIED RGBA
+//              fw_has_tex    int    1 = sample fw_tex with the mesh's uvs (c = fw_base_color * texel), 0 = base colour only
+// A texel with alpha < .5 is cut out (discard): no blending, no sorting (alphaMode MASK). The palette rule applies to
+// the textured colour: a grey texel x a grey base colour is a palette index.
 // Depth is left fixed-function: the sprites' bias_depth() writes gl_FragCoord.z - depth_bias * .001, which with no
 // bias is the fixed-function value, and not writing gl_FragDepth keeps early depth testing.
 
@@ -37,6 +41,8 @@ uniform int palette;
 uniform int fw_flat;
 uniform vec4 fw_cx_mul;
 uniform vec4 fw_cx_add;
+uniform sampler2D fw_tex;
+uniform int fw_has_tex;
 
 #if COMPILING_VERTEX_PROGRAM
     in vec3 position;
@@ -62,6 +68,10 @@ uniform vec4 fw_cx_add;
             return;
         }
         vec4 c = fw_base_color;
+        if (fw_has_tex != 0) {
+            c *= texture(fw_tex, v_uv);
+            if (c.a < 0.5) discard;
+        }
         float len = length(v_normal);
         vec3 n = len > 0.0 ? v_normal / len : vec3(0.0, 1.0, 0.0);
         float l = max(dot(n, normalize(fw_light_dir)), 0.0);

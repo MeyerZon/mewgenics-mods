@@ -553,4 +553,113 @@ TEST(model_path_rejects_everything_else) {
     CHECK_STR(small, "crate");
 }
 
+/* ---------------- model codes (design §2.6): ONE table, every refusal names its code ---------------- */
+TEST(codes_table_is_complete_unique_and_well_formed) {
+    static const char *const want[] = {   /* §2.6, plus the editor-side path / file / registry codes */
+        "model-path-invalid", "model-file-missing", "model-unregistered", "model-parse-error", "model-extension",
+        "model-glb-header", "model-gltf-version", "model-extension-required", "model-uri-unsupported",
+        "model-buffer-missing", "model-buffer-range", "model-accessor-invalid", "model-sparse-unsupported",
+        "model-primitive-mode", "model-attribute-missing", "model-attribute-format", "model-index-range",
+        "model-node-invalid", "model-node-cycle", "model-empty", "model-limit", "model-multi-material",
+        "model-ngon-concave", "model-skin-ignored", "model-animation-ignored", "model-morph-ignored",
+        "model-texcoord-set", "model-texture-transform-ignored", "model-alpha-blend", "model-image-format",
+        "model-texture-no-uvs", "model-heavy", "model-below-floor", "model-footprint", "model-texture-missing",
+        "model-texture-format", "model-texture-size", "model-no-normals", "model-texture-embedded",
+        "model-mtl-ignored", "model-extension-ignored", "model-attribute-ignored" };
+    CHECK_EQ(FW_MC_COUNT, (int)(sizeof want / sizeof want[0]));
+    for (int i = 0; i < FW_MC_COUNT; i++) {
+        const char *c = fw_mesh_code((FwMeshCodeId)i);
+        if (!c) { MT_FAIL("code %d is NULL", i); continue; }
+        CHECK(c == FW_MESH_CODES[i].code);                         /* the static string of the ONE table */
+        CHECK_STR(c, want[i]);
+        const char *sev = FW_MESH_CODES[i].severity;
+        CHECK(sev && (!strcmp(sev, "error") || !strcmp(sev, "warning") || !strcmp(sev, "info")));
+        for (int j = 0; j < i; j++) if (FW_MESH_CODES[j].code && !strcmp(FW_MESH_CODES[j].code, c)) MT_FAIL("duplicate %s", c);
+    }
+    CHECK_STR(fw_mesh_code_severity("model-parse-error"), "error");
+    CHECK_STR(fw_mesh_code_severity("model-limit"), "error");
+    CHECK_STR(fw_mesh_code_severity("model-multi-material"), "warning");
+    CHECK_STR(fw_mesh_code_severity("model-below-floor"), "warning");
+    CHECK_STR(fw_mesh_code_severity("model-no-normals"), "info");
+    CHECK(fw_mesh_code_severity("model-nope") == NULL);
+    CHECK(fw_mesh_code_severity(NULL) == NULL);
+    CHECK(fw_mesh_code((FwMeshCodeId)FW_MC_COUNT) == NULL);
+    CHECK(fw_mesh_code((FwMeshCodeId)-1) == NULL);
+}
+
+TEST(codes_warn_adds_once_and_reset_clears) {
+    FwMeshError e;
+    fw_mesh_err_reset(&e);
+    CHECK(e.code == NULL); CHECK_EQ(e.nwarnings, 0); CHECK_EQ(e.text[0], 0);
+    fw_mesh_warn(&e, FW_MC_NO_NORMALS);
+    fw_mesh_warn(&e, FW_MC_BELOW_FLOOR);
+    fw_mesh_warn(&e, FW_MC_NO_NORMALS);
+    CHECK_EQ(e.nwarnings, 2);
+    CHECK_STR(e.warnings[0], "model-no-normals");
+    CHECK_STR(e.warnings[1], "model-below-floor");
+    CHECK(fw_mesh_has_warning(&e, FW_MC_BELOW_FLOOR));
+    CHECK(!fw_mesh_has_warning(&e, FW_MC_HEAVY));
+    for (int i = 0; i < FW_MC_COUNT; i++) fw_mesh_warn(&e, (FwMeshCodeId)i);
+    CHECK_EQ(e.nwarnings, FW_MESH_MAX_WARNINGS);                    /* capped, never past the array */
+    fw_mesh_warn(NULL, FW_MC_HEAVY);
+    fw_mesh_err_reset(&e);
+    CHECK_EQ(e.nwarnings, 0);
+}
+
+static void obj_code(const char *src, const char *code, int line) {
+    FwMesh m; FwMeshError e;
+    if (parse(src, &m, &e) != 0) { MT_FAIL("accepted, wanted %s", code); fw_mesh_free(&m); return; }
+    if (!e.code || strcmp(e.code, code)) MT_FAIL("%s -> code %s (%s), wanted %s", src, e.code ? e.code : "(null)", e.text, code);
+    if (e.code && !fw_mesh_code_severity(e.code)) MT_FAIL("%s not in the table", e.code);
+    CHECK_EQ(e.line, line);
+}
+TEST(obj_every_refusal_has_its_code) {
+    obj_code("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 7\n", "model-parse-error", 4);    /* §2.6: OBJ index words are parse errors */
+    obj_code("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 0 1 2\n", "model-parse-error", 4);
+    obj_code("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1/9 2 3\n", "model-parse-error", 4);
+    obj_code("v 0 0 x\n", "model-parse-error", 1);
+    obj_code("v 0 0\n", "model-parse-error", 1);
+    obj_code("v 0 0 0\nf 1 1\n", "model-parse-error", 2);
+    obj_code("v 0 0 0\nf 1/2/3/4 1 1\n", "model-parse-error", 2);
+    obj_code("v 0 0 0 \\n", "model-parse-error", 1);
+    obj_code("blah 1 2\n", "model-parse-error", 1);
+    obj_code("v 0 0 0\nv 1 0 0\nl 1 2\n", "model-primitive-mode", 3);             /* lines / points / free-form: not triangles */
+    obj_code("p 1\n", "model-primitive-mode", 1);
+    obj_code("curv 0 1 1 2\n", "model-primitive-mode", 1);
+    obj_code("v 0 0 0\n", "model-empty", 0);
+    obj_code("", "model-empty", 0);
+    FwMeshError e;
+    memset(&e, 0, sizeof e);
+    CHECK_EQ(fw_mesh_obj_parse("v 0 0 0", 7, NULL, &e), 0);
+    CHECK(e.code != NULL);
+}
+
+TEST(obj_limits_are_model_limit) {
+    size_t n; FwMesh m; FwMeshError e;
+    char *b = repeat("v 0 0 0\n", (size_t)FW_MESH_MAX_VERTS + 1, &n);
+    CHECK_EQ(fw_mesh_obj_parse(b, n, &m, &e), 0);
+    CHECK_STR(e.code, "model-limit");
+    free(b);
+}
+
+TEST(obj_success_leaves_code_null_and_lists_ignored_materials) {
+    FwMesh m; FwMeshError e;
+    PARSE_OK("v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1\n");
+    CHECK(e.code == NULL); CHECK_EQ(e.nwarnings, 0);
+    fw_mesh_free(&m);
+    PARSE_OK("mtllib crate.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvn 0 0 1\nusemtl wood\nf 1//1 2//1 3//1\n");
+    CHECK(e.code == NULL);
+    CHECK(fw_mesh_has_warning(&e, FW_MC_MTL_IGNORED));
+    CHECK_EQ(e.nwarnings, 1);
+    fw_mesh_free(&m);
+    /* a failed parse after a warning: the code is set, the warnings do not matter */
+    CHECK_EQ(parse("usemtl a\nf 1 2 3\n", &m, &e), 0);
+    CHECK_STR(e.code, "model-parse-error");
+    /* a reused error struct is reset by every parse (the glue keeps one per call, tests reuse them) */
+    e.code = "stale"; e.nwarnings = 3; e.line = 9;
+    CHECK_EQ(fw_mesh_obj_parse("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", 32, &m, &e), 1);
+    CHECK(e.code == NULL); CHECK_EQ(e.line, 0); CHECK_EQ(e.nwarnings, 0);
+    fw_mesh_free(&m);
+}
+
 int main(void) { return MT_RUN_ALL(); }

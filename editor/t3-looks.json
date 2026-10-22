@@ -377,6 +377,61 @@
       "ingame-runs/*-dev-sandbox-mesh-probe/shot-mesh-b.png"
     ],
     "regenerate": "MEWFW_MESH_PROBE=2,6, cd editor && npm run test:artprobe -- --mesh --tile 2,6",
+    "status": "done"
+  },
+  {
+    "id": "3d-m2-occlusion",
+    "pr": 135,
+    "question": "Cube behind a cat (MEWFW_MESH_PROBE=2,6): is the cat drawn over the cube? Cube in front (1,3): is the cube over the cat? Mixed (2,4): over the farther cat, under the nearer one? No flicker while units idle?",
+    "shots": [
+      "ingame-runs/*-dev-sandbox-mesh-occlusion/shot-occ-b.png"
+    ],
+    "regenerate": "MEWFW_MESH_PROBE=2,6 (then 1,3 and 2,4), mods/dev-sandbox/tests/mesh-occlusion.mewtest (mods: dev-sandbox, fw-3d; PR #117 in-process shots)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m2-textured-crate",
+    "pr": 135,
+    "question": "Does the crate on tile (4,3) read as an orange/grey checker crate (each face 2x2 cells, top lit brightest), with no seams or flicker beyond the thin cell edges?",
+    "shots": [
+      "ingame-runs/*-dev-sandbox-mesh-tex-crate/shot-mesh-b.png",
+      "ingame-runs/*-dev-sandbox-mesh-tex-crate/crate-crop.png"
+    ],
+    "regenerate": "MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/crate.obj, mods/dev-sandbox/tests/mesh-probe.mewtest (mods: dev-sandbox, fw-3d)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m2-palette",
+    "pr": 135,
+    "question": "Left: palette off (grey cells). Right: palette row 63 — are the grey cells now mint/teal (darker on the shaded faces' ramp, never black) while the orange cells are unchanged?",
+    "shots": [
+      "ingame-runs/*-dev-sandbox-mesh-tex-palette/side-by-side-crop.png",
+      "ingame-runs/*-dev-sandbox-mesh-tex-palette/shot-mesh-b.png"
+    ],
+    "regenerate": "as 3d-m2-textured-crate plus MEWFW_MESH_PROBE_PALETTE=63",
+    "status": "open"
+  },
+  {
+    "id": "3d-m2-glb-pillar",
+    "pr": 135,
+    "question": "Does the teal pillar from models/pillar.glb stand upright on tile (4,3), 1.2 tiles tall, lit top-left like the cube?",
+    "shots": [
+      "ingame-runs/*-dev-sandbox-mesh-tex-glb/shot-mesh-b.png",
+      "ingame-runs/*-dev-sandbox-mesh-tex-glb/pillar-crop.png"
+    ],
+    "regenerate": "MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/pillar.glb",
+    "status": "open"
+  },
+  {
+    "id": "3d-m2-unit-model",
+    "pr": 135,
+    "question": "mods/_unitmodel gives the vanilla Rat a magenta box: is the box on the Rat in every shot, does it slide with it, is it drawn in front of the Rat's own sprite, and is it mirrored when the Rat turns?",
+    "shots": [
+      "ingame-runs/*-_unitmodel-unit-model/shot-unit-a.png",
+      "ingame-runs/*-_unitmodel-unit-model/shot-unit-m.png",
+      "ingame-runs/*-_unitmodel-unit-model/shot-unit-b.png"
+    ],
+    "regenerate": "npm run test:ingame -- _unitmodel unit-model (native/dist/mewframework.dll from feat/3d-meshes-m2)",
     "status": "open"
   }
 ]

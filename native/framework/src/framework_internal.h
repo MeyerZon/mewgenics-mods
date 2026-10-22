@@ -49,12 +49,14 @@ void obs3d_on_late_render(void *tacticsTest);        /* called by the glow engin
 
 /* mesh_engine.c (phase M: meshes in the vanilla scene; docs/possible_3d_work.md) */
 int mesh_engine_wants_layer_hook(void);               /* reads MEWFW_MESH_PROBE once; 1 when the Camera_RenderOneLayer hook must be installed */
+void mesh_engine_before_layer(void *cam, int layer);  /* record time, before the original: M2 installs the per-item filter */
 void mesh_engine_after_layer(void *cam, int layer);   /* record time, after the original Camera_RenderOneLayer */
 void mesh_engine_on_late_render(void *tacticsTest);   /* every combat frame, from the glow engine's LateRender hook */
 /* obj3d_engine.c (API v8: 3D objects; records only — the mesh engine resolves models and draws) */
 int obj3d_engine_register(void *character, const char *model, const float transform[16]);   /* handle > 0, 0 refused */
 int obj3d_engine_place(int col, int row, const char *model, const float transform[16]);     /* handle > 0, 0 refused */
 int obj3d_engine_unregister(void *character, int handle);   /* by character when non-NULL, else by handle; 1 removed */
+int obj3d_engine_set_material(int handle, const char *texture, int palette);   /* M2: texture (NULL = convention) + palette row (< 0 off); 1 ok */
 /* for the mesh engine, every combat frame: on_fight first (a new TacticsTest clears the registry, freed units are
  * pruned), then iterate count/get; fw_obj3d_model_matrix(o, unitXZ, out) gives the world matrix */
 int obj3d_engine_count(void);
@@ -62,3 +64,8 @@ const Fw3dObject *obj3d_engine_get(int i);                  /* NULL out of range
 void obj3d_engine_on_fight(void *tacticsTest);
 /* the unit's GON graphics.model (its live entry at Character+OFF_CH_GON_ENTRY, guarded reads): 1 found, 0 none, -1 unreadable */
 int obj3d_engine_unit_model(const void *character, char *out, size_t cap);
+/* per-unit models from GON (3D phase M2 item 4): framework.c's NextTurn hook hands over the fight's TurnControl; the
+ * mesh engine calls units_frame once per combat frame (after on_fight): a new unit with a graphics.model is registered
+ * once; registered GON objects get their facing and a position line when they moved */
+void obj3d_engine_on_turn_control(void *turnControl);
+void obj3d_engine_units_frame(void);

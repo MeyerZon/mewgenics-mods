@@ -14,7 +14,8 @@
 //      the vert()/frag() entry points and COMPILING_* guards, #includes that resolve, uniforms native code sets.
 //   7. The 3D data seam: a character's graphics.model is a mod file models/<...>.obj (model-path-invalid,
 //      model-file-missing) or a native-registered "@Name" (model-unregistered); files under models/ are assets,
-//      not overlays (model3d.ts, docs/data-mods.md "3D models in a mod (preview)").
+//      not overlays (model3d.ts, docs/data-mods.md "3D models in a mod (preview)"). A model file that exists is read
+//      by model-check.ts and its loader codes (model-codes.ts = the DLL's FW_MESH_CODES) reported at the same key.
 //
 // Findings are returned as a tagged Report (ok/warning/error with location).
 
@@ -35,6 +36,8 @@ import { parsePolicy } from "../overlay/policy.ts";
 import { findIndex } from "../gon/value.ts";
 import { resolutionSets, matchRegisteredPattern, malformedRegisteredPattern, catRigPrefix } from "../names.ts";
 import { MODEL_KEY, MODEL_PARENT, modelPathProblem, isRegisteredModelRef } from "../model3d.ts";
+import { checkModelBytes } from "../model-check.ts";
+import { modelCodeInfo } from "../model-codes.ts";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.ts";
 import { ReportBuilder, finding } from "./result.ts";
 import { validateScene } from "../art/scene.ts";
@@ -138,6 +141,7 @@ function collectOverlays(modDir: string, override?: TextOverride): OverlayFile[]
     if (f.relPath === "description.json" || f.relPath === MOD_MANIFEST_FILE || (!isPackPath(f.relPath) && !f.relPath.endsWith(SCENE_SUFFIX))) continue;
     if (AUDIO_FILE_RE.test(f.relPath)) continue; // binary audio: checked by validateAudioFiles, never an overlay
     if (f.relPath.startsWith("models/")) continue; // 3D model assets (graphics.model), not overlays of a pack file
+    if (f.relPath.startsWith("textures/models/") && f.relPath.endsWith(".png")) continue; // 3D model textures (App_GetTexture "models/<stem>.png"), new files
     try {
       texts.set(f.relPath, readFileSync(f.abs, "utf8"));
     } catch {
@@ -856,13 +860,77 @@ function validateGonOverlay(
     checkNative(name, at);
   };
 
-  /** graphics.model: "@Name" against the registered models, else a models/<...>.obj file in this mod */
+  /** graphics.model: "@Name" against the registered models, else a models/<...>.obj file in this mod; or the block form
+   *  model { file scale yaw offset texture tint palette double_sided } (3D phase M2 item 4; native fw_gon_model_block) */
   const checkModel = (value: VNode, at: SourceLocation): void => {
-    if (value.t !== "str") {
-      rb.error("model-path-invalid", `graphics.model must be a string ("models/<name>.obj" or "@RegisteredModel")`, at);
+    if (value.t === "obj") {
+      checkModelBlock(value, at);
       return;
     }
-    const raw = value.raw;
+    if (value.t !== "str") {
+      rb.error("model-path-invalid", `graphics.model must be a string ("models/<name>.obj" or "@RegisteredModel") or a model { file ... } block`, at);
+      return;
+    }
+    checkModelFile(value.raw, at);
+  };
+
+  const checkModelBlock = (block: VObject, at: SourceLocation): void => {
+    const here = (k: string): SourceLocation => ({ file: at.file, path: `${at.path}.${k}` });
+    const num = (v: VNode): number | null => (v.t === "str" && v.type === "number" && v.num !== null ? v.num : null);
+    const nums = (v: VNode): number[] | null => (v.t === "arr" && v.items.every((it) => num(it) !== null) ? v.items.map((it) => num(it)!) : null);
+    const fileEntry = block.entries.find((e) => e.key === "file");
+    if (!fileEntry || fileEntry.value.t !== "str" || fileEntry.value.type !== "string") {
+      rb.error("model-path-invalid", `a graphics.model block needs file "models/<name>.obj" (or "@RegisteredModel"); without it no model is drawn`, fileEntry ? here("file") : at);
+    } else checkModelFile(fileEntry.value.raw, here("file"));
+    for (const { key, value: v } of block.entries) {
+      const loc = here(key);
+      switch (key) {
+        case "file":
+          break;
+        case "scale": {
+          const n = num(v);
+          if (n === null || !(n > 0)) rb.error("model-scale", `model scale must be a number > 0 (1 = one model unit per tile)`, loc);
+          break;
+        }
+        case "yaw": {
+          const n = num(v);
+          if (n === null) rb.error("model-yaw", `model yaw must be a number of degrees about the height axis`, loc);
+          else if (n % 45 !== 0) rb.warn("model-yaw", `model yaw ${n} is not a multiple of 45: the iso view's natural steps are 0, 45, 90, ... (the model will look skewed against the tiles)`, loc);
+          break;
+        }
+        case "offset": {
+          const a = nums(v);
+          if (!a || a.length !== 3) rb.error("model-offset", `model offset must be 3 numbers [x height z] in tiles`, loc);
+          break;
+        }
+        case "tint": {
+          const a = nums(v);
+          if (!a || (a.length !== 3 && a.length !== 4)) rb.error("model-tint", `model tint must be 3 or 4 numbers [r g b (a)], 0..1`, loc);
+          break;
+        }
+        case "palette":
+        case "double_sided":
+          if (v.t !== "str" || v.type !== "bool") rb.error("model-flag", `model ${key} must be true or false`, loc);
+          break;
+        case "texture": {
+          if (v.t !== "str" || v.type !== "string") {
+            rb.error("model-texture-missing", `model texture must be a string: a path under the mod's textures/ folder`, loc);
+            break;
+          }
+          const t = v.raw;
+          const bad = t === "" || t.includes("\\") || t.startsWith("/") || t.includes(":") || t.split("/").some((seg) => seg === ".." || seg === "");
+          const abs = join(modDir, "textures", ...t.split("/"));
+          if (bad) rb.warn("model-texture-missing", `model texture "${t}" is not a relative path under textures/`, loc);
+          else if (!existsSync(abs) || !statSync(abs).isFile()) rb.warn("model-texture-missing", `model texture "${t}" not found: mods/${modName}/textures/${t} is not a file (the model draws with its base colour only)`, loc);
+          break;
+        }
+        default:
+          rb.warn("model-key-unknown", `"${key}" is not a key of the graphics.model block (file, scale, yaw, offset, texture, tint, palette, double_sided); the framework ignores it`, loc);
+      }
+    }
+  };
+
+  const checkModelFile = (raw: string, at: SourceLocation): void => {
     if (isRegisteredModelRef(raw)) {
       if (!sets.models.has(raw.slice(1))) {
         rb.error("model-unregistered", `model "${raw}" is not a native-registered model (editor/registered-names.json, kind "model")`, at);
@@ -877,6 +945,15 @@ function validateGonOverlay(
     const abs = join(modDir, ...raw.split("/"));
     if (!existsSync(abs) || !statSync(abs).isFile()) {
       rb.error("model-file-missing", `model "${raw}" not found: mods/${modName}/${raw} is not a file (models are mod-only; the base game has none)`, at);
+      return;
+    }
+    // what the DLL would say about the file (one code list with mewframework.log; header-level until PR #128)
+    for (const issue of checkModelBytes(raw, readFileSync(abs))) {
+      const sev = modelCodeInfo(issue.code)?.severity ?? "error";
+      const msg = `model "${raw}": ${issue.message}`;
+      if (sev === "error") rb.error(issue.code, msg, at);
+      else if (sev === "warning") rb.warn(issue.code, msg, at);
+      else rb.info(issue.code, msg, at);
     }
   };
 

@@ -112,6 +112,30 @@ export function runModel3dTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
       assert(r.ok && r.findings.length === 0, `expected no findings, got ${codes(r)}`);
     });
   } else console.log("  (skipped: data/characters/inanimate_objects.gon not extracted; mods/fw-3d is checked against the synthetic base only)");
+  // ---- the block form (3D phase M2 item 4; SCRATCH importer-design §3.2): model { file scale yaw offset texture tint palette double_sided }
+  test("model3d: model-block-clean — every block key with a valid value (and @Name as the block's file) validates with zero findings", () => {
+    const r = v("model-block-clean");
+    assert(r.ok && r.findings.length === 0, `expected no findings, got ${codes(r)}`);
+  });
+  test("model3d: model-block-bad — one finding per bad key, at the key's path, with its severity", () => {
+    const r = v("model-block-bad");
+    const at = (code: string): string => only(r, code).map((f) => `${f.severity}@${f.location?.path}`).sort().join(",");
+    eq(at("model-scale"), "error@Crate.graphics.model.scale", codes(r));
+    eq(at("model-yaw"), "error@Crate.graphics.model.yaw,warning@Tire.graphics.model.yaw", codes(r));   // "left" / 30 (not a multiple of 45)
+    eq(at("model-offset"), "error@Crate.graphics.model.offset", codes(r));
+    eq(at("model-tint"), "error@Crate.graphics.model.tint", codes(r));
+    eq(at("model-flag"), "error@Crate.graphics.model.double_sided,error@Crate.graphics.model.palette", codes(r));
+    eq(at("model-texture-missing"), "warning@Crate.graphics.model.texture", codes(r));
+    eq(at("model-key-unknown"), "warning@Crate.graphics.model.spin", codes(r));
+    eq(at("model-path-invalid"), "error@Rock.graphics.model", codes(r));                               // a block without file
+    eq(at("model-file-missing"), "error@Tire.graphics.model.file", codes(r));                          // the file rule still applies
+    assert(/mods\/model-block-bad\/textures\/models\/none\.png/.test(only(r, "model-texture-missing")[0]!.message), only(r, "model-texture-missing")[0]!.message);
+    eq(only(r, "merge-target-missing").length, 0, "graphics.model (block) is added by a .merge on purpose");
+  });
+  test("model3d: the scalar forms keep their codes — a number is still model-path-invalid, a string block-less", () => {
+    const r = v("model-path-invalid");
+    eq(only(r, "model-path-invalid").length, 3, codes(r));
+  });
   test("model3d: the fw-3d sample ships models/crate.obj and a description", () => {
     assert(existsSync(join(MODS_DIR, "fw-3d", "models", "crate.obj")), "models/crate.obj");
     assert(existsSync(join(MODS_DIR, "fw-3d", "description.json")), "description.json");

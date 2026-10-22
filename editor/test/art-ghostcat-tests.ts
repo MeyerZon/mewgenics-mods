@@ -15,10 +15,11 @@ import { readArtScene, loadSceneBitmaps } from "../src/core/art/art-io.ts";
 import { addCatRig, assignSlot, newCatAnimation, CAT_SLOTS } from "../src/core/art/cat-rig.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
-/** sha256 of emitSwf(abc none) for the committed scenes at the commit that added the ghost cat (origin/main 95dcaa5).
+/** sha256 of emitSwf(abc none) for the committed scenes at the commit that added the ghost cat (origin/main 95dcaa5); _artprobe re-pinned in the 2026-10-22 integration
+ *  after the wave / back-facing / raster / cat-rig probes grew probe.scene.json (the ghost-free emitter output of that scene).
  *  The ghost cat must not change them; an intentional emitter change updates these. */
 const PINNED_BUILDS: Array<{ mod: string; rel: string; bytes: number; sha256: string }> = [
-  { mod: "_artprobe", rel: "art/probe.scene.json", bytes: 4441, sha256: "ad48f3f026007f3ca2b4274654dec64692ecc258c46fbfc5e560e8707f433cd0" },
+  { mod: "_artprobe", rel: "art/probe.scene.json", bytes: 8368, sha256: "2bd103bf37b8756b2589321a6c2adc2d9fbafa115b11dc7640376e48011d1be8" },
   { mod: "dev-sandbox", rel: "art/my_rat.scene.json", bytes: 791, sha256: "d0483ca5ed51e71d254260378f5c9e76c27719b8e98ebf4354da2511b2e82835" },
 ];
 

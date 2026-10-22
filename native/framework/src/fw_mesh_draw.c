@@ -100,18 +100,43 @@ int fw_shader_stage(const char *src, size_t len, int vertex, char *out, size_t c
     return (int)w;
 }
 
+static int ends_with(const char *s, const char *suf) {
+    size_t n = strlen(s), k = strlen(suf);
+    return n >= k && strcmp(s + n - k, suf) == 0;
+}
+
+/* how far under the floor (game height, model units) a model may reach before model-below-floor: the M1 log's 0.01 */
+#define FW_MESH_FLOOR_TOLERANCE 0.01f
+
 int fw_mesh_load_bytes(const char *path, const uint8_t *bytes, size_t len, FwMesh *out, FwMeshError *err) {
     memset(out, 0, sizeof *out);
+    fw_mesh_err_reset(err);
     int kind = fw_mesh_model_kind(path);
     int ok;
     if (kind == FW_MESH_KIND_OBJ) ok = fw_mesh_obj_parse((const char *)bytes, len, out, err);
+    else if (kind == FW_MESH_KIND_GLB && !(len >= 4 && bytes && memcmp(bytes, "glTF", 4) == 0)) {
+        /* a .glb must be the binary container; the parser alone would read it as JSON text and say "not valid JSON" */
+        if (err) { snprintf(err->text, sizeof err->text, "not a GLB file (no glTF magic in its first 4 bytes)"); err->code = fw_mesh_code(FW_MC_GLB_HEADER); }
+        return 0;
+    }
     else if (kind == FW_MESH_KIND_GLTF || kind == FW_MESH_KIND_GLB) ok = fw_mesh_gltf_parse(bytes, len, NULL, NULL, out, err);
     else {
-        if (err) { snprintf(err->text, sizeof err->text, "not a model path (models/<name>.obj|.gltf|.glb): %s", path ? path : "(null)"); err->line = 0; }
+        const char *p = path ? path : "(null)";
+        int known = path && (ends_with(path, ".obj") || ends_with(path, ".gltf") || ends_with(path, ".glb"));
+        if (err) {
+            snprintf(err->text, sizeof err->text, known ? "not a models/<name>.obj|.gltf|.glb path: %s" : "not a .obj, .gltf or .glb file: %s", p);
+            err->line = 0;
+            err->code = fw_mesh_code(known ? FW_MC_PATH_INVALID : FW_MC_EXTENSION);
+        }
         return 0;
     }
     if (!ok) return 0;
     fw_mesh_to_game_axes(out, 1.0f);
+    /* what the engine filled in or the modder may not expect (design §2.6) */
+    if (!out->has_normals) fw_mesh_warn(err, FW_MC_NO_NORMALS);
+    if (out->bmin[1] < -FW_MESH_FLOOR_TOLERANCE) fw_mesh_warn(err, FW_MC_BELOW_FLOOR);
+    if (out->texture[0] && !out->has_uvs) fw_mesh_warn(err, FW_MC_TEXTURE_NO_UVS);
+    if (strncmp(out->texture, "embedded:", 9) == 0) fw_mesh_warn(err, FW_MC_TEXTURE_EMBEDDED);
     return 1;
 }
 
@@ -121,4 +146,24 @@ void fw_mesh_object_mvp(const float top[16], const float vp[16], const float iso
     fw_m4_iso_basis(iso, basis);
     fw_m4_mul(basis, world, bw);
     fw_m4_mul(tv, bw, out);
+}
+
+int fw_mesh_fmt_load_result(char *buf, size_t n, const char *path, int ok, const FwMesh *m, const FwMeshError *e) {
+    char tmp[512];
+    int w;
+    const char *p = path ? path : "(null)";
+    if (ok && m) {
+        w = snprintf(tmp, sizeof tmp, "mesh: %s: loaded %u vertices, %u triangles, bounds x %.2f..%.2f h %.2f..%.2f z %.2f..%.2f", p,
+                     m->nverts, m->nindices / 3, (double)m->bmin[0], (double)m->bmax[0], (double)m->bmin[1], (double)m->bmax[1],
+                     (double)m->bmin[2], (double)m->bmax[2]);
+        for (int i = 0; e && i < e->nwarnings && i < FW_MESH_MAX_WARNINGS && w > 0 && (size_t)w < sizeof tmp; i++)
+            w += snprintf(tmp + w, sizeof tmp - (size_t)w, "%s%s", i ? ", " : "; ", e->warnings[i] ? e->warnings[i] : "?");
+    } else {
+        const char *code = e && e->code ? e->code : fw_mesh_code(FW_MC_PARSE_ERROR);
+        w = snprintf(tmp, sizeof tmp, "mesh: %s: %s: %s — drawing the 2D clip", p, code, e && e->text[0] ? e->text : "not loaded");
+    }
+    if (w < 0) w = 0;
+    if ((size_t)w >= sizeof tmp) w = (int)sizeof tmp - 1;
+    if (buf && n) snprintf(buf, n, "%s", tmp);
+    return w;
 }

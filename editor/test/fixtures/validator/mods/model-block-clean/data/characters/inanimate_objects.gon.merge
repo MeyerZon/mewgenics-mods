@@ -1,0 +1,24 @@
+// the block form of graphics.model (3D phase M2 item 4): every key, valid values
+Crate {
+	graphics {
+		model {
+			file "models/crate.obj"
+			scale 1.5
+			yaw 90
+			offset [0 0.25 -0.5]
+			texture "models/crate.png"
+			tint [1 0.9 0.8 1]
+			palette true
+			double_sided false
+		}
+	}
+}
+Rock {
+	graphics {
+		model {
+			file "@Crate3D"
+			yaw -45
+			tint [1 1 1]
+		}
+	}
+}

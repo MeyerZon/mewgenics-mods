@@ -48,6 +48,11 @@ static Fw3dObject *new_object(Fw3dRegistry *r) {
     Fw3dObject *o = &r->objs[r->count++];
     memset(o, 0, sizeof *o);
     o->handle = r->nextHandle++;
+    o->palette = -1;   /* M2: no palette remap until fw_obj3d_set_material */
+    for (int k = 0; k < 4; k++) o->tint[k] = 1.0f;   /* the default look: draw as before */
+    o->usePalette = -1;
+    o->doubleSided = -1;
+    o->facing = 1;
     return o;
 }
 
@@ -148,5 +153,52 @@ void fw_obj3d_model_matrix(const Fw3dObject *o, const double unitXZ[2], float ou
     float t[16];
     fw_obj3d_identity(t);
     t[12] = anchor[0]; t[13] = anchor[1]; t[14] = anchor[2];
+    if (o->facing < 0) {
+        /* the sprite's mirror across the screen vertical is, in the iso basis, the x <-> z swap (about the anchor) */
+        float m[16];
+        fw_obj3d_identity(m);
+        m[0] = 0.0f; m[2] = 1.0f; m[8] = 1.0f; m[10] = 0.0f;
+        float tm[16];
+        fw_obj3d_mat4_mul(t, m, tm);
+        fw_obj3d_mat4_mul(tm, o->transform, out);
+        return;
+    }
     fw_obj3d_mat4_mul(t, o->transform, out);
+}
+
+int fw_obj3d_set_material(Fw3dRegistry *r, int handle, const char *texture, int palette) {
+    int i = fw_obj3d_find_handle(r, handle);
+    if (i < 0) return 0;
+    if (texture && texture[0] && !fw_obj3d_model_ok(texture)) return 0;
+    Fw3dObject *o = &r->objs[i];
+    if (texture && texture[0]) { size_t n = strlen(texture); memcpy(o->texture, texture, n + 1); }
+    else o->texture[0] = 0;
+    o->palette = palette < 0 ? -1 : palette;
+    return 1;
+}
+/* ---- look + facing (3D phase M2 item 4) ---- */
+int fw_obj3d_set_look(Fw3dRegistry *r, int handle, const char *texture, const float tint[4], int usePalette, int doubleSided) {
+    int i = fw_obj3d_find_handle(r, handle);
+    if (i < 0 || (texture && texture[0] && !fw_obj3d_model_ok(texture))) return 0;
+    Fw3dObject *o = &r->objs[i];
+    memset(o->texture, 0, sizeof o->texture);
+    if (texture) memcpy(o->texture, texture, strlen(texture));   /* fw_obj3d_model_ok bounded it */
+    for (int k = 0; k < 4; k++) o->tint[k] = tint ? tint[k] : 1.0f;
+    o->usePalette = usePalette < 0 ? -1 : usePalette ? 1 : 0;
+    o->doubleSided = doubleSided < 0 ? -1 : doubleSided ? 1 : 0;
+    return 1;
+}
+
+int fw_obj3d_set_facing(Fw3dRegistry *r, int handle, int facing) {
+    int i = fw_obj3d_find_handle(r, handle);
+    if (i < 0) return 0;
+    r->objs[i].facing = facing < 0 ? -1 : 1;
+    return 1;
+}
+
+int fw_obj3d_mark_gon(Fw3dRegistry *r, int handle) {
+    int i = fw_obj3d_find_handle(r, handle);
+    if (i < 0) return 0;
+    r->objs[i].fromGon = 1;
+    return 1;
 }

@@ -1,0 +1,146 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "script": "mods/_unitmodel/tests/unit-model.mewtest",
+  "run": {
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 3 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+  },
+  "shots": [
+    {
+      "label": "unit-a",
+      "world": [
+        8.5,
+        0.5
+      ],
+      "facing": -1
+    },
+    {
+      "label": "unit-m",
+      "world": [
+        8.5,
+        1.5
+      ],
+      "facing": -1
+    },
+    {
+      "label": "unit-b",
+      "world": [
+        8.5,
+        1.5
+      ],
+      "facing": -1
+    }
+  ],
+  "pairs": [
+    {
+      "a": "unit-a",
+      "b": "unit-m",
+      "worldA": [
+        8.5,
+        0.5
+      ],
+      "worldB": [
+        8.5,
+        1.5
+      ],
+      "verdict": "follows",
+      "patchA": {
+        "count": 13935,
+        "x0": 2642,
+        "y0": 673,
+        "x1": 2745,
+        "y1": 806
+      },
+      "patchB": {
+        "count": 13939,
+        "x0": 2520,
+        "y0": 612,
+        "x1": 2624,
+        "y1": 745
+      },
+      "deltaPx": [
+        -121.5,
+        -61
+      ],
+      "predicted": [
+        -0.894,
+        -0.447
+      ],
+      "angleDeg": 0.09423639448824654
+    },
+    {
+      "a": "unit-a",
+      "b": "unit-b",
+      "worldA": [
+        8.5,
+        0.5
+      ],
+      "worldB": [
+        8.5,
+        1.5
+      ],
+      "verdict": "follows",
+      "patchA": {
+        "count": 13935,
+        "x0": 2642,
+        "y0": 673,
+        "x1": 2745,
+        "y1": 806
+      },
+      "patchB": {
+        "count": 13937,
+        "x0": 2520,
+        "y0": 612,
+        "x1": 2624,
+        "y1": 745
+      },
+      "deltaPx": [
+        -121.5,
+        -61
+      ],
+      "predicted": [
+        -0.894,
+        -0.447
+      ],
+      "angleDeg": 0.09423639448824654
+    },
+    {
+      "a": "unit-m",
+      "b": "unit-b",
+      "worldA": [
+        8.5,
+        1.5
+      ],
+      "worldB": [
+        8.5,
+        1.5
+      ],
+      "verdict": "unit-not-moved",
+      "patchA": {
+        "count": 13939,
+        "x0": 2520,
+        "y0": 612,
+        "x1": 2624,
+        "y1": 745
+      },
+      "patchB": {
+        "count": 13937,
+        "x0": 2520,
+        "y0": 612,
+        "x1": 2624,
+        "y1": 745
+      },
+      "deltaPx": [
+        0,
+        0
+      ],
+      "predicted": [
+        0,
+        0
+      ],
+      "angleDeg": null
+    }
+  ],
+  "glErrors": []
+}
