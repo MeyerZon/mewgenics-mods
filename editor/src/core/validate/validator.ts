@@ -15,7 +15,7 @@
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, packPath } from "../repo.ts";
+import { REPO_ROOT, MODS_DIR, EXTRACTED_DATA, DATA_CACHE_DIR, packPath } from "../repo.ts";
 import { COMPONENT_CACHE_HINT } from "../components.ts";
 import { loadComponentSchema, resolveComponent, checkComponentBlock, forEachComponentBlock } from "../component-schema.ts";
 import type { ComponentSchema } from "../component-schema.ts";
@@ -33,6 +33,10 @@ import { validateScene } from "../art/scene.ts";
 import type { LocKeySource } from "../art/text.ts";
 import { isParticleKey, PARTICLE_DEAD_KEYS, isNoneName, PARTICLE_REF_KEYS, ABILITY_CLIP_KEYS, NON_CLIP_PROJECTILE_VALUES } from "../particles.ts";
 import { vanillaClipNames, modClipNames } from "../art/swf-exports.ts";
+import { AUDIO_FILE_RE, makeAudioContext, validateAudioFiles, checkAudioField, MUSIC_INFO } from "./audio.ts";
+import type { AudioContext, ModAudioFile } from "./audio.ts";
+import { loadAudioIndex, isSoundSetPath } from "../audio/sound-sets.ts";
+import type { AudioIndex } from "../audio/sound-sets.ts";
 import { identifyExe } from "../bindings/check.ts";
 import { listManifests } from "../bindings/manifest.ts";
 import { locateGameDir } from "../ingame/launch.ts";
@@ -123,6 +127,7 @@ function collectOverlays(modDir: string, override?: TextOverride): OverlayFile[]
   for (const f of files) {
     // art/*.scene.json is not a pack file but is validated as a scene (validateSceneFile); everything else off-pack is skipped
     if (f.relPath === "description.json" || f.relPath === MOD_MANIFEST_FILE || (!isPackPath(f.relPath) && !f.relPath.endsWith(SCENE_SUFFIX))) continue;
+    if (AUDIO_FILE_RE.test(f.relPath)) continue; // binary audio: checked by validateAudioFiles, never an overlay
     try {
       texts.set(f.relPath, readFileSync(f.abs, "utf8"));
     } catch {
@@ -215,6 +220,8 @@ export interface ValidateOptions {
   componentSchema?: ComponentSchema | null;
   /** vanilla SWF clip (export) names (tests/fixtures); default every extracted vanilla SWF (src/core/art/swf-exports.ts); empty = unknown */
   clips?: Iterable<string>;
+  /** the pack's audio index (tests/fixtures); undefined = the editor/data cache, null = none */
+  audioIndex?: AudioIndex | null;
 }
 
 /**
@@ -251,6 +258,12 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     rb.info("component-list-missing", `no component class names are known, so passives / ai brains / classes are not checked: ${COMPONENT_CACHE_HINT}`);
   }
 
+  // Sounds and music: the mod's audio files, its sound-set / music_info overlays, and (below) data refs.
+  const audioFiles: ModAudioFile[] = listModFiles(modDir).filter((f) => AUDIO_FILE_RE.test(f.relPath));
+  const audioIndex = opts.audioIndex !== undefined ? opts.audioIndex : loadAudioIndex(DATA_CACHE_DIR);
+  const audio = makeAudioContext(audioIndex, overlays, audioFiles);
+  validateAudioFiles(modName, overlays, audioFiles, audio, rb);
+
   // Union of localization keys available: base + mod-added.
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
 
@@ -266,7 +279,7 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
       palettes ??= lvlPalettes(overlays, root);
       validateLvl(o, rb, palettes, modName, modDir, root);
     } else if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, componentSchema, modDir, fragments, clips);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, componentSchema, modDir, fragments, clips, audio);
       if (/^data\/maps\/[^/]+\.gon$/.test(o.baseName)) validateMapFile(o, rb, overlays, modName, root, modDir);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
@@ -540,6 +553,7 @@ function validateGonOverlay(
   modDir: string,
   fragments: Set<string>,
   clips: ClipNames,
+  audio: AudioContext,
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
   const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
@@ -559,12 +573,16 @@ function validateGonOverlay(
   // a NEW data/maps/<x>.gon replaces nothing: the map DB lists data/maps (SpawnDatabase_LoadGonDir 0x7c0cb0 →
   // FileManager_ListDir 0x9a1900, which walks every -modpaths dir too) and a run loads "data/maps/" + next_map
   const newMap = o.mode === "replace" && /^data\/maps\/[^/]+\.gon$/.test(o.baseName) && !existsSync(packPath(o.baseName, dataRoot));
-  if (o.mode === "replace" && !fragment && !newMap) {
+  // A sound set / music_info file is checked by validateAudioFiles; a NEW set file (no pack copy) is not a replace.
+  const audioDef = isSoundSetPath(o.baseName) || o.baseName.toLowerCase() === MUSIC_INFO;
+  const newAudioFile = audioDef && audio.exists(o.baseName) === false;
+  if (o.mode === "replace" && !fragment && !newMap && !newAudioFile) {
     rb.warn("whole-file-replace", `${o.relPath} replaces the whole base file; prefer .append/.merge/.patch`, { file });
   }
   if (!root) return;
   const overlay = toValue(root);
   if (overlay.t !== "obj") return;
+  if (audioDef) return;
 
   // ---- Reference integrity (context-aware walk) ----------------------------
   const statusSet = new Set([...sets.statuses, ...local.statuses]);
@@ -584,6 +602,7 @@ function validateGonOverlay(
   const handleField = (key: string, value: VNode, path: string[]): void => {
     const here = [...path, key];
     const at: SourceLocation = { file, path: here.join(".") };
+    checkAudioField(key, value, path, audio, rb, file);
     if (key === "effects" || key === "temporary_effects") {
       if (value.t === "obj") for (const se of value.entries) checkStatus(se.key, { file, path: [...here, se.key].join(".") });
       return;

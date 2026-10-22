@@ -1,0 +1,15 @@
+mods: dev-sandbox
+timeout: 60s
+# Control for sounds.mewtest: the same PickupCoin step WITHOUT _audioprobe decodes the vanilla
+# audio/combat_sfx/pickup_coin.wav, whose data chunk is 44714 bytes (sounds.mewtest sees the mod tone's 24000).
+wait frames 120
+enter TacticsTest
+wait ms 4000
+cmd debug_sfx_memory_use
+expect console "Total loaded sfx: " within 5
+cmd play_sound PickupCoin
+wait frames 60
+cmd debug_sfx_memory_use
+expect console "Total loaded sfx: " within 5
+expect deltas "Total loaded sfx: " 44714
+quit

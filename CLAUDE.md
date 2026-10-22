@@ -75,7 +75,8 @@ web build (`scripts/vendor-vectorcraft.ts`: the ONE pinned release zip, size + S
 Node built-ins only, nothing installed; owner decision 2026-10-22) into the git-ignored `web/public/vectorcraft/`,
 skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hashes it:
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
-  list and base-data index the validator needs; regenerate after the base game updates). In a secondary git
+  list, the base-data index and `audio-index.json` (the pack's audio paths + sound groups, read from the gpak index
+  read-only) the validator needs; regenerate after the base game updates). In a secondary git
   worktree, point at the main checkout instead: one `node_modules` junction plus `MEWGENICS_EXTRACTED_DATA` (the
   whole `.extracted/`: data, swfs, textures), `MEWGENICS_EDITOR_DATA` (the caches) and `MEWGENICS_ANALYSIS_DIR` (the
   reverse-engineering store); every such path resolves in `editor/src/core/repo.ts` (`docs/tdd-procedure.md` "Running
@@ -207,7 +208,7 @@ verdicts) are in `docs/ingame-testing.md`; keep the three parts in sync with tha
 commands exist at the main menu; `enter TacticsTest` (2026-10-20) replays the dev menu's test-fight button inside the
 DLL, after which the run commands (`spawn`, `bind`, `load`, `win`, …) exist, turns fire and `dump` / `expect units` /
 `expect status` see the fight (`docs/engine-map.md` "Dev scenes and run entry"); `face <unit> back` turns a unit away
-(`Character::Face` 0x10ce50, so `<anim>B` frames are testable) and `dump` reports each unit's facing. After `enter Campaign house`,
+(`Character::Face` 0x10ce50, so `<anim>B` frames are testable) and `dump` reports each unit's facing. After `enter Campaign house`,
 `run start` / `run travel battle` / `run fight` walk a real run into a map node's fight (the map pool picks the level;
 `expect level` checks it; `docs/ingame-testing.md` "Campaign walk").
 

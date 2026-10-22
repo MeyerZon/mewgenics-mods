@@ -1887,3 +1887,52 @@ summary and recipe: `docs/data-mods.md` "Particles and VFX"; the key list the ed
   worn through `EliteParticle` by a spawned Rat, draws (a moving cloud of the mod's #ff0090 discs); a `particles.gon.merge`
   re-pointing vanilla `SparkleBuff`'s `movieclip` to a mod clip draws the mod clip. The window capture lagged the shot event
   by up to ~1 s in that run (the probe now waits 240 frames after each shot before changing the scene).
+
+## Audio (2026-10-22)
+
+Session `audio` (`.analysis/notes-audio.md`, 11 decompiles in `.analysis/decompiled/` with the "RE session audio"
+header); the modder-facing summary is `docs/data-mods.md` "Sounds and music". OBSERVED unless marked.
+
+- **Backend**: FAudio (XAudio2 API) over SDL3 audio; Ogg Vorbis by statically linked **stb_vorbis**
+  (`stb_vorbis_decode_memory` 0xa47080 `(mem, len, int* ch, int* rate, short** out)`, open-from-memory 0xa45fd0);
+  WAV by the engine's `WAVResource::decode` 0x9a6dd0. `AudioCore_init` 0x954e20 creates the submix voices
+  `music_main`, `voice_main`, `ambience_main`, `environment`, reads the settings keys `soundeffect_cache_size_mb`
+  (default 200 → cache budget `DAT_1413c1940[0x16]` = MB<<20) and `debug_check_audio_files_exist` (→ AudioCore+0x3a),
+  registers the engine console command `soundevent_debug off|all|real` and the SWF frame-script callback `PlaySound`.
+- **Pack layout**: `audio/` holds 16,076 `.wav` + 835 `.ogg` + 21 `.mid` + 235 `.gon`; sets `audio/combat_sfx.gon`
+  (Folder `combat_sfx`, 7,622 files), `ui_sfx.gon`, `house_sfx.gon`, `audio/voices/*.gon` (cat voices, `#include
+  voice_template.gon`), `audio/npcvoices/*.gon`; music `audio/music/<area>/*.ogg` + `music_info.gon` + `radio.gon`;
+  `audio/ambience/*.ogg`, `audio/cutscenes/*_{music,sfx}.ogg`. Every vanilla WAV is PCM 16-bit, 1 ch (8,989 @ 48 kHz,
+  6,898 @ 44.1 kHz) or 2 ch (189 @ 48 kHz); every music .ogg is 2 ch 44.1 kHz. All 22,525 file refs of the 232 sets
+  resolve at `audio/<Folder>/<file>` lower-cased (T1 `editor/test/audio-tests.ts`).
+- **`AudioCore::LoadSoundEffectSet(name, bool, bool)` 0x956110**: `Gon_LoadFile` 0x611a0 on `"audio/" + name`
+  (`"audio/"` = 0x141115c04) — the overlay path, so `.merge`/`.patch`/`.append` apply (OBSERVED in game:
+  `debug_list_loaded_files` lists `<mod>/audio/combat_sfx.gon.merge.raw`). A SetName already loaded is skipped.
+  `SoundEffectGroups` is looked up **by name** (FNV index), so an `.append`ed second block hides the vanilla one.
+  Each file → `Folder + "/" + file` → `SoundData_GetOrCreate` 0xa3b600 (cached handle, deferred load). With
+  AudioCore+0x3a set, `FileManager_FileExists` 0x9a14c0 first, a miss logs (0x9522c0, non-fatal) `Sound File Missing:
+  <path>\nWhen Loading Set: <SetName>`; default off. Channel parents other than `environment`/none/a defined channel
+  log `NO SOUND EFFECT CHANNEL NAMED: `.
+- **Which sets load**: `App_init_audio_sets` 0x750f90 — `combat_sfx.gon`, `ui_sfx.gon`, `house_sfx.gon`, then
+  `voices/<n>.gon` for `data/catgen.gon` `voice_sets` + `special_voice_sets`, then each `.gon` from
+  `FileManager_ListDir` 0x9a1900 on `audio/npcvoices` (pak index at FileManager+0x1c0, then every mod path at
+  FileManager+0x268..0x270 = the mod-path vector 0x1413c58b8 via `directory_iterator`; code only, not run).
+- **`SoundData::load` 0x9718a0** (async `load_deferred`): extension after the last `.` by `memcmp`, case-sensitive:
+  `"wav"` 0x14112b440 → `GetWAVResource` 0x973380, fmt fields copied into the FAudio WAVEFORMATEX (+0x90 tag, +0x92
+  ch, +0x94 rate, +0x9c align, +0x9e bits), data borrowed; `"ogg"` 0x14112a094 → `GetBinaryResource` 0x973750 +
+  stb_vorbis decode to PCM16; else fatal `Unsupported Sound File: <path>`. Resource NULL (no file) → 0x971de0: 4096
+  bytes of silence, mono 16-bit 41000 Hz — no log, no crash. `DAT_1413c6cb0` += data bytes (WAV) / file + decoded
+  bytes (OGG): the number `debug_sfx_memory_use` 0x754930 prints as `Total loaded sfx: N bytes (M mb)`.
+- **Lookup**: both getters → `FileManager_GetFile` 0x99ff50, mod paths first (r3dE). OBSERVED in game
+  (`mods/_audioprobe`): a mod-only file loads (+35280 = its data chunk), a mod file at a vanilla path replaces it
+  (+24000 vs +44714 vanilla, `pickup-vanilla-control.mewtest`), an absent file adds 0.
+- **Music**: `MewsicController::init` 0x23f440 loads `audio/music/music_info.gon` with `Gon_LoadFile` (overlays
+  apply); under `debug_check_audio_files_exist` a missing file is fatal `Music File Doesn't Exist: `.
+  `SoundStream::QueueSongChunk` 0xb511b0: `GetBinaryResource(path)` (missing → fatal `Couldn't Find Song File: `),
+  the whole .ogg stays in memory, decoded progressively (0xa45fd0); chunk 2+ must match chunk 1's rate and channels
+  (fatal `Song Chunk Mismatched Sample Rate` / `… Channels`); the voice is 32-bit float, block = ch*4.
+  Ambience: `"audio/ambience/" + name` (0x2443a0; INFERRED to stream like music, not followed).
+- **Debug surface**: `debug_list_loaded_files` (App command, after `enter`) prints every loaded file key — text files
+  as `<path>.rawpak` (pak) or `<modpath>/<path>.<mode>.raw` (loose), sounds as their pack path;
+  `debug_sfx_memory_use`; `play_sound <Group>` (TacticsTest). The harness reads them with `expect console` and the
+  runner-side `expect deltas` (`docs/ingame-testing.md`). Pinned by `editor/test/fixtures/ingame/result-audioprobe-sounds.jsonl`.

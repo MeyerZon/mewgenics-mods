@@ -49,6 +49,7 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       art (the new tileset `roomprobe_yard`), with the three water puddles and the trash bag where `probe.lvl` puts them?
 - [ ] `pr-room-editor` (#125) — Rooms mode on `_roomprobe` → `probe.lvl`: does the grid read as the room, can you paint / place a spawn / edit a random list unaided, and are the tint swatches (not tileset art) enough?
 - [ ] `pr130-room-tile-art` (#130) — Rooms mode on `_roomprobe` → `probe.lvl`, Flat and **Iso**: do the tile/object thumbnails read as the game's (water/lava drawn in their tint, not magenta), is the Iso view the room as the in-game shot shows it (which corner is row 0?), and is painting on the diamonds comfortable?
+- [ ] **Listen to the audio probe** (`feat/audio-mods`; no test can hear): `cd editor && node scripts/audio-probe-tones.ts`, then launch with `-modpaths <repo>/mods/_audioprobe` (or `npm run test:ingame -- _audioprobe sounds` with `hide: false`): in a fight, does a coin pickup / `play_sound PickupCoin` give a short high beep (1320 Hz) instead of the coin jingle, and `play_sound AudioProbe_New` a lower 660 Hz tone, at a sane volume?
 - [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 - [ ] **Ship a mod end to end** (PR feat/mod-packaging): `cd editor && npm run pack -- jokers-luck` (review the
       committed `mods/jokers-luck/mod.json`: license, description), then read the zip's `README-INSTALL.txt` as a player
@@ -385,6 +386,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **Fixed the real UI bug** the user was seeing: Art-mode Findings/Build tabs rendered JS source as literal text (VanJS binding returned a function into a child slot) — `editor/web/art-ui.mjs`
 
 ### Investigations run
+- [x] **Sounds and music for data mods** (2026-10-22, `feat/audio-mods`): RE session `audio` (`.analysis/notes-audio.md`) + T2 `mods/_audioprobe` (3 scripts: replaced `pickup_coin.wav` +24000 vs vanilla +44714, new mod-only group +35280, absent file +0, a mod character loading the new file). Editor: audio index (`npm run build:index` → `editor/data/audio-index.json`), validator `sound-missing` and 9 other audio codes, `list_base_data` `sounds`/`music`/`sound_files`, runner-side `expect deltas`. Docs: data-mods.md "Sounds and music", engine-map.md "Audio". Open: music/ambience replacement and a new voice set not run in game; no `expect sound <group>` hook (the memory counter made it unnecessary).
 - [x] DoABC/SymbolClass **gate test** on dev save → result: **DoABC is NOT the blocker**; our emitted SWF faults the `glaielswf` loader (new crash, distinct stack). Recorded.
 
 ## In progress

@@ -285,6 +285,18 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(!p.ok && p.errors[0].line === 1, JSON.stringify(p.errors));
     });
 
+    test("expect deltas parses a quoted prefix and one or more signed integers; runner-side like expect log", () => {
+      const d = parseDirective('expect deltas "Total loaded sfx: " 35280 24000', 7) as { kind: string; what: string; prefix: string; deltas: number[] };
+      eq(d.kind, "expect"); eq(d.what, "deltas"); eq(d.prefix, "Total loaded sfx: "); eq(d.deltas.join(","), "35280,24000");
+      eq((parseDirective('expect deltas "x" -3', 1) as { deltas: number[] }).deltas.join(), "-3");
+      for (const bad of ['expect deltas "x"', 'expect deltas bare 1', 'expect deltas "x" 1.5', 'expect deltas "x" 1 within 5', 'expect deltas "unterminated 1']) {
+        assert("error" in parseDirective(bad, 2), `${bad} should be an error`);
+      }
+      const p = parseScript('cmd x\nexpect deltas "n: " 1\nquit\n', { owningMod: "m" });
+      assert(p.ok && script.isRunnerSide(p.directives[1]!), "runner-side");
+      eq(p.body.split("\n")[1], '# runner: expect deltas "n: " 1', "the DLL sees a placeholder comment");
+    });
+
     test("expect log is kept out of the DLL body as a comment so body line numbers do not shift", () => {
       const p = parseScript(fixture("scripts/valid.mewtest"), { owningMod: "jokers-luck" });
       const lines = p.body.split("\n");
@@ -647,6 +659,17 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const absent = check!(null, [{ line: 2, substr: "x" }]);
       assert(!absent[0]!.ok && /debug\.log absent/.test(absent[0]!.detail), JSON.stringify(absent));
       eq(check!(text, []).length, 0);
+    });
+    test("checkDeltaExpects: the integers after the prefix in successive console lines must step by exactly the listed deltas", () => {
+      const check = (logs as unknown as { checkDeltaExpects?: (lines: string[], e: { line: number; prefix: string; deltas: number[] }[]) => { line: number; substr: string; ok: boolean; detail: string; what?: string }[] }).checkDeltaExpects;
+      assert(typeof check === "function", "checkDeltaExpects exported from logs.ts");
+      const lines = ["Executed: x", "Total loaded sfx: 403656 bytes (0 mb)", "noise", "Total loaded sfx: 438936 bytes (0 mb)", "Total loaded sfx: 462936 bytes (0 mb)"];
+      const r = check!(lines, [{ line: 3, prefix: "Total loaded sfx: ", deltas: [35280, 24000] }, { line: 4, prefix: "Total loaded sfx: ", deltas: [35280, 44714] }, { line: 5, prefix: "Total loaded sfx: ", deltas: [35280] }, { line: 6, prefix: "absent: ", deltas: [1] }]);
+      assert(r[0]!.ok && r[0]!.what === "deltas" && /403656 -> 438936 -> 462936/.test(r[0]!.detail), JSON.stringify(r[0]));
+      assert(!r[1]!.ok && /\+35280, \+24000/.test(r[1]!.detail), JSON.stringify(r[1]));
+      assert(!r[2]!.ok && /3 values/.test(r[2]!.detail), `the count must match too: ${JSON.stringify(r[2])}`);
+      assert(!r[3]!.ok && /0 values/.test(r[3]!.detail), JSON.stringify(r[3]));
+      eq(r[0]!.substr, 'deltas "Total loaded sfx: " 35280 24000');
     });
     test("checkSaveSuffix: ok / missing / different", () => {
       assert(checkSaveSuffix("dev", "dev").ok, "same");
@@ -1071,6 +1094,8 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       const okLog = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 5, substr: "x", ok: true, detail: "matched debug.log line 2" }] });
       eq(okLog.verdict, "pass", "expect log ok -> pass");
       assert(/1 log expectation/.test(okLog.reason), okLog.reason);
+      const missDelta = decideVerdict({ preflight: pre, exit: exit(0), result: res({}), logs: logs({}), safety: safe, logExpects: [{ line: 9, substr: 'deltas "n: " 1', ok: false, detail: "steps +2", what: "deltas" }] });
+      assert(missDelta.verdict === "fail" && /expect deltas failed at line 9/.test(missDelta.reason), missDelta.reason);
       // crash beats fail/timeout; safety beats crash
       expectV("crash > fail", { preflight: pre, exit: exit(1), result: res({ crash: { code: "x" }, end: { code: 1 } }), logs: logs({}), safety: safe }, "crash");
       expectV("safety > crash", { preflight: pre, exit: exit(3), result: res({ crash: { code: "x" }, end: { code: 3 } }), logs: logs({}), safety: { saveSuffixOk: false, saveCheck: null } }, "safety-violation");

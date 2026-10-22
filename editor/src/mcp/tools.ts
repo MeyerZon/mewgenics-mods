@@ -242,7 +242,7 @@ function def<N extends ToolName>(name: N, description: string, handler: (args: T
 export const TOOLS: ToolDef[] = [
   def(
     "list_base_data",
-    "List base game data. With no arguments, returns the data categories (abilities, passives, items, characters, classes, difficulties, statuses, ...) with entry counts. With `category`, lists the entry names in that category (optionally filtered by substring).",
+    "List base game data. With no arguments, returns the data categories (abilities, passives, items, characters, classes, difficulties, statuses, ..., and from the audio index: sounds = sound group names, music = music_info tracks, sound_files = pack audio paths) with entry counts. With `category`, lists the entry names in that category (optionally filtered by substring).",
     (a) => (a.category ? api.listBaseEntries(a.category, a.filter) : api.listBaseData()),
   ),
   def(

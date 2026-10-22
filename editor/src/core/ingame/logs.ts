@@ -43,6 +43,32 @@ export interface LogExpect {
   substr: string;
   ok: boolean;
   detail: string;
+  /** which runner-side expectation produced it (absent = log) */
+  what?: "log" | "deltas";
+}
+
+/**
+ * Runner-side `expect deltas "<prefix>" <d1> ...`: take every console line (result.jsonl, the whole run) that contains
+ * `prefix`, read the integer right after it, and require the successive differences to be exactly d1..dn (n+1 lines).
+ * Pure. `substr` echoes the directive for the verdict reason.
+ */
+export function checkDeltaExpects(consoleLines: string[], expects: { line: number; prefix: string; deltas: number[] }[]): LogExpect[] {
+  return expects.map(({ line, prefix, deltas }) => {
+    const substr = `deltas ${JSON.stringify(prefix)} ${deltas.join(" ")}`;
+    const values: number[] = [];
+    for (const l of consoleLines) {
+      const i = l.indexOf(prefix);
+      if (i < 0) continue;
+      const m = /^\s*(-?\d+)/.exec(l.slice(i + prefix.length));
+      if (m) values.push(Number(m[1]));
+    }
+    const steps = values.slice(1).map((v, k) => v - values[k]!);
+    const fmt = (xs: number[]): string => xs.map((x) => (x >= 0 ? `+${x}` : String(x))).join(", ");
+    const seen = `${values.length} values ${values.join(" -> ")}`.trim();
+    if (values.length !== deltas.length + 1) return { line, substr, ok: false, what: "deltas", detail: `expected ${deltas.length + 1} console values after the prefix, saw ${seen}` };
+    const ok = steps.every((s, k) => s === deltas[k]);
+    return { line, substr, ok, what: "deltas", detail: ok ? `${values.join(" -> ")} steps ${fmt(steps)}` : `steps ${fmt(steps)}, expected ${fmt(deltas)} (${seen})` };
+  });
 }
 
 /**

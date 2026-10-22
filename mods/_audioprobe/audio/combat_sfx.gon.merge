@@ -1,0 +1,11 @@
+// Sound groups are merged into the vanilla CombatSFX set (SetName CombatSFX, Folder combat_sfx): files resolve
+// under audio/combat_sfx/, mod path first, then the pack. .merge (not .append): an appended second
+// SoundEffectGroups block would be a duplicate name.
+SoundEffectGroups {
+    AudioProbe_New {
+        files [audioprobe_new.wav]
+    }
+    AudioProbe_Absent {
+        files [audioprobe_absent.wav]
+    }
+}

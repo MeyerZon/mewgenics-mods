@@ -72,6 +72,13 @@ PR; everything else is on `main`.
   listing the game does (`FileManager_ListDir` 0x9a1900) walks the mod paths, so a mod's new room joins a map's level
   pool, and `load <path>` plays it (OBSERVED, `mods/_roomprobe`). Hard limits: node `type` (19 names, fatal otherwise),
   `chapter_id` (a C++ enum), the run's first map. Details: **[data-mods.md](data-mods.md)** "Maps, rooms and encounters".
+- **Sounds and music are data-moddable** (OBSERVED 2026-10-22, `mods/_audioprobe`): a file at the mirrored path
+  (`mods/<m>/audio/combat_sfx/pickup_coin.wav`, `audio/music/<area>/*.ogg`) replaces the vanilla one (mod paths are
+  searched first); new sounds are new groups merged into a loaded set (`audio/combat_sfx.gon.merge` →
+  `SoundEffectGroups { MyGroup { files [x.wav] } }`, `.merge` never `.append`) referenced by name from data (`sounds {
+  ontrigger MyGroup }`, `LoopingSoundWhileAlive`, `sfx`, …). WAV PCM16 / Ogg Vorbis, lower-case extension; music Ogg
+  only, same rate/channels as the track it replaces. Backend FAudio + stb_vorbis. **[data-mods.md](data-mods.md)**
+  "Sounds and music", engine facts in [engine-map.md](engine-map.md) "Audio".
 
 ### Native layer
 - The Mewjector `version.dll` chainloader loads our `mewframework.dll`, which **gates on `-savesuffix` + the build id

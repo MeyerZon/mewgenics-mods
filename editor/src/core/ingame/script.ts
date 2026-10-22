@@ -48,6 +48,9 @@ export type Directive =
   | { line: number; kind: "expect"; what: "gon"; unit: string; path: string; check: "exists" | "missing" }
   /** runner-side: debug.log (after the `[file: …]` prefix) contains substr; evaluated after the run, never sent to the DLL */
   | { line: number; kind: "expect"; what: "log"; substr: string }
+  /** runner-side: the integers right after `prefix` in successive console lines (the whole run) step by exactly
+   *  `deltas` (n deltas = n+1 matching lines); evaluated after the run from result.jsonl, never sent to the DLL */
+  | { line: number; kind: "expect"; what: "deltas"; prefix: string; deltas: number[] }
   | { line: number; kind: "dump" }
   | { line: number; kind: "log"; text: string }
   | { line: number; kind: "quit"; code: number | null }
@@ -286,7 +289,16 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (arg.slice(q.end).trim()) return { error: "expect level: unexpected text after the quoted substring" };
         return { line: lineNo, kind: "expect", what: "level", substr: q.value };
       }
-      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|level|log)" };
+      if (what === "deltas") {
+        const q = parseQuoted(arg, 0);
+        if (!q) return { error: arg ? "expect deltas: unterminated or missing quoted prefix" : 'expect deltas needs a quoted prefix and integers: expect deltas "<prefix>" <d1> [<d2> ...]' };
+        const nums = arg.slice(q.end).trim().split(/\s+/).filter(Boolean);
+        if (!nums.length) return { error: "expect deltas: give at least one integer delta after the prefix" };
+        const bad = nums.find((n) => !/^[-+]?\d{1,15}$/.test(n));
+        if (bad) return { error: `expect deltas: "${bad}" is not an integer (no within: the console is read once, after the run)` };
+        return { line: lineNo, kind: "expect", what: "deltas", prefix: q.value, deltas: nums.map(Number) };
+      }
+      return { error: what ? `unknown expect kind "${what}"` : "expect needs a kind (console|noconsole|status|units|round|stacks|unit|gon|level|log|deltas)" };
     }
     case "run": {
       const words = rest ? rest.split(/\s+/) : [];
@@ -392,8 +404,8 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
 }
 
 /** Directives the Node runner evaluates itself (the DLL gets a comment placeholder instead). */
-export function isRunnerSide(d: Directive): d is Extract<Directive, { what: "log" }> {
-  return d.kind === "expect" && d.what === "log";
+export function isRunnerSide(d: Directive): d is Extract<Directive, { what: "log" | "deltas" }> {
+  return d.kind === "expect" && (d.what === "log" || d.what === "deltas");
 }
 
 export interface ParseScriptOptions {

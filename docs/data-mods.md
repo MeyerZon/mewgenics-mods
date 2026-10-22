@@ -524,6 +524,89 @@ A hit effect with your own art: `new_from_template vfx-ability PinkSpin { moviec
 particles file defines, `clip-missing` (warning) for a clip neither vanilla nor your scenes export (another loaded mod
 may still provide it), `clip-list-missing` (info) when the vanilla SWFs are not extracted.
 
+## Sounds and music (OBSERVED 2026-10-22)
+
+A data mod can **replace** any vanilla sound or song and **add** new sounds, with no native code. Engine facts and
+RVAs: `docs/engine-map.md` "Audio"; the in-game proof: `mods/_audioprobe` (T2 below).
+
+**How the game finds audio.** Every audio file is read through the same file manager as the GON data: mod paths
+first (in `-modpaths` order), then the pack (`FileManager_GetFile` 0x99ff50). So:
+
+- **Replace** a vanilla file: ship it at the mirrored path, e.g. `mods/<mod>/audio/combat_sfx/pickup_coin.wav`
+  replaces the coin pickup sound, `mods/<mod>/audio/music/alley/eatinrats_battle.ogg` the Alley battle music,
+  `mods/<mod>/audio/ambience/amb_rain.ogg` the rain ambience. No GON change needed.
+- **Add** a sound: the data layer never names a file, it names a **sound group** of a sound set. Add the group to a
+  set the game loads, then reference the group name from data:
+
+  ```
+  // mods/<mod>/audio/combat_sfx.gon.merge   (.merge, never .append — see below)
+  SoundEffectGroups {
+      MyMod_Zap {
+          files [mymod_zap1.wav mymod_zap2.wav]   // one is picked at random; audio/combat_sfx/<file>
+          pitch_range [.95, 1.05]
+          volume .8
+      }
+  }
+  ```
+  ship `mods/<mod>/audio/combat_sfx/mymod_zap1.wav` (…`2.wav`), and use `MyMod_Zap` wherever data takes a sound:
+  `sounds { ontrigger MyMod_Zap }` (abilities: `ontrigger`, `oncast`, `oncastpoint`, `ontrigger_intentional`),
+  `passives { LoopingSoundWhileAlive MyMod_Zap }`, `sfx`, `deathsound`, `sound_event`, `SoundEventOnHit`,
+  `equip_sound`, `play_sound`, `sound { alt_sounds [[…]] }`. In a fight the console command `play_sound MyMod_Zap`
+  plays it.
+
+**Sound sets** (`audio/<set>.gon`, read by `AudioCore::LoadSoundEffectSet` 0x956110 through the overlay-aware GON
+loader, so `.merge` / `.patch` apply): `SetName`, `Folder` (files resolve as `audio/<Folder>/<file>`), `Channels`
+(`main { volume, max_sounds, parent environment|none, falloff… }` + named channels a group picks with `channel`), and
+`SoundEffectGroups { <Group> { files, pitch, pitch_range, volume, volume_range, delay, delay_frames, extra_events,
+limit_amount, limit_period, play_chance, channel, … } }` (the vanilla header comment in `audio/combat_sfx.gon`
+documents each key). The game loads exactly: `audio/combat_sfx.gon` (Folder `combat_sfx`), `audio/ui_sfx.gon`,
+`audio/house_sfx.gon`, `audio/voices/<n>.gon` for each `n` in `data/catgen.gon` `voice_sets` / `special_voice_sets`
+(cat voices), and every `audio/npcvoices/*.gon` (listed from the pack **and** each mod path). A new
+`audio/<anything-else>.gon` is never read — put new groups into one of those sets.
+
+- **Use `.merge`, not `.append`, on a set.** The loader reads `SoundEffectGroups` by name; an appended second
+  `SoundEffectGroups` block is the one it finds, so every vanilla group of that set goes silent.
+- A new cat voice: `audio/voices/<n>.gon` (copy a vanilla one's shape: `#include voice_template.gon`, groups `Angry`
+  `Death` `Happy` `Hiss` `Hit` `Normal` `Purr` `Sad` `Sing`) + `mods/<mod>/data/catgen.gon.merge` adding `<n>` to
+  `voice_sets` (untested in game).
+
+**Formats** (`SoundData::load` 0x9718a0, `SoundStream::QueueSongChunk` 0xb511b0):
+
+| | accepted | notes |
+|---|---|---|
+| sound files (groups) | `*.wav`, `*.ogg` — **lower-case extension** | anything else stops the game: fatal `Unsupported Sound File: <path>` (validator `sound-unsupported`) |
+| WAV | RIFF / `fmt ` / `data`, other chunks skipped; the fmt block goes to FAudio as-is | every vanilla WAV is PCM 16-bit, mono (or 189 stereo), 44100 or 48000 Hz — stay there (`sound-format` warns otherwise). A non-RIFF `.wav` is a fatal assert (`sound-not-wav`) |
+| OGG sound | Ogg Vorbis, decoded fully to PCM16 in memory by stb_vorbis | |
+| music | Ogg Vorbis only (`music-not-ogg`), held in memory and decoded as it plays | every chunk queued on one stream must share the first one's **sample rate and channel count** (fatal `Song Chunk Mismatched …`); vanilla songs are 44100 Hz stereo — match the file you replace. A missing song file is fatal (`Couldn't Find Song File`) |
+| ambience | `ambient_sound <file>.ogg` → `audio/ambience/<file>` | |
+
+A sound file that exists nowhere is **silent and logs nothing** (a 4 KB silent stub); only the settings.txt key
+`debug_check_audio_files_exist 1` makes the set loader log `Sound File Missing: <path> When Loading Set: <set>` (and
+makes a missing music file fatal). Loaded sounds stay cached up to `soundeffect_cache_size_mb` (default 200).
+Volume routing: FAudio submixes `music_main`, `voice_main`, `ambience_main`, `environment` (the settings' volume
+sliders); a set's `Channels.main.parent` hangs it under `environment` (reverb) or `none`.
+
+**Music tracks** are keys of `audio/music/music_info.gon` (`map`, `battle`, `boss`, `event`, `midi`, `intro`, paths
+relative to `audio/music/`), named from data by `music` (maps), `override_music`, `new_music`. A new track is a
+`music_info.gon.append` entry + its `.ogg` files; the validator checks the key (`music-unknown`) and the files.
+
+**Validator** (`validate_mod`, needs `npm run build:index` for the pack's audio list, else one
+`audio-index-missing` info): `sound-missing` (a group / track / ambient file in neither mod nor pack), `sound-not-wav`,
+`sound-not-ogg`, `sound-unsupported`, `music-not-ogg` (errors); `sound-format`, `sound-event-unknown` (a data ref to
+no group of any set), `music-unknown`, `sound-set-append`, `sound-set-not-loaded` (warnings); `sound-replaces` (info:
+the mod file overrides a vanilla one). `list_base_data` lists `sounds` (8,215 group names), `music` (111 tracks) and
+`sound_files` (every pack audio path) once the index is built.
+
+**T2 proof** (`mods/_audioprobe`, `npm run test:ingame -- _audioprobe`; the WAVs are generated by
+`editor/scripts/audio-probe-tones.ts` — `*.wav` is git-ignored). There is no audio capture; the witness is the game's
+own `debug_sfx_memory_use` counter, which rises by each decoded WAV's data-chunk size (checked with the runner-side
+`expect deltas`): `play_sound AudioProbe_New` (mod-only file) **+35280** = the generated tone; `play_sound PickupCoin`
+with the replaced `pickup_coin.wav` **+24000** = the mod tone, against **+44714** (the vanilla file) in
+`pickup-vanilla-control.mewtest`; `AudioProbe_Absent` **+0**; `debug_list_loaded_files` shows
+`<mod>/audio/combat_sfx.gon.merge.raw` (the overlay was read) and the key `audio/combat_sfx/audioprobe_new.wav`.
+`character-ref.mewtest`: spawning `AudioProbeRat` (`LoopingSoundWhileAlive AudioProbe_New`) loads the mod file without
+any `play_sound`. Not proven in game: music / ambience replacement and new voice sets (same file path code; RE only).
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components (the keys each one reads: "Component keys" above). A mechanic that no component expresses
