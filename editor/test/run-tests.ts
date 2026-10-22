@@ -566,6 +566,8 @@ await mcpSmoke();
   await runArtRasterTests(test, assert, eq);
   const { runArtFontTests } = await import("./art-font-tests.ts");
   await runArtFontTests(test, assert, eq);
+  const { runArtRasterProbeTests } = await import("./art-raster-probe-tests.ts");
+  await runArtRasterProbeTests(test, assert, eq);
   const { runArtProbesTests } = await import("./art-probes-tests.ts");
   await runArtProbesTests(test, assert, eq);
   const { runArtGlowTests } = await import("./art-glow-tests.ts");
