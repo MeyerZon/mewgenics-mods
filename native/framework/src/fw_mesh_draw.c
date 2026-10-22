@@ -1,6 +1,45 @@
-/* fw_mesh_draw.c — red stub (the green commit implements it) */
+/* fw_mesh_draw.c — the pure decisions of the M1 mesh path (fw_mesh_draw.h). Host-tested in test/test_mesh_draw.c. */
+#include <stdio.h>
+#include <string.h>
 #include "fw_mesh_draw.h"
-int fw_mesh_probe_parse(const char *value, int *col, int *row) { (void)value; (void)col; (void)row; return -1; }
-int fw_mesh_draw_after_layer(const void *tt, const void *cam, int layer) { (void)tt; (void)cam; (void)layer; return -1; }
-const float *fw_mesh_stack_top(const void *const *stackData, const int *stackTop) { (void)stackData; (void)stackTop; return (const float *)1; }
-int fw_mesh_fmt_probe(char *buf, size_t n, int frame, int col, int row, const float ndc[3], const double canvas[2]) { (void)frame; (void)col; (void)row; (void)ndc; (void)canvas; if (n) buf[0] = 0; return 0; }
+#include "offsets.h"
+
+/* a plain non-negative decimal of at most 6 digits, the whole [s, e) range */
+static int parse_uint(const char *s, const char *e, int *out) {
+    if (s >= e || e - s > 6) return 0;
+    int v = 0;
+    for (const char *p = s; p < e; p++) {
+        if (*p < '0' || *p > '9') return 0;
+        v = v * 10 + (*p - '0');
+    }
+    *out = v;
+    return 1;
+}
+
+int fw_mesh_probe_parse(const char *value, int *col, int *row) {
+    if (!value || !*value) return 0;
+    if (!strcmp(value, "1")) { *col = FW_MESH_PROBE_DEFAULT_COL; *row = FW_MESH_PROBE_DEFAULT_ROW; return 1; }
+    const char *comma = strchr(value, ',');
+    if (!comma) return 0;
+    int c, r;
+    if (!parse_uint(value, comma, &c) || !parse_uint(comma + 1, comma + 1 + strlen(comma + 1), &r)) return 0;
+    *col = c; *row = r;
+    return 1;
+}
+
+int fw_mesh_draw_after_layer(const void *tacticsTest, const void *cam, int layer) {
+    if (!tacticsTest || !cam || layer != CONST_UNITS_LAYER) return 0;
+    return *(void *const *)((const unsigned char *)tacticsTest + OFF_TT_MAIN_CAMERA) == cam;
+}
+
+const float *fw_mesh_stack_top(const void *const *stackData, const int *stackTop) {
+    if (!stackData || !stackTop || !*stackData || *stackTop < 0) return NULL;
+    return (const float *)*stackData + (size_t)*stackTop * 16;
+}
+
+int fw_mesh_fmt_probe(char *buf, size_t n, int frame, int col, int row, const float ndc[3], const double canvas[2]) {
+    int k = snprintf(buf, n, "mesh probe f=%d tile=(%d,%d) ndc=(%.3g %.3g %.3g) canvas=(%.2f %.2f)", frame, col, row,
+                     (double)ndc[0], (double)ndc[1], (double)ndc[2], canvas[0], canvas[1]);
+    if (k < 0) { if (n) buf[0] = 0; return 0; }
+    return (size_t)k < n ? k : (int)(n ? n - 1 : 0);
+}

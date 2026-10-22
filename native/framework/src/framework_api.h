@@ -64,6 +64,11 @@ typedef enum FwSymbol {
     FW_SYM_Camera_render,               /* void (Camera*) — binds the RT (RTT cameras), stack top *= Camera_GetViewProjection, draws the enabled layers + passes */
     FW_SYM_Camera_GetViewProjection,    /* float* (Camera*, float out[16]) — K x inverse(view): zoom +0x168, y-flip int +0x170, 1280x720 canvas centre 640,360 */
     FW_SYM_Camera_RenderOneLayer,       /* void (Camera*, int layer) — how the world (TacticsTest+0x68) and UI cameras draw: one layer, own VP push */
+    /* M1 meshes (docs/possible_3d_work.md phase M): the draw functor, model bytes, the palette texture and material binding */
+    FW_SYM_Batch_SubmitFunctor,         /* void (unused, std::function<void()>* fn) — copies fn into the frame recording (run at replay via slot 2), destroys the argument */
+    FW_SYM_ResourceManager_GetBinaryResource, /* BinaryResource* (unused, std::string path by value) — bytes via -modpaths then the gpak; data +0x28, int32 size +0x30; NULL when missing */
+    FW_SYM_App_GetTexture,              /* Texture2D* (unused, std::string name by value) — cached "textures/"+name; a missing file is dereferenced */
+    FW_SYM_Material_Bind,               /* void (Material*) — program, uniforms, textures through the engine caches */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -89,6 +94,7 @@ typedef enum FwData {
     FW_DATA_DepthBias,                         /* float: global depth_bias (+1 per depth-tested layer) */
     FW_DATA_MatStackTop,                       /* int: matrix stack top index */
     FW_DATA_CurrentCamera,                     /* Camera*: the camera rendering right now */
+    FW_DATA_MatStackData,                      /* float*: matrix stack data (top = data + MatStackTop * 16 floats) */
     FW_DATA_COUNT_
 } FwData;
 

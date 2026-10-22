@@ -64,7 +64,7 @@ TEST(m4_inverse_roundtrip_and_singular) {
     float inv[16], o[16];
     CHECK_EQ(fw_m4_inverse(VP_F1, inv), 1);
     fw_m4_mul(VP_F1, inv, o);
-    for (int i = 0; i < 16; i++) CHECK_NEAR(o[i], (i % 5 == 0) ? 1 : 0, 1e-5);
+    for (int i = 0; i < 16; i++) CHECK_NEAR(o[i], (i % 5 == 0) ? 1 : 0, 1e-4);   /* float: the 664 px translation costs ~1e-5 */
     float z[16] = { 0 }, keep[16];
     for (int i = 0; i < 16; i++) keep[i] = inv[i];
     CHECK_EQ(fw_m4_inverse(z, inv), 0);
