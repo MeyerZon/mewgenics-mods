@@ -1,0 +1,7 @@
+{
+  "title": "VFX probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: (a) particles.gon.merge re-points the vanilla SparkleBuff system's movieclip to this mod's VfxProbeMarker clip (the _artprobe marker shape), (b) particles.gon.append adds a NEW system VfxProbeAura drawing this mod's VfxProbeDot clip (#ff0090), each worn by a Rat variant through the EliteParticle passive. npm run test:artprobe -- --vfx shoots and measures them. Never for play.",
+  "requirements": []
+}

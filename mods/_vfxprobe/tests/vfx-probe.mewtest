@@ -1,0 +1,32 @@
+mods: _vfxprobe
+timeout: 120s
+hide: false
+# The VFX probe (2026-10-22): can a data mod define a NEW particle system with its own art, and re-point a vanilla one?
+# No _autoplay: the fight waits on the player's turn, so the probe units stay alive and still while their auras emit.
+# Shots: a settled baseline (no probe unit), the NEW system (VfxProbeAura: a Rat with EliteParticle VfxProbeAura, our
+# #ff0090 VfxProbeDot clip) three times 25 frames apart, then the re-pointed vanilla system (VfxProbeRepoint: a Rat with
+# EliteParticle SparkleBuff, whose movieclip our particles.gon.merge sets to VfxProbeMarker) three times.
+# editor/scripts/art-probe.ts --vfx reads them (probe-vfx.ts): pink / marker pixels in the arena per shot, how much the
+# pink set moves between shots (particles, not a sprite), and it refuses a verdict when the shots are byte-identical.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+cmd spawn VfxProbeAura
+expect console "Spawned VfxProbeAura" within 10
+wait frames 90
+shot "aura 1"
+wait frames 25
+shot "aura 2"
+wait frames 25
+shot "aura 3"
+cmd spawn VfxProbeRepoint
+expect console "Spawned VfxProbeRepoint" within 10
+wait frames 90
+shot "repoint 1"
+wait frames 25
+shot "repoint 2"
+wait frames 25
+shot "repoint 3"
+quit

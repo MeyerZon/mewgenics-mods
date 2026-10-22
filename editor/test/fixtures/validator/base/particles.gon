@@ -1,0 +1,8 @@
+// Synthetic base: two particle systems (hand-written fixture, not game data).
+BasePuff {
+    movieclip ParticlePuff
+    emit_rate 10
+}
+BaseCombo {
+    combo [BasePuff]
+}

@@ -1,0 +1,23 @@
+// test-only (VFX probe b): a NEW particle system. Every key is one ParticleSystemData decode (0x9c5b00) reads;
+// there is no colour key - the colour is the clip's own art (VfxProbeDot, a #ff0090 disc in swfs/vfx.swf).
+VfxProbeAura {
+    movieclip VfxProbeDot
+    unlit true
+
+    render_mode separate
+    simulation_space global
+    ownership local
+    projection_matrix default
+
+    emit_rate 30
+    emit_amount 1
+    emit_direction [0, 1, 0]
+    emit_spread 30
+    emit_box [-.3 .3 0 1 -.3 .3]
+    live_bounds [-999 999 -999 999 -999 999]
+
+    particle_lifetime 1.5
+    speed_start .6
+    size 1
+    alpha 1
+}
