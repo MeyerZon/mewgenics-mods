@@ -75,5 +75,40 @@ export function runMeshOcclusionTests(test: TestFn, assert: AssertFn, eq: EqFn, 
     const j = mm.judgeOcclusion([shot(0, 1), shot(0.4, 3)], [early, occ], "behind");
     eq(j.shot, 1); eq(j.verdict, "behind-occluded");
   });
-  void fixture;
+  // T2 (2026-10-22, build 25143593, mods/dev-sandbox/tests/mesh-occlusion.mewtest, PR #117's in-process GL shots): the
+  // mesh lines of mod_logs/mewframework.log of the behind (MEWFW_MESH_PROBE=2,6) and front (1,3) runs, and the judgements
+  test("T2 fixture: the world camera had no filter of its own, the units layer was interleaved (sorted, mode 0), the keys came out descending, the behind cube went in before the cat on (2,5) and the front cube after the cat on (1,4)", () => {
+    const text = fixture?.("mesh-occlusion-log.txt");
+    assert(!!text, "fixtures/ingame/mesh-occlusion-log.txt");
+    if (!text) return;
+    const [behindText, frontText] = text.split(/^# --- front/m);
+    const b = mm.parseMeshOrderLog(behindText!), f = mm.parseMeshOrderLog(frontText ?? "");
+    for (const p of [b, f]) {
+      eq(p.filterPrev, "0000000000000000", "vanilla world camera: no per-item filter");
+      eq(p.interleaving, true);
+      assert(p.orders.length >= 3 && p.orders.every((o) => o.unsorted === 0 && o.groups === 1), "descending keys, one functor");
+      assert(p.occ.length >= 3, "occ lines");
+    }
+    const cat = (p: mm.MeshOrderLog, x: number, z: number) => p.items.find((i) => i.at[0] === x && i.at[1] === z);
+    const bp = b.orders[0]!.placements[0]!;
+    eq(bp.key, 9); eq(bp.itemKey, 8);
+    eq(bp.item, cat(b, 2.5, 5.5)?.index, "behind: right before the cat on (2,5)");
+    eq(b.occ[0]!.tile.join(","), "2,6");
+    const fp = f.orders[0]!.placements[0]!;
+    eq(fp.key, 5);
+    assert(fp.item !== null && fp.item > cat(f, 1.5, 4.5)!.index, "front: after the cat on (1,4)");
+    eq(f.occ[0]!.tile.join(","), "1,3");
+  });
+  test("T2 fixture: behind coverage < 0.85 (the cat covers a quarter of the cube), in front >= 0.9, the save untouched", () => {
+    const raw = fixture?.("mesh-occlusion-summary.json");
+    assert(!!raw, "fixtures/ingame/mesh-occlusion-summary.json");
+    if (!raw) return;
+    const s = JSON.parse(raw) as { runs: { name: string; expect: string; probe: string; judgement: mm.OcclusionJudgement; save: string }[] };
+    const behind = s.runs.find((r) => r.name === "behind")!, front = s.runs.find((r) => r.name === "front")!;
+    eq(behind.judgement.verdict, "behind-occluded"); eq(behind.judgement.pass, true);
+    assert(behind.judgement.coverage! < mm.OCC_BEHIND_MAX && behind.judgement.coverage! > 0.5, `behind ${behind.judgement.coverage}`);
+    eq(front.judgement.verdict, "front-unoccluded"); eq(front.judgement.pass, true);
+    assert(front.judgement.coverage! >= mm.OCC_FRONT_MIN, `front ${front.judgement.coverage}`);
+    for (const r of s.runs) assert(/^1 real save file\(s\) unchanged/.test(r.save), `${r.name}: ${r.save}`);
+  });
 }
