@@ -162,6 +162,18 @@ character the passives `CharacterLightSource { glow [r g b a] size N }` (an addi
 `AdvancedTint [mul r g b a  add r g b a]` (a brightness lift of its pixels) — `docs/data-mods.md` "Lighting and tint
 knobs"; neither is a rim.
 
+New cat animation (the engine's shape: `_Append_CatTest` frames `<name>F` / `<name>B` on the root, each placing a cat
+rig as the child `ani` at depth 1 — the instance the engine restarts on every play; the rig's seven slots are EMPTY
+sprites, `parts: "game"`): `new_art_scene { mod, name, template: "cat-animation", animation: "<name>" }` → pose the
+empty slots over the frames if you want (never put art in them: the game draws the cat's own parts — palette, texture,
+face — into empty slots, and a visible non-empty slot crashes it; placeholder art is preview-only) → `build_swf` →
+refer to it bare from GON: `alt_animations [[idle <name>]]` on a character or `animation <name>` on an ability (the
+engine adds the facing suffix; a missing F or B label is a silent no-op, so keep both). `write_art_scene { dryRun: true }`
+reports the `cat-anim-*` findings (`cat-anim-slot-not-empty` when a slot holds art; the info `cat-anim-untested` says
+what the game draws, OBSERVED in PR #74 once its empty-slot run lands). Never export a clip named `CatTest` itself:
+clips resolve through a global last-loaded-first registry and it would replace the cat for every cat
+(`cat-clip-override`).
+
 ## The mod-development loop (agent alone until the last step)
 
 1. Author the overlays (`new_from_template`, `write_overlay`); `validate_mod` and

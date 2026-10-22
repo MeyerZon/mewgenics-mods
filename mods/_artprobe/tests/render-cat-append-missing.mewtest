@@ -1,0 +1,15 @@
+mods: _artprobe, _autoplay
+timeout: 120s
+hide: false
+# Experiment A0 control 2: ArtProbeCatMissing is TomTom with alt_animations [[idle noSuchLabelXYZ]] — a label that no
+# clip has. If this crashes where render-cat-append.mewtest crashes, that crash is the missing-label path, not
+# the content of our appended frame.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+cmd spawn ArtProbeCatMissing
+expect console "Spawned ArtProbeCatMissing" within 10
+wait frames 120
+shot "missing"
+quit

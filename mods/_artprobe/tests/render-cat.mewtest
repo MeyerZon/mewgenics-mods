@@ -1,7 +1,7 @@
 mods: _artprobe, _autoplay
 timeout: 90s
 hide: false
-# The cat rig probe: an ArtProbeCat enemy (a Rat whose graphics.movieclip is the CatProbe rig in probe.swf: the seven
+# The cat rig probe: an ArtProbeCat enemy (a Rat whose graphics.movieclip is the CatProbeColours rig in probe.swf: the seven
 # vanilla cat slots, one passthrough colour each) in a seeded fight, shot three times. editor/scripts/art-probe.ts
 # --cat builds the SWF first and counts each slot colour in the shots (probe-compare.ts slotColoursPresent).
 wait frames 120

@@ -14,7 +14,7 @@ import { gradientProblems } from "./gradient.ts";
 import { fillRuleProblems } from "./shape.ts";
 import { vanillaExportSource, exportShadowsMessage } from "./swf-rules.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
-import { rigFindings } from "./cat-rig.ts";
+import { rigFindings, catAnimFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
 import { textProblems } from "./text.ts";
 import type { SceneText } from "./text.ts";
 import { VANILLA_EXPORTS } from "./vanilla-exports.ts";
@@ -157,6 +157,8 @@ export interface SceneSprite {
   layers: SceneLayer[];
   /** "cat": a cat rig (layers named after the vanilla slots; cat-rig.ts checks it) */
   rig?: "cat";
+  /** "game" (cat rigs): the slots are empty sprites the game fills with the cat's own parts (cat-rig.ts) */
+  parts?: "game";
 }
 
 export interface SceneStage {
@@ -477,8 +479,10 @@ export function validateScene(input: unknown): SceneValidation {
       err("sprite-layers", `sprite "${id}" needs layers[]`, [at]);
       continue;
     }
-    if (sp.rig === "cat") findings.push(...rigFindings(sp, at));
+    if (sp.rig === "cat") findings.push(...rigFindings(sp, at, scene));
     else if (sp.rig !== undefined) err("sprite-rig", `rig must be "cat"`, [at + ".rig"]);
+    if (sp.parts !== undefined && sp.parts !== "game") err("sprite-parts", `parts must be "game"`, [at + ".parts"]);
+    else if (sp.parts === "game" && sp.rig !== "cat") err("sprite-parts", `parts: "game" needs rig: "cat"`, [at + ".parts"]);
     if (!(Number.isInteger(sp.frames) && sp.frames >= 1)) {
       err("sprite-frames", `sprite "${id}" frames must be an integer >= 1`, [at + ".frames"]);
       sp.frames = Math.max(1, sp.frames | 0);
@@ -543,9 +547,13 @@ export function validateScene(input: unknown): SceneValidation {
   for (const [linkage, ref] of Object.entries(scene.exports)) {
     if (!linkage) err("export-name", "empty linkage name", ["exports"]);
     if (typeof ref !== "string" || !(scene.shapes[ref] || scene.sprites[ref])) err("export-ref", `export "${linkage}" points at unknown id "${String(ref)}"`, [`exports.${linkage}`]);
+    // OBSERVED 2026-10-21 (0x9bb6f0): clips resolve by name through a global registry of every loaded SWF, last-loaded first
+    if (linkage === CAT_CLIP_NAME) err("cat-clip-override", `export "${CAT_CLIP_NAME}" would replace the game's cat clip for every cat (clips resolve through a global last-loaded-first registry); append frames with "_Append_${CAT_CLIP_NAME}" instead`, [`exports.${linkage}`]);
     const vanillaFile = linkage ? vanillaExportSource(linkage) : null;
     if (vanillaFile) findings.push({ severity: "info", code: "export-shadows-vanilla", message: `export ${exportShadowsMessage(linkage, vanillaFile)}`, path: `exports.${linkage}` });
   }
+  // a cat animation donor (exports._Append_CatTest): facing pairs, a rig per labeled frame, depth 1 (cat-rig.ts)
+  findings.push(...catAnimFindings(scene));
   scene.stage_instances.forEach((si, i) => {
     if (!si || typeof si.ref !== "string" || !(scene.shapes[si.ref] || scene.sprites[si.ref] || (scene.texts || {})[si.ref] || (scene.imports || {})[si.ref])) err("stage-ref", `stage_instances[${i}].ref is not a shape or sprite`, [`stage_instances[${i}]`]);
   });
