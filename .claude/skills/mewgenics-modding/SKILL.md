@@ -154,6 +154,14 @@ report what the game's loader would do (`editor/src/core/art/swf-rules.ts`; erro
 The preview draws what the engine does: even-odd fills over the sub-paths the emitter keeps, the cxform after the palette
 remap, padded gradients, smoothed + clamped bitmaps.
 
+Glows and drop shadows: **bake them** — `bake_glow { mod, path, shapeId, color, blur, kind?: glow|dropShadow, dx?, dy?,
+strength?, steps?, replace? }` adds the halo shape `<shapeId>_glow` under the source on every layer that places it
+(ordinary geometry the game draws like anything else; re-bake after editing the source). Never put SWF filters on a
+key: the loader crashes on any filter list (`filter-unsupported`). For engine-side light or tint instead, give the
+character the passives `CharacterLightSource { glow [r g b a] size N }` (an additive ground disc around the unit) or
+`AdvancedTint [mul r g b a  add r g b a]` (a brightness lift of its pixels) — `docs/data-mods.md` "Lighting and tint
+knobs"; neither is a rim.
+
 ## The mod-development loop (agent alone until the last step)
 
 1. Author the overlays (`new_from_template`, `write_overlay`); `validate_mod` and

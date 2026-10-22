@@ -203,6 +203,29 @@ applies the status. The native half (`native/mods/jokers-luck`) registers the na
 `effects { JokersLuck N }` valid everywhere the game accepts a status name. Test in battle with the console command
 `bind JokersGambit`, then use the ability; carriers should show a luck modifier that changes every turn.
 
+## Lighting and tint knobs
+
+The engine has no per-unit glow or outline a mod can switch on (the combat rim is a hover effect with a constant white
+colour, and the SWF player refuses filter lists; `docs/engine-map.md` "Glow and outline passes", OBSERVED 2026-10-21).
+What data *can* do, all plain passives on a character / class / item:
+
+- **`CharacterLightSource { color [r g b] glow [r g b a] size N }`** — a `LightSource` on the unit feeding the scene's
+  `Lighting` pass: `color` is the light pool that lightens ambient-darkened ground (visible only where a tileset's
+  `Lighting { ambient … }` is below 1); `glow` is an **additive disc of colour on the ground tiles around the unit**
+  (radius ≈ `size/2` tiles + one soft tile, per-tile resolution, bleeds onto the sprite and its neighbours; it is not
+  sprite-shaped). Vanilla: `characters/enemies.gon` `passives { Undead 1  CharacterLightSource { color [.8, .9, 1]
+  size 1.5 } }`, `small_enemies.gon` `CharacterLightSource { color [.7, .3, 1] … }`; `glow` is read only when the key
+  exists (default 0). Works in combat (`Lighting` is `Instantiatable_InCombat`).
+- **`AdvancedTint [ mul_r mul_g mul_b mul_a  add_r add_g add_b add_a ]`** — a full colour transform on the unit's
+  sprite including the **additive** term, the only data-level way to brighten a sprite's own pixels. Vanilla:
+  `characters/finalboss.gon` `passives { AdvancedTint [ .6, .6, .6, 1  .5, .5, .5, 0 ] }`. Per pixel; no rim.
+- **`TintItem { mul [r g b] add [r g b] ignore_if_str_aux_equals <aux> }`** — the item-side form (`items/weapons.gon`
+  ModelingClay: `add [0.05 0.05 0.05] mul [0.45 0.3 0.25]`); `EliteTint [r g b a]` / `EliteFlatTint [r g b]`
+  (elite_buffs.gon) and `graphics { tint [r g b a] }` are multiplies only.
+
+For a sprite-shaped glow or drop shadow, bake it into the art: the editor's `bake_glow` (`docs/art-pipeline.md` §6)
+adds a halo shape under the source; the result is ordinary SWF geometry the game draws like any other.
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses

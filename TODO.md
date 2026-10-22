@@ -17,9 +17,14 @@ done (2026-10-21). Owner's answers of 2026-10-21 are recorded under each item; c
 - [x] **Localized text?** Texts (#69) are the literal initial string in a game font. Should mods get localized text
       (loc keys / per-language strings), and is Peralta the right default font?
       **Owner, 2026-10-21: deferred; Peralta is fine as the default for now.** No work queued.
-- [ ] **Filters / glows:** the game refuses any PlaceObject3 filter ("FILTERS NOT SUPPORTED", #65), so the validator
-      blocks them. Want a "bake glow / shadow into the art" helper, or leave it? Still under discussion (owner,
-      2026-10-21).
+- [x] **Filters / glows** — answered 2026-10-21: the game refuses any PlaceObject3 filter ("FILTERS NOT SUPPORTED",
+      #65; the loader has no filter renderer at all, `PlaceObject::decode3` 0xb78210 stops on the flag bit), so the
+      validator keeps blocking them and the **bake helper is done**: `bakeGlow` / `bakeDropShadow`
+      (`editor/src/core/art/glow.ts`), MCP `bake_glow`, the shape row's "Bake glow…" — a halo shape `<id>_glow` of
+      concentric outline bands placed under the source; `glow-baked` info findings; docs in `engine-map` "Glow and
+      outline passes", `art-pipeline` §6, `data-mods` "Lighting and tint knobs". Engine-side, data has only
+      `CharacterLightSource.glow` (ground disc) and `AdvancedTint` (brightness). A native per-unit rim (the combat
+      outline pass with a per-unit colour and an always-on mask) is being pursued in session `rim`.
 - [x] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
       **Owner, 2026-10-21: approved in principle, at least for testing** (agents drawing parts headlessly). Not

@@ -65,9 +65,24 @@ export interface ScenePath {
   transform?: Mat;
 }
 
+/** How a halo shape was baked (glow.ts); the validator reports it and the UI can re-bake it. */
+export interface BakedGlowMeta {
+  kind: "glow" | "dropShadow";
+  /** the source shape id */
+  of: string;
+  color: string;
+  blur: number;
+  strength: number;
+  steps: number;
+  dx?: number;
+  dy?: number;
+}
+
 export interface SceneShape {
   paths: ScenePath[];
   source?: string;
+  /** set on a halo shape bakeGlow / bakeDropShadow produced (glow.ts) */
+  baked?: BakedGlowMeta;
 }
 
 export interface GradientStopDef {
@@ -379,6 +394,12 @@ export function validateScene(input: unknown): SceneValidation {
       continue;
     }
     if (!sh.paths.length) warn("shape-empty", `shape "${id}" has no paths`, [`shapes.${id}`]);
+    if (sh.baked !== undefined) {
+      const b = sh.baked;
+      if (!b || typeof b.of !== "string" || (b.kind !== "glow" && b.kind !== "dropShadow")) err("glow-baked", `shape "${id}".baked must name kind (glow|dropShadow) and of (the source shape)`, [`shapes.${id}.baked`]);
+      else if (!scene.shapes[b.of]) warn("glow-orphan", `shape "${id}" is a baked ${b.kind} of "${b.of}", which no longer exists (delete it or re-bake)`, [`shapes.${id}.baked`]);
+      else findings.push({ severity: "info", code: "glow-baked", message: `shape "${id}" is a baked ${b.kind} of "${b.of}" (${b.color}, blur ${b.blur} px, ${b.steps} band${b.steps === 1 ? "" : "s"}${b.kind === "dropShadow" ? `, offset ${b.dx ?? 0}, ${b.dy ?? 0}` : ""}); re-bake it after editing "${b.of}"`, path: `shapes.${id}` });
+    }
     sh.paths.forEach((p, i) => {
       const at = `shapes.${id}.paths[${i}]`;
       if (!p || typeof p.d !== "string" || !p.d.trim()) {
@@ -506,7 +527,8 @@ export function validateScene(input: unknown): SceneValidation {
           else {
             k.filters.forEach((fl, fi) => { for (const msg of filterProblems(fl)) err("filter", `filters[${fi}]: ${msg}`, [`${kat}.filters[${fi}]`]); });
             // OBSERVED 2026-10-20 (gate "filters"): the game stops with "ERROR: FILTERS NOT SUPPORTED <swf>" on any filter list
-            if (k.filters.length) err("filter-unsupported", "the game does not support filters: it stops with \"ERROR: FILTERS NOT SUPPORTED\" when a SWF carries one (bake glows/shadows into the art instead)", [kat + ".filters"]);
+            // (PlaceObject::decode3 0xb78210 stops on the HasFilterList flag bit alone; docs/engine-map.md "Glow and outline passes")
+            if (k.filters.length) err("filter-unsupported", "the game does not support filters: it stops with \"ERROR: FILTERS NOT SUPPORTED\" when a SWF carries one. Bake the glow or shadow into the art instead (bakeGlow / MCP bake_glow / the shape row's Bake glow… button: a halo shape placed under the source), or use the engine's own knobs — CharacterLightSource { glow [r g b a] size N } for a ground light, AdvancedTint [mul…][add…] for a brightness lift (docs/data-mods.md \"Lighting and tint knobs\")", [kat + ".filters"]);
           }
         }
       });

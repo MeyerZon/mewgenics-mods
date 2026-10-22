@@ -456,7 +456,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 24 editor tools", () => eq(list.tools.length, 24));
+    test("tools/list returns the 25 editor tools", () => eq(list.tools.length, 25));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -539,6 +539,8 @@ await mcpSmoke();
   runArtImportTests(test, assert, eq);
   const { runArtTextTests } = await import("./art-text-tests.ts");
   await runArtTextTests(test, assert, eq);
+  const { runArtGlowTests } = await import("./art-glow-tests.ts");
+  await runArtGlowTests(test, assert, eq);
   const { runArtEngineRulesTests } = await import("./art-engine-rules-tests.ts");
   await runArtEngineRulesTests(test, assert, eq);
 }

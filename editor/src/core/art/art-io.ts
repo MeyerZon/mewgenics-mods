@@ -13,6 +13,8 @@ import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
 import { importSvg } from "./svg-import.ts";
 import { adoptGradients } from "./gradient.ts";
 import { shapeToSvg } from "./svg-export.ts";
+import { bakeGlow } from "./glow.ts";
+import type { BakeGlowOptions, BakeGlowResult } from "./glow.ts";
 import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
 import type { RgbaImage } from "./png.ts";
@@ -258,6 +260,25 @@ export function importSvgIntoScene(args: ImportSvgIntoSceneArgs): { ok: boolean;
   const w = writeArtScene(args.mod, args.scenePath, next);
   if (!w.ok) return { ok: false, error: w.error || "write failed", findings: [...(imp.findings || []), ...((w as { findings?: Finding[] }).findings || [])] };
   return { ok: true, paths: imp.shape.paths.length, findings: imp.findings || [] };
+}
+
+export interface BakeGlowIntoSceneArgs extends BakeGlowOptions {
+  mod: string;
+  /** the scene file inside the mod, e.g. art/my_rat.scene.json */
+  scenePath: string;
+  shapeId: string;
+}
+/** Bake a glow / drop shadow of a shape into a scene file (glow.ts) and save it: the agent-facing op behind MCP bake_glow. */
+export function bakeGlowIntoScene(args: BakeGlowIntoSceneArgs): { ok: boolean; error?: string; glowId?: string; layersAdded?: BakeGlowResult["layersAdded"]; findings: Finding[] } {
+  const rd = readArtScene(args.mod, args.scenePath);
+  if (!rd.ok || !rd.scene) return { ok: false, error: rd.error || "scene does not validate (fix it or write it with force first)", findings: rd.findings || [] };
+  const { mod: _m, scenePath: _p, shapeId, ...options } = args;
+  void _m; void _p;
+  const r = bakeGlow(rd.scene, shapeId, options);
+  if (!r.ok) return { ok: false, error: r.findings.map((f) => f.message).join("; ") || "bake refused", findings: r.findings };
+  const w = writeArtScene(args.mod, args.scenePath, r.scene);
+  if (!w.ok) return { ok: false, error: w.error || "write failed", findings: [...r.findings, ...((w as { findings?: Finding[] }).findings || [])] };
+  return { ok: true, glowId: r.glowId, layersAdded: r.layersAdded, findings: r.findings };
 }
 
 /**

@@ -142,6 +142,10 @@ export function inspectSwf(modName: string, relPath: string) {
 export function exportShapeSvg(modName: string, scenePath: string, shapeId: string) {
   return artio.exportShapeSvg(modName, scenePath, shapeId);
 }
+/** Bake a glow / drop shadow of a shape as <shapeId>_glow under it (glow.ts) and save the scene. */
+export function bakeGlowIntoScene(args: Parameters<typeof artio.bakeGlowIntoScene>[0]) {
+  return artio.bakeGlowIntoScene(args);
+}
 export function readArtAsset(modName: string, relPath: string) {
   return artio.readModBytes(modName, relPath);
 }
