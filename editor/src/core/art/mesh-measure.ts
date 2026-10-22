@@ -41,9 +41,14 @@ export function parseMeshProbeLog(text: string): MeshProbeLog {
   return out;
 }
 
-/** NDC -> a pixel of a w x h shot whose row 0 is the top (fw_m4_ndc_to_pixel) */
+/** NDC -> a pixel of a w x h shot whose row 0 is the top (fw_m4_ndc_to_pixel). The game keeps its 16:9 canvas and
+ * letterboxes the rest (OBSERVED: a 3440x1440 window, main RT viewport 2560x1440, bars left and right), so NDC maps into
+ * the centred 16:9 area of the shot. */
 export function ndcToShotPixel(ndc: [number, number], w: number, h: number): [number, number] {
-  return [((ndc[0] + 1) / 2) * w, ((1 - ndc[1]) / 2) * h];
+  const aspect = 16 / 9;
+  const cw = w / h > aspect ? h * aspect : w, ch = w / h > aspect ? h : w / aspect;
+  const ox = (w - cw) / 2, oy = (h - ch) / 2;
+  return [ox + ((ndc[0] + 1) / 2) * cw, oy + ((1 - ndc[1]) / 2) * ch];
 }
 
 function sameBytes(a: RgbaImageLike, b: RgbaImageLike): boolean {
