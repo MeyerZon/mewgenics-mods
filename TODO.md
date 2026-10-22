@@ -63,7 +63,7 @@ these without a decision (status per bullet below; the PR map follows).
       validated (engine-map "The back facing and the four-way quartet"; probe `render-cat-back`: the back rig drawn with the cat's own parts, OBSERVED run 20261022-114912). Turning a unit away is
       solved (2026-10-22, #105 stack): the harness's `face <unit> back` calls `Character::Face` 0x10ce50 (engine-map
       "Facing: Character::Face"; #105's `lock_orientation [0 -1]` asked for a FRONT facing and a lock overrides every
-      turn; the orientation keys are `properties.*`, #105 had them under `graphics`). Open: the back rig's non-slot marker is not drawn even on a genuinely back-facing unit (OBSERVED run 20261022-124301 — a property of the back rig, not of the facing; undecompiled), a four-way cat in the game. Not authored yet:
+      turn; the orientation keys are `properties.*`, #105 had them under `graphics`). ~~Open: the back rig's non-slot marker is not drawn~~ — resolved 2026-10-22 (backmarker, `fix/back-rig-marker`): it was drawn but out of frame (a marker at clip y −330 in a rig placed at 1.5x sits above the window's top edge; the slot visitor 0x742bd0 never touches a non-slot child). The probe marker moved to y −220 and is found above the back-facing unit in run 20261022-132159 (engine-map "The back facing and the four-way quartet"). Open: a four-way cat in the game. Not authored yet:
       a ghost cat in the preview for empty slots.
 - [x] **Localized text?** **Owner, 2026-10-21: deferred; Peralta is fine as the default font.** Since then session
       `loc` found it **looks data-only** (the text-box ctor 0x98d910 localizes an initial text that is a loc key; every

@@ -5,7 +5,8 @@ hide: false
 # back rig the editor authors (cat-rig.ts newCatAnimation: probeBackPoseBack, facing "back" — head_back behind the
 # body, the tail in front, vanilla idleB's layout and slot matrices; seven EMPTY slot sprites). probe.swf's
 # _Append_CatTest donor carries probeBackF (the front rig, NO marker) and probeBackB (the back rig at 1.5x + the
-# checker marker at the non-slot depth 15).
+# checker marker at the non-slot depth 15, at clip y -220 so that at 1.5x it lands where the front rigs' marker does —
+# at -330 it sat above the window's top edge, which read as "not drawn"; engine-map "The back facing ...").
 # ArtProbeCatFacing = TomTom + alt_animations [[idle probeBack]] at the default enemy facing: first the control (F),
 # then turned away with `face <unit> back` (Character::Face 0x10ce50, instant: the suffix becomes "B" and the current
 # state replays, so idleB -> probeBackB is drawn on a genuinely back-facing unit). ArtProbeCatBack faces away from

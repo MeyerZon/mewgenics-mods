@@ -239,10 +239,11 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
   // TomTom variant with lock_orientation still shows its face in TacticsTest (only the mirror changes) — the probe keeps
   // one turn attempt and adds ArtProbeCatBackShown, whose probeBackShowF / probeBackShowB BOTH place the back rig, so
   // the back pose is drawn whatever the facing. OBSERVED 2026-10-22 (run 20261022-114440): the shown cat is drawn from
-  // behind with TomTom's own parts but the checker marker at depth 15 of the back rig is NOT drawn (it is in the front
+  // behind with TomTom's own parts but the checker marker at depth 15 of the back rig was NOT found (it is in the front
   // rigs of the A0 / wave probes); run 20261022-114637 placed the back rig at 1.5x and the shown cat came out 1.5x — our
   // frame, not vanilla idleB. So the probe tells our B frames apart by SIZE: probeBackB / probeBackShowF / probeBackShowB
-  // place the back rig at sx = sy = 1.5, probeBackF the front rig at 1.
+  // place the back rig at sx = sy = 1.5, probeBackF the front rig at 1. (2026-10-22, backmarker: the marker was drawn,
+  // but above the window's top edge — see the next test.)
   const scene = JSON.parse(readFileSync(join(MODS_DIR, "_artprobe", "art", "probe.scene.json"), "utf8"));
   const gon = readFileSync(join(MODS_DIR, "_artprobe", "data", "characters", "enemies.gon.append"), "utf8");
   test("probe.scene.json: the donor carries probeBackF / probeBackB (probeBackPose: a front parts game rig, NO marker / probeBackPoseBack: facing back, parts game, empty slots at the back depths, the checker marker on the non-slot depth 15) and probeBackShowF / probeBackShowB (both the back rig: the back pose shown at any facing), all at vanilla idleB's `ani` offset; the only back-facing warning is probeBackShowF's (by design)", () => {

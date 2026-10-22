@@ -535,10 +535,8 @@ probeIdle]]`.
   without a crash and is drawn **from behind with TomTom's own parts** — `head_back` filled with the head seen from
   behind (ears, no face), the body, the tail in front of it — at 1.572x TomTom's height (21.6k vs 9.8k dark px), so it
   is our frame, not vanilla idleB. Every run: `real save file(s) unchanged`.
-- OBSERVED, unexplained: **a non-slot child of the back rig is not drawn** — the checker marker at depth 15 (drawn in
-  the A0 and wave front rigs at the same depth) never appears on the back rig (runs 20261022-114440, -114637, -114912).
-  INFERRED: the `head_<face>` / `back true` path hides the rest; not decompiled. A back-pose overlay therefore cannot
-  ride inside the rig yet.
+- ~~A non-slot child of the back rig is not drawn~~ — **wrong, corrected 2026-10-22 (backmarker): it is drawn; it was
+  out of frame.** See the last bullet of this section.
 - ~~Turning a unit away in a test fight is not solved~~ — **solved 2026-10-22** ("Facing: Character::Face"): the
   #105 runs put `lock_orientation` / `start_orientation` under `graphics`, where `Character::init` never reads them
   (they are `properties` keys). OBSERVED (run 20261022-124301, fixture `artprobe-cat-back-summary.json`, all 16
@@ -546,10 +544,31 @@ probeIdle]]`.
   and **our 1.5x back rig is drawn on that genuinely back-facing unit** (`face 9 front` afterwards swaps it for the 1x
   front rig: the vanished pose is 1.438x the height of the one that replaced it); ArtProbeCatBack with
   `properties { lock_orientation [1 0] }` spawns on `B` and `face 10 front` leaves it on `B` (effective (1,0)).
-- OBSERVED (same run, `shot-shown-2`, a window capture with three back-facing cats on our back rig): the depth-15
-  marker is **not drawn on a genuinely back-facing unit either**, so its absence belongs to the back rig itself
-  (INFERRED: the `head_<face>` path of the slot visitor 0x742bd0 or what it does to the rig's other children), not
-  to the shown cat's F label. Still undecompiled.
+- **A B pose keeps every child; the "missing" depth-15 marker was out of frame (OBSERVED 2026-10-22, backmarker).**
+  - The engine side. The slot visitor `CatParts::prerender::<lambda_2>` 0x742bd0 starts with `xor r14d,r14d`
+    (0x742c06, `45 33 F6`: result = 0) and sets the result to 1 only at the end of a matched slot's path
+    (0x743a95, `41 BE 01 00 00 00`). It returns through `mov eax,r14d` (0x743ad8). The only DisplayObject it writes is
+    the visited child itself (`child+9` bit 7 at 0x743a90 `41 80 4D 09 80`, and the slot fill through 0x741f10).
+    So a name that is not a slot (`marker`) returns 0. `IterateChildren` 0x99c270 then descends into it and nothing
+    touches it. `head_back` is matched like any `head<face>` entry: it fills the head slot and skips only that slot's
+    own subtree. Nothing keys on the `B` suffix here, and no sibling at any depth is hidden, removed or masked.
+  - The pixels. In run 20261022-124301 `shot-shown-2` (a window capture), the checker's lower two thirds sit at the
+    top edge of the window, above unit 9: x 1712..1985, y ≈ 8..107. The magenta and cyan cells are at y 27..75. A
+    foreground beam of the stage crosses the marker at y 33..47, and the rest of it lies above y 0. It is also tinted
+    to ~0.78 (yellow 199,197,0), below the old analyzer's near-#ffff00 tolerance. In `shot-turned-back`, after
+    `face 9 front`, it is gone (0 checker pixels).
+  - The geometry. The marker was authored at (−48, −330) in a rig placed at 1.5x. Its top lands at
+    −47.95 + 1.5·(−330) = −542.95 in the donor, against −377.95 for the 1x front rigs. At ~1.9 screen px per clip
+    px, that puts it ~1030 px above the feet, so it is cut off for every unit standing above y ≈ 1030.
+  - Fix. `probeBackPoseBack`'s marker is now at clip y −220, which gives the same donor top (−377.95).
+    `analyzeProbeShot` accepts a tinted yellow and reports a marker cut by the shot edge as `clipped`.
+  - Run 20261022-132159 (window captures, 16/16 expects, real save unchanged; fixture
+    `artprobe-cat-back-summary.json`):
+    - The marker is found at 1711,240–1986,423, above unit 9, in back 1..3, locked 1..2 and shown 1..2.
+    - Its scale is 2.875 px per clip px, 1.5x the front rigs' 1.92.
+    - It is in neither `front` nor `turned back`.
+  - So a back-pose overlay **can** ride inside the back rig like any front-rig child. Keep it within the frame at the
+    rig's placement scale.
 
 ### SWF loader and display path (closed, 2026-10-21)
 
