@@ -169,6 +169,9 @@ static void discover(void *tc) {
         fw_obj3d_mark_gon(reg(), h);
         if (!fw_obj3d_set_look(reg(), h, m.texture, m.tint, m.palette, m.doubleSided))
             fw_log("unit model: %s: texture \"%s\" refused (not printable ASCII / too long); drawn without it", name, m.texture);
+        fw_obj3d_set_hide(reg(), h, m.hideSprite);   /* M3: only `hide_sprite true` hides (fw_mesh_hide.h) */
+        if (m.hideSprite == 1) fw_log("unit model: %s: hide_sprite: the 2D sprite is not drawn while the model draws", name);
+        else if (m.invalid & FW_GON_MODEL_BAD_HIDE_SPRITE) fw_log("unit model: %s: model-flag hide_sprite is not true/false; the sprite is drawn", name);
         int k = 0;
         while (k < g_ntrack && g_track[k].handle != h) k++;
         if (k == g_ntrack) { if (g_ntrack >= FW_OBJ3D_MAX) continue; g_ntrack++; }

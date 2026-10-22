@@ -402,7 +402,7 @@ function validateGonOverlay(
   };
 
   /** graphics.model: "@Name" against the registered models, else a models/<...>.obj file in this mod; or the block form
-   *  model { file scale yaw offset texture tint palette double_sided } (3D phase M2 item 4; native fw_gon_model_block) */
+   *  model { file scale yaw offset texture tint palette double_sided hide_sprite } (3D phase M2 item 4, hide_sprite M3; native fw_gon_model_block) */
   const checkModel = (value: VNode, at: SourceLocation): void => {
     if (value.t === "obj") {
       checkModelBlock(value, at);
@@ -451,6 +451,7 @@ function validateGonOverlay(
         }
         case "palette":
         case "double_sided":
+        case "hide_sprite":
           if (v.t !== "str" || v.type !== "bool") rb.error("model-flag", `model ${key} must be true or false`, loc);
           break;
         case "texture": {
@@ -466,7 +467,7 @@ function validateGonOverlay(
           break;
         }
         default:
-          rb.warn("model-key-unknown", `"${key}" is not a key of the graphics.model block (file, scale, yaw, offset, texture, tint, palette, double_sided); the framework ignores it`, loc);
+          rb.warn("model-key-unknown", `"${key}" is not a key of the graphics.model block (file, scale, yaw, offset, texture, tint, palette, double_sided, hide_sprite); the framework ignores it`, loc);
       }
     }
   };

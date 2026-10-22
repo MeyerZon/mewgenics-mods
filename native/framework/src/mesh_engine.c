@@ -42,6 +42,8 @@
  * whose key is not larger than the mesh's (x + z of its origin; a unit-attached one right after its unit's item), the
  * rest after the layer. One functor per insertion point; meshes depth-test only against each other (the units layer
  * never writes depth). A layer that is not sorted or not drawn forward falls back to the M1 path (all after it).
+ * hide_sprite (M3, fw_mesh_hide.c): the filter at the camera is fw_mesh_hide_filter wrapping the order filter; a unit
+ * whose GON model block says hide_sprite true and whose model was drawn this frame has its units-layer item skipped.
  * Limits: meshes are drawn UNDER everything recorded after the units layer (UI, overlays); a multi-tile mesh is keyed
  * by one point (its origin).
  */
@@ -54,6 +56,7 @@
 #include "fw_m4.h"
 #include "fw_functor.h"
 #include "fw_mesh_order.h"
+#include "fw_mesh_hide.h"     /* M3 hide_sprite: the wrapping per-item filter */
 #include "fw_gl_state.h"
 #include "fw_mesh_draw.h"
 #include "fw_mesh_rules.h"
@@ -150,6 +153,11 @@ static void *g_fltCam, *g_fltPrev;
 static int g_fltInstalled;       /* our filter sits at the world camera's +OFF_CAM_LAYER_FILTER (inside the original call) */
 static int g_pendingAfter;       /* draws collected but the layer cannot be interleaved: all go after it (the M1 path) */
 static int g_orderLogged, g_fltLogged, g_itemsLogged;
+/* M3 hide_sprite (fw_mesh_hide.h): the renderers whose units-layer item is skipped this frame; the filter at the camera
+ * is the hide filter wrapping the order filter */
+static FwMeshHide g_hide;
+static FwMeshHideFilter g_hideFlt;
+static int g_hideFallbackLogged;
 #define MESH_LOG_ORDER_MAX 6
 
 #define MESH_LOG_PROBE_EVERY 60
@@ -557,6 +565,7 @@ static int collect(void *cam) {
     g_frame.n = 0;
     g_nsegs = 0;
     fw_mesh_order_reset(&g_order);
+    fw_mesh_hide_reset(&g_hide);
     if (g_probe <= 0 && nobj == 0) return 0;
     g_worldFrame++;
     const float *top = fw_mesh_stack_top((const void *const *)data_ptr(FW_DATA_MatStackData), (const int *)data_ptr(FW_DATA_MatStackTop));
@@ -627,6 +636,9 @@ static int collect(void *cam) {
         int before = g_frame.n;
         add_draw(slot, top, vp, iso, world, m ? m->base_color : (const float[4]){ 1, 1, 1, 1 }, key, at ? rnd : NULL);
         if (g_frame.n == before) continue;
+        /* M3: the model is drawn this frame, so a hide_sprite unit loses its sprite item (a model that failed to load
+         * never got here: resolve_model < 0 above, the sprite stays) */
+        if (fw_mesh_hide_wanted(o->hideSprite, o->byTile, rnd, 1)) fw_mesh_hide_add(&g_hide, rnd);
         MeshDraw *d = &g_frame.d[g_frame.n - 1];
         const FwTexEntry *te = object_texture(o, m);
         if (te && te->state == FW_TEX_LOADED) { d->tex = te->texture; d->texName = te->name; }
@@ -662,14 +674,23 @@ void mesh_engine_before_layer(void *cam, int layer) {
         fw_log("mesh order: world camera filter before ours = %p (units layer sorted=%d mode=%d: %s)", prev,
                l ? *((const unsigned char *)l + OFF_LAYER_SORTED) : -1, fw_obs3d_layer_mode(l), inter ? "interleaving" : "all meshes after the layer");
     }
-    if (!inter) { g_pendingAfter = 1; return; }
+    if (!inter) {
+        g_pendingAfter = 1;
+        if (g_hide.n && !g_hideFallbackLogged) { g_hideFallbackLogged = 1; fw_log("mesh hide: the units layer cannot be interleaved; hide_sprite not applied (%d unit sprite(s) drawn)", g_hide.n); }
+        return;
+    }
     g_flt.order = &g_order;
     g_flt.layer = layer;
     g_flt.submit = submit_group;
     g_flt.ctx = NULL;
     g_flt.prev = prev;
     g_flt.index = 0;
-    fw_filter_make(&g_fltImpl, fw_mesh_order_filter, &g_flt);
+    g_hideFlt.set = &g_hide;
+    g_hideFlt.layer = layer;
+    g_hideFlt.inner = fw_mesh_order_filter;   /* the order filter runs first (it chains the previous impl) */
+    g_hideFlt.innerUser = &g_flt;
+    g_hideFlt.prev = NULL;
+    fw_filter_make(&g_fltImpl, fw_mesh_hide_filter, &g_hideFlt);
     g_fltCam = cam;
     g_fltPrev = prev;
     fw_mesh_order_set_cam_filter(cam, &g_fltImpl);
@@ -685,6 +706,7 @@ static void log_order(void *cam, int layer) {
     fw_log("%s", buf);
     fw_mesh_order_fmt_keys(buf, sizeof buf, g_worldFrame, &g_order);
     fw_log("%s", buf);
+    if (g_hide.n) { fw_mesh_hide_fmt(buf, sizeof buf, g_worldFrame, &g_hide); fw_log("%s", buf); }
     if (g_itemsLogged) return;
     g_itemsLogged = 1;
     const void *l = fw_obs3d_layer(fw_obs3d_cam_queue(cam), layer);

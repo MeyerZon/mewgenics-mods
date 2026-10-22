@@ -203,5 +203,10 @@ int fw_obj3d_mark_gon(Fw3dRegistry *r, int handle) {
     return 1;
 }
 
-/* M3 (fw_mesh_hide.h): RED stub */
-int fw_obj3d_set_hide(Fw3dRegistry *r, int handle, int hideSprite) { (void)r; (void)handle; (void)hideSprite; return 0; }
+/* M3 (fw_mesh_hide.h): only exactly 1 hides the sprite */
+int fw_obj3d_set_hide(Fw3dRegistry *r, int handle, int hideSprite) {
+    int i = fw_obj3d_find_handle(r, handle);
+    if (i < 0) return 0;
+    r->objs[i].hideSprite = hideSprite == 1;
+    return 1;
+}

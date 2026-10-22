@@ -135,6 +135,7 @@ void fw_gon_model_defaults(FwGonModel *m) {
     for (int k = 0; k < 4; k++) m->tint[k] = 1.0f;
     m->palette = -1;
     m->doubleSided = -1;
+    m->hideSprite = -1;
 }
 
 /* an array of numbers at key under block into v (n in [minN, maxN]): 1 ok (*got = n), 0 missing, 2 wrong shape, -1 unreadable */
@@ -231,6 +232,10 @@ int fw_gon_model_block(FwMemRead rd, void *u, const void *gonEntry, FwGonModel *
     r = read_bool(rd, u, node, "double_sided", &b);
     if (r < 0) return -1;
     if (r == 1) m.doubleSided = b; else if (r == 2) m.invalid |= FW_GON_MODEL_BAD_DOUBLE_SIDED;
+    /* hide_sprite (M3, fw_mesh_hide.h): a bool; a bad value keeps -1, so the sprite stays */
+    r = read_bool(rd, u, node, "hide_sprite", &b);
+    if (r < 0) return -1;
+    if (r == 1) m.hideSprite = b; else if (r == 2) m.invalid |= FW_GON_MODEL_BAD_HIDE_SPRITE;
     *out = m;
     return 1;
 }
