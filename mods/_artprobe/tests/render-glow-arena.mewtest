@@ -1,0 +1,23 @@
+mods: _artprobe
+timeout: 90s
+hide: false
+# Baked-glow probe (2026-10-22, T3 card pr80-glow-in-game): ArtProbeGlow is a Rat drawn by the ArtProbeGlow clip —
+# the checker marker, the cxform orientation square, a 60 px square glowsrc with the halo glow.ts bakeGlow baked under
+# it (#ff8000, blur 24, 4 bands), the identical unglowed square glowctl and a swatch of #ff8000 (probe-outcomes.ts
+# GLOW_ARENA_PROBE). The baseline shot (before the spawn) is the arena behind the halo. No _autoplay: the unit stays
+# put. editor/scripts/art-probe.ts --glow-arena reads the shots (measureGlowArena): per-pixel halo alpha against the
+# baseline along four rays out of each square, the inner band's colour vs the swatch, the falloff.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+cmd spawn ArtProbeGlow
+expect console "Spawned ArtProbeGlow" within 10
+wait frames 90
+shot "glow 1"
+wait frames 40
+shot "glow 2"
+wait frames 40
+shot "glow 3"
+quit

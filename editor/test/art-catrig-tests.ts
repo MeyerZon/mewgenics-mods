@@ -459,7 +459,7 @@ async function runCatAnimationTests(test: TestFn, assert: AssertFn, eq: EqFn, ne
     assert(c0.includes("info:cat-anim-untested"), c0.join(","));
     assert(!c0.some((c) => /^(error|warning):cat-anim/.test(c)), c0.join(","));
     const note = (validateScene(good) as any).findings.find((f: any) => f.code === "cat-anim-untested");
-    assert(note.severity === "info" && /draws the cat's own parts/.test(note.message) && /OBSERVED in PR #74/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
+    assert(note.severity === "info" && /draws the cat's own parts/.test(note.message) && /OBSERVED 2026-10-22/.test(note.message) && /animated pose/.test(note.message) && /render-cat-wave/.test(note.message) && !/once its empty-slot run lands/.test(note.message) && /CatTest and the cat animation clips/.test(note.message), note.message);
     const filled = R.assignSlot(good, "wavePose", "head", "body").scene;
     const cf = codes(filled);
     assert(cf.includes("error:cat-anim-slot-not-empty"), cf.join(","));
