@@ -2,7 +2,7 @@
 // mods/<name>/mod.json (src/core/mod-manifest.ts), `pack` (mod folder -> editor/data/dist/<name>-<version>.zip) and
 // `install` (zip -> mods/<name>/, refusing traversal, oversize, missing manifest, tampering, a build mismatch unless
 // accepted). T0: every mod, zip and output dir is a temp dir; the validator, the SWF builder and the installed build
-// are injected, so nothing here reads .extracted/, the game or the repo's mods/.
+// are injected, so nothing here reads .extracted/ or the game; the last section reads the repo's mods/ (read-only).
 
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -493,4 +493,35 @@ export async function runPackTests(test: TestFn, assert: AssertFn, eq: EqFn): Pr
     assert(body["/api/mod/install"]!.safeParse({ base64: "AA==" }).success, "install ok");
     assert(!body["/api/mod/install"]!.safeParse({ base64: "AA==", into: "C:/x" }).success, "install takes no into");
   });
+
+  // ---- the repo's own mods (docs/data-mods.md "Shipping a mod": which mods carry a mod.json) --------------------
+  // Rule: every mods/<name>/ whose name does not start with "_" carries a valid mod.json (name = folder, semver, author
+  // MeyerZon, gameBuild = a bindings/<id>.json build, native/frameworkApi = what detectNativeHalf finds); the
+  // "_"-prefixed folders are test-only harness overlays and carry none. Reads only mods/, bindings/ and native/ sources.
+  {
+    const REPO = join(EDITOR, "..");
+    const builds = readdirSync(join(REPO, "bindings")).filter((f) => /^\d+\.json$/.test(f)).map((f) => f.replace(/\.json$/, ""));
+    const mods = readdirSync(join(REPO, "mods"), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+    for (const name of mods) {
+      const p = join(REPO, "mods", name, "mod.json");
+      if (name.startsWith("_")) {
+        test(`repo mods: ${name} (test-only, "_" prefix) has no mod.json`, () => assert(!existsSync(p), `${p} should not exist`));
+        continue;
+      }
+      test(`repo mods: ${name} has a valid mod.json (name = folder, MeyerZon, a known gameBuild, native per native/mods/)`, () => {
+        const m = need(M, mErr, "src/core/mod-manifest.ts");
+        const pk = need(P, pErr, "src/core/pack.ts");
+        assert(existsSync(p), `${p} is missing`);
+        const r = m.parseModManifest(readFileSync(p, "utf8"), name);
+        assert(r.ok, r.ok ? "" : r.errors.join("; "));
+        if (!r.ok) return;
+        eq(r.manifest.author, "MeyerZon", "author");
+        assert(builds.includes(r.manifest.gameBuild), `gameBuild ${r.manifest.gameBuild} not in bindings/: ${builds.join(",")}`);
+        assert(r.manifest.description.trim().length > 0, "description is empty");
+        const nat = pk.detectNativeHalf(name, REPO);
+        eq(JSON.stringify(r.manifest.native ?? null), JSON.stringify(nat ? nat.native : null), "native DLLs");
+        eq(r.manifest.frameworkApi ?? null, nat ? nat.frameworkApi ?? null : null, "frameworkApi = FW_API_VERSION");
+      });
+    }
+  }
 }
