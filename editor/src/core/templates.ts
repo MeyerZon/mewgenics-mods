@@ -1,6 +1,8 @@
 // new_from_template: scaffold an ability / passive / item / status-data overlay
 // plus matching localization rows, writing them under mods/<name>/ (or returning
 // the content for a dry run). Generated GON uses the .append overlay mode.
+// The map kinds `room` (a new levels/<folder>/<name>.lvl) and `tileset-variant` (a new tileset name in
+// data/tilesets.gon.append) live in level/level-templates.ts.
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -9,9 +11,12 @@ import { parse } from "./gon/parser.ts";
 import { toValue } from "./gon/value.ts";
 import { parseCsv, serializeCsv } from "./overlay/csv.ts";
 import { LOC_COLUMNS } from "./base-data.ts";
-import { writeOverlay } from "./mod-io.ts";
+import { writeOverlay, writeModBinary } from "./mod-io.ts";
+import { planRoom, planTilesetVariant } from "./level/level-templates.ts";
 
-export type TemplateKind = "ability" | "passive" | "item" | "status-data";
+export type TemplateKind = "ability" | "passive" | "item" | "status-data" | "room" | "tileset-variant";
+/** The kinds with a GON entry + localization rows (the map kinds have neither). */
+type EntryKind = Exclude<TemplateKind, "room" | "tileset-variant">;
 
 /** Scaffold knobs; every field is optional and comes from untyped JSON (MCP args / HTTP body). */
 export interface TemplateOptions {
@@ -31,10 +36,18 @@ export interface TemplateOptions {
   fillTranslations?: boolean;
   write?: boolean;
   dryRun?: boolean;
+  /** room: the folder under levels/ (default "custom"), grid size (default 10x10), placed objects and tiles */
+  folder?: string;
+  width?: number | string;
+  height?: number | string;
+  objects?: unknown;
+  tiles?: unknown;
+  /** room / tileset-variant: the base-data root (tests); default EXTRACTED_DATA */
+  extractedData?: string;
 }
 
-const LOC_PREFIX: Record<TemplateKind, string> = { ability: "ABILITY", passive: "PASSIVE", item: "ITEM", "status-data": "KEYWORD" };
-const DEFAULT_GON_FILE: Record<TemplateKind, string> = {
+const LOC_PREFIX: Record<EntryKind, string> = { ability: "ABILITY", passive: "PASSIVE", item: "ITEM", "status-data": "KEYWORD" };
+const DEFAULT_GON_FILE: Record<EntryKind, string> = {
   ability: "data/abilities/mod_abilities.gon.append",
   passive: "data/passives/mod_passives.gon.append",
   item: "data/items/mod_items.gon.append",
@@ -58,7 +71,7 @@ function locRow(key: string, en: string, fillTranslations: boolean): string[] {
   return row;
 }
 
-function scaffoldGon(kind: TemplateKind, name: string, o: TemplateOptions): string {
+function scaffoldGon(kind: EntryKind, name: string, o: TemplateOptions): string {
   const base = `${LOC_PREFIX[kind]}_${toKeyToken(name)}`;
   if (kind === "ability") {
     const parent = o.parent || "Spin";
@@ -140,12 +153,14 @@ function entryExists(abs: string, name: string): boolean {
 export interface TemplatePlanFile {
   relPath: string;
   content: string;
+  /** a binary file (room: the .lvl bytes); `content` is then a one-line summary */
+  base64?: string;
 }
 
 export type TemplateResult =
   | { ok: false; error: string; partial?: string[] }
-  | { ok: true; dryRun: true; kind: TemplateKind; name: string; files: TemplatePlanFile[]; localizationKeys: string[] }
-  | { ok: true; kind: TemplateKind; name: string; written: string[]; localizationKeys: string[] };
+  | { ok: true; dryRun: true; kind: TemplateKind; name: string; files: TemplatePlanFile[]; localizationKeys: string[]; hint?: string }
+  | { ok: true; kind: TemplateKind; name: string; written: string[]; localizationKeys: string[]; hint?: string };
 
 /**
  * Scaffold a new content entry and its localization rows.
@@ -153,6 +168,7 @@ export type TemplateResult =
  * @param options displayName, desc, parent, mana, class, component, statusEffect, gonFile, fillTranslations, write, dryRun
  */
 export function newFromTemplate(modName: string, kind: TemplateKind, name: string, options: TemplateOptions = {}): TemplateResult {
+  if (kind === "room" || kind === "tileset-variant") return levelTemplate(modName, kind, name, options);
   if (!LOC_PREFIX[kind]) return { ok: false, error: `unknown template kind: ${kind}` };
   if (!name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     return { ok: false, error: `invalid entry name: ${JSON.stringify(name)} (letters, digits, underscore; not starting with a digit)` };
@@ -212,4 +228,18 @@ export function newFromTemplate(modName: string, kind: TemplateKind, name: strin
     written.push(r.path);
   }
   return { ok: true, kind, name, written, localizationKeys: [nameKey, descKey] };
+}
+
+/** room / tileset-variant: plan with level/level-templates.ts, then write (binary for a .lvl) unless dryRun. */
+function levelTemplate(modName: string, kind: "room" | "tileset-variant", name: string, options: TemplateOptions): TemplateResult {
+  const plan = kind === "room" ? planRoom(modName, name, options) : planTilesetVariant(modName, name, options);
+  if (!plan.ok) return plan;
+  if (options.dryRun === true) return { ok: true, dryRun: true, kind, name, files: plan.files, localizationKeys: [], hint: plan.hint };
+  const written: string[] = [];
+  for (const f of plan.files) {
+    const r = f.base64 !== undefined ? writeModBinary(modName, f.relPath, Buffer.from(f.base64, "base64")) : writeOverlay(modName, f.relPath, f.content);
+    if (!r.ok) return { ok: false, error: r.error, partial: written };
+    written.push(r.path);
+  }
+  return { ok: true, kind, name, written, localizationKeys: [], hint: plan.hint };
 }

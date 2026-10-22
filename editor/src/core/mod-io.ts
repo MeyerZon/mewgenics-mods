@@ -103,3 +103,16 @@ export function writeOverlay(modName: string, relPath: string, content: string):
   writeFileSync(abs, content);
   return { ok: true, path: `mods/${modName}/${relPath}`, bytes: Buffer.from(content).length };
 }
+
+/** Write (create or overwrite) a binary file under mods/<name>/ (a level file, levels/<folder>/<name>.lvl). */
+export function writeModBinary(modName: string, relPath: string, bytes: Uint8Array): WriteOverlayResult {
+  let abs: string;
+  try {
+    abs = resolveModWritePath(modName, relPath);
+  } catch (e) {
+    return { ok: false, error: String(e instanceof Error ? e.message : e) };
+  }
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, bytes);
+  return { ok: true, path: `mods/${modName}/${relPath}`, bytes: bytes.length };
+}
