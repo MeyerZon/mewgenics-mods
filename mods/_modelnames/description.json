@@ -1,0 +1,7 @@
+{
+  "title": "Named-model probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for the 3D phase M3 named models (\"@Name\"): data/models.gon.append declares NameBox (models/name-box.gltf, a magenta 0.6-tile glTF box) and the vanilla Rat refers to it with `graphics { model { file \"@NameBox\" scale 1.25 } }`, while the vanilla Pooter refers to an undeclared @NoSuchModel (one model-name-unknown line, the Pooter keeps its sprite). Load it with fw-3d (the base data/models.gon and the mesh shader): `mods: _modelnames, fw-3d`. Never for play.",
+  "requirements": []
+}

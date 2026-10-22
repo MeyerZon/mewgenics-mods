@@ -47,3 +47,16 @@ export function baseRegistryNames(modsDir: string = MODS_DIR, baseMod: string = 
   }
   return out;
 }
+
+// ---- the DLL's log lines (native/framework/src/fw_model_names.c, obj3d_engine.c), for the T2 pins ----
+export interface ModelNamesLog {
+  /** the load line: the entry names, or absent / unreadable; null when no load line */
+  registry: { entries: string[]; absent: boolean; unreadable: boolean } | null;
+  /** "unit model: <Unit>: @Ref -> data/models.gon entry <Entry>" */
+  resolved: Array<{ unit: string; ref: string; entry: string }>;
+  /** "mesh: @Ref: model-name-unknown|model-registry-entry: ... (unit <Unit>...) — drawing the 2D clip" */
+  errors: Array<{ ref: string; code: string; unit: string | null; line: string }>;
+}
+export function parseModelNamesLog(_text: string): ModelNamesLog {
+  return { registry: null, resolved: [], errors: [] };   // RED STUB
+}
