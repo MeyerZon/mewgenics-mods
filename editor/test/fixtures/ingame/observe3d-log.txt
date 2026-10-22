@@ -1,0 +1,66 @@
+hook installed: Camera::render (observe3d) rva 0x9787c0 (observe3d: 3 window(s) of 60 world frames)
+hook installed: Camera::RenderOneLayer (observe3d) rva 0x979210 (observe3d: 3 window(s) of 60 world frames)
+obs3d fight tt=0000016c2ec10008
+obs3d late n=1 tt=0000016c2ec10008 world=00000162fa551388 camcalls=0 layercalls=154 worldframes=0
+obs3d globals iso=[0.894427 0.447214 0 0 0 1 0 0 -0.894427 0.447214 1 0 0 0 0 1] isoinv=[0.559017 -0.559017 0 0 1.11803 1.11803 0 0 0 0 1 0 0 0 0 1] flags=0x9 cull=0 depthbias=0 stacktop=0 f=1
+obs3d app clear=111 antialias=32 samples=32 f=1
+obs3d cam f=1 cam=00000162fa551388 world=1 rtt=0 hdr=0 zoom=78.2624 flip=-1 layers=0x41fde1ffff1 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 664.348 0 1]
+obs3d layers f=1 0x0:m0:n1 0xa:m0:n9 0xd:m0:n15 0x12:m0:n1 0x19:m0:n10 0x23:m0:n1
+obs3d item f=1 layer=0x19 rnd=0000017138b40008 pos=(2.5 5.5) screen=[-1 -0 0 0 -0 1 0 0 0 0 1 0 -2.68328 3.57771 0 1]
+obs3d item f=1 layer=0x0 rnd=00000163ba550448 pos=(0 0) screen=[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] (not a MaskedRendererIso: no position, no screen matrix)
+obs3d cam f=1 cam=00000162fa551508 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xfbe000000000 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=1 cam=00000162fa550908 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xffffffffffff vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=1 cam=00000162fa550488 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x16000000003 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=1 cam=00000162fa550188 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x3 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=1 cam=00000162fa550788 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x18b200000003 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=1 cam=00000162fa550308 world=0 rtt=0 hdr=0 zoom=60 flip=-1 layers=0x1 vp=[60 0 0 0 0 -60 0 0 0 0 1 0 640 360 0 1]
+obs3d cam f=1 cam=00000162fa550008 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x1 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=1 cam=00000162fa550608 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x1 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=1 cam=00000162fa550a88 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xffffffffffff vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d late n=2 tt=0000016c2ec10008 world=00000162fa551388 camcalls=5 layercalls=355 worldframes=1
+obs3d cam f=1 cam=00000162fa550c08 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x400000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 673.554 0 1]
+obs3d cam f=1 cam=00000162fa550d88 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x200000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 673.554 0 1]
+obs3d cam f=1 cam=00000162fa550f08 world=0 rtt=1 hdr=1 zoom=78.2624 flip=-1 layers=0xa vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 673.554 0 1]
+obs3d cam f=1 cam=00000162fa551088 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x1000000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 673.554 0 1]
+obs3d cam f=1 cam=00000162fa551208 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x800000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 673.554 0 1]
+obs3d late n=3 tt=0000016c2ec10008 world=00000162fa551388 camcalls=10 layercalls=556 worldframes=2
+obs3d globals iso=[0.894427 0.447214 0 0 0 1 0 0 -0.894427 0.447214 1 0 0 0 0 1] isoinv=[0.559017 -0.559017 0 0 1.11803 1.11803 0 0 0 0 1 0 0 0 0 1] flags=0x9 cull=0 depthbias=0 stacktop=0 f=61
+obs3d app clear=111 antialias=32 samples=32 f=61
+obs3d cam f=61 cam=00000162fa551388 world=1 rtt=0 hdr=0 zoom=78.2624 flip=-1 layers=0x41fde1ffff1 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 751.271 0 1]
+obs3d layers f=61 0x0:m0:n1 0xa:m0:n10 0xd:m0:n15 0x12:m0:n1 0x19:m0:n11 0x23:m0:n1
+obs3d item f=61 layer=0x19 rnd=0000017138b40008 pos=(2.5 5.5) screen=[-1 -0 0 0 -0 1 0 0 0 0 1 0 -2.68328 3.57771 0 1]
+obs3d item f=61 layer=0x0 rnd=00000163ba550448 pos=(0 0) screen=[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] (not a MaskedRendererIso: no position, no screen matrix)
+obs3d cam f=61 cam=00000162fa551508 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xfbe000000000 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=61 cam=00000162fa550908 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xffffffffffff vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=61 cam=00000162fa550488 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x16000000003 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=61 cam=00000162fa550188 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x3 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=61 cam=00000162fa550788 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x18b200000003 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=61 cam=00000162fa550308 world=0 rtt=0 hdr=0 zoom=60 flip=-1 layers=0x1 vp=[60 0 0 0 0 -60 0 0 0 0 1 0 640 360 0 1]
+obs3d cam f=61 cam=00000162fa550008 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x1 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=61 cam=00000162fa550608 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x1 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=61 cam=00000162fa550a88 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xffffffffffff vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=61 cam=00000162fa550c08 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x400000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 751.271 0 1]
+obs3d cam f=61 cam=00000162fa550d88 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x200000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 751.271 0 1]
+obs3d cam f=61 cam=00000162fa550f08 world=0 rtt=1 hdr=1 zoom=78.2624 flip=-1 layers=0xa vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 751.271 0 1]
+obs3d cam f=61 cam=00000162fa551088 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x1000000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 751.271 0 1]
+obs3d cam f=61 cam=00000162fa551208 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x800000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 751.271 0 1]
+obs3d globals iso=[0.894427 0.447214 0 0 0 1 0 0 -0.894427 0.447214 1 0 0 0 0 1] isoinv=[0.559017 -0.559017 0 0 1.11803 1.11803 0 0 0 0 1 0 0 0 0 1] flags=0x9 cull=0 depthbias=0 stacktop=0 f=121
+obs3d app clear=111 antialias=32 samples=32 f=121
+obs3d cam f=121 cam=00000162fa551388 world=1 rtt=0 hdr=0 zoom=78.2624 flip=-1 layers=0x41fde1ffff1 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 695.502 0 1]
+obs3d layers f=121 0x0:m0:n1 0xa:m0:n10 0xd:m0:n15 0x12:m0:n1 0x19:m0:n11 0x23:m0:n1
+obs3d item f=121 layer=0x19 rnd=0000017138b40008 pos=(2.5 5.5) screen=[-1 -0 0 0 -0 1 0 0 0 0 1 0 -2.68328 3.57771 0 1]
+obs3d item f=121 layer=0x0 rnd=00000163ba550448 pos=(0 0) screen=[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] (not a MaskedRendererIso: no position, no screen matrix)
+obs3d cam f=121 cam=00000162fa551508 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xfbe000000000 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=121 cam=00000162fa550908 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xffffffffffff vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=121 cam=00000162fa550488 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x16000000003 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=121 cam=00000162fa550188 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x3 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=121 cam=00000162fa550788 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x18b200000003 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=121 cam=00000162fa550308 world=0 rtt=0 hdr=0 zoom=60 flip=-1 layers=0x1 vp=[60 0 0 0 0 -60 0 0 0 0 1 0 640 360 0 1]
+obs3d cam f=121 cam=00000162fa550008 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x1 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=121 cam=00000162fa550608 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0x1 vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=121 cam=00000162fa550a88 world=0 rtt=0 hdr=0 zoom=1 flip=1 layers=0xffffffffffff vp=[1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1]
+obs3d cam f=121 cam=00000162fa550c08 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x400000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 694.525 0 1]
+obs3d cam f=121 cam=00000162fa550d88 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x200000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 694.525 0 1]
+obs3d cam f=121 cam=00000162fa550f08 world=0 rtt=1 hdr=1 zoom=78.2624 flip=-1 layers=0xa vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 694.525 0 1]
+obs3d cam f=121 cam=00000162fa551088 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x1000000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 694.525 0 1]
+obs3d cam f=121 cam=00000162fa551208 world=0 rtt=1 hdr=0 zoom=78.2624 flip=-1 layers=0x800000 vp=[68.0542 0 0 0 0 -68.0542 0 0 0 0 1 0 640 694.525 0 1]

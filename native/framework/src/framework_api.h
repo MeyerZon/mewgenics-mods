@@ -71,6 +71,10 @@ typedef enum FwSymbol {
     FW_SYM_Character_init,              /* void (Character*, std::string* name, bool, bool) — by-value string, callee destroys; hooked (entry scope) */
     FW_SYM_Swf_GetCharacterByName,      /* MovieClip* (void* unused, std::string* name) — by-value string, callee destroys; NULL when unknown; hooked */
     FW_SYM_ApplicationBase_ProcessAnimationMerges, /* void (ApplicationBase*, SWF* file) — once per loaded SWF; post-hooked (the _CatRig_ scan) */
+    /* the 3D block (docs/possible_3d_work.md): the phase-0 observer's hook, and the view-projection a perspective camera replaces */
+    FW_SYM_Camera_render,               /* void (Camera*) — binds the RT (RTT cameras), stack top *= Camera_GetViewProjection, draws the enabled layers + passes */
+    FW_SYM_Camera_GetViewProjection,    /* float* (Camera*, float out[16]) — K x inverse(view): zoom +0x168, y-flip int +0x170, 1280x720 canvas centre 640,360 */
+    FW_SYM_Camera_RenderOneLayer,       /* void (Camera*, int layer) — how the world (TacticsTest+0x68) and UI cameras draw: one layer, own VP push */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 
@@ -88,6 +92,14 @@ typedef enum FwData {
     FW_DATA_SDL_CreateWindowWithProperties,
     FW_DATA_MewDirector,                       /* MewDirector* global; non-null at the main menu of a dev launch (test director) */
     FW_DATA_ShaderManager,                     /* ShaderManager* global (API v4): the App object itself, material map at +0x278 */
+    /* the 3D block: render globals (docs/possible_3d_work.md K1-K13) */
+    FW_DATA_Iso,                               /* float[16] col-major: the iso basis (x, height, z columns) RendererIso projects through */
+    FW_DATA_IsoInverse,                        /* float[16]: the 2x2 ground inverse of Iso (picking) */
+    FW_DATA_RenderStateFlags,                  /* u8: current group flags (bit0 force, 2 depth test, 4 stencil, 8 colour+depth mask) */
+    FW_DATA_CullDisableCounter,                /* int: the 2D screen-space cull runs only while 0 */
+    FW_DATA_DepthBias,                         /* float: global depth_bias (+1 per depth-tested layer) */
+    FW_DATA_MatStackTop,                       /* int: matrix stack top index */
+    FW_DATA_CurrentCamera,                     /* Camera*: the camera rendering right now */
     FW_DATA_COUNT_
 } FwData;
 

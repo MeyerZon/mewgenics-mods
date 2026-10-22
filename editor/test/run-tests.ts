@@ -658,6 +658,9 @@ await mcpSmoke();
   let gm: typeof import("./glow-measure-tests.ts") | null = null;
   try { gm = await import("./glow-measure-tests.ts"); } catch (e) { test("glow-measure-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (gm) gm.runGlowMeasureTests(test, assert, eq, (n) => readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"));
+  let o3t: typeof import("./obs3d-tests.ts") | null = null;
+  try { o3t = await import("./obs3d-tests.ts"); } catch (e) { test("obs3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (o3t) o3t.runObs3dTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let dt: typeof import("./deps-tests.ts") | null = null;
   try { dt = await import("./deps-tests.ts"); } catch (e) { test("deps-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (dt) await dt.runDepsTests(test, assert, eq);

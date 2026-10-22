@@ -20,6 +20,12 @@ hooks; `mewtest` then writes `end{code 4, reason framework_inactive}` and the ru
 | Struct offsets | 102 (+ `GON_NODE_SIZE`) | `offsets.h` (`status_engine.c`, `mewtest.c`, `mt_gon.c`, `glow_engine.c`); 32 at the cross-build run, +8 on 2026-10-20 (dev scenes, RNG), +17 on 2026-10-22 (per-unit glow: TacticsTest cameras/passes, Camera, renderer extra layers, Pass fields, Character renderer/generation), +6 glow v2 (renderer clip, clip matrix, camera position/zoom/zoomY, scene-manager interpolation), +10 facing (the AnimStateMachine pointer, its suffix and flip, Character orientation / lock / sign / art_flip / no_horizontal_flip / always_face_forward / four_way, all witnessed in `Character_Face`), +8 campaign walk (MapScreen node count / nodes / marker, MapMarker node, MapNode type / next count / next data / done), +2 effective stats (`OFF_CH_STATS_EFF`, `OFF_CH_MAX_HP`), +1 game speed (`OFF_APP_TIMESCALE`), +3 cat rig (the SWF SymbolClass list head, node name, id) |
 | Layer / slot / canvas constants | 7 (`CONST_MASK_LAYER`, `CONST_COMPOSITE_LAYER`, `CONST_GLOW_FRAMEBUF_SLOT`, glow v2 `CONST_CLIP_KIND_A/B` and the 1280x720 canvas `CONST_GLOW_CANVAS_W/H`; call-arg / displacement / rdata witnesses) | `glow_engine.c` |
 
+The **3D block** (2026-10-22, the last 61 entries; `docs/possible_3d_work.md` §3) adds to these counts: 3 FwSymbol
+(`Camera_render`, `Camera_GetViewProjection`, `Camera_RenderOneLayer`; 40 in all), 27 signed reference functions (2 of them
+witness-host `.pdata` chunks of PGO-split functions: `Camera_render_body`, `Swf_DisplayObject_Render_cull`), 7 FwData
+render globals (18 in all), the `MaskedRendererIso` vftable (`BuildInfo.rva_MaskedRendererIso_vftable`), 19 offsets
+(97 in all) and 4 constants, every witness harvest-verified on 25143593.
+
 ## The manifest: `bindings/<steamBuildId>.json`
 
 One file per build (schema: `bindings/manifest.schema.json`; validator: `editor/src/core/bindings/manifest.ts`).

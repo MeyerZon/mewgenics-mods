@@ -1206,7 +1206,28 @@
           "ripRefs": 71,
           "resyncs": 0
         },
-        "callees": [],
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "RenderTarget_create",
+            "target": "0xa28a80"
+          },
+          {
+            "ordinal": 3,
+            "name": "Batch_SubmitFunctor",
+            "target": "0xa47820"
+          },
+          {
+            "ordinal": 4,
+            "name": "Batch_SubmitFunctor",
+            "target": "0xa47820"
+          },
+          {
+            "ordinal": 6,
+            "name": "MatStack_Ortho",
+            "target": "0x9fec80"
+          }
+        ],
         "prologue": "48 8B C4 48 89 58 10 48 89 70 18 48",
         "before": {
           "function": "ApplicationBase_FrameEnd"
@@ -3379,7 +3400,18 @@
           "ripRefs": 40,
           "resyncs": 0
         },
-        "callees": [],
+        "callees": [
+          {
+            "ordinal": 6,
+            "name": "Batch_SubmitFunctor",
+            "target": "0xa47820"
+          },
+          {
+            "ordinal": 7,
+            "name": "Batch_Replay",
+            "target": "0xa481d0"
+          }
+        ],
         "prologue": "40 55 53 56 57 41 56 48 8B EC 48 83",
         "after": {
           "function": "ApplicationBase_FrameBegin"
@@ -5114,6 +5146,11 @@
             "target": "0x9bb5d0"
           },
           {
+            "ordinal": 100,
+            "name": "App_GetTexture",
+            "target": "0x9bb490"
+          },
+          {
             "ordinal": 102,
             "name": "Material_SetTexture",
             "target": "0x9bdcd0"
@@ -6601,6 +6638,16 @@
         "note": "void (StatusMenu* this) — StatusMenu vftable 0x141120ff8 slot 11: resolves the hovered unit (TacticsGrid_GetUnitAtTile) into +0xe8, swap-removes every 0x18 from the previously outlined unit's (+0xf8, validated by the pool generation at Character-8 against +0x100) renderer extra layers, pushes 0x18 onto the new one's with vec_u32_AddUnique, then +0xf8 = +0xe8. Witness of CONST_MASK_LAYER, OFF_CH_RENDERER, OFF_RND_EXTRA_LAYERS, OFF_CH_GENERATION.",
         "callees": [
           {
+            "ordinal": 7,
+            "name": "Component_GetSceneCamera",
+            "target": "0x1b1070"
+          },
+          {
+            "ordinal": 8,
+            "name": "TacticsGrid_PickTileUnderMouse",
+            "target": "0x8abc50"
+          },
+          {
             "ordinal": 13,
             "name": "string_Allocate",
             "target": "0x52a40"
@@ -7621,7 +7668,13 @@
       "anchors": {
         "strings": [],
         "note": "float* (Renderer*, float out[16]): the renderer's world-to-canvas 4x4 (x row M0/M4/M12, y row M1/M5/M13) from its Position (+0x40) through the scene's interpolation (+0x28->+0x30) and the iso constants 0x12f7a00..; LateRender calls it on the hovered Character's renderer (Character+0x40) before mapping the clip bounds (0x88e2ac)",
-        "callees": [],
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Position_GetInterpolated",
+            "target": "0x9b4a30"
+          }
+        ],
         "cfgLite": {
           "bytes": 326,
           "calls": 2,
@@ -7659,7 +7712,13 @@
       "anchors": {
         "strings": [],
         "note": "float* (Position*, float out[16], double interp in xmm2): a camera Position's 4x4 (rotation from the angle, translation in 12/13/14), returns out. LateRender calls it on the mask camera's Position (Camera+0x38) with the scene manager's interpolation (Camera+0x28 -> +0x30) and inverts the result (the leaf 0xa07c70) before the zoom/canvas mapping (0x88e3dc)",
-        "callees": [],
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Position_GetInterpolated",
+            "target": "0x9b4a30"
+          }
+        ],
         "cfgLite": {
           "bytes": 219,
           "calls": 2,
@@ -9271,6 +9330,2153 @@
       "note": "sizeof(GonObject): the children vector's element stride"
     },
     {
+      "name": "Camera_render",
+      "kind": "function",
+      "rva": "0x9787c0",
+      "signature": {
+        "pattern": "40 55 57 48 8D 6C 24 F8 48 81 EC 08",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Camera*): binds the camera's RT (RTT cameras) via a RenderTarget::bind functor, pushes the stack top and post-multiplies it by Camera_GetViewProjection, draws every enabled layer with Layer_Draw then its passes, pops; sets/clears the current-camera global 0x13c6d88",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 28,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "40 55 57 48 8D 6C 24 F8 48 81 EC 08"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Camera_render",
+          "index": 45
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c",
+        ".analysis/notes-rim.md",
+        ".analysis/notes-r3dB.md"
+      ]
+    },
+    {
+      "name": "Camera_GetViewProjection",
+      "kind": "function",
+      "rva": "0x9785e0",
+      "signature": {
+        "pattern": "48 8B C4 53 48 81 EC 20 01 00 00 F2",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "float* (Camera* rcx, float out[16] rdx): K x inverse(Position_GetViewMatrix(cam+0x38, (cam+0x28)->+0x30)), K = {zoom,0,0,0 / 0,flip*zoom,0,0 / 0,0,1,0 (.rdata 0x141140520) / 640,360,0,1 (0x141140960)}, zoom = double +0x168, flip = int +0x170; 18 callers incl. Camera_render (draw push, call 0x140978c78), picking 0x9796d0 and CombatShaders slot 19 (camera_mat)",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Position_GetViewMatrix",
+            "target": "0x9b4c90"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 476,
+          "calls": 2,
+          "ripRefs": 2,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 53 48 81 EC 20 01 00 00 F2"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Camera_GetViewProjection",
+          "index": 46
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_ViewProjection_0x9785e0.c",
+        ".analysis/notes-r3dB.md"
+      ]
+    },
+    {
+      "name": "Camera_RenderOneLayer",
+      "kind": "function",
+      "rva": "0x979210",
+      "signature": {
+        "pattern": "48 8B C4 48 89 58 08 57 48 81 EC A0 00 00 00 83",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Camera*, int layer): unless +0x58 == 1, sets the current camera, pushes the stack top x Camera_GetViewProjection, draws that one layer (Layer_Draw) and its passes, pops. RenderCore 0x989020 calls it (0x140989316) for every layer index x every camera of its second list: the world camera TacticsTest+0x68 and the UI camera (OBSERVED T2 2026-10-22: Camera_render, the first list, never sees +0x68)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 31,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 48 89 58 08 57 48 81 EC A0"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Camera_RenderOneLayer",
+          "index": 47
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_RenderOneLayer_0x979210.c",
+        ".analysis/notes-r3dB.md"
+      ]
+    },
+    {
+      "name": "Layer_Draw",
+      "kind": "function",
+      "rva": "0x9896f0",
+      "signature": {
+        "pattern": "48 89 5C 24 10 55 56 57 41 56 41 57 48 8D AC 24 80",
+        "exactLen": 17,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Layer*, Camera*): sorts the 0x20-byte items by the key functor (+0x28) with comparator 0x988dd0 (descending), draws each by renderable slot 20 or the custom draw functor +0xa8; mode +0x24 == 1 = depth-tested: reverse order with render-state |= 2, then depth_bias += 1.0",
+        "callees": [
+          {
+            "ordinal": 1,
+            "name": "MatStack_Push",
+            "target": "0x9feaf0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1260,
+          "calls": 11,
+          "ripRefs": 11,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 55 56 57 41 56 41 57"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c",
+        ".analysis/notes-rim.md"
+      ]
+    },
+    {
+      "name": "Position_GetInterpolated",
+      "kind": "function",
+      "rva": "0x9b4a30",
+      "signature": {
+        "pattern": "48 83 EC 48 0F 10 05 ?? ?? ?? ?? F2",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 7,
+            "len": 4,
+            "why": "rip-relative disp32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "double* (Position*, double out[6], double alpha): interpolated (x, height, z, sx, sy, rot) from the current (+0x80..) and previous state",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 597,
+          "calls": 0,
+          "ripRefs": 8,
+          "resyncs": 2
+        },
+        "prologue": "48 83 EC 48 0F 10 05 ?? ?? ?? ?? F2"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Renderer_GetScreenMatrix_0x78d600.c"
+      ]
+    },
+    {
+      "name": "Batch_SubmitFunctor",
+      "kind": "function",
+      "rva": "0xa47820",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 54 24 10 48 89 4C 24 08 55 56 57 48 8B",
+        "exactLen": 20,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (unused rcx, std::function<void()>* fn): copies fn (impl vtbl slot 0 _Copy into a new 0x40-byte object, impl ptr at +0x38) onto a state-only group (0xa480a0) at +0x28, destroys the argument (slot 4), pushes a fresh group; replay calls slot 2 (_Do_call); immediate when 0x1412f80e1 is set",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 422,
+          "calls": 6,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 18 48 89 54 24 10 48 89"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Batch_SubmitFunctor_0xa47820.c",
+        ".analysis/notes-r3dA.md"
+      ]
+    },
+    {
+      "name": "Batch_Replay",
+      "kind": "function",
+      "rva": "0xa481d0",
+      "signature": {
+        "pattern": "40 56 48 83 EC 50 80 79 20 00 48 8B",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Batch* = 0x1412f80f0): runs the pre-group functor list 0x1412f8148, then per 0x30-byte group: apply state (0xa497d0) -> shadow copy 0x1412f7160 -> functor (+0x28) -> draw (MDI or per-command)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 19,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "40 56 48 83 EC 50 80 79 20 00 48 8B"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Batch_Replay_0xa481d0.c",
+        ".analysis/notes-r3dA.md"
+      ]
+    },
+    {
+      "name": "Batch_AddInstance",
+      "kind": "function",
+      "rva": "0xa47e50",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B D9 44",
+        "exactLen": 19,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Batch*, mode, vao, firstIndex, count, baseVertex): appends a 100-byte instance record (mvp = stack top col-major +0, cxform mul +0x40 / add +0x50, depth_bias +0x60) to the instance VBO 0x1412f8160; merges identical consecutive commands; flushes mid-frame at 0x8000 records",
+        "callees": [
+          {
+            "ordinal": 3,
+            "name": "Batch_Replay",
+            "target": "0xa481d0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 588,
+          "calls": 4,
+          "ripRefs": 18,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 48 89 74 24 10 57 48"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Batch_AddInstance_0xa47e50.c",
+        ".analysis/notes-r3dA.md"
+      ]
+    },
+    {
+      "name": "Batch_ApplyGroupState",
+      "kind": "function",
+      "rva": "0xa497d0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B D9 48 8B 09",
+        "exactLen": 21,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Group*): Material_Bind always; VAO, depth test (flags bit 2), stencil, colour+depth mask (bit 8), stencil func/op, blend eq/func when the force bit (flags bit 0, set by FrameBegin to 0x09) is set or the value differs from the shadow",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Material_Bind",
+            "target": "0x9bda20"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 607,
+          "calls": 1,
+          "ripRefs": 23,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 48 89 74 24 10 57 48"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Batch_ApplyGroupState_0xa497d0.c",
+        ".analysis/decompiled/RenderState_Apply_0xa497d0.c",
+        ".analysis/notes-r3dA.md"
+      ]
+    },
+    {
+      "name": "Material_Bind",
+      "kind": "function",
+      "rva": "0x9bda20",
+      "signature": {
+        "pattern": "40 53 57 41 54 41 57 48 83 EC 28 48",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (Material*): glUseProgram(*(int*)(*(Material+0x18)+8)) through the shader cache 0x1413c42b8, uniforms, textures (cache 0x1413c19a0[unit]); last material 0x1413c1980",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 455,
+          "calls": 2,
+          "ripRefs": 12,
+          "resyncs": 0
+        },
+        "prologue": "40 53 57 41 54 41 57 48 83 EC 28 48"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Material_Bind_0x9bda20.c",
+        ".analysis/notes-r3dA.md",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "Swf_DisplayObject_Render",
+      "kind": "function",
+      "rva": "0x9b0a50",
+      "signature": {
+        "pattern": "48 89 5C 24 20 55 48 8D 6C 24 A9 48",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (DisplayObject*): concatenates the 2D matrix/cxform onto the stack and culls the affine bbox against the NDC bounds 0x1413c5c20..38 only while the counter 0x1413c5c90 is 0; autoflip via 0xa082b0",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 42,
+          "calls": 0,
+          "ripRefs": 1,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 20 55 48 8D 6C 24 A9 48"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Swf_DisplayObject_Render_0x9b0a50.c",
+        ".analysis/notes-r3dA.md"
+      ]
+    },
+    {
+      "name": "MatStack_Ortho",
+      "kind": "function",
+      "rva": "0x9fec80",
+      "signature": {
+        "pattern": "48 83 EC 38 F3 0F 10 6C 24 60 4C 8B",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (MatStack*, float L, R, B, T on the stack): the base pixels->NDC ortho, m10 = 1e-4 (0x38d1b717), m14 = -0; sets flags[top] = det < 0; callers FrameBegin (0x1409b7d52) and CombatShaders slot 19",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Mat4_IsMirrored",
+            "target": "0xa082b0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 214,
+          "calls": 1,
+          "ripRefs": 2,
+          "resyncs": 0
+        },
+        "prologue": "48 83 EC 38 F3 0F 10 6C 24 60 4C 8B"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/MatStack_Ortho_0x9fec80.c",
+        ".analysis/notes-r3dB.md"
+      ]
+    },
+    {
+      "name": "MatStack_Push",
+      "kind": "function",
+      "rva": "0x9feaf0",
+      "signature": {
+        "pattern": "40 53 48 83 EC 20 8B 41 30 48 8B D9 FF",
+        "exactLen": 13,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (MatStack*): duplicates the top matrix and its autoflip flag",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 183,
+          "calls": 3,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "40 53 48 83 EC 20 8B 41 30 48 8B D9"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/MatStack_Push_0x9feaf0.c",
+        ".analysis/notes-r3dB.md"
+      ]
+    },
+    {
+      "name": "Mat4_IsMirrored",
+      "kind": "function",
+      "rva": "0xa082b0",
+      "signature": {
+        "pattern": "4C 8B DC 48 81 EC 88 00 00 00 F3 0F",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "bool (float m[16]) = det4x4 < 0; callers 0x9fec80, 0x9b0a50, 0x9b1000, 0x9b12f0 (negate column 0 when the sign differs from the level flag)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 434,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "4C 8B DC 48 81 EC 88 00 00 00 F3 0F"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Mat4_IsMirrored_0xa082b0.c",
+        ".analysis/notes-r3dB.md"
+      ]
+    },
+    {
+      "name": "Camera_MouseToCamera2D",
+      "kind": "function",
+      "rva": "0x9796d0",
+      "signature": {
+        "pattern": "48 89 5C 24 08 57 48 81 EC B0 00 00 00 48 8B FA",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "double* (Camera*, double out[2]): mouse virtual px (0x986ee0) through inverse(Camera_GetViewProjection) (0xa07c70), z = 0, no w divide; 27 caller functions, combat world picking = tile picker 0x8abc50, ability targeting 0x778da0, StatusMenu slot 16 0x81eaa0",
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "Camera_GetViewProjection",
+            "target": "0x9785e0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 186,
+          "calls": 4,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 57 48 81 EC B0 00 00"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_MouseToCamera2D_0x9796d0.c",
+        ".analysis/decompiled/Camera_MouseToWorld2D_0x9796d0.c",
+        ".analysis/notes-r3dC.md"
+      ]
+    },
+    {
+      "name": "Component_GetSceneCamera",
+      "kind": "function",
+      "rva": "0x1b1070",
+      "signature": {
+        "pattern": "48 89 5C 24 08 57 48 83 EC 20 48 8B 79 18 BA 07",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Camera* (Component*): the first enabled Camera (type 7) of the scene in registration order, else the parent scene's; in combat INFERRED TacticsTest+0x40 (a side camera mirroring +0x68)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 136,
+          "calls": 2,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 57 48 83 EC 20 48 8B"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Component_GetSceneCamera_0x1b1070.c",
+        ".analysis/notes-r3dB.md"
+      ]
+    },
+    {
+      "name": "TacticsGrid_PickTileUnderMouse",
+      "kind": "function",
+      "rva": "0x8abc50",
+      "signature": {
+        "pattern": "4C 89 44 24 18 53 57 41 56 41 57 48",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "int2* (TacticsGrid*, int2* out, double off[3]): tile = floor(ISO^-1 (u, v) + offset) with +-0.4-tile hysteresis on grid+0x1a0; tile centres are col+0.5 / row+0.5",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "Component_GetSceneCamera",
+            "target": "0x1b1070"
+          },
+          {
+            "ordinal": 1,
+            "name": "Camera_MouseToCamera2D",
+            "target": "0x9796d0"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 393,
+          "calls": 3,
+          "ripRefs": 8,
+          "resyncs": 4
+        },
+        "prologue": "4C 89 44 24 18 53 57 41 56 41 57 48"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/TacticsGrid_PickTileUnderMouse_0x8abc50.c",
+        ".analysis/notes-r3dC.md"
+      ]
+    },
+    {
+      "name": "Character_SetRenderLayer",
+      "kind": "function",
+      "rva": "0xf4890",
+      "signature": {
+        "pattern": "48 89 5C 24 08 48 89 74 24 20 48 89 54 24 10 57 48 83 EC 60",
+        "exactLen": 20,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "the SWF script callback SetRenderLayer (Character::init lambda_11): (Character+0x40)->+0x54 = 0x13 flat / 0x19 default / 0x1c overlay, then re-runs the renderer's start slot",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 571,
+          "calls": 15,
+          "ripRefs": 3,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 08 48 89 74 24 20 48 89"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Character_SetRenderLayer_0xf4890.c",
+        ".analysis/notes-r3dC.md"
+      ]
+    },
+    {
+      "name": "Shadow_Update",
+      "kind": "function",
+      "rva": "0x794850",
+      "signature": {
+        "pattern": "48 8B C4 53 48 81 EC 00 01 00 00 48",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Shadow slot 19: position = (owner.x + dx, 0, owner.z + dz), (dx, dz) = the `shadow` child clip's offset through ISO^-1",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 27,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 53 48 81 EC 00 01 00 00 48"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Shadow_Update_slot19_0x794850.c",
+        ".analysis/notes-r3dC.md"
+      ]
+    },
+    {
+      "name": "RenderTarget_create",
+      "kind": "function",
+      "rva": "0xa28a80",
+      "signature": {
+        "pattern": "48 89 5C 24 10 48 89 6C 24 18 56 57 41 54 41 56 41 57 48 81 EC 80 00 00 00 44",
+        "exactLen": 26,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (RT*, w, h, samples, type, hdr, depth): RGBA8 (RGBA16F with hdr) colour renderbuffer +0x14 and a D24S8 renderbuffer +0x18 on FBO +0x1c, multisampled at +0x50 (clamped to GL_MAX_SAMPLES); the main RT App+0xc10 is created only by FrameBegin (0x1409b7afe) with samples = App+0xdf4 (antialias), depth = 1",
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "Batch_SubmitFunctor",
+            "target": "0xa47820"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 806,
+          "calls": 3,
+          "ripRefs": 23,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 48 89 6C 24 18 56 57"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/RenderTarget_create_0xa28a80.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "RenderTarget_resolve",
+      "kind": "function",
+      "rva": "0xa29150",
+      "signature": {
+        "pattern": "48 89 5C 24 20 56 48 83 EC 50 80 79",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void (RT*): colour-only blit (GL_COLOR_BUFFER_BIT 0x4000) into the resolve FBO +0x20; depth never leaves the MSAA FBO",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 26,
+          "calls": 0,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 20 56 48 83 EC 50 80 79"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/RenderTarget_resolve_0xa29150.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "RenderTarget_unbind_lambda1_DoCall",
+      "kind": "function",
+      "rva": "0xa29d20",
+      "signature": {
+        "pattern": "48 83 EC 48 48 8B 49 08 83 79 08 00",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "RenderTarget::unbind lambda_1 _Do_call: resolve when type (+0x08) != 0 and samples (+0x50) > 0",
+        "callees": [
+          {
+            "ordinal": 0,
+            "name": "RenderTarget_resolve",
+            "target": "0xa29150"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 53,
+          "calls": 1,
+          "ripRefs": 1,
+          "resyncs": 0
+        },
+        "prologue": "48 83 EC 48 48 8B 49 08 83 79 08 00"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/RenderTarget_unbind_lambda1_DoCall_0xa29d20.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "RenderTarget_bind_lambda1_DoCall",
+      "kind": "function",
+      "rva": "0xa29d90",
+      "signature": {
+        "pattern": "40 53 48 83 EC 20 48 8B 51 08 48 8B D9 B9",
+        "exactLen": 14,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "RenderTarget::bind lambda_1 _Do_call (vftable 0x141133808 slot 2): glBindFramebuffer(GL_FRAMEBUFFER, +0x1c), optional clear 0x4500, viewport, GL_MULTISAMPLE",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 142,
+          "calls": 0,
+          "ripRefs": 7,
+          "resyncs": 0
+        },
+        "prologue": "40 53 48 83 EC 20 48 8B 51 08 48 8B"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/RenderTarget_bind_lambda1_DoCall_0xa29d90.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "Shader_compile",
+      "kind": "function",
+      "rva": "0xa55470",
+      "signature": {
+        "pattern": "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 A8",
+        "exactLen": 18,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [
+          {
+            "text": "C:\\Users\\Tyler\\Desktop\\SVN\\Engine\\code\\rendering\\Shader.cpp",
+            "role": "file",
+            "unique": true
+          },
+          {
+            "text": "void __cdecl glaiel::Shader::compile(void)",
+            "role": "funcsig",
+            "unique": true
+          }
+        ],
+        "note": "glaiel::Shader::compile: one .shader source copied twice and text-replaced (' vert()'/' frag()' -> ' main()', COMPILING_VERTEX/FRAGMENT_PROGRAM -> 1/0, MATRICES_AS_ATTRIBS -> 1 with ARB_base_instance); attribs position 0, color 1, texcoord 2, mvp 3, color_xform 7, depth_bias 9",
+        "callees": [
+          {
+            "ordinal": 10,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 15,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 20,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 25,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 31,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 33,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 34,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 35,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 38,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 39,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 41,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 42,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 43,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          },
+          {
+            "ordinal": 45,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 60,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 61,
+            "name": "string_Allocate",
+            "target": "0x52a40"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 5954,
+          "calls": 86,
+          "ripRefs": 108,
+          "resyncs": 0
+        },
+        "prologue": "40 55 53 56 57 41 54 41 55 41 56 41"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Shader_compile_0xa55470.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "ResourceManager_GetBinaryResource",
+      "kind": "function",
+      "rva": "0x973750",
+      "signature": {
+        "pattern": "4C 89 7D C7 48 C7 45 CF 0F 00 00 00 C6 45 B7 00 40 0F B6 F7 83 3D ?? ?? ?? ?? 00 41 0F 45 F6 4C 8D 45 97 48 8D 55 F7 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 08 48 8B 79 30 48 85 FF 74 15 40 84 F6 0F 84 ?? ?? ?? ?? 48 8B 07 41 8B D6 48 8B CF FF 50 18 48 8B D3 48 8D 4D 07 E8 ?? ?? ?? ?? 41 B1 01 44 0F B6 C6 48 8B D0 E8 ?? ?? ?? ?? 4C 8B F0 48 85 C0 0F 84 ?? ?? ?? ?? B9 38",
+        "exactLen": 125,
+        "offset": -407,
+        "wildcards": [
+          {
+            "at": 22,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 42,
+            "len": 4,
+            "why": "rip-relative disp32"
+          },
+          {
+            "at": 47,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 68,
+            "len": 4,
+            "why": "Jcc rel32"
+          },
+          {
+            "at": 92,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 107,
+            "len": 4,
+            "why": "E8 rel32"
+          },
+          {
+            "at": 119,
+            "len": 4,
+            "why": "Jcc rel32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "BinaryResource* (rcx unused, std::string path by value, callee frees): bytes of any file by path through -modpaths (first mod path that has it, then the gpak; no extension filter); data at res+0x28, int32 size at +0x30, borrowed from the FileManager cache (key \"bin_\"+path); NULL when missing",
+        "callees": [
+          {
+            "ordinal": 5,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 7,
+            "name": "FileManager_GetFile",
+            "target": "0x99ff50"
+          },
+          {
+            "ordinal": 10,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 13,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          },
+          {
+            "ordinal": 14,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 17,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 963,
+          "calls": 23,
+          "ripRefs": 13,
+          "resyncs": 0
+        },
+        "prologue": "48 89 54 24 10 48 89 4C 24 08 55 53"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/ResourceManager_GetBinaryResource_0x973750.c",
+        ".analysis/notes-r3dE.md"
+      ]
+    },
+    {
+      "name": "App_GetTexture",
+      "kind": "function",
+      "rva": "0x9bb490",
+      "signature": {
+        "pattern": "48 89 5C 24 18 48 89 54 24 10 55 56 57 48 83 EC 50 48 8B FA 48",
+        "exactLen": 21,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "Texture2D* (rcx unused, std::string name): cached \"textures/\"+name through stb_image (premultiplied RGBA, GL_LINEAR, GL_REPEAT), GL id at +8; a missing file is dereferenced without a NULL check (check FileManager_FileExists first)",
+        "callees": [
+          {
+            "ordinal": 2,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 3,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 6,
+            "name": "SaveProps_GetOrCreate",
+            "target": "0x61ea0"
+          },
+          {
+            "ordinal": 7,
+            "name": "string_TidyDeallocate",
+            "target": "0x52780"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 317,
+          "calls": 8,
+          "ripRefs": 2,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 18 48 89 54 24 10 55 56"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/App_GetTexture_0x9bb490.c",
+        ".analysis/notes-r3dE.md"
+      ]
+    },
+    {
+      "name": "ParticleSystemDepthSorter_Update",
+      "kind": "function",
+      "rva": "0x78dfe0",
+      "signature": {
+        "pattern": "48 89 5C 24 10 56 48 83 EC 30 48 8B F1",
+        "exactLen": 13,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "ParticleSystemDepthSorter slot 19: copies the owner's x+z+offsets (the K11 key, inlined) into the particle renderer's sort key",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 89,
+          "calls": 1,
+          "ripRefs": 0,
+          "resyncs": 0
+        },
+        "prologue": "48 89 5C 24 10 56 48 83 EC 30 48 8B"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/ParticleSystemDepthSorter_slot19_0x78dfe0.c",
+        ".analysis/notes-r3dE.md"
+      ]
+    },
+    {
+      "name": "DepthTrackingBehindEffect_Update",
+      "kind": "function",
+      "rva": "0x8d08a0",
+      "signature": {
+        "pattern": "48 83 EC 58 48 8B D1 48 8B 49 40 48",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "DepthTrackingBehindEffect slot 11: slides along the writable data vector 0x1413c4728 = (0.7071, 0, 0.7071) with the height correction 0x1412f7980",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 66,
+          "calls": 0,
+          "ripRefs": 1,
+          "resyncs": 0
+        },
+        "prologue": "48 83 EC 58 48 8B D1 48 8B 49 40 48"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/DepthTrackingBehindEffect_Update_0x8d08a0.c",
+        ".analysis/notes-r3dE.md"
+      ]
+    },
+    {
+      "name": "Camera_render_body",
+      "kind": "function",
+      "rva": "0x9787dc",
+      "signature": {
+        "pattern": "4C 89 AC 24 F0 00 00 00 E8 ?? ?? ?? ?? 44",
+        "exactLen": 14,
+        "offset": 0,
+        "wildcards": [
+          {
+            "at": 9,
+            "len": 4,
+            "why": "E8 rel32"
+          }
+        ]
+      },
+      "anchors": {
+        "strings": [],
+        "note": "witness host: the second .pdata chunk of Camera_render (0x9787dc..0x978c42, chained unwind; the first chunk is the 28-byte prologue): the current-camera store, the RTT/HDR branch and the layer walk",
+        "callees": [
+          {
+            "ordinal": 6,
+            "name": "RenderTarget_create",
+            "target": "0xa28a80"
+          },
+          {
+            "ordinal": 8,
+            "name": "Batch_SubmitFunctor",
+            "target": "0xa47820"
+          }
+        ],
+        "cfgLite": {
+          "bytes": 1126,
+          "calls": 11,
+          "ripRefs": 21,
+          "resyncs": 0
+        },
+        "prologue": "4C 89 AC 24 F0 00 00 00 E8 ?? ?? ??"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "Swf_DisplayObject_Render_cull",
+      "kind": "function",
+      "rva": "0x9b0b78",
+      "signature": {
+        "pattern": "44 0F 29 44 24 60 44 0F 29 4C 24 50 44 0F 29 54",
+        "exactLen": 16,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "witness host: the .pdata chunk of Swf_DisplayObject_Render (0x9b0b78..0x9b0cba) holding the cull gate cmp dword [0x1413c5c90],0 (0x1409b0b9c)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 322,
+          "calls": 0,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "prologue": "44 0F 29 44 24 60 44 0F 29 4C 24 50"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Swf_DisplayObject_Render_0x9b0a50.c"
+      ]
+    },
+    {
+      "name": "Iso",
+      "kind": "data",
+      "rva": "0x12f7a00",
+      "anchors": {
+        "witness": {
+          "function": "Renderer_GetScreenMatrix",
+          "kind": "rip-other",
+          "needsHarvest": false,
+          "ripRefOrdinal": 2
+        },
+        "note": "float[16] col-major in .data, written only by the static initializer 0x140025720: x column (0.894427, 0.447214), height (0, 1), z (-0.894427, 0.447214); 19 reader functions"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_Iso",
+          "index": 11
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Renderer_GetScreenMatrix_0x78d600.c",
+        ".analysis/notes-r3dC.md"
+      ]
+    },
+    {
+      "name": "IsoInverse",
+      "kind": "data",
+      "rva": "0x12f79c0",
+      "anchors": {
+        "witness": {
+          "function": "TacticsGrid_PickTileUnderMouse",
+          "kind": "rip-other",
+          "needsHarvest": false,
+          "ripRefOrdinal": 1
+        },
+        "note": "float[16] in .data, a 2x2 ground inverse ([0]=0.559017, [1]=-0.559017, [4]=1.118034, [5]=1.118034), written only by 0x1400257c0; 10 reader functions (a 4-direction table at 0x1412f79a0 ends right before it)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_IsoInverse",
+          "index": 12
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/TacticsGrid_PickTileUnderMouse_0x8abc50.c",
+        ".analysis/notes-r3dC.md"
+      ]
+    },
+    {
+      "name": "RenderStateFlags",
+      "kind": "data",
+      "rva": "0x12f714c",
+      "anchors": {
+        "witness": {
+          "function": "Layer_Draw",
+          "kind": "rip-other",
+          "needsHarvest": false,
+          "ripRefOrdinal": 5
+        },
+        "note": "u8: the current group's state flags (bit 0 force, bit 1 (2) depth test, bit 2 stencil, bit 3 (8) colour+depth mask); Layer_Draw ORs 2 for mode-1 layers"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_RenderStateFlags",
+          "index": 13
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c",
+        ".analysis/notes-r3dA.md"
+      ]
+    },
+    {
+      "name": "CullDisableCounter",
+      "kind": "data",
+      "rva": "0x13c5c90",
+      "anchors": {
+        "witness": {
+          "function": "Swf_DisplayObject_Render_cull",
+          "kind": "rip-other",
+          "needsHarvest": false,
+          "ripRefOrdinal": 1
+        },
+        "note": "int: the 2D screen-space cull runs only while it is 0 (balanced inc/dec in 0x998a50/0x998ac0/0x998b30)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_CullDisableCounter",
+          "index": 14
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Swf_DisplayObject_Render_0x9b0a50.c",
+        ".analysis/notes-r3dA.md"
+      ]
+    },
+    {
+      "name": "DepthBias",
+      "kind": "data",
+      "rva": "0x13c5c40",
+      "anchors": {
+        "witness": {
+          "function": "Layer_Draw",
+          "kind": "rip-other",
+          "needsHarvest": false,
+          "ripRefOrdinal": 7
+        },
+        "note": "float: the global depth_bias, += 1.0 after every mode-1 layer, reset by FrameBegin; the fragment shaders write gl_FragCoord.z - depth_bias*.001"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_DepthBias",
+          "index": 15
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c"
+      ]
+    },
+    {
+      "name": "MatStackTop",
+      "kind": "data",
+      "rva": "0x13c5c00",
+      "anchors": {
+        "witness": {
+          "function": "Layer_Draw",
+          "kind": "rip-other",
+          "needsHarvest": false,
+          "ripRefOrdinal": 10
+        },
+        "note": "int: the matrix stack's top index (stack data at 0x13c5bd8, 0x40-byte column-major floats)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_MatStackTop",
+          "index": 16
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "CurrentCamera",
+      "kind": "data",
+      "rva": "0x13c6d88",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "kind": "rip-mov",
+          "needsHarvest": false,
+          "ripRefOrdinal": 0
+        },
+        "note": "Camera*: the camera rendering right now (set at the start of Camera_render, cleared at the end)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_DATA_CurrentCamera",
+          "index": 17
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "MaskedRendererIso_vftable",
+      "kind": "vtable",
+      "rva": "0xed81e8",
+      "slots": 30,
+      "anchors": {
+        "rtti": {
+          "typeDescriptorName": ".?AVMaskedRendererIso@glaiel@@",
+          "method": "typedesc-col-vftable"
+        },
+        "slotChecks": [
+          {
+            "slot": 25,
+            "note": "MaskedRendererIso_RefreshSortKey 0x78d480 (a leaf with no .pdata entry, so not a function entry): position+0xb0 = z + x + offsets"
+          }
+        ],
+        "note": "glaiel::MaskedRendererIso (units' renderers, Character+0x40): the observer calls Renderer_GetScreenMatrix only on objects with this vftable; slot 19 = Submit 0x78d4c0, slot 25 = RefreshSortKey; 30 consecutive code pointers"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c"
+      ],
+      "exposure": [
+        {
+          "field": "rva_MaskedRendererIso_vftable"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/notes-r3dC.md",
+        ".analysis/notes-rim.md"
+      ]
+    },
+    {
+      "name": "Camera_rtt",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0x80",
+      "ctype": "u8: render-to-texture camera",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "pattern": "44 38 97 80 00 00 00 0F 84",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "cmp byte [rdi+0x80],r10b; je (0x140978858): the RTT branch"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_RTT"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "Camera_hdr",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0x81",
+      "ctype": "u8: RGBA16F instead of RGBA8 for an RTT camera",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "pattern": "4C 8D BF 81 00 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "lea r15,[rdi+0x81] (0x1409789ab): the HDR byte passed to RenderTarget_create"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_HDR"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "Camera_queue",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0x40",
+      "ctype": "RenderQueue*",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "pattern": "48 8B 47 40 45 8B DA",
+          "dispAt": 3,
+          "dispSize": 1
+        },
+        "note": "mov rax,[rdi+0x40] (0x140978872): the camera's render queue, whose layers it walks"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_QUEUE"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "Camera_layerBits",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0xc8",
+      "ctype": "uint32*: the enabled-layer bitset words",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "pattern": "48 8B B7 C8 00 00 00 41 8B CA",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rsi,[rdi+0xc8] (0x140978894) then bt via shl/test per layer"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_LAYER_BITS"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "RenderQueue_layers",
+      "kind": "offset",
+      "struct": "RenderQueue",
+      "value": "0x38",
+      "ctype": "Layer* begin (CONST_LAYER_STRIDE bytes each)",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "pattern": "4C 8B 48 40 4C 8B 40 38",
+          "dispAt": 7,
+          "dispSize": 1
+        },
+        "note": "mov r8,[rax+0x38] (0x14097887d)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RQ_LAYERS"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "RenderQueue_layersEnd",
+      "kind": "offset",
+      "struct": "RenderQueue",
+      "value": "0x40",
+      "ctype": "Layer* end",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "pattern": "4C 8B 48 40 4C 8B 40 38",
+          "dispAt": 3,
+          "dispSize": 1
+        },
+        "note": "mov r9,[rax+0x40] (0x140978879)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RQ_LAYERS_END"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "Layer_count",
+      "kind": "offset",
+      "struct": "Layer",
+      "value": "0xc",
+      "ctype": "uint32: item count",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "pattern": "43 83 7C 02 0C 00",
+          "dispAt": 4,
+          "dispSize": 1
+        },
+        "note": "cmp dword [r10+r8+0xc],0 (0x1409788b5): a layer with items"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_LAYER_COUNT"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ]
+    },
+    {
+      "name": "Layer_items",
+      "kind": "offset",
+      "struct": "Layer",
+      "value": "0x10",
+      "ctype": "Item*: {renderable*, Position*, double key, u32 flags}",
+      "anchors": {
+        "witness": {
+          "function": "Layer_Draw",
+          "pattern": "44 8B 76 0C 4C 8B 7E 10",
+          "dispAt": 7,
+          "dispSize": 1
+        },
+        "note": "mov r15,[rsi+0x10] (0x14098977b) after mov r14d,[rsi+0xc]"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_LAYER_ITEMS"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c"
+      ]
+    },
+    {
+      "name": "Layer_mode",
+      "kind": "offset",
+      "struct": "Layer",
+      "value": "0x24",
+      "ctype": "int32: draw mode (1 = depth-tested, reverse order; 2/3 = flat black/white)",
+      "anchors": {
+        "witness": {
+          "function": "Layer_Draw",
+          "pattern": "83 7E 24 01 0F 85",
+          "dispAt": 2,
+          "dispSize": 1
+        },
+        "note": "cmp dword [rsi+0x24],1; jne (0x1409898b3) then or byte [0x1412f714c],2"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_LAYER_MODE"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c"
+      ]
+    },
+    {
+      "name": "Renderer_position",
+      "kind": "offset",
+      "struct": "MaskedRendererIso",
+      "value": "0x40",
+      "ctype": "Position*",
+      "anchors": {
+        "witness": {
+          "function": "Renderer_GetScreenMatrix",
+          "pattern": "48 8B 49 40 48 8D 54 24 20",
+          "dispAt": 3,
+          "dispSize": 1
+        },
+        "note": "mov rcx,[rcx+0x40] (0x14078d60d) right before Position_GetInterpolated"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RND_POSITION"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Renderer_GetScreenMatrix_0x78d600.c"
+      ]
+    },
+    {
+      "name": "Renderer_layer",
+      "kind": "offset",
+      "struct": "MaskedRendererIso",
+      "value": "0x54",
+      "ctype": "int32: the renderer's main draw layer",
+      "anchors": {
+        "witness": {
+          "function": "Character_SetRenderLayer",
+          "pattern": "8B 41 54 C7 41 54 19",
+          "dispAt": 2,
+          "dispSize": 1
+        },
+        "note": "mov eax,[rcx+0x54]; mov dword [rcx+0x54],0x19 (0x1400f49de)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RND_LAYER"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Character_SetRenderLayer_0xf4890.c"
+      ]
+    },
+    {
+      "name": "Position_x",
+      "kind": "offset",
+      "struct": "Position",
+      "value": "0x80",
+      "ctype": "double: world x (tiles)",
+      "anchors": {
+        "witness": {
+          "function": "Position_GetInterpolated",
+          "pattern": "0F 10 81 80 00 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "movups xmm0,[rcx+0x80] (0x1409b4a7e): the current (x, height) pair; x is the first double"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_POS_X"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/MaskedRendererIso_RefreshSortKey_0x78d480.c"
+      ]
+    },
+    {
+      "name": "Position_z",
+      "kind": "offset",
+      "struct": "Position",
+      "value": "0x90",
+      "ctype": "double: world z (tiles)",
+      "anchors": {
+        "witness": {
+          "function": "Position_GetInterpolated",
+          "pattern": "F2 0F 10 89 90 00 00 00",
+          "dispAt": 4,
+          "dispSize": 4
+        },
+        "note": "movsd xmm1,[rcx+0x90] (0x1409b4a88): the current z (the sort key MaskedRendererIso_RefreshSortKey 0x78d480, a pdata-less leaf, reads the same +0x80/+0x90)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_POS_Z"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/MaskedRendererIso_RefreshSortKey_0x78d480.c"
+      ]
+    },
+    {
+      "name": "App_mainRT",
+      "kind": "offset",
+      "struct": "App",
+      "value": "0xc10",
+      "ctype": "RenderTarget (embedded): the main MSAA RT the non-RTT cameras draw into",
+      "anchors": {
+        "witness": {
+          "function": "ApplicationBase_FrameBegin",
+          "pattern": "48 8D BB 10 0C 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "lea rdi,[rbx+0xc10] (0x1409b7aa7) before RenderTarget_create"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APP_MAIN_RT"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "App_antialias",
+      "kind": "offset",
+      "struct": "App",
+      "value": "0xdf4",
+      "ctype": "int32: the antialias setting (MSAA samples requested)",
+      "anchors": {
+        "witness": {
+          "function": "ApplicationBase_FrameBegin",
+          "pattern": "44 8B 8B F4 0D 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov r9d,[rbx+0xdf4] (0x1409b7aae): the samples argument"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APP_ANTIALIAS"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "App_clearColor",
+      "kind": "offset",
+      "struct": "App",
+      "value": "0xd98",
+      "ctype": "u8: FrameBegin clears GL_COLOR_BUFFER_BIT of the main RT",
+      "anchors": {
+        "witness": {
+          "function": "ApplicationBase_FrameBegin",
+          "pattern": "0F B6 83 98 0D 00 00 F6 D8",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "movzx eax,byte [rbx+0xd98] (0x1409b7b61)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APP_CLEAR_COLOR"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "App_clearDepth",
+      "kind": "offset",
+      "struct": "App",
+      "value": "0xd99",
+      "ctype": "u8: ... GL_DEPTH_BUFFER_BIT",
+      "anchors": {
+        "witness": {
+          "function": "ApplicationBase_FrameBegin",
+          "pattern": "40 38 B3 99 0D 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "cmp byte [rbx+0xd99],sil (0x1409b7b7c)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APP_CLEAR_DEPTH"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "App_clearStencil",
+      "kind": "offset",
+      "struct": "App",
+      "value": "0xd9a",
+      "ctype": "u8: ... GL_STENCIL_BUFFER_BIT",
+      "anchors": {
+        "witness": {
+          "function": "ApplicationBase_FrameBegin",
+          "pattern": "40 38 B3 9A 0D 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "cmp byte [rbx+0xd9a],sil (0x1409b7b8c)"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_APP_CLEAR_STENCIL"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c",
+        ".analysis/notes-r3dD.md"
+      ]
+    },
+    {
+      "name": "RenderTarget_samples",
+      "kind": "offset",
+      "struct": "RenderTarget",
+      "value": "0x50",
+      "ctype": "int32: MSAA samples (clamped)",
+      "anchors": {
+        "witness": {
+          "function": "RenderTarget_unbind_lambda1_DoCall",
+          "pattern": "83 79 08 00 74 22 83 79 50 00",
+          "dispAt": 8,
+          "dispSize": 1
+        },
+        "note": "cmp dword [rcx+0x50],0 (after cmp dword [rcx+8],0): resolve only a multisampled RT"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RT_SAMPLES"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/RenderTarget_unbind_lambda1_DoCall_0xa29d20.c"
+      ]
+    },
+    {
+      "name": "LayerStride",
+      "kind": "constant",
+      "value": "0xe8",
+      "anchors": {
+        "witness": {
+          "function": "Camera_render_body",
+          "pattern": "49 81 C2 E8 00 00 00 49 0F AF C5",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "add r10,0xe8 (0x1409788cd) in the layer walk"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_LAYER_STRIDE"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Camera_render_0x9787c0.c"
+      ],
+      "note": "bytes per RenderQueue layer"
+    },
+    {
+      "name": "LayerItemShift",
+      "kind": "constant",
+      "value": "5",
+      "anchors": {
+        "witness": {
+          "function": "Layer_Draw",
+          "pattern": "4C 8B 7E 10 41 8B DE 48 C1 E3 05",
+          "dispAt": 10,
+          "dispSize": 1
+        },
+        "note": "shl rbx,5 (0x140989782): items are 1<<5 = 0x20 bytes"
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_LAYER_ITEM_SHIFT"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Layer_Draw_0x9896f0.c"
+      ],
+      "note": "log2 of the layer item size"
+    },
+    {
+      "name": "UnitsLayer",
+      "kind": "constant",
+      "value": "0x19",
+      "anchors": {
+        "witness": {
+          "function": "Character_SetRenderLayer",
+          "pattern": "C7 41 54 19 00 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov dword [rcx+0x54],0x19 (0x1400f49e1): SetRenderLayer \"default\""
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_UNITS_LAYER"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Character_SetRenderLayer_0xf4890.c",
+        ".analysis/notes-r3dC.md"
+      ],
+      "note": "the default standing layer (units, objects, tall-tile halves)"
+    },
+    {
+      "name": "FlatLayer",
+      "kind": "constant",
+      "value": "0x13",
+      "anchors": {
+        "witness": {
+          "function": "Character_SetRenderLayer",
+          "pattern": "C7 41 54 13 00 00 00",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov dword [rcx+0x54],0x13 (0x1400f4938): SetRenderLayer \"flat\""
+      },
+      "consumers": [
+        "native/framework/src/obs3d_engine.c",
+        "native/framework/src/fw_obs3d_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_FLAT_LAYER"
+        }
+      ],
+      "evidence": [
+        "docs/possible_3d_work.md",
+        "docs/engine-map.md#3d-rendering-path-2026-10-22",
+        ".analysis/decompiled/Character_SetRenderLayer_0xf4890.c",
+        ".analysis/notes-r3dC.md"
+      ],
+      "note": "the layer a unit is moved to when it lies flat"
+    },
+    {
       "name": "App_timescale",
       "kind": "offset",
       "struct": "ApplicationBase",
@@ -9736,6 +11942,11 @@
         ],
         "note": "glaiel::MapScreen::init(std::string, bool) (__FUNCSIG__ at 0xf14040, MapScreen.cpp): load_map + generate_map 0x21ca60, \"Map generated without a start node somehow\" when no node has type 2, the marker component at +0xa0 (its +0x80 std::function is the on-arrive lambda 0x39b180 -> EnterNode). Called by AddComponent<MapScreen> 0x39e570 <- MapTest::init 0x39df90 <- AddComponent<MapTest> 0x3c5210 <- StartAdventure 0x3b38c0.",
         "callees": [
+          {
+            "ordinal": 0,
+            "name": "Component_GetSceneCamera",
+            "target": "0x1b1070"
+          },
           {
             "ordinal": 8,
             "name": "string_TidyDeallocate",

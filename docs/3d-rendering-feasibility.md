@@ -317,6 +317,26 @@ billboard basis; every update breaks the hooks.
 
 ## 6. Hook points (decompiled, build 25143593)
 
+> **2026-10-22 refresh (RE sessions r3dA–r3dE + the first T2 observer run).** Every row below is now a signed entry
+> of the manifest's "3D block" (`bindings/25143593.json`; names and the phase each serves are in
+> [`possible_3d_work.md`](possible_3d_work.md) §3), and the plan there supersedes §7. Corrections to this table and §1:
+> - The world camera is **`TacticsTest+0x68`, not render-to-texture**; it is drawn by **`Camera_RenderOneLayer`
+>   0x979210** (RenderCore 0x989020's second list: every layer × every non-RTT camera, a VP push per layer), not by
+>   `Camera::render` 0x9787c0, which only renders the 5 RTT side cameras (T2: 5 calls per frame, never +0x68).
+> - `FUN_140764da0` is ParticleTest init and `FUN_14031d200` is `AddComponent<DialogTest>`: neither builds the combat
+>   cameras (TacticsTest::init 0x833390 does; "scale 1.15" is the world camera Position's scale, not a camera).
+> - The world camera runs at **zoom 78.2624** in a fight (not the ctor's 60) with flip −1; `+0x170` is the y-flip, not
+>   a zoom.
+> - The main RT `App+0xc10` (RGBA8 + D24S8, MSAA = the `antialias` setting) is cleared COLOR|DEPTH|STENCIL every frame
+>   (T2: `App+0xd98/0xd99/0xd9a` = 1/1/1); non-RTT cameras share its depth buffer.
+> - `FUN_140a55470` is `Shader::compile` (text replacement, not `#define`s); attribs position 0, color 1, texcoord 2,
+>   mvp 3, color_xform 7, depth_bias 9.
+> - The GLEW table spans ~0x1413bc060..0x1413c11d0 (0x1413bc370 is glBindBuffer); glDrawElements / glDepthFunc are
+>   not imported.
+> - Picking `FUN_1409796d0` has 27 caller functions (32 call sites), 3 of them combat world picking.
+> - ISO / ISO⁻¹ are in writable `.data`, written only at static init; TacticsTest::init copies ISO into the particle
+>   core at `+0x190`.
+
 | Function / data | VA (RVA) | Signature (guess) | What a 3D mod does there |
 |---|---|---|---|
 | **ISO matrix** (data) | `0x1412f7a00` (`0x12f7a00`), float[16] col-major; inverse `0x1412f79c0` | — | B1 step 1: rewrite per frame with the rotated orthographic basis (keep the inverse consistent). Read by `RendererIso`, `Shadow`, `camera_to_world` and 23 picking/preview sites |

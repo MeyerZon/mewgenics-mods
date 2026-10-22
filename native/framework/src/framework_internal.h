@@ -41,3 +41,7 @@ int catrig_engine_is_step(const FwHookSpec *spec);     /* the three cat rig step
 int catrig_engine_hook_step(const FwHookSpec *spec);
 int catrig_engine_register(const FwCatRigDef *def);
 const char *catrig_engine_for(const char *character);
+
+/* obs3d_engine.c (phase-0 3D observer, log-only, MEWFW_OBSERVE3D) */
+int obs3d_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_Camera_render step: a no-op success when off */
+void obs3d_on_late_render(void *tacticsTest);        /* called by the glow engine's LateRender hook every combat frame */

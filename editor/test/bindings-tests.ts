@@ -384,12 +384,12 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(m.build.sdlVersion, "3.2.12");
     eq(m.sigCap, 128);
   });
-  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face, the 4 campaign-walk symbols the 2 glow-v2 screen-matrix symbols and the 3 v7 cat-rig hook targets); each has a signature except the three with no relocation-free unique window", () => {
+  test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (40, incl. the v4 run-entry symbols, the 7 glow symbols, Character_Face, the 4 campaign-walk symbols the 2 glow-v2 screen-matrix symbols the 3 v7 cat-rig hook targets and the 3 observe3d camera symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 45);
+    eq(want.length, 48);
     // API v7 (2026-10-22): the cat rig redirect hooks the entry scope, the by-name clip lookup and the SWF post-load pass
-    eq(want.slice(42).join(","), "FW_SYM_Character_init,FW_SYM_Swf_GetCharacterByName,FW_SYM_ApplicationBase_ProcessAnimationMerges");
+    eq(want.slice(42, 45).join(","), "FW_SYM_Character_init,FW_SYM_Swf_GetCharacterByName,FW_SYM_ApplicationBase_ProcessAnimationMerges");
     eq(entry(m, "Character_init")!.rva, "0xf70f0");
     eq(entry(m, "Swf_GetCharacterByName")!.rva, "0x9bb890");
     eq(entry(m, "ApplicationBase_ProcessAnimationMerges")!.rva, "0x9bc070");
@@ -417,10 +417,10 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const sp = entry(m, "SaveProps_GetOrCreate")!.signature!;
     assert(sp.offset < 0 && sp.wildcards.length >= 5, `SaveProps_GetOrCreate regenerated on an instruction boundary with its relocations masked: ${JSON.stringify(sp)}`);
   });
-  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (11, incl. the MewDirector and ShaderManager globals); App_global first", () => {
+  test("25143593.json: FwData table == framework_api.h FW_DATA_* order (18, incl. the MewDirector and ShaderManager globals and the 7 render globals of the 3D block); App_global first", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_DATA_");
-    eq(want.length, 11);
+    eq(want.length, 18);
     eq(entry(m, "MewDirector_global")!.rva, "0x13dac30");
     const got = dataTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
@@ -494,7 +494,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 102, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects) + 2 effective stats + App_timescale (game speed) + 3 cat rig (the SymbolClass list: SwfFile_symbolList, SymNode_name, SymNode_idFromName)");
+    eq(offs.length, 121, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 10 facing (Character::Face) + 8 campaign walk + 6 glow v2 (per-unit screen rects) + 2 effective stats + App_timescale (game speed) + 3 cat rig (the SymbolClass list: SwfFile_symbolList, SymNode_name, SymNode_idFromName) + 19 3D block (observe3d)");
   });
   test("25143593.json: effective stats (2026-10-22) — Character::recompute_stats (RTTI of its std::function lambdas) is a signed function entry; the effective stat block +0x5bc and max HP +0x4bc are offsets witnessed in it", () => {
     const m = loadManifest(realPath);
@@ -1924,7 +1924,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const WALK_NAMES = new Set([...WALK_SYMBOLS.map((x) => x[0]), ...WALK_REFERENCE.map((x) => x[0]), ...WALK_OFFSETS.map((x) => x[0])]);
   test("the committed manifest carries the campaign-walk bindings (2026-10-22) as one contiguous block at its end: 4 FwSymbol functions (GoOnAnAdventure, MapScreen::init, MapScreen::EnterNode, StartMapBattle), 3 reference functions, 8 witnessed offsets; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(enumerators("FW_SYM_").length, 45);
+    eq(enumerators("FW_SYM_").length, 48);
     for (const [name, rva, index] of WALK_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
@@ -1984,6 +1984,92 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   ];
   /** layer / slot constants: name, macro, value */
   const GLOW_CONSTANTS: [string, string, string][] = [["MaskLayer", "CONST_MASK_LAYER", "0x18"], ["CompositeLayer", "CONST_COMPOSITE_LAYER", "0x1a"], ["GlowFramebufSlot", "CONST_GLOW_FRAMEBUF_SLOT", "6"], ["VT_TacticsTest_LateRender", "VT_TT_LATERENDER", "19"]];
+  // ---- 3D block (2026-10-22, RE sessions r3dA..r3dE, docs/possible_3d_work.md): the observe3d hook + call (FwSymbol
+  // 37/38), the functions the full-3D build hooks or calls (reference, signed so a port finds them again), 7 render
+  // globals (FwData 11..17), the MaskedRendererIso vftable, 19 witnessed offsets and 4 witnessed constants. Appended
+  // at the end of the manifest as one contiguous block.
+  // T2 (2026-10-22, the first observe3d run): RenderCore 0x989020 calls Camera_render only for its first camera list (the
+  // 5 RTT cameras); the world and UI cameras are drawn layer by layer through Camera_RenderOneLayer 0x979210 (second
+  // list, every layer index x every camera), which pushes the same VP. Both are hooked.
+  const R3D_SYMBOLS: [string, string, number][] = [["Camera_render", "0x9787c0", 45], ["Camera_GetViewProjection", "0x9785e0", 46], ["Camera_RenderOneLayer", "0x979210", 47]];
+  const R3D_REFERENCE: [string, string][] = [["Layer_Draw", "0x9896f0"], ["Position_GetInterpolated", "0x9b4a30"],
+    ["Batch_SubmitFunctor", "0xa47820"], ["Batch_Replay", "0xa481d0"], ["Batch_AddInstance", "0xa47e50"], ["Batch_ApplyGroupState", "0xa497d0"], ["Material_Bind", "0x9bda20"],
+    ["Swf_DisplayObject_Render", "0x9b0a50"], ["MatStack_Ortho", "0x9fec80"], ["MatStack_Push", "0x9feaf0"], ["Mat4_IsMirrored", "0xa082b0"], ["Camera_MouseToCamera2D", "0x9796d0"],
+    ["Component_GetSceneCamera", "0x1b1070"], ["TacticsGrid_PickTileUnderMouse", "0x8abc50"], ["Character_SetRenderLayer", "0xf4890"],
+    ["Shadow_Update", "0x794850"], ["RenderTarget_create", "0xa28a80"], ["RenderTarget_resolve", "0xa29150"], ["RenderTarget_unbind_lambda1_DoCall", "0xa29d20"],
+    ["RenderTarget_bind_lambda1_DoCall", "0xa29d90"], ["Shader_compile", "0xa55470"], ["ResourceManager_GetBinaryResource", "0x973750"], ["App_GetTexture", "0x9bb490"],
+    ["ParticleSystemDepthSorter_Update", "0x78dfe0"], ["DepthTrackingBehindEffect_Update", "0x8d08a0"],
+    // witness hosts: .pdata chunks of functions whose first chunk is only the prologue (chained unwind)
+    ["Camera_render_body", "0x9787dc"], ["Swf_DisplayObject_Render_cull", "0x9b0b78"]];
+  const R3D_DATA: [string, string, number][] = [["Iso", "0x12f7a00", 11], ["IsoInverse", "0x12f79c0", 12], ["RenderStateFlags", "0x12f714c", 13], ["CullDisableCounter", "0x13c5c90", 14],
+    ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17]];
+  const R3D_OFFSETS: [string, string, string][] = [["Camera_rtt", "OFF_CAM_RTT", "0x80"], ["Camera_hdr", "OFF_CAM_HDR", "0x81"], ["Camera_queue", "OFF_CAM_QUEUE", "0x40"],
+    ["Camera_layerBits", "OFF_CAM_LAYER_BITS", "0xc8"], ["RenderQueue_layers", "OFF_RQ_LAYERS", "0x38"], ["RenderQueue_layersEnd", "OFF_RQ_LAYERS_END", "0x40"],
+    ["Layer_count", "OFF_LAYER_COUNT", "0xc"], ["Layer_items", "OFF_LAYER_ITEMS", "0x10"], ["Layer_mode", "OFF_LAYER_MODE", "0x24"], ["Renderer_position", "OFF_RND_POSITION", "0x40"],
+    ["Renderer_layer", "OFF_RND_LAYER", "0x54"], ["Position_x", "OFF_POS_X", "0x80"], ["Position_z", "OFF_POS_Z", "0x90"], ["App_mainRT", "OFF_APP_MAIN_RT", "0xc10"],
+    ["App_antialias", "OFF_APP_ANTIALIAS", "0xdf4"], ["App_clearColor", "OFF_APP_CLEAR_COLOR", "0xd98"], ["App_clearDepth", "OFF_APP_CLEAR_DEPTH", "0xd99"],
+    ["App_clearStencil", "OFF_APP_CLEAR_STENCIL", "0xd9a"], ["RenderTarget_samples", "OFF_RT_SAMPLES", "0x50"]];
+  const R3D_CONSTANTS: [string, string, string][] = [["LayerStride", "CONST_LAYER_STRIDE", "0xe8"], ["LayerItemShift", "CONST_LAYER_ITEM_SHIFT", "5"],
+    ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
+  const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",
+    ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]);
+  test("the committed manifest carries the 3D block (r3dA..r3dE) as one contiguous block at the end: 3 FwSymbol + 27 reference functions (all signed; 2 are witness-host .pdata chunks), 7 FwData render globals with harvested witnesses, the MaskedRendererIso vftable (RTTI), 19 offsets and 4 constants with witnesses; the generated headers expose them", () => {
+    const m = loadManifest(realPath);
+    for (const [name, rva, index] of R3D_SYMBOLS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ enum: `FW_SYM_${name}`, index }]), `${name} enumerator`);
+    }
+    for (const [name, rva] of R3D_REFERENCE) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);
+      eq(e!.exposure.length, 0, `${name} is reference only`);
+    }
+    for (const [name, rva, index] of R3D_DATA) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "data" && e.rva === rva, `${name} is data at ${rva}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ enum: `FW_DATA_${name}`, index }]), `${name} enumerator`);
+      assert(Number.isInteger(e!.anchors.witness?.ripRefOrdinal) && e!.anchors.witness?.needsHarvest === false, `${name}: harvested rip-ref witness`);
+    }
+    const vt = entry(m, "MaskedRendererIso_vftable");
+    assert(!!vt && vt.kind === "vtable" && vt.rva === "0xed81e8", "MaskedRendererIso_vftable 0xed81e8");
+    eq(vt!.anchors.rtti?.typeDescriptorName, ".?AVMaskedRendererIso@glaiel@@");
+    assert((vt!.slots || 0) > 25, "covers slot 25 (RefreshSortKey)");
+    eq(JSON.stringify(vt!.exposure), JSON.stringify([{ field: "rva_MaskedRendererIso_vftable" }]));
+    for (const [name, macro, value] of R3D_OFFSETS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "offset" && e.value === value, `${name} is an offset ${value}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      const w = e!.anchors.witness;
+      assert(!!w && typeof w.function === "string" && typeof w.pattern === "string" && Number.isInteger(w.dispAt), `${name}: witness {function, pattern, dispAt}`);
+    }
+    for (const [name, macro, value] of R3D_CONSTANTS) {
+      const e = entry(m, name);
+      assert(!!e && e.kind === "constant" && e.value === value, `${name} is a constant ${value}`);
+      eq(JSON.stringify(e!.exposure), JSON.stringify([{ macro }]), `${name} macro`);
+      assert(hv.constantHasSources(e!.anchors), `${name} carries a witness the harvest can verify`);
+    }
+    const names = m.entries.map((e) => e.name);
+    const idx = names.map((n, i) => (R3D_NAMES.has(n) ? i : -1)).filter((i) => i >= 0);
+    eq(idx.length, R3D_NAMES.size, "every 3D entry is present");
+    eq(idx[idx.length - 1]! - idx[0]! + 1, R3D_NAMES.size, "the 3D entries are one contiguous block");
+    const oh = genOffsetsH([m]);
+    for (const [, macro, value] of [...R3D_OFFSETS, ...R3D_CONSTANTS]) assert(new RegExp(`^#define ${macro}\\s+${value}\\s`, "m").test(oh), `${macro} ${value} in offsets.h`);
+    const sh = genSignaturesH([m]);
+    for (const [name, rva] of R3D_SYMBOLS) assert(sh.includes(`${rva}u },  /* FW_SYM_${name} */`), `the ${name} signature row`);
+    assert(sh.includes("uint32_t rva_MaskedRendererIso_vftable;") && sh.includes("0x00ed81e8u"), "BuildInfo.rva_MaskedRendererIso_vftable in signatures.h");
+    for (const [name] of R3D_DATA) assert(sh.includes(`/* FW_DATA_${name} */`), `rva_data[FW_DATA_${name}]`);
+  });
+  if (exe) {
+    test("T1 real exe: the 3D block verifies on the installed exe (harvest): the data rip-ref witnesses, the vftable by RTTI, every offset and constant witness reads its value", () => {
+      const m = loadManifest(realPath);
+      const rep = harvestManifest(parsePe(exe), exe, m).report;
+      for (const n of [...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable", ...R3D_OFFSETS.map((x) => x[0]), ...R3D_CONSTANTS.map((x) => x[0])]) {
+        const x = rep.find((r) => r.name === n);
+        eq(x?.status, "verified", `${n}: ${x?.detail}`);
+      }
+    });
+  }
   // ---- glow v2 (2026-10-22): per-unit colours scissor one composite pass per unit to the unit's screen rect, computed exactly
   // as TacticsTest::LateRender computes the hovered unit's (0x88e24e..0x88e4a0): clip bounds (slot 16) -> clip matrix
   // (+0x60) -> Renderer_GetScreenMatrix -> inverse(Position_GetViewMatrix(maskCamera+0x38, interp)) x zoom -> 1280x720.
@@ -2033,7 +2119,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   }
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1 + 3 + 1 + 5 + FACING_NAMES.size + WALK_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam) + the effective stats (3) + App_timescale (game speed) + the cat rig block (5) + the facing block + the campaign-walk block");
+    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1 + 3 + 1 + 5 + FACING_NAMES.size + WALK_NAMES.size + R3D_NAMES.size, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam) + the effective stats (3) + App_timescale (game speed) + the cat rig block (5) + the facing block + the campaign-walk block + the 3D block");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);

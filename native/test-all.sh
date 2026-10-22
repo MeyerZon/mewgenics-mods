@@ -33,6 +33,7 @@ run_suite "mewframework random stream" "$FW/build/test_rng" -I"$FW/src" "$FW/tes
 run_suite "jokers_luck reroll" "$JL/build/test_roll" -I"$JL/src" -I"$FW/src" "$JL/test/test_roll.c" "$JL/src/jl_roll.c" "$FW/src/fw_rng.c"
 run_suite "mewframework game-speed rules" "$FW/build/test_speed_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_speed_rules.c" "$FW/src/fw_speed_rules.c" -lm
 run_suite "mewframework cat rig rules" "$FW/build/test_catrig_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_catrig_rules.c" "$FW/src/fw_catrig_rules.c"
+run_suite "mewframework 3D observer rules" "$FW/build/test_obs3d_rules" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_obs3d_rules.c" "$FW/src/fw_obs3d_rules.c"
 run_suite "mewtest harness pure modules" "$HS/build/test_mewtest" -DMT_HOST_TEST -I"$HS/src" -I"$FW/src" "$HS/test/test_mewtest.c" \
   "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c" "$HS/src/mt_face.c" "$HS/src/mt_walk.c" "$HS/src/mt_shot.c"
 CS="$HERE/mods/catrig-sample"
