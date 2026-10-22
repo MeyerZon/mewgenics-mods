@@ -70,10 +70,14 @@ if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
   -o "%OUT%\test_mesh_draw.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_draw.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_mesh_rules.c" "%HERE%src\fw_mesh_rules.c" ^
   -o "%OUT%\test_mesh_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_rules.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
   "%HERE%test\test_obj3d_rules.c" "%HERE%src\fw_obj3d_rules.c" "%HERE%src\fw_mesh_rules.c" ^
   -o "%OUT%\test_obj3d_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
