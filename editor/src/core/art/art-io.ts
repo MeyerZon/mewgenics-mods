@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
-import { MODS_DIR, REPO_ROOT, resolveModWritePath, isInside, touchesSaves } from "../repo.ts";
+import { MODS_DIR, resolveModWritePath, isInside, touchesSaves, vanillaSwfDir } from "../repo.ts";
 import { validateScene, newScene, exampleScene, DEFAULT_ABC_MODE } from "./scene.ts";
 import type { Scene, SceneShape, SceneGradient, Finding } from "./scene.ts";
 import { newCatAnimation } from "./cat-rig.ts";
@@ -514,10 +514,8 @@ export function inspectSwf(modName: string, relPath: string): InspectSwfResult {
 
 /** The mod the gate lives in; `*.swf` and the generated `.append` are git-ignored there. */
 // ---- vanilla SWFs (read-only reference copies in the git-ignored .extracted/swfs/) ----------------------------
-/** where extracted vanilla SWFs live; MEWGENICS_VANILLA_SWF_DIR overrides (tests) */
-export function vanillaSwfDir(): string {
-  return process.env.MEWGENICS_VANILLA_SWF_DIR ? process.env.MEWGENICS_VANILLA_SWF_DIR : join(REPO_ROOT, ".extracted", "swfs");
-}
+/** where extracted vanilla SWFs live (repo.ts: MEWGENICS_VANILLA_SWF_DIR, else <extracted root>/swfs) */
+export { vanillaSwfDir };
 const VANILLA_HINT = (name: string) => `python -I tools/gpak.py extract .extracted --prefix swfs/${name || ""}`;
 
 export interface VanillaSwfListing {

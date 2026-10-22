@@ -171,26 +171,38 @@ this section in sync with `merge.ts` and the fixtures.
   `tutorial`, `finalboss`; 22 in this build) of `key value` string pairs plus `global_objects` / `reverb`
   sub-objects, keyed by `default_tileset`. The game also uses it as a per-tileset **clip-name indirection** (below).
 
-### Redirecting a vanilla character's clip via tilesets.gon (INFERRED, untested)
+### Redirecting a vanilla character's clip via tilesets.gon (OBSERVED 2026-10-22)
 
 Decompiled 2026-10-21 (`ResolveClipName` 0x7bdbb0, called by `CharacterGraphics_build` 0xf1150 with
 `(graphics.movieclip, "auto")` before the SymbolClass lookup; `docs/engine-map.md` "SWF loader and display path"):
 for every **non-cat** character the game first looks `graphics.movieclip` up as a key in the *current* tileset's
 object of `tilesets.gon` and, when the value is a string, uses that string as the clip name instead. Vanilla uses this
-for `non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. Since the table is loaded once at boot
-(`SpawnDatabase_init` 0x7a74b0), a mod overlay applies, so a data-only redirect should exist:
+for `non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. The table is loaded once at boot
+(`SpawnDatabase_init` 0x7a74b0), so a mod overlay applies.
+
+**OBSERVED in-game 2026-10-22** (`mods/_tileprobe`, `npm run test:artprobe -- --tileset`, runs
+`20261022-090748-_tileprobe-render-tileset-redirect` and the control `20261022-090756-_artprobe-render-tileset-control`,
+both pass with the real save unchanged): with `alley { Rat ArtProbe }` a `spawn Rat` in TacticsTest (tileset alley)
+draws `_artprobe`'s ArtProbe clip — the probe marker in both post-spawn shots (scale 1.72, mirrored, the same screen
+box as the ArtProbe enemy), none in the pre-spawn baseline; the control without the overlay draws the vanilla Rat (no
+marker). Pinned in `editor/test/fixtures/ingame/artprobe-tileset-summary.json` (`art-probes-tests.ts`).
+
+Recipe — reskin a vanilla non-cat character without touching its GON:
 
 ```
-// data/tilesets.gon.patch — draw the Rat with the mod's SymbolClass MyModRat, without touching enemies.gon
+// data/tilesets.gon.merge — `.merge` recurses into each tileset by name and appends the new key
 alley    { Rat MyModRat }
 junkyard { Rat MyModRat }
-// … one row per tileset the character can appear in (incl. house if it shows there)
+// … one row per tileset the character can appear in (incl. house if it shows there); a tileset you leave out draws vanilla
 ```
 
-Caveats: the key namespace is shared with the tileset slots (`combat_background`, `static_*`, `debris`,
-`event_piece_frame`, `reverb`, `global_objects`), the `_CAT` branch does not pass through this function, and the
-validator does not model it. Not run in-game yet; the alternative is a mod SWF exporting the vanilla name itself
-(by-name lookup prefers the last-loaded file; validator info `export-shadows-vanilla`), equally INFERRED.
+`MyModRat` is an export of your mod SWF (`build_swf`; the clip needs the labels the character plays, as for
+`graphics.movieclip`). Caveats: the key namespace is shared with the tileset slots (`combat_background`, `static_*`,
+`debris`, `event_piece_frame`, `reverb`, `global_objects`) — no vanilla tileset has a key `Rat` (T1 check in
+`art-probes-tests.ts`), check your name the same way; every character whose `graphics.movieclip` is that name is
+redirected (variants that keep `movieclip Rat` included); the `_CAT` branch does not pass through this function; the
+validator does not model it. Only alley was run. The alternative — a mod SWF exporting the vanilla name itself
+(validator info `export-shadows-vanilla`) — stays INFERRED.
 
 Extract reference copies with `python -I tools/gpak.py extract .extracted --prefix data/` (git-ignored).
 
@@ -271,21 +283,38 @@ of it in the units event: `hp` 12 (vanilla 6: current HP right after a spawn is 
 The editor's preview agrees (`run-tests.ts` 4d: speed 15, health 12). Fixtures:
 `editor/test/fixtures/ingame/result-golden-numeric{,-vanilla}.jsonl`.
 
-## Localized text for mods (INFERRED, untested)
+## Localized text for mods (OBSERVED 2026-10-22 — plain text boxes only)
 
 Decompiled 2026-10-21 (session `loc`; `docs/engine-map.md` "Localization and text fields"): the game loads **every**
 `data/text/*.csv` the file manager sees (`StringsDatabase_load_csv` 0x9610a0 — so a `combined.csv.append` row is in the
 same table as vanilla's), and the text-box constructor `DynamicTextBox_init_from_DefineEditText` 0x98d910 passes a
-`DefineEditText`'s initial text to `has_key_current_lang` 0x963070: **an initial text that is exactly a key of the
-current language becomes that key's localized text at creation** (gendered `_M/_F/_N` rows and `{TOKEN}` replacements
-included; a miss shows the key itself). `SetText(…, localize = 1)` 0x98e790 does the same at runtime. So a mod text
-should need no code: a `combined.csv.append` row `MY_MOD_LABEL,Hello,,Hola,…` plus a `scene.texts` entry whose `text`
-is `MY_MOD_LABEL`. Not witnessed in-game: the editor's `text.ts` wraps the string in `<p><font>` HTML like vanilla, and
-whether the stripped text equals the key byte-for-byte is the open question. Caveats: the key must exist in the
-*current* language's table (the loader's empty-cell fallback to `en` is INFERRED); the text is resolved once at
-instance creation, not on a language switch. Parked by the owner (2026-10-21); Peralta stays the default font.
+`DefineEditText`'s initial text to `has_key_current_lang` 0x963070: an initial text that is exactly a key of the
+current language becomes that key's localized text at creation (gendered `_M/_F/_N` rows and `{TOKEN}` replacements
+included, INFERRED; a miss shows the key itself). `SetText(…, localize = 1)` 0x98e790 does the same at runtime.
 
-Probe recipe (one `.mewtest`, agent work): in `mods/_artprobe` add the CSV row and a text whose `text` is the key, build,
-`enter TacticsTest`, `spawn` the probe character, `shot`, and look for the English text (not the key) in the shot; if
-the key shows, re-emit the DefineEditText for key texts without the HTML flag / wrapper and repeat. On pass, pin the
-run summary as a fixture and turn the HTML question into a validator rule.
+**OBSERVED in-game 2026-10-22** (`mods/_artprobe/tests/render-loctext.mewtest`, `npm run test:artprobe -- --loctext`,
+run `20261022-090100-_artprobe-render-loctext`, pass, real save unchanged; fixture
+`editor/test/fixtures/ingame/artprobe-loctext-summary.json`): the `ArtProbeLoc` clip carries four key texts next to
+one-letter-off look-alike literals and the English values. Result, the same in every readable shot:
+
+| initial text | HTML flag | drawn as |
+|---|---|---|
+| `ENEMY_TOMTOM_NAME` (vanilla key) | off (`html: false`) | **Tom Tom** — localized |
+| `ARTPROBE_LOCTEST` (this mod's `combined.csv.append` row) | off | **LOCALIZED OK** — localized |
+| `ENEMY_TOMTOM_NAME` | on (vanilla's `<p align><font …>` wrapper) | `ENEMY_TOMTOM_NAME` — as written |
+| `ARTPROBE_LOCTEST` | on | `ARTPROBE_LOCTEST` — as written |
+
+So the key must be the initial text **byte-for-byte without HTML**: in the wrapper the string the constructor tests is
+not the bare key (INFERRED: the raw HTML, or the stripped text with the `<p>` newline). Plain texts draw in the same
+font, size and colour as HTML ones (the DefineEditText fields carry them; T3 look owed).
+
+Recipe:
+1. `data/text/combined.csv.append`: `MY_MOD_LABEL,Hello,notes,Hola,Bonjour,…` — fill **every** language column
+   (the key must exist in the current language's table; the empty-cell fallback to `en` is INFERRED).
+2. `scene.texts.label = { "text": "MY_MOD_LABEL", "html": false, "font": "Peralta", "size": 24, … }`, placed by a key.
+3. `build_swf`. The text is resolved once at instance creation (not on a language switch).
+
+Not done: the editor does not switch a key text to plain by itself, and the validator does not warn about an
+HTML-wrapped key (follow-up); the preview draws the key, not the localized value. Measure and its limits:
+`editor/src/core/art/probe-outcomes.ts` (ink masks per box on a clip-space grid, key vs value vs look-alike,
+min over ±3 px shifts; a box under 60 % of its best ink — the "Battle Start!" banner, the unit — does not vote).

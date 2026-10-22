@@ -1,0 +1,20 @@
+mods: _artprobe, _autoplay
+timeout: 90s
+hide: false
+# Loc-key probe (2026-10-22): ArtProbeLoc is the probe marker plus ten text boxes (probe-outcomes.ts LOC_PROBE_BOXES):
+# ENEMY_TOMTOM_NAME (vanilla) and ARTPROBE_LOCTEST (this mod's combined.csv.append) as initial texts, each in vanilla's
+# HTML wrapper and plain, beside one-letter-off look-alike literals, plus the English values "Tom Tom" / "LOCALIZED OK".
+# editor/scripts/art-probe.ts --loctext reads which key boxes the game localized (DynamicTextBox ctor 0x98d910).
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+cmd spawn ArtProbeLoc
+expect console "Spawned ArtProbeLoc" within 10
+wait frames 60
+shot "loc 1"
+wait frames 40
+shot "loc 2"
+wait frames 40
+shot "loc 3"
+quit

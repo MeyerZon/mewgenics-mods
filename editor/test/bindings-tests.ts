@@ -7,7 +7,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { locateGameDir } from "../src/core/ingame/launch.ts";
-import { REPO_ROOT, SafetyError } from "../src/core/repo.ts";
+import { REPO_ROOT, SafetyError, ANALYSIS_DIR } from "../src/core/repo.ts";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -1753,12 +1753,13 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     assert(bad.length === 0, bad.join("; "));
   });
   {
-    const REPO = join(BINDINGS_DIR, "..");
-    const ANALYSIS = join(REPO, ".analysis");
+    // .analysis/ resolves through ANALYSIS_DIR (MEWGENICS_ANALYSIS_DIR), so a worktree checks against the main
+    // checkout's decompile store.
+    const ANALYSIS = ANALYSIS_DIR;
     if (existsSync(join(ANALYSIS, "decompiled"))) {
       test("every .analysis/ evidence path in the committed manifest exists on disk (the decompile store is rebuilt; .analysis/ is git-ignored, so this runs only where it exists)", () => {
         const m = loadManifest(realPath);
-        const missing = m.entries.flatMap((e) => (e.evidence || []).filter((ev) => ev.startsWith(".analysis/")).map((ev) => ev.replace(/:\d+$/, "")).filter((ev) => !existsSync(join(REPO, ev))).map((ev) => `${e.name}: ${ev}`));
+        const missing = m.entries.flatMap((e) => (e.evidence || []).filter((ev) => ev.startsWith(".analysis/")).map((ev) => ev.replace(/:\d+$/, "")).filter((ev) => !existsSync(join(ANALYSIS, ev.slice(".analysis/".length)))).map((ev) => `${e.name}: ${ev}`));
         assert(missing.length === 0, missing.join("; "));
       });
     } else console.log("  (skipped: .analysis/decompiled absent — the evidence-on-disk check runs where the decompile store exists)");

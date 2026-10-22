@@ -1,0 +1,19 @@
+mods: _artprobe, _tileprobe, _autoplay
+timeout: 90s
+hide: false
+# Tileset redirect probe (2026-10-22): _tileprobe's data/tilesets.gon.merge adds `alley { Rat ArtProbe }`; TacticsTest
+# plays in alley (default_tileset), so CharacterGraphics_build 0xf1150 → ResolveClipName 0x7bdbb0 should turn a plain
+# Rat's `graphics.movieclip Rat` into _artprobe's ArtProbe clip: the probe marker on screen after the spawn, not before.
+# Control: _artprobe/tests/render-tileset-control.mewtest. editor/scripts/art-probe.ts --tileset runs both.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+shot "baseline"
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 60
+shot "rat 1"
+wait frames 40
+shot "rat 2"
+quit

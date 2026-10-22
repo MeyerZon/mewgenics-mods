@@ -139,7 +139,7 @@ What the game does with a mod's SWF (OBSERVED 2026-10-20/21, build 25143593; `ed
 - **Text the base game's way.** `scene.texts { id: { text, font, size, color, align, width, height } }`, placed by
   keys like a shape → a `DefineEditText` naming one of the game's eight font classes in `fonts.swf` (default
   `Peralta`; e.g. `Swanky`, `Edmundm`) plus a zero-asset `ImportAssets2("fonts.swf")`, no glyphs in the file. The
-  string is literal: no loc keys, so the text is the same in every language.
+  string is literal unless it is a loc key with `"html": false` (see "Localized text" below).
 - **SVG round trip** for an external vector editor (VectorCraft, Inkscape; static drawing only, animation stays in
   the scene's sprites): `export_svg { mod, path, shapeId }` writes `mods/<mod>/art/<shapeId>.svg`; bring the edit back
   with `import_svg { mod, path: "art/<shapeId>.svg", options: { applyViewBox: false }, into: { scene, shapeId,
@@ -183,9 +183,15 @@ what the game draws, OBSERVED in PR #74 once its empty-slot run lands). Never ex
 clips resolve through a global last-loaded-first registry and it would replace the cat for every cat
 (`cat-clip-override`).
 
-Localized text: a `scene.texts` string is literal today. The game localizes a DefineEditText whose initial text is a
-loc key (`docs/data-mods.md` "Localized text for mods" — INFERRED from the decompile, untested, parked by the owner);
-do not promise it to a user until the probe there has run.
+Localized text (OBSERVED 2026-10-22, `docs/data-mods.md` "Localized text for mods"): add the row with
+`combined.csv.append` (`MY_MOD_LABEL,English,notes,Spanish,…` — every column), and give the scene a text whose `text`
+is exactly `MY_MOD_LABEL` **and `"html": false`** — the game then shows the current language's string. With the default
+HTML wrapper the key is drawn literally. Other texts stay literal (same in every language).
+
+Redirecting a vanilla non-cat character's art without touching its GON (OBSERVED 2026-10-22, `data-mods.md`
+"Redirecting a vanilla character's clip via tilesets.gon"): a `data/tilesets.gon.merge` with
+`<tileset> { <vanilla movieclip name> <your export> }` per tileset it appears in (e.g. `alley { Rat MyRat }`).
+Not for `_CAT` characters.
 
 ## The mod-development loop (agent alone until the last step)
 

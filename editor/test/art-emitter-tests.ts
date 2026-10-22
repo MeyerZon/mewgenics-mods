@@ -20,12 +20,13 @@ import { normalizePath, signedArea, flattenSubpath } from "../src/core/art/geome
 import { bakeSprite, diffFrames } from "../src/core/art/timeline.ts";
 import type { Tag } from "../src/core/art/swf-reader.ts";
 import type { Placement } from "../src/core/art/timeline.ts";
+import { vanillaSwfDir } from "../src/core/repo.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 // Vanilla SWFs (T1) are read from the git-ignored `.extracted/swfs/` (populate with
 // `python -I tools/gpak.py extract .extracted --prefix swfs/ability_icons.swf`); set MEWGENICS_VANILLA_SWF_DIR to
 // point elsewhere. Tests that need them skip with a logged `(skipped: …)` when the file is absent.
-const VANILLA_DIR = process.env.MEWGENICS_VANILLA_SWF_DIR || resolve(dirname(fileURLToPath(import.meta.url)), "../../.extracted/swfs");
+const VANILLA_DIR = vanillaSwfDir(); // repo.ts: MEWGENICS_VANILLA_SWF_DIR, else <extracted root>/swfs
 
 function vanilla(name: string): Uint8Array | null {
   const p = join(VANILLA_DIR, name);

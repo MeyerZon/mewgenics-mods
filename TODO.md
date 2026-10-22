@@ -37,6 +37,13 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
 - [ ] `pr88-vectorcraft-tab` (#88) — my_rat → Shapes → VectorCraft on body: does the app appear, and after drawing + Apply to shape does Preview show it where the body is (and Build SWF / Ruffle look right)?
 - [ ] `pr88-shortcuts` (#88) — Do keyboard shortcuts reach VectorCraft after a click into the iframe, while the editor's own inputs still work when the tab is not active?
 - [ ] `pr89-vectorcraft-exec` (#89) — From Claude Code, vectorcraft_exec on dev-sandbox my_rat body with a shape.ellipse, then Build SWF: does the ellipse look right (Ruffle tab / art probe)?
+- [ ] **Loc-text shot** (`npm run test:artprobe -- --loctext`, run `20261022-090100-_artprobe-render-loctext`,
+      `shot-loc-2.png`): is the substituted string ("Tom Tom", "LOCALIZED OK") rendered in the right font / size — the
+      same lettering as the HTML boxes beside it?
+- [ ] **Redirected Rat** (`npm run test:artprobe -- --tileset`, run `20261022-090748-_tileprobe-render-tileset-redirect`,
+      `shot-rat-2.png`): any wrong offset or mirroring of the ArtProbe clip drawn for a plain Rat, against the ArtProbe
+      enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
+- [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
@@ -54,8 +61,14 @@ these without a decision (status per bullet below; the PR map follows).
       a ghost cat in the preview for empty slots.
 - [x] **Localized text?** **Owner, 2026-10-21: deferred; Peralta is fine as the default font.** Since then session
       `loc` found it **looks data-only** (the text-box ctor 0x98d910 localizes an initial text that is a loc key; every
-      `data/text/*.csv` is loaded — engine-map "Localization and text fields", INFERRED for mods, untested). A probe
-      script is queued as agent work (`docs/data-mods.md` "Localized text for mods"); no editor change until it passes.
+      `data/text/*.csv` is loaded — engine-map "Localization and text fields"). **Probed 2026-10-22 (OBSERVED,
+      `mods/_artprobe/tests/render-loctext.mewtest`):** a DefineEditText whose initial text is exactly a key is shown
+      localized — for a vanilla key and for a key a mod adds via `combined.csv.append` — **only when it is emitted
+      without the HTML flag** (`scene.texts[].html: false`); in vanilla's `<p><font>` wrapper the key is drawn as
+      written. Open (agent, no decision): make key texts plain automatically / a validator rule.
+- [x] **`tilesets.gon` clip redirect** — probed 2026-10-22 (OBSERVED, `mods/_tileprobe`): `alley { Rat ArtProbe }`
+      makes every plain Rat in the alley tileset draw the mod clip `ArtProbe` (marker found after `spawn Rat`, none
+      in the overlay-free control). `docs/data-mods.md` "Redirecting a vanilla character's clip via tilesets.gon".
 - [x] **Filters / glows** — answered 2026-10-21 (PR #80): the game refuses any PlaceObject3 filter (the loader has no
       filter renderer; `PlaceObject::decode3` 0xb78210 stops on the flag bit), so the validator keeps blocking them and
       the **bake helper is done**: `bakeGlow` / `bakeDropShadow` (`editor/src/core/art/glow.ts`), MCP `bake_glow`, the
@@ -347,6 +360,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    `extractedData` (`editor/test/preview-merge-tests.ts`); `MEWGENICS_EDITOR_DATA` redirects the `editor/data`
    caches and a missing component list is one `component-list-missing` info / a logged skip
    (`docs/tdd-procedure.md` "Running the editor from a git worktree").
+   - [x] Follow-up 2026-10-22 (`fix/extracted-env-paths`): #77's "palette.ts / Ruffle list" note
+     (`art/palette.ts` read `<repo>/.extracted/textures`, the Ruffle tab's vanilla list `<repo>/.extracted/swfs`)
+     and #83's "build:index writes `editor/data` into the worktree" report (it already wrote to `DATA_CACHE_DIR`;
+     the report was a run without `MEWGENICS_EDITOR_DATA`; now pinned by a test): every game-data / cache path goes
+     through `repo.ts` `EXTRACTED_ROOT` / `extractedPath` / `vanillaSwfDir` / `DATA_CACHE_DIR`, so
+     `MEWGENICS_EXTRACTED_DATA` + `MEWGENICS_EDITOR_DATA` are the whole worktree setup.
 8. [ ] **Golden merge cases** (owner 2026-10-20: "tdd 8 - ok" — the "golden through `dump`" sub-item is approved and
    queued as agent work, first of the 2026-10-20 run): freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
    so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1

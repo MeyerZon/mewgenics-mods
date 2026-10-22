@@ -53,7 +53,7 @@ PR; everything else is on `main`.
     `CatHeadPlacements`; the x-flip is a scale(−1) the engine writes on the root node.
   - *Localization and text fields* (this run) — every `data/text/*.csv` is loaded; `StringsDatabase::get` 0x9616d0
     returns the key itself on a miss; a DefineEditText whose initial text is a loc key is localized at creation
-    (0x98d910) — the data-only route for mod text, one in-game witness owed.
+    (0x98d910) — the data-only route for mod text, OBSERVED in-game 2026-10-22 for a plain (non-HTML) text box.
 
 ### Space is strictly 2D
 - Gameplay is a flat tile grid indexed by `iVec2D` (col,row). `Vec3D`/`height`/jump arcs exist only for **rendering**;
@@ -128,14 +128,13 @@ PR; everything else is on `main`.
 
 ## What we don't know yet / open
 
-- **Localized mod text (INFERRED, untested):** the text-box constructor 0x98d910 localizes an initial text that is a
-  current-language key, so a `DefineEditText` whose text is `MY_KEY` plus a `combined.csv.append` row should just
-  work — but the editor's `text.ts` wraps the text in `<p><font>` HTML and whether the stripped string equals the key
-  byte-for-byte is unwitnessed. Probe recipe: `data-mods.md` "Localized text for mods". Parked by the owner
-  (2026-10-21: deferred, Peralta stays the default font); the probe is queued agent work.
-- **`tilesets.gon` clip redirect (INFERRED, untested):** `ResolveClipName` 0x7bdbb0 remaps a non-cat character's
-  `graphics.movieclip` through the current tileset's object, so a `tilesets.gon.patch` could redirect `Rat` to a mod
-  SymbolClass without touching `enemies.gon` (PR #81, `data-mods.md`). Not run in-game.
+- [x] **Localized mod text — OBSERVED 2026-10-22** (`render-loctext.mewtest`): a `DefineEditText` whose initial text
+  is exactly a key (vanilla's or one a mod adds via `combined.csv.append`) is shown localized **only when emitted
+  without the HTML flag** (`scene.texts[].html: false`); in vanilla's `<p><font>` wrapper the key is drawn as
+  written. Left: the editor does not yet switch key texts to plain by itself (`data-mods.md` "Localized text for mods").
+- [x] **`tilesets.gon` clip redirect — OBSERVED 2026-10-22** (`mods/_tileprobe`): `alley { Rat ArtProbe }` in a
+  `tilesets.gon.merge` makes a plain Rat draw the mod clip in the alley tileset; the control run without the overlay
+  draws the vanilla Rat (`data-mods.md` "Redirecting a vanilla character's clip via tilesets.gon").
 - **GON pre-pass not located:** the tokenizer handles only `#` comments, yet vanilla relies on `//`, `/* */` and
   `#include "standard_nodes.gon"` (the 20 `maps/*.gon`); an earlier pass must strip / inline them (candidate 0xa50bd0).
   The editor neither inlines nor validates includes (PR #83).
@@ -190,7 +189,8 @@ PR; everything else is on `main`.
 - Author/validate mods in the editor (or via the `mewgenics-editor` MCP tools); overlays live in `mods/<name>/`.
   Art, cat animations and glows the same way (`new_art_scene`, `bake_glow`, `build_swf`, `inspect_swf`).
 - In a secondary git worktree, point at the main checkout's inputs with `MEWGENICS_EXTRACTED_DATA` /
-  `MEWGENICS_EDITOR_DATA` / `MEWGENICS_VANILLA_SWF_DIR` and one `node_modules` junction (`tdd-procedure.md`); never
+  `MEWGENICS_EDITOR_DATA` / `MEWGENICS_ANALYSIS_DIR` (the vanilla SWFs and textures follow the first;
+  `MEWGENICS_VANILLA_SWF_DIR` is only an override) and one `node_modules` junction (`tdd-procedure.md`); never
   junction `.analysis` or `.extracted`.
 
 ### Hard safety rules (never violate)

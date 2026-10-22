@@ -601,7 +601,7 @@ scripts (`DoABC::decode` `0xa4a740` → `AVM2Bytecode::RunObjectScript` `0xb7f2b
 addFrameScript` / `UNSUPPORTED INSTRUCTION:`. Manifest-ready prologues for these functions are in
 `.analysis/notes-disp.md` "Manifest-ready rows" (the two `goto*Label` twins differ only at their tail).
 
-**Clip-name remap through `data/tilesets.gon` (INFERRED, not run in-game).** `ResolveClipName` **`0x7bdbb0`**:
+**Clip-name remap through `data/tilesets.gon` (OBSERVED in-game 2026-10-22).** `ResolveClipName` **`0x7bdbb0`**:
 `node = tilesets[<current tileset, game+0x14f8>][name]`; a string node is returned, else `name` itself when the
 fallback is `"auto"`. `CharacterGraphics_build` `0xf1150` calls it with `(graphics.movieclip, "auto")` before the
 SymbolClass lookup `0x9bb890`, for every **non-cat** character (the `_CAT` branch does not pass through it);
@@ -609,9 +609,14 @@ SymbolClass lookup `0x9bb890`, for every **non-cat** character (the `_CAT` branc
 `0x7a74b0`, so overlays apply) holds one flat object per tileset (22 in this build: `alley`, `junkyard`, `sewers`, …,
 `house`, `tutorial`, `finalboss`) whose key namespace is shared with the slot names (`combat_background`,
 `static_*`, `debris`, `event_piece_frame`, `reverb`, `global_objects`); vanilla uses it for
-`non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. So a `data/tilesets.gon.patch` adding `<tileset>
-{ Rat MyModRat }` per tileset would redirect `graphics.movieclip Rat` to a mod SymbolClass without touching
-`enemies.gon` — see `docs/data-mods.md`; untested.
+`non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. So a `data/tilesets.gon.merge` adding `<tileset>
+{ Rat MyModRat }` per tileset redirects `graphics.movieclip Rat` to a mod SymbolClass without touching `enemies.gon`.
+**OBSERVED 2026-10-22** (`mods/_tileprobe`: `alley { Rat ArtProbe }`; TacticsTest plays in alley): after `spawn Rat`
+the `_artprobe` ArtProbe clip is drawn (probe marker in both post-spawn shots, scale 1.72, mirrored, the ArtProbe
+enemy's own screen box 2528..2692 × 781..890; none in the pre-spawn baseline) — run
+`20261022-090748-_tileprobe-render-tileset-redirect`; the control without the overlay
+(`20261022-090756-_artprobe-render-tileset-control`) draws the vanilla Rat, no marker. Both pass, real save unchanged;
+fixture `artprobe-tileset-summary.json`. No vanilla tileset has a key `Rat` (T1). `docs/data-mods.md` has the recipe.
 
 **Hook seams** (for a future native "alias animation" or clip redirect): `AnimStateMachine::PlayAnimation` `0x9abda0`
 (label by `std::string*` in rdx, 7 callers, plain prologue), `gotoFrame` `0x9a88a0` (116 callers, every frame change),
@@ -1252,8 +1257,9 @@ Manifest-ready rows (prologue bytes and callee ordinals in `notes-catA.md` / `no
 Ghidra session `loc` (`.analysis/notes-loc.md`; decompiles `StringsDatabase_*.c`, `DynamicTextBox_*.c`,
 `Clip_SetTextFieldByName_0x97c6f0.c`, `Swf_FindCharacterByClassName_0x9bb910.c`, `DamageText_*.c`, …). RVAs, build
 25143593. The question was how the game gets localized text into SWF text fields, and whether a mod can — the answer:
-**a data-only route looks to exist** (the text-box constructor localizes an initial text that is a loc key), pending
-one in-game witness (`docs/data-mods.md` "Localized text for mods").
+**a data-only route exists** (the text-box constructor localizes an initial text that is a loc key) — **OBSERVED
+in-game 2026-10-22 for a DefineEditText without the HTML flag; with vanilla's HTML wrapper the key is drawn as
+written** (`docs/data-mods.md` "Localized text for mods").
 
 **The strings database (`glaiel::StringsDatabase`, util/Localization.cpp; OBSERVED).**
 - Global instance **`DAT_1413c5530`** (717 xrefs). `+0x00` `unordered_map<std::string, LanguageTable*>` keyed by
@@ -1308,11 +1314,15 @@ one in-game witness (`docs/data-mods.md` "Localized text for mods").
   `def+0xd8` (UTF-8) is passed to `has_key_current_lang` 0x963070 — if it is a key, the text becomes `get(key,
   gendered = 1)` + `{}` replacements, else the literal converted to UTF-16** → `tb+0xb8`, then
   `DynamicTextBox_layout_plain` 0x990480. **This is the data-only localization hook**: a DefineEditText whose initial
-  text is exactly a key in the current language's table shows the localized text with no code (OBSERVED in the
-  decompile, not yet witnessed in-game). The vanilla initial text is HTML; PR #81 places the HTML pre-parse in
-  `DefineEditText::init` 0xb79410 (`<p>` → newline) — this session did not locate the tag decoder (no `<font` literal
-  exists in the exe) and sees plain text at the init; whether the stripped string equals the key byte-for-byte is the
-  open probe.
+  text is exactly a key in the current language's table shows the localized text with no code. **OBSERVED in-game
+  2026-10-22** (run `20261022-090100-_artprobe-render-loctext`, `mods/_artprobe` clip `ArtProbeLoc`, fixture
+  `artprobe-loctext-summary.json`): with the HTML flag clear (flags 0xeca1, initial text the bare key) both
+  `ENEMY_TOMTOM_NAME` → "Tom Tom" and a mod key added by `combined.csv.append` (`ARTPROBE_LOCTEST` → "LOCALIZED OK")
+  are localized; **with vanilla's HTML wrapper (flags 0xeca3, `<p align><font …>KEY</font></p>`) the key is drawn as
+  written** (2 readable shots of 3 vote per question, all agree; shot 1 is covered by the "Battle Start!" banner). The
+  vanilla initial text is HTML; PR #81 places the HTML pre-parse in `DefineEditText::init` 0xb79410 (`<p>` → newline),
+  so the string `has_key_current_lang` sees for an HTML box is not the bare key (INFERRED: the newline-terminated
+  stripped text or the raw HTML; the tag decoder is still not located — no `<font` literal in the exe).
 - **Setting text at runtime:** `DynamicTextBox_SetText_wide` **0x98e8a0**(tb, const std::wstring*, bool force, bool
   allowMarkup): clears `tb+0x269`; equal text and not `force` → no-op; `allowMarkup` with `tb+0x26a == 0` and a `[`
   in the text → 0x991230 (fancy mode); copies into `tb+0xb8`, `tb+0xe0 = 1.0` (scale), **re-lays out synchronously on
@@ -1366,10 +1376,9 @@ with 0x99a5a0, sets frames (0x9a88a0 / 0x9a8c00: `Colorless`, `classed_indicator
 0x98e790 — ordinary `DynamicTextBox`es in a vanilla clip, styled by colour / outline / scale from the GON; no separate
 renderer.
 
-**What localized mod text would take.** Data-only, pending one witness: (a) a `combined.csv.append` row `MY_KEY,…`
-(the editor already supports it) and (b) a `DefineEditText` whose initial text is exactly `MY_KEY` — the editor's
-`text.ts` currently wraps the text in `<p><font>` HTML; if the stripped string is not the key byte-for-byte, emit the
-DefineEditText without the HTML flag / wrapper for key texts. Gendered variants and `{}` tokens come for free. Caveats:
+**What localized mod text takes (OBSERVED 2026-10-22).** Data-only: (a) a `combined.csv.append` row `MY_KEY,…` and
+(b) a `DefineEditText` whose initial text is exactly `MY_KEY` **without the HTML flag** — `scene.texts[].html: false`
+in the editor (`text.ts` `EDIT_TEXT_FLAGS_PLAIN` 0xeca1); the default HTML wrapper is not localized. Gendered variants and `{}` tokens come for free. Caveats:
 the key must exist in the *current* language's table (a key only in `en` is not found while playing `fr` unless the
 loader's empty-cell fallback filled it — INFERRED), and the text is resolved once at instance creation (no live update
 on a language change unless the clip is recreated). A native hook is needed only for text that changes at runtime
