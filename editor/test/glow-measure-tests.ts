@@ -49,6 +49,42 @@ export function runGlowMeasureTests(test: TestFn, assert: AssertFn, eq: EqFn, fi
     eq(gm.compareGlowShots(gm.measureGlow(shot({ stray: 300 })), n).verdict, "none", "scattered pixels without a patch are not a rim");
     eq(gm.compareGlowShots(g, g).verdict, "none", "the same rim in both shots is not ours");
   });
+  /** glow v2: two units, each optionally ringed in its own colour */
+  const twoUnits = (rings: [Px | null, Px | null]) => {
+    const W = 640, H = 360, img = new Uint8Array(W * H * 4);
+    for (let i = 0; i < W * H; i++) img.set([40, 44, 40, 255], i * 4);
+    const put = (x: number, y: number, c: Px) => { if (x >= 0 && y >= 0 && x < W && y < H) img.set([c[0], c[1], c[2], 255], (y * W + x) * 4); };
+    const centres: [number, number][] = [[200, 200], [440, 200]];
+    centres.forEach(([cx, cy], k) => {
+      for (let y = -40; y <= 40; y++) for (let x = -40; x <= 40; x++) {
+        const d = Math.sqrt(x * x + y * y), ring = rings[k];
+        if (d <= 30) put(cx + x, cy + y, [136, 136, 136]);
+        else if (ring && d <= 36) put(cx + x, cy + y, ring);
+      }
+    });
+    return { width: W, height: H, rgba: img };
+  };
+  test("glow v2: GLOW_PROBE_COLOUR_B is cyan (no arena/UI hue either) and reads apart from magenta", () => {
+    eq(JSON.stringify(gm.GLOW_PROBE_COLOUR_B), JSON.stringify([0, 255, 255]));
+    const s = twoUnits([[255, 0, 255], [0, 255, 255]]);
+    const m = gm.measureGlow(s, gm.GLOW_PROBE_COLOUR), c = gm.measureGlow(s, gm.GLOW_PROBE_COLOUR_B);
+    assert(m.pixels > 800 && c.pixels > 800, `magenta ${m.pixels}, cyan ${c.pixels}`);
+    assert(!!m.region && !!c.region && m.region.x1 < 320 && c.region.x0 > 320, `magenta left, cyan right: ${JSON.stringify([m.region, c.region])}`);
+  });
+  test("glow v2: compareTwoColourShot — each colour must add its own rim over the no-glow shot and the two rims must lie apart (per-unit colours, not one shared colour or one rim painted over both)", () => {
+    const base = twoUnits([null, null]);
+    const mb = gm.measureGlow(base, gm.GLOW_PROBE_COLOUR), cb = gm.measureGlow(base, gm.GLOW_PROBE_COLOUR_B);
+    const read = (s: ReturnType<typeof twoUnits>) => gm.compareTwoColourShot({ a: gm.measureGlow(s, gm.GLOW_PROBE_COLOUR), b: gm.measureGlow(s, gm.GLOW_PROBE_COLOUR_B) }, { a: mb, b: cb });
+    const ok = read(twoUnits([[255, 0, 255], [0, 255, 255]]));
+    eq(ok.verdict, "two-colour"); eq(ok.apart, true); eq(ok.a.verdict, "glow"); eq(ok.b.verdict, "glow");
+    const shared = read(twoUnits([[255, 0, 255], [255, 0, 255]]));   /* v1: the first unit's colour on both */
+    eq(shared.verdict, "none"); eq(shared.b.verdict, "none");
+    const one = read(twoUnits([[255, 0, 255], null]));
+    eq(one.verdict, "none");
+    const stacked = gm.compareTwoColourShot({ a: gm.measureGlow(twoUnits([[255, 0, 255], null]), gm.GLOW_PROBE_COLOUR), b: gm.measureGlow(twoUnits([[0, 255, 255], null]), gm.GLOW_PROBE_COLOUR_B) }, { a: mb, b: cb });
+    eq(stacked.a.verdict, "glow"); eq(stacked.b.verdict, "glow");
+    eq(stacked.apart, false); eq(stacked.verdict, "none", "both colours around the same unit is not per-unit");
+  });
   test("OBSERVED 2026-10-22 fixture (unit-glow-summary.json): FW_SetUnitGlow drew a magenta rim around the spawned Rat (glow shot) that the no-glow shot lacks: verdict glow, delta >= 200, a patch >= 100 px, the real save untouched", () => {
     const j = JSON.parse(fixture("unit-glow-summary.json")) as { summary: { verdict: string; delta: number; glowPixels: number; noglowPixels: number; glowRegion: { count: number } | null; verdictRun: string; saveUnchanged: boolean } };
     eq(j.summary.verdict, "glow");
