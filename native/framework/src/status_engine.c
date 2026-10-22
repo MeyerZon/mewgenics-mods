@@ -138,9 +138,7 @@ static void *apply_glow(MsvcString *name, void *ctx, int stacks, void *src, void
     FwApplyResolved a;
     fw_walk_apply_resolve(ctx, src, p5, p6, g_defaultSource, &a);
     void *result = NULL;
-    /* the merge lookup walks the entity apply_status resolved (ctx+0x18), not ctx+0x20's: OBSERVED 2026-10-22 under
-     * StatusOnSpawnIn, ctx is the Character itself and ctx+0x20 another object whose entity holds no components */
-    void *existing = fw_walk_entity_find_status(a.entity, g_glow.vt);
+    void *existing = fw_walk_apply_existing(&a, g_glow.vt);   /* the unit's entity, never ctx+0x20 (the Scene) */
     if (fw_walk_apply_merges(existing, p7)) {
         fw_walk_merge_stacks(existing, stacks, a.applier);
         fw_glow_status_put(&g_glowObjs, existing, nm, strlen(nm));   /* one glow status per unit: the latest colour wins */
@@ -151,14 +149,14 @@ static void *apply_glow(MsvcString *name, void *ctx, int stacks, void *src, void
     } else {
         int st = stacks;
         void *source = a.source, *applier = a.applier;
-        void *obj = g_LuckUp_ctor(a.character, a.entity, &st, &source, &applier);
+        void *obj = g_LuckUp_ctor(a.scene, a.entity, &st, &source, &applier);
         if (obj) {
             fw_walk_adopt(obj, g_glow.vt, p7);
             fw_glow_status_put(&g_glowObjs, obj, nm, strlen(nm));
             result = obj;
             fw_log("%s: glow status created on %p with %d stacks (obj %p%s)", nm, fw_walk_status_character(obj), stacks, obj, p7 ? ", temporary" : "");
         } else {
-            fw_log("%s: template constructor returned null (target dead or invalid)", nm);
+            fw_log("%s: template constructor returned null (scene destroyed or invalid)", nm);
         }
     }
     /* the unit that glows is the status's own Character (+OFF_STATUS_CHARACTER, the one ApplyStatModifiers writes and the
@@ -237,23 +235,23 @@ static void *hook_ApplyByName(MsvcString *name, void *ctx, int stacks, void *src
     fw_walk_apply_resolve(ctx, src, p5, p6, g_defaultSource, &a);
     void *result = NULL;
 
-    void *existing = fw_walk_find_status(a.character, d->vt);
+    void *existing = fw_walk_apply_existing(&a, d->vt);
     if (fw_walk_apply_merges(existing, p7)) {
         fw_walk_merge_stacks(existing, stacks, a.applier);
         if (stacks != 0) ((fn_OnStacksChanged)d->vt[VT_ONSTACKSCHANGED])(existing);
         if (*fw_walk_status_stacks(existing) == 0) g_StatusRemove(existing);
         result = existing;
-        fw_log("%s: +%d stacks on existing (now %d)", d->name, stacks, *fw_walk_status_stacks(existing));
+        fw_log("%s: +%d stacks on the existing status of %p (now %d)", d->name, stacks, fw_walk_status_character(existing), *fw_walk_status_stacks(existing));
     } else {
         int st = stacks;
         void *source = a.source, *applier = a.applier;
-        void *obj = g_LuckUp_ctor(a.character, a.entity, &st, &source, &applier);
+        void *obj = g_LuckUp_ctor(a.scene, a.entity, &st, &source, &applier);
         if (obj) {
             fw_walk_adopt(obj, d->vt, p7);   /* identity swap: template behavior, our name/type */
             result = obj;
-            fw_log("%s: created on %p with %d stacks (obj %p)", d->name, a.character, stacks, obj);
+            fw_log("%s: created on %p with %d stacks (obj %p)", d->name, fw_walk_status_character(obj), stacks, obj);
         } else {
-            fw_log("%s: template constructor returned null (target dead or invalid)", d->name);
+            fw_log("%s: template constructor returned null (scene destroyed or invalid)", d->name);
         }
     }
     g_TidyDeallocate(name); /* by-value std::string: callee destroys */

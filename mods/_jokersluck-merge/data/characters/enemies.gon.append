@@ -1,0 +1,12 @@
+// Test-only (mods/jokers-luck/tests/merge-contexts.mewtest): a Rat variant that gets JokersLuck TWICE on spawn, both
+// through StatusOnSpawnIn, i.e. two apply_status calls whose ctx is the Character itself. Merged, the unit carries ONE
+// JokersLuck with 1 + 2 = 3 stacks. Spawn-only (`spawn JokersLuckRat`); no vanilla entry changes. Never ship or play with it.
+JokersLuckRat {
+    variant_of Rat
+    passives {
+        StatusOnSpawnIn {
+            JokersLuck 1
+            JokersLuck 2
+        }
+    }
+}

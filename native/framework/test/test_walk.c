@@ -20,7 +20,7 @@
 _Static_assert(OFF_CH_ENTITY + 8 <= FAKE_CHARACTER_BYTES && OFF_CH_TOUCHED_PASSIVES + 1 <= FAKE_CHARACTER_BYTES, "character fake too small");
 _Static_assert(OFF_ENT_COMPCOUNT + 4 <= FAKE_ENTITY_BYTES && OFF_ENT_COMPS + 8 <= FAKE_ENTITY_BYTES, "entity fake too small");
 _Static_assert(OFF_STATUS_TEMPORARY + 1 <= FAKE_STATUS_BYTES && OFF_STATUS_APPLIER_OWNER + 8 <= FAKE_STATUS_BYTES, "status fake too small");
-_Static_assert(OFF_APPLYCTX_CHARACTER + 8 <= FAKE_CTX_BYTES && OFF_APPLYCTX_ENTITY + 8 <= FAKE_CTX_BYTES, "ctx fake too small");
+_Static_assert(OFF_APPLYCTX_SCENE + 8 <= FAKE_CTX_BYTES && OFF_APPLYCTX_ENTITY + 8 <= FAKE_CTX_BYTES, "ctx fake too small");
 _Static_assert(OFF_APPLYP6_APPLIER + 8 <= FAKE_P6_BYTES, "p6 fake too small");
 
 typedef struct Fakes {
@@ -104,7 +104,7 @@ TEST(find_live_takes_temporary_statuses_too_but_never_a_removing_one) {
 
 TEST(entity_find_status_walks_the_apply_entity_directly_not_ctx_plus_0x20s_entity) {
     /* OBSERVED 2026-10-22 (data-glow T2, StatusOnSpawnIn): apply_status's ctx is the Character itself (ctx+0x18 =
-     * the entity holding the statuses, the new object's +0x38 = ctx) and ctx+0x20 is another object whose entity
+     * the entity holding the statuses, the new object's +0x38 = ctx) and ctx+0x20 is the Scene, whose +0x18
      * holds no components — so a merge lookup must walk the entity apply_status names, not ctx+0x20's */
     Fakes f; make_character(&f, 2);
     make_status(f.status[0], VT_A, 1, 1, 0, f.character);      /* removing: never */
@@ -117,6 +117,38 @@ TEST(entity_find_status_walks_the_apply_entity_directly_not_ctx_plus_0x20s_entit
     CHECK(fw_walk_entity_find_status(NULL, VT_A) == NULL);
     f.status[1][OFF_STATUS_TEMPORARY] = 0;
     CHECK(fw_walk_find_status(f.character, VT_A) == fw_walk_entity_find_status(f.entity, VT_A));   /* the character form is a wrapper */
+}
+
+TEST(apply_existing_finds_the_units_status_under_both_ctx_shapes_never_through_ctx_plus_0x20) {
+    /* OBSERVED 2026-10-22 (mods/jokers-luck/tests/merge-contexts.mewtest, red run 20261022-115757): apply_status's
+     * ctx is a Component in every shape — the passive component under StatusOnBattleStart, the Character itself under
+     * StatusOnSpawnIn — whose +0x18 is the unit's entity and whose +0x20 is the Scene (the framework logged "created on
+     * <p>" with p = the `enter` event's scene= for all 6 applies). A second JokersLuck therefore never found the first
+     * through ctx+0x20 and each unit carried two objects (1 and 2) instead of one with 3 stacks. */
+    Fakes f; make_character(&f, 2);
+    make_status(f.status[0], VT_GAME, 1, 0, 0, f.character);
+    make_status(f.status[1], VT_A, 1, 0, 0, f.character);
+    f.comps[0] = f.status[0]; f.comps[1] = f.status[1];
+    unsigned char sceneEntity[FAKE_ENTITY_BYTES]; memset(sceneEntity, 0, sizeof sceneEntity);   /* holds no components */
+    unsigned char scene[FAKE_CHARACTER_BYTES]; memset(scene, 0, sizeof scene);
+    *(void **)(scene + OFF_CH_ENTITY) = sceneEntity;
+    FwApplyResolved a;
+    /* shape 1, StatusOnSpawnIn: ctx = the Character (its +0x18 = entity), ctx+0x20 = the scene */
+    *(void **)(f.character + OFF_APPLYCTX_SCENE) = scene;
+    fw_walk_apply_resolve(f.character, NULL, NULL, NULL, NULL, &a);
+    CHECK(fw_walk_apply_existing(&a, VT_A) == f.status[1]);
+    /* shape 2, StatusOnBattleStart: ctx = the passive component (its +0x18 = the unit's entity), ctx+0x20 = the scene */
+    unsigned char passive[FAKE_CTX_BYTES]; memset(passive, 0, sizeof passive);
+    *(void **)(passive + OFF_APPLYCTX_ENTITY) = f.entity;
+    *(void **)(passive + OFF_APPLYCTX_SCENE) = scene;
+    fw_walk_apply_resolve(passive, NULL, NULL, NULL, NULL, &a);
+    CHECK(fw_walk_apply_existing(&a, VT_A) == f.status[1]);
+    CHECK(fw_walk_apply_existing(&a, VT_B) == NULL);
+    f.status[1][OFF_STATUS_TEMPORARY] = 1;                          /* a temporary is never the merge target */
+    CHECK(fw_walk_apply_existing(&a, VT_A) == NULL);
+    *(void **)(passive + OFF_APPLYCTX_ENTITY) = NULL;               /* no entity: nothing to merge into */
+    fw_walk_apply_resolve(passive, NULL, NULL, NULL, NULL, &a);
+    CHECK(fw_walk_apply_existing(&a, VT_A) == NULL);
 }
 
 TEST(vt_index_finds_a_registered_vtable) {
@@ -166,12 +198,12 @@ TEST(each_custom_is_a_noop_without_character_entity_or_definitions) {
 TEST(apply_resolve_reads_ctx_and_picks_source_and_applier) {
     unsigned char ctx[FAKE_CTX_BYTES]; memset(ctx, 0, sizeof ctx);
     unsigned char p6[FAKE_P6_BYTES]; memset(p6, 0, sizeof p6);
-    *(void **)(ctx + OFF_APPLYCTX_CHARACTER) = (void *)0xC1;
+    *(void **)(ctx + OFF_APPLYCTX_SCENE) = (void *)0xC1;
     *(void **)(ctx + OFF_APPLYCTX_ENTITY) = (void *)0xE1;
     *(void **)(p6 + OFF_APPLYP6_APPLIER) = (void *)0xA6;
     FwApplyResolved r;
     fw_walk_apply_resolve(ctx, (void *)0x51, (void *)0x55, p6, (void *)0xD0, &r);
-    CHECK(r.character == (void *)0xC1);
+    CHECK(r.scene == (void *)0xC1);
     CHECK(r.entity == (void *)0xE1);
     CHECK(r.source == (void *)0x51);                                  /* an explicit source wins */
     CHECK(r.applier == (void *)0x55);                                 /* p5 wins over p6's applier */

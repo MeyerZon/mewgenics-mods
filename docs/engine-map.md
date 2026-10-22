@@ -312,14 +312,14 @@ notes in `.analysis/notes-<tag>.md`):
   3 `GetTypeHierarchy()` (`{int ids[16]; uint64 count}`), 5 scalar deleting dtor, 30 `OnInit(stacks, GonObject*
   data, applier)`, 33 `OnApplied`, 82 `ApplyStatModifiers` (LuckUp: `character->luckBonus(+0x5d4) += stacks`, and
   marks removal when stacks reach 0), 170 `OnStacksChanged`, 171 stacks-cleared callback.
-- Object fields: +0x18 entity, +0x20 owner character (also +0x38), +0x5c `int stacks`, +0x68 GON data, +0x74 applied,
+- Object fields: +0x18 entity, +0x20 the **Scene** (+0x28 = its first qword, the scene manager: the Component layout), +0x38 the unit (Character*), +0x5c `int stacks`, +0x68 GON data, +0x74 applied,
   +0x75 removing, +0x76 `tickdown_this_turn`, +0xc8 applier, +0xe9 "temporary" flag.
 - OBSERVED 2026-10-21 (session `bind`, `.analysis/notes-bind.md`, cross-checked in Ghidra): `LuckUp_ctor`
   (`0x711c90`, 292 B) pool-allocates **0xF0 bytes** (`41 B8 F0 00 00 00` memset length; pool global `0x1414e40`,
   element size 0xf8, referenced only by the ctor and its 54-byte static initialiser `0x1fa40`), runs the base
   `Passive::Passive` (`0x4c940`), zeroes +0xc8..+0xe0, writes word 1 at +0xe8 (so +0xe8 = 1, +0xe9 `temporary` = 0),
   stores `LuckUp_vftable` (`lea rax,[0xf57ab8]; mov [rbx],rax` at +140 — the **only** code reference to that vftable
-  image-wide), sets **+0x18 = entity, +0x20 = owner character**, +0x28 = the owner's first qword, pushes itself into
+  image-wide), sets **+0x18 = entity, +0x20 = its first argument, the Scene** (2026-10-22, below), +0x28 = the scene's first qword, pushes itself into
   `entity+0x20` (`{cap u32, count u32, T** data}`, so Entity +0x24 = count, +0x28 = `Component**`), copies
   `entity+0x19` to +0xe and calls slot 30 `OnInit` devirtualised (`0x8104b0`: stores data at +0x68, stacks at +0x5c,
   reads GON `tickdown_this_turn` into +0x76). It is a byte-twin of the `AIControlNextTurn` ctor (`0x705db0`) and one
@@ -346,12 +346,24 @@ notes in `.analysis/notes-<tag>.md`):
   `touched_passives` (forces a stat recompute), +0x5d4 = accumulated luck bonus.
 - `Status_ApplyByName` (RVA `0x483120`): `Status* f(std::string* name, void* ctx, int stacks, void* src, void* p5,
   void* p6, char temporary, char p8)`, a 793-way if-chain on the name calling a per-status apply function; the
-  callee destroys the by-value string (`std::string::_Tidy_deallocate`, RVA `0x52780`). `ctx` holds the entity at
-  +0x18 and the character at +0x20 (a Component-shaped context; OBSERVED 2026-10-22: under `StatusOnSpawnIn` ctx is the
-  Character itself, its +0x20 another object with an empty entity, and the new status's `+0x38` is the unit — "Per-unit
-  glow" v3). The LuckUp branch (`0x5f9760`) merges into an existing LuckUp found through
+  callee destroys the by-value string (`std::string::_Tidy_deallocate`, RVA `0x52780`). **`ctx` is a Component in every shape: +0x18 = the unit's Entity, +0x20 = the
+  Scene** (+0x28 the scene manager — the Component layout of "Dev scenes and run entry"). Shapes seen: the passive
+  component under `StatusOnBattleStart`, the Character itself (a Component too) under `StatusOnSpawnIn`. OBSERVED
+  2026-10-22 (`mods/jokers-luck/tests/merge-contexts.mewtest`, red run `20261022-115757`): the framework logged
+  "JokersLuck: created on <ctx+0x20>" for all 6 applies of both shapes with the one pointer the harness `enter` event
+  reports as `scene=`. CONFIRMED by the decompiles: `Status_ApplyLuckUp` checks `[ctx+0x20]+0x4b0` (`Scene_destroyed`),
+  merges through `Entity_FindComponentsByTypeId(ctx+0x18, 0x4d6)` and passes ctx+0x20 as `LuckUp_ctor`'s first argument,
+  which hands it to `Owner_RegisterComponentTypeIds` (0x96b340: the scene's per-type component arrays at +0x18/+0x20
+  and its +0x488 vector). So **a status is found through ctx+0x18, never through ctx+0x20**, and the unit is the new
+  status's `+0x38` (`OFF_STATUS_CHARACTER`). The manifest entry is `ApplyCtx_scene` (`OFF_APPLYCTX_SCENE`; it was
+  `ApplyCtx_character` until then). Until this fix the framework's JokersLuck merge walked `(ctx+0x20)+0x18`, never
+  found the first instance, and a second apply built a second object (`[JokersLuck=1, JokersLuck=2]` on every unit);
+  `fw_walk_apply_existing` (the one merge lookup of the custom-status and glow paths; host test
+  `apply_existing_finds_the_units_status_under_both_ctx_shapes_never_through_ctx_plus_0x20`) walks ctx+0x18, and the
+  green run `20261022-121252` shows one JokersLuck with 3 stacks per unit (fixture `result-merge-contexts.jsonl`). The
+  TacticsTest console command `status <name>` with no unit selected reaches no apply_status at all (OBSERVED, same runs). The LuckUp branch (`0x5f9760`) merges into an existing LuckUp found through
   `Entity_FindComponentsByTypeId` (`0x969f90`) or constructs via `LuckUp_ctor` (`0x711c90`:
-  `(Character*, Entity*, int* stacks, void** src, void** applier)`) which runs slot 30 before returning.
+  `(Scene*, Entity*, int* stacks, void** src, void** applier)`) which runs slot 30 before returning.
 - `glaiel::get_status_type(std::string)` (`0x4929c0`) and the hit-effect flags lookup (`0x493190`) are FNV-1a
   hash-map lookups keyed by name; unknown names log `NO STATUS NAMED <x>` to the game log.
 - `Status_Remove` (`0x767fa0`): marks +0x75, sets `touched_passives`, calls slot 45.
@@ -1944,8 +1956,8 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   fight scene drops native registrations only (`fw_glow_reset_scene`). `FW_RegisterStatus` refuses the `FwGlow_`
   prefix (`FW_STATUS_ERR_RESERVED`). **OBSERVED (run `20261022-113119-fw-glow-data-glow`):** under `StatusOnSpawnIn` the
   `apply_status` ctx **is the Character itself** — ctx+0x18 is the entity holding the statuses and the new object's
-  `+0x38` (`OFF_STATUS_CHARACTER`) = ctx — while ctx+0x20 (the "character" of `fw_walk_apply_resolve`, right for the
-  Component-shaped contexts the JokersLuck path met) is another object whose entity holds **no** components: the first
+  `+0x38` (`OFF_STATUS_CHARACTER`) = ctx — while ctx+0x20 is the Scene, in this and every other shape ("Status effects",
+  `Status_ApplyByName`; then still called the "character" of `fw_walk_apply_resolve`), whose +0x18 holds **no** components: the first
   launch registered that object, the sweep found no glow status on it and cleared the rim the same frame. The glow
   path therefore merges by the resolved **entity** (`fw_walk_entity_find_status`) and glows the status's own
   `+0x38`. With that, `spawn FwGlowRat` (mods/fw-glow) gave a 5620 px magenta patch (2628,693)-(2759,825) the pre-spawn
