@@ -239,10 +239,11 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
   // TomTom variant with lock_orientation still shows its face in TacticsTest (only the mirror changes) — the probe keeps
   // one turn attempt and adds ArtProbeCatBackShown, whose probeBackShowF / probeBackShowB BOTH place the back rig, so
   // the back pose is drawn whatever the facing. OBSERVED 2026-10-22 (run 20261022-114440): the shown cat is drawn from
-  // behind with TomTom's own parts but the checker marker at depth 15 of the back rig is NOT drawn (it is in the front
+  // behind with TomTom's own parts but the checker marker at depth 15 of the back rig was NOT found (it is in the front
   // rigs of the A0 / wave probes); run 20261022-114637 placed the back rig at 1.5x and the shown cat came out 1.5x — our
   // frame, not vanilla idleB. So the probe tells our B frames apart by SIZE: probeBackB / probeBackShowF / probeBackShowB
-  // place the back rig at sx = sy = 1.5, probeBackF the front rig at 1.
+  // place the back rig at sx = sy = 1.5, probeBackF the front rig at 1. (2026-10-22, backmarker: the marker was drawn,
+  // but above the window's top edge — see the next test.)
   const scene = JSON.parse(readFileSync(join(MODS_DIR, "_artprobe", "art", "probe.scene.json"), "utf8"));
   const gon = readFileSync(join(MODS_DIR, "_artprobe", "data", "characters", "enemies.gon.append"), "utf8");
   test("probe.scene.json: the donor carries probeBackF / probeBackB (probeBackPose: a front parts game rig, NO marker / probeBackPoseBack: facing back, parts game, empty slots at the back depths, the checker marker on the non-slot depth 15) and probeBackShowF / probeBackShowB (both the back rig: the back pose shown at any facing), all at vanilla idleB's `ani` offset; the only back-facing warning is probeBackShowF's (by design)", () => {
@@ -273,6 +274,26 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
     assert(v.ok, errors(v.findings));
     const bad = R.catAnimFindings(scene).filter((f: any) => f.severity !== "info" && /probeBack/.test(f.message));
     eq(bad.map((f: any) => f.code + " " + (/"(\w+)"/.exec(f.message) || [])[1]).join(","), "cat-anim-back-facing probeBackShowF");
+  });
+
+  // OBSERVED 2026-10-22 (backmarker; engine-map "The back facing and the four-way quartet"): the back rig's depth-15
+  // marker IS drawn. The slot visitor 0x742bd0 returns 0 for a non-slot name and never writes that child, and run
+  // 20261022-124301's shot-shown-2 holds the checker's lower two thirds at the window's top edge (gone in
+  // shot-turned-back once unit 9 faces front). It was out of frame: (−48, −330) in a rig placed at 1.5x lands 1.5x as far
+  // above the feet.
+  test("probe.scene.json: every rig marker's top edge lands at the same height in the donor (ani y + sy·marker y = the 1x front rigs' −377.95), so the 1.5x back rig's marker stays in frame like the front rigs'", () => {
+    const d = scene.sprites[scene.exports._Append_CatTest];
+    const ani = d.layers.find((l: any) => l.name === "ani");
+    const tops: Record<string, number> = {};
+    for (const [label, frame] of Object.entries(d.labels as Record<string, number>)) {
+      const k = ani.keys.find((x: any) => x.frame === frame);
+      const rig = scene.sprites[k.ref];
+      const m = rig && rig.layers.find((l: any) => l.keys.some((x: any) => x.ref === "CatProbeMc_marker"));
+      if (!m) continue;
+      tops[label] = Math.round((k.y + (k.sy ?? 1) * m.keys[0].y) * 100) / 100;
+    }
+    assert(tops.probeIdleF !== undefined && tops.probeBackB !== undefined && tops.probeBackShowF !== undefined, JSON.stringify(tops));
+    for (const [label, top] of Object.entries(tops)) eq(top, -377.95, label);
   });
 
   if (!existsSync(caPath)) console.log(`  (skipped: vanilla catanis.swf not extracted at ${VANILLA_DIR})`);
@@ -347,5 +368,16 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
     assert((j.facing["10"] as any[]).every((u) => u.facing === "B" && JSON.stringify(u.lock) === "[1,0]"), JSON.stringify(j.facing));
     assert((j.expects as string[]).length >= 16 && (j.expects as string[]).every((e) => e.startsWith("ok")), (j.expects as string[]).join("; "));
     assert(/face 9 back/.test(j.turn), j.turn);
+    // 2026-10-22 (backmarker): with the back rig's marker at clip y -220 it is in frame. Window captures only: the
+    // checker is found above unit 9 in every back shot at 1.5x the front rigs' ~1.9 px per clip px, and in neither the
+    // control (front: the F rig has no marker) nor "turned back" (unit 9 on F again), so it is the B pose's own child.
+    assert(Array.isArray(j.markers), "per-shot markers (scale / clipped)");
+    const mk = (l: string) => (j.markers as any[]).find((m) => m.label === l);
+    for (const l of ["back 1", "back 2", "back 3"]) if (windowShot(l)) {
+      const m = mk(l);
+      assert(!!m && m.found && m.scale >= 1.5 * 1.8 && m.scale <= 1.5 * 2.0, `${l}: ${JSON.stringify(m)}`);
+    }
+    for (const l of ["front", "turned back"]) if (windowShot(l)) assert(!!mk(l) && !mk(l).found, `${l}: no marker (${JSON.stringify(mk(l))})`);
+    assert(["back 1", "back 2", "back 3"].filter(windowShot).length >= 2, `window captures: ${(j.capture as string[]).join("; ")}`);
   });
 }
