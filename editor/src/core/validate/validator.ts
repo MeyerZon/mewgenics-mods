@@ -20,7 +20,7 @@ import { parseOverlayName } from "../overlay/overlay.ts";
 import { parseCsv } from "../overlay/csv.ts";
 import { parsePolicy } from "../overlay/policy.ts";
 import { findIndex } from "../gon/value.ts";
-import { resolutionSets, matchRegisteredPattern, malformedRegisteredPattern } from "../names.ts";
+import { resolutionSets, matchRegisteredPattern, malformedRegisteredPattern, catRigPrefix } from "../names.ts";
 import { loadLocalization, LOC_COLUMNS } from "../base-data.ts";
 import { ReportBuilder } from "./result.ts";
 import { identifyExe } from "../bindings/check.ts";
@@ -235,7 +235,34 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
       rb.warn("whole-file-replace", `${o.relPath} replaces the whole base file; prefer .append/.merge/.patch`, fileLoc);
     }
   }
+  checkCatRigTargets(overlays, rb, modName, new Set([...sets.characters, ...(local.byCategory.get("characters") ?? [])]));
   return rb.build();
+}
+
+/**
+ * A swap rig (framework API v5): an art scene export `_CatRig_<Entry>` replaces the cat clip of the character entry
+ * <Entry> (fw_catrig_rules.h), so <Entry> must be a character of the base game or of this mod. An unknown entry is not
+ * a crash (the framework registers it and nothing ever spawns under that name) but the rig would silently never show.
+ * The rig itself (slots, labels, entry-name length) is the scene validator's (cat-rig.ts catRigFindings).
+ */
+function checkCatRigTargets(overlays: OverlayFile[], rb: ReportBuilder, modName: string, characters: Set<string>): void {
+  const prefix = catRigPrefix();
+  for (const o of overlays) {
+    if (!/^art\/[^/]+\.scene\.json$/.test(o.relPath)) continue;
+    let exportsMap: unknown;
+    try {
+      exportsMap = (JSON.parse(o.text) as { exports?: unknown }).exports;
+    } catch {
+      continue; // the scene validator reports an unreadable scene
+    }
+    if (!exportsMap || typeof exportsMap !== "object") continue;
+    for (const linkage of Object.keys(exportsMap)) {
+      if (!linkage.startsWith(prefix)) continue;
+      const entry = linkage.slice(prefix.length);
+      if (!entry || characters.has(entry)) continue;
+      rb.error("cat-rig-target-unknown", `${linkage} would replace the cat clip of the character "${entry}", which is not a known character (base data/characters or this mod's characters overlays); the rig would never be drawn`, { file: `mods/${modName}/${o.relPath}`, path: `exports.${linkage}` });
+    }
+  }
 }
 
 /** @param nativeBuild installed-exe identity; null = no exe */

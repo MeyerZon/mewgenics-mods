@@ -64,7 +64,10 @@ these without a decision (status per bullet below; the PR map follows).
       shape — `new_art_scene template cat-animation`, `parts: "game"` rigs, `cat-anim-*` validator codes, the Rig tab).
       The import route stays closed (#71). What remains native or copied: a non-`_CAT` character wearing a cat's parts
       (hook seam S1 in engine-map "Cat parts: entry path, palette, faces, mirroring" — parked, optional) and new part
-      art in catparts.swf. Not authored yet: the back facing's `head_back` layout, the four-way `LF/RF/LB/RB` quartet,
+      art in catparts.swf. **S1 built 2026-10-22 (framework API v5, `feat/native-catrig-redirect`):** a SWF export
+      `_CatRig_<Entry>` (or `FW_RegisterCatRig`) gives one `movieclip _CAT` entry its own whole cat clip; T2
+      `render-rig.mewtest` redirected (engine-map "Cat rig redirect", data-mods "A whole cat rig for one character").
+      Next: an editor "swap rig for <entry>" control / MCP template (plan A3) and the sample pairing (plan A2.4). Not authored yet: the back facing's `head_back` layout, the four-way `LF/RF/LB/RB` quartet,
       a ghost cat in the preview for empty slots.
 - [x] **Localized text?** **Owner, 2026-10-21: deferred; Peralta is fine as the default font.** Since then session
       `loc` found it **looks data-only** (the text-box ctor 0x98d910 localizes an initial text that is a loc key; every

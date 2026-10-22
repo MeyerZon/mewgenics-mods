@@ -283,6 +283,34 @@ MyGlowingRat {
   --data`; fixture `editor/test/fixtures/ingame/data-glow-summary.json`: a 5620 px magenta rim around the spawned
   FwGlowRat, none before the spawn).
 
+## A whole cat rig for one character (framework API v5, OBSERVED 2026-10-22)
+
+Appended cat animations (`_Append_CatTest`, data only) add labels to the one vanilla cat clip every cat shares. To
+give ONE character entry its own complete cat clip, export the clip from the mod's SWF as **`_CatRig_<CharacterEntry>`**
+and keep the entry a normal cat:
+
+```
+ArtProbeRigCat { variant_of TomTom  graphics { movieclip _CAT  custom_cat_data ArtProbeParts  … } }
+```
+
+- With `mewframework.dll` (dev launches only), the framework registers every `_CatRig_<Entry>` export when the SWF
+  loads, and while that entry's `Character::init` runs it answers the game's `CatTest` lookup with the rig clip. The
+  game keeps its whole cat path — CatData, palette, face, shadow, the animation state machine — and `CatParts` fills
+  the rig's slots by name, so the rig cat is drawn with its own `custom_cat_data` parts. Every other cat keeps
+  `CatTest`. A DLL can register any export for an entry with `FW_RegisterCatRig({character, rig_clip})`
+  (`FW_CatRigFor` reads it back); `<Entry>_Champion` / `_Elite` use the entry's rig unless they have their own.
+- The clip's shape is CatTest's: root labels `<anim>F` / `<anim>B` (**`idleF` / `idleB` at least** — the cat starts in
+  idle; a label the rig lacks is a silent no-op, the cat keeps its frame), each placing the pose as the child **`ani`**
+  at depth 1; the pose is a `rig: "cat"` sprite with the seven **empty** slot sprites `tail leg2 arm2 body leg1 arm1
+  head` (`parts: "game"`); any extra art (the probe's marker) draws as authored.
+- Validator: `cat-rig-target-unknown` (the entry is no character of the base game or the mod), `cat-rig-slot-missing`
+  (no labeled frame places a rig with all seven slots), `cat-rig-idle-missing` (warning), `cat-rig-export-name` (empty
+  or > 63-byte entry). `editor/registered-names.json` lists the shape as kind `catrig`.
+- Without the framework (a plain launch, an unknown build) the export is inert and the cat is the vanilla one.
+- Proven by `mods/_artprobe/tests/render-rig.mewtest` (`npm run test:artprobe -- --rig`; fixture
+  `editor/test/fixtures/ingame/artprobe-rig-summary.json`): ArtProbeRigCat shows the rig's marker over a real cat in all
+  three shots, ArtProbeVanillaCat on the same parts shows none. Engine side: `docs/engine-map.md` "Cat rig redirect".
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses

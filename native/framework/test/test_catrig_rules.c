@@ -67,7 +67,9 @@ TEST(names_are_bounded_and_non_empty) {
     CHECK_EQ(FW_CATRIG_NAME_MAX, 63);
     CHECK_EQ(fw_catrig_add(&r, n63, n63, 0), FW_CATRIG_OK);
     CHECK_EQ(fw_catrig_add(&r, n64, "Rig", 0), FW_CATRIG_ERR_TOO_LONG);
-    CHECK_EQ(fw_catrig_add(&r, "B", n64, 0), FW_CATRIG_ERR_TOO_LONG);
+    char n72[73]; memset(n72, 'c', 72); n72[72] = 0;
+    CHECK_EQ(FW_CATRIG_CLIP_MAX, 71);   /* _CatRig_ + a 63-byte entry */
+    CHECK_EQ(fw_catrig_add(&r, "B", n72, 0), FW_CATRIG_ERR_TOO_LONG);
     CHECK_EQ(fw_catrig_add(&r, "", "Rig", 0), FW_CATRIG_ERR_EMPTY);
     CHECK_EQ(fw_catrig_add(&r, "C", "", 0), FW_CATRIG_ERR_EMPTY);
     CHECK_EQ(fw_catrig_add(&r, NULL, "Rig", 0), FW_CATRIG_ERR_NULL);

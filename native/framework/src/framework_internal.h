@@ -31,3 +31,9 @@ int glow_engine_hook_step(const FwHookSpec *spec);   /* the FW_SYM_TacticsTest_L
 int glow_engine_set(void *character, const float rgba[4]);
 int glow_engine_clear(void *character);
 int glow_engine_set_from_status(void *character, const float rgba[4]);   /* a FwGlow_ status was applied (status_engine.c) */
+
+/* catrig_engine.c (API v5) */
+int catrig_engine_is_step(const FwHookSpec *spec);     /* the three cat rig steps of FW_HOOK_PLAN */
+int catrig_engine_hook_step(const FwHookSpec *spec);
+int catrig_engine_register(const FwCatRigDef *def);
+const char *catrig_engine_for(const char *character);

@@ -1,0 +1,32 @@
+mods: _artprobe, _autoplay
+timeout: 120s
+hide: false
+# Cat rig redirect (framework API v5, strategy S1, 2026-10-22): a WHOLE custom cat clip for one character entry.
+# probe.swf exports _CatRig_ArtProbeRigCat (CatRigRoot: labels idleF / idleB / walkF / walkB, each placing the CatProbe
+# rig — seven EMPTY slot sprites at vanilla idleF's matrices plus the yellow checker marker — as the child ani at
+# depth 1). mewframework's post-hook on process_animation_merges registers it for ArtProbeRigCat when the SWF loads;
+# its Character::init hook scopes the entry and its Swf_GetCharacterByName hook answers the game's "CatTest" lookup
+# with our clip. Both cats are movieclip _CAT on the same custom_cat_data ArtProbeParts.
+# Shots: baseline (settled, no spawn), vanilla (ArtProbeVanillaCat: the vanilla CatTest — NO marker, the scoping
+# control and the real-parts reference), then the rig cat three times within 160 frames of its spawn.
+# editor/scripts/art-probe.ts --rig reads them and the framework log (probe-compare.ts rigSwapVerdict): registered +
+# redirected for ArtProbeRigCat, no marker on the vanilla cat, our marker on the rig cat in >= 2 shots with real cat
+# parts (new dark outline >= 30 % of the vanilla cat's) under it.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 300
+shot "baseline"
+cmd spawn ArtProbeVanillaCat
+expect console "Spawned ArtProbeVanillaCat" within 10
+wait frames 120
+shot "vanilla"
+cmd spawn ArtProbeRigCat
+expect console "Spawned ArtProbeRigCat" within 10
+wait frames 120
+shot "rig 1"
+wait frames 20
+shot "rig 2"
+wait frames 20
+shot "rig 3"
+quit

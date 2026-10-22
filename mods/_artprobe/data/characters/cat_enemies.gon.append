@@ -1,0 +1,29 @@
+// test-only (cat rig redirect, framework API v5, 2026-10-22): two real cats on the same parts (ArtProbeParts:
+// Mangy's indices, palette 9), both movieclip _CAT. probe.swf exports _CatRig_ArtProbeRigCat (CatRigRoot: idleF / idleB /
+// walkF / walkB placing the CatProbe rig — EMPTY slot sprites + the yellow marker — as ani), which mewframework
+// registers when the SWF loads; while ArtProbeRigCat's Character::init runs, the game's "CatTest" lookup returns that
+// clip instead, so this one entry is drawn by our clip and CatParts fills its slots. ArtProbeVanillaCat is the control:
+// the vanilla CatTest, no marker. npm run test:artprobe -- --rig
+ArtProbeRigCat {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data ArtProbeParts
+        scale 1.1
+        shadow_size 1.1
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+ArtProbeVanillaCat {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data ArtProbeParts
+        scale 1.1
+        shadow_size 1.1
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}

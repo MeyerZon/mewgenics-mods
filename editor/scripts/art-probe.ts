@@ -21,6 +21,10 @@
 // control _artprobe/render-tileset-control.mewtest (no overlay) and write tileset-summary.json: the marker per shot
 // (baseline before `spawn Rat`, two after) and the outcome (probe-outcomes.ts tilesetOutcome). `--loctext --from <runDir>`
 // re-reads an earlier run's report.json and shots instead of launching the game.
+// --rig (2026-10-22, framework API v5): run render-rig.mewtest (ArtProbeVanillaCat, then ArtProbeRigCat — the same parts, the
+// latter drawn by probe.swf's _CatRig_ArtProbeRigCat through the framework's CatTest redirect) and write rig-summary.json:
+// the framework log's catrig lines, the vanilla cat's marker (must be absent) and outline, per rig shot our marker and the
+// new dark outline under it, and the outcome (probe-compare.ts rigSwapVerdict). `--rig --from <runDir>` re-reads a run.
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
@@ -30,7 +34,7 @@ import * as api from "../src/core/api.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
 import { decodePng } from "../src/core/art/png.ts";
 import { measureLocText, summarizeLocText, tilesetOutcome } from "../src/core/art/probe-outcomes.ts";
-import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
+import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS, parseCatRigLog, rigSwapVerdict } from "../src/core/art/probe-compare.ts";
 
 /** the CatProbe rig's slot colours (mods/_artprobe/art/probe.scene.json) */
 export const CAT_PROBE_COLOURS: Record<string, string> = { tail: "#ff8000", leg2: "#8000ff", arm2: "#00a080", body: "#2080ff", leg1: "#ff60a0", arm1: "#a0ff40", head: "#ffd0a0" };
@@ -78,6 +82,44 @@ if (process.argv.includes("--loctext")) {
     `artifacts: ${r.artifacts.runDir}`,
   ].join("\n"));
   process.exit(r.verdict === "pass" && first ? 0 : 1);
+}
+if (process.argv.includes("--rig")) {
+  // the cat rig redirect (framework API v5): ArtProbeRigCat drawn by _CatRig_ArtProbeRigCat, ArtProbeVanillaCat the control
+  const RADIUS = 350;
+  const fromAt = process.argv.indexOf("--from");
+  const r = fromAt > 0 ? (JSON.parse(readFileSync(join(process.argv[fromAt + 1]!, "report.json"), "utf8")) as Awaited<ReturnType<typeof api.runIngameTest>>) : await api.runIngameTest({ mod: "_artprobe", test: "render-rig", hide: false });
+  if (!("verdict" in r)) { console.error(r.error); process.exit(2); }
+  if (r.verdict === "skipped" || r.verdict === "cannot-run") { console.log(`skipped: ${r.reason}`); process.exit(2); }
+  const dirR = r.artifacts.runDir!;
+  const fwPath = r.artifacts.frameworkLogWindow;
+  const log = parseCatRigLog(fwPath ? readFileSync(fwPath, "utf8") : "");
+  const byLabel = new Map(r.artifacts.shots.filter((s) => s.path).map((s) => [s.label, decodePng(readFileSync(s.path!))]));
+  const baseline = byLabel.get("baseline"), vanilla = byLabel.get("vanilla");
+  const arena = vanilla ? { x0: Math.round(vanilla.width * 0.15), y0: Math.round(vanilla.height * 0.1), x1: Math.round(vanilla.width * 0.85), y1: Math.round(vanilla.height * 0.7) } : undefined;
+  const vRegion = baseline && vanilla ? largestChangedRegion(vanilla, baseline, { dark: 40, within: arena }) : null;
+  const vMarker = vanilla ? geomOf(analyzeProbeShot(vanilla)) : null;
+  const vanillaOut = { label: "vanilla", marker: vMarker, region: vRegion, outline: vRegion && baseline && vanilla ? darkPixelsNear(vanilla, baseline, { x: vRegion.cx, y: vRegion.cy }, RADIUS) : null };
+  const rig = vanilla ? ["rig 1", "rig 2", "rig 3"].filter((l) => byLabel.has(l)).map((label) => {
+    const img = byLabel.get(label)!;
+    const a = analyzeProbeShot(img);
+    const marker = geomOf(a);
+    const ours = !!marker && marker.found;
+    // the marker sits at clip (-48, -330) above the frame origin: the cat's body centre is 266 clip px below it (A0)
+    const centre = ours ? { x: (a.box!.x0 + a.box!.x1) / 2, y: (a.box!.y0 + a.box!.y1) / 2 + 266 * a.scale } : null;
+    return { label, marker, ours, centre, outline: centre ? darkPixelsNear(img, vanilla, centre, RADIUS) : 0 };
+  }) : [];
+  const v = rigSwapVerdict({ verdict: r.verdict, character: "ArtProbeRigCat", log, vanilla: { marker: !!(vMarker && vMarker.found), outline: vanillaOut.outline || 0 }, rig: rig.map((x) => ({ label: x.label, marker: x.ours, outline: x.outline })) });
+  const out = { observed: "2026-10-22, build 25143593", verdict: r.verdict, reason: r.reason, save: saveOf(r), runDir: dirR, outcome: v.outcome, markers: v.markers, partsDrawn: v.partsDrawn, radius: RADIUS, log, shots: [...byLabel.keys()], vanilla: vanillaOut, rig };
+  writeFileSync(join(dirR, "rig-summary.json"), JSON.stringify(out, null, 2) + "\n");
+  console.log([
+    `framework log: registered ${log.registered.map((x) => `${x.clip} for ${x.character} (${x.source})`).join(", ") || "none"}; redirected ${log.redirected.map((x) => `${x.character} -> ${x.clip}`).join(", ") || "none"}${log.missing.length ? `; missing ${log.missing.map((x) => x.clip).join(", ")}` : ""}${log.refused.length ? `; refused ${log.refused.length}` : ""}`,
+    `vanilla cat: marker ${vMarker && vMarker.found ? "FOUND (not scoped!)" : "none"}; new dark region ${vRegion ? `${vRegion.n} px at ${vRegion.cx},${vRegion.cy}` : "none"}; outline ${vanillaOut.outline ?? "-"}`,
+    ...rig.map((x) => `${x.label}: marker ${x.ours ? `found (scale ${x.marker!.scale.toFixed(2)}, ${x.marker!.mirrored ? "mirrored" : "as authored"})` : "not found"}; outline ${x.outline}`),
+    `outcome: ${v.outcome} (our marker in ${v.markers}/${rig.length} rig shots; real parts under it in ${v.partsDrawn}/${v.markers})`,
+    `run: ${r.verdict} — ${r.reason}; ${out.save}`,
+    `artifacts: ${dirR}`,
+  ].join("\n"));
+  process.exit(v.outcome === "redirected" ? 0 : 1);
 }
 const report = await api.runIngameTest({ mod: "_artprobe", test: catAppend ? "render-cat-append" : cat ? "render-cat" : "render-probe", hide: false });
 if (!("verdict" in report)) { console.error(report.error); process.exit(2); }

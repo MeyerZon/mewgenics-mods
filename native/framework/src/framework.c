@@ -131,6 +131,7 @@ static void hook_Character_BeginTurn(void *character, int kind) {
 static int install_step(const FwHookSpec *spec, int ordinal, int failuresSoFar, void *user) {
     (void)ordinal; (void)failuresSoFar; (void)user;
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_TacticsTest_LateRender) return glow_engine_hook_step(spec);
+    if (catrig_engine_is_step(spec)) return catrig_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Character_BeginTurn) {
         uintptr_t rva = g_sym[spec->index] - g_base;
         void *tramp = NULL;
@@ -210,6 +211,17 @@ FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a
 FW_EXPORT int FW_ClearUnitGlow(void *character) {
     if (!g_active) return 0;
     return glow_engine_clear(character);
+}
+
+/* --- API v5: cat rigs (catrig_engine.c) --- */
+FW_EXPORT int FW_RegisterCatRig(const FwCatRigDef *def) {
+    if (!g_active) return 0;
+    return catrig_engine_register(def);
+}
+
+FW_EXPORT const char *FW_CatRigFor(const char *character) {
+    if (!g_active) return NULL;
+    return catrig_engine_for(character);
 }
 
 /* ----------------------------------------------------------------------- */

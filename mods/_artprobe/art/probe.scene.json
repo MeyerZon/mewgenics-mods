@@ -104,6 +104,11 @@
       "labels": { "probeIdleF": 0, "probeIdleB": 1 },
       "layers": [ { "name": "ani", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe", "x": 3.85, "y": -47.95 }, { "frame": 1, "ref": "CatProbe", "x": 3.85, "y": -47.95 } ] } ]
     },
+    "CatRigRoot": {
+      "frames": 4,
+      "labels": { "idleF": 0, "idleB": 1, "walkF": 2, "walkB": 3 },
+      "layers": [ { "name": "ani", "depth": 1, "keys": [ { "frame": 0, "ref": "CatProbe", "x": 3.85, "y": -47.95 }, { "frame": 1, "ref": "CatProbe", "x": 3.85, "y": -47.95 }, { "frame": 2, "ref": "CatProbe", "x": 3.85, "y": -47.95 }, { "frame": 3, "ref": "CatProbe", "x": 3.85, "y": -47.95 } ] } ]
+    },
     "ArtProbeLoc": {
       "frames": 1,
       "layers": [
@@ -137,5 +142,5 @@
       ]
     }
   },
-  "exports": { "ArtProbe": "ArtProbe", "CatProbeColours": "CatProbeColours", "_Append_CatTest": "CatAppendRoot", "ArtProbeLoc": "ArtProbeLoc" }
+  "exports": { "ArtProbe": "ArtProbe", "CatProbeColours": "CatProbeColours", "_Append_CatTest": "CatAppendRoot", "_CatRig_ArtProbeRigCat": "CatRigRoot", "ArtProbeLoc": "ArtProbeLoc" }
 }
