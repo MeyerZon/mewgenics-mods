@@ -80,7 +80,8 @@ was tested on, its native DLLs + framework API version if any, license; `npm run
 writes a zip of the mod folder (without `tests/` and the `art/` sources) plus a generated `README-INSTALL.txt` (unzip,
 the `-modpaths` launch line, save advice, the native step) and a `MANIFEST.sha256`. The receiving side installs it with
 `--install`, MCP `install_mod` or the web UI's *Import mod…*: path traversal, oversize zips, a missing manifest and
-tampered files are refused, and a game-build mismatch is asked about first. Details: [`docs/data-mods.md`
+tampered files are refused, and a game-build mismatch is asked about first. The repo's own mods each carry a `mod.json` (the `_`-prefixed
+test-only mods do not), so `npm run pack -- jokers-luck` works out of the box once `native/dist/` holds its DLL. Details: [`docs/data-mods.md`
 "Shipping a mod"](docs/data-mods.md#shipping-a-mod).
 
 Register the MCP server so agents can author and validate mods through it:

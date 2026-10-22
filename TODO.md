@@ -44,8 +44,8 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       `shot-rat-2.png`): any wrong offset or mirroring of the ArtProbe clip drawn for a plain Rat, against the ArtProbe
       enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
 - [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
-- [ ] **Ship a mod end to end** (PR feat/mod-packaging): `cd editor && npm run pack -- jokers-luck --init` (review the
-      drafted `mods/jokers-luck/mod.json`: license, description), then read the zip's `README-INSTALL.txt` as a player
+- [ ] **Ship a mod end to end** (PR feat/mod-packaging): `cd editor && npm run pack -- jokers-luck` (review the
+      committed `mods/jokers-luck/mod.json`: license, description), then read the zip's `README-INSTALL.txt` as a player
       would — clear enough? — and install it on another folder (`npm run pack -- --install <zip> --into <dir>`) and
       launch with the README's `-modpaths` line: does the mod load? Also try *Export…* / *Import mod…* in the web UI.
 
@@ -316,9 +316,9 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   `MANIFEST.sha256`), `npm run pack -- --install <zip>` / MCP `install_mod` / web *Import mod…* (traversal, size,
   manifest, checksum, build-mismatch checks; never overwrites). Hand-written zip writer + the shared reader in
   `src/core/zip.ts` (Node built-ins only).
-  - [ ] Follow-up: add `mod.json` to the sample mods (`jokers-luck`, `dev-sandbox`, `fw-glow`) — a `mods/` change, so
-    it needs a T2 smoke run (the game should ignore the file like `description.json`); until then they report
-    `manifest-missing` (info) and `pack -- --init` drafts one.
+  - [x] Follow-up: `mod.json` for the sample mods (PR feat/sample-mod-manifests): `dev-sandbox`, `fw-glow`, `jokers-luck`,
+    `swf-gate` (every non-`_` folder; the `_` test-only mods carry none — data-mods.md "Shipping a mod"); T2
+    `jokers-luck/smoke` + `dev-sandbox/console-smoke` pass with the file present; each packs.
   - [x] (done by PR #110) Follow-up (pre-existing, seen while packing): the validator reads `tests/*.mewtest` as whole-file overlays and
     warns `whole-file-replace` for each script; skip `tests/` (and `art/`) in `collectOverlays`.
 

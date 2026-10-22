@@ -1,0 +1,9 @@
+{
+  "name": "swf-gate",
+  "version": "0.1.0",
+  "author": "MeyerZon",
+  "description": "Test-only: the in-game harness writes one generated donor SWF and a swflist.gon.append here (npm run test:swfgate) to check that an _Append_AbilityIcon clip boots the game. Not for play.",
+  "gameBuild": "25143593",
+  "license": "MIT",
+  "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
+}

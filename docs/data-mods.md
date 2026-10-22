@@ -341,6 +341,12 @@ UI offers it) drafts one from `description.json`, the installed build and, for a
 `manifest-build-mismatch` (warning — the installed exe is another known build, or one no `bindings/*.json` knows; said
 only when an exe is installed, `check_game_build`'s identity).
 
+**Which repo mods carry one** (pinned by `editor/test/pack-tests.ts` "repo mods"): every `mods/<name>/` whose name
+does not start with `_` has a `mod.json` (`dev-sandbox`, `fw-glow`, `jokers-luck`, `swf-gate`; author MeyerZon, license MIT,
+`gameBuild` a `bindings/<id>.json` build, `native`/`frameworkApi` exactly what `--init` detects from `native/mods/<mod>/`);
+the `_`-prefixed folders are test-only harness overlays and never get one (their `manifest-missing` info is expected —
+they are never packed). The game ignores the file: T2 `jokers-luck/smoke` and `dev-sandbox/console-smoke` pass with it.
+
 **Pack** — `cd editor && npm run pack -- <mod> [--force] [--init] [--out <dir>]`, MCP `pack_mod { mod, force?, init? }`,
 web UI mod menu → *Export…*:
 1. rebuilds every `art/**/*.scene.json` through `build_swf` (so `swfs/` matches the sources);
