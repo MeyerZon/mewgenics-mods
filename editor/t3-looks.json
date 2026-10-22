@@ -222,5 +222,13 @@
     "shots": [],
     "regenerate": "ask an agent: MCP vectorcraft_exec { mod: dev-sandbox, shape body, shape.ellipse }, then Build SWF and look in the Ruffle tab or cd editor && npm run test:artprobe",
     "status": "open"
+  },
+  {
+    "id": "pr-cat-back",
+    "pr": 105,
+    "question": "Measured back-pose-drawn (run 20261022-114912: the shown cat is 1.57x TomTom's height, i.e. our 1.5x back rig). In shot-shown-1, the big cat at the top right of the arena: does it read as TomTom seen from behind — the back of the head with both ears, the body, the tail in front — with nothing missing or misplaced (compare a vanilla cat walking away)?",
+    "shots": ["ingame-runs/*-_artprobe-render-cat-back/shot-shown-1.png", "ingame-runs/*-_artprobe-render-cat-back/shot-vanilla.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --cat-back",
+    "status": "open"
   }
 ]
