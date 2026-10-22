@@ -489,7 +489,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_init")!.rva, "0xf70f0"); eq(entry(m, "TacticsTest_1hp_DoCall")!.rva, "0x895160"); eq(entry(m, "GonObject_child_by_name")!.rva, "0x942b50");
     for (const n of ["GonObject_children", "GonObject_childrenEnd", "GonObject_name", "GonObject_type", "GonObject_size"]) eq(witness(n).function, "GonObject_child_by_name", n);
     const offs = m.entries.filter((e) => e.kind === "offset");
-    eq(offs.length, 100, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures)");
+    eq(offs.length, 103, "40 + 7 Character + 8 GonObject + 17 per-unit glow (#86) + 6 glow v2 (per-unit screen rects) + 19 3D block (observe3d) + 2 BinaryResource (M2 model bytes) + 1 Texture2D GL name (M2 textures) + 3 sprite/mesh order (M2 occlusion)");
   });
   if (exe) {
     const m = loadManifest(realPath);
