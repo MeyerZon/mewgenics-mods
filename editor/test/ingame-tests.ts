@@ -467,6 +467,35 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(v.expects.failed, 0); eq(g.expects.failed, 0);
       eq(v.end!.code, 0); eq(g.end!.code, 0);
     });
+    test("OBSERVED 2026-10-22 fixture: effective stats — LuckUp 3 on a spawned Rat gives luck 5 / luck.effective 8; FwGlow_ff00ff (LuckUp's vtable, slot 82 replaced by #104) gives luck.effective 5; every unit carries the effective block (result-effective-stats.jsonl, mods/_effective-stats/tests/effective-luck.mewtest)", () => {
+      type Eff = { strength: number; dexterity: number; constitution: number; intelligence: number; speed: number; charisma: number; luck: number; maxhp: number };
+      type U = { i: number; name: string; namekey: string; hp: number; strength: number; constitution: number; luck: number; statuses: string[]; stacks: number[]; effective: Eff };
+      type R = { units: { count: number; list: U[] } | null; expects: { passed: number; failed: number }; end: { code: number; reason: string } | null };
+      const r = parseResults(fixture("result-effective-stats.jsonl")) as unknown as R;
+      eq(r.units!.count, 11, "seed 42: 4 cats + 4 coins + Rat + LuckyRat + FwGlowRat");
+      for (const u of r.units!.list) {
+        const keys = Object.keys(u.effective).join(",");
+        eq(keys, "strength,dexterity,constitution,intelligence,speed,charisma,luck,maxhp", `unit ${u.i}: the effective block's keys`);
+      }
+      const [rat, lucky, glow] = [8, 9, 10].map((i) => r.units!.list[i]!);
+      eq(rat.statuses.length, 0); eq(rat.luck, 5); eq(rat.effective.luck, 5, "a plain Rat: effective == base");
+      eq(rat.effective.strength, 4); eq(rat.effective.maxhp, 5, "max HP = max(1, (health 5 - 4*con 5) + 4*con 5) = 5 (Character+0x4bc)");
+      eq(lucky.statuses.join(","), "LuckUp"); eq(lucky.stacks[0], 3); eq(lucky.luck, 5, "base luck (+0x5b8) untouched by the status");
+      eq(lucky.effective.luck, 8, "LuckUp's ApplyStatModifiers added its 3 stacks to the effective luck (+0x5d4)");
+      eq(glow.statuses.join(","), "FwGlow_ff00ff"); eq(glow.effective.luck, 5, "the glow status adds no luck (its slot 82 keeps only the removal)");
+      for (const u of r.units!.list.slice(0, 8)) eq(u.effective.luck, u.luck, `${u.name}: no status, effective luck == base`);
+      for (const u of r.units!.list) if (u.namekey === "PLAYER_CAT_NAME") eq(u.effective.maxhp, u.hp, `${u.name}: a fresh cat is at full HP (hp == maxhp.effective)`);
+      eq(r.expects.failed, 0); eq(r.expects.passed, 17); eq(r.end!.code, 0);
+    });
+    test("mods/_effective-stats: LuckyRat is a Rat variant with StatusOnSpawnIn LuckUp 3; effective-luck.mewtest loads it with fw-glow and _autoplay and asserts through the .effective fields", () => {
+      const gon = readFileSync(join(MODS_DIR, "_effective-stats", "data", "characters", "enemies.gon.append"), "utf8");
+      assert(/LuckyRat\s*\{\s*variant_of Rat[\s\S]*StatusOnSpawnIn\s*\{\s*LuckUp 3\s*\}/.test(gon), "LuckyRat { variant_of Rat passives { StatusOnSpawnIn { LuckUp 3 } } }");
+      if ("__error" in script) throw new Error(script.__error);
+      const plan = script.parseScript(readFileSync(join(MODS_DIR, "_effective-stats", "tests", "effective-luck.mewtest"), "utf8"), { owningMod: "_effective-stats", name: "effective-luck" }) as { mods: string[]; directives: { kind: string; what?: string; field?: string; unit?: string; value?: unknown }[] };
+      eq(plan.mods.join(","), "_effective-stats,fw-glow,_autoplay");
+      const eff = plan.directives.filter((d) => d.kind === "expect" && d.what === "unit" && String(d.field).endsWith(".effective")).map((d) => `${d.unit} ${d.field} ${d.value}`);
+      for (const want of ["8 luck.effective 5", "9 luck.effective 8", "10 luck.effective 5", "8 maxhp.effective 5"]) assert(eff.includes(want), `${want} in ${eff.join("; ")}`);
+    });
     test("OBSERVED 2026-10-20 fixture: enter Campaign house -> the real House (no intro), the campaign director's 57 commands pinned, a house command executes (result-enter-house.jsonl + console-campaign-listcmds.txt)", () => {
       const r = parseResults(fixture("result-enter-house.jsonl")) as unknown as { enter: { ok: boolean; name: string; mode: string; detail: string } | null; expects: { passed: number; failed: number }; end: { code: number } | null; popups: unknown[]; shots: unknown[] };
       assert(!!r.enter && r.enter.ok && r.enter.name === "Campaign" && r.enter.mode === "house" && /game_began set/.test(r.enter.detail), JSON.stringify(r.enter));

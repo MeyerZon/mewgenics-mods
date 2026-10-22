@@ -140,6 +140,11 @@ static void do_dump(MtRunner *r, const MtHost *h, long id) {
         mt_jw_int(&w, "shield", u.shield);
         mt_jw_int(&w, "divineshield", u.divineShield);
         for (int k = 0; k < MT_STAT_COUNT; k++) mt_jw_int(&w, mt_stat_name(k), u.stats[k]);
+        /* what Character::recompute_stats made of them (every passive's / status's ApplyStatModifiers folded in) */
+        mt_jw_obj_begin(&w, "effective");
+        for (int k = 0; k < MT_STAT_COUNT; k++) mt_jw_int(&w, mt_stat_name(k), u.eff[k]);
+        mt_jw_int(&w, "maxhp", u.maxHp);
+        mt_jw_obj_end(&w);
         mt_jw_arr_begin(&w, "statuses");
         for (int k = 0; k < u.statusCount && k < MT_UNIT_STATUSES; k++) mt_jw_arr_str(&w, u.statuses[k]);
         mt_jw_arr_end(&w);
@@ -166,7 +171,11 @@ static long unit_int_field(const MtUnit *u, MtUnitField f) {
     switch (f) {
         case MT_F_FACTION: return u->faction; case MT_F_MOVE: return u->move; case MT_F_ACT: return u->act; case MT_F_TURNKIND: return u->turnKind;
         case MT_F_HP: return u->hp; case MT_F_SHIELD: return u->shield; case MT_F_DIVINESHIELD: return u->divineShield;
-        default: return f >= MT_F_STRENGTH && f <= MT_F_LUCK ? u->stats[f - MT_F_STRENGTH] : 0;
+        case MT_F_MAXHP_EFF: return u->maxHp;
+        default:
+            if (f >= MT_F_STRENGTH && f <= MT_F_LUCK) return u->stats[f - MT_F_STRENGTH];
+            if (f >= MT_F_STRENGTH_EFF && f <= MT_F_LUCK_EFF) return u->eff[f - MT_F_STRENGTH_EFF];
+            return 0;
     }
 }
 /* the unit as an expect arg: the index, the bare name, or the quoted name when it has a space */

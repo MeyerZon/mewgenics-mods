@@ -556,6 +556,11 @@ static int h_unit_info(void *u, int i, MtUnit *out) {
     read_i32(AT(ch, OFF_CH_SHIELD), &out->shield);
     read_i32(AT(ch, OFF_CH_DIVINE_SHIELD), &out->divineShield);
     if (!safe_read(AT(ch, OFF_CH_STATS), out->stats, sizeof out->stats)) memset(out->stats, 0, sizeof out->stats);
+    /* effective stats (2026-10-22): Character::recompute_stats copies the base block to +OFF_CH_STATS_EFF, lets every
+     * live passive / status add its ApplyStatModifiers (vtable slot 82; LuckUp: +stacks to luck) and derives max HP
+     * (+OFF_CH_MAX_HP) from them — the values the status menu and Character::deval read. Read, never recomputed here. */
+    if (!safe_read(AT(ch, OFF_CH_STATS_EFF), out->eff, sizeof out->eff)) memset(out->eff, 0, sizeof out->eff);
+    read_i32(AT(ch, OFF_CH_MAX_HP), &out->maxHp);
     void *ent = NULL;
     uint32_t cc = 0;
     void *comps = NULL;

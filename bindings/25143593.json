@@ -181,6 +181,11 @@
             "target": "0x483120"
           },
           {
+            "ordinal": 48,
+            "name": "Character_recompute_stats",
+            "target": "0x102520"
+          },
+          {
             "ordinal": 60,
             "name": "Ability_trigger",
             "target": "0x320a0"
@@ -8152,6 +8157,11 @@
             "target": "0x941540"
           },
           {
+            "ordinal": 1187,
+            "name": "Character_recompute_stats",
+            "target": "0x102520"
+          },
+          {
             "ordinal": 1323,
             "name": "string_TidyDeallocate",
             "target": "0x52780"
@@ -8195,6 +8205,11 @@
             "ordinal": 1350,
             "name": "Status_AttachPassive",
             "target": "0x494080"
+          },
+          {
+            "ordinal": 1351,
+            "name": "Character_recompute_stats",
+            "target": "0x102520"
           },
           {
             "ordinal": 1354,
@@ -8276,6 +8291,36 @@
         ".analysis/decompiled/TacticsTest_init_lambda36_1hp_DoCall_0x895160.c"
       ],
       "note": "TacticsTest::init lambda_36 _Do_call (the `1hp` console command, 255 B): walks the live Character array (the same RefArray walk as the harness) and for every unit sets +0x4b0 (current HP) to 1 when above 1 and zeroes +0x4b4 (shield). The one direct HP witness in the exe; `999` deals 999 damage instead of writing HP. Never called by the harness."
+    },
+    {
+      "name": "Character_recompute_stats",
+      "kind": "function",
+      "rva": "0x102520",
+      "signature": {
+        "pattern": "48 8B C4 44 88 40 18 48 89 50 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D A8 88",
+        "exactLen": 27,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "void glaiel::Character::recompute_stats(Ability*, bool) — identified by the RTTI of the std::function lambdas it builds: .?AV?$_Func_impl_no_alloc@V<lambda_1>@?1??recompute_stats@Character@glaiel@@QEAAXPEAVAbility@4@_N@Z@XPEAVPassive@4@@std@@ (vftable 0x140ee0eb8, lea'd at +0x51a; _Do_call 0x129220 = Passive vtable slot 82 ApplyStatModifiers, then slot 87 with the Ability when one is given) and lambda_2..6 (0x140ee0e80 / e48 / e10 / dd8 / da0), each lea'd only here and in its own _Copy. Copies the base stats +0x5a0..+0x5b8 to the effective block +0x5bc..+0x5d4, runs lambda_1 over the passive list (0x117c40, re-entrancy counter +0xeb4; statuses are passives), then derives movement +0x950, initiative +0x954, max HP +0x4bc = max(1, +0x5e8 + 4*con_eff), max mana +0xd1c, ... from the effective values. 48 direct callers. The harness reads its results; it never calls it.",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 3447,
+          "calls": 31,
+          "ripRefs": 15,
+          "resyncs": 0
+        },
+        "prologue": "48 8B C4 44 88 40 18 48 89 50 10 55"
+      },
+      "consumers": [],
+      "exposure": [],
+      "evidence": [
+        "docs/engine-map.md#effective-stats-characterrecompute_stats-2026-10-22",
+        ".analysis/decompiled/Character_recompute_stats_0x102520.c",
+        ".analysis/notes-fxstats.md"
+      ]
     },
     {
       "name": "GonObject_child_by_name",
@@ -8588,7 +8633,7 @@
         "docs/engine-map.md#gon-at-runtime-2026-10-21",
         ".analysis/decompiled/Character_init_0xf70f0.c"
       ],
-      "note": "seven consecutive int32 in data/characters order: strength, dexterity, constitution, intelligence, speed, charisma, luck — IntOr(stats.<name>, 5) at init; the per-stat bonus block +0x5bc..+0x5d4 follows (engine-map: LuckUp adds to +0x5d4)"
+      "note": "seven consecutive int32 in data/characters order: strength, dexterity, constitution, intelligence, speed, charisma, luck — IntOr(stats.<name>, 5) at init (the BASE values); the effective block +0x5bc..+0x5d4 follows (Character_statsEffective, written by Character::recompute_stats)"
     },
     {
       "name": "Character_baseHealth",
@@ -8617,7 +8662,7 @@
         "docs/engine-map.md#gon-at-runtime-2026-10-21",
         ".analysis/decompiled/Character_init_0xf70f0.c"
       ],
-      "note": "base health = properties.health - 4*constitution (IntOr(properties.base_health, 0) when health is absent); max HP = base + 4*con + modifiers (INFERRED, no getter found)"
+      "note": "base health = properties.health - 4*constitution (IntOr(properties.base_health, 0) when health is absent); max HP = max(1, base + 4 * effective constitution), stored at +0x4bc by Character::recompute_stats (Character_maxHp)"
     },
     {
       "name": "Character_gonEntry",
@@ -8678,6 +8723,66 @@
         ".analysis/decompiled/Character_init_0xf70f0.c"
       ],
       "note": "OBSERVED 2026-10-22 (golden-numeric T2): the unit's display-name loc key — graphics.name, e.g. ENEMY_POOTER_NAME, GOLDEN_RAT_NAME after a .merge — a std::string Character::init copies; the units event's `namekey` field. notes-gon.md inferred the entry name here; the entry name's home is still unknown"
+    },
+    {
+      "name": "Character_statsEffective",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x5bc",
+      "ctype": "int32[7]",
+      "anchors": {
+        "witness": {
+          "function": "Character_recompute_stats",
+          "pattern": "8B 87 A0 05 00 00 89 87 ?? ?? ?? ??",
+          "dispAt": 8,
+          "dispSize": 4
+        },
+        "note": "mov eax,[rdi+0x5a0] (base strength); mov [rdi+0x5bc],eax — the first of the seven base -> effective copies (0x5bc strength … 0x5d4 luck) before the passives' ApplyStatModifiers run"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_STATS_EFF"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#effective-stats-characterrecompute_stats-2026-10-22",
+        ".analysis/decompiled/Character_recompute_stats_0x102520.c",
+        ".analysis/notes-fxstats.md"
+      ],
+      "note": "the effective stats, same order as Character_stats (strength, dexterity, constitution, intelligence, speed, charisma, luck): base + every live passive's / status's ApplyStatModifiers (LuckUp: luck +0x5d4 += stacks), written by Character::recompute_stats; what the status menu (StatusMenu_update) and Character::deval read"
+    },
+    {
+      "name": "Character_maxHp",
+      "kind": "offset",
+      "struct": "Character",
+      "value": "0x4bc",
+      "ctype": "int32",
+      "anchors": {
+        "witness": {
+          "function": "Character_recompute_stats",
+          "pattern": "42 8D 0C 88 83 F9 01 44 0F 4F E1 44 89 A7 ?? ?? ?? ??",
+          "dispAt": 14,
+          "dispSize": 4
+        },
+        "note": "lea ecx,[rax+r9*4] (base health + 4 * effective constitution); cmp ecx,1; cmovg r12d,ecx; mov [rdi+0x4bc],r12d — the only max HP store in recompute_stats"
+      },
+      "consumers": [
+        "native/mods/test-harness/src/mewtest.c:h_unit_info"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CH_MAX_HP"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#effective-stats-characterrecompute_stats-2026-10-22",
+        ".analysis/decompiled/Character_recompute_stats_0x102520.c",
+        ".analysis/notes-fxstats.md"
+      ],
+      "note": "effective max HP = max(1, Character_baseHealth + 4 * effective constitution), written by Character::recompute_stats (later lambdas may still adjust it, INFERRED from the passes that follow); the status menu reads it next to current HP"
     },
     {
       "name": "GonObject_children",

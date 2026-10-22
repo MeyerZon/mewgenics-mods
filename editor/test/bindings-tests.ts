@@ -498,8 +498,11 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     const rs = entry(m, "Character_recompute_stats")!;
     eq(rs.kind, "function"); eq(rs.rva, "0x102520");
     assert(!!(rs.signature && rs.signature.pattern), "a byte signature");
-    assert(/recompute_stats@Character@glaiel/.test(rs.anchors.note ?? ""), "the note names the RTTI lambda type that identifies it");
-    assert((rs.anchors.callees ?? []).length >= 2, "callee witnesses (harvest)");
+    assert(/recompute_stats@Character@glaiel/.test(String(rs.anchors.note ?? "")), "the note names the RTTI lambda type that identifies it");
+    // its own callees are no manifest entries (the passive-list getters 0x117c40 / 0x118300 / 0x117fc0), so the call
+    // witnesses run the other way: harvest records it as a named callee of Character_init and Character_BeginTurn
+    const callers = m.entries.filter((e) => (e.anchors.callees ?? []).some((c) => c.name === "Character_recompute_stats" && c.target === "0x102520")).map((e) => e.name);
+    assert(callers.includes("Character_init") && callers.includes("Character_BeginTurn"), `named callee of Character_init and Character_BeginTurn (harvest): ${callers.join(",")}`);
     assert(rs.evidence.some((e) => e.includes("Character_recompute_stats_0x102520.c")), "the decompile is evidence");
     eq(entry(m, "Character_statsEffective")!.value, "0x5bc"); eq(entry(m, "Character_statsEffective")!.ctype, "int32[7]"); eq(macro("Character_statsEffective"), "OFF_CH_STATS_EFF");
     eq(witness("Character_statsEffective").function, "Character_recompute_stats");
@@ -1911,7 +1914,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   });
   test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
-    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam)");
+    eq(m.entries.length, 121 + 25 + GLOW_NAMES.size + GLOW2_NAMES.size + 1 + 3, "121 pre-existing entries + 25 (bindings hardening #82, GON at runtime #85) + the glow block + the glow v2 block + VT_ApplyStatModifiers (glow v3, the data seam) + the effective stats (Character_recompute_stats, Character_statsEffective, Character_maxHp)");
     for (const [name, rva, index] of GLOW_SYMBOLS) {
       const e = entry(m, name);
       assert(!!e && e.kind === "function" && e.rva === rva && !!e.signature, `${name} is a signed function at ${rva}`);

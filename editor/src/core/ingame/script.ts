@@ -15,6 +15,10 @@ export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
 export const UNIT_FIELDS = [
   "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
   "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck",
+  // effective (2026-10-22): after Character::recompute_stats folded every passive's / status's ApplyStatModifiers in
+  // (the units event's `effective` block: Character+0x5bc.., max HP +0x4bc)
+  "strength.effective", "dexterity.effective", "constitution.effective", "intelligence.effective",
+  "speed.effective", "charisma.effective", "luck.effective", "maxhp.effective",
 ] as const;
 export type UnitField = (typeof UNIT_FIELDS)[number];
 /** the `expect unit` fields that take a quoted value with == / != (the rest are integers with any op) */

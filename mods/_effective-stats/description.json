@@ -1,0 +1,7 @@
+{
+  "title": "Effective stats (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for the in-game harness's effective stats (the units event's effective block, `expect unit <stat>.effective`): LuckyRat, a Rat that gains LuckUp 3 on spawn (StatusOnSpawnIn), so its effective luck is base + 3. Load it next to fw-glow and _autoplay: `mods: _effective-stats, fw-glow, _autoplay`. Never for play.",
+  "requirements": []
+}
