@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 test.describe("Shipping — Export… / Import mod…", () => {
   test("Export… on a mod without mod.json asks to draft one; dismissing reports manifest-missing", async ({ page }) => {
     await openApp(page);
-    await selectMod(page, "dev-sandbox");
+    await selectMod(page, "_golden-merge");   // a test-only mod: no mod.json (every non-`_` mod ships one since #119)
     const asked: string[] = [];
     page.on("dialog", (d) => {
       asked.push(d.message());
