@@ -43,6 +43,7 @@ run_suite "mewframework hide_sprite (M3)" "$FW/build/test_mesh_hide" -DFW_NO_WIN
 run_suite "mewframework unit model facing (M3)" "$FW/build/test_unit_face" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_unit_face.c" "$FW/src/fw_unit_face.c" "$FW/src/fw_unit_model.c" "$FW/src/fw_gon.c" -lm
 run_suite "mewframework PNG decoder (M3)" "$FW/build/test_png" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_png.c" "$FW/src/fw_png.c"
 run_suite "mewframework embedded model textures (M3)" "$FW/build/test_mesh_embtex" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_embtex.c" "$FW/src/fw_mesh_embtex.c" "$FW/src/fw_png.c" "$FW/src/fw_mesh_rules.c" "$FW/src/fw_mesh_gltf.c" "$FW/src/fw_json.c" -lm
+run_suite "mewframework unit palette row (M3)" "$FW/build/test_unit_palette" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_unit_palette.c" "$FW/src/fw_unit_palette.c" "$FW/src/fw_gon.c"
 run_suite "mewtest harness pure modules" "$HS/build/test_mewtest" -DMT_HOST_TEST -I"$HS/src" -I"$FW/src" "$HS/test/test_mewtest.c" \
   "$HS/src/mt_jsonl.c" "$HS/src/mt_args.c" "$HS/src/mt_msvcstr.c" "$HS/src/mt_script.c" "$HS/src/mt_console.c" "$HS/src/mt_runner.c" "$HS/src/mt_exit.c" "$HS/src/mt_queue.c" "$HS/src/mt_gon.c"
 echo "=== all native suites passed"
