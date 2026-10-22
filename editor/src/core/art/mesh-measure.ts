@@ -261,3 +261,15 @@ export function judgeUnitModelFollows(a: RgbaImageLike, b: RgbaImageLike, worldA
   out.angleDeg = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
   return { ...out, verdict: out.angleDeg <= FOLLOW_MAX_ANGLE ? "follows" : "wrong-direction" };
 }
+// ---- M2: sprite/mesh occlusion (red stubs) ----
+export interface MeshOccLine { frame: number; tile: [number, number]; key: number; hull: [number, number, number, number]; area: number }
+export interface MeshOrderPlacement { draw: number; key: number; item: number | null; itemKey: number | null }
+export interface MeshOrderLine { frame: number; items: number; meshes: number; groups: number; unsorted: number; placements: MeshOrderPlacement[]; line: string }
+export interface MeshOrderItem { frame: number; index: number; key: number; at: [number, number] }
+export interface MeshOrderLog { occ: MeshOccLine[]; orders: MeshOrderLine[]; items: MeshOrderItem[]; filterPrev: string | null; interleaving: boolean }
+export interface OcclusionMeasure { expectedPx: number; magentaPx: number; coverage: number; box: [number, number, number, number] }
+export type OcclusionVerdict = "behind-occluded" | "front-unoccluded" | "not-occluded" | "occluded-in-front" | "no-cube" | "stale-shots" | "no-occ-lines" | "no-shots";
+export interface OcclusionJudgement { verdict: OcclusionVerdict; pass: boolean; coverage: number | null; expectedPx: number | null; magentaPx: number | null; shot: number | null; occ: MeshOccLine | null }
+export function parseMeshOrderLog(_text: string): MeshOrderLog { return { occ: [], orders: [], items: [], filterPrev: null, interleaving: false }; }
+export function measureOcclusion(_img: RgbaImageLike, _occ: MeshOccLine): OcclusionMeasure { return { expectedPx: 0, magentaPx: 0, coverage: 0, box: [0, 0, 0, 0] }; }
+export function judgeOcclusion(_shots: RgbaImageLike[], _occ: MeshOccLine[], _expect: "behind" | "front"): OcclusionJudgement { return { verdict: "no-shots", pass: false, coverage: null, expectedPx: null, magentaPx: null, shot: null, occ: null }; }

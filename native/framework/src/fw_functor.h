@@ -52,3 +52,22 @@ typedef void  (*FwFuncDoCallFn)(void *self);
 typedef void  (*FwFuncDeleteFn)(void *self, unsigned char dealloc);
 typedef void *(*FwFuncGetFn)(void *self);
 typedef const void *(*FwFuncTargetFn)(void *self);
+
+/* ---- M2: the camera's per-item filter, std::function<bool(Item* const&, int const&)> (Layer_Draw 0x9896f0, OBSERVED:
+ * before every item it loads the impl pointer at camera+OFF_CAM_LAYER_FILTER and, when set, calls slot 2
+ * `_Do_call(impl, &itemPointer, &camera[+0xa4] layer)` — both arguments by pointer (forwarded references), the bool in
+ * AL; false skips the item). We never own the camera's std::function: mesh_engine.c points the impl pointer at OUR impl
+ * object for the duration of one Camera_RenderOneLayer call and puts the previous pointer back; the previous impl (if
+ * any) is chained through fw_filter_call. _Copy/_Move/_Delete_this are filled like the void() functor's (never
+ * expected to run on this path). */
+typedef int (*FwFilterFn)(void *user, void **itemRef, int *layerRef);   /* nonzero = draw the item */
+typedef struct FwFilterImpl {
+    const void *const *vtbl;
+    FwFilterFn fn;
+    void *user;
+} FwFilterImpl;
+typedef unsigned char (*FwFuncFilterCallFn)(void *self, void **itemRef, int *layerRef);
+const void *const *fw_filter_vtable(void);
+void fw_filter_make(FwFilterImpl *impl, FwFilterFn fn, void *user);
+/* call any std::function<bool(Item* const&, int const&)> impl's _Do_call (ours or the game's); a NULL impl = draw (1) */
+int fw_filter_call(void *impl, void **itemRef, int *layerRef);

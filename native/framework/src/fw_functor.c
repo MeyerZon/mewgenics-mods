@@ -44,3 +44,8 @@ void fw_functor_make(FwStdFunction *f, FwFunctorFn fn, void *user) {
 }
 
 int fw_functor_unexpected_deallocs(void) { return g_unexpectedDeallocs; }
+
+/* ---- M2: the per-item filter (fw_functor.h) — red stubs */
+const void *const *fw_filter_vtable(void) { return NULL; }
+void fw_filter_make(FwFilterImpl *impl, FwFilterFn fn, void *user) { (void)impl; (void)fn; (void)user; }
+int fw_filter_call(void *impl, void **itemRef, int *layerRef) { (void)impl; (void)itemRef; (void)layerRef; return 0; }
