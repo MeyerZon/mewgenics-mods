@@ -3,14 +3,14 @@
 import React, { useRef } from "react";
 import { useStore } from "../store.ts";
 import { S } from "../state.ts";
-import { A, newScene } from "./art-state.ts";
+import { newScene, closeNewSceneModal } from "./art-state.ts";
 import { sx } from "./Bits.tsx";
 import { Modal, Button } from "../components/ui.tsx";
 
 export function NewSceneModal() {
   const mod = useStore(S, (s) => s.mod);
   const name = useRef("");
-  const close = () => A.set({ newSceneOpen: false });
+  const close = () => closeNewSceneModal();
   return (
     <Modal
       title="New art scene"

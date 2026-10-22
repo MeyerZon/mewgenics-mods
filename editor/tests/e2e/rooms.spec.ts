@@ -86,7 +86,7 @@ test.describe("Rooms mode — the Room editor", () => {
     await expect(cell(page, 5, 5)).toHaveAttribute("data-objects", String(spawnId));
     await expect(page.locator(".roomfindings")).toContainText("No findings");
 
-    await page.locator(".room-save").click();
+    await page.locator(".topbar .topbar-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/painted\.lvl/)).toBeVisible();
 
     // the bytes on disk, through the editor's own codec
@@ -117,7 +117,7 @@ test.describe("Rooms mode — the Room editor", () => {
     await expect(page.locator(".rcell")).toHaveCount(100);
     await expect(cell(page, 4, 4)).toHaveAttribute("data-tile", "random");
     await expect(cell(page, 2, 2)).toHaveAttribute("data-objects", "1,random");
-    await page.locator(".room-save").click();
+    await page.locator(".topbar .topbar-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/keep\.lvl/)).toBeVisible();
     expect(Buffer.from(readFileSync(join(MOD_DIR, "levels", "e2e", "keep.lvl"))).equals(Buffer.from(KEEP))).toBe(true);
 
@@ -130,7 +130,7 @@ test.describe("Rooms mode — the Room editor", () => {
     await page.getByLabel("tile choice 2").selectOption(String(MUD));
     await page.getByLabel("tile weight 2").fill("4");
     await expect(cell(page, 7, 7)).toHaveAttribute("data-tile", "random");
-    await page.locator(".room-save").click();
+    await page.locator(".topbar .topbar-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/keep\.lvl/)).toBeVisible();
     // the first save's toast may still be up: wait for the file itself
     await expect.poll(() => decodeLvl(readFileSync(join(MOD_DIR, "levels", "e2e", "keep.lvl"))).tiles[7 * 10 + 7]).toEqual([{ id: 0, weight: 1 }, { id: MUD, weight: 4 }]);
@@ -150,7 +150,7 @@ test.describe("Rooms mode — the Room editor", () => {
     await openRooms(page);
     await page.locator(".rooms-list .srow", { hasText: "e2e/vanilla_copy.lvl" }).click();
     await expect(page.locator(".rcell")).toHaveCount(100);
-    await page.locator(".room-save").click();
+    await page.locator(".topbar .topbar-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/vanilla_copy\.lvl/)).toBeVisible();
     expect(Buffer.from(readFileSync(join(MOD_DIR, "levels", "e2e", "vanilla_copy.lvl"))).equals(bytes)).toBe(true);
   });

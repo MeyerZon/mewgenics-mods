@@ -6,6 +6,7 @@
 import { createStore } from "../store.ts";
 import { S, toast } from "../state.ts";
 import { getJson, post, url } from "../api.ts";
+import { registerDirty, guard } from "../dirty.ts";
 import { paintTiles, placeObject, removeObjects, setObjectPick, objectsAt, firstId } from "../../../src/core/level/edit.ts";
 import type { LvlFile, LvlPick } from "../../../src/core/level/lvl.ts";
 import type { ArtResolution } from "../../../src/core/level/tile-art.ts";
@@ -108,6 +109,41 @@ export const R = createStore<RoomState>({
 
 export function isDirty(s: RoomState): boolean {
   return !!s.level && JSON.stringify(s.level) !== s.loadedJson;
+}
+
+// unsaved work (dirty.ts): asked on demand only (it stringifies the level)
+registerDirty("rooms", {
+  dirty: () => isDirty(R.get()),
+  label: () => `the room ${R.get().path}`,
+  save: () => saveLevel(),
+});
+
+/** A room row clicked: asks first when the open room has unsaved edits. */
+export async function pickLevel(relPath: string): Promise<void> {
+  if (relPath !== R.get().path && !(await guard(["rooms"], "Opening another room"))) return;
+  await openLevel(relPath);
+}
+
+/** The toolbar's Close: asks first when the room has unsaved edits. */
+export async function requestCloseLevel(): Promise<void> {
+  if (!(await guard(["rooms"], "Closing the room"))) return;
+  closeLevel();
+}
+
+export function setRoomTool(tool: RoomTool): void {
+  R.set({ tool });
+}
+export function setRoomView(view: RoomView): void {
+  R.set({ view });
+}
+export function setPaletteFilter(kind: "tile" | "object", value: string): void {
+  R.set(kind === "tile" ? { tileFilter: value } : { objectFilter: value });
+}
+export function openNewRoom(): void {
+  R.set({ newOpen: true });
+}
+export function closeNewRoom(): void {
+  R.set({ newOpen: false });
 }
 
 /** Mod switched (or Rooms mode entered): the level list and the palette for that mod; closes the open level. */
@@ -220,27 +256,30 @@ export function brushLabel(p: LvlPick): string {
 }
 export { firstId };
 
-export async function saveLevel(): Promise<void> {
+/** Write the open room (the top-bar Save / Ctrl+S in Rooms mode). True when written. */
+export async function saveLevel(): Promise<boolean> {
   const { level, path } = R.get();
   const mod = S.get().mod;
-  if (!level || !path || !mod) return;
+  if (!level || !path || !mod) return false;
   const r = await post<"/api/level", WriteLevelResult>("/api/level", { mod, path, level });
   if (!r.ok) {
-    toast(`write refused: ${r.error}`);
-    return;
+    toast(`write refused: ${r.error}`, { kind: "error" });
+    return false;
   }
   const findings = r.findings;
   let errors = 0, warnings = 0, infos = 0;
   for (const f of findings) { if (f.severity === "error") errors++; else if (f.severity === "warning") warnings++; else infos++; }
   R.set({ loadedJson: JSON.stringify(level), report: { ok: errors === 0, findings, counts: { errors, warnings, infos } } });
-  toast(`saved ${r.path} (${r.bytes} bytes)`);
+  toast(`saved ${r.path} (${r.bytes} bytes)`, { kind: "ok" });
   await refreshLevels(mod);
+  return true;
 }
 
 /** New room: new_from_template kind room (4 player spawns + 2 Rats) → levels/<folder>/<name>.lvl, then open it. */
 export async function newRoom(folder: string, name: string): Promise<string | null> {
   const mod = S.get().mod;
   if (!mod) return "open a mod first";
+  if (!(await guard(["rooms"], "Creating a new room"))) return null;
   const res = await post<"/api/template", TemplateResult>("/api/template", { mod, kind: "room", name, options: { folder: folder || "custom" } });
   if (!res.ok) return res.error;
   R.set({ newOpen: false });

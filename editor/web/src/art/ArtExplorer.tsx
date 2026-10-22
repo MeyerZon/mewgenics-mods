@@ -3,7 +3,7 @@
 import React from "react";
 import { useStore } from "../store.ts";
 import { S } from "../state.ts";
-import { A, openScene, inspectSwf } from "./art-state.ts";
+import { A, pickScene, inspectSwf, openNewSceneModal } from "./art-state.ts";
 import { sx } from "./Bits.tsx";
 
 export function ArtExplorer() {
@@ -17,7 +17,7 @@ export function ArtExplorer() {
       <div className="exhead">
         <span className="sec">Art scenes</span>
         {mod ? (
-          <button className="btn ghost sm" style={sx("color:var(--acc-ink)")} onClick={() => A.set({ newSceneOpen: true })}>
+          <button className="btn ghost sm" style={sx("color:var(--acc-ink)")} onClick={() => openNewSceneModal()}>
             + New scene
           </button>
         ) : null}
@@ -30,7 +30,7 @@ export function ArtExplorer() {
         <div className="exbody tw">
           {scenes.length ? (
             scenes.map((s) => (
-              <button key={s.relPath} className={"srow" + (scenePath === s.relPath ? " sel" : "")} title={s.relPath} onClick={() => openScene(s.relPath)}>
+              <button key={s.relPath} className={"srow" + (scenePath === s.relPath ? " sel" : "")} title={s.relPath} onClick={() => void pickScene(s.relPath)}>
                 <span className="fname" style={sx("flex:1")}>{s.name}</span>
                 <span className="count">{`${s.bytes} B`}</span>
               </button>

@@ -4,7 +4,7 @@
 import React, { useId } from "react";
 import { useStore } from "../store.ts";
 import { S, openArtTour } from "../state.ts";
-import { A, getScene, bump, scheduleValidate, saveScene, build, closeScene } from "./art-state.ts";
+import { A, getScene, bump, scheduleValidate, build, requestCloseScene, openNewSceneModal, setArtSubtab, setArtRightTab } from "./art-state.ts";
 import { sx, CommitInput } from "./Bits.tsx";
 import { DropZone } from "./DropZone.tsx";
 import { ShapesTab, SpritesTab, ExportsTab, JsonTab } from "./SceneTabs.tsx";
@@ -40,7 +40,7 @@ function ArtEmpty() {
           A scene is a JSON model of shapes (16-level grayscale, palette-remapped in game), sprites (timelines with frame labels) and exports (SymbolClass linkage names). The editor builds it into an uncompressed SWF v17 — the exact subset <span className="mono">glaiel::swf</span> reads — and previews it with the real <span className="mono">palette.png</span> rows.
         </p>
         <div className="grid2">
-          <button className="card plain" style={sx("text-align:left;cursor:pointer;color:var(--ink)")} onClick={() => A.set({ newSceneOpen: true })}>
+          <button className="card plain" style={sx("text-align:left;cursor:pointer;color:var(--ink)")} onClick={() => openNewSceneModal()}>
             <div style={sx("font-weight:700;margin-bottom:4px")}>+ New scene</div>
             <div style={sx("font-size:12.5px;color:var(--ink2)")}>Starts from a bobbing gray square with two frame labels.</div>
           </button>
@@ -64,12 +64,11 @@ function SceneTabBar() {
     <div className="edtabbar">
       <div className="filetab">
         <span className="mono" style={sx("font-size:12.5px")}>{scenePath.split("/").pop() || ""}</span>
-        <button className="x" aria-label="Close scene" onClick={() => closeScene()}>✕</button>
+        <button className="x" aria-label="Close scene" onClick={() => void requestCloseScene()}>✕</button>
       </div>
       <span className="pill append">scene → .swf</span>
       <div className="grow" />
       {saved ? <span className="dotok" style={sx("font-size:12px")}>● Saved</span> : <span className="muted" style={sx("font-size:12px")}>● Unsaved</span>}
-      <button className="btn ghost sm" onClick={() => saveScene()} disabled={!hasScene}>Save scene</button>
       <button className="btn primary sm" onClick={() => build(false)} disabled={!hasScene} title="Emit swfs/<name>.swf and swflist.gon.append">Build SWF</button>
     </div>
   );
@@ -98,7 +97,7 @@ function ScenePanel() {
   const e = findings.filter((f) => f.severity === "error").length;
   const w = findings.filter((f) => f.severity === "warning").length;
   const mk = (id: ArtSubtab, text: string) => (
-    <button className={"btn sm ghost" + (subtab === id ? " on" : "")} onClick={() => A.set({ subtab: id })}>{text}</button>
+    <button className={"btn sm ghost" + (subtab === id ? " on" : "")} onClick={() => setArtSubtab(id)}>{text}</button>
   );
   let tab: React.ReactNode;
   if (subtab === "shapes") tab = <ShapesTab />;
@@ -116,9 +115,9 @@ function ScenePanel() {
           <h2>{sc.name}</h2>
           <span className="meta">{`${sc.frameRate || 60} fps · stage ${sc.stage ? sc.stage.width + "×" + sc.stage.height : "?"} · ${Object.keys(sc.shapes || {}).length} shapes · ${Object.keys(sc.sprites || {}).length} sprites · ${Object.keys(sc.exports || {}).length} exports`}</span>
           <div className="grow" />
-          <span className={`pill ${e ? "err" : w ? "warn" : "ok"}`} style={sx("cursor:pointer")} onClick={() => A.set({ rightTab: "findings" })}>
+          <button type="button" className={`pill ${e ? "err" : w ? "warn" : "ok"}`} title="Show the findings" onClick={() => setArtRightTab("findings")}>
             {`● ${e} error${e === 1 ? "" : "s"} · ${w} warning${w === 1 ? "" : "s"}`}
-          </span>
+          </button>
         </div>
         <div className="subtabs">{mk("overview", "Overview")}{mk("shapes", "Shapes")}{mk("sprites", "Sprites")}{mk("timeline", "Timeline")}{mk("rig", "Rig")}{mk("vectorcraft", "VectorCraft")}{mk("exports", "Exports")}{mk("json", "JSON")}</div>
         {tab}

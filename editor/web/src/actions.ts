@@ -1,12 +1,16 @@
 // Data-mode actions (were the module-level functions of app.mjs): plain functions that talk
 // to the /api bridge and write into the app store. Components call these; nothing here
-// renders. Art-mode actions live in ./art/art-state.ts.
+// renders. Art-mode actions live in ./art/art-state.ts, Rooms-mode ones in ./rooms/room-state.ts.
+// The shell's mode-aware commands (saveCurrent / validateCurrent / openFindings), the editor status
+// (GET /api/status) and the deep link (?mode=&mod=&file=) live here too.
 
 import { S, tpl, lsGet, lsSet, onboarding, toast, type OpenMenu, type Tab } from "./state.ts";
 import { getJson, post, url } from "./api.ts";
 import { editorCtl } from "./components/Editor.tsx";
-import { loadArtForMod } from "./art/art-state.ts";
-import { loadRoomsForMod, openLevel } from "./rooms/room-state.ts";
+import { loadArtForMod, refreshArtListings, saveScene, runValidate as runArtValidate, setArtRightTab } from "./art/art-state.ts";
+import { R, loadRoomsForMod, refreshLevels, openLevel, saveLevel, runValidate as runRoomValidate } from "./rooms/room-state.ts";
+import { registerDirty, guard, isDirty, ALL_SCOPES, type DirtyScope } from "./dirty.ts";
+import { readDeepLink, writeDeepLink, type Mode } from "./deeplink.ts";
 import type {
   ListModsResult,
   ListBaseResult,
@@ -23,7 +27,10 @@ import type {
   FileType,
   TemplateKindName,
   TemplateResult,
+  EditorStatus,
 } from "./types.ts";
+
+export type { Mode } from "./deeplink.ts";
 
 // ---- live validation / preview (debounced) ----------------------------------------------
 let liveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -40,11 +47,12 @@ export async function runLive(): Promise<void> {
 }
 
 // ---- actions ------------------------------------------------------------------------------
-export async function loadMods(): Promise<void> {
+/** List the mods; with none open, open `prefer` (a deep link's ?mod=) when it exists, else the first. */
+export async function loadMods(prefer = ""): Promise<void> {
   const r = await getJson<ListModsResult>("/api/mods");
   const mods = r.mods || [];
   S.set({ mods });
-  if (!S.get().mod && mods.length) await selectMod(mods[0]!);
+  if (!S.get().mod && mods.length) await selectMod(prefer && mods.includes(prefer) ? prefer : mods[0]!);
 }
 export async function loadBaseCats(): Promise<void> {
   const r = await getJson<ListBaseResult>("/api/base");
@@ -59,20 +67,39 @@ export async function loadCompTotal(): Promise<void> {
     /* non-fatal */
   }
 }
+/** Open a mod (closes its open file, scene and room; callers that come from the user guard first: pickMod). */
 export async function selectMod(name: string): Promise<void> {
   S.set({ mod: name, file: "", report: null, preview: null });
-  const r = await getJson<ReadModResult>(url("/api/mod", { mod: name }));
-  const files = r.ok ? r.files : [];
-  S.set({ files: files.filter((f) => f.relPath !== "description.json" && f.relPath !== "mod.json") });
+  void loadStatus();
+  await refreshModFiles(name);
   await loadArtForMod(name);
   await loadRoomsForMod(name);
+}
+/** Re-read the mod's file list only (after a save): the open file, scene, room, report and preview stay. */
+export async function refreshModFiles(name: string = S.get().mod): Promise<void> {
+  if (!name) return;
+  const r = await getJson<ReadModResult>(url("/api/mod", { mod: name }));
+  const files = r.ok ? r.files : [];
+  if (S.get().mod === name) S.set({ files: files.filter((f) => f.relPath !== "description.json" && f.relPath !== "mod.json") });
+}
+/** The mod menu: asks first when anything (overlay, scene, VectorCraft drawing, room) is unsaved. */
+export async function pickMod(name: string): Promise<void> {
+  closeMenu();
+  if (!(await guard(ALL_SCOPES, "Switching mods"))) return;
+  await selectMod(name);
 }
 export async function openFile(relPath: string): Promise<void> {
   // a level file is binary: it opens in the Room editor, not the text editor
   if (/.lvl$/i.test(relPath)) {
+    if (relPath !== R.get().path && !(await guard(["rooms"], "Opening another room"))) return;
     enterRoomMode();
     await openLevel(relPath);
     return;
+  }
+  const s = S.get();
+  if (s.file && !s.saved) {
+    if (relPath === s.file) return; // already open with unsaved edits: keep them (a re-read would drop them)
+    if (!(await guard(["data"], "Opening another file"))) return;
   }
   S.set({ file: relPath });
   const r = await getJson<ReadFileResult>(url("/api/mod-file", { mod: S.get().mod, path: relPath }));
@@ -82,21 +109,102 @@ export async function openFile(relPath: string): Promise<void> {
   editorCtl.repaintNow();
   await runLive();
 }
-export function closeFile(): void {
-  S.set({ file: "", report: null, preview: null });
+export async function closeFile(): Promise<void> {
+  if (!(await guard(["data"], "Closing the file"))) return;
+  S.set({ file: "", report: null, preview: null, saved: true });
 }
-export async function save(): Promise<void> {
+/** Write the open overlay (the top-bar Save / Ctrl+S in Data mode). True when written. */
+export async function save(): Promise<boolean> {
   const { mod, file } = S.get();
-  if (!mod || !file) return;
+  if (!mod || !file) return false;
   const r = await post<"/api/write", WriteResult>("/api/write", { mod, path: file, content: editorCtl.getValue() });
   if (r.ok) {
     S.set({ saved: true });
     toast(`saved ${r.path} (${r.bytes} bytes)`, { kind: "ok", ms: 4000 });
-    await selectMod(mod);
+    // only the file list: re-opening the mod would close the open scene and room (and drop their unsaved edits)
+    await refreshModFiles(mod);
     S.set({ file: r.path.split("/").slice(2).join("/") });
-  } else {
-    toast(`write refused: ${r.error}`, { kind: "error", ms: 4000 });
+    return true;
   }
+  toast(`write refused: ${r.error}`, { kind: "error", ms: 4000 });
+  return false;
+}
+
+// unsaved work (dirty.ts): the open overlay
+registerDirty("data", {
+  dirty: () => !S.get().saved && !!S.get().file,
+  label: () => `the overlay ${S.get().file}`,
+  save: () => save(),
+});
+
+// ---- the shell's mode-aware commands (TopBar Validate / Save, Ctrl+S, the status pill) ----------
+export function currentMode(): Mode {
+  const s = S.get();
+  return s.roomMode ? "rooms" : s.artMode ? "art" : "data";
+}
+/** The dirty scopes each mode owns (the mode switch's dot, the Save button's dot). */
+export const MODE_SCOPES: Record<Mode, DirtyScope[]> = { data: ["data"], art: ["art", "vc"], rooms: ["rooms"] };
+/** Whether a mode holds unsaved work. */
+export function modeDirty(m: Mode): boolean {
+  return isDirty(MODE_SCOPES[m]);
+}
+/** Save what the current mode has open: the overlay, the scene or the room. True when written. */
+export async function saveCurrent(): Promise<boolean> {
+  const m = currentMode();
+  if (m === "art") return saveScene();
+  if (m === "rooms") return saveLevel();
+  return save();
+}
+/** Validate what the current mode has open, now (no debounce). */
+export async function validateCurrent(): Promise<void> {
+  const m = currentMode();
+  if (m === "art") return runArtValidate();
+  if (m === "rooms") return runRoomValidate();
+  if (liveTimer) clearTimeout(liveTimer);
+  return runLive();
+}
+/** The status pill: show the current mode's findings (Rooms lists them in its right panel already). */
+export function openFindings(): void {
+  const m = currentMode();
+  if (m === "art") setArtRightTab("findings");
+  else if (m === "data") setTab("validation");
+}
+
+// ---- editor status (GET /api/status) --------------------------------------------------------------
+/** Refresh S.status; a failed fetch marks the server unreachable (no toast: this runs on every window focus). */
+export async function loadStatus(): Promise<void> {
+  try {
+    const r = await fetch(url("/api/status", { mod: S.get().mod }));
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    S.set({ status: (await r.json()) as EditorStatus, serverOk: true });
+  } catch {
+    S.set({ serverOk: false });
+  }
+}
+
+/** The Launch… popover's command line (run from the repo root). */
+export function launchCommand(mod: string): string {
+  return mod ? `launch-dev.bat mods\\${mod}` : "launch-dev.bat";
+}
+/** Copy the launch command (Clipboard API; falls back to selecting `input` + execCommand). */
+export async function copyLaunchCommand(text: string, input: HTMLInputElement | null): Promise<void> {
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    ok = true;
+  } catch {
+    if (input) {
+      input.focus();
+      input.select();
+      try {
+        ok = document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
+    }
+  }
+  if (ok) toast(`copied: ${text}`, { kind: "ok", ms: 4000 });
+  else toast("could not copy — select the command and copy it by hand", { kind: "error" });
 }
 export async function selectCategory(category: string): Promise<void> {
   S.set({ baseCategory: category });
@@ -167,6 +275,11 @@ export function fileTypeLabel(ft: string): string {
 export function setTab(tab: Tab): void {
   S.set({ tab });
 }
+/** Data mode's components tab, or (no mod open) the components drawer. */
+export function openComponents(): void {
+  if (S.get().mod) S.set({ tab: "components" });
+  else S.set({ compDrawer: true });
+}
 export function toggleMenu(menu: OpenMenu): void {
   S.set({ openMenu: S.get().openMenu === menu ? "" : menu });
 }
@@ -229,6 +342,10 @@ export function artExampleGoto(go: () => void): void {
 export function openConcepts(): void {
   S.set({ openMenu: "", conceptsOpen: true });
 }
+/** Help ▸ Rooms concepts. A placeholder until the Rooms tour lands (UX PR 6 replaces this body). */
+export function openRoomTour(): void {
+  openConcepts();
+}
 
 export interface TemplatePrefill {
   mod?: string;
@@ -267,8 +384,26 @@ export async function scaffold(): Promise<void> {
   if (res && res.ok) {
     toast(`scaffolded ${t.name} in mods/${t.mod}`, { kind: "ok", ms: 4000 });
     await loadMods();
-    await selectMod(t.mod);
+    if (t.mod === S.get().mod) {
+      // the open mod: re-list its files, scenes and rooms; whatever is open (and unsaved) stays open
+      await refreshModFiles(t.mod);
+      await refreshArtListings(t.mod);
+      await refreshLevels(t.mod);
+    } else if (await guard(ALL_SCOPES, `Opening mods/${t.mod}`)) await selectMod(t.mod);
   }
+}
+
+/** Keep ?mode=&mod=&file= in the address bar in step with the store (replaceState: no history entry, no reload). */
+function syncDeepLink(): void {
+  if (typeof location === "undefined" || typeof history === "undefined") return;
+  let last = location.search;
+  S.subscribe(() => {
+    const s = S.get();
+    const next = writeDeepLink(location.search, { mode: currentMode(), mod: s.mod, file: s.file });
+    if (next === last) return;
+    last = next;
+    history.replaceState(history.state, "", `${location.pathname}${next}${location.hash}`);
+  });
 }
 
 /** App startup (was the tail of app.mjs after mounting). */
@@ -278,23 +413,28 @@ export function startup(): void {
   if (started) return;
   started = true;
   editorCtl.repaintNow();
-  void loadMods();
+  // Deep link: ?mode=data|art|rooms&mod=<name>&file=<relPath> (deeplink.ts)
+  const link = readDeepLink(typeof location !== "undefined" ? location.search : "");
+  void loadMods(link.mod).then(() => {
+    if (link.file && link.mod && S.get().mod === link.mod && !S.get().file) return openFile(link.file);
+  });
   void loadBaseCats();
   void loadCompTotal();
   // First-run guided tour (shows once unless dismissed with "don't show again").
   if (lsGet("mewged.onboard.tourDontShow") !== "1" && lsGet("mewged.onboard.tourSeen") !== "1") {
     S.set({ tourOpen: true });
   }
-  // Deep link: http://127.0.0.1:4173/?mode=art opens straight into Art mode (skips the tours,
-  // e.g. for demos/screenshots). Both onboarding tours stay reachable from the Help (?) menu.
-  if (typeof location !== "undefined" && new URLSearchParams(location.search).get("mode") === "art") {
+  // ?mode=art opens straight into Art mode (skips the tours, e.g. for demos/screenshots). Both onboarding tours
+  // stay reachable from the Help (?) menu.
+  if (link.mode === "art") {
     S.set({ artMode: true, tourOpen: false });
     onboarding.artTourTriggered = true; // don't auto-pop the art tour over a deep-linked session
   }
   // ?mode=rooms opens straight into the Room editor (no tour over it)
-  if (typeof location !== "undefined" && new URLSearchParams(location.search).get("mode") === "rooms") {
+  if (link.mode === "rooms") {
     S.set({ roomMode: true, tourOpen: false });
   }
+  syncDeepLink();
 }
 
 // ---- shipping a mod: Export… / Import mod… (docs/data-mods.md "Shipping a mod") ----------
@@ -349,6 +489,6 @@ export async function importModFile(file: File): Promise<void> {
   if (r.ok) {
     toast(`installed ${r.name} ${r.version} into mods/${r.name}${r.notes.length ? ` — ${r.notes.join("; ")}` : ""}`, { kind: "ok", ms: 8000 });
     await loadMods();
-    await selectMod(r.name);
+    if (await guard(ALL_SCOPES, `Opening mods/${r.name}`)) await selectMod(r.name);
   } else if (r.verdict === "refused") toast(`import refused (${r.code}): ${r.reason}`, { kind: "error", ms: 8000 });
 }

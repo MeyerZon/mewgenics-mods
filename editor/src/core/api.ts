@@ -5,7 +5,7 @@ import * as baseData from "./base-data.ts";
 import * as components from "./components.ts";
 import { loadComponentSchema, describeComponent } from "./component-schema.ts";
 import * as modio from "./mod-io.ts";
-import { validateMod } from "./validate/validator.ts";
+import { validateMod, installedNativeBuild } from "./validate/validator.ts";
 import { previewMerge } from "./preview-merge.ts";
 import { newFromTemplate as scaffold } from "./templates.ts";
 import { loadRegisteredNames } from "./names.ts";
@@ -30,8 +30,9 @@ import { checkInstalledBuild } from "./bindings/check.ts";
 import { portManifest, renderPortReport } from "./bindings/port.ts";
 import { loadManifest, saveManifest, listManifests, BINDINGS_DIR } from "./bindings/manifest.ts";
 import { parsePe, PeError } from "./bindings/pe.ts";
-import { locateGameDir } from "./ingame/launch.ts";
-import { isInside, touchesSaves, SafetyError, MODS_DIR, DATA_CACHE_DIR } from "./repo.ts";
+import { locateGameDir, NATIVE_DIST_DIR, FRAMEWORK_DLL_NAME, MEWTEST_DLL_NAME } from "./ingame/launch.ts";
+import { readModManifest, compareBuild, MOD_NAME_RE, type BuildComparison } from "./mod-manifest.ts";
+import { isInside, touchesSaves, SafetyError, MODS_DIR, DATA_CACHE_DIR, vanillaSwfDir as swfDir } from "./repo.ts";
 import { sceneLocLookup } from "./art/scene-loc.ts";
 import { loadAudioIndex, audioCategoryEntries, AUDIO_CATEGORIES } from "./audio/sound-sets.ts";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
@@ -134,6 +135,65 @@ export function validate(modName: string, override?: TextOverride, opts: { modpa
 
 export function preview(modName: string, relPath: string, opts?: PreviewMergeOptions) {
   return previewMerge(modName, relPath, opts);
+}
+
+export interface EditorStatus {
+  gameDir: string;
+  exeFound: boolean;
+  /** the installed exe is a build bindings/*.json knows */
+  known: boolean;
+  /** its Steam build id (null: no exe, or an unknown build) */
+  gameBuild: string | null;
+  timeDateStamp: string | null;
+  knownBuilds: string[];
+  extracted: boolean;
+  extractedSwfs: boolean;
+  frameworkDll: boolean;
+  mewtestDll: boolean;
+  /** Mewjector (version.dll) in the game folder */
+  mewjector: boolean;
+  saveSuffix: string;
+  modsDir: string;
+  /** with ?mod=: the build its mod.json was tested on, compared with the installed one */
+  mod?: { name: string; gameBuild: string | null; compare: BuildComparison | null };
+}
+
+/**
+ * What the status bar shows: the installed game's identity (PE headers only, memoized: the validator's
+ * installedNativeBuild, never the full-exe hash of checkGameBuild), what is extracted / built, and the save suffix
+ * modded play uses. Read-only: every check is an existsSync (plus the mod's mod.json when `mod` is given).
+ */
+export function editorStatus(opts: { mod?: string } = {}): EditorStatus {
+  const gameDir = locateGameDir(process.env);
+  const nb = installedNativeBuild(process.env);
+  let knownBuilds: string[] = [];
+  try {
+    knownBuilds = listManifests().map((m) => m.manifest.build.steamBuildId);
+  } catch {
+    /* no bindings dir: none known */
+  }
+  const out: EditorStatus = {
+    gameDir,
+    exeFound: nb !== null,
+    known: !!nb?.known,
+    gameBuild: nb?.matched?.steamBuildId ?? null,
+    timeDateStamp: nb?.identity?.timeDateStamp ?? null,
+    knownBuilds,
+    extracted: baseData.hasBaseData(),
+    extractedSwfs: existsSync(swfDir()),
+    frameworkDll: existsSync(join(NATIVE_DIST_DIR, FRAMEWORK_DLL_NAME)),
+    mewtestDll: existsSync(join(NATIVE_DIST_DIR, MEWTEST_DLL_NAME)),
+    mewjector: existsSync(join(gameDir, "version.dll")),
+    saveSuffix: ingame.DEFAULT_SAVESUFFIX,
+    modsDir: MODS_DIR,
+  };
+  const name = opts.mod || "";
+  if (name && MOD_NAME_RE.test(name)) {
+    const man = readModManifest(join(MODS_DIR, name), name);
+    const gameBuild = man.present && man.ok ? man.manifest.gameBuild : null;
+    out.mod = { name, gameBuild, compare: gameBuild ? compareBuild(gameBuild, nb) : null };
+  }
+  return out;
 }
 
 export function listRegisteredNativeNames() {

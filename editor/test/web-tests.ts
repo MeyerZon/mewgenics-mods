@@ -330,6 +330,79 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     eq(e.status, 0);
   });
 
+  // ---- PR 2: the dirty registry + guard (web/src/dirty.ts) and the deep-link codec (web/src/deeplink.ts) ----------
+  const dy = await load("../web/src/dirty.ts");
+  test("web/src/dirty.ts loads", () => assert(!dy.__error, dy.__error ?? ""));
+  {
+    let artDirty = false;
+    let roomsDirty = false;
+    let saved = 0;
+    if (!dy.__error) {
+      dy.registerDirty("art", { dirty: () => artDirty, label: () => "scene art/x.scene.json", save: async () => { saved++; artDirty = false; return true; } });
+      dy.registerDirty("rooms", { dirty: () => roomsDirty, label: () => "room levels/a.lvl" });
+    }
+    test("dirty: isDirty / dirtyLabel read only the registered providers of the scopes asked (all when none given)", () => {
+      eq(dy.isDirty(), false, "nothing dirty");
+      artDirty = true;
+      eq(dy.isDirty(), true);
+      eq(dy.isDirty(["rooms"]), false, "rooms only");
+      eq(dy.isDirty(["art", "rooms"]), true);
+      roomsDirty = true;
+      eq(dy.dirtyLabel(), "scene art/x.scene.json, room levels/a.lvl");
+      eq(dy.dirtyLabel(["rooms"]), "room levels/a.lvl");
+      artDirty = false;
+      roomsDirty = false;
+    });
+    const outcomes: Record<string, unknown> = {};
+    if (!dy.__error) {
+      outcomes.clean = await dy.guard(["art"], "Switching mods");
+      artDirty = true;
+      const p1 = dy.guard(["art"], "Switching mods");
+      outcomes.confirm = st.S.get().confirm;
+      dy.resolveConfirm("cancel");
+      outcomes.cancel = await p1;
+      outcomes.afterCancel = st.S.get().confirm;
+      const p2 = dy.guard(["art"], "Switching mods");
+      dy.resolveConfirm("discard");
+      outcomes.discard = await p2;
+      outcomes.savedAfterDiscard = saved;
+      const p3 = dy.guard(["art"], "Switching mods");
+      dy.resolveConfirm("save");
+      outcomes.save = await p3;
+      outcomes.savedAfterSave = saved;
+      roomsDirty = true;
+      const p4 = dy.guard(["rooms"], "Closing the room");
+      outcomes.noSaver = (st.S.get().confirm as { canSave?: boolean } | null)?.canSave;
+      dy.resolveConfirm("cancel");
+      await p4;
+      roomsDirty = false;
+      artDirty = false;
+    }
+    test("dirty: guard() proceeds at once when clean; when dirty it opens S.confirm {title, body, canSave} and resolves with the choice", () => {
+      eq(outcomes.clean, true, "clean → proceed, no dialog");
+      const c = outcomes.confirm as { title: string; body: string; canSave: boolean } | null;
+      assert(!!c && typeof c.title === "string" && /scene art\/x\.scene\.json/.test(c.body) && /Switching mods/.test(c.body), JSON.stringify(c));
+      eq(c?.canSave, true, "every dirty scope has a save → canSave");
+      eq(outcomes.cancel, false, "cancel → stay");
+      eq(outcomes.afterCancel, null, "the dialog closes");
+      eq(outcomes.discard, true, "discard → proceed");
+      eq(outcomes.savedAfterDiscard, 0, "discard does not save");
+      eq(outcomes.save, true, "save and continue → proceed after the save");
+      eq(outcomes.savedAfterSave, 1, "save and continue saved once");
+      eq(outcomes.noSaver, false, "a scope without save → no Save and continue");
+    });
+  }
+  const dl = await load("../web/src/deeplink.ts");
+  test("web/src/deeplink.ts loads", () => assert(!dl.__error, dl.__error ?? ""));
+  test("deeplink: readDeepLink parses ?mode=&mod=&file= (unknown mode → null); writeDeepLink keeps other params and drops empty ones", () => {
+    eq(JSON.stringify(dl.readDeepLink("?mode=art&mod=dev-sandbox&file=data/a.gon.append")), '{"mode":"art","mod":"dev-sandbox","file":"data/a.gon.append"}');
+    eq(JSON.stringify(dl.readDeepLink("")), '{"mode":null,"mod":"","file":""}');
+    eq(dl.readDeepLink("?mode=bogus").mode, null);
+    eq(dl.writeDeepLink("?x=1", { mode: "rooms", mod: "m", file: "" }), "?x=1&mode=rooms&mod=m");
+    eq(dl.writeDeepLink("?mode=art&file=old", { mode: "data", mod: "m", file: "a/b c.gon" }), "?mode=data&file=a%2Fb+c.gon&mod=m");
+    eq(dl.writeDeepLink("", { mode: "data", mod: "", file: "" }), "?mode=data");
+  });
+
   // PaneBoundary lives in a JSX-free module so Node can load it (ui.tsx re-exports it). React's server renderer does
   // not run error boundaries, so this covers the two halves the boundary is made of: the static
   // getDerivedStateFromError (error → state) and render() for both states, rendered to HTML; reset() clears it.
@@ -408,6 +481,26 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
           assert(b.status >= 400 && b.status < 500 && /application\/json/.test(b.type), JSON.stringify(b));
           assert(/"ok":false/.test(b.body), b.body);
         }
+      });
+    }
+    {
+      let s: { status: number; body: string; json: any } = { status: 0, body: "", json: null };
+      try {
+        const r = await fetch(`${base}/api/status?mod=jokers-luck`, { headers: { Connection: "close" } });
+        s = { status: r.status, body: await r.text(), json: null };
+        try { s.json = JSON.parse(s.body); } catch { /* asserted below */ }
+      } catch (e) { s.body = String(e); }
+      test("server: GET /api/status answers 200 with the editor status (booleans, saveSuffix dev, known builds) — with or without a game installed", () => {
+        eq(s.status, 200, s.body.slice(0, 200));
+        const j = s.json;
+        assert(!!j, "json");
+        for (const k of ["exeFound", "known", "extracted", "extractedSwfs", "frameworkDll", "mewtestDll", "mewjector"]) eq(typeof j[k], "boolean", k);
+        eq(j.saveSuffix, "dev");
+        eq(typeof j.gameDir, "string", "gameDir");
+        eq(typeof j.modsDir, "string", "modsDir");
+        assert(Array.isArray(j.knownBuilds) && j.knownBuilds.includes("25143593"), JSON.stringify(j.knownBuilds));
+        assert(j.gameBuild === null || typeof j.gameBuild === "string", "gameBuild");
+        assert(j.mod && typeof j.mod.compare === "object" && ["match", "mismatch", "unknown"].includes(j.mod.compare.status), JSON.stringify(j.mod));
       });
     }
     const dist = join(EDITOR, "web", "dist", "index.html");

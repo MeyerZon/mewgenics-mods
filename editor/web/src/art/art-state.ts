@@ -9,6 +9,7 @@
 import { createStore } from "../store.ts";
 import { S, toast } from "../state.ts";
 import { getJson, post, url } from "../api.ts";
+import { registerDirty, guard } from "../dirty.ts";
 import { createPreview, type Preview, type PreviewView } from "./preview-gl.ts";
 import { BUILTIN_GHOST_PARTS, ghostCatsIn, ghostBounds } from "../../../src/core/art/ghost-cat.ts";
 import type { GhostParts } from "../../../src/core/art/ghost-cat.ts";
@@ -74,6 +75,8 @@ export interface ArtState {
   // VectorCraft tab: the shape it targets and a counter bumped by every "Open in VectorCraft" request
   vcShape: string;
   vcRequest: number;
+  /** the VectorCraft document has edits not yet applied to the shape (VectorcraftPanel's dirty poll) */
+  vcDirty: boolean;
   // ghost cat (preview-only placeholders in a parts: "game" rig's empty slots): on/off is a per-viewer convenience
   ghostCat: boolean;
   ghostSource: GhostParts["source"];
@@ -119,6 +122,7 @@ export const A = createStore<ArtState>({
   dropOver: false,
   vcShape: "",
   vcRequest: 0,
+  vcDirty: false,
   ghostCat: readGhostPref(),
   ghostSource: "builtin",
 });
@@ -158,6 +162,21 @@ export function setArtSubtab(tab: string): void {
 export function setArtRightTab(tab: string): void {
   A.set({ rightTab: tab as ArtRightTab });
 }
+/** VectorcraftPanel reports whether its document holds edits not yet applied. */
+export function setVcDirty(v: boolean): void {
+  if (A.get().vcDirty !== v) A.set({ vcDirty: v });
+}
+
+// ---- unsaved work (dirty.ts): the open scene, and a VectorCraft drawing not applied yet ----------------
+registerDirty("art", {
+  dirty: () => !A.get().saved && !!A.get().scenePath,
+  label: () => `the scene ${A.get().scenePath}`,
+  save: () => saveScene(),
+});
+registerDirty("vc", {
+  dirty: () => A.get().vcDirty && !!A.get().scenePath,
+  label: () => "the VectorCraft drawing (not applied to its shape)",
+});
 
 /** Window-resize → re-fit the preview, rAF-batched and only while the preview canvas is on-screen. */
 export function initArtUi(): void {
@@ -177,20 +196,16 @@ export function initArtUi(): void {
 }
 
 // ---- data loading -------------------------------------------------------------------
+/** Mod switched: closes the open scene, then lists the mod's scenes / SWFs / assets (and loads the palette once). */
 export async function loadArtForMod(modName: string): Promise<void> {
-  A.set({ scenePath: "", findings: [], buildResult: null, inspect: null });
+  A.set({ scenePath: "", findings: [], buildResult: null, inspect: null, vcDirty: false });
   scene = null;
   if (!modName) {
     A.set({ scenes: [], swfs: [] });
     bump();
     return;
   }
-  const r = await getJson<ArtScenesResponse>(url("/api/art/scenes", { mod: modName }));
-  A.set({
-    scenes: r.scenes || [],
-    swfs: r.swfs || [],
-    assets: { svgs: r.svgs || [], pngs: r.pngs || [], swflistAppend: r.swflistAppend || null },
-  });
+  await refreshArtListings(modName);
   if (!A.get().palette) {
     try {
       const pal = await getJson<PaletteResponse>("/api/art/palette");
@@ -217,9 +232,32 @@ export async function loadArtForMod(modName: string): Promise<void> {
   bump();
 }
 
+/** Re-list the mod's scenes, built SWFs and assets; the open scene stays open. */
+export async function refreshArtListings(modName: string = mod()): Promise<void> {
+  if (!modName) return;
+  const r = await getJson<ArtScenesResponse>(url("/api/art/scenes", { mod: modName }));
+  A.set({
+    scenes: r.scenes || [],
+    swfs: r.swfs || [],
+    assets: { svgs: r.svgs || [], pngs: r.pngs || [], swflistAppend: r.swflistAppend || null },
+  });
+}
+
+/** A scene row clicked: asks first when the open scene (or its VectorCraft drawing) has unsaved work. */
+export async function pickScene(relPath: string): Promise<void> {
+  if (relPath !== A.get().scenePath && !(await guard(["art", "vc"], "Opening another scene"))) return;
+  await openScene(relPath);
+}
+
+/** The scene tab's ✕: asks first when it has unsaved work. */
+export async function requestCloseScene(): Promise<void> {
+  if (!(await guard(["art", "vc"], "Closing the scene"))) return;
+  closeScene();
+}
+
 export async function openScene(relPath: string): Promise<void> {
   const r = await getJson<SceneReadResponse>(url("/api/art/scene", { mod: mod(), path: relPath }));
-  A.set({ scenePath: relPath, findings: r.findings || [], buildResult: null });
+  A.set({ scenePath: relPath, findings: r.findings || [], buildResult: null, vcDirty: false });
   if (r.scene) {
     scene = r.scene;
   } else {
@@ -238,7 +276,7 @@ export async function openScene(relPath: string): Promise<void> {
 }
 
 export function closeScene(): void {
-  A.set({ scenePath: "" });
+  A.set({ scenePath: "", vcDirty: false });
   scene = null;
   bump();
 }
@@ -257,7 +295,9 @@ export function scheduleValidate(): void {
   if (liveTimer) clearTimeout(liveTimer);
   liveTimer = setTimeout(runValidate, 300);
 }
-async function runValidate(): Promise<void> {
+/** Validate the open scene now (the top-bar Validate in Art mode; the debounced scheduleValidate lands here). */
+export async function runValidate(): Promise<void> {
+  if (liveTimer) clearTimeout(liveTimer);
   if (!scene) return;
   const r = await post<"/api/art/validate", SceneValidateResponse>("/api/art/validate", { scene: sceneBody(scene), mod: mod() });
   A.set({ findings: r.findings || [] });
@@ -265,21 +305,30 @@ async function runValidate(): Promise<void> {
   bump();
 }
 
-export async function saveScene(): Promise<void> {
-  if (!scene || !A.get().scenePath) return;
+/** Write the open scene (the top-bar Save / Ctrl+S in Art mode). True when written. */
+export async function saveScene(): Promise<boolean> {
+  if (!scene || !A.get().scenePath) return false;
   const r = await post<"/api/art/scene", SceneWriteResponse>("/api/art/scene", { mod: mod(), path: A.get().scenePath, scene: sceneBody(scene), force: true });
   if (r.ok) {
     A.set({ saved: true });
-    toast(`saved ${r.path} (${r.bytes} bytes${r.valid ? "" : " — has errors"})`);
+    toast(`saved ${r.path} (${r.bytes} bytes${r.valid ? "" : " — has errors"})`, { kind: "ok" });
     A.set({ findings: r.findings || A.get().findings });
-  } else toast(`save refused: ${r.error}`);
+    return true;
+  }
+  toast(`save refused: ${r.error}`, { kind: "error" });
+  return false;
+}
+
+export function closeNewSceneModal(): void {
+  A.set({ newSceneOpen: false });
 }
 
 export async function newScene(name: string): Promise<void> {
+  if (!(await guard(["art", "vc"], "Creating a new scene"))) return;
   const r = await post<"/api/art/new-scene", NewSceneResponse>("/api/art/new-scene", { mod: mod(), name, starter: true });
   if (!r.ok) return toast(`could not create scene: ${r.error}`);
   A.set({ newSceneOpen: false });
-  await loadArtForMod(mod());
+  await refreshArtListings();
   await openScene(r.relPath);
   toast(`created ${r.path}`);
 }
@@ -290,7 +339,7 @@ export async function build(dryRun = false): Promise<void> {
   A.set({ buildResult: r, rightTab: "build" });
   if (r.ok) {
     toast(dryRun ? `dry run ok: ${r.bytes} bytes` : `built ${r.swfPath} (${r.bytes} bytes, DoABC: ${r.abc})`);
-    if (!dryRun) await loadArtForMod(mod());
+    if (!dryRun) await refreshArtListings(); // the scene stays open (an unsaved edit survives a build)
   } else toast(`build failed: ${r.error}`);
 }
 
@@ -405,7 +454,7 @@ export function openShapeInVectorcraft(id: string): void {
   A.set((a) => ({ subtab: "vectorcraft", vcShape: id, vcRequest: a.vcRequest + 1 }));
 }
 
-/** VectorCraft's exported SVG replaces shape `id` in place after the artboard re-origin is undone (in memory; Save scene writes it). */
+/** VectorCraft's exported SVG replaces shape `id` in place after the artboard re-origin is undone (in memory; the top-bar Save writes it). */
 export async function applyVectorcraftSvg(id: string, exportedSvg: string, originalViewBox: number[]): Promise<void> {
   const sc = scene;
   if (!sc || !sc.shapes[id]) return toast(`no shape "${id}"`);
@@ -480,7 +529,7 @@ export async function importIntoSceneOrNew(f: File): Promise<void> {
     const name = f.name.replace(/\.(svg|png)$/i, "").replace(/[^A-Za-z0-9_.-]/g, "_") || "art";
     const r = await post<"/api/art/new-scene", NewSceneResponse>("/api/art/new-scene", { mod: mod(), name, starter: false });
     if (!r.ok) return toast(`could not create scene: ${r.error}`);
-    await loadArtForMod(mod());
+    await refreshArtListings();
     await openScene(r.relPath);
   }
   if (png) await importPngFile(f);
@@ -579,8 +628,7 @@ export function setRow(n: number): void {
   A.set({ row });
   if (scene) {
     scene.preview = scene.preview || {};
-    scene.preview.palette = row;
-    A.set({ saved: false });
+    scene.preview.palette = row; // persisted with the next save; browsing rows alone is not an unsaved change
   }
   const p = ensurePreview();
   p.setPaletteRow(row);

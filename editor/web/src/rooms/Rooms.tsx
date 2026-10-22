@@ -8,10 +8,14 @@ import { sx, Modal, Button } from "../components/ui.tsx";
 import {
   R,
   isDirty,
-  openLevel,
-  closeLevel,
-  saveLevel,
+  pickLevel,
+  requestCloseLevel,
   newRoom,
+  setRoomTool,
+  setRoomView,
+  setPaletteFilter,
+  openNewRoom,
+  closeNewRoom,
   strokeStart,
   strokeEnter,
   strokeEnd,
@@ -85,7 +89,7 @@ function PaletteList({ kind }: { kind: "tile" | "object" }): React.JSX.Element {
           aria-label={kind === "tile" ? "Filter tiles" : "Filter objects"}
           placeholder={kind === "tile" ? "filter tiles…" : "filter objects (Rat, PlayerSpawn, 5000…)"}
           value={filter}
-          onChange={(e) => R.set(kind === "tile" ? { tileFilter: e.target.value } : { objectFilter: e.target.value })}
+          onChange={(e) => setPaletteFilter(kind, e.target.value)}
         />
       </div>
       <div className={`exbody tw palette-${kind}`}>
@@ -124,7 +128,7 @@ export function RoomExplorer(): React.JSX.Element {
         <small className="muted">· levels/</small>
         <div className="grow" />
         {mod ? (
-          <button className="btn ghost sm" style={sx("color:var(--acc-ink)")} onClick={() => R.set({ newOpen: true })}>
+          <button className="btn ghost sm" style={sx("color:var(--acc-ink)")} onClick={() => openNewRoom()}>
             + New room
           </button>
         ) : null}
@@ -137,7 +141,7 @@ export function RoomExplorer(): React.JSX.Element {
         <div className="exbody tw rooms-list">
           {levels.length ? (
             levels.map((l) => (
-              <button key={l.relPath} className={"srow" + (path === l.relPath ? " sel" : "")} title={l.ok ? `${l.objects} object(s), ${l.painted} painted cell(s)` : l.error} onClick={() => void openLevel(l.relPath)}>
+              <button key={l.relPath} className={"srow" + (path === l.relPath ? " sel" : "")} title={l.ok ? `${l.objects} object(s), ${l.painted} painted cell(s)` : l.error} onClick={() => void pickLevel(l.relPath)}>
                 <span className="fname" style={sx("flex:1")}>{l.relPath.replace(/^levels\//, "")}</span>
                 <span className="count">{l.ok ? `${l.bytes} B` : "bad"}</span>
               </button>
@@ -185,7 +189,7 @@ function Toolbar(): React.JSX.Element {
       <span className="mono roompath">{path}{dirty ? " •" : ""}</span>
       <div className="modeswitch" role="group" aria-label="Room tool">
         {tools.map(([t, label, title]) => (
-          <button key={t} className={"btn sm" + (tool === t ? " on" : "")} aria-pressed={tool === t} title={title} onClick={() => R.set({ tool: t })}>
+          <button key={t} className={"btn sm" + (tool === t ? " on" : "")} aria-pressed={tool === t} title={title} onClick={() => setRoomTool(t)}>
             {label}
           </button>
         ))}
@@ -198,7 +202,7 @@ function Toolbar(): React.JSX.Element {
       <div className="grow" />
       <div className="modeswitch" role="group" aria-label="Room view">
         {(["flat", "iso"] as const).map((v) => (
-          <button key={v} className={"btn sm" + (view === v ? " on" : "")} aria-pressed={view === v} title={v === "flat" ? "the 10x10 grid, row 0 on top" : "2:1 diamonds as the game draws the board; sprites stand on their cell"} onClick={() => R.set({ view: v })}>
+          <button key={v} className={"btn sm" + (view === v ? " on" : "")} aria-pressed={view === v} title={v === "flat" ? "the 10x10 grid, row 0 on top" : "2:1 diamonds as the game draws the board; sprites stand on their cell"} onClick={() => setRoomView(v)}>
             {v === "flat" ? "Flat" : "Iso"}
           </button>
         ))}
@@ -213,8 +217,7 @@ function Toolbar(): React.JSX.Element {
         {!art ? <option value={tileset}>{tileset || "tileset…"}</option> : null}
         {(art?.tilesets ?? []).map((t) => <option key={t} value={t}>{t}</option>)}
       </select>
-      <button className="btn ghost sm" onClick={() => closeLevel()}>Close</button>
-      <button className="btn primary sm room-save" onClick={() => void saveLevel()}>Save room</button>
+      <button className="btn ghost sm" onClick={() => void requestCloseLevel()} title="Close the room (Save is in the top bar, Ctrl+S)">Close</button>
     </div>
   );
 }
@@ -391,7 +394,7 @@ function RoomsEmpty(): React.JSX.Element {
           A room is a binary <span className="mono">levels/&lt;folder&gt;/&lt;name&gt;.lvl</span>: a 10x10 grid of <span className="mono">tiles.gon</span> ids and objects placed by <span className="mono">spawns.gon</span> id (enemies, props, the <span className="mono">PlayerSpawn</span> cells). Any id can instead be a weighted random list. Play one in a test fight with the console command <span className="mono">load &lt;folder&gt;/&lt;name&gt;</span>.
         </p>
         <div style={sx("display:flex;gap:12px;align-items:center;flex-wrap:wrap")}>
-          {mod ? <button className="btn primary" onClick={() => R.set({ newOpen: true })}>+ New room</button> : <span className="muted">No mod open — pick one from the top-bar mod switcher first.</span>}
+          {mod ? <button className="btn primary" onClick={() => openNewRoom()}>+ New room</button> : <span className="muted">No mod open — pick one from the top-bar mod switcher first.</span>}
           <span className="muted" style={sx("font-size:12.5px")}>docs/data-mods.md "Maps, rooms and encounters"</span>
         </div>
       </div>
@@ -404,7 +407,7 @@ function NewRoomModal(): React.JSX.Element {
   const [folder, setFolder] = useState(mod.replace(/[^A-Za-z0-9_-]/g, "_") || "custom");
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
-  const close = () => R.set({ newOpen: false });
+  const close = () => closeNewRoom();
   const create = async () => {
     if (!name) { setErr("enter a room name"); return; }
     const e = await newRoom(folder, name);
