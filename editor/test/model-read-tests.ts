@@ -469,6 +469,38 @@ export function runModelReadTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     const small = toGameAxes(readObj("v -0.4 0 -0.4\nv 0.4 0 -0.4\nv 0 0.8 0.4\nf 1 2 3\n").mesh!, 1);
     eq(modelBudgetFindings(small).length, 0, modelBudgetFindings(small).map((x) => x.code).join(","));
   });
+  test("fuzz: 3000 seeded mutations of a GLB, a .gltf and an OBJ never throw — each read ends in a mesh or an error finding", () => {
+    let seed = 0x2545f491;
+    const rnd = (n: number): number => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % n; };
+    const box = boxDoc({ uvs: "f32", materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }], extra: { textures: [{ source: 0 }], images: [{ uri: "crate.png" }] } });
+    const seeds: [string, Uint8Array][] = [
+      ["models/b.glb", glb(box.json, box.bin)],
+      ["models/t.gltf", gltfText(triangleDoc().json, triangleDoc().bin)],
+      ["models/q.obj", enc("v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nvn 0 0 1\nf 1/1/1 2/1/1 3/1/1 4/1/1\nf -1 -2 -3\n")],
+    ];
+    let reads = 0, meshes = 0;
+    for (const [name, src] of seeds) {
+      for (let i = 0; i < 1000; i++) {
+        const b = src.slice();
+        const flips = 1 + rnd(4);
+        for (let k = 0; k < flips; k++) {
+          const at = rnd(b.length);
+          const op = rnd(3);
+          if (op === 0) b[at] = rnd(256); else if (op === 1) b[at] = b[at]! ^ (1 << rnd(8)); else b[at] = "0123456789-/., \n{}[]\":e".charCodeAt(rnd(23));
+        }
+        let r: ModelRead;
+        try { r = readModel(name, rnd(10) === 0 ? b.subarray(0, rnd(b.length)) : b); }
+        catch (e) { throw new Error(`${name} mutation ${i} threw ${String(e instanceof Error ? e.stack : e)}`); }
+        reads++;
+        if (r.mesh) {
+          meshes++;
+          const nv = r.mesh.positions.length / 3;
+          for (const x of r.mesh.indices) if (x >= nv) throw new Error(`${name} mutation ${i}: index ${x} >= ${nv} vertices`);
+        } else assert(errors(r).length > 0, `${name} mutation ${i}: no mesh and no error`);
+      }
+    }
+    eq(reads, 3000); assert(meshes > 0 && meshes < 3000, `some mutations still read (${meshes})`);
+  });
   test("readModel dispatches on the extension (.obj / .gltf / .glb, else model-extension); a .glb without the magic is an error", () => {
     const d = triangleDoc();
     eq(readModel("models/t.gltf", gltfText(d.json, d.bin)).stats.triangles, 1);
