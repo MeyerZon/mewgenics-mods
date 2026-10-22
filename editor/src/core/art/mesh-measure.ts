@@ -345,15 +345,57 @@ export function judgeOcclusion(shots: RgbaImageLike[], occ: MeshOccLine[], expec
     : (m.coverage >= OCC_FRONT_MIN ? "front-unoccluded" : "occluded-in-front");
   return { verdict, pass: verdict === "behind-occluded" || verdict === "front-unoccluded", coverage: m.coverage, expectedPx: m.expectedPx, magentaPx: m.magentaPx, shot, occ: line };
 }
-// ---- M3: hide_sprite ---- (RED stubs; the green commit fills them in)
+// ---- M3: hide_sprite ----
+// A unit whose GON model block says `hide_sprite true` has its units-layer sprite item skipped while its model draws
+// (native/framework/src/fw_mesh_hide.c). mewframework logs "unit model: <Entry>: hide_sprite: ..." once at discovery,
+// "unit model: <Entry>: model-flag hide_sprite ..." for a bad value, and "mesh hide f=.. units=.. items=.. skipped=.."
+// in the plan windows. The shot proof: around the model's magenta patch the unit's sprite would show its black outline;
+// count those dark pixels in a hide shot and in a control shot (same scene, hide_sprite false).
 export interface HideMeasure { patch: GlowRegion | null; box: Box | null; dark: number; total: number }
 export type HideVerdict = "hidden" | "not-hidden" | "no-patch" | "control-no-sprite";
 export interface HideJudgement { verdict: HideVerdict; share: number | null }
 export interface MeshHideLine { frame: number; units: number; items: number; skipped: number }
 export interface MeshHideLog { hides: MeshHideLine[]; hideUnits: string[]; badFlag: string[] }
+/** a pixel is "dark" (the sprite's black outline) when r + g + b < this; the arena floor and the shaded box stay above */
 export const HIDE_DARK_SUM = 90;
+/** the control must show the sprite: at least this many dark pixels around the box */
 export const HIDE_MIN_CONTROL_DARK = 200;
+/** hidden = the hide shot keeps less than this share of the control's dark pixels */
 export const HIDE_MAX_SHARE = 0.05;
-export function measureHideRegion(_img: RgbaImageLike, _colour = MESH_PROBE_COLOUR): HideMeasure { return { patch: null, box: null, dark: 0, total: 0 }; }
-export function judgeHide(_hide: HideMeasure, _control: HideMeasure): HideJudgement { return { verdict: "no-patch", share: null }; }
-export function parseMeshHideLog(_text: string): MeshHideLog { return { hides: [], hideUnits: [], badFlag: [] }; }
+
+/** the magenta patch, the box around it (widened by its width each side, 2x its height above, 1x below: where an
+ * upright sprite standing on the same anchor shows) and its dark pixels */
+export function measureHideRegion(img: RgbaImageLike, colour = MESH_PROBE_COLOUR): HideMeasure {
+  const g = measureGlow(img, colour);
+  if (!g.region) return { patch: null, box: null, dark: 0, total: 0 };
+  const r = g.region, w = r.x1 - r.x0, h = r.y1 - r.y0;
+  const box: Box = { x0: Math.max(0, r.x0 - w), y0: Math.max(0, r.y0 - 2 * h), x1: Math.min(img.width - 1, r.x1 + w), y1: Math.min(img.height - 1, r.y1 + h) };
+  let dark = 0, total = 0;
+  for (let y = box.y0; y <= box.y1; y++)
+    for (let x = box.x0; x <= box.x1; x++) {
+      const i = (y * img.width + x) * 4;
+      total++;
+      if (img.rgba[i]! + img.rgba[i + 1]! + img.rgba[i + 2]! < HIDE_DARK_SUM) dark++;
+    }
+  return { patch: r, box, dark, total };
+}
+
+export function judgeHide(hide: HideMeasure, control: HideMeasure): HideJudgement {
+  if (!hide.patch || !control.patch) return { verdict: "no-patch", share: null };
+  if (control.dark < HIDE_MIN_CONTROL_DARK) return { verdict: "control-no-sprite", share: null };
+  const share = hide.dark / control.dark;
+  return { verdict: share < HIDE_MAX_SHARE ? "hidden" : "not-hidden", share };
+}
+
+export function parseMeshHideLog(text: string): MeshHideLog {
+  const out: MeshHideLog = { hides: [], hideUnits: [], badFlag: [] };
+  for (const line of text.split(/\r?\n/)) {
+    let m = /mesh hide f=(\d+) units=(\d+) items=(\d+) skipped=(\d+)/.exec(line);
+    if (m) { out.hides.push({ frame: +m[1]!, units: +m[2]!, items: +m[3]!, skipped: +m[4]! }); continue; }
+    m = /unit model: (\S+): hide_sprite: /.exec(line);
+    if (m) { out.hideUnits.push(m[1]!); continue; }
+    m = /unit model: (\S+): model-flag hide_sprite /.exec(line);
+    if (m) out.badFlag.push(m[1]!);
+  }
+  return out;
+}
