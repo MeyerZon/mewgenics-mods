@@ -223,10 +223,11 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
   // Union of localization keys available: base + mod-added.
   const findLocRow = (key: string): string[] | undefined => local.locRows.get(key) || loc.rows.get(key);
 
+  const fragments = includeFragments(overlays, root, modDir);
   for (const o of overlays) {
     const fileLoc = { file: `mods/${modName}/${o.relPath}` };
     if (o.fileType === "gon") {
-      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, modDir);
+      validateGonOverlay(o, rb, sets, local, findLocRow, modName, nativeBuild, root, modDir, fragments);
     } else if (o.fileType === "csv" || (o.category === "text" && o.fileType === "other")) {
       validateCsvOverlay(o, rb, loc, modName);
     } else if (o.mode === "replace") {
@@ -234,6 +235,24 @@ export function validateMod(modName: string, override?: TextOverride, opts: Vali
     }
   }
   return rb.build();
+}
+
+/**
+ * Pack paths of the files this mod ships that its own GON files `#include` (found as the mod's copy). Such a file
+ * that is not in the base data is an include fragment, read only through the include, not a whole-file replacement.
+ */
+function includeFragments(overlays: OverlayFile[], dataRoot: string, modDir: string): Set<string> {
+  const out = new Set<string>();
+  for (const o of overlays) {
+    if (o.fileType !== "gon") continue;
+    const ctx = { resource: o.baseName, dataRoot, modDir };
+    for (const inc of preprocessFile(o.text, ctx).includes) {
+      if (!inc.found || inc.cycle) continue;
+      const t = locateInclude(ctx, inc.name);
+      if (t.source === "mod") out.add(t.packPath);
+    }
+  }
+  return out;
 }
 
 /** @param nativeBuild installed-exe identity; null = no exe */
@@ -247,6 +266,7 @@ function validateGonOverlay(
   nativeBuild: NativeBuild | null,
   dataRoot: string,
   modDir: string,
+  fragments: Set<string> = new Set(),
 ): void {
   const file = `mods/${modName}/${o.relPath}`;
   const hasComponentList = sets.componentListKnown; // else component-list-missing was reported once
@@ -262,7 +282,8 @@ function validateGonOverlay(
     }
     return;
   }
-  if (o.mode === "replace") {
+  const fragment = o.mode === "replace" && fragments.has(o.baseName) && !existsSync(packPath(o.baseName, dataRoot));
+  if (o.mode === "replace" && !fragment) {
     rb.warn("whole-file-replace", `${o.relPath} replaces the whole base file; prefer .append/.merge/.patch`, { file });
   }
   if (!root) return;

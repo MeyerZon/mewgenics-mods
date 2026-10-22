@@ -23,6 +23,7 @@ import { preprocess, stripComments } from "../src/core/gon/preprocess.ts";
 import { locateInclude, preprocessFile } from "../src/core/gon-includes.ts";
 import { EXTRACTED_DATA, MODS_DIR } from "../src/core/repo.ts";
 import { parseScript } from "../src/core/ingame/script.ts";
+import { validateMod } from "../src/core/validate/validator.ts";
 import type { VNode, VScalar, VArray, VObject, VEntry } from "../src/core/gon/types.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
@@ -538,6 +539,16 @@ export function runGonPreprocessTests(test: TestFn, assert: AssertFn, eq: EqFn):
     eq(at(e, "variant_of"), "Rat");
     eq(at(e, "properties.health"), "55");
     eq(at(e, "properties.movement"), "2");
+  });
+  test("T1 _incprobe: validates with zero errors, and incprobe_props.gon is an include fragment (no whole-file-replace)", () => {
+    if (!existsSync(join(EXTRACTED_DATA, "characters", "enemies.gon"))) {
+      console.log("  (skipped: no .extracted/data/characters/enemies.gon)");
+      return;
+    }
+    const r = validateMod("_incprobe");
+    assert(r.ok, JSON.stringify(r.findings.filter((f) => f.severity === "error")));
+    const frag = r.findings.filter((f) => f.location?.file === "mods/_incprobe/data/characters/incprobe_props.gon");
+    eq(frag.map((f) => f.code).join(","), "", "no finding on the fragment");
   });
   test("_incprobe: include-probe.mewtest seeds 42, enters TacticsTest, spawns IncProbe + IncProbeMacro and checks the merged GON", () => {
     const plan = parseScript(readFileSync(join(PROBE, "tests", "include-probe.mewtest"), "utf8"), { owningMod: "_incprobe", name: "include-probe" });
