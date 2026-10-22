@@ -112,6 +112,16 @@ these without a decision (status per bullet below; the PR map follows).
       also moves `backups/mewtest01_*.savbackup` into the run dir (a rename, never a delete). Agents may not touch
       `saves/` beyond the existing exception, so this needs your say-so.
 
+- [ ] **Developers' stance on mods — contact them? remove anything?** (added 2026-10-22) Research and repo audit in
+      [`docs/legal-and-community.md`](docs/legal-and-community.md): no Mewgenics policy exists yet (Workshop/launcher
+      "eventually"); the same developer's TEIN terms are non-commercial, require the game, no exe or unmodified assets;
+      Edmund made the Antibirth EXE mod canon; REPENTOGON publishes the same kind of signatures for Isaac; takedowns
+      elsewhere hit decompiled source and assets, which this repo has none of. Decide: (1) send Tyler Glaiel the
+      drafted heads-up (§5) or not; (2) which optional clean-ups to do — paraphrase the 6-line vanilla shader excerpt in
+      `docs/art-pipeline.md`, regenerate the `_roomprobe` `.lvl` files from a blank template, drop "sanctioned" from
+      README/CLAUDE.md, pack-time "no game files" note, a "no decompiler output in tracked files" rule; (3) adopt the
+      suggested README section "Relationship to the game and its developers" (§6).
+
 - [x] **Cat parts in a rig — which route, if any?** **Resolved 2026-10-22 as data-only for cat animations** (PR #74:
       experiment A0 — a `_Append_CatTest` frame placing a rig whose seven slots are EMPTY 1-frame sprites is filled by
       the game with the cat's own parts, palette, texture and face; the 2026-10-21 crash at `+0x741f5d` was a visible
