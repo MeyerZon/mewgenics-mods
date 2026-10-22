@@ -506,3 +506,5 @@ int fw_mesh_name_from_path(const char *path, char *out, size_t cap) {
     out[nl] = 0;
     return 1;
 }
+
+int fw_mesh_model_kind(const char *path) { (void)path; return 0; }   /* RED stub */

@@ -26,6 +26,12 @@ typedef struct FwMesh {
                           * and the parser filled nrm with flat face normals (fw_mesh_flat_normals): nrm is ALWAYS valid */
     int has_uvs;         /* 1: some corner named a vt (corners without one get uv 0,0). 0: every uv is 0,0 */
     float bmin[3], bmax[3];
+    /* appended for glTF (OBJ and the unit cube: 1,1,1,1 and ""): the material of the first baked primitive that has
+     * one — glTF baseColorFactor (linear RGBA) and baseColorTexture's image: its uri (percent-decoded, relative to
+     * the model file), "embedded:<bufferView>" for an image stored in a bufferView (.glb), "embedded:data-uri" for a
+     * data: URI image. Materials of later primitives are ignored (one material per model). */
+    float base_color[4];
+    char texture[260];
 } FwMesh;
 
 typedef struct FwMeshError { char text[160]; int line; } FwMeshError;   /* line = 1-based OBJ line, 0 = not a line */
@@ -42,6 +48,34 @@ typedef struct FwMeshError { char text[160]; int line; } FwMeshError;   /* line 
  * vp and the other free-form geometry statements), "unknown OBJ statement '...'", the limits above ("... (limit)");
  * "no faces" (line 0). */
 int fw_mesh_obj_parse(const char *text, size_t len, FwMesh *out, FwMeshError *err);
+
+/* Reads a side file named by a model (a glTF buffer's uri, percent-decoded, relative to the model file; never absolute,
+ * never containing "..", "\" or ":"): returns malloc'd bytes (the parser free()s them, so same CRT) and *len, or NULL
+ * when absent. */
+typedef void *(*FwMeshReadFn)(void *user, const char *relPath, size_t *len);
+
+/* Parses a glTF 2.0 model: `.glb` (detected by the magic "glTF": header version 2, JSON chunk, optional BIN chunk,
+ * 4-byte aligned chunk lengths) or `.gltf` JSON text. Buffers: the .glb BIN chunk (buffer 0 without uri), base64
+ * `data:` URIs, or a relative file through `read` (may be NULL when nothing external is needed). Returns 1 and fills
+ * *out in glTF model space (right-handed, +Y up, metres: call fw_mesh_to_game_axes next, exactly as for OBJ), or 0 with
+ * *out zeroed and err->text set (err->line = 0).
+ * - Scene: the `scene` (default 0) of `scenes`, its node trees walked depth-first; every node with a `mesh` bakes all
+ *   of that mesh's primitives with the node's world transform (`matrix`, column-major, or T*R*S from `translation` /
+ *   `rotation` (x,y,z,w quaternion) / `scale`); normals by the inverse-transpose (renormalised); a node whose matrix
+ *   has a negative determinant reverses its triangles. A node reached twice (cycle / shared child) is an error. No
+ *   `scenes` at all: every mesh baked once with the identity. Cameras, lights, skins (bind pose is used) and
+ *   animations are ignored. A node tree deeper than FW_GLTF_MAX_NODE_DEPTH is an error ("too deep").
+ * - Primitive: mode absent or 4 (TRIANGLES), else an error naming the mode; POSITION required (VEC3 float), NORMAL
+ *   (VEC3 float; absent -> flat normals for that primitive, and has_normals = 0), TEXCOORD_0 (VEC2 float, or normalized
+ *   unsigned byte / short; non-normalized integers are an error); other attributes ignored; `targets` (morphs) are an
+ *   error. Indices: SCALAR unsigned byte / short / int, each < the POSITION count, count % 3 == 0; absent -> 0..n-1.
+ * - Accessors: `sparse` is an error, a missing bufferView is an error; byteStride honoured; every element must lie
+ *   inside its bufferView and every bufferView inside its buffer's byteLength (an error, never a read past the end).
+ * - `asset.version` must start with "2."; a non-empty `extensionsRequired` is an error naming the first entry
+ *   (KHR_draco_mesh_compression, EXT_meshopt_compression, KHR_texture_transform, ...); `extensionsUsed` is ignored.
+ * - Limits: FW_MESH_MAX_VERTS / FW_MESH_MAX_INDICES over the whole baked model. */
+#define FW_GLTF_MAX_NODE_DEPTH 256
+int fw_mesh_gltf_parse(const uint8_t *bytes, size_t len, FwMeshReadFn read, void *user, FwMesh *out, FwMeshError *err);
 
 /* OBJ (right-handed, Y up) -> game (x, height, z; left-handed): x_g = s*x, h = s*y, z_g = -s*z; normals mirrored the
  * same way (and renormalised), every triangle's index order reversed (a reflection flips winding), bounds recomputed.
@@ -79,9 +113,14 @@ const char *fw_mesh_reg_name(const FwMeshRegistry *reg, int i);              /* 
 void fw_mesh_reg_clear(FwMeshRegistry *reg);                                 /* frees every mesh, count = 0 */
 
 /* ---- model paths (mod-relative, as a GON `model` key names them) ---- */
-/* Accepts exactly `models/<name>.obj`: forward slashes, no subdirectory, <name> 1..63 chars of [A-Za-z0-9_-], the
- * extension lowercase `.obj` (the only format tonight). Then copies ref into out (cap must fit it + NUL) and returns 1;
+/* Accepts exactly `models/<name>.<ext>` with ext one of lowercase `obj`, `gltf`, `glb`: forward slashes, no
+ * subdirectory, <name> 1..63 chars of [A-Za-z0-9_-]. Then copies ref into out (cap must fit it + NUL) and returns 1;
  * else 0 with out = "" (when cap > 0). So `..`, absolute paths, drive letters, backslashes and spaces are all refused. */
 int fw_mesh_model_path(const char *ref, char *out, size_t cap);
 /* `models/crate.obj` -> `crate` (the registry name). Same acceptance rule as fw_mesh_model_path; 1 ok, else 0 / "". */
 int fw_mesh_name_from_path(const char *path, char *out, size_t cap);
+/* which parser a valid model path needs: OBJ -> fw_mesh_obj_parse, GLTF / GLB -> fw_mesh_gltf_parse; 0 = not valid */
+#define FW_MESH_KIND_OBJ  1
+#define FW_MESH_KIND_GLTF 2
+#define FW_MESH_KIND_GLB  3
+int fw_mesh_model_kind(const char *path);
