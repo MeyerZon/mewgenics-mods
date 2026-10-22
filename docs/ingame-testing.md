@@ -77,6 +77,11 @@ seed <N>                                         pin the game's RNG (TLS+0x178) 
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every
                                                  roll after it are then identical run to run, so assertions can be exact
+glow <unit> <r> <g> <b> <a>                      FW_SetUnitGlow (framework API v4) on a unit of the walk (index, bareword or
+glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; v1
+                                                 keeps one shared colour); `off` = FW_ClearUnitGlow. Needs the fight and
+                                                 `mods: …, fw-glow` (the rim shader). A missing unit or a refusal ends the
+                                                 script with code 1 (glow_failed); a framework without API v4 with code 4
 wait frames|turns|rounds|ms <N>                  N >= 1; turns = TurnControl::NextTurn calls; rounds = TurnControl's
                                                  round counter advancing by N from the directive
 expect console "<substr>" [within <frames>]      a console line since the last cmd contains substr
@@ -125,6 +130,7 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"log","text":"..."}
 {"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
 {"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}
+{"ev":"glow","line":N,"unit":N,"name":"...","arg":"<the directive's argument text>","ok":true,"detail":"FW_SetUnitGlow on 0x…: ok"}   unit -1 when no unit matched
 {"ev":"idle","line":N}                               interactive mode: the script ran to its end; the DLL now serves the pipe
 {"ev":"exec","id":N,"op":"exec","text":"...","ok":true,"lines":["..."]}   a pipe request served (also the reply on the pipe)
 {"ev":"units","id":N,...}                            a dump requested over the pipe carries the request id
@@ -133,7 +139,7 @@ Every event carries `t` (ms since harness start) and `frame`.
                                                 closed — it would otherwise stop the frame loop for good under a hidden
                                                 window; never decides the verdict, appended to its reason
 {"ev":"crash","code":"0xC0000005","addr":"0x...","module":"Mewgenics.exe","rva":"0x...","tid":N}
-{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|seed_failed|seed_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
+{"ev":"end","code":N,"reason":"quit|eof|timeout|crash|script_error|console_unavailable|enter_failed|enter_unavailable|seed_failed|seed_unavailable|glow_failed|glow_unavailable|framework_inactive|framework_missing|harness_error","frames":N,"turns":N,"elapsed_ms":N,"expect_pass":N,"expect_fail":N}
 ```
 
 Harness exit codes: `0` pass, `1` an expect failed or `quit 1`, `2` script timeout, `3` crash, `4` harness error
@@ -184,6 +190,7 @@ npm run test:ingame -- jokers-luck       # one mod
 npm run test:ingame -- jokers-luck smoke # one script
 npm run test:ingame -- --json            # machine-readable reports
 #   --timeout <ms>  --no-hide  --clean  --no-savecheck
+npm run test:unitglow                    # the per-unit glow proof: dev-sandbox/unit-glow + the shot measure (glow-measure.ts)
 ```
 
 Exit 0 when everything passed or was skipped, 1 on any failure, 2 on a usage error. A machine-level reason (no game,

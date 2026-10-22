@@ -54,6 +54,16 @@ applies the status. The native half (`native/mods/jokers-luck`) registers the na
 `effects { JokersLuck N }` valid everywhere the game accepts a status name. Test in battle with the console command
 `bind JokersGambit`, then use the ability; carriers should show a luck modifier that changes every turn.
 
+**Glows (2026-10-22).** The per-unit glow is a **native-only API in v1**: a native mod calls `FW_SetUnitGlow(Character*,
+r, g, b, a)` / `FW_ClearUnitGlow` (framework API v4, `docs/engine-map.md` "Per-unit glow") and the framework draws a
+coloured rim around the unit through the game's own outline mask. There is no data-level way to ask for one yet — no
+`registered-names.json` kind, no GON key; a `glow` kind that a status or passive could name is the natural v2 once
+per-unit colours exist. What the data layer does carry is the rim shader: `mods/fw-glow/shaders/fw_unit_glow.shader`
+(`.shader` files in a mod path load like any pack file). A mod whose native half calls the API lists `fw-glow` next to
+itself (`mods: <mod>, fw-glow` in a `.mewtest` header, `-modpaths … mods/fw-glow` in a launch); the harness directive
+`glow <unit> <r> <g> <b> <a>` exercises it (`mods/dev-sandbox/tests/unit-glow.mewtest`). Static halos that need no
+native code remain the editor's baked glow (PR #80).
+
 ## Limits of the data layer
 
 Data recombines ~1,750 existing C++ behavior components. A mechanic that no component expresses

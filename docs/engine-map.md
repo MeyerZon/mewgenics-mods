@@ -438,3 +438,89 @@ in case a future build uses the suffix) may change; any other change is a `safet
 dev launches wrote `campaign02.sav` and `test00.sav`; `steamcampaign01.sav` untouched since 2026-03-31. Open: what
 else the game does with the suffix (`Inherit Save File Suffix` exists in `ProcessCmds`); Steam Cloud's
 `steam_autocloud.vdf` in the same dir suggests the `steam` family is what Steam syncs.
+
+## Per-unit glow (native, 2026-10-22)
+
+The native half of a per-unit glow: `FW_SetUnitGlow(Character*, r, g, b, a)` / `FW_ClearUnitGlow(Character*)` (API v4,
+`native/framework/src/glow_engine.c` over the host-tested `fw_glow_rules.c`), proven in-game by
+`mods/dev-sandbox/tests/unit-glow.mewtest` + `npm run test:unitglow` (fixture `editor/test/fixtures/ingame/unit-glow-summary.json`).
+It follows the "Glow and outline passes (2026-10-21)" decode (PR #80) and Ghidra session `rim` (`.analysis/notes-rim.md`,
+container `rea_ghidra_rim`, decompiles under `.analysis/decompiled/`: `StatusMenu_update_0x81aee0.c`,
+`MaskedRendererIso_Submit_0x78d4c0.c`, `Scene_SubmitDraw_0x989be0.c`, `Camera_render_0x9787c0.c`,
+`Renderer_AddPostProcessPass_0x979880.c`, `PostProcessEffect_process_0x9776a0.c`, `vec_u32_AddUnique_0x72cd0.c`,
+`TacticsTest_ctor_0x31c5f0.c`, `ImmediateModeGameUI_init_0x88d780.c` — the file name is the glow session's, the content is
+TacticsTest's). Every number below is in `bindings/25143593.json` (one contiguous block after `DevMenu_TacticsTest_lambda`)
+and reaches the DLL through the generated `signatures.h` / `offsets.h`.
+
+- **The mask is a layer, not a draw call (OBSERVED).** Combat draw layer **0x18** (`CONST_MASK_LAYER`) is the outline mask.
+  `StatusMenu::update` **0x81aee0** (StatusMenu vftable `0x141120ff8` slot 11) swap-removes every 0x18 from the previously
+  hovered unit's renderer extra-layer vector (`StatusMenu+0xf8`, validated by the pool generation at `Character-8` against
+  `+0x100`) and pushes 0x18 onto the newly hovered unit's with `vec_u32_AddUnique` **0x72cd0** (`(Character+0x40)->+0x68`:
+  `{cap, count, data}` of uint32 at `+0x68/+0x6c/+0x70`). The unit's own `MaskedRendererIso_Submit` **0x78d4c0** (vftable
+  `0x140ed81e8` slot 19) then calls `Scene_SubmitDraw` **0x989be0** once for its main layer (`+0x54` = 0x19) and once more
+  per extra layer, every frame. Nothing re-draws anything.
+- **The cameras and passes (OBSERVED).** `glaiel::TacticsTest` (vftable **0xf0f4b8**, RTTI `.?AVTacticsTest@glaiel@@`,
+  28 slots; the glow notes first pinned this vftable on ImmediateModeGameUI, session rim corrected it) holds the combat
+  cameras: `+0x58` the mask camera (RTT, layer 0x18 only, texture at `Camera+0x50`), `+0x68` the main camera (its passes
+  at layer **0x1a** = `CONST_COMPOSITE_LAYER` composite the outline), the passes `+0x80` jumpflood_init, `+0x88`
+  jumpflood_composite, `+0x90` the `ol_blur_x/y` chain, `+0x98` the white `composite_outlines`, and the mode int `+0xa0`
+  (1 = jump-flood, else blur; no write to it was found in the ctor decompile). `Camera_render` **0x9787c0** clears
+  `Camera+0x9c`, sets it when an enabled layer has items, draws each enabled layer and then runs every pass in
+  `(Camera+0xb0)[layer]` through `PostProcessEffect_process` 0x9776a0 (returns on `pass+0x10 == 0` or a false predicate at
+  `pass+0x60`/impl `+0x98`; rects `+0x18`/`+0x38` are normalized scissors; `+0x58` ping-pong). `Camera_AddPostProcessPass`
+  **0x979880** `(Camera*, Material*, layer) -> Pass*` (0xa0 bytes, enabled, full-screen rects, flags 1, one `{Material*, 1}`
+  entry; owned by the camera — never cache a `Pass*` across frames). Materials: `ShaderManager_GetOrCreateMaterial`
+  **0x9bb5d0** `(mgr = the App global 0x13c4a30 itself, map at +0x278; std::string name, std::string shaderFile — both
+  by value, callee destroys)`, `Material_SetUniformVec4` **0x9bde70** `(mat, name, x (xmm2), y (xmm3), z, w)`,
+  `Material_SetUniformFloat` **0x9bddc0**, `Material_SetTexture` **0x9bdcd0** `(mat, name, Texture*, slot)`; the
+  composites bind the mask texture as `framebuf` in slot **6** (`CONST_GLOW_FRAMEBUF_SLOT`). The 1.0-scale RTT textures are
+  window-sized RGBA8 (`Camera_render`: internal format `0x8058`; the `+0x81` byte picks 1 or 4 bytes per channel).
+- **What the shots corrected (OBSERVED 2026-10-22, four launches; the numbers are in the fixture).** The mask layer's draw
+  mode 3 ("flat white") is `MovieClip_DrawFlat(clip, (1,1,1,1))` = the sprite **multiplied** by white: the mask's rgb is
+  the sprite's own luminance (a black outline is 0, the Rat's gray body about 0.55) and its **alpha is the coverage**.
+  Consequences: the game's blur route (`alpha_cutoff 0.75` on `.r`) and `composite_glow.shader`'s `(1 - tex.g)` cutout are
+  luminance-based (they fit the light cat sprites); forcing the `ol_blur` chain on for our pass did not shape it at all
+  (launch 1: a flat 50 % magenta fill over the whole Rat = `(1 - 0.55)` of the body); a rim keyed on `.r` lands inside
+  the black outline (launch 2); and the game's `composite_outlines` pass starts **enabled** with full-screen rects and a
+  predicate that is simply "the mask had content", so it paints `(1 - luminance)` white over the body of every masked
+  unit — i.e. over any unit a mod glows — until a hover in jump-flood mode turns it off.
+- **The hook (`glow_engine.c`).** `TacticsTest::LateRender` **0x88d780** = vftable slot **19** (`VT_TT_LATERENDER`, the
+  only slot whose body starts with its prologue) is hooked with `MJ_InstallHook` like every other framework hook, after
+  checking `TacticsTest_vftable[19]` is the signature-resolved address (a vtable slot swap was the notes' first choice;
+  the prologue hook sees the same calls, chains with Mewjector and is undone on unload). After the original, every frame:
+  a new `TacticsTest*` resets the registry (a new fight); units whose pool generation (`Character-8`, `OFF_CH_GENERATION`)
+  moved are dropped; `vec_u32_AddUnique(renderer+0x68, 0x18)` for each registered unit unless present (StatusMenu strips
+  it from the unit the hover left); the game's `composite_outlines` (`+0x98`) is disabled (restored when the last unit is
+  cleared); our pass is re-found in `(mainCamera+0xb0)[0x1a]` by its first material or added
+  (`AddPostProcessPass(mainCamera, fw_unit_glow, 0x1a)`, flags zeroed, `framebuf` = `maskCamera->+0x50` in slot 6,
+  re-bound when the texture changes); `glow_color` is set when it changes. The material is created once
+  (`GetOrCreateMaterial(App, "fw_unit_glow", "fw_unit_glow.shader")`, `glow_radius` 12) and lives in the manager's map.
+- **The rim shader is data: `mods/fw-glow/shaders/fw_unit_glow.shader`.** Same vertex stage as `composite_glow.shader`;
+  the fragment samples the mask's alpha in 16 directions x 3 rings up to `glow_radius` texels and paints `glow_color`
+  with `clamp(max_ring(alpha * falloff) - alpha_here)`: a band outside the silhouette (black outline included), zero
+  inside, fading outward. A `.shader` file in a mod path loads like any pack file (`-modpaths`), so the mod that calls
+  `FW_SetUnitGlow` lists `fw-glow` next to itself; without it the material has no shader and draws nothing. Measured
+  (launch 4, 3440x1440): `glow "Lil' Rat" 1 0 1 1` -> one connected magenta patch of **5653 px**, bbox (2628,692)-(2759,825)
+  around the sprite 2646..2741 x 724..808, fading over ~16 px, outline and body untouched; after `FW_ClearUnitGlow` the
+  noglow shot holds **0** magenta px; the run passed with the real save unchanged.
+- **v1 limits.** One composite, hence one shared colour (the first registered unit's rgba; per-unit colours need one
+  material + pass per unit with rects, or one spare layer + camera per colour — both additive to this); combat scenes
+  only (`TacticsTest`); up to 16 units; registrations belong to the current fight scene (register during the fight);
+  main thread only; while any unit glows the game's white hover rim (blur mode) is off — the jump-flood passes
+  (`+0x80/+0x88`) are not touched, so a jump-flood hover still works; the API is native-only (no data-level way to ask
+  for a glow yet, see `docs/data-mods.md`).
+- **Bindings added (glow block, all harvest-verified):** functions `TacticsTest_LateRender` 0x88d780, `vec_u32_AddUnique`
+  0x72cd0, `ShaderManager_GetOrCreateMaterial` 0x9bb5d0, `Material_SetUniformVec4` 0x9bde70, `Material_SetUniformFloat`
+  0x9bddc0, `Material_SetTexture` 0x9bdcd0, `Camera_AddPostProcessPass` 0x979880 (`FW_SYM_*`), reference
+  `Scene_SubmitDraw` 0x989be0, `MaskedRendererIso_Submit` 0x78d4c0, `StatusMenu_update` 0x81aee0,
+  `Camera_SetRenderToTexture` 0x979d50; data `ShaderManager_global` 0x13c4a30 (`FW_DATA_ShaderManager`, = App_global);
+  vtable `TacticsTest_vftable` 0xf0f4b8 (`BuildInfo.rva_TacticsTest_vftable`); offsets `OFF_TT_MASK_CAMERA` 0x58,
+  `OFF_TT_MAIN_CAMERA` 0x68, `OFF_TT_BLUR_PASS` 0x90, `OFF_TT_COMPOSITE_PASS` 0x98, `OFF_CAM_RTT_TEXTURE` 0x50,
+  `OFF_CAM_PASSES` 0xb0, `OFF_CH_RENDERER` 0x40, `OFF_CH_GENERATION` -8, `OFF_RND_EXTRA_LAYERS/COUNT/DATA`
+  0x68/0x6c/0x70, `OFF_PASS_MAT_COUNT` 4, `OFF_PASS_MATERIALS` 8, `OFF_PASS_ENABLED` 0x10, `OFF_PASS_RECT_A/B` 0x18/0x38,
+  `OFF_PASS_FLAGS` 0x58; constants `CONST_MASK_LAYER` 0x18, `CONST_COMPOSITE_LAYER` 0x1a, `CONST_GLOW_FRAMEBUF_SLOT` 6,
+  `VT_TT_LATERENDER` 19. **Not bound, and why:** `Camera_AddLayer` 0x979bd0 and the pass-predicate lambda 0x8967b0 have no
+  `.pdata` entry (leaf functions; the T1 test requires one); `Camera_render` 0x9787c0 is PGO-split into chained
+  `.pdata` chunks (0x9787c0..dc, 0x9787dc..c42, 0x978ded..f98, ...) and the harvester reads only the first, so `Camera+0x9c`
+  (had-content) has no witness — the engine never writes it (the predicate reads it). Following chained chunks is an
+  improvement candidate for `readOffsetWitness`.

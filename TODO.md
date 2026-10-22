@@ -17,7 +17,11 @@ docs sweep at the end of this list.
 - [ ] **Localized text?** Texts (#69) are the literal initial string in a game font. Should mods get localized text
       (loc keys / per-language strings), and is Peralta the right default font?
 - [ ] **Filters / glows:** the game refuses any PlaceObject3 filter ("FILTERS NOT SUPPORTED", #65), so the validator
-      blocks them. Want a "bake glow / shadow into the art" helper, or leave it?
+      blocks them; the baked halo helper is PR #80. The **native per-unit glow** landed (feat/native-unit-glow, stacked on
+      #79): `FW_SetUnitGlow(Character*, rgba)` draws a rim through the game's outline mask (one shared colour, combat only,
+      the rim shader shipped by `mods/fw-glow`). Decide: (a) a data-level way to ask for it (a `registered-names.json`
+      kind `glow` a status/passive names?) and per-unit colours (v2: one material + pass per unit, or a camera per
+      colour); (b) whether the hover rim should stay off while units glow (it is now) or be redrawn by us.
 - [ ] **VectorCraft's agent channel:** VectorCraft has an MCP server / JSON control port (alpha). Use it later so agents
       draw parts headlessly, or stay with plain SVG round trips (#70)?
 - [ ] **T3 looks** still unticked from the art PRs — the shots are in `editor/data/ingame-runs/` (`npm run
