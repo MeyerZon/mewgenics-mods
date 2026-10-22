@@ -1,0 +1,226 @@
+[
+  {
+    "id": "pr63-gradient",
+    "pr": 63,
+    "question": "In the probe shot, does the leftmost square fade smoothly red → black (mirrored, like every enemy clip)?",
+    "shots": ["ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"],
+    "regenerate": "cd editor && npm run test:artprobe",
+    "status": "open"
+  },
+  {
+    "id": "pr64-caps",
+    "pr": 64,
+    "question": "In the probe shot, is the top green line (butt caps) visibly shorter than the bottom one (square caps)?",
+    "shots": ["ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"],
+    "regenerate": "cd editor && npm run test:artprobe",
+    "status": "open"
+  },
+  {
+    "id": "pr65-add-blend",
+    "pr": 65,
+    "question": "In the probe shot, does the add-blend square look like a lightened dark red over the arena (not a flat #600000)?",
+    "shots": ["ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"],
+    "regenerate": "cd editor && npm run test:artprobe",
+    "status": "open"
+  },
+  {
+    "id": "pr69-probe-text",
+    "pr": 69,
+    "question": "In the probe shot, does the mint word PROBE read in the game's own lettering, mirrored like every enemy clip?",
+    "shots": ["ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"],
+    "regenerate": "cd editor && npm run test:artprobe",
+    "status": "open"
+  },
+  {
+    "id": "pr67-cat-rig",
+    "pr": 67,
+    "question": "Does the CatProbe rig read as a cat — orange tail, blue body, peach head with ears — mirrored like every enemy?",
+    "shots": ["ingame-runs/*-_artprobe-render-cat/shot-cat-1.png", "ingame-runs/*-_artprobe-render-cat/shot-cat-3.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --cat",
+    "status": "open"
+  },
+  {
+    "id": "pr74-tomtom",
+    "pr": 74,
+    "question": "In shot-rig-1, does the cat under our yellow checker marker look like TomTom — the same gray textured parts, grumpy face and tail as the control TomTom — standing upright on its tile?",
+    "shots": ["ingame-runs/*-_artprobe-render-cat-append/shot-rig-1.png", "ingame-runs/*-_artprobe-render-cat-append/shot-vanilla.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --cat-append",
+    "status": "open"
+  },
+  {
+    "id": "pr74-size-facing",
+    "pr": 74,
+    "question": "Is the appended-frame cat the same size and facing as the control TomTom (both scale 1.1, both mirrored), with nothing missing — two legs, two arms, body, head, tail?",
+    "shots": ["ingame-runs/*-_artprobe-render-cat-append/shot-rig-1.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --cat-append",
+    "status": "open"
+  },
+  {
+    "id": "pr74-hit",
+    "pr": 74,
+    "question": "In shot-rig-3, does the hit reaction look like a normal enemy hit (the vanilla animation taking over our idle), not a glitch?",
+    "shots": ["ingame-runs/*-_artprobe-render-cat-append/shot-rig-3.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --cat-append",
+    "status": "open"
+  },
+  {
+    "id": "pr80-glow-preview",
+    "pr": 80,
+    "question": "Before → after: does the banded orange 6 px halo around the starter's gray square read as a glow at game scale (No = the default needs more bands or a wider blur)?",
+    "shots": ["glow-shots/before.png", "glow-shots/after.png"],
+    "regenerate": "cd editor && npm run test:e2e -- -g \"Bake glow\"",
+    "status": "open"
+  },
+  {
+    "id": "pr86-unit-glow",
+    "pr": 86,
+    "question": "In shot-glow, does the Rat at the right of the arena carry a magenta band hugging its sprite, with no wash over its body (and none in shot-noglow)?",
+    "shots": ["ingame-runs/*-dev-sandbox-unit-glow/shot-glow.png", "ingame-runs/*-dev-sandbox-unit-glow/shot-noglow.png"],
+    "regenerate": "cd editor && npm run test:unitglow",
+    "status": "open"
+  },
+  {
+    "id": "pr86-glow-width",
+    "pr": 86,
+    "question": "Is glow_radius 12 the band width you want for the per-unit rim (and is the white hover rim being off while a unit glows acceptable)?",
+    "shots": ["ingame-runs/*-dev-sandbox-unit-glow/shot-glow.png"],
+    "regenerate": "cd editor && npm run test:unitglow",
+    "status": "open"
+  },
+  {
+    "id": "pr59-ruffle-tab",
+    "pr": 59,
+    "question": "Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?",
+    "shots": [],
+    "regenerate": "cd editor && npm run build && npm run web, open http://127.0.0.1:4173/ → Art mode → Ruffle tab",
+    "status": "open"
+  },
+  {
+    "id": "pr63-svg-gradient",
+    "pr": 63,
+    "question": "Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → drop an SVG with a linear gradient on the drop zone",
+    "status": "open"
+  },
+  {
+    "id": "pr64-svg-corners",
+    "pr": 64,
+    "question": "Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → import an SVG with stroke-linecap=butt, stroke-linejoin=miter, stroke-width ≥ 8",
+    "status": "open"
+  },
+  {
+    "id": "pr66-timeline-tab",
+    "pr": 66,
+    "question": "Timeline tab on dev-sandbox/my_rat: can you click cells, add a key, move it in the inspector, and does the preview follow with marks readable in your theme?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → dev-sandbox/my_rat → Timeline",
+    "status": "open"
+  },
+  {
+    "id": "pr67-rig-tab",
+    "pr": 67,
+    "question": "Rig tab: does New cat rig → assign a shape to head → Animate it in the Timeline work and read clearly?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → a scene → Rig tab → New cat rig",
+    "status": "open"
+  },
+  {
+    "id": "pr70-svg-roundtrip",
+    "pr": 70,
+    "question": "Export SVG → edit mods/<mod>/art/<shape>.svg in VectorCraft or Inkscape → save as plain SVG → Replace…: does the shape change in place?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → Shapes → Export SVG, edit the file, then Replace…",
+    "status": "open"
+  },
+  {
+    "id": "pr76-cat-anim-ui",
+    "pr": 76,
+    "question": "Rig tab → type a name → New cat animation: do the donor card and the <name>F / <name>B pills read well, with the under-test note visible but not alarming?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → a scene → Rig tab → New cat animation",
+    "status": "open"
+  },
+  {
+    "id": "pr76-animate-pose",
+    "pr": 76,
+    "question": "Does Animate pose land on the rig in the Timeline tab, and does Timeline on the donor show the two labeled frames?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → Rig tab → after New cat animation: Animate pose, then Timeline on the donor",
+    "status": "open"
+  },
+  {
+    "id": "pr76-wave-in-game",
+    "pr": 76,
+    "question": "In a run, does a `wave` animation played from alt_animations [[idle wave]] show the cat's own parts (then the cat-anim-untested wording can be trimmed)?",
+    "shots": [],
+    "regenerate": "no probe script yet — needs a .mewtest that plays the authored wave (agent work); until then check by playing a dev run with the mod",
+    "status": "open"
+  },
+  {
+    "id": "pr80-glow-in-game",
+    "pr": 80,
+    "question": "A baked glow placed as a character's graphics.movieclip via _artprobe: is the rim over the arena right — bands not visible, no colour bleeding onto the palette?",
+    "shots": [],
+    "regenerate": "bake_glow on a mod scene, build, place it via mods/_artprobe, then cd editor && npm run test:artprobe (no dedicated probe yet)",
+    "status": "open"
+  },
+  {
+    "id": "pr80-bake-form",
+    "pr": 80,
+    "question": "The Bake glow… form: are kind / colour / blur / offset the right knobs (No = strength and bands should be exposed too)?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → Shapes → Bake glow… on a row",
+    "status": "open"
+  },
+  {
+    "id": "pr81-fill-rule",
+    "pr": 81,
+    "question": "Two overlapping same-fill squares on one path (fillRule nonzero): does Findings show fill-rule-ignored and the preview a hole, and does evenodd clear the warning?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → a scene with two overlapping squares on one path → Findings",
+    "status": "open"
+  },
+  {
+    "id": "pr81-inspect-card",
+    "pr": 81,
+    "question": "Build tab → inspect a built SWF: does the Inspect card list the loader's findings (or \"The game's loader accepts every tag.\") clearly?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → Build tab → Inspect a built SWF",
+    "status": "open"
+  },
+  {
+    "id": "pr87-vendor-online",
+    "pr": 87,
+    "question": "Online once: does `npm run build` print the VectorCraft download line, and does `npm run vendor:vectorcraft:check` then say verified?",
+    "shots": [],
+    "regenerate": "cd editor && npm run build && npm run vendor:vectorcraft:check",
+    "status": "open"
+  },
+  {
+    "id": "pr88-vectorcraft-tab",
+    "pr": 88,
+    "question": "my_rat → Shapes → VectorCraft on body: does the app appear, and after drawing + Apply to shape does Preview show it where the body is (and Build SWF / Ruffle look right)?",
+    "shots": [],
+    "regenerate": "cd editor && npm run build && npm run web → Art mode → dev-sandbox/my_rat → Shapes → VectorCraft on body",
+    "status": "open"
+  },
+  {
+    "id": "pr88-shortcuts",
+    "pr": 88,
+    "question": "Do keyboard shortcuts reach VectorCraft after a click into the iframe, while the editor's own inputs still work when the tab is not active?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → the VectorCraft sub-tab",
+    "status": "open"
+  },
+  {
+    "id": "pr89-vectorcraft-exec",
+    "pr": 89,
+    "question": "From Claude Code, vectorcraft_exec on dev-sandbox my_rat body with a shape.ellipse, then Build SWF: does the ellipse look right (Ruffle tab / art probe)?",
+    "shots": [],
+    "regenerate": "ask an agent: MCP vectorcraft_exec { mod: dev-sandbox, shape body, shape.ellipse }, then Build SWF and look in the Ruffle tab or cd editor && npm run test:artprobe",
+    "status": "open"
+  }
+]

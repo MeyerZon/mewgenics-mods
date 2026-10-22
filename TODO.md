@@ -2,16 +2,48 @@
 
 Living status snapshot (last updated 2026-10-22: the 2026-10-21/22 parallel RE run is in PRs #73–#83 + two in flight, none merged yet; everything through #72 is merged). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 
-## Requires a human
+## Requires a human (T3 looks) — open the gallery: `cd editor && npm run t3`, then open `editor/data/t3-gallery/index.html`
 
-Looks no measure in this repo can judge; the shots are under `editor/data/ingame-runs/` (rebuild with the named command).
+What no test can see (look, feel, usability), collected from the PR bodies' T3 sections. One line per item; the
+shots, the regenerate command and the status live in `editor/t3-looks.json` (tick an item there with
+`"status": "done"` and here). The page shows each item's shots (copied from the run dirs), Yes / No / Not sure,
+and **Export answers** (a JSON to hand back to an agent). Decisions that are not looks stay under "Open decisions".
 
+- [ ] `pr63-gradient` (#63) — In the probe shot, does the leftmost square fade smoothly red → black (mirrored, like every enemy clip)?
+- [ ] `pr64-caps` (#64) — In the probe shot, is the top green line (butt caps) visibly shorter than the bottom one (square caps)?
+- [ ] `pr65-add-blend` (#65) — In the probe shot, does the add-blend square look like a lightened dark red over the arena (not a flat #600000)?
+- [ ] `pr69-probe-text` (#69) — In the probe shot, does the mint word PROBE read in the game's own lettering, mirrored like every enemy clip?
+- [ ] `pr67-cat-rig` (#67) — Does the CatProbe rig read as a cat — orange tail, blue body, peach head with ears — mirrored like every enemy?
+- [ ] `pr74-tomtom` (#74) — In shot-rig-1, does the cat under our yellow checker marker look like TomTom — the same gray textured parts, grumpy face and tail as the control TomTom — standing upright on its tile?
+- [ ] `pr74-size-facing` (#74) — Is the appended-frame cat the same size and facing as the control TomTom (both scale 1.1, both mirrored), with nothing missing — two legs, two arms, body, head, tail?
+- [ ] `pr74-hit` (#74) — In shot-rig-3, does the hit reaction look like a normal enemy hit (the vanilla animation taking over our idle), not a glitch?
+- [ ] `pr80-glow-preview` (#80) — Before → after: does the banded orange 6 px halo around the starter's gray square read as a glow at game scale (No = the default needs more bands or a wider blur)?
+- [ ] `pr86-unit-glow` (#86) — In shot-glow, does the Rat at the right of the arena carry a magenta band hugging its sprite, with no wash over its body (and none in shot-noglow)?
+- [ ] `pr86-glow-width` (#86) — Is glow_radius 12 the band width you want for the per-unit rim (and is the white hover rim being off while a unit glows acceptable)?
+- [ ] `pr59-ruffle-tab` (#59) — Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?
+- [ ] `pr63-svg-gradient` (#63) — Dropping an SVG with a gradient into Art mode: does the preview show a smooth ramp, with gray stops mapped to the palette row?
+- [ ] `pr64-svg-corners` (#64) — Importing an SVG with thick butt and miter strokes: are the preview corners sharp, not rounded?
+- [ ] `pr66-timeline-tab` (#66) — Timeline tab on dev-sandbox/my_rat: can you click cells, add a key, move it in the inspector, and does the preview follow with marks readable in your theme?
+- [ ] `pr67-rig-tab` (#67) — Rig tab: does New cat rig → assign a shape to head → Animate it in the Timeline work and read clearly?
+- [ ] `pr70-svg-roundtrip` (#70) — Export SVG → edit mods/<mod>/art/<shape>.svg in VectorCraft or Inkscape → save as plain SVG → Replace…: does the shape change in place?
+- [ ] `pr76-cat-anim-ui` (#76) — Rig tab → type a name → New cat animation: do the donor card and the <name>F / <name>B pills read well, with the under-test note visible but not alarming?
+- [ ] `pr76-animate-pose` (#76) — Does Animate pose land on the rig in the Timeline tab, and does Timeline on the donor show the two labeled frames?
+- [ ] `pr76-wave-in-game` (#76) — In a run, does a `wave` animation played from alt_animations [[idle wave]] show the cat's own parts (then the cat-anim-untested wording can be trimmed)?
+- [ ] `pr80-glow-in-game` (#80) — A baked glow placed as a character's graphics.movieclip via _artprobe: is the rim over the arena right — bands not visible, no colour bleeding onto the palette?
+- [ ] `pr80-bake-form` (#80) — The Bake glow… form: are kind / colour / blur / offset the right knobs (No = strength and bands should be exposed too)?
+- [ ] `pr81-fill-rule` (#81) — Two overlapping same-fill squares on one path (fillRule nonzero): does Findings show fill-rule-ignored and the preview a hole, and does evenodd clear the warning?
+- [ ] `pr81-inspect-card` (#81) — Build tab → inspect a built SWF: does the Inspect card list the loader's findings (or "The game's loader accepts every tag.") clearly?
+- [ ] `pr87-vendor-online` (#87) — Online once: does `npm run build` print the VectorCraft download line, and does `npm run vendor:vectorcraft:check` then say verified?
+- [ ] `pr88-vectorcraft-tab` (#88) — my_rat → Shapes → VectorCraft on body: does the app appear, and after drawing + Apply to shape does Preview show it where the body is (and Build SWF / Ruffle look right)?
+- [ ] `pr88-shortcuts` (#88) — Do keyboard shortcuts reach VectorCraft after a click into the iframe, while the editor's own inputs still work when the tab is not active?
+- [ ] `pr89-vectorcraft-exec` (#89) — From Claude Code, vectorcraft_exec on dev-sandbox my_rat body with a shape.ellipse, then Build SWF: does the ellipse look right (Ruffle tab / art probe)?
 - [ ] **Loc-text shot** (`npm run test:artprobe -- --loctext`, run `20261022-090100-_artprobe-render-loctext`,
       `shot-loc-2.png`): is the substituted string ("Tom Tom", "LOCALIZED OK") rendered in the right font / size — the
       same lettering as the HTML boxes beside it?
 - [ ] **Redirected Rat** (`npm run test:artprobe -- --tileset`, run `20261022-090748-_tileprobe-render-tileset-redirect`,
       `shot-rat-2.png`): any wrong offset or mirroring of the ArtProbe clip drawn for a plain Rat, against the ArtProbe
       enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
+- [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
@@ -59,12 +91,8 @@ these without a decision (status per bullet below; the PR map follows).
       `vectorcraft_exec` (the same `window.vectorcraft` API in Playwright's headless Chromium, ~0.5–4 s to boot;
       skips when not vendored). The native `vectorcraft-cli mcp --headless` route needs an install and stays unasked.
       Remaining: T3 — the owner's look at the tab and at a `vectorcraft_exec` drawing in game.
-- [ ] **T3 looks** (owner, 2026-10-21: he will do these later) still unticked from the art PRs — the shots are in
-      `editor/data/ingame-runs/` (`npm run test:artprobe`, `-- --cat`, `-- --cat-append` rebuild them):
-      gradient square red → black (#63); top green line shorter than the bottom one (#64); the add square a lightened
-      dark red (#65); Timeline and Rig tabs readable and usable (#66, #67); PROBE in the game's lettering (#69); an
-      Export SVG → edit in VectorCraft/Inkscape → Replace… round trip (#70); the Ruffle tab (#59); the baked glow halo
-      (#80); the real cat standing in our appended frame under our marker (#74).
+- [ ] **T3 looks** (owner, 2026-10-21: he will do these later) — moved to **"Requires a human (T3 looks)"** at the
+      top of this file (the gallery: `cd editor && npm run t3`; the list: `editor/t3-looks.json`).
 - [x] **Agent, next session (no decision needed):** the deferred docs sweep — done 2026-10-21 in PR #73 (the modding
       skill's art section, binding-port.md "Known limits", KNOWLEDGE-BASE's Ruffle line, CLAUDE.md's tool count; also
       ticked the stale "46 unanchored entries" items, closed by #53–#56). The RE notes of 2026-10-21/22 are folded by
@@ -139,7 +167,6 @@ Things no test can see: they need a human at the game, a decision, or an account
   call `list_base_data` / `validate_mod` (your registration still names `editor/src/mcp/server.mjs`, now a 4-line shim);
   optionally re-register with `claude mcp add mewgenics-editor -- node "<repo>/editor/src/mcp/server.ts"`. Run
   `npm run test:ingame` once with Steam up (the runner is typed, not changed).
-- [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 
 ### Only you can do these — added 2026-10-19 night (after the leftovers stack)
 
