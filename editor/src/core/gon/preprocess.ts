@@ -42,6 +42,8 @@ export interface PreprocessResult {
   includes: IncludeUse[];
   /** names of `#define` macros in the top-level text (the game expands them; the editor does not) */
   defines: string[];
+  /** 1-based position of a `/*` in the top-level text that is never closed (the game drops everything after it) */
+  unclosedComment?: { line: number; col: number };
 }
 
 /** NUL, TAB, LF, CR, space — the blank set of the pre-pass word readers (mask 0x100002601). */
@@ -51,15 +53,17 @@ function isBlank(c: string | undefined): boolean {
 
 /**
  * Pass 1 (Gon_Pre_StripComments 0xa4eb80).
- * @returns the stripped text and, per kept character, its offset in `src`
+ * @returns the stripped text, per kept character its offset in `src`, and the offset of the `/` of a `/*` that is
+ * never closed (the pass then silently drops the rest of the text)
  */
-export function stripComments(src: string): { text: string; map: number[] } {
+export function stripComments(src: string): { text: string; map: number[]; unclosedBlockAt?: number } {
   let out = "";
   const map: number[] = [];
   const n = src.length;
   let inString = false;
   let inComment = false;
   let block = false;
+  let blockStart = -1;
   const keep = (i: number): void => {
     out += src[i];
     map.push(i);
@@ -81,6 +85,7 @@ export function stripComments(src: string): { text: string; map: number[] } {
       if (c === "/" && i < n - 1 && src[i + 1] === "*") {
         inComment = true;
         block = true;
+        blockStart = i;
       }
       if (c === "/" && i < n - 1 && src[i + 1] === "/") {
         inComment = true;
@@ -90,7 +95,7 @@ export function stripComments(src: string): { text: string; map: number[] } {
       if (!inComment) keep(i);
     }
   }
-  return { text: out, map };
+  return inComment && block ? { text: out, map, unclosedBlockAt: blockStart } : { text: out, map };
 }
 
 /** Gon_Pre_ReadWord 0xa4e650: skip blanks, then read a word; `"` toggles a quoted part (not copied), a closing `"`
@@ -214,6 +219,9 @@ function findDefines(text: string): string[] {
  */
 export function preprocess(src: string, resolve: IncludeResolver = () => null): PreprocessResult {
   const includes: IncludeUse[] = [];
-  const text = expandIncludes(src, stripComments(src), resolve, 0, [], includes);
-  return { text, includes, defines: findDefines(text) };
+  const stripped = stripComments(src);
+  const text = expandIncludes(src, stripped, resolve, 0, [], includes);
+  const result: PreprocessResult = { text, includes, defines: findDefines(text) };
+  if (stripped.unclosedBlockAt !== undefined) result.unclosedComment = lineCol(src, stripped.unclosedBlockAt);
+  return result;
 }

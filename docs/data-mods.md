@@ -36,7 +36,8 @@ Every `.gon` the game loads — base files **and** every mod `.gon`, `.gon.appen
 through the same pre-pass before parsing, so a mod file may use all of these:
 
 - `# …`, `// …` comments to end of line, `/* … */` block comments (no nesting: the first `*/` closes; an unclosed
-  `/*` silently swallows the rest of the file). Comment markers inside `"…"` are text.
+  `/*` silently swallows the rest of the file — the validator warns `comment-unclosed` at its line). Comment markers
+  inside `"…"` are text.
 - `#include "file.gon"` (quotes optional; the name may not contain a quote; anything after it on the line stays):
   the file's text — its own comments stripped, its own includes expanded — is pasted in place, so put it where its
   content belongs (vanilla: `nodes { #include "standard_nodes.gon" … }` in the 19 `maps/*.gon`).
@@ -45,7 +46,8 @@ through the same pre-pass before parsing, so a mod file may use all of these:
   looked up in the mod folders first and then the pack — so a mod can ship `mods/m/data/maps/x.gon` and include it.
   A nested include resolves against the **top-level** file's directory, not the included file's. Avoid `..`
   (passed to the file manager as written; unverified) — the editor refuses names that leave `data/`.
-- **A missing include is fatal:** the game shows `Could not locate include file: <name>` and exits. The validator
+- **A missing include is fatal:** the game shows an error message box `Could not locate include file: <name>` and
+  exits. The validator
   reports it as `include-missing` (error) at the directive's line.
 - **Overlays and included files:** the includer's overlays apply after inlining (an `alley.gon.merge` sees the
   included nodes as part of the base). An overlay *on the included file's own name* (`standard_nodes.gon.append`)

@@ -100,8 +100,8 @@ index, and `.overwrite` replaces the whole array.
 ### Comments and `#include` in a mod file
 
 Every mod `.gon` / `.gon.append` / `.merge` / `.patch` goes through the game's pre-pass: `#`, `//` and
-`/* */` comments work (no nesting), and `#include "x.gon"` pastes `<directory of the BASE file>/x.gon` (mod
-folder first, then the pack) in place. A missing include is **fatal** in the game (`include-missing` in the
+`/* */` comments work (no nesting; an unclosed `/*` drops the rest of the file — `comment-unclosed`), and `#include "x.gon"` pastes `<directory of the BASE file>/x.gon` (mod
+folder first, then the pack) in place. A missing include is **fatal** in the game (error box, then exit; `include-missing` in the
 validator). An overlay on an included file's own name is pasted as text, not merged — overlay the including files
 instead. `#define` macros are not modelled by the editor (`gon-define-unmodelled`). Details:
 `docs/data-mods.md` "Comments and `#include`".

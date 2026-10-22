@@ -443,7 +443,8 @@ function validateGonOverlay(
 /**
  * The GON the game actually parses for an overlay: the text after its pre-pass (Gon_Preprocess 0xa50bd0: comments
  * stripped, `#include` inlined against the base resource's directory with this mod's files taking part). Reports
- * includes that resolve nowhere (`include-missing`: the game stops with the fatal "Could not locate include file")
+ * includes that resolve nowhere (`include-missing`: the game shows an error box "Could not locate include file" and
+ * exits), a `/*` that is never closed (`comment-unclosed`: the game drops the rest of the file)
  * and `#define` macros (`gon-define-unmodelled`: the game expands them, the editor does not).
  * @returns the parsed root, or null after a `gon-parse-error` the pre-pass introduced
  */
@@ -456,9 +457,12 @@ function semanticParse(o: OverlayFile, rb: ReportBuilder, file: string, dataRoot
     const via = inc.chain.length ? ` (inside ${inc.chain.map((c) => `"${c}"`).join(" > ")})` : "";
     const why = t.outside
       ? `resolves to ${t.packPath}, outside data/: the editor does not read it and the game would not find it in the pack`
-      : `resolves to ${t.packPath}, which exists neither in this mod nor in the base data: the game stops with the fatal "Could not locate include file: ${inc.name}"`;
+      : `resolves to ${t.packPath}, which exists neither in this mod nor in the base data: when the game loads this file it shows an error message box "Could not locate include file: ${inc.name}" and exits`;
     const at = inc.depth === 0 ? { file, line: inc.line, col: inc.col } : { file };
     rb.error("include-missing", `#include "${inc.name}"${via} ${why}`, at);
+  }
+  if (pre.unclosedComment) {
+    rb.warn("comment-unclosed", `a /* block comment is never closed: the game silently drops everything after it to the end of the file (add the missing */)`, { file, line: pre.unclosedComment.line, col: pre.unclosedComment.col });
   }
   if (pre.defines.length > 0) {
     rb.warn("gon-define-unmodelled", `${o.relPath} uses #define (${pre.defines.join(", ")}): the game expands these macros before parsing, the editor does not — checks and previews of this file see the unexpanded text`, { file });
