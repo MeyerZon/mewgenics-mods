@@ -54,7 +54,8 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
   `npm run build:index` from `.analysis/` (then CI skips the checks).
 - **Vanilla typos the game ignores** (component-schema PR): `LowHealthAllyDodgeChanceAura { theshold }`,
   `AbilityOnRoundEndOnce { even_of_stunned }`, `TourettesMeows { cooldown }`, `DamageReductionAura { allies_only }`,
-  `MoveTowardsDamageSource { ability }`. A mod could fix them with a .patch; worth a sample mod?
+  `MoveTowardsDamageSource { ability }` (+ `SpawnThingOnDamage { number }`, `AbilityHealthThreshold { aux }`; now
+  `unread` keys, reported as `ignored-key` infos). A mod could fix them with a .patch; worth a sample mod?
 
 Owner: "we will decide on it later". Everything through PR #72 is merged; the 2026-10-21/22 run answered most of
 these without a decision (status per bullet below; the PR map follows).
@@ -292,9 +293,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 - [x] **Component key schema** (2026-10-22, branch `feat/component-schema`): `editor/component-schema.json` maps the GON keys
   each of 1741 component classes reads (RE runs compA..compE; `docs/data-mods.md` "Component keys"); validator
   `unknown-key` / `missing-required-key`, MCP `search_components` keys, web key hints, `npm run build:component-schema`.
-  Follow-ups: the 39 vanilla-used components still `open` (their `vanillaMissed` keys are mostly in unlocated lambdas;
-  `FinalBossHitCountdown` base has no vftable row), `AddAdvantageToEvent` unresolved, 369 tier-3 classes carry
-  only objdump seed keys.
+  Follow-ups closed by `feat/component-schema-close` (2026-10-22): all 393 vanilla-used components closed (was 38
+  open), `AddAdvantageToEvent` resolved (its block is read by nothing), the 110 seed-only Passive / Status /
+  GlobalModifier classes verified by decompile; `ignored-key` info for vanilla keys no code reads. Left: 250 seed-only
+  engine / UI / ability-hierarchy classes (never a `passives` block; the Ability* ones read the ability entry at
+  `this+0x28`, which the schema cannot express yet); `PercentOr` defaults other sessions took from Ghidra pseudo-code
+  may print 0 for a 0.5 (re-check against the disassembly).
 
 ### Repo / docs / ops
 - [x] Private GitHub repo `MeyerZon/mewgenics-mods` created + pushed
