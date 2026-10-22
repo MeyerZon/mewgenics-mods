@@ -479,7 +479,7 @@ export function validateScene(input: unknown, opts: SceneValidateOptions = {}): 
     const problems = textProblems(t);
     for (const p of problems) err(p.code, `text "${id}": ${p.message}`, [`texts.${id}` + (p.at ? `.${p.at}` : "")]);
     const lk = !problems.length && t ? locKeyHtmlProblem(t, opts.locKey) : null;
-    if (lk) warn("text-loc-key-html", `text "${id}": ${lk}`, [`texts.${id}`]);
+    if (lk) findings.push({ severity: lk.severity, code: "text-loc-key-html", message: `text "${id}": ${lk.message}`, path: `texts.${id}` });
   }
   for (const id of Object.keys(scene.sprites)) {
     const sp = scene.sprites[id];
