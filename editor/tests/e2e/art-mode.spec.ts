@@ -698,12 +698,13 @@ test.describe("Art mode — view options, shape menu, PNG import, VectorCraft ac
     await expect(ta).toHaveValue(typed);
   });
 
-  test("the Build panel says SymbolClass binds the names in one sentence (no gate procedure)", async ({ page }) => {
+  test("the Build panel says SymbolClass binds the names in one sentence (the old gate procedure prose is gone; Prepare SWF gate stays)", async ({ page }) => {
     await openSandboxScene(page);
     await page.locator(".rightpanel .tab", { hasText: "Build" }).click();
     const body = page.locator(".rightpanel .panelbody");
     await expect(body).toContainText("SymbolClass binds the export names; the DoABC stub is optional.");
-    await expect(body).not.toContainText("gate");
+    for (const stale of ["npm run", "test:swfgate", "The SWF gate (fix spec", "Flash-generated DoABC"]) await expect(body).not.toContainText(stale);
+    await expect(body.getByRole("button", { name: "Prepare SWF gate" })).toBeVisible();
     await expect(body.locator('input[name="abcmode"]')).toHaveCount(2);
   });
 });

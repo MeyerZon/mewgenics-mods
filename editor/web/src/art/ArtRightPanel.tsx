@@ -6,7 +6,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useStore, useStoreShallow } from "../store.ts";
-import { S } from "../state.ts";
+import { S, toast } from "../state.ts";
+import { post } from "../api.ts";
 import {
   A,
   build,
@@ -39,7 +40,7 @@ import { hasGhostRig } from "../../../src/core/art/ghost-cat.ts";
 import { sx, FindingRows } from "./Bits.tsx";
 import { Tabs, Checkbox, Select, Summary } from "../components/ui.tsx";
 import { usePref } from "../hooks/usePref.ts";
-import type { ArtRightTab } from "./types.ts";
+import type { ArtRightTab, PrepareGateResponse } from "./types.ts";
 import { RufflePanel } from "./RufflePanel.tsx";
 
 const RIGHT_TABS: { id: ArtRightTab; label: string }[] = [
@@ -104,6 +105,16 @@ function BuildPanel() {
         <div style={sx("display:flex;gap:8px;margin-top:10px;flex-wrap:wrap")}>
           <button className="btn primary sm" disabled={!hasScene} onClick={() => void build(false)}>Build SWF</button>
           <button className="btn sm" disabled={!hasScene} onClick={() => void build(true)}>Dry run</button>
+          <button
+            className="btn ghost sm"
+            title="Writes mods/swf-gate/swfs/gate.swf + swflist.gon.append (flat variant); run it with npm run test:swfgate -- flat"
+            onClick={async () => {
+              const g = await post<"/api/art/prepare-swf-gate", PrepareGateResponse>("/api/art/prepare-swf-gate", { variant: "flat" });
+              toast(g.ok ? `gate files written: ${(g.written || []).join(", ")} — next: ${g.next}` : `failed: ${g.error}`);
+            }}
+          >
+            Prepare SWF gate
+          </button>
         </div>
       </div>
       {!r && !ins ? (
