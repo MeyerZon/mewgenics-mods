@@ -12,18 +12,22 @@
 //              everything else (`yes`, `True`, `5%`) -> string. `{` -> object, `[` -> array. Every scalar keeps
 //              its source text.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse, serialize } from "../src/core/gon/parser.ts";
 import { toValue, pretty, prettyRoot } from "../src/core/gon/value.ts";
 import { scalarType, numericValue } from "../src/core/gon/typing.ts";
 import { append, deepMerge, patchMerge } from "../src/core/overlay/merge.ts";
+import { preprocess, stripComments } from "../src/core/gon/preprocess.ts";
+import { locateInclude, preprocessFile } from "../src/core/gon-includes.ts";
+import { EXTRACTED_DATA } from "../src/core/repo.ts";
 import type { VNode, VScalar, VArray, VObject } from "../src/core/gon/types.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OVERLAY_FIXTURES = join(HERE, "fixtures", "overlay");
+const INCLUDE_FIXTURES = join(HERE, "fixtures", "gon-include");
 
 function root(src: string): VObject {
   const v = toValue(parse(src));
@@ -254,5 +258,179 @@ export function runGonTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
       const got = fn(base, overlay);
       eq(pretty(got), pretty(expected), `fixture ${name}`);
     }
+  });
+  runGonPreprocessTests(test, assert, eq);
+}
+
+// ---- The game's text pre-pass (Gon_Preprocess 0xa50bd0, RE session inc 2026-10-22) ---------------------------------
+// Every GON text the game loads (base files and every .append/.merge/.patch overlay) goes through
+// Gon_Preprocess(text, resolve, 0x100, 1) before Gon_Tokenize:
+//   pass 1 Gon_Pre_StripComments 0xa4eb80   `//` to end of line (the newline kept), `/* */` removed with its newlines,
+//                                           no nesting, the first `*/` closes (`/*/` closes at once), unterminated
+//                                           drops the rest; never inside "…" (a `"` not preceded by `\` toggles);
+//                                           `#` means nothing to this pass.
+//   pass 2 Gon_Pre_ExpandIncludes 0xa4edf0  outside "…", a #-word exactly `#include`, blanks (newlines too), a name
+//                                           (quotes optional and dropped, a closing quote ends it) -> replaced by the
+//                                           pre-passed text of resolve(name); text after the name stays; the
+//                                           recursion reuses the SAME resolver (top-level resource directory).
+//   passes 3/4 `#define … #end` macros (top level only) — not modelled by the editor, reported instead.
+// The file layer (GonResource::decode 0x9a6100, include lambda 0x9a7610): path = <dir of the resource being loaded> +
+// name, fetched as a TextResource (0x7c10e0): a mod's own copy wins, overlays on the included name are concatenated
+// as text (TextResource::combined_decode 0x9a5a20 ignores the mode); missing -> fatal "Could not locate include file".
+
+export function runGonPreprocessTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
+  console.log("\n# GON pre-pass (comments, #include) vs the game's Gon_Preprocess 0xa50bd0");
+  const pp = (src: string, files: Record<string, string> = {}) => preprocess(src, (n) => (n in files ? files[n]! : null));
+
+  test("gon pre-pass: `//` runs to end of line and the newline is kept", () => {
+    eq(stripComments("a 1 // c\nb 2").text, "a 1 \nb 2");
+  });
+  test("gon pre-pass: `/* */` is removed together with the newlines inside it", () => {
+    eq(stripComments("a /* x\ny */ 1").text, "a  1");
+  });
+  test("gon pre-pass: block comments do not nest — the first `*/` closes", () => {
+    eq(stripComments("/* a /* b */ c */").text, " c */");
+  });
+  test("gon pre-pass: `/*/` closes at once (the `*` of the opener counts as the `*` before `/`)", () => {
+    eq(stripComments("x /*/ 5\ny 6").text, "x  5\ny 6");
+  });
+  test("gon pre-pass: an unterminated `/*` silently drops the rest of the text", () => {
+    eq(stripComments("a 1 /* b 2").text, "a 1 ");
+  });
+  test("gon pre-pass: an unterminated `/*` is reported with the offset of its `/` (and preprocess gives line:col)", () => {
+    eq(stripComments("a 1 /* b 2").unclosedBlockAt, 4);
+    eq(stripComments("a /* b */ 1").unclosedBlockAt, undefined);
+    const r = preprocess("x 1\n  /* open\ny 2");
+    eq(r.unclosedComment ? `${r.unclosedComment.line}:${r.unclosedComment.col}` : "none", "2:3");
+  });
+  test("gon pre-pass: a lone trailing `/` is kept", () => {
+    eq(stripComments("a /").text, "a /");
+  });
+  test("gon pre-pass: comment markers inside \"…\" are text; an escaped quote does not end the string", () => {
+    eq(stripComments('s "http://x /*y*/"').text, 's "http://x /*y*/"');
+    eq(stripComments('s "a\\"//b" // c').text, 's "a\\"//b" ');
+  });
+  test("gon pre-pass: `#` is not a comment to the pre-pass — a quote inside a # comment opens a string", () => {
+    const src = '# say "hi\n// kept\n"\nx 1';
+    eq(stripComments(src).text, src);
+  });
+  test("gon pre-pass: the source map points each kept character at its source offset", () => {
+    const r = stripComments("a/*xx*/b");
+    eq(r.text, "ab");
+    eq(r.map.join(","), "0,7");
+  });
+  test("gon pre-pass: `#include \"name\"` is replaced by the pre-passed included text (its comments stripped)", () => {
+    const r = pp('nodes {\n  #include "std.gon"\n  x 1\n}', { "std.gon": "a 1 // c\nb 2" });
+    eq(r.text, "nodes {\n  a 1 \nb 2\n  x 1\n}");
+    eq(r.includes.length, 1);
+    eq(r.includes[0]!.name, "std.gon");
+    assert(r.includes[0]!.found, "found");
+    eq(`${r.includes[0]!.line}:${r.includes[0]!.col}`, "2:3");
+  });
+  test("gon pre-pass: the name may be bare and may sit on the next line (blanks include newlines)", () => {
+    eq(pp("#include\nstd.gon\n", { "std.gon": "a 1" }).text, "a 1\n");
+  });
+  test("gon pre-pass: a closing quote ends the name; text after it on the line stays", () => {
+    eq(pp('#include "std.gon"z 3', { "std.gon": "a 1 " }).text, "a 1 z 3");
+  });
+  test("gon pre-pass: `#includes`, `#include\"x\"` and `#include` inside a string are not directives", () => {
+    const calls: string[] = [];
+    const r = preprocess('#includes x\n#include"y"\ns "#include z"', (n) => (calls.push(n), "!"));
+    eq(r.text, '#includes x\n#include"y"\ns "#include z"');
+    eq(calls.length, 0, "resolver never called");
+  });
+  test("gon pre-pass: `#include` inside a comment is inert (comments go first)", () => {
+    const calls: string[] = [];
+    const r = preprocess('// #include "a.gon"\n/* #include "b.gon" */x 1', (n) => (calls.push(n), "!"));
+    eq(r.text, "\nx 1");
+    eq(calls.length, 0);
+  });
+  test("gon pre-pass: nested includes go back to the SAME resolver with the name as written", () => {
+    const calls: string[] = [];
+    const files: Record<string, string> = { "a.gon": '#include "b.gon"\nfrom_a 1', "b.gon": "from_b 2 /* c */" };
+    const r = preprocess('#include "a.gon"', (n) => (calls.push(n), files[n] ?? null));
+    eq(calls.join(","), "a.gon,b.gon");
+    eq(r.text, "from_b 2 \nfrom_a 1");
+    eq(r.includes.map((i) => `${i.name}@${i.depth}`).join(","), "a.gon@0,b.gon@1");
+  });
+  test("gon pre-pass: a missing include is recorded (the game stops with a fatal error) and contributes no text", () => {
+    const r = pp('x 1\n  #include "nope.gon"\ny 2');
+    eq(r.text, "x 1\n  \ny 2");
+    eq(r.includes.length, 1);
+    assert(!r.includes[0]!.found, "not found");
+    eq(`${r.includes[0]!.line}:${r.includes[0]!.col}`, "2:3");
+  });
+  test("gon pre-pass: an include cycle terminates in the editor and is flagged (the game would recurse forever)", () => {
+    const r = pp('#include "a.gon"', { "a.gon": '#include "a.gon"' });
+    assert(r.includes.some((i) => i.cycle === true), JSON.stringify(r.includes.slice(0, 3)));
+  });
+  test("gon pre-pass: `#define` is reported (macros are expanded by the game, not modelled by the editor)", () => {
+    const r = pp("#define NODE\n shop1 { type shop }\n#end\nx { #NODE }");
+    eq(r.defines.join(","), "NODE");
+  });
+  test("gon tokenizer: `/*/` closes the block comment like the pre-pass (x 5, y 6)", () => {
+    const r = root("x /*/ 5\ny 6");
+    eq(r.entries.map((e) => `${e.key}=${(e.value as VScalar).raw}`).join(","), "x=5,y=6");
+  });
+
+  // ---- the file layer: where a name resolves -----------------------------------------------------------------------
+  const BASE = join(INCLUDE_FIXTURES, "base");
+  const MOD = join(INCLUDE_FIXTURES, "mods", "m");
+  test("gon include path: <dir of the resource being loaded> + name (data/maps/town.gon + std_nodes.gon)", () => {
+    const t = locateInclude({ resource: "data/maps/town.gon", dataRoot: BASE }, "std_nodes.gon");
+    eq(t.packPath, "data/maps/std_nodes.gon");
+    eq(t.source, "base");
+    assert(!t.outside, "inside");
+  });
+  test("gon include path: never reads outside data/ (a `..` escape is refused, not read)", () => {
+    const t = locateInclude({ resource: "data/maps/town.gon", dataRoot: BASE }, "../../../package.json");
+    assert(t.outside, "outside");
+    eq(t.source, null);
+    eq(t.text, null);
+  });
+  test("gon include file: base town.gon inlines std_nodes.gon and, nested, deeper.gon", () => {
+    const r = preprocessFile(readFileSync(join(BASE, "maps", "town.gon"), "utf8"), { resource: "data/maps/town.gon", dataRoot: BASE });
+    const nodes = field(r.text, "nodes");
+    if (nodes.t !== "obj") throw new Error("nodes is an object");
+    eq(nodes.entries.map((e) => e.key).join(","), "shop0,camp0,exit0");
+    assert(r.includes.every((i) => i.found), JSON.stringify(r.includes));
+  });
+  test("gon include file: a nested include resolves against the TOP-LEVEL resource's directory", () => {
+    const r = preprocessFile(readFileSync(join(BASE, "maps", "sub", "inner.gon"), "utf8"), { resource: "data/maps/inner_host.gon", dataRoot: BASE });
+    const inner = field(r.text, "inner");
+    if (inner.t !== "obj") throw new Error("inner is an object");
+    eq(inner.entries.map((e) => e.key).join(","), "camp0", "maps/deeper.gon, not maps/sub/deeper.gon");
+  });
+  test("gon include file: a mod-shipped file at the mirrored path is found (mod before base)", () => {
+    const t = locateInclude({ resource: "data/maps/town.gon", dataRoot: BASE, modDir: MOD }, "extra_nodes.gon");
+    eq(t.source, "mod");
+    assert((t.text ?? "").includes("modnode0"), String(t.text));
+  });
+  test("gon include file: a mod's overlay on the INCLUDED name is concatenated as text (TextResource, mode ignored)", () => {
+    const t = locateInclude({ resource: "data/maps/town.gon", dataRoot: BASE, modDir: MOD }, "std_nodes.gon");
+    eq(t.source, "base");
+    eq(t.overlays.join(","), "data/maps/std_nodes.gon.append");
+    const text = t.text ?? "";
+    assert(text.indexOf("shop0") >= 0 && text.indexOf("appended0") > text.indexOf("shop0"), text);
+  });
+  test("gon include T1: every vanilla maps/*.gon with an #include parses after the pre-pass and gains the shared nodes", () => {
+    const maps = join(EXTRACTED_DATA, "maps");
+    if (!existsSync(join(maps, "standard_nodes.gon"))) {
+      console.log("  (skipped: no .extracted/data/maps/standard_nodes.gon)");
+      return;
+    }
+    const std = root(preprocessFile(readFileSync(join(maps, "standard_nodes.gon"), "utf8"), { resource: "data/maps/standard_nodes.gon" }).text);
+    let n = 0;
+    for (const f of readdirSync(maps).filter((x) => x.endsWith(".gon"))) {
+      const src = readFileSync(join(maps, f), "utf8");
+      if (!src.includes("#include")) continue;
+      n++;
+      const r = preprocessFile(src, { resource: `data/maps/${f}` });
+      assert(r.includes.length > 0 && r.includes.every((i) => i.found), `${f}: ${JSON.stringify(r.includes)}`);
+      const nodes = field(r.text, "nodes");
+      if (nodes.t !== "obj") throw new Error(`${f}: nodes`);
+      for (const e of std.entries) assert(nodes.entries.some((x) => x.key === e.key), `${f}: ${e.key} inlined`);
+    }
+    assert(n >= 19, `expected the 19 including maps, saw ${n}`);
   });
 }

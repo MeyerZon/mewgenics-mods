@@ -232,4 +232,27 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     eq(only(v("manifest-build-mismatch", { nativeBuild: { known: true, matched: { steamBuildId: "25143593" } } }), "manifest-build-mismatch").length, 0, "match");
     eq(only(v("manifest-build-mismatch", { nativeBuild: null }), "manifest-build-mismatch").length, 0, "no exe");
   });
+  test("validator fixture: include-missing is an error at the #include line for a name that exists in neither the mod nor the base (the game stops: Could not locate include file)", () => {
+    const r = v("include-missing");
+    const f = expectCode(r, "include-missing", "error");
+    eq(f.location?.file, "mods/include-missing/data/maps/town.gon.append");
+    eq(`${f.location?.line}:${f.location?.col}`, "4:2");
+    assert(f.message.includes("nope_nodes.gon") && f.message.includes("data/maps/nope_nodes.gon"), f.message);
+    assert(/error message box/.test(f.message) && /exits/.test(f.message), `says what the game does: ${f.message}`);
+    assert(!r.ok, "an error makes the mod invalid");
+  });
+  test("validator fixture: an #include that resolves in the base (data/maps/std_nodes.gon) is not reported", () => {
+    const r = v("include-missing");
+    eq(only(r, "include-missing").length, 1, "only nope_nodes.gon");
+  });
+  test("validator fixture: gon-define-unmodelled warns for #define (game macros the editor does not expand)", () => {
+    const f = expectCode(v("gon-define-unmodelled"), "gon-define-unmodelled", "warning");
+    assert(/NODE/.test(f.message), f.message);
+  });
+  test("validator fixture: comment-unclosed warns at the /* line (the game silently drops everything after it)", () => {
+    const f = expectCode(v("comment-unclosed"), "comment-unclosed", "warning");
+    eq(f.location?.file, "mods/comment-unclosed/data/maps/town.gon.append");
+    eq(`${f.location?.line}:${f.location?.col}`, "5:1");
+    assert(/drops everything after it/.test(f.message), f.message);
+  });
 }

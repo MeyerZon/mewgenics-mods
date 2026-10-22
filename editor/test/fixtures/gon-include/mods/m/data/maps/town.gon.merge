@@ -1,0 +1,4 @@
+// a mod overlay on the includer: may use comments and #include, resolved against data/maps/
+nodes {
+    #include "extra_nodes.gon"
+}

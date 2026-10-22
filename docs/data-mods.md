@@ -33,7 +33,39 @@ fragile when the base game adds rows. Prefer `.append` with new localization key
 Not every file in a mod folder is an overlay: `tests/` (the harness's `.mewtest` scripts), `art/` (the editor's
 scene sources; the built SWFs go under `swfs/`) and dotfiles are never loaded by the game (the pack has no such
 root), so the validator skips them (`isPackPath` in `editor/src/core/validate/validator.ts`; before 2026-10-22 each
-`.mewtest` drew a `whole-file-replace` warning).
+`.mewtest` drew a `whole-file-replace` warning). The one exception is `art/*.scene.json`, which the validator runs
+through the scene validator (`text-loc-key-html` and the other scene codes) instead of skipping.
+
+### Comments and `#include` (OBSERVED 2026-10-22, engine-map "GON text pre-pass")
+
+Every `.gon` the game loads — base files **and** every mod `.gon`, `.gon.append`, `.gon.merge`, `.gon.patch` — goes
+through the same pre-pass before parsing, so a mod file may use all of these:
+
+- `# …`, `// …` comments to end of line, `/* … */` block comments (no nesting: the first `*/` closes; an unclosed
+  `/*` silently swallows the rest of the file — the validator warns `comment-unclosed` at its line). Comment markers
+  inside `"…"` are text.
+- `#include "file.gon"` (quotes optional; the name may not contain a quote; anything after it on the line stays):
+  the file's text — its own comments stripped, its own includes expanded — is pasted in place, so put it where its
+  content belongs (vanilla: `nodes { #include "standard_nodes.gon" … }` in the 19 `maps/*.gon`).
+- **Where it resolves:** `<directory of the file being loaded>/<name>`, by the pack path. For an overlay that is the
+  directory of its **base** file: in `mods/m/data/maps/alley.gon.append`, `#include "x.gon"` means `data/maps/x.gon`,
+  looked up in the mod folders first and then the pack — so a mod can ship `mods/m/data/maps/x.gon` and include it.
+  A nested include resolves against the **top-level** file's directory, not the included file's. Avoid `..`
+  (passed to the file manager as written; unverified) — the editor refuses names that leave `data/`.
+- **A missing include is fatal:** the game shows an error message box `Could not locate include file: <name>` and
+  exits. The validator
+  reports it as `include-missing` (error) at the directive's line.
+- **Overlays and included files:** the includer's overlays apply after inlining (an `alley.gon.merge` sees the
+  included nodes as part of the base). An overlay *on the included file's own name* (`standard_nodes.gon.append`)
+  is picked up, but included files are read as plain text, so its text is just **pasted after** the base text —
+  `.append` behaves as expected inside the including object, while `.merge` / `.patch` do **not** merge (their keys
+  arrive as extra children, `.patch` suffixes literally). To change shared nodes, overlay each including file.
+- `#define NAME … #end` macros exist in the pre-pass (unused by vanilla); the editor does not expand them and warns
+  `gon-define-unmodelled`.
+
+The editor mirrors this in `editor/src/core/gon/preprocess.ts` + `editor/src/core/gon-includes.ts`; the validator and
+the merge preview check the text the game would actually parse, while the GON editor keeps comments and `#include`
+lines as written.
 
 ## GON typing fidelity (2026-10-22)
 
@@ -48,9 +80,9 @@ for all 210 vanilla files); its *typing* now follows the game's rules below. Pin
 is flushed first), inside it `\` escapes the next character — **only `\n` becomes a newline**, `\t` is a plain `t`,
 `\"` → `"`, `\\` → `\` — and the closing `"` ends the token. **The quotes are dropped and no "was quoted" flag
 survives**: `"5"` and `5` reach the parser as the same token. Unclosed quote / comment → `GON ERROR: didn't close
-a quote/comment somewhere`. `//` and `/* */` are **not** in this tokenizer, yet 188 / 35 of the 210 vanilla
-`data/*.gon` files use them (comments containing `"`, `{`, `:` that would otherwise break parsing), so an earlier
-pass must strip them (INFERRED; not located — a candidate is the text pass at 0xa50bd0 before parsing).
+a quote/comment somewhere`. `//`, `/* */` and `#include` are **not** in this tokenizer (188 / 35 / 19 of the 210
+vanilla `data/*.gon` files use them): the pre-pass `Gon_Preprocess` 0xa50bd0 strips the comments and inlines the
+includes first (OBSERVED; "Comments and `#include`" above, engine-map "GON text pre-pass").
 
 **Parser.** `{` → object (type 3, children are `name value` pairs; `GON ERROR: missing a '}'`), `[` → array
 (type 4; `missing a ']'`), anything else is a scalar typed **from its text alone**: type starts as string (1) and
@@ -79,8 +111,9 @@ string; `.add` / `.multiply` (Gon_DeepMerge 0x946680) add / multiply the **doubl
 | `:` `=` as whitespace (`a=5`, `a:5`, `[1:2=3]`) | yes (no vanilla line has either outside a comment or a quoted string) | no — `a=5` was one bare token | **DIVERGED → fixed**; they live in the trivia, round trip intact; a string holding `=` `:` `,` is now pretty-printed quoted |
 | `{ } [ ]` adjacency (`a{b 1}`, `c[2]`, `"a"5`) | single-char tokens; a quote flushes the pending token | same | MATCH |
 | `#` line comment, also mid-token (`5#c` → `5`) | yes | yes | MATCH |
-| `//` line and `/* */` block comments | not in the tokenizer; stripped earlier (INFERRED from 188 / 35 vanilla files) | comments | MATCH (inferred); editor-only until the pass is located |
-| `#include "standard_nodes.gon"` (the 20 `maps/*.gon`, inside `nodes { … }`; the only vanilla `#` use) | to the tokenizer a `#` comment — so the same pre-pass must be a preprocessor that inlines the file (INFERRED) | a comment; the included nodes are invisible to the editor | gap (not fixed here): the editor neither inlines nor validates includes — a mod overlaying `maps/*.gon` nodes sees fewer base children than the game |
+| `//` line and `/* */` block comments | stripped by the pre-pass `Gon_Pre_StripComments` 0xa4eb80 (OBSERVED): `//` keeps its newline, `/* */` drops its newlines, no nesting, `/*/` closes at once, never inside `"…"` | comments (trivia); `/*/` ran to the next `*/` | **`/*/` DIVERGED → fixed**; otherwise MATCH. The semantic readers (validator, merge preview) parse `preprocess()` output, which is the exact port — the trivia tokenizer still differs where the pre-pass ignores `#` comments (a `/*` or `"` inside a `#` comment counts to the game; none in vanilla) |
+| `#include "standard_nodes.gon"` (19 `maps/*.gon`, inside `nodes { … }`; the only vanilla `#` directive) | inlined by `Gon_Pre_ExpandIncludes` 0xa4edf0 from `<dir of the resource>/<name>` as a TextResource (OBSERVED; missing = fatal) | a `#` comment; the included nodes were invisible | **DIVERGED → fixed**: `preprocess()` + `gon-includes.ts` inline it for the validator and the merge preview (mod copy first, the mod's overlays on the included name concatenated as text); `include-missing` when it resolves nowhere; the editing AST keeps the line as trivia |
+| `#define NAME … #end` / `#NAME` macros | expanded by the pre-pass, top level only (OBSERVED in outline; none in vanilla) | not modelled | gap, reported as `gon-define-unmodelled` |
 | `\n` in quotes | newline (5 vanilla uses) | newline | MATCH |
 | `\t`, `\r` in quotes | plain `t`, `r` | tab, CR | **DIVERGED → fixed**; the pretty-printer emits raw tabs / CRs and escapes only `\` `"` `\n` |
 | `\"`, `\\`, `\/`, `\z` | `"`, `\`, `/`, `z` | same | MATCH |

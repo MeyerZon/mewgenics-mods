@@ -1,0 +1,4 @@
+// nested includes resolve against the TOP-LEVEL resource directory (maps/), not maps/sub/
+inner {
+    #include "deeper.gon"
+}
