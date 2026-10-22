@@ -1,6 +1,7 @@
 /* Pure rules of the 3D-object registry; see fw_obj3d_rules.h. */
 #include <string.h>
 #include "fw_obj3d_rules.h"
+#include "fw_mesh_rules.h"
 
 /* ----------------------------------------------------------------------- */
 /* registry                                                                 */
@@ -24,23 +25,9 @@ int fw_obj3d_model_ok(const char *model) {
     return 1;
 }
 
+/* the one model path rule (fw_mesh_rules.c model_check; editor/src/core/model3d.ts mirrors it) */
 int fw_obj3d_model_path_ok(const char *path) {
-    static const char PREFIX[] = "models/", EXT[] = ".obj";
-    if (!fw_obj3d_model_ok(path)) return 0;
-    size_t n = strlen(path);
-    if (strncmp(path, PREFIX, sizeof PREFIX - 1) != 0) return 0;   /* also refuses '/'-absolute and drive paths */
-    if (strchr(path, ':')) return 0;
-    if (n < sizeof EXT - 1 || strcmp(path + n - (sizeof EXT - 1), EXT) != 0) return 0;
-    /* every segment non-empty and not "..", the file name more than the bare extension */
-    const char *seg = path;
-    for (;;) {
-        const char *slash = strchr(seg, '/');
-        size_t len = slash ? (size_t)(slash - seg) : strlen(seg);
-        if (len == 0) return 0;
-        if (len == 2 && seg[0] == '.' && seg[1] == '.') return 0;
-        if (!slash) return len > sizeof EXT - 1;
-        seg = slash + 1;
-    }
+    return fw_obj3d_model_ok(path) && fw_mesh_model_kind(path) != 0;
 }
 
 void fw_obj3d_identity(float out[16]) {

@@ -299,7 +299,7 @@ yet). Add it with a `.merge` (`mods/fw-3d/data/characters/inanimate_objects.gon.
 `"@Name"`, a model a native mod registers with the mesh engine and declares in `editor/registered-names.json` as
 `{ "name": "Name", "kind": "model", "mod": "<mod>" }` (kind `model` names resolve only `@` references, never a status
 or ability). Path rule (the editor's `editor/src/core/model3d.ts` and the DLL's `fw_obj3d_model_path_ok` apply the
-same one): relative to the mod folder, starts `models/`, ends `.obj` (the editor's rule; the DLL's mesh loader also reads `.gltf` / `.glb`, see "glTF models" below), no `..`, no empty
+same one): relative to the mod folder, starts `models/`, ends `.obj`, `.gltf` or `.glb` (lowercase; one rule with the DLL's loader, `fw_mesh_model_kind`, so a path that validates also loads; see "glTF models" below), no `..`, no empty
 segment, no backslash, not absolute, printable ASCII, under 64 bytes. Model files are served through `-modpaths` like
 any pack file (`ResourceManager_GetBinaryResource`, the first mod path that has the file; `possible_3d_work.md` §1
 "Mesh bytes") and are **mod-only**: the pack has none, so nothing is looked up in base data. Files under a mod's
@@ -338,8 +338,8 @@ remap; `@Name` models; animation; `render3d` modes (floor / billboard / upright)
 
 **glTF models (the DLL's loader, `fw_mesh_gltf.c`).** What a `.gltf` / `.glb` must be to load on the first try:
 - glTF **2.0** (`asset.version` "2.x"); one `.glb` (preferred), or `.gltf` + `.bin` side by side in `mods/<mod>/models/`,
-  or a `.gltf` with the buffer as a `data:` URI; name `<name>.gltf|.glb`, letters/digits/`_`/`-`, at most 63
-  characters, lowercase extension, no sub-folder.
+  or a `.gltf` with the buffer as a `data:` URI; name `<name>.gltf|.glb`, letters/digits/`_`/`-`, at most 63 bytes
+  for the whole `models/...` path, lowercase extension, sub-folders fine; OBJ texture v is flipped on load (`v' = 1 - v`).
 - **Triangles only** (Blender: Triangulate modifier or the exporter's option); points/lines/strips are refused.
 - At most 1 048 576 vertices / 3 145 728 indices for the whole model (a prop: a few thousand).
 - **Y up** (the glTF / Blender exporter default "+Y Up"); **1 unit = 1 m = 1 tile**; origin = the feet / ground contact,

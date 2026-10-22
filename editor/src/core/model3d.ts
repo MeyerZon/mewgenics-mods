@@ -17,7 +17,8 @@ export function isRegisteredModelRef(value: string): boolean {
   return value.length > 1 && value.startsWith("@");
 }
 
-/** Why `path` is not an acceptable mod model path, or null when it is (`models/<segments>/<name>.obj`). */
+/** Why `path` is not an acceptable mod model path, or null when it is (`models/<segments>/<name>.obj|.gltf|.glb`) —
+ * the same rule as the DLL's `fw_mesh_model_kind` (native/framework/src/fw_mesh_rules.c), so what validates also loads. */
 export function modelPathProblem(path: string): string | null {
   if (path === "") return "the path is empty";
   if (path.includes("\\")) return "use forward slashes, not a backslash";
@@ -26,8 +27,11 @@ export function modelPathProblem(path: string): string | null {
   const segs = path.split("/");
   if (segs.some((s) => s === "")) return "the path has an empty segment (//)";
   if (segs.some((s) => s === "..")) return "the path must not contain .. segments";
-  if (!path.endsWith(".obj")) return "only .obj models are supported for now";
-  if (segs[segs.length - 1] === ".obj") return "the file name is missing (models/<name>.obj)";
+  if (segs.some((s) => s === ".")) return "the path must not contain . segments";
+  // the extensions mewframework loads (fw_mesh_model_kind: one rule with the DLL), lowercase
+  const ext = [".obj", ".gltf", ".glb"].find((e) => path.endsWith(e));
+  if (!ext) return "a model is a .obj, .gltf or .glb file (lowercase extension)";
+  if (segs[segs.length - 1] === ext) return `the file name is missing (models/<name>${ext})`;
   if (/[^\x20-\x7e]/.test(path)) return "the path must be printable ASCII";
   if (path.length >= 64) return "the path is too long (the framework stores at most 63 bytes)";
   return null;

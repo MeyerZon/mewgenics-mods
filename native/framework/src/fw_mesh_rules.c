@@ -291,6 +291,7 @@ int fw_mesh_obj_parse(const char *text, size_t len, FwMesh *out, FwMeshError *er
             if (s.ntex >= FW_MESH_MAX_VERTS) { set_err(err, line, "more than %u texcoords (limit) at line %d", FW_MESH_MAX_VERTS, line); goto fail; }
             if (parse_numbers(&cur, le, f, 2, 1, 3, "vt", line, err) < 0) goto fail;
             if (!grow((void **)&s.tex, &s.ctex, 2 * (s.ntex + 1), sizeof *s.tex)) goto oom;
+            f[1] = 1.0f - f[1];   /* OBJ's texture origin is bottom-left, glTF's / the game's top-left (Godot's OBJ importer does the same) */
             memcpy(&s.tex[2 * s.ntex++], f, sizeof f);
         } else if (tok_is(ks, ke, "vn")) {
             float f[3];
@@ -482,30 +483,45 @@ void fw_mesh_reg_clear(FwMeshRegistry *reg) {
 /* ------------------------------------------------------------------ model paths */
 #define MODEL_PREFIX "models/"
 
-/* the kind of models/<name>.<obj|gltf|glb> with a valid name (and *nameLen), else 0 */
-static int model_check(const char *ref, size_t *nameLen) {
+/* THE model path rule, shared by the loader (here), the 3D-object registry (fw_obj3d_model_path_ok) and the editor
+ * (editor/src/core/model3d.ts modelPathProblem): relative to the mod folder, starts models/, printable ASCII without a
+ * backslash or ':', no empty / "." / ".." segment (sub-folders are fine), a file name longer than its extension, the
+ * lowercase extension .obj | .gltf | .glb giving the kind, at most FW_MESH_NAME_MAX (63) bytes (the registry's and
+ * Fw3dObject's name size). *nameAt / *nameLen = the file name without its extension. */
+static int model_check(const char *ref, size_t *nameAt, size_t *nameLen) {
     if (!ref) return 0;
-    size_t pl = sizeof MODEL_PREFIX - 1;
-    if (strncmp(ref, MODEL_PREFIX, pl) != 0) return 0;
-    size_t nl = 0;
-    for (const char *q = ref + pl; *q && *q != '.'; q++) {
-        char c = *q;
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || is_digit(c) || c == '_' || c == '-')) return 0;
-        nl++;
+    size_t pl = sizeof MODEL_PREFIX - 1, n = strlen(ref);
+    if (n > FW_MESH_NAME_MAX || strncmp(ref, MODEL_PREFIX, pl) != 0) return 0;
+    for (size_t i = 0; i < n; i++) {
+        unsigned char c = (unsigned char)ref[i];
+        if (c < 0x20 || c > 0x7e || c == '\\' || c == ':') return 0;
     }
-    if (nl == 0 || nl > FW_MESH_NAME_MAX) return 0;
-    const char *ext = ref + pl + nl;
-    int kind = strcmp(ext, ".obj") == 0 ? FW_MESH_KIND_OBJ : strcmp(ext, ".gltf") == 0 ? FW_MESH_KIND_GLTF
-             : strcmp(ext, ".glb") == 0 ? FW_MESH_KIND_GLB : 0;
-    if (kind && nameLen) *nameLen = nl;
-    return kind;
+    const char *seg = ref, *last = ref;
+    for (;;) {
+        const char *slash = strchr(seg, '/');
+        size_t len = slash ? (size_t)(slash - seg) : strlen(seg);
+        if (len == 0 || (len == 1 && seg[0] == '.') || (len == 2 && seg[0] == '.' && seg[1] == '.')) return 0;
+        if (!slash) { last = seg; break; }
+        seg = slash + 1;
+    }
+    static const struct { const char *ext; int kind; } kinds[] = { { ".obj", FW_MESH_KIND_OBJ }, { ".gltf", FW_MESH_KIND_GLTF }, { ".glb", FW_MESH_KIND_GLB } };
+    size_t ll = strlen(last);
+    for (size_t k = 0; k < sizeof kinds / sizeof kinds[0]; k++) {
+        size_t el = strlen(kinds[k].ext);
+        if (ll > el && strcmp(last + ll - el, kinds[k].ext) == 0) {
+            if (nameAt) *nameAt = (size_t)(last - ref);
+            if (nameLen) *nameLen = ll - el;
+            return kinds[k].kind;
+        }
+    }
+    return 0;
 }
 
-int fw_mesh_model_kind(const char *path) { return model_check(path, NULL); }
+int fw_mesh_model_kind(const char *path) { return model_check(path, NULL, NULL); }
 
 int fw_mesh_model_path(const char *ref, char *out, size_t cap) {
     if (out && cap) out[0] = 0;
-    if (!out || !model_check(ref, NULL)) return 0;
+    if (!out || !model_check(ref, NULL, NULL)) return 0;
     size_t n = strlen(ref);
     if (n + 1 > cap) return 0;
     memcpy(out, ref, n + 1);
@@ -514,9 +530,9 @@ int fw_mesh_model_path(const char *ref, char *out, size_t cap) {
 
 int fw_mesh_name_from_path(const char *path, char *out, size_t cap) {
     if (out && cap) out[0] = 0;
-    size_t nl = 0;
-    if (!out || !model_check(path, &nl) || nl + 1 > cap) return 0;
-    memcpy(out, path + sizeof MODEL_PREFIX - 1, nl);
+    size_t at = 0, nl = 0;
+    if (!out || !model_check(path, &at, &nl) || nl + 1 > cap) return 0;
+    memcpy(out, path + at, nl);
     out[nl] = 0;
     return 1;
 }
