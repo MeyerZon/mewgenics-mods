@@ -11,10 +11,11 @@ import { emitSwf, minimalGateSwf } from "../src/core/art/swf-emitter.ts";
 import { exampleScene, validateScene } from "../src/core/art/scene.ts";
 import { importSvg } from "../src/core/art/svg-import.ts";
 import { SWF_GATE_VARIANTS } from "../src/core/art/art-io.ts";
+import { vanillaSwfDir } from "../src/core/repo.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VANILLA_DIR = process.env.MEWGENICS_VANILLA_SWF_DIR || resolve(HERE, "../../.extracted/swfs");
+const VANILLA_DIR = vanillaSwfDir(); // repo.ts: MEWGENICS_VANILLA_SWF_DIR, else <extracted root>/swfs
 const SQ = "M0 0 L40 0 L40 40 L0 40 Z";
 const LINE = "M0 0 L10 0";
 

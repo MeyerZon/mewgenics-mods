@@ -2,7 +2,7 @@
 // Test harness for the Mewgenics mod editor core (+ an MCP smoke test).
 // Node built-ins only; plain assertions. Exits non-zero on any failure.
 
-import { readFileSync, existsSync, mkdtempSync } from "node:fs";
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -291,10 +291,13 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
   else console.log(`  (skipped: ${cache.hint}; StatusOnBattleStart cannot be checked as a component)`);
   // The check above needs the git-ignored component-names cache. A fresh worktree has none: the test must then
   // say so with a '(skipped: …)' line, not FAIL (nested run with MEWGENICS_EDITOR_DATA pointing at an empty dir).
+  // MEWGENICS_ANALYSIS_DIR -> an empty dir too, so the on-demand distill from list_names.tsv cannot fill the list on
+  // a machine that has .analysis/list_names.tsv: the skip path is exercised whatever the machine holds.
   test("component cache absent: the JokersLuck validation check logs '(skipped: … component-names.json …)' and the run stays green", () => {
     const empty = mkdtempSync(join(tmpdir(), "mewged-nocache-"));
+    const emptyAnalysis = mkdtempSync(join(tmpdir(), "mewged-noanalysis-"));
     const r = spawnSync(process.argv[0]!, [join(HERE, "run-tests.ts"), "--only", "_jokersluck-test"], {
-      env: { ...process.env, MEWGENICS_EDITOR_DATA: empty, MEWGENICS_EXTRACTED_DATA: EXTRACTED_DATA },
+      env: { ...process.env, MEWGENICS_EDITOR_DATA: empty, MEWGENICS_EXTRACTED_DATA: EXTRACTED_DATA, MEWGENICS_ANALYSIS_DIR: emptyAnalysis },
       encoding: "utf8", timeout: 600000, maxBuffer: 64 << 20,
     });
     const out = (r.stdout || "") + (r.stderr || "");
@@ -310,6 +313,24 @@ if (BASE_READY && existsSync(join(MODS_DIR, "dev-sandbox"))) {
     assert(!codes(validateMod("jokers-luck")).includes("native-build-unknown"), "default on this machine (known build or no exe)");
   });
 }
+// T0: no base data needed (synthetic TSV, redirected cache and data dirs).
+test("build:index reads list_names.tsv from MEWGENICS_ANALYSIS_DIR: a synthetic TSV yields exactly its glaiel:: class names", () => {
+  const analysis = mkdtempSync(join(tmpdir(), "mewged-analysis-"));
+  const cacheDir = mkdtempSync(join(tmpdir(), "mewged-cache-"));
+  const noData = mkdtempSync(join(tmpdir(), "mewged-nodata-"));
+  writeFileSync(join(analysis, "list_names.tsv"),
+    "0x1000\tglaiel::ZetaComponent::Update\n0x1010\tglaiel::AlphaStatus\n0x1020\tnot_a_glaiel_name\n0x1030\tglaiel::ZetaComponent::~ZetaComponent\n");
+  const r = spawnSync(process.argv[0]!, [join(HERE, "..", "scripts", "build-index.ts")], {
+    env: { ...process.env, MEWGENICS_ANALYSIS_DIR: analysis, MEWGENICS_EDITOR_DATA: cacheDir, MEWGENICS_EXTRACTED_DATA: noData },
+    encoding: "utf8", timeout: 120000,
+  });
+  const out = (r.stdout || "") + (r.stderr || "");
+  eq(r.status, 0, out.slice(-300));
+  const file = join(cacheDir, "component-names.json");
+  assert(existsSync(file), `component-names.json written to the redirected cache dir: ${out.slice(-300)}`);
+  eq(JSON.stringify(JSON.parse(readFileSync(file, "utf8"))), JSON.stringify(["AlphaStatus", "ZetaComponent"]));
+  assert(/component-names\.json: 2 glaiel:: classes/.test(out), out.slice(-300));
+});
 
 // ---- 4c. mods/_autoplay: the auto-resolve overlay (TDD target 3; T1 against the real base) ----
 if (BASE_READY) {
@@ -617,7 +638,9 @@ await mcpSmoke();
 if (!process.env.MEWGENICS_EXTRACTED_DATA) {
   console.log("\n# T0 without .extracted/ (nested run with MEWGENICS_EXTRACTED_DATA pointing at an empty dir)");
   test("npm test skips, not fails, when no base data is extracted (CI shape)", () => {
-    const empty = mkdtempSync(join(tmpdir(), "mewged-noextracted-"));
+    // an empty extracted ROOT (…/data inside a fresh temp dir), so swfs/ and textures/ resolve empty too
+    const empty = join(mkdtempSync(join(tmpdir(), "mewged-noextracted-")), "data");
+    mkdirSync(empty);
     const r = spawnSync(process.argv[0]!, [join(HERE, "run-tests.ts")], { env: { ...process.env, MEWGENICS_EXTRACTED_DATA: empty }, encoding: "utf8", timeout: 600000, maxBuffer: 64 << 20 });
     const out = (r.stdout || "") + (r.stderr || "");
     const fails = out.split("\n").filter((l) => l.startsWith("FAIL")).slice(0, 6);

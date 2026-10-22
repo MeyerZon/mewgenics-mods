@@ -139,6 +139,7 @@ Things no test can see: they need a human at the game, a decision, or an account
   call `list_base_data` / `validate_mod` (your registration still names `editor/src/mcp/server.mjs`, now a 4-line shim);
   optionally re-register with `claude mcp add mewgenics-editor -- node "<repo>/editor/src/mcp/server.ts"`. Run
   `npm run test:ingame` once with Steam up (the runner is typed, not changed).
+- [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
 
 ### Only you can do these — added 2026-10-19 night (after the leftovers stack)
 
@@ -332,6 +333,12 @@ Things no test on this machine can decide. Tick them off here; each links to whe
    `extractedData` (`editor/test/preview-merge-tests.ts`); `MEWGENICS_EDITOR_DATA` redirects the `editor/data`
    caches and a missing component list is one `component-list-missing` info / a logged skip
    (`docs/tdd-procedure.md` "Running the editor from a git worktree").
+   - [x] Follow-up 2026-10-22 (`fix/extracted-env-paths`): #77's "palette.ts / Ruffle list" note
+     (`art/palette.ts` read `<repo>/.extracted/textures`, the Ruffle tab's vanilla list `<repo>/.extracted/swfs`)
+     and #83's "build:index writes `editor/data` into the worktree" report (it already wrote to `DATA_CACHE_DIR`;
+     the report was a run without `MEWGENICS_EDITOR_DATA`; now pinned by a test): every game-data / cache path goes
+     through `repo.ts` `EXTRACTED_ROOT` / `extractedPath` / `vanillaSwfDir` / `DATA_CACHE_DIR`, so
+     `MEWGENICS_EXTRACTED_DATA` + `MEWGENICS_EDITOR_DATA` are the whole worktree setup.
 8. [ ] **Golden merge cases** (owner 2026-10-20: "tdd 8 - ok" — the "golden through `dump`" sub-item is approved and
    queued as agent work, first of the 2026-10-20 run): freeze the merged output of each `.append/.merge/.patch` policy as observed in-game
    so the overlay engine is tested against the game, not only against the decompile. **Still blocked after target 1

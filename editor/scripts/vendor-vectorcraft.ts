@@ -19,6 +19,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { get as httpsGet } from "node:https";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DATA_CACHE_DIR } from "../src/core/repo.ts";
 import { inflateRawSync } from "node:zlib";
 
 export interface VcPin {
@@ -309,7 +310,7 @@ export function checkVendored(dst: string): { ok: boolean; reason?: string; miss
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const editor = join(dirname(fileURLToPath(import.meta.url)), "..");
   const dst = join(editor, "web", "public", "vectorcraft");
-  const dataDir = process.env.MEWGENICS_EDITOR_DATA ? process.env.MEWGENICS_EDITOR_DATA : join(editor, "data");
+  const dataDir = DATA_CACHE_DIR; // repo.ts: $MEWGENICS_EDITOR_DATA, else editor/data
   if (process.argv.includes("--check")) {
     const r = checkVendored(dst);
     if (r.ok) console.log(`VectorCraft ${r.manifest!.version}: ${r.manifest!.files.length} vendored file(s) verified`);

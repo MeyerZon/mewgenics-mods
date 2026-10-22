@@ -13,21 +13,41 @@ import { existsSync, mkdirSync } from "node:fs";
 const here = dirname(fileURLToPath(import.meta.url)); // <repo>/editor/src/core
 export const REPO_ROOT = resolve(here, "..", "..", "..");
 export const EDITOR_DIR = join(REPO_ROOT, "editor");
-// The two git-ignored inputs a checkout accumulates can be redirected, so a secondary git worktree (which has
-// neither) reads the main checkout's copies (docs/tdd-procedure.md "Running the editor from a git worktree"):
+// The git-ignored inputs a checkout accumulates can be redirected, so a secondary git worktree (which has
+// none of them) reads the main checkout's copies (docs/tdd-procedure.md "Running the editor from a git worktree"):
 //   MEWGENICS_EXTRACTED_DATA  the extracted `data/` tree; default <repo>/.extracted/data. The test runner also
 //                             points it at an empty dir for the T0-without-game-data nested run.
 //   MEWGENICS_EDITOR_DATA     the editor's cache dir (component-names.json, base-index.json, ingame-runs/);
 //                             default <repo>/editor/data. Refused under any `saves/` path (the editor writes here).
+//   MEWGENICS_VANILLA_SWF_DIR the extracted vanilla SWFs; default extractedPath("swfs"), read on every call (tests
+//                             point it at a temp dir).
+//   MEWGENICS_ANALYSIS_DIR    the reverse-engineering store (list_names.tsv, decompiled/); default <repo>/.analysis.
+//                             Read only: build:index distills component names from its list_names.tsv, and the
+//                             bindings evidence check resolves `.analysis/...` paths under it.
+// Every other read of the extracted tree (textures/, swfs/) goes through EXTRACTED_ROOT / extractedPath, so setting
+// MEWGENICS_EXTRACTED_DATA alone is enough for a worktree; never join REPO_ROOT with ".extracted" elsewhere.
 export const EXTRACTED_DATA = process.env.MEWGENICS_EXTRACTED_DATA
   ? resolve(process.env.MEWGENICS_EXTRACTED_DATA)
   : join(REPO_ROOT, ".extracted", "data");
+/** The extracted pack's root (the `.extracted/` layout: data/, swfs/, textures/, shaders/): the parent of
+ * MEWGENICS_EXTRACTED_DATA when it is set, else <repo>/.extracted. */
+export const EXTRACTED_ROOT = process.env.MEWGENICS_EXTRACTED_DATA ? dirname(EXTRACTED_DATA) : join(REPO_ROOT, ".extracted");
+/** A path inside the extracted pack root, e.g. extractedPath("textures", "palette.png"). */
+export function extractedPath(...segments: string[]): string {
+  return join(EXTRACTED_ROOT, ...segments);
+}
+/** Where the extracted vanilla SWFs live: MEWGENICS_VANILLA_SWF_DIR when set (read per call), else extractedPath("swfs"). */
+export function vanillaSwfDir(): string {
+  return process.env.MEWGENICS_VANILLA_SWF_DIR ? resolve(process.env.MEWGENICS_VANILLA_SWF_DIR) : extractedPath("swfs");
+}
 export const MODS_DIR = join(REPO_ROOT, "mods");
 export const DATA_CACHE_DIR = process.env.MEWGENICS_EDITOR_DATA
   ? resolve(process.env.MEWGENICS_EDITOR_DATA)
   : join(EDITOR_DIR, "data");
 export const REGISTERED_NAMES_PATH = join(EDITOR_DIR, "registered-names.json");
-export const ANALYSIS_DIR = join(REPO_ROOT, ".analysis");
+export const ANALYSIS_DIR = process.env.MEWGENICS_ANALYSIS_DIR
+  ? resolve(process.env.MEWGENICS_ANALYSIS_DIR)
+  : join(REPO_ROOT, ".analysis");
 export const COMBINED_CSV = join(EXTRACTED_DATA, "text", "combined.csv");
 
 /**

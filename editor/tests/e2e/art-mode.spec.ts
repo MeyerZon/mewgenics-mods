@@ -263,8 +263,8 @@ test.describe("Art mode — explorer & scene authoring", () => {
     const errors = collectConsole(page);
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
-    // before/after shots of the preview canvas for the PR's T3 look (editor/data/ is git-ignored)
-    const shots = join(REPO_ROOT, "editor", "data", "glow-shots");
+    // before/after shots of the preview canvas for the PR's T3 look (editor/data/ or $MEWGENICS_EDITOR_DATA, git-ignored)
+    const shots = join(process.env.MEWGENICS_EDITOR_DATA || join(REPO_ROOT, "editor", "data"), "glow-shots"); // the cache dir (repo.ts DATA_CACHE_DIR)
     mkdirSync(shots, { recursive: true });
     const before = await page.locator(".pvcanvasbox canvas").screenshot({ path: join(shots, "before.png") });
     await page.getByRole("button", { name: "Bake glow of body" }).click();

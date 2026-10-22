@@ -189,7 +189,8 @@ PR; everything else is on `main`.
 - Author/validate mods in the editor (or via the `mewgenics-editor` MCP tools); overlays live in `mods/<name>/`.
   Art, cat animations and glows the same way (`new_art_scene`, `bake_glow`, `build_swf`, `inspect_swf`).
 - In a secondary git worktree, point at the main checkout's inputs with `MEWGENICS_EXTRACTED_DATA` /
-  `MEWGENICS_EDITOR_DATA` / `MEWGENICS_VANILLA_SWF_DIR` and one `node_modules` junction (`tdd-procedure.md`); never
+  `MEWGENICS_EDITOR_DATA` / `MEWGENICS_ANALYSIS_DIR` (the vanilla SWFs and textures follow the first;
+  `MEWGENICS_VANILLA_SWF_DIR` is only an override) and one `node_modules` junction (`tdd-procedure.md`); never
   junction `.analysis` or `.extracted`.
 
 ### Hard safety rules (never violate)

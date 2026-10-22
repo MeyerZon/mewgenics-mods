@@ -10,10 +10,11 @@ import { exampleScene, validateScene } from "../src/core/art/scene.ts";
 import { readSwf, readTags, flattenTags } from "../src/core/art/swf-reader.ts";
 import * as emitter from "../src/core/art/swf-emitter.ts";
 import { SWF_GATE_VARIANTS } from "../src/core/art/art-io.ts";
+import { vanillaSwfDir } from "../src/core/repo.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VANILLA_DIR = process.env.MEWGENICS_VANILLA_SWF_DIR || resolve(HERE, "../../.extracted/swfs");
+const VANILLA_DIR = vanillaSwfDir(); // repo.ts: MEWGENICS_VANILLA_SWF_DIR, else <extracted root>/swfs
 
 export async function runArtTextTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
   console.log("\n# Art: text (DefineEditText with a game font class + ImportAssets2 fonts.swf)");
