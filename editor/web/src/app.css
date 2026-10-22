@@ -428,3 +428,20 @@ textarea.scenejson { width: 100%; min-height: 320px; resize: vertical; font-fami
 .rndtable td { padding: 2px 4px; vertical-align: middle; }
 .rndtable td:first-child { width: 100%; }
 .objrow { display: flex; gap: 8px; align-items: flex-start; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+/* Rooms mode: tileset art (thumbnails from /api/level-tile-art) and the iso view */
+.swatch.art { background: var(--panel2); overflow: hidden; padding: 0; }
+.swatch.art img { width: 100%; height: 100%; object-fit: contain; }
+.rcell .cellart { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.rcell .cellart.objart { inset: 8%; width: 84%; height: 84%; }
+.rcell[data-art="clip"] { background: var(--panel) !important; }
+.rcell[data-art="clip"] .tl { display: none; }
+.roomiso { position: relative; margin: 0 auto; user-select: none; flex: none; }
+.roomiso .icell { position: absolute; border: 0; padding: 0; margin: 0; cursor: crosshair; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: var(--panel); font-family: var(--mono); color: #fff; }
+.roomiso .icell { background: var(--panel2); }
+.roomiso .icell.alt { background: var(--line); }
+.roomiso .icell:hover { filter: brightness(1.25); }
+.roomiso .icell.sel { background: var(--acc); }
+.roomiso .icell.rnd { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.18) 0 4px, transparent 4px 8px); }
+.roomiso .icell .tl { font-size: 9px; text-shadow: 0 0 2px #000; }
+.roomiso .icell .obj { position: absolute; left: 34%; right: 34%; top: 14%; bottom: 14%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; border: 1px solid rgba(0,0,0,.45); }
+.roomiso .isoart { position: absolute; pointer-events: none; }

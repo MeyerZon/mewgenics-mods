@@ -191,3 +191,23 @@ export function categoryColor(category: number | null): string | null {
   if (category === 107) return TINTS.grey!;
   return null;
 }
+
+// ---- iso view (the Room editor's optional isometric drawing) ----
+//
+// The engine draws the board as 2:1 dimetric diamonds (MetalTile's polygon is (70,0) (0,35) (-70,0) (0,-35) clip px;
+// the iso matrix maps world x → (0.894, 0.447) and z → (-0.894, 0.447), OBSERVED: docs/3d-rendering-feasibility.md)
+// and paints packets sorted by x + z. The editor maps grid x → world x and grid y → world z: a cell's centre is
+// ((x - y)·w/2, (x + y)·w/4) for diamonds w wide, and cells with a larger x + y are nearer, so they draw later. Which
+// screen corner row 0 lands on in a real fight is not pinned; the view is for reading the layout.
+
+/** The centre of cell (x, y) relative to cell (0, 0), for diamonds `w` px wide and `w/2` tall. */
+export function isoCellCenter(x: number, y: number, w: number): { x: number; y: number } {
+  return { x: ((x - y) * w) / 2, y: ((x + y) * w) / 4 };
+}
+
+/** Every cell of a width x height grid in painter's order: x + y ascending (back to front), then x. */
+export function isoDrawOrder(width: number, height: number): Cell[] {
+  const out: Cell[] = [];
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) out.push({ x, y });
+  return out.sort((a, b) => a.x + a.y - (b.x + b.y) || a.x - b.x);
+}

@@ -132,8 +132,9 @@ test.describe("Rooms mode — the Room editor", () => {
     await expect(cell(page, 7, 7)).toHaveAttribute("data-tile", "random");
     await page.locator(".room-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/keep\.lvl/)).toBeVisible();
+    // the first save's toast may still be up: wait for the file itself
+    await expect.poll(() => decodeLvl(readFileSync(join(MOD_DIR, "levels", "e2e", "keep.lvl"))).tiles[7 * 10 + 7]).toEqual([{ id: 0, weight: 1 }, { id: MUD, weight: 4 }]);
     const f = decodeLvl(readFileSync(join(MOD_DIR, "levels", "e2e", "keep.lvl")));
-    expect(f.tiles[7 * 10 + 7]).toEqual([{ id: 0, weight: 1 }, { id: MUD, weight: 4 }]);
     // everything else is the original level
     const back = { ...f, tiles: f.tiles.map((t, i) => (i === 77 ? 0 : t)) };
     expect(Buffer.from(encodeLvl(back)).equals(Buffer.from(KEEP))).toBe(true);

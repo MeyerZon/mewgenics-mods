@@ -34,12 +34,15 @@ function syntheticSwf(): Uint8Array {
   s.shapes.red = { paths: [{ d: "M-20 -10 L20 -10 L20 10 L-20 10 Z", fill: "#ff0000" }] };
   s.shapes.green = { paths: [{ d: "M-20 -10 L20 -10 L20 10 L-20 10 Z", fill: "#00ff00" }] };
   // asymmetric: x 0..10, y -30..0 (feet at the origin, the body to the right)
+  // the vanilla shader-filled tiles (water, lava, ice, …) are drawn in pure magenta
+  s.shapes.magenta = { paths: [{ d: "M-20 -10 L20 -10 L20 10 L-20 10 Z", fill: "#ff00ff" }] };
   s.shapes.blue = { paths: [{ d: "M0 -30 L10 -30 L10 0 L0 0 Z", fill: "#0000ff" }] };
   const one = (ref: string) => ({ frames: 1, layers: [{ name: "a", depth: 1, keys: [{ frame: 0, ref, x: 0, y: 0 }] }] });
   s.sprites.WaterTile = one("red");
   s.sprites.ToxTile = one("green");
   s.sprites.Rat = one("blue");
-  s.exports = { WaterTile: "WaterTile", ToxTile: "ToxTile", Rat: "Rat" };
+  s.sprites.LavaTile = one("magenta");
+  s.exports = { WaterTile: "WaterTile", ToxTile: "ToxTile", Rat: "Rat", LavaTile: "LavaTile" };
   const v = validateScene(s);
   return emitSwf(v.scene, { abc: "none" }).bytes;
 }
@@ -47,6 +50,7 @@ function syntheticSwf(): Uint8Array {
 const TILES_GON = `0 { editor { name "Empty" } }
 1 { editor { image_tint [blue blue] name "Water" } tile WaterTile }
 2 { editor { image_tint [green green] name "Grass" } tile { GrassTile 80 TallGrassTile 15 BlankTile 5 } }
+6 { editor { image_tint [orange red] name "Lava" } tile LavaTile }
 11 { editor { name "Toxic Sludge" } tile ToxicTile }
 12 { editor { name "Shadow" } tile BlankTile }
 13 { editor { name "Mud" } tile MudTile }
@@ -147,6 +151,10 @@ export async function runLevelArtTests(test: TestFn, assert: AssertFn, eq: EqFn)
     same(ta.resolveObjectArt(obj(15, "object", "Plain"), 15, ctx()).reason, "cat-rig");
     same(ta.resolveObjectArt(obj(1, "utility", "PlayerSpawn"), 1, ctx()).reason, "utility");
     same(ta.resolveObjectArt(obj(14, "object", "NoSuchCharacter"), 14, ctx()).reason, "no-character");
+    // spawns.gon names elite variants (Rat_Elite) that no characters file defines: drawn as the base character
+    const el = ta.resolveObjectArt(obj(16, "object", "Rat_Elite"), 16, ctx());
+    same([el.ok, el.clip, el.mirrored], [true, "Rat", true]);
+    assert(el.steps.some((s: string) => /elite/.test(s)), `steps: ${el.steps}`);
     same(ta.resolveObjectArt(undefined, 999, ctx()).reason, "not-in-palette");
     same(ta.resolveObjectArt(obj(11, "object", "Rat"), 11, ctx("alley", null)).reason, "no-swfs");
   });
@@ -252,6 +260,12 @@ export async function runLevelArtTests(test: TestFn, assert: AssertFn, eq: EqFn)
       same([b.ok, b.meta.cached], [true, true]);
       const r = la.levelArtImage(MOD, { tileset: "alley", object: 11 }, opts);
       assert(r.ok && r.meta.mirrored === true, `the Rat renders mirrored: ${r.reason ?? ""}`);
+      // pure-magenta (#ff00ff) pixels are the shader-filled surface: the thumbnail paints them in the tile's tint
+      const lava = la.levelArtImage(MOD, { tileset: "alley", tile: 6 }, opts);
+      assert(lava.ok, `tile 6: ${lava.reason}`);
+      const li = decodePng(lava.png);
+      const lx = Math.round(lava.meta.originX), ly = Math.round(lava.meta.originY);
+      same(Array.from(li.rgba.slice((ly * li.width + lx) * 4, (ly * li.width + lx) * 4 + 4)), [0xe0, 0x8a, 0x2c, 255], "magenta → the orange tint");
       const bad = la.levelArtImage(MOD, { tileset: "alley", tile: 13 }, opts);
       same([bad.ok, bad.reason], [false, "no-clip"]);
     });
