@@ -348,6 +348,9 @@ textarea.scenejson { width: 100%; min-height: 320px; resize: vertical; font-fami
 .pvcanvasbox { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); aspect-ratio: 4 / 3; }
 .pvcanvasbox canvas { width: 100%; height: 100%; display: block; }
 .pvstatus { position: absolute; left: 8px; bottom: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); background: rgba(14,17,22,.7); padding: 2px 6px; border-radius: 6px; }
+.pvcanvasbox svg.ghost-cat { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.ghost-cat .ghost-part path { fill: rgba(170, 178, 190, .26); stroke: rgba(205, 212, 222, .8); stroke-width: 1.2px; stroke-dasharray: 4 3; }
+.ghost-cat .ghost-label { font: 600 10px var(--mono); fill: #dfe5ee; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(14, 17, 22, .85); stroke-width: 3px; }
 .transport { display: flex; align-items: center; gap: 6px; }
 .transport .frame { font-family: var(--mono); font-size: 12px; color: var(--ink2); min-width: 72px; text-align: center; }
 .scrub { position: relative; padding: 8px 0 14px; }

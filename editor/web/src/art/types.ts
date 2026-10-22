@@ -136,6 +136,9 @@ export interface PaletteResponse {
   defaultAbc: AbcMode;
 }
 
+/** GET /api/art/ghost-parts: the ghost cat's part outlines (catparts.swf when extracted, else built-in) */
+export type { GhostParts as GhostPartsResponse } from "../../../src/core/art/ghost-cat.ts";
+
 /** POST /api/art/prepare-swf-gate */
 export interface PrepareGateResponse {
   ok: boolean;

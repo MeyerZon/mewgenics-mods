@@ -184,6 +184,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     if (method === "GET" && url.pathname === "/api/art/palette") {
       return sendJson(res, 200, api.readArtPalette(q.get("which") === "fx_palette" ? "fx_palette" : "palette"));
     }
+    if (method === "GET" && url.pathname === "/api/art/ghost-parts") {
+      return sendJson(res, 200, api.readGhostCatParts());
+    }
     if (method === "GET" && url.pathname === "/api/art/asset") {
       const r = api.readArtAsset(q.get("mod") || "", q.get("path") || "");
       if (!r.ok) return sendJson(res, 404, { error: r.error });

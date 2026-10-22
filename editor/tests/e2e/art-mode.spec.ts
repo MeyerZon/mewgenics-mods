@@ -251,7 +251,7 @@ test.describe("Art mode — explorer & scene authoring", () => {
     await page.getByRole("button", { name: "Animate pose" }).click();
     const ghosts = page.locator(".pvcanvasbox .ghost-cat .ghost-part");
     await expect(ghosts).toHaveCount(7);
-    const labels = await page.locator(".pvcanvasbox .ghost-cat .ghost-label").allInnerTexts();
+    const labels = await page.locator(".pvcanvasbox .ghost-cat .ghost-label").allTextContents();
     expect(labels.slice().sort()).toEqual(["arm1", "arm2", "body", "head", "leg1", "leg2", "tail"]);
     await expect(page.locator(".pvcanvasbox .ghost-cat")).toHaveAttribute("data-source", /^(catparts\.swf|builtin)$/);
     const toggle = page.locator('input[aria-label="ghost cat"]');

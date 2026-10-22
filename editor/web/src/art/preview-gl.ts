@@ -137,9 +137,24 @@ export interface Preview {
   resize(): void;
   /** image for scene.bitmaps[id]; null removes it */
   setBitmap(id: string, image: TexImageSource | null): void;
+  /** extra content bounds per target (the ghost cat) that "fit" includes; null removes it */
+  setExtraBounds(fn: ((targetId: string) => Bounds | null) | null): void;
   render(): void;
   destroy(): void;
   info(): PreviewInfo;
+}
+
+/** What a render showed: stage px → CSS px is `(p - center) * zoom + [width, height] / 2`. */
+export interface PreviewView {
+  target: string | null;
+  frame: number;
+  /** frames since playback started (nested sprites run on it) */
+  clock: number;
+  zoom: number;
+  center: [number, number];
+  /** canvas CSS size */
+  width: number;
+  height: number;
 }
 
 export interface PreviewOptions {
@@ -149,6 +164,8 @@ export interface PreviewOptions {
   onFrame?: (frame: number) => void;
   /** called when playback starts or stops (NOT on a visibility suspend, so the UI's play/pause stays truthful while off-screen) */
   onPlaying?: (playing: boolean) => void;
+  /** called after every render with the view, so a DOM overlay (the ghost cat) can follow the frame, zoom and centre */
+  onRender?: (view: PreviewView) => void;
 }
 
 // ---- constants -------------------------------------------------------------------
@@ -507,6 +524,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
   const onStatus = opts.onStatus || (() => {});
   const onFrame = opts.onFrame || (() => {});
   const onPlaying = opts.onPlaying || (() => {});
+  const onRender = opts.onRender || (() => {});
+  let extraBounds: ((targetId: string) => Bounds | null) | null = null;
 
   // ---- state ----
   let scene: Scene | null = null;
@@ -880,6 +899,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
       };
       for (let f = 0; f < n; f++) walkTarget(id, f, v);
     }
+    if (extraBounds) out = unionBounds(out, extraBounds(id));
     boundsCache.set(id, out);
     return out;
   }
@@ -1470,6 +1490,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     updateFit();
     if (gl) renderGL();
     else if (ctx2d) render2D();
+    const [width, height] = cssSize();
+    onRender({ target: targetId, frame, clock, zoom, center: [center[0], center[1]], width, height });
   }
 
   const preview: Preview = {
@@ -1613,6 +1635,11 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
         if (gl) uploadBitmap(id, image);
       }
       for (const k of [...remapCache.keys()]) if (k.startsWith(id + "|")) remapCache.delete(k);
+      render();
+    },
+    setExtraBounds(fn) {
+      extraBounds = fn;
+      boundsCache.clear();
       render();
     },
     render,
