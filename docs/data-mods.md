@@ -167,6 +167,30 @@ this section in sync with `merge.ts` and the fixtures.
   In this repo `mods/<mod>/swfs/` is **build output** of the editor's art pipeline (the SWF and the generated
   `swflist.gon.append`) and is git-ignored; the source is `mods/<mod>/art/*.scene.json`.
 - **Text** (`data/text/combined.csv`): `KEY,en,notes,sp,fr,de,it,pt-br,ru,ko,ja,zh-cn`.
+- **Tilesets** (`data/tilesets.gon`): one flat object per tileset (`alley`, `junkyard`, `sewers`, …, `house`,
+  `tutorial`, `finalboss`; 22 in this build) of `key value` string pairs plus `global_objects` / `reverb`
+  sub-objects, keyed by `default_tileset`. The game also uses it as a per-tileset **clip-name indirection** (below).
+
+### Redirecting a vanilla character's clip via tilesets.gon (INFERRED, untested)
+
+Decompiled 2026-10-21 (`ResolveClipName` 0x7bdbb0, called by `CharacterGraphics_build` 0xf1150 with
+`(graphics.movieclip, "auto")` before the SymbolClass lookup; `docs/engine-map.md` "SWF loader and display path"):
+for every **non-cat** character the game first looks `graphics.movieclip` up as a key in the *current* tileset's
+object of `tilesets.gon` and, when the value is a string, uses that string as the clip name instead. Vanilla uses this
+for `non_interactive_objects.gon`'s `static_1x1_a` / `static_tall_a`. Since the table is loaded once at boot
+(`SpawnDatabase_init` 0x7a74b0), a mod overlay applies, so a data-only redirect should exist:
+
+```
+// data/tilesets.gon.patch — draw the Rat with the mod's SymbolClass MyModRat, without touching enemies.gon
+alley    { Rat MyModRat }
+junkyard { Rat MyModRat }
+// … one row per tileset the character can appear in (incl. house if it shows there)
+```
+
+Caveats: the key namespace is shared with the tileset slots (`combat_background`, `static_*`, `debris`,
+`event_piece_frame`, `reverb`, `global_objects`), the `_CAT` branch does not pass through this function, and the
+validator does not model it. Not run in-game yet; the alternative is a mod SWF exporting the vanilla name itself
+(by-name lookup prefers the last-loaded file; validator info `export-shadows-vanilla`), equally INFERRED.
 
 Extract reference copies with `python -I tools/gpak.py extract .extracted --prefix data/` (git-ignored).
 
