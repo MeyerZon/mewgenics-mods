@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { decodeLvl, encodeLvl, buildRoom, lvlIds, LvlFormatError } from "../src/core/level/lvl.ts";
 import { validateMod } from "../src/core/validate/validator.ts";
 import { extractedPath } from "../src/core/repo.ts";
+import { newFromTemplate } from "../src/core/templates.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 /** Little-endian byte writer for hand-made fixtures. */
@@ -141,6 +142,55 @@ export function runLevelTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   test("validator: a .lvl outside levels/ is flagged (the game only reads levels/<path>.lvl)", () => {
     const c = codes(mkMod({ "data/room.lvl": sample() }));
     assert(c.includes("warning:lvl-outside-levels"), c.join(", "));
+  });
+
+  // ---- new_from_template kinds `room` and `tileset-variant` (dry runs: nothing is written) ----
+  test("template room: a dry run plans levels/<folder>/<name>.lvl that decodes, with object names resolved to spawn ids", () => {
+    const r = newFromTemplate("anymod", "room", "my_room", {
+      dryRun: true, folder: "mymod", extractedData: base,
+      objects: [{ x: 1, y: 0, object: "PlayerSpawn" }, { x: 4, y: 7, object: "Rat" }, { x: 5, y: 5, id: 5010 }],
+      tiles: [{ x: 0, y: 4, id: 1 }],
+    });
+    assert(r.ok && "dryRun" in r, JSON.stringify(r));
+    if (!r.ok || !("dryRun" in r)) return;
+    same(r.files.map((f) => f.relPath), ["levels/mymod/my_room.lvl"]);
+    const b64 = r.files[0]!.base64;
+    assert(typeof b64 === "string", "binary plan file carries base64");
+    const f = decodeLvl(Buffer.from(b64 ?? "", "base64"));
+    same(f.objects, [{ x: 1, y: 0, id: 1 }, { x: 4, y: 7, id: 11 }, { x: 5, y: 5, id: 5010 }]);
+    same(f.tiles[4 * 10], 1);
+    assert(/load mymod\/my_room/.test(r.hint ?? ""), `hint names the console command: ${r.hint}`);
+  });
+
+  test("template room: an unknown object name and a bad file name are refused", () => {
+    const r1 = newFromTemplate("anymod", "room", "r", { dryRun: true, extractedData: base, objects: [{ x: 0, y: 0, object: "NoSuchThing" }] });
+    assert(!r1.ok && /NoSuchThing/.test(r1.error), JSON.stringify(r1));
+    const r2 = newFromTemplate("anymod", "room", "../evil", { dryRun: true, extractedData: base });
+    assert(!r2.ok, JSON.stringify(r2));
+  });
+
+  test("template room: with no objects it scaffolds 4 player spawns and 2 Rats", () => {
+    const r = newFromTemplate("anymod", "room", "starter", { dryRun: true, extractedData: base });
+    assert(r.ok && "dryRun" in r, JSON.stringify(r));
+    if (!r.ok || !("dryRun" in r)) return;
+    const f = decodeLvl(Buffer.from(r.files[0]!.base64 ?? "", "base64"));
+    same(lvlIds(f).objects, [1, 11]);
+    same(f.objects.filter((o) => o.id === 1).length, 4);
+  });
+
+  writeFileSync(join(base, "tilesets.gon"), ["default_tileset alley", "", "alley {", "    combat_background AlleyBGTest", "    static_1x1_a Rubble", "    reverb {", "        battle {", "            preset Alley", "        }", "    }", "}", ""].join("\n"));
+  test("template tileset-variant: copies a vanilla tileset under a new name into data/tilesets.gon.append", () => {
+    const r = newFromTemplate("anymod", "tileset-variant", "my_yard", { dryRun: true, parent: "alley", extractedData: base });
+    assert(r.ok && "dryRun" in r, JSON.stringify(r));
+    if (!r.ok || !("dryRun" in r)) return;
+    same(r.files.map((f) => f.relPath), ["data/tilesets.gon.append"]);
+    const text = r.files[0]!.content;
+    assert(/^my_yard \{/m.test(text) && /combat_background AlleyBGTest/.test(text) && /preset Alley/.test(text), text);
+    assert(/tileset my_yard/.test(r.hint ?? ""), `hint names the console command: ${r.hint}`);
+    const bad = newFromTemplate("anymod", "tileset-variant", "x", { dryRun: true, parent: "nope", extractedData: base });
+    assert(!bad.ok && /nope/.test(bad.error), JSON.stringify(bad));
+    const clash = newFromTemplate("anymod", "tileset-variant", "alley", { dryRun: true, parent: "alley", extractedData: base });
+    assert(!clash.ok && /already/.test(clash.error), JSON.stringify(clash));
   });
 
   // ---- T1: every vanilla level round-trips ----
