@@ -193,7 +193,8 @@ export function runShaderTests(test: TestFn, assert: AssertFn, eq: EqFn): void {
   for (const mod of ["fw-glow", "fw-3d"]) {
     test(`mods/${mod} validates clean (shaders${BASE_SHADERS_READY ? "" : "; base include check skipped"})`, () => {
       const r = real(mod);
-      const rest = r.findings.filter((f) => f.code !== "component-list-missing" && !(f.code === "shader-include-unchecked" && !BASE_SHADERS_READY));
+      // without .extracted (CI) a .merge overlay cannot be checked against its base (fw-3d gives the vanilla Crate a model): base-missing is a warning then
+      const rest = r.findings.filter((f) => f.code !== "component-list-missing" && !((f.code === "shader-include-unchecked" || f.code === "base-missing") && !BASE_SHADERS_READY));
       eq(codes(rest), "(none)", JSON.stringify(rest));
     });
   }
