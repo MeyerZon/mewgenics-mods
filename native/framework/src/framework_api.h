@@ -57,6 +57,9 @@ typedef enum FwSymbol {
     FW_SYM_Material_SetUniformFloat,    /* void (Material*, std::string name, float v) — callee destroys name */
     FW_SYM_Material_SetTexture,         /* void (Material*, std::string name, Texture*, int slot) — callee destroys name */
     FW_SYM_Camera_AddPostProcessPass,   /* Pass* (Camera*, Material*, int layer) — owned by the camera; never cache the Pass* */
+    /* glow v2: a unit's screen rect, as TacticsTest::LateRender computes the hovered unit's (per-unit colours) */
+    FW_SYM_Renderer_GetScreenMatrix,    /* float* (Renderer*, float out[16]) — the renderer's world-to-canvas matrix */
+    FW_SYM_Position_GetViewMatrix,      /* float* (Position*, float out[16], double interp) — a camera's view matrix (LateRender inverts it) */
     FW_SYMBOL_COUNT_
 } FwSymbol;
 

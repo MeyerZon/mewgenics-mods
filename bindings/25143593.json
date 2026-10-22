@@ -6149,6 +6149,26 @@
             "target": "0x989be0"
           },
           {
+            "ordinal": 14,
+            "name": "Renderer_GetScreenMatrix",
+            "target": "0x78d600"
+          },
+          {
+            "ordinal": 15,
+            "name": "Position_GetViewMatrix",
+            "target": "0x9b4c90"
+          },
+          {
+            "ordinal": 20,
+            "name": "Renderer_GetScreenMatrix",
+            "target": "0x78d600"
+          },
+          {
+            "ordinal": 21,
+            "name": "Position_GetViewMatrix",
+            "target": "0x9b4c90"
+          },
+          {
             "ordinal": 27,
             "name": "string_Allocate",
             "target": "0x52a40"
@@ -7545,6 +7565,344 @@
         ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
       ],
       "note": "TacticsTest vftable slot of the late render / submit-phase method the glow engine hooks"
+    },
+    {
+      "name": "Renderer_GetScreenMatrix",
+      "kind": "function",
+      "rva": "0x78d600",
+      "signature": {
+        "pattern": "40 53 48 83 EC 50 48 8B 41 28 48 8B",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "float* (Renderer*, float out[16]): the renderer's world-to-canvas 4x4 (x row M0/M4/M12, y row M1/M5/M13) from its Position (+0x40) through the scene's interpolation (+0x28->+0x30) and the iso constants 0x12f7a00..; LateRender calls it on the hovered Character's renderer (Character+0x40) before mapping the clip bounds (0x88e2ac)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 326,
+          "calls": 2,
+          "ripRefs": 9,
+          "resyncs": 0
+        },
+        "prologue": "40 53 48 83 EC 50 48 8B 41 28 48 8B"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:unit_rect"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Renderer_GetScreenMatrix",
+          "index": 35
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c",
+        ".analysis/decompiled/Renderer_GetScreenMatrix_0x78d600.c"
+      ]
+    },
+    {
+      "name": "Position_GetViewMatrix",
+      "kind": "function",
+      "rva": "0x9b4c90",
+      "signature": {
+        "pattern": "40 53 48 83 EC 50 48 8B DA 48 8D 54",
+        "exactLen": 12,
+        "offset": 0,
+        "wildcards": []
+      },
+      "anchors": {
+        "strings": [],
+        "note": "float* (Position*, float out[16], double interp in xmm2): a camera Position's 4x4 (rotation from the angle, translation in 12/13/14), returns out. LateRender calls it on the mask camera's Position (Camera+0x38) with the scene manager's interpolation (Camera+0x28 -> +0x30) and inverts the result (the leaf 0xa07c70) before the zoom/canvas mapping (0x88e3dc)",
+        "callees": [],
+        "cfgLite": {
+          "bytes": 219,
+          "calls": 2,
+          "ripRefs": 3,
+          "resyncs": 0
+        },
+        "prologue": "40 53 48 83 EC 50 48 8B DA 48 8D 54"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c:unit_rect"
+      ],
+      "exposure": [
+        {
+          "enum": "FW_SYM_Position_GetViewMatrix",
+          "index": 36
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ]
+    },
+    {
+      "name": "Renderer_clip",
+      "kind": "offset",
+      "struct": "MaskedRendererIso",
+      "value": "0x80",
+      "ctype": "MovieClip* (or another content object; vtable slot 0 = its kind)",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "48 8B 8B 80 00 00 00 48 85 C9 74",
+          "dispAt": 3,
+          "dispSize": 4
+        },
+        "note": "mov rcx,[rbx+0x80] (0x88de21; again at 0x88e252 for the hovered unit): the renderer's content, taken by LateRender only when its vtable slot 0 returns 1 or 2"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_RND_CLIP"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ]
+    },
+    {
+      "name": "MovieClip_matrix",
+      "kind": "offset",
+      "struct": "MovieClip",
+      "value": "0x60",
+      "ctype": "float[6] {m0..m5}: x' = m0 x + m3 y + m4, y' = m2 x + m1 y + m5 (the leaf 0x9d46d0's reading)",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "48 8D 53 60 48 8D 4C 24",
+          "dispAt": 3
+        },
+        "note": "lea rdx,[rbx+0x60] (0x88de68) right before call 0x9d46d0: the clip's 2D matrix the bounds are mapped by"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CLIP_MATRIX"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ]
+    },
+    {
+      "name": "Camera_position",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0x38",
+      "ctype": "Position*",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "F2 0F 10 50 30 48 8D 55 20 48 8B 49 38 E8",
+          "dispAt": 12
+        },
+        "note": "mov rcx,[rcx+0x38] (0x88dfb2) with rcx = the mask camera, right before call Position_GetViewMatrix"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_POSITION"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ]
+    },
+    {
+      "name": "SceneManager_interp",
+      "kind": "offset",
+      "struct": "SceneManager",
+      "value": "0x30",
+      "ctype": "double: the frame interpolation factor (LateRender lerps sort-y by it when < 1)",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "48 8B 41 28 F2 0F 10 50 30 48 8D 55",
+          "dispAt": 8
+        },
+        "note": "movsd xmm2,[rax+0x30] (0x88dfa9) with rax = maskCamera->+0x28 (Component_sceneManager): the third argument of Position_GetViewMatrix"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_SCENEMANAGER_INTERP"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ]
+    },
+    {
+      "name": "Camera_zoom",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0x168",
+      "ctype": "double",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "F2 0F 10 89 68 01 00 00 66 0F 6E",
+          "dispAt": 4,
+          "dispSize": 4
+        },
+        "note": "movsd xmm1,[rcx+0x168] (0x88df5b), rcx = the mask camera: the x scale of the canvas mapping (and, times the int at +0x170, the y scale)"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_ZOOM"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ]
+    },
+    {
+      "name": "Camera_zoomY",
+      "kind": "offset",
+      "struct": "Camera",
+      "value": "0x170",
+      "ctype": "int32: multiplies the zoom for the y scale",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "66 0F 6E 81 70 01 00 00 F3 0F E6 C0",
+          "dispAt": 4,
+          "dispSize": 4
+        },
+        "note": "movd xmm0,[rcx+0x170]; cvtdq2pd; mulsd xmm0,xmm1 (0x88df63): (double)int * zoom = the y scale"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_CAM_ZOOM_Y"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ]
+    },
+    {
+      "name": "VT_Clip_Bounds",
+      "kind": "constant",
+      "value": "16",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "FF 90 80 00 00 00 48 8D 53 60",
+          "dispAt": 2,
+          "dispSize": 4,
+          "scale": 8
+        },
+        "note": "call [rax+0x80] (0x88de62) right before lea rdx,[rbx+0x60]: the clip's bounds(out float[4] {x0,x1,y0,y1}) slot, 0x80/8 = 16"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "VT_CLIP_BOUNDS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ],
+      "note": "clip vtable slot of bounds(this, float out[4])"
+    },
+    {
+      "name": "ClipKind_A",
+      "kind": "constant",
+      "value": "1",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "FF 10 83 F8 01 74",
+          "dispAt": 4
+        },
+        "note": "call [rax]; cmp eax,1 (0x88de30): the first content kind whose +0x80 object LateRender treats as a clip"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_CLIP_KIND_A"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ],
+      "note": "renderer content kind (vtable slot 0) LateRender takes as a clip"
+    },
+    {
+      "name": "ClipKind_B",
+      "kind": "constant",
+      "value": "2",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_LateRender",
+          "pattern": "FF 10 83 F8 02 75",
+          "dispAt": 4
+        },
+        "note": "call [rax]; cmp eax,2 (0x88de41): the second one"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "CONST_CLIP_KIND_B"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/decompiled/ImmediateModeGameUI_init_0x88d780.c"
+      ],
+      "note": "the other renderer content kind LateRender takes as a clip"
     },
     {
       "name": "Character_init",
