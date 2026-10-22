@@ -117,6 +117,13 @@
         "text": {
           "type": "string",
           "description": "optional unsaved content for `path`"
+        },
+        "modpaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "optional: the mods loaded together, in -modpaths order; adds the cross-mod checks (two mods appending the same _Append_ label, two mods shipping the same swfs/<name>.swf, a label or SWF name vanilla already has)"
         }
       },
       "required": [

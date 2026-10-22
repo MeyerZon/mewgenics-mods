@@ -48,6 +48,7 @@ export const TOOL_INPUT = {
     mod: str(),
     path: str("optional overlay path to override with unsaved text").optional(),
     text: str("optional unsaved content for `path`").optional(),
+    modpaths: z.array(str()).describe("optional: the mods loaded together, in -modpaths order; adds the cross-mod checks (two mods appending the same _Append_ label, two mods shipping the same swfs/<name>.swf, a label or SWF name vanilla already has)").optional(),
   }),
   preview_merge: z.object({
     mod: str(),
@@ -251,10 +252,10 @@ export const TOOLS: ToolDef[] = [
   ),
   def(
     "validate_mod",
-    "Validate a mod's overlays: reference integrity (statuses/abilities/components resolve against base data or registered names), localization completeness (keys exist in combined.csv with all 12 columns), and overlay-target existence (.merge/.patch target existing paths, .append adds non-colliding keys, positional CSV .merge flagged fragile). Returns ok/warning/error findings with source locations. Pass `path`+`text` to validate unsaved content for one file.",
+    "Validate a mod's overlays: reference integrity (statuses/abilities/components resolve against base data or registered names), localization completeness (keys exist in combined.csv with all 12 columns), and overlay-target existence (.merge/.patch target existing paths, .append adds non-colliding keys, positional CSV .merge flagged fragile). Returns ok/warning/error findings with source locations. Pass `path`+`text` to validate unsaved content for one file. Pass `modpaths` (the mods loaded together, in -modpaths order) for the cross-mod checks: cat-append-conflict (a label two mods append to the same clip; the later mod wins), swf-file-conflict (two mods ship the same swfs/<name>.swf; only the later one loads), cat-append-shadows-vanilla, swf-file-shadows-vanilla.",
     (a) => {
       const override = a.path !== undefined && a.text !== undefined ? { relPath: a.path, text: a.text } : undefined;
-      return api.validate(a.mod, override);
+      return api.validate(a.mod, override, a.modpaths ? { modpaths: a.modpaths } : {});
     },
   ),
   def(
