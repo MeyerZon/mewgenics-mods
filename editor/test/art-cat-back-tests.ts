@@ -235,7 +235,11 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
   // OBSERVED 2026-10-22 (runs 20261022-113746 with lock_orientation [1 0], 20261022-113911 with [0 -1]): a spawned
   // TomTom variant with lock_orientation still shows its face in TacticsTest (only the mirror changes) — the probe keeps
   // one turn attempt and adds ArtProbeCatBackShown, whose probeBackShowF / probeBackShowB BOTH place the back rig, so
-  // the back pose is drawn whatever the facing.
+  // the back pose is drawn whatever the facing. OBSERVED 2026-10-22 (run 20261022-114440): the shown cat is drawn from
+  // behind with TomTom's own parts but the checker marker at depth 15 of the back rig is NOT drawn (it is in the front
+  // rigs of the A0 / wave probes); run 20261022-114637 placed the back rig at 1.5x and the shown cat came out 1.5x — our
+  // frame, not vanilla idleB. So the probe tells our B frames apart by SIZE: probeBackB / probeBackShowF / probeBackShowB
+  // place the back rig at sx = sy = 1.5, probeBackF the front rig at 1.
   const scene = JSON.parse(readFileSync(join(MODS_DIR, "_artprobe", "art", "probe.scene.json"), "utf8"));
   const gon = readFileSync(join(MODS_DIR, "_artprobe", "data", "characters", "enemies.gon.append"), "utf8");
   test("probe.scene.json: the donor carries probeBackF / probeBackB (probeBackPose: a front parts game rig, NO marker / probeBackPoseBack: facing back, parts game, empty slots at the back depths, the checker marker on the non-slot depth 15) and probeBackShowF / probeBackShowB (both the back rig: the back pose shown at any facing), all at vanilla idleB's `ani` offset; the only back-facing warning is probeBackShowF's (by design)", () => {
@@ -248,6 +252,8 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
       assert(Number.isInteger(d.labels[l]), `label ${l}`);
       eq(keyAt(l).ref, ref, l);
       assert(keyAt(l).x === 3.85 && keyAt(l).y === -47.95, `${l}: ${JSON.stringify(keyAt(l))}`);
+      const big = ref === "probeBackPoseBack" ? 1.5 : 1;
+      assert((keyAt(l).sx ?? 1) === big && (keyAt(l).sy ?? 1) === big, `${l}: scale ${big}`);
     }
     const front = scene.sprites.probeBackPose, back = scene.sprites.probeBackPoseBack;
     eq(front.rig, "cat"); eq(front.parts, "game"); eq(front.facing, undefined);
@@ -300,30 +306,30 @@ export async function runArtCatBackTests(test: TestFn, assert: AssertFn, eq: EqF
     eq((b.match(/shot "shown \d"/g) || []).length, 2);
   });
 
-  test("catBackOutcome: back-facing when the turned cat shows our marker in >= 2 back shots with real parts under it (outline >= 30 % of TomTom's); else back-pose-drawn when the shown back pose does in >= 2 shown shots; front-marker when the control already shows it; not-filled when a marker has no parts under it; not-turned otherwise; a failed run gives its verdict", () => {
-    need("catBackOutcome");
-    const none = { verdict: "pass", frontMarker: false, markers: 0, partsDrawn: 0, shownMarkers: 0, shownParts: 0 };
-    eq(P.catBackOutcome({ ...none, markers: 3, partsDrawn: 3, shownMarkers: 2, shownParts: 2 }), "back-facing");
-    eq(P.catBackOutcome({ ...none, shownMarkers: 2, shownParts: 2 }), "back-pose-drawn");
-    eq(P.catBackOutcome({ ...none, markers: 1, partsDrawn: 1, shownMarkers: 2, shownParts: 2 }), "back-pose-drawn");
-    eq(P.catBackOutcome({ ...none, frontMarker: true, shownMarkers: 2, shownParts: 2 }), "front-marker");
-    eq(P.catBackOutcome({ ...none, markers: 3, partsDrawn: 2 }), "not-filled");
-    eq(P.catBackOutcome({ ...none, shownMarkers: 2, shownParts: 1 }), "not-filled");
-    eq(P.catBackOutcome(none), "not-turned");
+  test("catBackOutcome (size ratios: each new cat's dark-blob height over TomTom's): back-facing when >= 2 back shots of the turn attempt are big (>= CAT_BACK_BIG, the 1.5x back rig plays); else back-pose-drawn when >= 2 shown shots are; front-big when the control is already big; not-drawn otherwise; a failed run gives its verdict", () => {
+    need("catBackOutcome", "CAT_BACK_BIG");
+    eq(P.CAT_BACK_BIG, 1.3);
+    const none = { verdict: "pass", front: 1.0, back: [1.0, 1.02, 0.98], shown: [1.0, 1.0] };
+    eq(P.catBackOutcome({ ...none, back: [1.5, 1.48, 1.52], shown: [1.5, 1.5] }), "back-facing");
+    eq(P.catBackOutcome({ ...none, shown: [1.49, 1.51] }), "back-pose-drawn");
+    eq(P.catBackOutcome({ ...none, back: [1.5, 1, 1], shown: [1.5, 1.5] }), "back-pose-drawn");
+    eq(P.catBackOutcome({ ...none, front: 1.5, shown: [1.5, 1.5] }), "front-big");
+    eq(P.catBackOutcome({ ...none, shown: [1.5, null] }), "not-drawn");
+    eq(P.catBackOutcome(none), "not-drawn");
     eq(P.catBackOutcome({ ...none, verdict: "crash" }), "crash");
   });
 
-  test("OBSERVED fixture (artprobe-cat-back-summary.json, npm run test:artprobe -- --cat-back): the run passed with the real save unchanged; no marker on the control; outcome back-facing (the turn attempt shows the B frame) or back-pose-drawn (the back rig drawn with the cat's parts: our marker in >= 2 shown shots with a TomTom-sized outline under it)", () => {
+  test("OBSERVED fixture (artprobe-cat-back-summary.json, npm run test:artprobe -- --cat-back): the run passed with the real save unchanged; the control is TomTom-sized; outcome back-facing (the turn attempt plays the 1.5x B frame) or back-pose-drawn (the shown cat is our 1.5x back rig, filled with the cat's own parts)", () => {
     const p = join(HERE, "fixtures", "ingame", "artprobe-cat-back-summary.json");
     assert(existsSync(p), "written by npm run test:artprobe -- --cat-back");
     const j = JSON.parse(readFileSync(p, "utf8")) as any;
     eq(j.verdict, "pass");
     assert(/real save file\(s\) unchanged/.test(j.save), String(j.save));
     assert(j.outcome === "back-facing" || j.outcome === "back-pose-drawn", j.outcome);
-    eq(j.front.marker && j.front.marker.found, false);
+    assert(j.front.ratio !== null && j.front.ratio < 1.3, `control ratio ${j.front.ratio}`);
     const list = j.outcome === "back-facing" ? j.back : j.shown;
-    const ours = list.filter((s: any) => s.marker && s.marker.found);
-    assert(ours.length >= 2, `marker in ${ours.length} shots`);
-    for (const s of ours) assert(s.outline >= 0.3 * j.vanilla.outline, `${s.label}: outline ${s.outline} vs ${j.vanilla.outline}`);
+    const big = list.filter((s: any) => s.ratio !== null && s.ratio >= 1.3 && s.ratio <= 1.8);
+    assert(big.length >= 2, `big in ${big.length} shots: ${JSON.stringify(list)}`);
+    assert(/start_orientation/.test(j.turnAttempt), j.turnAttempt);
   });
 }
