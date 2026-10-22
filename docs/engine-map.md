@@ -245,7 +245,7 @@ notes in `.analysis/notes-<tag>.md`):
   2026-10-19, pinned by the T1 bindings test and `bindings/25143593.json` `LuckUp_typeid.anchors.witness`).
 - Vtable slots identified: 0 `GetTypeName(this, std::string* out)`, 1 `GetTypeId()`, 2 `IsA(this, std::string*)`,
   3 `GetTypeHierarchy()` (`{int ids[16]; uint64 count}`), 5 scalar deleting dtor, 30 `OnInit(stacks, GonObject*
-  data, applier)`, 33 `OnApplied`, 82 `ApplyStatModifiers` (LuckUp: `character->luckBonus(+0x5d4) += stacks`, and
+  data, applier)`, 33 `OnApplied`, 82 `ApplyStatModifiers` (LuckUp: `character->effectiveLuck(+0x5d4) += stacks`, called by `Character::recompute_stats` — "Effective stats" below — and
   marks removal when stacks reach 0), 170 `OnStacksChanged`, 171 stacks-cleared callback.
 - Object fields: +0x18 entity, +0x20 owner character (also +0x38), +0x5c `int stacks`, +0x68 GON data, +0x74 applied,
   +0x75 removing, +0x76 `tickdown_this_turn`, +0xc8 applier, +0xe9 "temporary" flag.
@@ -278,7 +278,7 @@ notes in `.analysis/notes-<tag>.md`):
   12 `.pdata` functions; adding `"None"` (`0xed0b90`) and the size tolerance leaves this one. These facts are the
   `bindings/25143593.json` anchors `imm32Witness`, `callers[].afterStringLea`, `vtableStore` and `sharedDataRef`.
 - Character +0x18 = `Entity*`; Entity +0x24 = component count (u32), +0x28 = `Component**` array. Character +0xe50 =
-  `touched_passives` (forces a stat recompute), +0x5d4 = accumulated luck bonus.
+  `touched_passives` (forces a stat recompute), +0x5d4 = effective luck (base + every modifier; "Effective stats").
 - `Status_ApplyByName` (RVA `0x483120`): `Status* f(std::string* name, void* ctx, int stacks, void* src, void* p5,
   void* p6, char temporary, char p8)`, a 793-way if-chain on the name calling a per-status apply function; the
   callee destroys the by-value string (`std::string::_Tidy_deallocate`, RVA `0x52780`). `ctx` holds the entity at
@@ -899,8 +899,8 @@ still open. (`Status+0x68 = const GonObject*` is the status's data node, known.)
 **Stats and HP (OBSERVED unless marked).** Seven `int32` read as `IntOr(Get(stats, name), 5)` (default 5) in
 `data/characters` order at **`+0x5a0` strength, `+0x5a4` dexterity, `+0x5a8` constitution, `+0x5ac` intelligence,
 `+0x5b0` speed, `+0x5b4` charisma, `+0x5b8` luck** (`OFF_CH_STATS`, `int32[7]`; seven `mov edx,edi; mov rcx,rax; call
-IntOr; mov [r14+N],eax` from 0xf99ba, 0x3a apart). INFERRED: `+0x5bc..+0x5d4` are the per-stat bonus ints (the
-known LuckUp `+0x5d4 += stacks` is the 7th = luck). Base block from `entry.properties`, the stat share subtracted so
+IntOr; mov [r14+N],eax` from 0xf99ba, 0x3a apart). `+0x5bc..+0x5d4` are the EFFECTIVE stats (OBSERVED 2026-10-22, "Effective stats" below; the
+earlier "per-stat bonus ints" reading was wrong: LuckUp's `+0x5d4 += stacks` lands on base + bonuses). Base block from `entry.properties`, the stat share subtracted so
 the runtime formula re-adds it: `+0x5d8` base movement (`IntOr(base_movement, 4)`; with `movement`: `Int(movement) -
 (speed-5)/2`), `+0x5dc` base initiative (`Int(initiative) - 2*speed`), `+0x5e4` health regen, **`+0x5e8` base health
 = `Int(properties.health) - 4*constitution`** (`OFF_CH_BASE_HEALTH`; `mov ebx,[r14+0x5a8]; shl ebx,2; … sub eax,ebx;
@@ -913,8 +913,8 @@ array and does `if (+0x4b0 > 1) +0x4b0 = 1; +0x4b4 = 0` — the one direct HP wi
 every non-ally" through `Character_TakeDamage` 0x110120, not an HP write). OBSERVED in-game: ten frames after
 `spawn`, `+0x4b0` equals `properties.health` (Pooter 6; 12 with `health.multiply 2`; Rat 5). `+0x4b4` shield =
 `IntOr(properties.shield, 0)` × multiplier (`OFF_CH_SHIELD`), `+0x4b8` divine shield likewise
-(`OFF_CH_DIVINE_SHIELD`). **Max HP**: no stored field was found; the champion scaling treats `+0x5e8 + 4*con` as the
-base formula (INFERRED for the runtime value, the getter with stat bonuses and status modifiers is unknown).
+(`OFF_CH_DIVINE_SHIELD`). **Max HP**: `+0x4bc` = max(1, `+0x5e8` + 4 * effective constitution), stored by `Character::recompute_stats`
+(OBSERVED 2026-10-22, `OFF_CH_MAX_HP`; "Effective stats" below).
 `Character_BeginTurn` / `GetTurnControl` touch none of these (`+0xeb4/+0xebc` there are re-entrancy counters).
 
 **Parser scalar typing (OBSERVED: `Gon_LoadText` 0x940840, `Gon_Tokenize` 0x93f090, `Gon_ParseTokens` 0x93fcf0).**
@@ -933,6 +933,40 @@ nodes; `yes` / `True` / `1` are not bools (`Bool()` on them logs `is not a bool`
 `.add` / `.multiply` (PatchMerge) rewrite the int, the double **and** the token text (OBSERVED in-game:
 `health.multiply 2` → int 12, double 12, text `"12"`). The editor-side parser's typing is another PR's concern;
 these are the facts it must mirror.
+
+## Effective stats: Character::recompute_stats (2026-10-22)
+
+RE session `fxstats` (`.analysis/notes-fxstats.md`; decompiles `Character_recompute_stats_0x102520.c`,
+`Character_recompute_stats_lambda1_DoCall_0x129220.c`, `Character_GetPassiveList_0x117c40.c`). OBSERVED unless marked.
+
+- **There is no `GetStat(id)` / per-stat getter.** Effective stats are stored fields written by one function,
+  **`glaiel::Character::recompute_stats(Ability*, bool)` at RVA `0x102520`** (3447 B; named by the RTTI of the six
+  `std::_Func_impl_no_alloc<lambda_N … recompute_stats@Character@glaiel@@QEAAXPEAVAbility@4@_N@Z …>` functors whose
+  vftables `0x140ee0eb8`/`e80`/`e48`/`e10`/`dd8`/`da0` are lea'd only there). 48 direct call sites in 34 functions,
+  among them `Character_init` and `Character_BeginTurn` (the manifest's callee witnesses).
+- **Order.** Early-out `if (+0xeb4 != 0 && touched_passives +0xe50) return` (a re-entrant call during a pass);
+  snapshot of the old values; **base → effective copy** `+0x5a0..+0x5b8 → +0x5bc..+0x5d4` (`mov eax,[rdi+0x5a0]; mov
+  [rdi+0x5bc],eax` …, `OFF_CH_STATS_EFF`); **lambda_1 over the passive list** (`0x117c40`, counter `+0xeb4`; statuses
+  are passives) whose `_Do_call` `0x129220` calls **vtable slot 82 `ApplyStatModifiers`** (`+0x290`) and, when an
+  `Ability*` is passed, slot 87 (`+0x2b8`, ability-specific modifiers, INFERRED); lambda_2 over list `0x118300`
+  (`+0xeb8`) → slot 152, lambda_3 over a `TacticsTile` list `0x117fc0` (`+0xebc`) → slot 39. Then the derived values,
+  all from the **effective** stats: `+0x950` movement = max(1, `+0x5d8` + (spd−5)/2), `+0x954` initiative = `+0x5dc` +
+  2·spd, **`+0x4bc` max HP = max(1, `+0x5e8` + 4·con)** (`lea ecx,[rax+r9*4]; cmp ecx,1; cmovg r12d,ecx; mov
+  [rdi+0x4bc],r12d`, `OFF_CH_MAX_HP`), `+0xd1c` max mana = max(0, `+0x5f0` + 3·cha), `+0x960` = max(0, `+0x5e0` + int),
+  `+0x96c` = `+0x5f8` + str − 5, `+0x970` = `+0x5fc` + (dex−5)/2, `+0xc60` = max(0, `+0x624` + 2·luck), `+0xc70` =
+  (luck−5)·0.1. A second round of lambdas 4–6 over the same lists follows (INFERRED: modifiers of derived values);
+  current HP `+0x4b0` / mana `+0xd18` are clamped to the new maxima under a condition; any change bumps `+0xe68`
+  (INFERRED a stats version counter).
+- **Readers.** `StatusMenu_update` (0x81aee0) shows strength…luck from `+0x5bc..+0x5d4` and max HP from `+0x4bc`;
+  `Character::deval` (0x103320) binds its expression variables to the same block.
+- **In-game (run `20261022-120539-_effective-stats-effective-luck`, seed 42).** Ten frames after `spawn`, a Rat
+  (luck unset → 5) reads luck 5 / effective 5 / max HP 5; `LuckyRat` (`StatusOnSpawnIn { LuckUp 3 }`,
+  `mods/_effective-stats`) base 5 / **effective 8**; `FwGlowRat` (`FwGlow_ff00ff`, LuckUp's vtable with slot 82
+  replaced, "Per-unit glow" v3) **effective 5**; every fresh cat reads `hp == +0x4bc`. So the recompute had run for
+  the spawned units by then. The harness reads these fields (`dump`'s `effective` block, `expect unit <stat>.effective`
+  / `maxhp.effective`; `docs/ingame-testing.md`) and never calls the function. Fixture
+  `editor/test/fixtures/ingame/result-effective-stats.jsonl`; manifest `Character_recompute_stats`,
+  `Character_statsEffective`, `Character_maxHp`.
 
 ## Save safety
 

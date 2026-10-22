@@ -100,7 +100,15 @@ expect unit <unit> <field> <op> <value>          one field of one unit as the un
                                                  Rat": name "Lil' Rat"`. Faction numbers seen: allies 1, coins 0,
                                                  enemies 2. namekey is the graphics.name loc key (ENEMY_POOTER_NAME);
                                                  hp is current HP (= properties.health right after a spawn), the seven
-                                                 stats are what Character::init stored (data value, default 5)
+                                                 stats are what Character::init stored (data value, default 5) — the BASE
+expect unit <unit> <stat>.effective <op> <N>     the EFFECTIVE stat (2026-10-22): what Character::recompute_stats wrote
+expect unit <unit> maxhp.effective <op> <N>      after folding every live passive's / status's ApplyStatModifiers (vtable
+                                                 slot 82) into a copy of the base block (Character+0x5bc.., the values the
+                                                 status menu shows); maxhp.effective = Character+0x4bc, max(1, base health
+                                                 + 4 * effective constitution). Integers, any op. Detail e.g. `unit 9
+                                                 "Lil' Rat": luck.effective 8` (LuckUp 3 on a luck-5 Rat). Read only — the
+                                                 harness never calls recompute_stats, so a value is as fresh as the game's
+                                                 last recompute (it ran for spawned units within 10 frames, OBSERVED)
 expect gon <unit> <path> <op> <number>           one node of the unit's merged data/characters entry, as the game holds
 expect gon <unit> <path> ==|!= "<string>"        it (Character+0x240; variant_of-resolved, every overlay applied): the
 expect gon <unit> <path> ==|!= true|false        DLL walks <path> (dot-separated; an all-digit segment indexes the
@@ -142,10 +150,12 @@ Every event carries `t` (ms since harness start) and `frame`.
 {"ev":"turn","n":N,"round":N}
 {"ev":"wait","line":N,"kind":"frames","n":N,"actual":N}
 {"ev":"expect","line":N,"kind":"console","arg":"...","ok":true,"detail":"..."}
-{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","namekey":"ENEMY_POOTER_NAME","faction":0,"move":3,"act":1,"turnkind":2,"hp":6,"shield":0,"divineshield":0,"strength":5,"dexterity":5,"constitution":5,"intelligence":5,"speed":5,"charisma":5,"luck":5,"statuses":["LuckUp"],"stacks":[2]}]}
+{"ev":"units","available":true,"round":N,"count":N,"list":[{"i":0,"name":"...","class":"...","namekey":"ENEMY_POOTER_NAME","faction":0,"move":3,"act":1,"turnkind":2,"hp":6,"shield":0,"divineshield":0,"strength":5,"dexterity":5,"constitution":5,"intelligence":5,"speed":5,"charisma":5,"luck":5,"effective":{"strength":5,"dexterity":5,"constitution":5,"intelligence":5,"speed":5,"charisma":5,"luck":7,"maxhp":6},"statuses":["LuckUp"],"stacks":[2]}]}
                                                 stacks is parallel to statuses (Status+0x5c, the field FW_SetStatusStacks writes);
                                                 namekey/hp/shield/divineshield/the seven stats (2026-10-22) read Character+0x248/+0x4b0/+0x4b4/+0x4b8/+0x5a0..+0x5b8
                                                 (docs/engine-map.md "GON at runtime"); an unreadable field reads as 0 / ""
+                                                effective (2026-10-22): the seven stats after Character::recompute_stats (+0x5bc..+0x5d4,
+                                                same order) and maxhp (+0x4bc); docs/engine-map.md "Effective stats"
 {"ev":"log","text":"..."}
 {"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
 {"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}
