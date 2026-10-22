@@ -195,6 +195,10 @@ export function runValidatorTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     const r = v("include-missing");
     eq(only(r, "include-missing").length, 1, "only nope_nodes.gon");
   });
+  test("validator fixture: a file the mod ships only to be #included (not in the base) is an include fragment — no whole-file-replace, no include-missing", () => {
+    const r = v("include-mod-file");
+    eq(codes(r), "(none)");
+  });
   test("validator fixture: #define macros are expanded like the game (no gon-define-unmodelled; the append sees morestuff.shop1)", () => {
     const r = v("gon-define");
     eq(only(r, "gon-define-unmodelled").length, 0, `no unmodelled warning (all: ${codes(r)})`);

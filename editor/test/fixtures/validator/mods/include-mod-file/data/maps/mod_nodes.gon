@@ -1,0 +1,4 @@
+// an include fragment: not in the base data, read only through town.gon.append's #include
+modnode0 {
+	type event
+}

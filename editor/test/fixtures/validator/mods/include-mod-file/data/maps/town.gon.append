@@ -1,0 +1,4 @@
+// the mod ships the file it includes, at the mirrored path (data/maps/mod_nodes.gon)
+newstuff {
+	#include "mod_nodes.gon"
+}
