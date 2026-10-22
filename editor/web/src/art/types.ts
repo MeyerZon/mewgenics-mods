@@ -81,6 +81,16 @@ export interface ImportSvgResponse {
   info?: unknown;
 }
 
+/** POST /api/art/import-bitmap (api.importBitmap without a scene: the PNG checked and written to art/<id>.png) */
+export interface ImportBitmapResponse {
+  ok: boolean;
+  width?: number;
+  height?: number;
+  relPath?: string;
+  findings: Finding[];
+  error?: string;
+}
+
 export interface SwfReportExport {
   id: number;
   name: string;

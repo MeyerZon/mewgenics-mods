@@ -712,6 +712,16 @@ batch draw `0xa47e50`).
   `textureLod` LINEAR + mip (bias −0.5) for 0x40 / 0x41, `clamp_to_nearest` mip 0 for 0x42 / 0x43; repeat =
   `mod(uv,1)`, clipped = `clamp(uv, .5/size, 1−.5/size)`; stored premultiplied, un-premultiplied in the shader. The
   emitter writes 0x41 → LINEAR + clamp, what the probe saw. Editor constant `TEXTURE_ATLAS_SIZE` → `bitmap-too-large`.
+  **OBSERVED in-game 2026-10-22** (`npm run test:artprobe -- --raster`, run `20261022-134011`, fixture
+  `artprobe-raster-summary.json`; `src/core/art/probe-raster.ts`): a raster-only character clip draws; 0x41 blends
+  between magnified texels (37 % of a ×32 red/blue stripe's row purple) and 0x43 does not (1 %); 0x40 repeats outside
+  the bitmap (7 crossings over 4 periods of a 2×2 tile, strongly blended at 8 clip px per texel); a 1-texel checker
+  minified to ≈0.43 screen px per texel is flat gray (σ 3.5: mipmapped). The editor now writes all four fill types
+  (`scene.bitmaps[id].repeat / smooth`, `raster.ts bitmapFillType`). Vanilla census (T1, `vanilla-raster.json`): 22
+  files carry bitmaps, all lossless format 5, none JPEG, max 3373×2784; `backgrounds.swf AlleyBGTest` = one 2000×1500
+  plate per frame at 0.7667 from (0,0). A `tilesets.gon.merge` `alley { combat_background <ModClip> }` with a 1-frame
+  plate clip replaces the arena picture (`mods/_bgprobe`). `DefineBitsLossless_init` 0xb7a4e0 has branches for formats
+  3 / 4 / 5 only → `bitmap-unsupported-format` for any other (INFERRED: no pixels).
 - **Palette + cxform order** (`shaders/paletted_full.shader`): `out = compute_color_full(v)` → if `r≈g≈b` (±0.001)
   `out.rgb = texelFetch(palettemap, (r·15+.5, palette))` → **`frag = out × color_xform[0] + color_xform[1]`**. The
   concatenated PlaceObject cxform applies **after** the palette remap; `default_full` is the same minus the remap.
@@ -1728,7 +1738,15 @@ DefineFont3 (only version 3 decodes — PR #81) with a SymbolClass / ExportAsset
 later file in `swflist.gon` shadows an earlier one of the same name (INFERRED from the walk order). 0x746a80 reads
 `languages`, `overrides`, `glyph_lookup_order`, `font_adjustments`, `dialate` (`No font info found for language: `);
 `DAT_1413c6c80 = FindCharacterByClassName("NotoSans")` is the global fallback (0x7469b0). `DefineFont::decode`
-0xa2a4a0 (`ERROR: DefineFont version unsupported`).
+0xa2a4a0 (`ERROR: DefineFont version unsupported`): reads flags, the NUL-terminated name, the offset table (wide with
+flag 0x08), the code table (wide with 0x04) into a code → glyph map, and with HasLayout (0x80) ascent / descent /
+leading and the advance table ×0.05 (`+0x40`), skipping the bounds and reading the kerning pairs.
+**OBSERVED in-game 2026-10-22** (run `20261022-134011`, fixture `artprobe-raster-summary.json`): a mod SWF's own
+DefineFont3 (`scene.fonts`, `src/core/art/font.ts`: vanilla's flags 0x84, glyphs with FillStyle0 = 1) exported by
+SymbolClass is found by a DefineEditText naming its class and drawn with its own glyph shapes; a character the font
+lacks is drawn from another font (the fallback above; `font-glyph-missing` warns); **a class that no loaded SWF exports
+crashes the game when the text is shown: 0xc0000005 at `Mewgenics.exe+0xa2addf`** (run `20261022-134035`; the
+`font-class-unknown` error).
 
 **Damage / floating text (OBSERVED calls).** Same path: `data/damage_text_styles.gon` is parsed by 0x7a74b0 (GON
 only; `outline_color` users 0x2bcf90 / 0x3363f0 / 0x88d780); `DamageText_build` 0x2bcf90 builds the style + wstrings

@@ -1,0 +1,142 @@
+// Mod-embedded fonts (2026-10-22). The facts: DefineFont::decode 0xa2a4a0 decodes DefineFont3 only (10 / 48 are FATAL);
+// it keeps the glyph shapes, the code table and — with HasLayout — the advance table (×0.05); a DefineEditText with
+// HasFontClass resolves its class through Swf_FindCharacterByClassName 0x9bb910 → the global export-name registry
+// (ApplicationBase::FindCharacter 0x9bb6f0, last-loaded file first), accepting only font tags. Vanilla's fonts.swf is
+// exactly that: eight DefineFont3 (HasLayout | WideCodes, glyphs present) bound by SymbolClass. So a mod font is a
+// DefineFont3 + a SymbolClass name in the mod's own SWF; scene.fonts authors one from glyph paths (em 1024, y down,
+// baseline 0) and scene.texts[].font may name it. T2: the raster probe draws a text in a mod font (probe-raster.ts).
+
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { vanillaSwfDir } from "../src/core/repo.ts";
+import { readSwf, flattenTags } from "../src/core/art/swf-reader.ts";
+import { emitSwf } from "../src/core/art/swf-emitter.ts";
+import { exampleScene, validateScene } from "../src/core/art/scene.ts";
+import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
+
+/** a two-glyph block font: "H" a full em-box square, "I" a thin bar, " " empty */
+export function blockFont() {
+  return {
+    name: "Probe Blocks",
+    ascent: 800,
+    descent: 224,
+    glyphs: {
+      H: { d: "M0 -700 L700 -700 L700 0 L0 0 Z", advance: 800 },
+      I: { d: "M300 -700 L400 -700 L400 0 L300 0 Z", advance: 700 },
+      " ": { d: "", advance: 400 },
+    },
+  };
+}
+
+export async function runArtFontTests(test: TestFn, assert: AssertFn, eq: EqFn): Promise<void> {
+  console.log("\n# Art: mod fonts (DefineFont3 + SymbolClass from scene.fonts; texts in a mod font)");
+  let F: Record<string, any> = {};
+  let RU: Record<string, any> = {};
+  const errs: string[] = [];
+  try { F = await import("../src/core/art/font.ts"); } catch (e) { errs.push(`font.ts: ${e instanceof Error ? e.message : String(e)}`); }
+  try { RU = await import("../src/core/art/swf-rules.ts"); } catch (e) { errs.push(`swf-rules.ts: ${e instanceof Error ? e.message : String(e)}`); }
+  const need = () => { if (errs.length) throw new Error(errs.join("; ")); };
+  const codes = (fs: Array<{ code: string; severity: string }>, sev?: string) => fs.filter((f) => !sev || f.severity === sev).map((f) => f.code);
+
+  test("fontProblems: a block font is clean; no glyphs (font-empty), a two-char key / negative advance / bad path (font-glyph), bad ascent (font-metrics)", () => {
+    need();
+    eq(F.fontProblems(blockFont()).length, 0, JSON.stringify(F.fontProblems(blockFont())));
+    eq(F.fontProblems({ ascent: 800, descent: 200, glyphs: {} })[0].code, "font-empty");
+    const bad = F.fontProblems({ ascent: 800, descent: 200, glyphs: { AB: { d: "M0 0 L1 1 Z", advance: 10 }, C: { d: "M0 0 L1 1 Z", advance: -1 }, D: { d: 42, advance: 10 } } });
+    eq(bad.filter((p: any) => p.code === "font-glyph").length, 3, JSON.stringify(bad));
+    eq(F.fontProblems({ ascent: -1, descent: 200, glyphs: { A: { d: "", advance: 1 } } })[0].code, "font-metrics");
+  });
+
+  test("encodeDefineFont3 → swf-reader: flags HasLayout|WideCodes (0x84, vanilla's), name NUL-terminated, glyphs sorted by code, advances ×20, ascent/descent ×20, the glyph SHAPE uses FillStyle0 = 1 like vanilla's glyphs", () => {
+    need();
+    const bytes = F.encodeDefineFont3(5, blockFont(), "Probe Blocks");
+    const t = (readSwf(wrap(bytes)).tags as any[]).find((x) => x.code === 75);
+    assert(!!t && !!t.font, "reader parses DefineFont3 into .font");
+    eq(t.font.id, 5); eq(t.font.flags, 0x84); eq(t.font.name, "Probe Blocks\u0000");
+    eq(t.font.codes, " HI"); eq(t.font.advances.join(","), "8000,16000,14000");
+    eq(t.font.ascent, 16000); eq(t.font.descent, 4480);
+    eq(t.font.glyphFill0.join(","), "0,1,1"); // the empty space glyph has no style record
+  });
+
+  const vf = join(vanillaSwfDir(), "fonts.swf");
+  if (!existsSync(vf)) console.log(`  (skipped: vanilla fonts.swf not extracted at ${vf})`);
+  else test("T1: swf-reader parses vanilla fonts.swf's DefineFont3s (Peralta id 7: 364 glyphs, flags 0x8c, ascent 20053; every font HasLayout + WideCodes; glyphs use FillStyle0)", () => {
+    const fonts = (readSwf(new Uint8Array(readFileSync(vf))).tags as any[]).filter((x) => x.code === 75).map((x) => x.font);
+    eq(fonts.length, 8);
+    const per = fonts.find((f: any) => f.id === 7);
+    eq(per.name, "Peralta\u0000"); eq(per.codes.length, 364); eq(per.flags, 0x8c); eq(per.ascent, 20053);
+    for (const f of fonts) { assert((f.flags & 0x84) === 0x84, `${f.name} flags ${f.flags}`); assert(f.glyphFill0.filter((v: number) => v === 1).length > 100, f.name); }
+  });
+
+  const withFont = () => {
+    const sc = exampleScene("fx") as any;
+    sc.fonts = { ProbeBlocks: blockFont() };
+    sc.texts = { t: { text: "HIH", font: "ProbeBlocks", size: 20, color: "#ff6000", align: "left", width: 100, height: 30, html: false } };
+    sc.sprites.Starter.layers.push({ name: "t", depth: 60, keys: [{ frame: 0, ref: "t", x: 0, y: -80 }] });
+    return sc;
+  };
+
+  test("validateScene: a text may name a scene font; font errors are reported per font; dup-id across fonts; font-glyph-missing warns for characters the font lacks", () => {
+    need();
+    const v = validateScene(withFont()) as any;
+    assert(v.ok, JSON.stringify(v.findings));
+    const miss = withFont(); miss.texts.t.text = "HXH";
+    const vm = validateScene(miss) as any;
+    assert(vm.ok, "a missing glyph is a warning");
+    assert(codes(vm.findings, "warning").includes("font-glyph-missing"), JSON.stringify(vm.findings));
+    const bad = withFont(); bad.fonts.ProbeBlocks.glyphs = {}; bad.shapes.ProbeBlocks = { paths: [] };
+    const vb = validateScene(bad) as any;
+    assert(codes(vb.findings, "error").includes("font-empty") && codes(vb.findings, "error").includes("dup-id"), JSON.stringify(vb.findings));
+    const unk = withFont(); unk.texts.t.font = "NoSuchFont";
+    assert(codes((validateScene(unk) as any).findings, "error").includes("text-font"), "unknown font class stays an error at scene level");
+  });
+
+  test("emitSwf: the scene font becomes a DefineFont3 before the text, exported by SymbolClass under its id; the DefineEditText names that class (HasFontClass)", () => {
+    need();
+    const v = validateScene(withFont()) as any;
+    const out = emitSwf(v.scene, {});
+    const tags = readSwf(out.bytes).tags as any[];
+    const fi = tags.findIndex((x) => x.code === 75), ti = tags.findIndex((x) => x.code === 37);
+    assert(fi >= 0 && fi < ti, `font ${fi} before text ${ti}`);
+    const sc = tags.find((x) => x.code === 76);
+    assert(sc.entries.some((e: any) => e.name === "ProbeBlocks" && e.id === tags[fi].font.id), JSON.stringify(sc.entries));
+    eq(tags[ti].editText.fontClass, "ProbeBlocks");
+    eq(codes(RU.swfFindings(tags)).filter((c: string) => c.startsWith("font")).length, 0, JSON.stringify(RU.swfFindings(tags)));
+  });
+
+  test("swfFindings: a DefineEditText naming a font class that is neither a game font nor exported by this file is font-class-unknown", () => {
+    need();
+    const v = validateScene(withFont()) as any;
+    const out = emitSwf(v.scene, {});
+    // rename the class in the text tag only (same length, so the framing stays valid)
+    const s = Buffer.from(out.bytes);
+    const ti = (readSwf(new Uint8Array(s)).tags as any[]).find((x) => x.code === 37);
+    const nameAt = s.indexOf(Buffer.from("ProbeBlocks\u0000"), ti.offset);
+    assert(nameAt > ti.offset, "class string in the text tag");
+    Buffer.from("NoSuchFont1\u0000").copy(s, nameAt);
+    const f = RU.swfFindings(readSwf(new Uint8Array(s)).tags) as any[];
+    assert(codes(f, "error").includes("font-class-unknown"), `an error since OBSERVED 2026-10-22: spawning such a text crashes the game at Mewgenics.exe+0xa2addf — ${JSON.stringify(f)}`);
+    assert(!!RU.SWF_RULE_CODES["font-class-unknown"], "listed in SWF_RULE_CODES");
+  });
+
+  test("layoutTextPaths: glyph paths scaled by size/1024 and advanced left to right (H at x 0, I at 800·s), centred box like the text box; missingGlyphs lists what the font lacks", () => {
+    need();
+    const t = { text: "HI", font: "ProbeBlocks", size: 10.24, width: 100, height: 20, align: "left" as const };
+    const paths = F.layoutTextPaths(blockFont(), t);
+    eq(paths.length, 2);
+    eq(paths[0].transform[0], 0.01);
+    eq(Math.round((paths[1].transform[4] - paths[0].transform[4]) * 100) / 100, 8);
+    eq(F.missingGlyphs(blockFont(), "HAX H").join(""), "AX");
+  });
+}
+
+/** a framed tag inside a minimal SWF header (so readSwf can parse it) */
+function wrap(tagBytes: Uint8Array): Uint8Array {
+  const head = [0x46, 0x57, 0x53, 10, 0, 0, 0, 0, 0x00, 0, 60, 1, 0]; // FWS v10, len, RECT nbits 0 (1 byte), rate 60, count 1
+  const end = [0, 0];
+  const out = new Uint8Array(head.length + tagBytes.length + end.length);
+  out.set(head, 0); out.set(tagBytes, head.length); out.set(end, head.length + tagBytes.length);
+  const len = out.length;
+  out[4] = len & 0xff; out[5] = (len >>> 8) & 0xff; out[6] = (len >>> 16) & 0xff; out[7] = (len >>> 24) & 0xff;
+  return out;
+}

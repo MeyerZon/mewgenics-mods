@@ -17,6 +17,8 @@ import { adoptGradients } from "../../../src/core/art/gradient.ts";
 import { shapeToSvg } from "../../../src/core/art/svg-export.ts";
 import { parseViewBox, reoriginSvg } from "../../../src/core/art/svg-reorigin.ts";
 import { bakeGlow } from "../../../src/core/art/glow.ts";
+import { addBitmapToScene } from "../../../src/core/art/raster.ts";
+import type { RasterMode } from "../../../src/core/art/raster.ts";
 import type { BakeGlowOptions } from "../../../src/core/art/glow.ts";
 import type {
   AbcMode,
@@ -27,6 +29,7 @@ import type {
   BuildResponse,
   Finding,
   ImportSvgResponse,
+  ImportBitmapResponse,
   InspectResponse,
   NewSceneResponse,
   PaletteResponse,
@@ -420,18 +423,68 @@ export async function applyVectorcraftSvg(id: string, exportedSvg: string, origi
   toast(`applied VectorCraft's drawing to shape "${id}" (${r.shape.paths.length} paths${re.dx || re.dy ? `, re-origined by ${re.dx},${re.dy}` : ""})`);
 }
 
-/** Drop / file-picker entry: an SVG becomes a shape of the open scene, or of a new scene if none is open. */
+/** base64 of bytes, chunked (String.fromCharCode(...big) overflows the argument limit) */
+function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+export interface ImportPngOptions {
+  mode?: RasterMode;
+  scale?: number;
+  smooth?: boolean;
+  repeat?: boolean;
+}
+
+/**
+ * Import PNG…: the server checks the PNG and writes it to art/<id>.png; addBitmapToScene (raster.ts, the same code as
+ * MCP import_bitmap) adds <id>Bmp, the shape <id> and — sprite / background — the exported 1-frame clip <id>Clip.
+ */
+export async function importPngFile(file: File, opts: ImportPngOptions = {}): Promise<void> {
+  if (!scene) return toast("open or create a scene first");
+  const sc = scene;
+  const base = file.name.replace(/\.png$/i, "").replace(/[^A-Za-z0-9_]/g, "_") || "Bitmap";
+  const stem = /^[A-Za-z_]/.test(base) ? base : `Bitmap_${base}`;
+  const taken = (x: string) => !!(sc.shapes[x] || sc.sprites[x] || (sc.bitmaps || {})[x] || sc.exports[x]);
+  let id = stem;
+  let n = 2;
+  while (taken(id) || taken(`${id}Bmp`) || taken(`${id}Clip`)) id = `${stem}_${n++}`;
+  const r = await post<"/api/art/import-bitmap", ImportBitmapResponse>("/api/art/import-bitmap", { mod: mod(), base64: toBase64(new Uint8Array(await file.arrayBuffer())), id });
+  if (!r.ok || !r.width || !r.height || !r.relPath) {
+    A.set((a) => ({ findings: [...(r.findings || []), ...a.findings] }));
+    return toast(`PNG import failed: ${r.error || "see findings"}`);
+  }
+  const add = addBitmapToScene(sc, { id, file: r.relPath, width: r.width, height: r.height, ...opts });
+  if (!add.ok) {
+    A.set((a) => ({ findings: [...add.findings, ...a.findings] }));
+    return toast(`PNG import failed: ${add.findings[0] ? add.findings[0].message : "?"}`);
+  }
+  sc.bitmaps = add.scene.bitmaps;
+  sc.shapes = add.scene.shapes;
+  sc.sprites = add.scene.sprites;
+  sc.exports = add.scene.exports;
+  A.set((a) => ({ findings: [...add.findings, ...(r.findings || []), ...a.findings], subtab: "shapes", target: add.spriteId || id }));
+  toast(`imported ${file.name} (${r.width}×${r.height}) as ${add.spriteId ? `the clip "${add.spriteId}" exported as ${add.exportName}` : `the bitmap-filled shape "${id}"`}`);
+  scheduleValidate();
+  bump();
+  pushSceneToPreview();
+}
+
+/** Drop / file-picker entry: an SVG becomes a shape of the open scene, or of a new scene if none is open; a PNG a raster sprite. */
 export async function importIntoSceneOrNew(f: File): Promise<void> {
-  if (!/\.svg$/i.test(f.name)) return toast("only .svg files are importable here (PNG bitmaps are referenced from the scene JSON)");
+  const png = /\.png$/i.test(f.name);
+  if (!png && !/\.svg$/i.test(f.name)) return toast("drop an .svg (a vector shape) or a .png (a raster sprite)");
   if (!scene) {
     if (!mod()) return toast("open a mod first");
-    const name = f.name.replace(/\.svg$/i, "").replace(/[^A-Za-z0-9_.-]/g, "_") || "art";
+    const name = f.name.replace(/\.(svg|png)$/i, "").replace(/[^A-Za-z0-9_.-]/g, "_") || "art";
     const r = await post<"/api/art/new-scene", NewSceneResponse>("/api/art/new-scene", { mod: mod(), name, starter: false });
     if (!r.ok) return toast(`could not create scene: ${r.error}`);
     await loadArtForMod(mod());
     await openScene(r.relPath);
   }
-  await importSvgFile(f);
+  if (png) await importPngFile(f);
+  else await importSvgFile(f);
 }
 
 // ---- preview (wraps web/src/art/preview-gl.ts) -------------------------------------------

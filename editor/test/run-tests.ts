@@ -492,7 +492,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 30 editor tools", () => eq(list.tools.length, 30));
+    test("tools/list returns the 31 editor tools", () => eq(list.tools.length, 31));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -579,6 +579,12 @@ await mcpSmoke();
   runArtImportTests(test, assert, eq);
   const { runArtTextTests } = await import("./art-text-tests.ts");
   await runArtTextTests(test, assert, eq);
+  const { runArtRasterTests } = await import("./art-raster-tests.ts");
+  await runArtRasterTests(test, assert, eq);
+  const { runArtFontTests } = await import("./art-font-tests.ts");
+  await runArtFontTests(test, assert, eq);
+  const { runArtRasterProbeTests } = await import("./art-raster-probe-tests.ts");
+  await runArtRasterProbeTests(test, assert, eq);
   const { runArtProbesTests } = await import("./art-probes-tests.ts");
   await runArtProbesTests(test, assert, eq);
   const { runArtWaveGlowTests } = await import("./art-wave-glow-tests.ts");

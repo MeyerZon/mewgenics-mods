@@ -1,0 +1,11 @@
+// test-only (raster + font probe, 2026-10-22): TomTom's parts with palette 54 (a reddish row: gray levels 1..14 map
+// to clearly non-gray colours), so the probe can tell a palette-remapped gray from a passthrough one
+ArtProbeRasterCat {
+    default_frame 1000
+    texture 1000
+    claws 1
+    palette 54
+
+    voice male1
+    pitch .5
+}

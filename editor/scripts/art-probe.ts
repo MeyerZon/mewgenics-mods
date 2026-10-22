@@ -33,6 +33,9 @@
 // write cat-back-summary.json (probe-outcomes.ts catBackOutcome; exit 0 on `back-facing` / `back-pose-drawn`; `--from <runDir>` too). --vfx (2026-10-22): run _vfxprobe's
 // vfx-probe.mewtest (a NEW particles.gon system with our clip, and SparkleBuff re-pointed to our marker clip) and write
 // vfx-summary.json (probe-vfx.ts measureVfx; refuses a verdict when every shot is byte-identical); also takes --from.
+// --raster (2026-10-22): write the big generated PNGs (art/generated/), build art/raster.scene.json, patch its
+// missing-font text's class (patchMissingFontClass), run render-raster / render-raster-cat / render-font-missing,
+// _bgprobe/render-backdrop and the control render-tileset-control, and write raster-summary.json (probe-raster.ts).
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
@@ -40,9 +43,12 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as api from "../src/core/api.ts";
 import { buildSwf } from "../src/core/art/art-io.ts";
-import { decodePng } from "../src/core/art/png.ts";
+import { decodePng, encodePng } from "../src/core/art/png.ts";
 import { measureLocText, summarizeLocText, tilesetOutcome, catWaveOutcome, catBackOutcome, CAT_BACK_BIG, measureGlowArena, glowArenaOutcome, GLOW_ARENA_PROBE } from "../src/core/art/probe-outcomes.ts";
 import { measureVfx, VFX_DOT_COLOUR } from "../src/core/art/probe-vfx.ts";
+import { writeModBytes } from "../src/core/art/art-io.ts";
+import { MODS_DIR, extractedPath } from "../src/core/repo.ts";
+import { RASTER_PROBE, rasterProbeImages, patchMissingFontClass, measureRasterShot, measureCatRamp, backdropShare } from "../src/core/art/probe-raster.ts";
 import { analyzeProbeShot, summarizeProbe, renderProbeReport, slotColoursPresent, largestChangedRegion, changedPixelsNear, darkPixelsNear, MARKER_COLOURS } from "../src/core/art/probe-compare.ts";
 
 /** the CatProbe rig's slot colours (mods/_artprobe/art/probe.scene.json) */
@@ -94,6 +100,63 @@ if (process.argv.includes("--vfx")) {
     `artifacts: ${r.artifacts.runDir}`,
   ].join("\n"));
   process.exit(r.verdict === "pass" && m.outcomes.aura === "drawn" && m.outcomes.repoint === "drawn" ? 0 : 1);
+}
+if (process.argv.includes("--raster")) {
+  // 1. the big generated PNGs (git-ignored art/generated/), 2. build raster.scene.json, 3. patch the missing-font text
+  const imgs = rasterProbeImages();
+  for (const [n, im] of Object.entries(imgs.generated)) {
+    const w = writeModBytes("_artprobe", `art/generated/${n}.png`, encodePng(im.width, im.height, im.rgba));
+    if (!w.ok) { console.error(w.error); process.exit(1); }
+  }
+  const rb = buildSwf("_artprobe", "art/raster.scene.json", {});
+  if (!rb.ok) { console.error(`raster build failed: ${JSON.stringify(rb.findings).slice(0, 600)}`); process.exit(1); }
+  const swfPath = join(MODS_DIR, "_artprobe", "swfs", "raster.swf");
+  const pt = patchMissingFontClass(new Uint8Array(readFileSync(swfPath)));
+  if (pt.patched !== 1) { console.error(`patchMissingFontClass patched ${pt.patched} strings, expected 1`); process.exit(1); }
+  writeFileSync(swfPath, pt.bytes);
+  // palette row 54 (the cat's) from the game's palette.png, for the ramp measure
+  const pal = decodePng(new Uint8Array(readFileSync(extractedPath("textures", "palette.png"))));
+  const row = RASTER_PROBE.cat.palette;
+  const palRow = Array.from({ length: 16 }, (_, n) => { const i = (row * pal.width + n) * 4; return [pal.rgba[i]!, pal.rgba[i + 1]!, pal.rgba[i + 2]!] as [number, number, number]; });
+  const crashRva = (reason: string) => { const m = /Mewgenics\.exe\+(0x[0-9a-f]+)/i.exec(reason); return m ? m[1]! : null; };
+  const run = async (mod: string, test: string) => {
+    const r = await api.runIngameTest({ mod, test, hide: false });
+    if (!("verdict" in r)) return { mod, test, verdict: "launch-error", reason: r.error, crashRva: null, save: null, runDir: null, shots: [] as Array<{ label: string; img: ReturnType<typeof decodePng> }> };
+    return { mod, test, verdict: r.verdict, reason: r.reason, crashRva: crashRva(r.reason), save: saveOf(r), runDir: r.artifacts.runDir || null, shots: r.artifacts.shots.filter((s) => s.path).map((s) => ({ label: s.label, img: decodePng(readFileSync(s.path!)) })) };
+  };
+  const strip = ({ shots: _shots, ...rest }: Awaited<ReturnType<typeof run>>) => rest;
+  const raster = await run("_artprobe", "render-raster");
+  if (raster.verdict === "skipped" || raster.verdict === "cannot-run") { console.log(`skipped: ${raster.reason}`); process.exit(2); }
+  const rasterShots = raster.shots.map((s) => { const a = analyzeProbeShot(s.img); const g = geomOf(a); return { label: s.label, marker: g, measure: g && g.found ? measureRasterShot(s.img, g) : null }; });
+  const catRun = await run("_artprobe", "render-raster-cat");
+  const catShots = catRun.shots.map((s) => { const a = analyzeProbeShot(s.img); const g = geomOf(a); return { label: s.label, marker: g, measure: g && g.found ? measureCatRamp(s.img, g, palRow) : null }; });
+  const fm = await run("_artprobe", "render-font-missing");
+  const fmShots = fm.shots.map((s) => { const a = analyzeProbeShot(s.img); const g = geomOf(a); return { label: s.label, marker: g, measure: g && g.found ? measureRasterShot(s.img, g).font : null }; });
+  const bg = await run("_bgprobe", "render-backdrop");
+  const ctl = await run("_artprobe", "render-tileset-control");
+  const bgShares = bg.shots.map((s) => ({ label: s.label, ...backdropShare(s.img) }));
+  const ctlBase = ctl.shots.find((s) => s.label === "baseline");
+  const ctlShare = ctlBase ? backdropShare(ctlBase.img) : null;
+  const vote = <T extends string>(xs: Array<T | undefined>) => { const c = new Map<T, number>(); for (const x of xs) if (x) c.set(x, (c.get(x) || 0) + 1); return [...c.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "no-marker"; };
+  const rm = rasterShots.map((s) => s.measure).filter((m): m is NonNullable<typeof m> => !!m);
+  const cm = catShots.map((s) => s.measure).filter((m): m is NonNullable<typeof m> => !!m);
+  const outcomes = {
+    rasterSprite: raster.verdict !== "pass" ? raster.verdict : rm.some((m) => m.quad.ok) ? "drawn" : "not-drawn",
+    sampling: vote(rm.map((m) => m.stripes.verdict)),
+    repeat: vote(rm.map((m) => m.tile.verdict)),
+    minified: vote(rm.map((m) => m.big.verdict)),
+    embeddedFont: vote(rm.map((m) => m.font.verdict)),
+    missingGlyph: vote(rm.map((m) => (m.fontMissingGlyph.blobs.length === 2 ? "skipped" : m.fontMissingGlyph.blobs.length === 3 ? "fallback-glyph" : m.fontMissingGlyph.verdict === "nothing" ? "nothing" : `blobs-${m.fontMissingGlyph.blobs.length}`))),
+    missingFont: fm.verdict !== "pass" ? `${fm.verdict}${fm.crashRva ? ` at ${fm.crashRva}` : ""}` : vote(fmShots.map((s) => s.measure?.verdict)),
+    catBitmapGray: catRun.verdict !== "pass" ? catRun.verdict : vote(cm.map((m) => m.bitmap)),
+    catVectorGray: catRun.verdict !== "pass" ? catRun.verdict : vote(cm.map((m) => m.vector)),
+    backdrop: bg.verdict !== "pass" ? bg.verdict : bgShares.some((s) => s.left > 0.02 && s.right > 0.02) && (!ctlShare || ctlShare.left + ctlShare.right < 0.005) ? "drawn" : "not-drawn",
+  };
+  const out = { observed: "2026-10-22, build 25143593", outcomes, raster: { ...strip(raster), shots: rasterShots }, cat: { ...strip(catRun), palette: row, palRow, shots: catShots }, fontMissing: { ...strip(fm), shots: fmShots }, backdrop: { ...strip(bg), shares: bgShares }, control: { ...strip(ctl), baselineShare: ctlShare } };
+  writeFileSync(join(raster.runDir || ".", "raster-summary.json"), JSON.stringify(out, null, 2) + "\n");
+  const line = (r: { mod: string; test: string; verdict: string; reason: string; save: string | null; runDir: string | null }) => `${r.mod}/${r.test}: ${r.verdict} — ${r.reason}; ${r.save}\n  artifacts: ${r.runDir}`;
+  console.log([line(raster), line(catRun), line(fm), line(bg), line(ctl), `outcomes: ${JSON.stringify(outcomes, null, 1)}`, `summary: ${join(raster.runDir || ".", "raster-summary.json")}`].join("\n"));
+  process.exit(raster.verdict === "pass" && rm.length ? 0 : 1);
 }
 if (process.argv.includes("--loctext")) {
   const fromAt = process.argv.indexOf("--from");

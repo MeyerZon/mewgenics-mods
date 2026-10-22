@@ -103,8 +103,8 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (30 tools, incl. the art tools
-  with `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (31 tools, incl. the art tools
+  with `import_bitmap` (a PNG as a raster sprite / background plate / bitmap fill), `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
   Chromium), `check_game_build`, `port_bindings`, the room tools `read_level` / `write_level`, and `pack_mod` / `install_mod`).
 - `npm run pack -- <mod> [--force] [--init]` — ship a mod: needs `mods/<mod>/mod.json` (name, version, author,
   description, `gameBuild` = the Steam build id; `--init` drafts it), rebuilds its SWFs, refuses on validator errors

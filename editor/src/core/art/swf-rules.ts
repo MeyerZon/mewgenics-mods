@@ -11,6 +11,8 @@ import type { FillStyle } from "./swf-reader.ts";
 import type { Finding } from "./scene.ts";
 import { VANILLA_EXPORTS } from "./vanilla-exports.ts";
 import { bitmapFitsAtlas, bitmapTooLargeMessage } from "./engine-behaviour.ts";
+import { GAME_FONTS } from "./text.ts";
+import { flattenTags } from "./swf-reader.ts";
 
 export interface RuleCode {
   severity: Finding["severity"];
@@ -25,6 +27,8 @@ export const SWF_RULE_CODES: Readonly<Record<string, RuleCode>> = {
   "font-tag-unsupported": { severity: "error", where: ["swf"], why: "DefineFont::decode 0xa2a4a0 accepts DefineFont3 only; tags 10 / 48 are FATAL 'ERROR: DefineFont version unsupported'" },
   "abc-count": { severity: "error", where: ["swf"], why: "DoABC::decode 0xa4a740 is FATAL 'Multiple DoABC tags in one SWF' on a second DoABC" },
   "bitmap-too-large": { severity: "error", where: ["scene", "swf"], why: "fit_texture 0xa24540 is FATAL 'Bitmap Fill could not fit into atlas' when width or height >= texture_atlas_size (4096)" },
+  "bitmap-unsupported-format": { severity: "error", where: ["scene", "swf"], why: "DefineBitsLossless_init 0xb7a4e0 converts formats 3 (palette), 4 (RGB555) and 5 (ARGB) only; the editor PNG decoder takes 8-bit non-interlaced PNGs (png.ts)" },
+  "font-class-unknown": { severity: "error", where: ["swf"], why: "DynamicTextBox_init_from_DefineEditText 0x98d910 takes the font from Swf_FindCharacterByClassName 0x9bb910 (the export registry, font tags only); a class no loaded SWF exports finds nothing and the game crashes when the text is shown (0xc0000005 at Mewgenics.exe+0xa2addf, OBSERVED 2026-10-22)" },
   "filter-unsupported": { severity: "error", where: ["scene", "swf"], why: "PlaceObject3::decode 0xb78210 is FATAL 'ERROR: FILTERS NOT SUPPORTED' on a filter list" },
   "import-unsupported": { severity: "error", where: ["scene", "swf"], why: "ImportAssets / ImportAssets2 are skipped by createTag 0xa2e990, so an imported id has no character and placing it crashes (Swf_GetCharacter 0xa4a190)" },
   "scaling-grid-ignored": { severity: "warning", where: ["swf"], why: "DefineScalingGrid (78) is not in createTag's switch: no 9-slice" },
@@ -69,6 +73,10 @@ export function exportShadowsMessage(name: string, file: string): string {
 export function swfFindings(tags: Tag[]): Finding[] {
   const out: Finding[] = [];
   let abcCount = 0;
+  // font classes this file itself exports (a DefineFont3 bound by SymbolClass / ExportAssets)
+  const flat = flattenTags(tags);
+  const fontIds = new Set(flat.filter((t) => t.code === TAG.DefineFont3 && t.id !== undefined).map((t) => t.id!));
+  const ownFonts = new Set(flat.filter((t) => t.code === TAG.SymbolClass || t.code === TAG.ExportAssets).flatMap((t) => (t.entries || []).filter((e) => fontIds.has(e.id)).map((e) => e.name)));
   const walk = (list: Tag[], prefix: string) => {
     list.forEach((t, i) => {
       const path = `${prefix}[${i}]`;
@@ -84,6 +92,7 @@ export function swfFindings(tags: Tag[]): Finding[] {
           break;
         case TAG.DefineBitsLossless:
         case TAG.DefineBitsLossless2:
+          if (t.bitmap && ![3, 4, 5].includes(t.bitmap.format)) push("error", "bitmap-unsupported-format", `${t.name} id ${t.bitmap.id} has format ${t.bitmap.format}: DefineBitsLossless_init 0xb7a4e0 converts formats 3, 4 and 5 only (INFERRED: the bitmap gets no pixels); write format 5 (32-bit ARGB, what every vanilla bitmap uses)`);
           if (t.bitmap && !bitmapFitsAtlas(t.bitmap.width, t.bitmap.height)) push("error", "bitmap-too-large", bitmapTooLargeMessage(`${t.name} id ${t.bitmap.id}`, t.bitmap.width, t.bitmap.height));
           break;
         case TAG.PlaceObject3:
@@ -125,6 +134,11 @@ export function swfFindings(tags: Tag[]): Finding[] {
         case TAG.DefineSprite:
           if (t.tags) walk(t.tags, `${path}.tags`);
           break;
+        case TAG.DefineEditText: {
+          const fc = t.editText && t.editText.fontClass;
+          if (fc && !GAME_FONTS.includes(fc) && !ownFonts.has(fc)) push("error", "font-class-unknown", `DefineEditText id ${t.editText!.id} names font class "${fc}", which is neither a game font (${GAME_FONTS.join(", ")}) nor a DefineFont3 this file exports: unless another loaded SWF exports it, the lookup (Swf_FindCharacterByClassName 0x9bb910) finds nothing and the game crashes when the text is shown (0xc0000005 at Mewgenics.exe+0xa2addf, OBSERVED 2026-10-22); export the font from this SWF (scene.fonts) or use a game font`);
+          break;
+        }
         default:
           if (JPEG_TAGS.has(t.code)) push("info", "jpeg-bitmap", `${t.name} id ${t.id ?? "?"}: decoded, but the game logs "WARNING: TEXTURE ENCODED AS JPG INSTEAD OF PNG"; prefer DefineBitsLossless2 (PNG)`);
           else if (!LOADER_ACCEPTED_TAGS.has(t.code) && !LOADER_SILENT_TAGS.has(t.code)) push("info", "tag-ignored", `${tagName(t.code)} (tag ${t.code}) is skipped by the loader (createTag 0xa2e990 default case) and draws nothing`);

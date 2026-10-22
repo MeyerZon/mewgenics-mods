@@ -1,0 +1,448 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "outcomes": {
+    "rasterSprite": "drawn",
+    "sampling": "smooth-vs-snapped",
+    "repeat": "repeats",
+    "minified": "mipmapped",
+    "embeddedFont": "embedded-font",
+    "missingGlyph": "fallback-glyph",
+    "missingFont": "crash at 0xa2addf",
+    "catBitmapGray": "no-marker",
+    "catVectorGray": "no-marker",
+    "backdrop": "drawn"
+  },
+  "raster": {
+    "mod": "_artprobe",
+    "test": "render-raster",
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 3 shot(s)",
+    "crashRva": null,
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "20261022-134011-_artprobe-render-raster",
+    "shots": [
+      {
+        "label": "raster 1",
+        "marker": {
+          "found": true,
+          "box": {
+            "x0": 1919,
+            "y0": 964,
+            "x1": 2084,
+            "y1": 1074
+          },
+          "scale": 1.7291666666666667,
+          "mirrored": true
+        },
+        "measure": {
+          "quad": {
+            "tl": [
+              32,
+              66,
+              255
+            ],
+            "tr": [
+              33,
+              191,
+              66
+            ],
+            "bl": [
+              255,
+              131,
+              0
+            ],
+            "br": [
+              124,
+              0,
+              252
+            ],
+            "ok": true
+          },
+          "stripes": {
+            "smoothMixed": 0.383,
+            "snappedMixed": 0.012,
+            "verdict": "smooth-vs-snapped"
+          },
+          "tile": {
+            "transitions": 7,
+            "amplitude": 54,
+            "verdict": "repeats"
+          },
+          "big": {
+            "tl": [
+              210,
+              47,
+              50
+            ],
+            "tr": [
+              45,
+              135,
+              196
+            ],
+            "bl": [
+              47,
+              180,
+              92
+            ],
+            "blocksOk": true,
+            "checkerMean": 119,
+            "checkerStd": 3.5,
+            "verdict": "mipmapped"
+          },
+          "font": {
+            "ink": 7243,
+            "expected": 7026,
+            "fillRatio": 0.74,
+            "verdict": "embedded-font"
+          },
+          "fontMissingGlyph": {
+            "ink": 5228,
+            "expected": 4471,
+            "fillRatio": 0.742,
+            "verdict": "embedded-font",
+            "blobs": [
+              48,
+              35,
+              48
+            ],
+            "gapPx": 4.6
+          }
+        }
+      },
+      {
+        "label": "raster 2",
+        "marker": {
+          "found": true,
+          "box": {
+            "x0": 1919,
+            "y0": 964,
+            "x1": 2084,
+            "y1": 1074
+          },
+          "scale": 1.7291666666666667,
+          "mirrored": true
+        },
+        "measure": {
+          "quad": {
+            "tl": [
+              34,
+              66,
+              255
+            ],
+            "tr": [
+              32,
+              192,
+              64
+            ],
+            "bl": [
+              254,
+              123,
+              0
+            ],
+            "br": [
+              127,
+              0,
+              255
+            ],
+            "ok": true
+          },
+          "stripes": {
+            "smoothMixed": 0.371,
+            "snappedMixed": 0.012,
+            "verdict": "smooth-vs-snapped"
+          },
+          "tile": {
+            "transitions": 7,
+            "amplitude": 51,
+            "verdict": "repeats"
+          },
+          "big": {
+            "tl": [
+              208,
+              51,
+              51
+            ],
+            "tr": [
+              45,
+              141,
+              200
+            ],
+            "bl": [
+              50,
+              179,
+              92
+            ],
+            "blocksOk": true,
+            "checkerMean": 121,
+            "checkerStd": 3,
+            "verdict": "mipmapped"
+          },
+          "font": {
+            "ink": 7243,
+            "expected": 7026,
+            "fillRatio": 0.74,
+            "verdict": "embedded-font"
+          },
+          "fontMissingGlyph": {
+            "ink": 5223,
+            "expected": 4471,
+            "fillRatio": 0.741,
+            "verdict": "embedded-font",
+            "blobs": [
+              48,
+              35,
+              48
+            ],
+            "gapPx": 4.6
+          }
+        }
+      },
+      {
+        "label": "raster 3",
+        "marker": {
+          "found": true,
+          "box": {
+            "x0": 1919,
+            "y0": 964,
+            "x1": 2084,
+            "y1": 1074
+          },
+          "scale": 1.7291666666666667,
+          "mirrored": true
+        },
+        "measure": {
+          "quad": {
+            "tl": [
+              33,
+              62,
+              255
+            ],
+            "tr": [
+              31,
+              192,
+              64
+            ],
+            "bl": [
+              255,
+              131,
+              0
+            ],
+            "br": [
+              131,
+              0,
+              255
+            ],
+            "ok": true
+          },
+          "stripes": {
+            "smoothMixed": 0.389,
+            "snappedMixed": 0.012,
+            "verdict": "smooth-vs-snapped"
+          },
+          "tile": {
+            "transitions": 7,
+            "amplitude": 58,
+            "verdict": "repeats"
+          },
+          "big": {
+            "tl": [
+              209,
+              46,
+              49
+            ],
+            "tr": [
+              47,
+              140,
+              199
+            ],
+            "bl": [
+              52,
+              176,
+              96
+            ],
+            "blocksOk": true,
+            "checkerMean": 120,
+            "checkerStd": 3.5,
+            "verdict": "mipmapped"
+          },
+          "font": {
+            "ink": 7244,
+            "expected": 7026,
+            "fillRatio": 0.74,
+            "verdict": "embedded-font"
+          },
+          "fontMissingGlyph": {
+            "ink": 5228,
+            "expected": 4471,
+            "fillRatio": 0.742,
+            "verdict": "embedded-font",
+            "blobs": [
+              48,
+              35,
+              48
+            ],
+            "gapPx": 4.6
+          }
+        }
+      }
+    ]
+  },
+  "cat": {
+    "mod": "_artprobe",
+    "test": "render-raster-cat",
+    "verdict": "pass",
+    "reason": "all 2 expectation(s) passed; 4 shot(s)",
+    "crashRva": null,
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "20261022-134022-_artprobe-render-raster-cat",
+    "palette": 54,
+    "palRow": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        177,
+        115,
+        115
+      ],
+      [
+        177,
+        115,
+        115
+      ],
+      [
+        159,
+        101,
+        101
+      ],
+      [
+        159,
+        101,
+        101
+      ],
+      [
+        141,
+        89,
+        89
+      ],
+      [
+        141,
+        89,
+        89
+      ],
+      [
+        255,
+        249,
+        233
+      ],
+      [
+        255,
+        249,
+        233
+      ],
+      [
+        241,
+        210,
+        210
+      ],
+      [
+        241,
+        210,
+        210
+      ],
+      [
+        255,
+        208,
+        249
+      ],
+      [
+        255,
+        208,
+        249
+      ],
+      [
+        232,
+        140,
+        140
+      ],
+      [
+        232,
+        140,
+        140
+      ],
+      [
+        255,
+        255,
+        255
+      ]
+    ],
+    "shots": [
+      {
+        "label": "a0",
+        "marker": null,
+        "measure": null
+      },
+      {
+        "label": "cat 1",
+        "marker": null,
+        "measure": null
+      },
+      {
+        "label": "cat 2",
+        "marker": null,
+        "measure": null
+      },
+      {
+        "label": "cat 3",
+        "marker": null,
+        "measure": null
+      }
+    ]
+  },
+  "fontMissing": {
+    "mod": "_artprobe",
+    "test": "render-font-missing",
+    "verdict": "crash",
+    "reason": "crash 0xc0000005 at Mewgenics.exe+0xa2addf",
+    "crashRva": "0xa2addf",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "20261022-134035-_artprobe-render-font-missing",
+    "shots": []
+  },
+  "backdrop": {
+    "mod": "_bgprobe",
+    "test": "render-backdrop",
+    "verdict": "pass",
+    "reason": "all 0 expectation(s) passed; 2 shot(s)",
+    "crashRva": null,
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "20261022-134042-_bgprobe-render-backdrop",
+    "shares": [
+      {
+        "label": "backdrop 1",
+        "left": 0.2458,
+        "right": 0.2951
+      },
+      {
+        "label": "backdrop 2",
+        "left": 0.244,
+        "right": 0.2973
+      }
+    ]
+  },
+  "control": {
+    "mod": "_artprobe",
+    "test": "render-tileset-control",
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 3 shot(s)",
+    "crashRva": null,
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "20261022-134051-_artprobe-render-tileset-control",
+    "baselineShare": {
+      "left": 0,
+      "right": 0
+    }
+  }
+}

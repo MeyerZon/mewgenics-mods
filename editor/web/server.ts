@@ -160,6 +160,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       const b = await body("/api/art/import-svg", req);
       return sendJson(res, 200, api.importSvgShape({ svgText: b.svgText, mod: b.mod, relPath: b.path, options: b.options }));
     }
+    if (method === "POST" && url.pathname === "/api/art/import-bitmap") {
+      const b = await body("/api/art/import-bitmap", req);
+      return sendJson(res, 200, api.importBitmap({ base64: b.base64, mod: b.mod, id: b.id }));
+    }
     if (method === "POST" && url.pathname === "/api/art/export-svg") {
       const b = await body("/api/art/export-svg", req);
       return sendJson(res, 200, api.exportShapeSvg(b.mod, b.path, b.shapeId));

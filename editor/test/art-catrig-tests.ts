@@ -248,7 +248,7 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(scene.exports["CatProbeColours"], "CatProbeColours");
     const root = scene.sprites.CatAppendRoot;
     assert(!!root, "sprite CatAppendRoot");
-    eq(root.frames, 8, "probeIdleF / probeIdleB, then the wave probe's waveF / waveB (art-wave-glow-tests.ts), then the back probe's probeBackF / probeBackB / probeBackShowF / probeBackShowB (art-cat-back-tests.ts)");
+    eq(root.frames, 10, "probeIdleF / probeIdleB, then the wave probe's waveF / waveB (art-wave-glow-tests.ts), the back probe's probeBackF / probeBackB / probeBackShowF / probeBackShowB (art-cat-back-tests.ts), then the raster probe's probeRasterF / B (probe-raster.ts withRasterCatFrame)");
     eq(root.labels.probeIdleF, 0); eq(root.labels.probeIdleB, 1);
     eq(root.layers.length, 1);
     const ani = root.layers[0];

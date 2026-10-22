@@ -18,6 +18,8 @@ import type { RgbaImage } from "./png.ts";
 import { BLEND_MODES, hasEffects, writeFilterList } from "./effects.ts";
 import { encodeDefineEditText, encodeImportGameFonts, encodeImportAssets2 } from "./text.ts";
 import { bitmapFitsAtlas, bitmapTooLargeMessage } from "./engine-behaviour.ts";
+import { bitmapFillType } from "./raster.ts";
+import { encodeDefineFont3 } from "./font.ts";
 import type { SceneFilter } from "./effects.ts";
 
 export const SWF_VERSION = 17;
@@ -37,7 +39,7 @@ export interface EmitOptions {
 
 export interface EmitCharacter {
   id: number;
-  kind: "bitmap" | "shape" | "sprite" | "text" | "import";
+  kind: "bitmap" | "shape" | "sprite" | "text" | "import" | "font";
   name: string;
 }
 export interface EmitExport {
@@ -156,6 +158,8 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
   const bitmapIds = new Map<string, number>();
   const characters: EmitCharacter[] = [];
   const bitmaps = scene.bitmaps || {};
+  const fonts = scene.fonts || {};
+  const bitmapTypes = new Map(Object.entries(bitmaps).map(([id, bm]) => [id, bitmapFillType(bm)]));
   for (const id of order) {
     const cid = ids.get(id) as number;
     if (importIds.has(id)) {
@@ -179,11 +183,15 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
       }
       bitmapIds.set(id, cid);
       characters.push({ id: cid, kind: "bitmap", name: id });
+    } else if (fonts[id]) {
+      // a mod font: DefineFont3 (the only version the game decodes), found by class name = the font id (SymbolClass below)
+      tags.push({ code: TAG.DefineFont3, bytes: encodeDefineFont3(cid, fonts[id]!, fonts[id]!.name || id) });
+      characters.push({ id: cid, kind: "font", name: id });
     } else if (texts[id]) {
       tags.push({ code: TAG.DefineEditText, bytes: encodeDefineEditText(cid, texts[id]!) });
       characters.push({ id: cid, kind: "text", name: id });
     } else if (scene.shapes[id]) {
-      const enc = encodeDefineShape(cid, scene.shapes[id], { bitmapIds, shapeName: id, cubicSplits: scene.curveResolution, gradients: scene.gradients });
+      const enc = encodeDefineShape(cid, scene.shapes[id], { bitmapIds, bitmapTypes, shapeName: id, cubicSplits: scene.curveResolution, gradients: scene.gradients });
       findings.push(...enc.findings);
       tags.push({ code: TAG.DefineShape3, bytes: enc.bytes });
       characters.push({ id: cid, kind: "shape", name: id });
@@ -215,6 +223,11 @@ export function emitSwf(scene: Scene, opts: EmitOptions = {}): EmitResult {
       continue;
     }
     exports.push({ id: cid, name: linkage });
+  }
+  // fonts are found by class name (Swf_FindCharacterByClassName 0x9bb910 → the export registry): export each one
+  for (const fid of Object.keys(fonts)) {
+    const cid = ids.get(fid);
+    if (cid !== undefined && !exports.some((e) => e.name === fid)) exports.push({ id: cid, name: fid });
   }
   if (!exports.length) findings.push({ severity: "warning", code: "exports-empty", message: "SymbolClass is empty: nothing in this SWF is addressable from GON", path: "exports" });
   const symbolBody = encodeSymbolList(exports);

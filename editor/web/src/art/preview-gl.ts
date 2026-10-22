@@ -45,6 +45,8 @@ import { strokePolys } from "../../../src/core/art/stroke.ts";
 import { fillSubpathMask } from "../../../src/core/art/shape.ts";
 import { C2D_COMPOSITE } from "../../../src/core/art/effects.ts";
 import { textRgba } from "../../../src/core/art/text.ts";
+import { bitmapFillType } from "../../../src/core/art/raster.ts";
+import { layoutTextPaths } from "../../../src/core/art/font.ts";
 import type { SceneText } from "../../../src/core/art/text.ts";
 import type { StrokeStyle } from "../../../src/core/art/stroke.ts";
 import { gradientUnitMatrix, gradientFocal, rasterizeStops, resolveStops, swfSpread } from "../../../src/core/art/gradient.ts";
@@ -206,6 +208,8 @@ uniform float u_showGray;
 uniform float u_useBitmap;
 uniform float u_focal;
 uniform float u_spread;
+uniform float u_bmMode;
+uniform vec2 u_bmSize;
 varying vec2 v_uv;
 void main() {
   vec4 c = u_color;
@@ -228,7 +232,11 @@ void main() {
     gt.rgb /= max(gt.a, .001);
     c = gt;
   } else if (u_useBitmap > 0.5) {
-    vec4 t = texture2D(u_bitmap, v_uv);
+    // the fill type (raster.ts bitmapFillType, swf_lib.shader): 0x40 / 0x42 repeat = fract(uv); 0x42 / 0x43 pixel-snapped = the texel centre
+    vec2 uv = v_uv;
+    if (mod(u_bmMode, 2.0) < 0.5) uv = fract(uv);
+    if (u_bmMode > 65.5) uv = (floor(uv * u_bmSize) + 0.5) / u_bmSize;
+    vec4 t = texture2D(u_bitmap, uv);
     t.rgb /= max(t.a, .001);
     c = t;
   }
@@ -491,7 +499,7 @@ interface BitmapTexture {
 interface CoverSpec {
   color: Rgba;
   cx: Cxform | null;
-  bitmap: (BitmapTexture & { inv: Mat }) | null;
+  bitmap: (BitmapTexture & { inv: Mat; mode?: number }) | null;
   /** with bitmap = the stop strip (width = height = 1, inv → unit gradient space): 2 linear / 3 radial */
   grad?: { mode: 2 | 3; focal: number; spread: number };
 }
@@ -626,7 +634,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     prog = link(g, VERT_SRC, FRAG_SRC);
     checkerProg = link(g, CHECKER_VERT_SRC, CHECKER_FRAG_SRC);
     U = {};
-    for (const n of ["u_view", "u_palette", "u_bitmap", "u_color", "u_cxmul", "u_cxadd", "u_row", "u_showGray", "u_useBitmap", "u_focal", "u_spread"]) U[n] = g.getUniformLocation(prog, n);
+    for (const n of ["u_view", "u_palette", "u_bitmap", "u_color", "u_cxmul", "u_cxadd", "u_row", "u_showGray", "u_useBitmap", "u_focal", "u_spread", "u_bmMode", "u_bmSize"]) U[n] = g.getUniformLocation(prog, n);
     UC = {};
     for (const n of ["u_cell", "u_c0", "u_c1"]) UC[n] = g.getUniformLocation(checkerProg, n);
     aPos = g.getAttribLocation(prog, "a_pos");
@@ -690,6 +698,12 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
     const all = s.texts || {};
     for (const [id, t] of Object.entries(all)) {
       if (!t || !(t.width > 0) || !(t.height > 0) || !(t.size > 0)) continue;
+      // a text in one of the scene's own fonts is drawn from its glyph paths, as the game draws a DefineFont3 (font.ts)
+      const sf = s.fonts && t.font ? s.fonts[t.font] : undefined;
+      if (sf) {
+        prepared.set(id, prepareShape({ paths: layoutTextPaths(sf, t) }));
+        continue;
+      }
       const cv = textCanvas(t);
       if (!cv) continue;
       const bid = `__text_${id}`;
@@ -1048,6 +1062,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
           g.activeTexture(g.TEXTURE1);
           g.bindTexture(g.TEXTURE_2D, cover.bitmap.tex);
           g.uniform1f(U.u_useBitmap!, cover.grad ? cover.grad.mode : 1);
+          g.uniform1f(U.u_bmMode!, cover.bitmap.mode ?? 0x41);
+          g.uniform2f(U.u_bmSize!, Math.max(1, cover.bitmap.width), Math.max(1, cover.bitmap.height));
           if (cover.grad) {
             g.uniform1f(U.u_focal!, cover.grad.focal);
             g.uniform1f(U.u_spread!, cover.grad.spread);
@@ -1089,7 +1105,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
               const bm = bitmapTex.get(path.fill.id);
               const inv = bm ? invert(multiply(mat, path.transform)) : null;
               if (bm && inv) {
-                glFill(fillPolys, FILL_RULE, { color: { r: 255, g: 255, b: 255, a: 255 }, cx, bitmap: { tex: bm.tex, width: bm.width, height: bm.height, inv } });
+                const mode = bitmapFillType(scene && scene.bitmaps ? scene.bitmaps[path.fill.id] : undefined);
+                glFill(fillPolys, FILL_RULE, { color: { r: 255, g: 255, b: 255, a: 255 }, cx, bitmap: { tex: bm.tex, width: bm.width, height: bm.height, inv, mode } });
               } else if (!bm) {
                 missingBitmaps++;
                 glFill(fillPolys, FILL_RULE, { color: { r: 255, g: 0, b: 255, a: 128 }, cx, bitmap: null });
@@ -1292,8 +1309,13 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
                 c.transform(fm[0], fm[1], fm[2], fm[3], fm[4], fm[5]);
                 // cxform approximated for bitmaps: alpha multiplier only
                 c.globalAlpha = clamp01(cx ? cx.mul[3] : 1);
-                c.imageSmoothingEnabled = true; // the game filters bitmap fills (OBSERVED; matches the GL LINEAR sampling)
-                c.drawImage(img, 0, 0);
+                // the game filters 0x40 / 0x41 fills and pixel-snaps 0x42 / 0x43 (bitmapFillType); repeat tiles them
+                const ft = bitmapFillType(scene && scene.bitmaps ? scene.bitmaps[path.fill.id] : undefined);
+                c.imageSmoothingEnabled = ft < 0x42;
+                if (ft % 2 === 0) {
+                  const pat = c.createPattern(img as CanvasImageSource, "repeat");
+                  if (pat) { c.fillStyle = pat; c.fillRect(-1e4, -1e4, 2e4, 2e4); }
+                } else c.drawImage(img, 0, 0);
                 c.restore();
                 drawCalls++;
                 fillsDrawn++;

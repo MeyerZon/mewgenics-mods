@@ -162,3 +162,43 @@ ArtProbeCatBackShown {
         tooltip "ENEMY_TOMTOM_DESC"
     }
 }
+
+// test-only (raster + font probe, 2026-10-22): a Rat drawn by ArtProbeRaster (art/raster.scene.json → swfs/raster.swf):
+// a PNG raster sprite, smoothed / pixel-snapped / repeated bitmap fills, a 1024×768 minified "photo", a text in the
+// mod's own DefineFont3 ProbeBlocks; npm run test:artprobe -- --raster reads the shots (probe-raster.ts)
+ArtProbeRaster {
+    variant_of Rat
+    graphics {
+        movieclip ArtProbeRaster
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}
+
+// test-only (raster + font probe): a text whose font class no loaded SWF exports (art-probe.ts --raster patches the
+// built raster.swf: Peralta → Pzzzzzz) — what does the game draw for a missing font?
+ArtProbeFontMissing {
+    variant_of Rat
+    graphics {
+        movieclip ArtProbeFontMissing
+        name "ENEMY_LILRAT_NAME"
+        shadow_size .70
+        tooltip "ENEMY_LILRAT_DESC"
+    }
+}
+
+// test-only (raster + font probe): a real cat (palette 54, custom_cats.gon.append) whose idle is raster.swf's appended
+// CatTest frame probeRaster — a gray ramp as a bitmap and as vector gray:N squares: is a bitmap's gray palette-remapped?
+ArtProbeRasterCat {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data ArtProbeRasterCat
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeRaster]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}

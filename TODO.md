@@ -60,6 +60,9 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       re-pointed SparkleBuff show our yellow-bordered marker clip (streaked along the motion) on the second Rat? Note: that
       run used PR #117's in-process GL capture (its `mewtest.dll` swapped in and restored); with the window capture every
       shot came back as the loading screen (stale-shots, refused by the measure) — re-run after #117 merges.
+- [ ] `pr124-raster-look` (#124) — In the raster shot, do the PNG sprite, the photo blocks and the orange block-font text look right at game scale, and is the soft 0x41 stripe acceptable next to the crisp 0x43 one?
+- [ ] `pr124-backdrop` (#124) — In the backdrop shot, does the purple / teal mod plate read as the arena background, with the tileset foreground on top?
+- [ ] `pr124-import-png` (#124) — Art mode → Shapes → Import PNG…: is the row clear, and does the preview show the PNG where the game would?
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
@@ -607,6 +610,17 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
   `export_svg` (#70), `bake_glow` (#80), `vectorcraft_exec` (#89)
 - [x] External vector editor round trip (2026-10-21): VectorCraft (github.com/storytold/vectorcraft) is a static vector editor without timeline or player, so it edits single shapes through plain SVG — Export SVG / Replace… on Shapes rows, MCP `export_svg`, `svg-export.ts`; animation stays in the Timeline tab
 - [x] Testing frontier from `automation-feasibility.md`: AI-brain auto-resolve to smoke-test mods in a real fight (tiers B/C) → now TDD targets 1–3 above; an IPC action layer (tier D) → the named-pipe mode in target 12 (done: #43–#46, #52)
+
+### Raster art and fonts — follow-ups (PR #124, 2026-10-22)
+
+- [ ] **Cat ramp frame in-game:** `render-raster-cat` shows ArtProbeRasterCat (and A0's ArtProbeCatReal spawned first
+      in the same script) in the vanilla idle, not the appended frame, though A0's own `render-cat-append` still passes.
+      Find what makes the appended idle show (spawn order, a hit / turn re-playing idle?), then read the gray ramps
+      (`measureCatRamp`) to move "gray texels are remapped on a cat" from shader source to in-game OBSERVED.
+- [ ] **Two mod SWFs exporting `_Append_CatTest`:** with a second donor (an earlier raster.swf) A0's frame did not show
+      either; re-test once the item above is understood — if it holds, it is a cross-mod limit for cat animations.
+- [ ] **TTF/OTF → scene.fonts:** a font importer (cmap + glyf quadratic contours, pure TS) so modders need not draw
+      glyph paths by hand.
 
 ### Open engine unknowns to resolve
 - [x] **GON pre-pass (`//`, `/* */`, `#include`)** — located 2026-10-22 (RE session `inc`, `.analysis/notes-inc.md`):

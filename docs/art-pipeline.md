@@ -33,7 +33,10 @@ docs/mods, with a URL). Where OBSERVED and COMMUNITY-SOURCED facts corroborate, 
 | New animation *systems* / rig behavior | Native code | Hard | Rig/animation logic is C++ (`glaiel::swf`, `glaiel::CatParts`) |
 
 **Bottom line (INFERRED):** Mewgenics' primary art is **vector SWF**, not sprite sheets.
-PNGs are a supporting role (backgrounds, liquids, noise, cursors, and palette-lookup maps).
+Loose PNGs are a supporting role (liquids, noise, cursors, and palette-lookup maps) — but **inside** the SWFs vanilla
+uses bitmaps heavily (every combat background is a 2000×1500 bitmap plate; props, UI and cutscenes carry hundreds),
+and a mod can do the same: §2 "Raster art inside SWFs" (OBSERVED 2026-10-22; Art mode Import PNG…, MCP `import_bitmap`).
+A mod can also carry its own font (§2 "Fonts").
 Recoloring (palette/tint) and whole-file asset replacement are genuine data-layer mods via
 `-modpaths`. Adding *new* parts/palettes cleanly, or anything touching render passes, needs
 native DLLs — which the community already provides.
@@ -151,6 +154,68 @@ textures (eyestrips, water, noise) are sampled by their own shaders and are not 
   native palette extender (§4).
 - **Native/authoring:** adding a genuinely new texture that the engine will sample needs a
   code path that requests it; most textures are engine-driven.
+
+### Raster art inside SWFs: PNGs as sprites, fills and backgrounds (OBSERVED 2026-10-22)
+
+The owner's question was "a way to use not only vector files". Inside a SWF the game draws bitmaps natively, and
+vanilla relies on them far more than the "vector-first" summary above suggests (read-only census of the installed
+`.extracted/swfs/*.swf`, pinned in `editor/test/fixtures/art/vanilla-raster.json`, `src/core/art/raster-census.ts`):
+
+- **22 of the vanilla SWFs carry bitmaps** — `static_objects.swf` 841, `modular_cutscenes.swf` 208, `ui.swf` 134,
+  `events.swf` 133, `backgrounds.swf` 104, `house.swf` 99, `npcs.swf` 89, enemies / bosses / particles a few to 52 each.
+  **Every one is DefineBitsLossless / DefineBitsLossless2 format 5 (32-bit ARGB); none is JPEG.** The largest are
+  3373×2784 (`bosses4.swf`) and 3072×2000 (`npcs.swf`) — all below the 4096 atlas page. Fill types in use: 0x41
+  (clipped, smoothed) almost everywhere, 0x40 (repeat) in ui / map / house / events / npcs, 0x43 (pixel-snapped) in
+  `enemies4.swf` and `portraits.swf`.
+- **Every combat background is a bitmap plate.** `backgrounds.swf` `AlleyBGTest` (alley, TacticsTest's tileset) is a
+  10-frame sprite, each frame one shape: a 2000×1500 bitmap scaled 0.7667 (1533×1150 clip px) from (0,0).
+
+What the game does with them (the decode is `docs/engine-map.md` "SWF loader and display path"; the in-game run is
+`npm run test:artprobe -- --raster`, fixture `editor/test/fixtures/ingame/artprobe-raster-summary.json`, run
+`20261022-134011`; the probe lives in `mods/_artprobe/art/raster.scene.json` + `src/core/art/probe-raster.ts`):
+
+| Question | Answer |
+|---|---|
+| A whole PNG as a character clip ("photo" enemy) | **Works.** `ArtProbeRaster` (a Rat variant whose `graphics.movieclip` is a raster clip) draws a 32×32 four-colour PNG ×2 and a 1024×768 picture exactly where placed, mirrored like every enemy clip. |
+| Smoothing | Fill 0x41 (the default) is filtered LINEAR — a 4×1 red/blue stripe magnified ×32 shows purple ramps between texels (37 % of the row blended); 0x43 (`smooth: false`) is pixel-snapped (1 %, hard edges). Use `smooth: false` for pixel art. |
+| Repeat | Fill 0x40 (`repeat: true`) tiles outside the bitmap's own rectangle (7 red↔blue crossings over 4 periods of a 2×2 tile). A tiny tile magnified with smoothing comes out mostly blended (±25 around purple at 8 clip px per texel): tile with bigger textures, or `smooth: false`. Outside a clipped (0x41) fill the edge texels streak (OBSERVED 2026-10-20). |
+| Minification / mipmaps | Mipmapped: a 1-texel black/white checker drawn at 0.25 (≈0.43 screen px per texel at 3440×1440) is flat gray (mean 119, σ 3.5) — no moiré. Big pictures can be scaled down freely. |
+| Magnification / density | At the harness's 3440×1440 one clip px is ≈1.73 screen px (enemies, `scale` 1), so a bitmap at 1 texel per clip px is magnified ×1.7 — soft. Author at ≥ 1.7 texels per clip px (scale ≤ 0.6) for crisp art at 1440p; vanilla's plates use 1.3. The editor reports `bitmap-upscaled` (info) above 1 clip px per texel. |
+| Size limit | Width and height must stay **below `texture_atlas_size` (4096)**: `fit_texture` 0xa24540 is FATAL (`Bitmap Fill could not fit into atlas`) otherwise → `bitmap-too-large` (error). Memory: pages are 4096² RGBA layers of one texture array (64 MB each + mips); bitmaps over half a page take most of a layer — a handful of 2000-px plates is what vanilla ships per file. |
+| Premultiplied alpha | The atlas is premultiplied and the shader un-premultiplies; the editor writes premultiplied ARGB (`lossless.ts`). Transparent PNG edges come out right; do not pre-multiply the PNG yourself. |
+| Gray pixels and palettes | On a non-cat character (an enemy) nothing is palette-remapped (gray stays gray, OBSERVED 2026-10-20). On a paletted unit `paletted_full.shader` remaps **every fragment whose r ≈ g ≈ b** after `compute_color_full` — which includes bitmap samples — so gray texels of a bitmap on a cat are remapped like vector `gray:N` (OBSERVED in the shader source; the in-game measure of the cat ramp frame `probeRaster` did not display in the harness, see TODO). A coloured photo passes through; a desaturated one would be recoloured on a cat. |
+| A mod combat background | **Works.** `mods/_bgprobe`'s `data/tilesets.gon.merge` `alley { combat_background ArtProbeBackdrop }` (a 1-frame clip: one 2000×1500 plate at 0.7667, vanilla's recipe) replaces the whole arena picture — floor included — in TacticsTest (25 % / 29 % of the screen in the plate's two colours, 0 % in the vanilla control); the tileset's foreground (`combat_ui_background`: wires, foliage, the frame) and the paper grain stay on top. One frame is enough. |
+| JPEG | Decoded (stb_image) with `WARNING: TEXTURE ENCODED AS JPG INSTEAD OF PNG` → info `jpeg-bitmap`; the editor only writes lossless. |
+
+**How to make it.** Art mode → Shapes → **Import PNG…** (or drop a `.png` on the drop zone): *sprite* = a 1-frame clip
+`<id>Clip` exported for `graphics.movieclip`, origin at the feet (bottom-centre); *background plate* = the same from the
+top-left corner, for a tileset `combat_background` (`data/tilesets.gon.merge`); *bitmap fill* = just the bitmap-filled
+shape to place in your own sprites. *scale* is clip px per texel; *pixel art* = `smooth: false`; *tile* = `repeat: true`.
+Agents: MCP **`import_bitmap { mod, base64 | file, scene, mode, scale, origin, repeat, smooth, area, exportName }`**
+(`src/core/art/raster.ts` `addBitmapToScene`, the same code). Then Build SWF. The PNG must be 8-bit, non-interlaced
+(`bitmap-unsupported-format` otherwise; the SWF rule also refuses a lossless format other than 3 / 4 / 5).
+
+### Fonts: a mod can carry its own (OBSERVED 2026-10-22)
+
+- **A mod SWF's DefineFont3 works.** The loader decodes only DefineFont3 (`font-tag-unsupported` for 10 / 48), keeps
+  its glyph shapes, code table and advances; a DefineEditText with HasFontClass resolves the class through
+  `Swf_FindCharacterByClassName` 0x9bb910 → the global export registry, so a DefineFont3 exported by SymbolClass under a
+  name is found from any SWF — vanilla's own `fonts.swf` is exactly eight DefineFont3 (HasLayout | WideCodes, glyphs
+  present) bound by SymbolClass. In-game: `ArtProbeRaster`'s text `HHIH` in the mod font **ProbeBlocks** (H a solid
+  square, I a bar) is drawn as those blocks (ink 7244 px vs 7026 expected, fill 0.74).
+- **A character the font lacks falls back to another font's glyph** (the `X` in `HXH` is drawn as a normal letter
+  between the two blocks — the engine's `glyph_lookup_order` / `NotoSans` fallback, 0x746a80 / 0x7469b0) → warning
+  `font-glyph-missing`.
+- **A font class no loaded SWF exports crashes the game** when the text is shown (0xc0000005 at
+  `Mewgenics.exe+0xa2addf`, right after `DefineFont::decode`; run `20261022-134035`) → error `font-class-unknown`
+  (`swf-rules.ts`; at scene level `text-font` already refuses an unknown class).
+- A mod font named like a game font (`Peralta`) would shadow it everywhere (last-loaded first; INFERRED, not run) →
+  info `export-shadows-vanilla`. `[font X]` markup in text resolves X the same way.
+- **How to make it:** `scene.fonts.<Id> = { name?, ascent, descent, leading?, glyphs: { "<char>": { d, advance } } }`
+  — glyph paths in an em of 1024 units, y down, baseline at 0 (capitals reach into negative y), `""` for an empty glyph
+  such as the space; texts name it with `font: "<Id>"`. The emitter writes the DefineFont3 (vanilla's flags) and
+  exports it under `<Id>` (`src/core/art/font.ts`); the preview draws the glyph paths. Converting a TTF/OTF is not
+  built (TODO).
 
 ---
 

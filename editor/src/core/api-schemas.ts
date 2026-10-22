@@ -84,6 +84,9 @@ export const ArtBuildBody = z.object({
 
 export const ArtAssetBody = z.object({ mod: str, path: str, base64: str });
 
+/** Import PNG…: check the PNG and (with mod) write it to art/<id>.png; the UI then adds it to the open scene (raster.ts). */
+export const ArtImportBitmapBody = z.object({ base64: str, mod: str.optional(), id: str.optional() });
+
 export const PrepareSwfGateBody = z.object({
   mod: str.optional(),
   variant: SwfGateVariant.default("flat"),
@@ -122,6 +125,7 @@ export const API_BODY = {
   "/api/art/new-scene": ArtNewSceneBody,
   "/api/art/validate": ArtValidateBody,
   "/api/art/import-svg": ArtImportSvgBody,
+  "/api/art/import-bitmap": ArtImportBitmapBody,
   "/api/art/export-svg": ArtExportSvgBody,
   "/api/art/build": ArtBuildBody,
   "/api/art/asset": ArtAssetBody,

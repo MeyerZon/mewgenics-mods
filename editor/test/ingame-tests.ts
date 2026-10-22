@@ -1525,10 +1525,11 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       }
       return out;
     })();
-    test("MCP tools/list returns the 30 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools + the 9 art tools incl. bake_glow + vectorcraft_exec + pack_mod + install_mod + read_level / write_level)", () => {
+    test("MCP tools/list returns the 31 editor tools (9 + list_ingame_tests + run_ingame_test + check_game_build + port_bindings + the 3 session tools + the 10 art tools incl. bake_glow + vectorcraft_exec + import_bitmap + pack_mod + install_mod + read_level / write_level)", () => {
       assert(!mcp.error, mcp.error);
       const names = mcp.list.tools.map((t: { name: string }) => t.name);
-      eq(names.length, 30, names.join(","));
+      eq(names.length, 31, names.join(","));
+      assert(names.includes("import_bitmap"), names.join(","));
       assert(names.includes("list_ingame_tests") && names.includes("run_ingame_test"), names.join(","));
     });
     test("MCP list_ingame_tests returns the discovered scripts", () => {

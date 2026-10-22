@@ -193,6 +193,10 @@ export function exportShapeSvg(modName: string, scenePath: string, shapeId: stri
   return artio.exportShapeSvg(modName, scenePath, shapeId);
 }
 /** Bake a glow / drop shadow of a shape as <shapeId>_glow under it (glow.ts) and save the scene. */
+/** A PNG as raster art: check it, copy it into the mod, add it to a scene as a bitmap fill / raster sprite / background (raster.ts). */
+export function importBitmap(args: Parameters<typeof artio.importBitmap>[0]) {
+  return artio.importBitmap(args);
+}
 export function bakeGlowIntoScene(args: Parameters<typeof artio.bakeGlowIntoScene>[0]) {
   return artio.bakeGlowIntoScene(args);
 }

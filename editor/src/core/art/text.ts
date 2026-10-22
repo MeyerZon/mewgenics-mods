@@ -39,12 +39,13 @@ export interface TextProblem {
   at?: string;
 }
 
-export function textProblems(t: SceneText | null | undefined): TextProblem[] {
+/** @param sceneFonts the ids of the scene's own fonts (scene.fonts), valid font classes besides GAME_FONTS */
+export function textProblems(t: SceneText | null | undefined, sceneFonts: readonly string[] = []): TextProblem[] {
   const out: TextProblem[] = [];
   if (!t || typeof t !== "object") return [{ code: "text-empty", message: "a text is an object { text, font, size, width, height }" }];
   if (typeof t.text !== "string" || !t.text.trim()) out.push({ code: "text-empty", message: "text is empty", at: "text" });
   const font = t.font ?? "Peralta";
-  if (!GAME_FONTS.includes(font)) out.push({ code: "text-font", message: `font "${font}" is not a game font class (${GAME_FONTS.join(", ")})`, at: "font" });
+  if (!GAME_FONTS.includes(font) && !sceneFonts.includes(font)) out.push({ code: "text-font", message: `font "${font}" is neither a game font class (${GAME_FONTS.join(", ")}) nor one of this scene's fonts${sceneFonts.length ? ` (${sceneFonts.join(", ")})` : " (scene.fonts)"}`, at: "font" });
   if (!(typeof t.size === "number" && t.size > 0 && t.size <= 400)) out.push({ code: "text-size", message: "size must be a number of px in (0, 400]", at: "size" });
   if (!(typeof t.width === "number" && t.width > 0 && typeof t.height === "number" && t.height > 0)) out.push({ code: "text-box", message: "width and height must be positive px", at: "width" });
   if (t.color !== undefined) {

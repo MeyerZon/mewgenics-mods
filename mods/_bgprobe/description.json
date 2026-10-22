@@ -1,0 +1,7 @@
+{
+  "title": "Backdrop probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only: points the alley tileset's combat_background at _artprobe's ArtProbeBackdrop (a 2000x1500 bitmap plate, vanilla's own recipe) so the harness shows whether a mod raster background is drawn. Never for play.",
+  "requirements": []
+}

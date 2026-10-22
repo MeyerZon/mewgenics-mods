@@ -1,0 +1,411 @@
+{
+  "version": 1,
+  "name": "raster",
+  "frameRate": 60,
+  "stage": {
+    "width": 1280,
+    "height": 720,
+    "background": "#000000"
+  },
+  "preview": {
+    "palette": 54
+  },
+  "shapes": {
+    "checker": {
+      "paths": [
+        {
+          "d": "M0 0 L12 0 L12 8 L0 8 Z",
+          "fill": "bitmap:checkerbmp",
+          "transform": [
+            8,
+            0,
+            0,
+            8,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "sq": {
+      "paths": [
+        {
+          "d": "M-30 -30 L30 -30 L30 30 L-30 30 Z",
+          "fill": "gray:8"
+        }
+      ]
+    },
+    "quad": {
+      "paths": [
+        {
+          "d": "M0 0 L32 0 L32 32 L0 32 Z",
+          "fill": "bitmap:quadbmp",
+          "transform": [
+            2,
+            0,
+            0,
+            2,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "stripeSmooth": {
+      "paths": [
+        {
+          "d": "M0 0 L4 0 L4 1 L0 1 Z",
+          "fill": "bitmap:stripebmp",
+          "transform": [
+            32,
+            0,
+            0,
+            16,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "stripeSnapped": {
+      "paths": [
+        {
+          "d": "M0 0 L4 0 L4 1 L0 1 Z",
+          "fill": "bitmap:stripesnapbmp",
+          "transform": [
+            32,
+            0,
+            0,
+            16,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "tile": {
+      "paths": [
+        {
+          "d": "M0 0 L8 0 L8 4 L0 4 Z",
+          "fill": "bitmap:tilebmp",
+          "transform": [
+            8,
+            0,
+            0,
+            8,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "big": {
+      "paths": [
+        {
+          "d": "M0 0 L1024 0 L1024 768 L0 768 Z",
+          "fill": "bitmap:bigbmp",
+          "transform": [
+            0.25,
+            0,
+            0,
+            0.25,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "backdrop": {
+      "paths": [
+        {
+          "d": "M0 0 L2000 0 L2000 1500 L0 1500 Z",
+          "fill": "bitmap:backdropbmp",
+          "transform": [
+            0.7667,
+            0,
+            0,
+            0.7667,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  },
+  "bitmaps": {
+    "checkerbmp": {
+      "file": "art/checker.png"
+    },
+    "quadbmp": {
+      "file": "art/raster-quad.png"
+    },
+    "stripebmp": {
+      "file": "art/raster-stripe.png"
+    },
+    "stripesnapbmp": {
+      "file": "art/raster-stripe.png",
+      "smooth": false
+    },
+    "tilebmp": {
+      "file": "art/raster-tile.png",
+      "repeat": true
+    },
+    "bigbmp": {
+      "file": "art/generated/rasterbig.png"
+    },
+    "backdropbmp": {
+      "file": "art/generated/backdrop.png"
+    }
+  },
+  "fonts": {
+    "ProbeBlocks": {
+      "name": "Probe Blocks",
+      "ascent": 800,
+      "descent": 224,
+      "glyphs": {
+        "H": {
+          "d": "M0 -700 L700 -700 L700 0 L0 0 Z",
+          "advance": 800
+        },
+        "I": {
+          "d": "M300 -700 L400 -700 L400 0 L300 0 Z",
+          "advance": 700
+        },
+        " ": {
+          "d": "",
+          "advance": 400
+        }
+      }
+    }
+  },
+  "texts": {
+    "fontText": {
+      "text": "HHIH",
+      "font": "ProbeBlocks",
+      "size": 40,
+      "color": "#ff6000",
+      "align": "left",
+      "width": 260,
+      "height": 50,
+      "html": false
+    },
+    "fontTextMissing": {
+      "text": "HXH",
+      "font": "ProbeBlocks",
+      "size": 40,
+      "color": "#ff6000",
+      "align": "left",
+      "width": 260,
+      "height": 50,
+      "html": false
+    },
+    "fontMissingText": {
+      "text": "HHIH",
+      "font": "Peralta",
+      "size": 40,
+      "color": "#ff6000",
+      "align": "left",
+      "width": 260,
+      "height": 50,
+      "html": false
+    }
+  },
+  "sprites": {
+    "ArtProbeRaster": {
+      "frames": 1,
+      "layers": [
+        {
+          "name": "marker",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "checker",
+              "x": 0,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "name": "cx",
+          "depth": 2,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "sq",
+              "x": 310,
+              "y": 30,
+              "cxform": {
+                "mul": [
+                  1,
+                  0,
+                  0,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "quad",
+          "depth": 3,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "quad",
+              "x": 120,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "name": "stripeSmooth",
+          "depth": 4,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "stripeSmooth",
+              "x": 0,
+              "y": 90
+            }
+          ]
+        },
+        {
+          "name": "stripeSnapped",
+          "depth": 5,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "stripeSnapped",
+              "x": 0,
+              "y": 120
+            }
+          ]
+        },
+        {
+          "name": "tile",
+          "depth": 6,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "tile",
+              "x": 0,
+              "y": 150
+            }
+          ]
+        },
+        {
+          "name": "big",
+          "depth": 7,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "big",
+              "x": 450,
+              "y": -230
+            }
+          ]
+        },
+        {
+          "name": "fontText",
+          "depth": 8,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "fontText",
+              "x": 300,
+              "y": 120
+            }
+          ]
+        },
+        {
+          "name": "fontTextMissing",
+          "depth": 9,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "fontTextMissing",
+              "x": 300,
+              "y": 190
+            }
+          ]
+        }
+      ],
+      "labels": {}
+    },
+    "ArtProbeFontMissing": {
+      "frames": 1,
+      "layers": [
+        {
+          "name": "marker",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "checker",
+              "x": 0,
+              "y": 0
+            }
+          ]
+        },
+        {
+          "name": "cx",
+          "depth": 2,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "sq",
+              "x": 310,
+              "y": 30,
+              "cxform": {
+                "mul": [
+                  1,
+                  0,
+                  0,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "text",
+          "depth": 3,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "fontMissingText",
+              "x": 300,
+              "y": 120
+            }
+          ]
+        }
+      ],
+      "labels": {}
+    },
+    "ArtProbeBackdrop": {
+      "frames": 1,
+      "layers": [
+        {
+          "name": "plate",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "backdrop",
+              "x": 0,
+              "y": 0
+            }
+          ]
+        }
+      ],
+      "labels": {}
+    }
+  },
+  "exports": {
+    "ArtProbeRaster": "ArtProbeRaster",
+    "ArtProbeFontMissing": "ArtProbeFontMissing",
+    "ArtProbeBackdrop": "ArtProbeBackdrop"
+  },
+  "stage_instances": []
+}
