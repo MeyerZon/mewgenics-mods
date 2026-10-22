@@ -307,6 +307,16 @@ export function runModelReadTests(test: TestFn, assert: AssertFn, eq: EqFn): voi
     (v.json.bufferViews as Json[])[0]!.byteLength = 400;
     eq(errors(readGltf(gltfText(v.json, v.bin)))[0]?.code, "model-buffer-range", "a view past its buffer");
   });
+  test("gltf: a hostile accessor count (2e9) is a bounds error found before any allocation, with or without a bufferView", () => {
+    const d = triangleDoc();
+    (d.json.accessors as Json[])[0]!.count = 2_000_000_000;
+    const r = readGltf(gltfText(d.json, d.bin));
+    eq(errors(r)[0]?.code, "model-buffer-range", codes(r));
+    const z = triangleDoc();
+    delete (z.json.accessors as Json[])[0]!.bufferView;
+    (z.json.accessors as Json[])[0]!.count = 2_000_000_000;
+    eq(errors(readGltf(gltfText(z.json, z.bin)))[0]?.code, "model-limit", "a view-less (all-zero) accessor is capped by the vertex limit");
+  });
   test("gltf: misaligned accessor offsets and a byteStride that is not a multiple of 4 are model-accessor-invalid", () => {
     const d = triangleDoc();
     (d.json.accessors as Json[])[1]!.byteOffset = 1;
