@@ -44,8 +44,15 @@
  * never writes depth). A layer that is not sorted or not drawn forward falls back to the M1 path (all after it).
  * hide_sprite (M3, fw_mesh_hide.c): the filter at the camera is fw_mesh_hide_filter wrapping the order filter; a unit
  * whose GON model block says hide_sprite true and whose model was drawn this frame has its units-layer item skipped.
- * Limits: meshes are drawn UNDER everything recorded after the units layer (UI, overlays); a multi-tile mesh is keyed
- * by one point (its origin).
+ * Per-band slices (M3, fw_mesh_slice.c): a tile object (and the probe cube) is cut along world x + z into one slice per
+ * sort band [n, n + 1) of its bounds' depth range; each slice is a draw of its own with fw_clip = its band (the shader
+ * discards the rest), keyed n + 0.5, so a multi-tile mesh is interleaved row by row and only the part of a mesh in front
+ * of a unit's feet is drawn over that unit; a key equal to an item's goes before it (the unit wins ties). Unit-attached
+ * meshes are not sliced. MEWFW_MESH_ORDER=m2 restores the M2 plan (every slice keyed by the origin, meshes win ties) for
+ * control runs; MEWFW_MESH_PROBE_TINT=1 draws the probe model's slices blue/cyan/magenta and logs "mesh slice ..."
+ * lines (the T2 per-band coverage measure, editor/src/core/art/mesh-slices.ts); MEWFW_MESH_PROBE_MODEL=<path>@<c>,<r>
+ * places the probe model on that tile and draws no probe cube.
+ * Limits: meshes are drawn UNDER everything recorded after the units layer (UI, overlays).
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -57,6 +64,7 @@
 #include "fw_functor.h"
 #include "fw_mesh_order.h"
 #include "fw_mesh_hide.h"     /* M3 hide_sprite: the wrapping per-item filter */
+#include "fw_mesh_slice.h"
 #include "fw_gl_state.h"
 #include "fw_mesh_draw.h"
 #include "fw_mesh_rules.h"
@@ -91,6 +99,7 @@ typedef struct MeshGl {
     void (*Uniform3f)(int loc, float x, float y, float z);
     void (*Uniform1f)(int loc, float x);
     void (*Uniform1i)(int loc, int x);
+    void (*Uniform2f)(int loc, float x, float y);
     void (*GenVertexArrays)(int n, uint32_t *out);
     void (*GenBuffers)(int n, uint32_t *out);
     void (*BufferData)(uint32_t target, ptrdiff_t size, const void *data, uint32_t usage);
@@ -109,8 +118,8 @@ static MeshGl g_mg;
 static int g_glState;            /* 0 not loaded, 2 loaded (program pending), 1 ready, -1 failed (logged once, never retried) */
 static uint32_t g_prog;
 static int g_progIsMod;          /* 1 = mods/fw-3d/shaders/fw_mesh.shader, 0 = the inline fallback */
-enum { U_MVP, U_MODEL, U_LIGHT, U_AMBIENT, U_BANDS, U_COLOUR, U_PALETTE, U_FLAT, U_CXMUL, U_CXADD, U_TEX, U_HASTEX, U_PALMAP, U_COUNT };
-static const char *const UNIFORMS[U_COUNT] = { "fw_mvp", "fw_model", "fw_light_dir", "fw_ambient", "fw_bands", "fw_base_color", "palette", "fw_flat", "fw_cx_mul", "fw_cx_add", "fw_tex", "fw_has_tex", "palettemap" };
+enum { U_MVP, U_MODEL, U_LIGHT, U_AMBIENT, U_BANDS, U_COLOUR, U_PALETTE, U_FLAT, U_CXMUL, U_CXADD, U_TEX, U_HASTEX, U_PALMAP, U_CLIP, U_COUNT };
+static const char *const UNIFORMS[U_COUNT] = { "fw_mvp", "fw_model", "fw_light_dir", "fw_ambient", "fw_bands", "fw_base_color", "palette", "fw_flat", "fw_cx_mul", "fw_cx_add", "fw_tex", "fw_has_tex", "palettemap", "fw_clip" };
 static int g_loc[U_COUNT];
 
 /* meshes: slot 0 = the built-in unit cube, then models by path (g_models.names = the path) */
@@ -132,6 +141,12 @@ static int g_probeCol, g_probeRow;
 static char g_probeModel[FW_MESH_NAME_MAX + 1];
 static char g_probeTexture[FW_TEX_NAME_MAX + 1];   /* MEWFW_MESH_PROBE_TEXTURE: the probe model's texture name */
 static int g_probePalette = -1;                     /* MEWFW_MESH_PROBE_PALETTE: the probe model's palette row */
+static int g_probeAt, g_probeAtCol, g_probeAtRow;   /* MEWFW_MESH_PROBE_MODEL=<path>@<c>,<r>: the model's tile, no cube */
+static int g_probeTint;                             /* MEWFW_MESH_PROBE_TINT=1: the probe model's slices tinted + logged */
+static int g_orderM2;                               /* MEWFW_MESH_ORDER=m2: the M2 plan (origin keys, meshes win ties) */
+static int g_probeHandle;                           /* the probe model's API handle this fight (0 none) */
+static int g_sliceLogged;
+#define MESH_LOG_SLICE_MAX 48
 
 /* textures (record time: game calls; replay time: the GL names) */
 static FwTexCache g_tex;
@@ -147,7 +162,7 @@ static int g_probeLogged, g_drawLogged, g_errLogged, g_objLogged;
 static long g_draws;
 
 #define MESH_MAX_DRAWS 64
-typedef struct MeshDraw { int mesh; float mvp[16]; float world[16]; float colour[4]; void *tex; const char *texName; int palette; int emb; } MeshDraw;
+typedef struct MeshDraw { int mesh; float mvp[16]; float world[16]; float colour[4]; void *tex; const char *texName; int palette; int emb; float clip[2]; } MeshDraw;
 typedef struct MeshFrame { int frame; int n; MeshDraw d[MESH_MAX_DRAWS]; } MeshFrame;
 static MeshFrame g_frame;        /* captured at record time, drawn by the functors at replay */
 /* M2: one group of draws per insertion point in the units layer's painter order (fw_mesh_order.c); one functor each */
@@ -203,7 +218,7 @@ static int load_gl(void) {
     LOAD(g_mg.AttachShader, "glAttachShader"); LOAD(g_mg.BindAttribLocation, "glBindAttribLocation"); LOAD(g_mg.LinkProgram, "glLinkProgram");
     LOAD(g_mg.GetProgramiv, "glGetProgramiv"); LOAD(g_mg.GetProgramInfoLog, "glGetProgramInfoLog"); LOAD(g_mg.GetUniformLocation, "glGetUniformLocation");
     LOAD(g_mg.UniformMatrix4fv, "glUniformMatrix4fv"); LOAD(g_mg.Uniform4f, "glUniform4f"); LOAD(g_mg.Uniform3f, "glUniform3f");
-    LOAD(g_mg.Uniform1f, "glUniform1f"); LOAD(g_mg.Uniform1i, "glUniform1i"); LOAD(g_mg.GenVertexArrays, "glGenVertexArrays");
+    LOAD(g_mg.Uniform1f, "glUniform1f"); LOAD(g_mg.Uniform1i, "glUniform1i"); LOAD(g_mg.Uniform2f, "glUniform2f"); LOAD(g_mg.GenVertexArrays, "glGenVertexArrays");
     LOAD(g_mg.GenBuffers, "glGenBuffers"); LOAD(g_mg.BufferData, "glBufferData"); LOAD(g_mg.VertexAttribPointer, "glVertexAttribPointer");
     LOAD(g_mg.EnableVertexAttribArray, "glEnableVertexAttribArray"); LOAD(g_mg.DrawElements, "glDrawElements");
     LOAD(g_mg.GenTextures, "glGenTextures"); LOAD(g_mg.TexImage2D, "glTexImage2D"); LOAD(g_mg.TexParameteri, "glTexParameteri");
@@ -218,14 +233,18 @@ static const char *VS_INLINE =
     "in vec3 position;\n"
     "in vec3 color;\n"
     "uniform mat4 fw_mvp;\n"
+    "uniform mat4 fw_model;\n"
     "out vec3 v_n;\n"
-    "void main(){ v_n = color; gl_Position = fw_mvp * vec4(position, 1.0); }\n";
+    "out float v_d;\n"
+    "void main(){ v_n = color; vec4 w = fw_model * vec4(position, 1.0); v_d = w.x + w.z; gl_Position = fw_mvp * vec4(position, 1.0); }\n";
 static const char *FS_INLINE =
     "#version 150\n"
     "uniform vec4 fw_base_color;\n"
+    "uniform vec2 fw_clip;\n"
     "in vec3 v_n;\n"
+    "in float v_d;\n"
     "out vec4 frag_color;\n"
-    "void main(){ float s = v_n.y > 0.5 ? 1.0 : (abs(v_n.x) > 0.5 ? 0.8 : 0.62); frag_color = vec4(fw_base_color.rgb * s, 1.0); }\n";
+    "void main(){ if (fw_clip.y > fw_clip.x && (v_d < fw_clip.x || v_d >= fw_clip.y)) discard; float s = v_n.y > 0.5 ? 1.0 : (abs(v_n.x) > 0.5 ? 0.8 : 0.62); frag_color = vec4(fw_base_color.rgb * s, 1.0); }\n";
 
 static uint32_t compile(uint32_t type, const char *src) {
     uint32_t sh = g_mg.CreateShader(type);
@@ -497,6 +516,7 @@ static void mesh_draw(void *user) {
         g_mg.UniformMatrix4fv(g_loc[U_MVP], 1, 0, d->mvp);
         g_mg.UniformMatrix4fv(g_loc[U_MODEL], 1, 0, d->world);
         g_mg.Uniform4f(g_loc[U_COLOUR], d->colour[0], d->colour[1], d->colour[2], d->colour[3]);
+        g_mg.Uniform2f(g_loc[U_CLIP], d->clip[0], d->clip[1]);
         FwMeshMaterialPlan plan;
         uint32_t texName = d->emb > 0 ? fw_embtex_upload(&g_emb[d->emb], &up) : fw_tex_gl_name(d->tex);
         fw_mesh_material_plan(texName, palName, d->palette, &plan);
@@ -530,12 +550,21 @@ static void read_settings(void) {
     if (g_probe >= 0) return;
     g_probe = fw_mesh_probe_parse(getenv("MEWFW_MESH_PROBE"), &g_probeCol, &g_probeRow);
     const char *pm = getenv("MEWFW_MESH_PROBE_MODEL");
-    if (g_probe && pm && *pm) snprintf(g_probeModel, sizeof g_probeModel, "%s", pm);
+    if (g_probe && pm && *pm) {
+        int at = fw_mesh_slice_probe_at(pm, g_probeModel, sizeof g_probeModel, &g_probeAtCol, &g_probeAtRow);
+        if (at < 0) { fw_log("mesh: MEWFW_MESH_PROBE_MODEL \"%s\" refused (<path> or <path>@<col>,<row>)", pm); g_probeModel[0] = 0; }
+        g_probeAt = at > 0;
+    }
+    const char *tint = getenv("MEWFW_MESH_PROBE_TINT"), *ord = getenv("MEWFW_MESH_ORDER");
+    g_probeTint = g_probe && tint && !strcmp(tint, "1");
+    g_orderM2 = ord && !strcmp(ord, "m2");
+    if (g_orderM2) fw_log("mesh: MEWFW_MESH_ORDER=m2: the M2 painter plan (meshes keyed by their origin, meshes win ties)");
     const char *pt = getenv("MEWFW_MESH_PROBE_TEXTURE"), *pp = getenv("MEWFW_MESH_PROBE_PALETTE");
     if (g_probe && pt && *pt) snprintf(g_probeTexture, sizeof g_probeTexture, "%s", pt);
     if (g_probe && pp && *pp) { char *e = NULL; long v = strtol(pp, &e, 10); g_probePalette = (e && !*e && v >= 0 && v < 4096) ? (int)v : -1; }
     if (g_probe && (g_probeTexture[0] || g_probePalette >= 0)) fw_log("mesh: probe model texture %s, palette row %d (MEWFW_MESH_PROBE_TEXTURE / _PALETTE)", g_probeTexture[0] ? g_probeTexture : "(convention)", g_probePalette);
-    if (g_probe) fw_log("mesh: probe cube on tile (%d,%d) (MEWFW_MESH_PROBE)%s%s", g_probeCol, g_probeRow, g_probeModel[0] ? "; probe model " : "", g_probeModel);
+    if (g_probe && g_probeAt) fw_log("mesh: probe model %s on tile (%d,%d) (MEWFW_MESH_PROBE_MODEL @; no probe cube)%s", g_probeModel, g_probeAtCol, g_probeAtRow, g_probeTint ? ", tinted per band" : "");
+    else if (g_probe) fw_log("mesh: probe cube on tile (%d,%d) (MEWFW_MESH_PROBE)%s%s", g_probeCol, g_probeRow, g_probeModel[0] ? "; probe model " : "", g_probeModel);
 }
 
 void mesh_engine_on_late_render(void *tt) {
@@ -543,12 +572,15 @@ void mesh_engine_on_late_render(void *tt) {
     if (tt != g_tt) {
         g_tt = tt;
         g_worldFrame = 0;
-        g_orderLogged = g_itemsLogged = g_fltLogged = 0;
+        g_orderLogged = g_itemsLogged = g_fltLogged = g_sliceLogged = 0;
+        g_probeHandle = 0;
         read_settings();
         if (g_probe > 0 && g_probeModel[0]) {
             float identity[16];
             fw_m4_identity(identity);
-            int h = obj3d_engine_place(g_probeCol + 1, g_probeRow, g_probeModel, identity);   /* the API v6 path (FW_Place3DObjectOnTile) */
+            int h = g_probeAt ? obj3d_engine_place(g_probeAtCol, g_probeAtRow, g_probeModel, identity)
+                              : obj3d_engine_place(g_probeCol + 1, g_probeRow, g_probeModel, identity);   /* the API v6 path (FW_Place3DObjectOnTile) */
+            g_probeHandle = h;
             if (h && (g_probeTexture[0] || g_probePalette >= 0)) obj3d_engine_set_material(h, g_probeTexture, g_probePalette);
         }
     }
@@ -568,11 +600,47 @@ static void add_draw(int mesh, const float top[16], const float vp[16], const fl
     MeshDraw *d = &g_frame.d[g_frame.n];
     d->mesh = mesh;
     d->tex = NULL; d->texName = NULL; d->palette = -1; d->emb = -1;
+    d->clip[0] = -FW_MESH_CLIP_OPEN; d->clip[1] = FW_MESH_CLIP_OPEN;
     fw_mesh_object_mvp(top, vp, iso, world, d->mvp);
     memcpy(d->world, world, sizeof d->world);
     memcpy(d->colour, colour, sizeof d->colour);
     fw_mesh_order_add(&g_order, key, anchor, g_frame.n);
     g_frame.n++;
+}
+
+/* a tile mesh: one draw per sort band of its bounds lo..hi under world (fw_mesh_slice.c), each clipped to its band and
+ * keyed n + 0.5 (MEWFW_MESH_ORDER=m2: every slice keyed originKey, the M2 plan). tint: the probe model's measurement
+ * colours; logObj >= 0: log the slices ("mesh slice ...", bounded). Returns the index of the first draw added (-1 none). */
+static int add_sliced(int mesh, const float top[16], const float vp[16], const float iso[16], const float world[16], const float colour[4],
+                      const float lo[3], const float hi[3], double originKey, int tint, int logObj) {
+    FwMeshSlice s[FW_MESH_SLICE_MAX];
+    double r[2];
+    int n = fw_mesh_slice_depth(world, lo, hi, r) ? fw_mesh_slice_plan(r[0], r[1], FW_MESH_SLICE_MAX, s) : 0;
+    if (n <= 0) {   /* no range (degenerate input): one unclipped draw at the origin */
+        int first = g_frame.n;
+        add_draw(mesh, top, vp, iso, world, colour, originKey, NULL);
+        return g_frame.n > first ? first : -1;
+    }
+    int first = -1;
+    for (int i = 0; i < n; i++) {
+        float c[4];
+        if (tint) fw_mesh_slice_tint(i, c); else memcpy(c, colour, sizeof c);
+        int before = g_frame.n;
+        add_draw(mesh, top, vp, iso, world, c, g_orderM2 ? originKey : s[i].key, NULL);
+        if (g_frame.n == before) break;
+        MeshDraw *d = &g_frame.d[g_frame.n - 1];
+        d->clip[0] = s[i].clip[0]; d->clip[1] = s[i].clip[1];
+        if (first < 0) first = before;
+        if (logObj >= 0 && g_sliceLogged < MESH_LOG_SLICE_MAX && (g_worldFrame - 1) % MESH_LOG_PROBE_EVERY == 0) {
+            g_sliceLogged++;
+            double box[4] = { 0, 0, 0, 0 }, area = 0;
+            fw_mesh_slice_visible(d->mvp, world, lo, hi, s[i].lo, s[i].hi, box, &area);
+            char buf[256];
+            fw_mesh_slice_fmt(buf, sizeof buf, g_worldFrame, logObj, i, n, &s[i], box, area, tint ? fw_mesh_slice_tint_name(i) : NULL);
+            fw_log("%s", buf);
+        }
+    }
+    return first;
 }
 
 /* fw_mesh_order's submit callback: one group of draws -> one draw functor through Batch_SubmitFunctor (record time;
@@ -597,6 +665,7 @@ static int collect(void *cam) {
     g_nsegs = 0;
     fw_mesh_order_reset(&g_order);
     fw_mesh_hide_reset(&g_hide);
+    fw_mesh_order_set_m2(&g_order, g_orderM2);
     if (g_probe <= 0 && nobj == 0) return 0;
     g_worldFrame++;
     const float *top = fw_mesh_stack_top((const void *const *)data_ptr(FW_DATA_MatStackData), (const int *)data_ptr(FW_DATA_MatStackTop));
@@ -613,7 +682,7 @@ static int collect(void *cam) {
     float vp[16];
     ((fn_GetVP)g_sym[FW_SYM_Camera_GetViewProjection])(cam, vp);
     g_frame.frame = g_worldFrame;
-    if (g_probe > 0 && g_cubeBuilt) {
+    if (g_probe > 0 && g_cubeBuilt && !g_probeAt) {
         double c[3];
         float world[16];
         const float magenta[4] = { FW_MESH_PROBE_R, FW_MESH_PROBE_G, FW_MESH_PROBE_B, 1.0f };
@@ -622,20 +691,21 @@ static int collect(void *cam) {
         world[0] = world[5] = world[10] = (float)FW_MESH_PROBE_SIZE;
         world[12] = (float)c[0]; world[13] = (float)c[1]; world[14] = (float)c[2];
         double key = fw_mesh_order_tile_key(c[0], c[2]);
-        add_draw(MESH_CUBE, top, vp, iso, world, magenta, key, NULL);
-        if ((g_worldFrame - 1) % MESH_LOG_PROBE_EVERY == 0 && g_probeLogged < MESH_LOG_PROBE_MAX) {
+        const float clo[3] = { -0.5f, 0.0f, -0.5f }, chi[3] = { 0.5f, 1.0f, 0.5f };   /* the unit cube's bounds */
+        int cd = add_sliced(MESH_CUBE, top, vp, iso, world, magenta, clo, chi, key, 0, -1);
+        if (cd >= 0 && (g_worldFrame - 1) % MESH_LOG_PROBE_EVERY == 0 && g_probeLogged < MESH_LOG_PROBE_MAX) {
             g_probeLogged++;
             /* the cube's screen silhouette (M2 occlusion measure: editor/src/core/art/mesh-measure.ts measureOcclusion) */
             const float lo[3] = { -0.5f, 0.0f, -0.5f }, hi[3] = { 0.5f, 1.0f, 0.5f };
             double box[4], area = 0;
-            if (fw_mesh_order_hull(g_frame.d[g_frame.n - 1].mvp, lo, hi, box, &area)) {
+            if (fw_mesh_order_hull(g_frame.d[cd].mvp, lo, hi, box, &area)) {
                 char ob[200];
                 fw_mesh_order_fmt_occ(ob, sizeof ob, g_worldFrame, g_probeCol, g_probeRow, key, box, area);
                 fw_log("%s", ob);
             }
             const float mid[3] = { 0.0f, 0.5f, 0.0f };   /* the cube's centre in its local unit space (h 0..1) */
             float ndc[3] = { 0 }, model[16], vpm[16], cv[3] = { 0 };
-            fw_m4_project(g_frame.d[g_frame.n - 1].mvp, mid, ndc);
+            fw_m4_project(g_frame.d[cd].mvp, mid, ndc);
             fw_m4_place(iso, c[0], c[1], c[2], FW_MESH_PROBE_SIZE, model);
             fw_m4_mul(vp, model, vpm);
             fw_m4_project(vpm, mid, cv);
@@ -665,14 +735,23 @@ static int collect(void *cam) {
         /* painter key: a tile object by its origin; a unit-attached one right after its unit's own item */
         double key = at ? fw_mesh_order_unit_key(xz[0], xz[1]) : fw_mesh_order_tile_key(world[12], world[14]);
         int before = g_frame.n;
-        add_draw(slot, top, vp, iso, world, m ? m->base_color : (const float[4]){ 1, 1, 1, 1 }, key, at ? rnd : NULL);
+        const float *base = m ? m->base_color : (const float[4]){ 1, 1, 1, 1 };
+        if (at || !m) add_draw(slot, top, vp, iso, world, base, key, at ? rnd : NULL);   /* unit-attached: one draw right after its unit */
+        else {
+            int probe = g_probeHandle && o->handle == g_probeHandle;
+            add_sliced(slot, top, vp, iso, world, base, m->bmin, m->bmax, key, probe && g_probeTint, probe ? o->handle : -1);
+        }
         if (g_frame.n == before) continue;
         /* M3: the model is drawn this frame, so a hide_sprite unit loses its sprite item (a model that failed to load
          * never got here: resolve_model < 0 above, the sprite stays) */
         if (fw_mesh_hide_wanted(o->hideSprite, o->byTile, rnd, 1)) fw_mesh_hide_add(&g_hide, rnd);
-        MeshDraw *d = &g_frame.d[g_frame.n - 1];
-        object_texture(o, m, slot, d);
-        d->palette = object_palette(o);
+        int pal = object_palette(o);
+        for (int k = before; k < g_frame.n; k++) {   /* every slice of the object (M3 order) */
+            MeshDraw *dk = &g_frame.d[k];
+            object_texture(o, m, slot, dk);   /* M3 glb: explicit > embedded > convention */
+            dk->palette = pal;
+        }
+        MeshDraw *d = &g_frame.d[before];
         if (g_objLogged < MESH_LOG_OBJ_MAX && g_worldFrame % MESH_LOG_PROBE_EVERY == 1) {
             g_objLogged++;
             const float mid[3] = { 0.0f, m ? (m->bmin[1] + m->bmax[1]) * 0.5f : 0.5f, 0.0f };
