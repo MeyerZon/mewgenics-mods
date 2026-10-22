@@ -12,7 +12,7 @@ import { parse } from "../src/core/gon/parser.ts";
 import { toValue, prettyRoot } from "../src/core/gon/value.ts";
 import type { VObject } from "../src/core/gon/types.ts";
 import {
-  resolveComponent, checkComponentBlock, forEachComponentBlock, loadComponentSchema, validateSchemaShape, SCHEMA_PATH,
+  resolveComponent, checkComponentBlock, forEachComponentBlock, loadComponentSchema, validateSchemaShape, describeComponent, SCHEMA_PATH,
 } from "../src/core/component-schema.ts";
 import type { ComponentSchema, ComponentSpec, KeySpec, KeyType } from "../src/core/component-schema.ts";
 import { validateFragment, mergeFragments, surveyVanilla } from "../src/core/component-schema-build.ts";
@@ -137,6 +137,7 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(c.unknown.join(","), "nmber", "an unread key is not unknown");
     eq(c.ignored.join(","), "numbr", "it is listed as ignored");
     eq(validateSchemaShape(s).join("; "), "", "unread keys pass the shape check");
+    eq((describeComponent(s, "SpawnThing")!.keys as Record<string, { unread?: boolean }>).numbr!.unread, true, "describeComponent (MCP / web) carries the flag");
     const bad = syntheticSchema();
     bad.components.SpawnThing!.keys.numbr = key("any", { unread: true, required: true });
     assert(validateSchemaShape(bad).some((e) => /numbr.*unread/.test(e)), `an unread key cannot be required: ${validateSchemaShape(bad).join(" | ")}`);
@@ -349,6 +350,8 @@ export function runComponentSchemaTests(test: TestFn, assert: AssertFn, eq: EqFn
     assert(Array.isArray(c!.chain) && c!.chain[0] === "CatchProjectiles", "chain starts at the class");
     assert(c!.keys !== null && typeof c!.keys === "object", "keys object");
     eq((searchComponents("ZzNoSuchComponentZz").schema ?? []).length, 0, "no match, no schema rows");
+    const lh = (searchComponents("LowHealthAllyDodgeChanceAura").schema ?? []).find((x) => x.name === "LowHealthAllyDodgeChanceAura");
+    eq(lh?.keys.theshold?.unread, true, "the vanilla typo theshold is listed as unread (ignored by the game)");
   });
   test("component schema T1: vanilla-derived fixture mods (renamed .append copies) give 0 unknown-key / missing-required-key", () => {
     const src = ["passives/butcher_passives.gon", "items/head_items.gon", "characters/enemies.gon", "abilities/fighter_abilities.gon"].filter((p) => existsSync(join(EXTRACTED_DATA, p)));

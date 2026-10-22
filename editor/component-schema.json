@@ -902,7 +902,7 @@
   "AbilityHealthThreshold": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
@@ -923,6 +923,15 @@
      "confidence": "observed",
      "evidence": ".analysis/decompiled/AbilityHealthThreshold_slot11_0x2c8c00.c",
      "note": ""
+    },
+    "aux": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "aux is an ITEM-entry key (the equipment init 0x2e01d0 reads aux / str_aux from the item entry); inside the passive block nothing reads it"
     },
     "count_shield": {
      "type": "bool",
@@ -989,11 +998,9 @@
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "aux"
-   ],
-   "notes": "aux (1 vanilla use, passives) is not read by any AbilityHealthThreshold code found (slot 11 late_update + its lambda); probably read by the cast ability (str_aux) or unused.",
-   "agent": "compA"
+   "vanillaMissed": [],
+   "notes": "aux (1 vanilla use, passives) is not read by any AbilityHealthThreshold code found (slot 11 late_update + its lambda); probably read by the cast ability (str_aux) or unused. | compclose: aux unread on the class paths.",
+   "agent": "compA+compclose"
   },
   "AbilityInheritsWeaponEffects": {
    "base": "Passive",
@@ -1104,7 +1111,7 @@
   "AbilityOnRoundEndOnce": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
@@ -1116,16 +1123,23 @@
      "confidence": "observed",
      "evidence": ".analysis/decompiled/AbilityOnRoundEndOnce_slot39_0x907730.c",
      "note": "logging getter: GON ERROR on miss (non-fatal)"
+    },
+    "even_of_stunned": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "typo of even_if_stunned: the string exists nowhere in the binary"
     }
    },
    "includes": [
     "@Passive_QueueAbility"
    ],
-   "vanillaMissed": [
-    "even_of_stunned"
-   ],
-   "notes": "vanilla key even_of_stunned is a typo of even_if_stunned; no code reads it (vanilla-safe: validator must tolerate it).",
-   "agent": "compA"
+   "vanillaMissed": [],
+   "notes": "vanilla key even_of_stunned is a typo of even_if_stunned; no code reads it (vanilla-safe: validator must tolerate it). | compclose: even_of_stunned has no literal at all.",
+   "agent": "compA+compclose"
   },
   "AbilityReaction": {
    "base": "Passive",
@@ -1430,19 +1444,43 @@
   },
   "AddAdvantageToEvent": {
    "base": "Passive",
-   "status": "unresolved",
-   "open": true,
+   "status": "no-keys",
+   "open": false,
    "children": null,
    "scalar": null,
-   "keys": {},
+   "keys": {
+    "add": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "see type"
+    },
+    "options": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "see type"
+    },
+    "type": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "no own vftable slots, no type-id 0x7c / IsA query and no reader of the class name beyond the by-name dispatch chains: nothing reads this block (INFERRED: the event advantage is not implemented in this build)"
+    }
+   },
    "includes": [],
-   "vanillaMissed": [
-    "add",
-    "options",
-    "type"
-   ],
-   "notes": "No own vftable slots; ctor (0x1406368b0) only runs Passive init. The keys type/options/add must be read by the event/choice engine (event choice parsers 0x140912610 / 0x140913a90 read \"options\" of events, not of this block); the class name is only referenced by the by-name chains, an IsA helper 0x1405b15d0 and TacticsTest::init. Reader not found.",
-   "agent": "compA"
+   "vanillaMissed": [],
+   "notes": "No own vftable slots; ctor (0x1406368b0) only runs Passive init. The keys type/options/add must be read by the event/choice engine (event choice parsers 0x140912610 / 0x140913a90 read \"options\" of events, not of this block); the class name is only referenced by the by-name chains, an IsA helper 0x1405b15d0 and TacticsTest::init. Reader not found. | compclose: no reader of the block found; its keys are recorded as unread.",
+   "agent": "compA+compclose"
   },
   "AddAllyNeighborsToAbilityRange": {
    "base": "Passive",
@@ -2539,23 +2577,23 @@
    "base": "GlobalModifier",
    "status": "mapped",
    "open": false,
-   "children": "effects",
+   "children": "any",
    "scalar": null,
    "keys": {
-    "count": {
-     "type": "number",
-     "default": 0,
+    "*.count": {
+     "type": "int",
+     "default": 1,
      "required": false,
-     "accessor": "inline",
+     "accessor": "Get + inline int (type 2), or [min,max]",
      "confidence": "observed",
      "evidence": ".analysis/decompiled/AddTilesetObjects_slot33_0x90a0e0.c",
-     "note": ""
+     "note": "per child; the child name is the tileset object (vanilla: FloatingDebris)"
     }
    },
    "includes": [],
    "vanillaMissed": [],
-   "notes": "",
-   "agent": "compA"
+   "notes": "compclose: slot33 0x90a0e0 iterates every child (object name -> {count}); count is per child, so children is an arbitrary map, not effects.",
+   "agent": "compA+compclose"
   },
   "AddUnfilledMaxHealth": {
    "base": "Passive",
@@ -2608,27 +2646,14 @@
   "AdventureTokenPassivePool": {
    "base": "Passive",
    "status": "no-keys",
-   "open": true,
-   "children": "passives",
+   "open": false,
+   "children": "any",
    "scalar": null,
    "keys": {},
    "includes": [],
-   "vanillaMissed": [
-    "StacyMutant_Brace",
-    "StacyMutant_Counter",
-    "StacyMutant_Damage",
-    "StacyMutant_DoubleHead",
-    "StacyMutant_Fire",
-    "StacyMutant_Health",
-    "StacyMutant_Holy",
-    "StacyMutant_Ice",
-    "StacyMutant_Lightning",
-    "StacyMutant_Mirror",
-    "StacyMutant_Speed",
-    "StacyMutant_Thorns"
-   ],
-   "notes": "Iterates every child (the StacyMutant_* blocks) and attaches them by name via attach_passive 0x494080 (random pick).",
-   "agent": "compA"
+   "vanillaMissed": [],
+   "notes": "Iterates every child (the StacyMutant_* blocks) and attaches them by name via attach_passive 0x494080 (random pick). | compclose: slot33 0x218870 iterates every child: the child NAME is an adventure token (checked by 0x3be270), its body the passive blocks attached when the token is held.",
+   "agent": "compA+compclose"
   },
   "AfterImage": {
    "base": "Passive",
@@ -7176,7 +7201,7 @@
   "ChaosBossFormChangeGuide": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
@@ -7197,14 +7222,21 @@
      "confidence": "observed",
      "evidence": ".analysis/decompiled/ChaosBossFormChangeGuide_slot33_0x7f4a00.c",
      "note": "-> vector at this+0x120"
+    },
+    "passives_health_threshold": {
+     "type": "percent",
+     "default": 0,
+     "required": false,
+     "accessor": "PercentOr",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/ChaosBoss_passives_health_threshold_reader_0x7f4d00.c",
+     "note": "read by 0x7f4d00 (called from 0x5c7900) on this+0x68 when choosing the next pieces"
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "passives_health_threshold"
-   ],
-   "notes": "passives_health_threshold is not read in the only own slot (33); maybe read through a sibling (ChaosBossPieces) or another system.",
-   "agent": "compB"
+   "vanillaMissed": [],
+   "notes": "passives_health_threshold is not read in the only own slot (33); maybe read through a sibling (ChaosBossPieces) or another system. | compclose: passives_health_threshold in 0x7f4d00.",
+   "agent": "compB+compclose"
   },
   "ChaosBossPieces": {
    "base": "Passive",
@@ -7473,25 +7505,26 @@
   },
   "CharacterTypeGainsStatusAtBattleStart": {
    "base": "GlobalModifier",
-   "status": "mechanical",
-   "open": true,
+   "status": "mapped",
+   "open": false,
    "children": "effects",
    "scalar": null,
    "keys": {
     "tag": {
-     "type": "number",
-     "default": null,
+     "type": "string",
+     "default": "any",
      "required": false,
-     "accessor": "inline",
-     "confidence": "inferred",
-     "evidence": null,
-     "note": "mechanical seed: Get at 0x140246818 (slot 48, depth 0)"
+     "accessor": "Get + inline text",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/CharacterTypeGainsStatusAtBattleStart_slot48_0x2467c0.c"
     }
    },
-   "includes": [],
+   "includes": [
+    "@StatusesBlock"
+   ],
    "vanillaMissed": [],
-   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled. 6 undecoded keyed reads.",
-   "agent": "compB"
+   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled. 6 undecoded keyed reads. | compclose: slot48 0x2467c0: tag filter (default any), then statuses (or self) applied.",
+   "agent": "compB+compclose"
   },
   "Charge": {
    "base": "Status",
@@ -8778,25 +8811,24 @@
   },
   "CustomRunAwayCondition": {
    "base": "Passive",
-   "status": "mechanical",
+   "status": "mapped",
    "open": false,
    "children": null,
    "scalar": null,
    "keys": {
     "allow_decision_mid_turn": {
      "type": "bool",
-     "default": null,
+     "default": false,
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "evidence": null,
-     "note": "mechanical seed: Get at 0x14015bfdf (slot 33, depth 0)"
+     "accessor": "Get + inline bool (type 5)",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/CustomRunAwayCondition_slot33_0x15bf60.c"
     }
    },
    "includes": [],
    "vanillaMissed": [],
-   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled.",
-   "agent": "compB"
+   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled. | compclose: slot33 0x15bf60 decompiled (inherited by RunWhen*).",
+   "agent": "compB+compclose"
   },
   "CutsceneCatArt": {
    "base": "Component",
@@ -9089,16 +9121,24 @@
   "DamageReductionAura": {
    "base": "AuraBase",
    "status": "no-keys",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
-   "keys": {},
+   "keys": {
+    "allies_only": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "no reader on the class paths (AuraBase reads aura_effects_allies / aura_effects_enemies; the ally test is hard-coded at 0x119e20); the literal is read only by the Ability init 0x2b3b0"
+    }
+   },
    "includes": [],
-   "vanillaMissed": [
-    "allies_only"
-   ],
-   "notes": "own slots 29/145 read no keys: reduction = this+0x5c (stacks), ally test hard-coded via 0x119e20. range/stacks are AuraBase/Passive base keys. vanilla allies_only is NOT read by this class's own slots (dead key unless AuraBase reads it) — kept in vanillaMissed so the validator does not flag it. Evidence: .analysis/decompiled/DamageReductionAura_slot145_0x39fc20.c, .analysis/decompiled/DamageReductionAura_slot29_0x39fcc0.c.",
-   "agent": "compB"
+   "vanillaMissed": [],
+   "notes": "own slots 29/145 read no keys: reduction = this+0x5c (stacks), ally test hard-coded via 0x119e20. range/stacks are AuraBase/Passive base keys. vanilla allies_only is NOT read by this class's own slots (dead key unless AuraBase reads it) — kept in vanillaMissed so the validator does not flag it. Evidence: .analysis/decompiled/DamageReductionAura_slot145_0x39fc20.c, .analysis/decompiled/DamageReductionAura_slot29_0x39fcc0.c. | compclose: allies_only unread.",
+   "agent": "compB+compclose"
   },
   "DamageReflection": {
    "base": "Passive",
@@ -12447,43 +12487,42 @@
   },
   "FactionUprising": {
    "base": "GlobalModifier",
-   "status": "mechanical",
-   "open": true,
+   "status": "mapped",
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
     "extra_passives": {
-     "type": "any",
+     "type": "object",
      "default": null,
      "required": false,
-     "accessor": "passed",
-     "confidence": "inferred",
-     "evidence": null,
-     "note": "mechanical seed: Get at 0x140249301 (slot 162, depth 0)"
+     "accessor": "Get",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/FactionUprising_slot162_0x249050.c",
+     "note": "passive blocks added to the faction"
     },
     "extra_statuses": {
-     "type": "any",
+     "type": "object",
      "default": null,
      "required": false,
-     "accessor": "passed",
-     "confidence": "inferred",
-     "evidence": null,
-     "note": "mechanical seed: Get at 0x1402494e2 (slot 162, depth 0)"
+     "accessor": "Get -> Passive_ApplyStatusChildren 0x76a160",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/FactionUprising_slot162_0x249050.c",
+     "note": "children are effect / status names"
     },
     "tag": {
-     "type": "any",
+     "type": "string",
      "default": null,
      "required": false,
-     "accessor": "passed",
-     "confidence": "inferred",
-     "evidence": null,
-     "note": "mechanical seed: NameIndex_Find at 0x140249114 (slot 162, depth 0)"
+     "accessor": "inlined FNV lookup + String",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/FactionUprising_slot162_0x249050.c"
     }
    },
    "includes": [],
    "vanillaMissed": [],
-   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled. 1 undecoded keyed reads. Iterates children (unresolved).",
-   "agent": "compB"
+   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled. 1 undecoded keyed reads. Iterates children (unresolved). | compclose: slot162 0x249050 decompiled.",
+   "agent": "compB+compclose"
   },
   "FadeInsteadOfDie": {
    "base": "Passive",
@@ -12632,73 +12671,70 @@
   },
   "FinalBossHitCountdown": {
    "base": "Status",
-   "status": "mechanical",
-   "open": true,
-   "children": null,
+   "status": "mapped",
+   "open": false,
+   "children": "effects",
    "scalar": null,
    "keys": {
-    "icon_ready": {
-     "type": "number",
-     "default": null,
+    "icon": {
+     "type": "int",
+     "default": 800,
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "evidence": null,
-     "note": "mechanical seed: Get at 0x1407f7d1d (slot 33, depth 0)"
+     "accessor": "Get + inline int (type 2)",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/FinalBossHitCountdown_slot33_0x7f7c40.c"
+    },
+    "icon_ready": {
+     "type": "int",
+     "default": 801,
+     "required": false,
+     "accessor": "Get + inline int (type 2)",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/FinalBossHitCountdown_slot33_0x7f7c40.c"
     }
    },
-   "includes": [],
+   "includes": [
+    "@StatusesBlock"
+   ],
    "vanillaMissed": [],
-   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled. 3 undecoded keyed reads.",
-   "agent": "compB"
+   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled. 3 undecoded keyed reads. | compclose: slot33 0x7f7c40 reads icon / icon_ready; slot67 0x7f7d90 applies the node's statuses (Passive_ApplyStatusesSub 0x76a0c0, \"statuses\" or self) excluding {stacks, icon, icon_ready} -> effect children (ForceUseAbility).",
+   "agent": "compB+compclose"
   },
   "FinalBossHitCountdownBoris": {
    "base": "FinalBossHitCountdown",
    "status": "no-keys",
-   "open": true,
-   "children": "effects",
-   "scalar": null,
-   "keys": {},
-   "includes": [],
-   "vanillaMissed": [
-    "icon",
-    "icon_ready",
-    "stacks"
-   ],
-   "notes": "no own vtable slots: everything (icon, icon_ready, stacks, effect children such as ForceUseAbility) is read by the base FinalBossHitCountdown. vanillaMissed keys may be base-class (FinalBossHitCountdown) keys.",
-   "agent": "compB"
-  },
-  "FinalBossHitCountdownExplosive": {
-   "base": "FinalBossHitCountdown",
-   "status": "no-keys",
-   "open": true,
-   "children": "effects",
-   "scalar": null,
-   "keys": {},
-   "includes": [],
-   "vanillaMissed": [
-    "icon",
-    "icon_ready",
-    "stacks"
-   ],
-   "notes": "no own vtable slots: everything (icon, icon_ready, stacks, effect children such as ForceUseAbility) is read by the base FinalBossHitCountdown. vanillaMissed keys may be base-class (FinalBossHitCountdown) keys.",
-   "agent": "compB"
-  },
-  "FinalBossHitCountdownHoly": {
-   "base": "FinalBossHitCountdown",
-   "status": "no-keys",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {},
    "includes": [],
-   "vanillaMissed": [
-    "icon",
-    "icon_ready",
-    "stacks"
-   ],
-   "notes": "no own vtable slots: everything (icon, icon_ready, stacks, effect children such as ForceUseAbility) is read by the base FinalBossHitCountdown. vanillaMissed keys may be base-class (FinalBossHitCountdown) keys.",
-   "agent": "compB"
+   "vanillaMissed": [],
+   "notes": "no own vtable slots: everything (icon, icon_ready, stacks, effect children such as ForceUseAbility) is read by the base FinalBossHitCountdown. vanillaMissed keys may be base-class (FinalBossHitCountdown) keys. | compclose: all keys are the FinalBossHitCountdown base's.",
+   "agent": "compB+compclose"
+  },
+  "FinalBossHitCountdownExplosive": {
+   "base": "FinalBossHitCountdown",
+   "status": "no-keys",
+   "open": false,
+   "children": null,
+   "scalar": null,
+   "keys": {},
+   "includes": [],
+   "vanillaMissed": [],
+   "notes": "no own vtable slots: everything (icon, icon_ready, stacks, effect children such as ForceUseAbility) is read by the base FinalBossHitCountdown. vanillaMissed keys may be base-class (FinalBossHitCountdown) keys. | compclose: all keys are the FinalBossHitCountdown base's.",
+   "agent": "compB+compclose"
+  },
+  "FinalBossHitCountdownHoly": {
+   "base": "FinalBossHitCountdown",
+   "status": "no-keys",
+   "open": false,
+   "children": null,
+   "scalar": null,
+   "keys": {},
+   "includes": [],
+   "vanillaMissed": [],
+   "notes": "no own vtable slots: everything (icon, icon_ready, stacks, effect children such as ForceUseAbility) is read by the base FinalBossHitCountdown. vanillaMissed keys may be base-class (FinalBossHitCountdown) keys. | compclose: all keys are the FinalBossHitCountdown base's.",
+   "agent": "compB+compclose"
   },
   "FinalBossPupils": {
    "base": "Passive",
@@ -13110,16 +13146,14 @@
   "FloatingDebris": {
    "base": "Instantiatable_InCombat",
    "status": "mechanical",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {},
    "includes": [],
-   "vanillaMissed": [
-    "count"
-   ],
-   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled.",
-   "agent": "compB"
+   "vanillaMissed": [],
+   "notes": "tier3 (unused in vanilla): mechanical keys copied, not decompiled. | compclose: vanilla `count` was an AddTilesetObjects child named FloatingDebris (a map key); this class is a tileset object, not a GON block.",
+   "agent": "compB+compclose"
   },
   "FloatingGlassTile": {
    "base": "GlassTile",
@@ -14312,14 +14346,14 @@
   "FurnitureStats": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": "any",
    "scalar": null,
    "keys": {},
    "includes": [],
    "vanillaMissed": [],
-   "notes": "No own vtable slots. Vanilla Comfort/Stimulation/Appeal are house-stat names: the house code parses child names with the stat-name parser 0x1b4930 (Appeal, Comfort, Evolution, GayStrayChance, Health, InheritAbilityFavorDad/Mom, InheritDisorderChance, InheritPassiveFavorDad/Mom, InheritStatFavorDad/Mom, NoBirthDefects, Stimulation) -> number. The exact reader of this component's node was not pinned (string xrefs 0x1401fa796 in 0x1f8f60, 0x1404acbc5, 0x1404e355e...). confidence inferred. Evidence: .analysis/decompiled/FurnitureStats_comfort_user_0x1b4930.c.",
-   "agent": "compB"
+   "notes": "No own vtable slots. Vanilla Comfort/Stimulation/Appeal are house-stat names: the house code parses child names with the stat-name parser 0x1b4930 (Appeal, Comfort, Evolution, GayStrayChance, Health, InheritAbilityFavorDad/Mom, InheritDisorderChance, InheritPassiveFavorDad/Mom, InheritStatFavorDad/Mom, NoBirthDefects, Stimulation) -> number. The exact reader of this component's node was not pinned (string xrefs 0x1401fa796 in 0x1f8f60, 0x1404acbc5, 0x1404e355e...). confidence inferred. Evidence: .analysis/decompiled/FurnitureStats_comfort_user_0x1b4930.c. | compclose: children any (house-stat name -> value) accepts every child; closed.",
+   "agent": "compB+compclose"
   },
   "Fury": {
    "base": "Status",
@@ -14901,17 +14935,14 @@
   "Grappling": {
    "base": "Status",
    "status": "no-keys",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {},
    "includes": [],
-   "vanillaMissed": [
-    "partial_animation_suffix",
-    "exit_animations"
-   ],
-   "notes": "own slot functions decompiled; no GON reads on this+0x68. Scalar form = Passive stacks. vanillaMissed: partial_animation_suffix / exit_animations literals are read only by the FormChange component init 0x199010 and the form-switch routine 0x19a210 on form nodes; how Grappling's node reaches them is not established.",
-   "agent": "compC"
+   "vanillaMissed": [],
+   "notes": "own slot functions decompiled; no GON reads on this+0x68. Scalar form = Passive stacks. vanillaMissed: partial_animation_suffix / exit_animations literals are read only by the FormChange component init 0x199010 and the form-switch routine 0x19a210 on form nodes; how Grappling's node reaches them is not established. | compclose: vanilla keys were a FormChanger form named Grappling (a map key), not this status.",
+   "agent": "compC+compclose"
   },
   "GrassOnEndTurn": {
    "base": "Passive",
@@ -17870,7 +17901,7 @@
   "LowHealthAllyDodgeChanceAura": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
@@ -17883,6 +17914,15 @@
      "evidence": ".analysis/decompiled/LowHealthAllyDodgeChanceAura_slot33_0x3a1e20.c",
      "note": ""
     },
+    "theshold": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "typo of threshold: the string exists nowhere in the binary, so vanilla's value is ignored and threshold keeps its default"
+    },
     "threshold": {
      "type": "int",
      "default": 5,
@@ -17894,11 +17934,9 @@
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "theshold"
-   ],
-   "notes": "evidence: .analysis/decompiled/LowHealthAllyDodgeChanceAura_slot33_0x3a1e20.c vanillaMissed: vanilla writes `theshold` (typo); the engine reads `threshold` (default 5), so the vanilla value is ignored.",
-   "agent": "compC"
+   "vanillaMissed": [],
+   "notes": "evidence: .analysis/decompiled/LowHealthAllyDodgeChanceAura_slot33_0x3a1e20.c vanillaMissed: vanilla writes `theshold` (typo); the engine reads `threshold` (default 5), so the vanilla value is ignored. | compclose: theshold has no literal at all.",
+   "agent": "compC+compclose"
   },
   "LowerAmbientLight": {
    "base": "GlobalModifier",
@@ -19347,10 +19385,60 @@
   "MotherTumorPassive": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
+    "Cat": {
+     "type": "object",
+     "default": null,
+     "required": false,
+     "accessor": "Get",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/MotherTumorPassive_Receive_lambda2_body_0x7f17b0.c",
+     "note": "used when the receiver is a cat"
+    },
+    "Cat.formchange": {
+     "type": "string",
+     "default": "no_change",
+     "required": false,
+     "accessor": "Get + inline text",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/MotherTumorPassive_Receive_lambda2_body_0x7f17b0.c"
+    },
+    "Cat.statuses": {
+     "type": "object",
+     "default": null,
+     "required": false,
+     "accessor": "Get -> Passive_ApplyStatusChildren 0x76a160",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/MotherTumorPassive_Receive_lambda2_body_0x7f17b0.c"
+    },
+    "NonCat": {
+     "type": "object",
+     "default": null,
+     "required": false,
+     "accessor": "Get",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/MotherTumorPassive_Receive_lambda2_body_0x7f17b0.c",
+     "note": "used when the receiver is not a cat"
+    },
+    "NonCat.formchange": {
+     "type": "string",
+     "default": "no_change",
+     "required": false,
+     "accessor": "Get + inline text",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/MotherTumorPassive_Receive_lambda2_body_0x7f17b0.c"
+    },
+    "NonCat.statuses": {
+     "type": "object",
+     "default": null,
+     "required": false,
+     "accessor": "Get -> Passive_ApplyStatusChildren 0x76a160",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/MotherTumorPassive_Receive_lambda2_body_0x7f17b0.c"
+    },
     "considered_forms": {
      "type": "array",
      "default": null,
@@ -19389,12 +19477,9 @@
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "Cat",
-    "NonCat"
-   ],
-   "notes": "evidence: .analysis/decompiled/MotherTumorPassive_ConsideredForms_0x7f1b10.c vanillaMissed: Cat / NonCat sub-blocks not located in any decompiled function (MotherTumorSpawnInCapture reads same-named blocks from its own node).",
-   "agent": "compC"
+   "vanillaMissed": [],
+   "notes": "evidence: .analysis/decompiled/MotherTumorPassive_ConsideredForms_0x7f1b10.c vanillaMissed: Cat / NonCat sub-blocks not located in any decompiled function (MotherTumorSpawnInCapture reads same-named blocks from its own node). | compclose: Receive lambda_2 (DoCall 0x7fb560 -> body 0x7f17b0) picks Cat / NonCat by the receiver; MotherTumorSpawnInCapture slot49 0x7f0a40 reads the same names.",
+   "agent": "compC+compclose"
   },
   "MotherTumorSpawnInCapture": {
    "base": "Passive",
@@ -19900,10 +19985,19 @@
   "MoveTowardsDamageSource": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
+    "ability": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "the class reads move_ability; ability is not read on any of its slots / lambdas"
+    },
     "can_move_zero": {
      "type": "bool",
      "default": false,
@@ -19987,11 +20081,9 @@
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "ability"
-   ],
-   "notes": "move options read by the queued lambda <lambda_1> of OnAppliedStatuses, Do_call 0x2c1da0. vanillaMissed: vanilla `ability` (1 use) not read by the slot or its lambda; probably a stale key (move_ability is the read one).",
-   "agent": "compC"
+   "vanillaMissed": [],
+   "notes": "move options read by the queued lambda <lambda_1> of OnAppliedStatuses, Do_call 0x2c1da0. vanillaMissed: vanilla `ability` (1 use) not read by the slot or its lambda; probably a stale key (move_ability is the read one). | compclose: ability unread (move_ability is the key).",
+   "agent": "compC+compclose"
   },
   "MoveTowardsKillers": {
    "base": "Passive",
@@ -21669,6 +21761,15 @@
      "evidence": ".analysis/decompiled/Passive_CastHelper_c_0x76b650.c",
      "note": "cast helper 0x76b650 only"
     },
+    "stack_key": {
+     "type": "string",
+     "default": null,
+     "required": false,
+     "accessor": "Get + inline text (default: the caller's key; \"same_type\" = the class name)",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/Passive_GetStackKey_0x7698d0.c",
+     "note": "read by Passive::GetStackKey 0x7698d0 (this+0x68); used by SpawnEachTurn, StackingFlowerTrail, StatusAfterXStacks, *MultiplierBonus, PassiveIfFirstWithStackKey, … and scanned on every passive by GetAllWithStackKey / RemoveStatusByStackKey"
+    },
     "stacks": {
      "type": "int",
      "default": 0,
@@ -21681,8 +21782,8 @@
    },
    "includes": [],
    "vanillaMissed": [],
-   "notes": "Base of all passives. slot31 init(GON*) 0x767cd0 stores the node at this+0x68 and reads only `stacks`; slot32 0x767b30 (full init) / slot30 0x767e80 (raw abort) read no keys. Other own slots (7,25,28,29,111-113,142,169) read no GON. Shared helpers used by many subclasses: Passive_ApplyStatusChildren 0x76a160 (iterates every child of a node except a passed exclusion list, each child parsed as a status entry by FUN_1402bbab0 and applied via apply_status 0x483120), Passive_CastAbilityByName 0x76b0f0 (no GON), Passive_InitCommon 0x768ca0 (no GON). Cast helpers 0x76ad70/0x76b290/0x76b650/0x76bb20 (used by subclasses that cast abilities) also read even_if_stunned and force_display_name from this+0x68.",
-   "agent": "compC"
+   "notes": "Base of all passives. slot31 init(GON*) 0x767cd0 stores the node at this+0x68 and reads only `stacks`; slot32 0x767b30 (full init) / slot30 0x767e80 (raw abort) read no keys. Other own slots (7,25,28,29,111-113,142,169) read no GON. Shared helpers used by many subclasses: Passive_ApplyStatusChildren 0x76a160 (iterates every child of a node except a passed exclusion list, each child parsed as a status entry by FUN_1402bbab0 and applied via apply_status 0x483120), Passive_CastAbilityByName 0x76b0f0 (no GON), Passive_InitCommon 0x768ca0 (no GON). Cast helpers 0x76ad70/0x76b290/0x76b650/0x76bb20 (used by subclasses that cast abilities) also read even_if_stunned and force_display_name from this+0x68. | compclose: stack_key (Passive::GetStackKey 0x7698d0).",
+   "agent": "compC+compclose"
   },
   "PassiveAfterXKills": {
    "base": "ConditionalPassive",
@@ -23505,7 +23606,7 @@
   "Rain": {
    "base": "GlobalModifier",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": {
     "type": "number",
@@ -23516,11 +23617,9 @@
    },
    "keys": {},
    "includes": [],
-   "vanillaMissed": [
-    "ai"
-   ],
-   "notes": "Rain slot33 reads only the node itself as a number. The vanilla `ai` key appears under `nested:FormChanger` Rain blocks: likely a FormChanger form named Rain, not this GlobalModifier.",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "Rain slot33 reads only the node itself as a number. The vanilla `ai` key appears under `nested:FormChanger` Rain blocks: likely a FormChanger form named Rain, not this GlobalModifier. | compclose: vanilla `ai` was a FormChanger form named Rain (a map key), not this class.",
+   "agent": "compD+compclose"
   },
   "RandomBrain": {
    "base": "Brain",
@@ -24903,7 +25002,7 @@
   "RunWhenLastPlayerCatIsCharmed": {
    "base": "CustomRunAwayCondition",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
@@ -24918,11 +25017,9 @@
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "allow_decision_mid_turn"
-   ],
-   "notes": "allow_decision_mid_turn is not read in this class's own slots (97, 170); presumably the CustomRunAwayCondition base (mechanical pass also attributes it to RunWhenCatsTrappedOnceEach).",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "allow_decision_mid_turn is not read in this class's own slots (97, 170); presumably the CustomRunAwayCondition base (mechanical pass also attributes it to RunWhenCatsTrappedOnceEach). | compclose: allow_decision_mid_turn is read by the inherited CustomRunAwayCondition slot33 0x15bf60.",
+   "agent": "compD+compclose"
   },
   "RunWhenMaxPhylacteryHeal": {
    "base": "CustomRunAwayCondition",
@@ -25449,16 +25546,14 @@
   "Shadow": {
    "base": "Component",
    "status": "no-keys",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {},
    "includes": [],
-   "vanillaMissed": [
-    "crit_chance"
-   ],
-   "notes": "glaiel::Shadow is the render-shadow Component (slots 6/19 position a \"shadow\" movieclip; no GON reads). The vanilla `crit_chance` under `nested:ElementalAttunement` is an ElementalAttunement element named Shadow, not this class.",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "glaiel::Shadow is the render-shadow Component (slots 6/19 position a \"shadow\" movieclip; no GON reads). The vanilla `crit_chance` under `nested:ElementalAttunement` is an ElementalAttunement element named Shadow, not this class. | compclose: vanilla `crit_chance` was an ElementalAttunement element named Shadow (a map key), not this class.",
+   "agent": "compD+compclose"
   },
   "ShadowTile": {
    "base": "TacticsTile",
@@ -25910,19 +26005,14 @@
   "SlotMachineRollPool": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
-   "children": "passives",
+   "open": false,
+   "children": "any",
    "scalar": null,
    "keys": {},
    "includes": [],
-   "vanillaMissed": [
-    "SlotResult_Explode",
-    "SlotResult_Jackpot_Coins",
-    "SlotResult_Nothing",
-    "SlotResult_RandomPickup"
-   ],
-   "notes": "slot63: Gon_WeightedRandomChild 0x94ff80(node, \"weight\") — each child's weight is the child itself if a number, or child.weight, default 1 — then Passive_AddPassiveByName 0x76ab80(child name). Vanilla SlotResult_* : number children.",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "slot63: Gon_WeightedRandomChild 0x94ff80(node, \"weight\") — each child's weight is the child itself if a number, or child.weight, default 1 — then Passive_AddPassiveByName 0x76ab80(child name). Vanilla SlotResult_* : number children. | compclose: slot63 0x3494c0 -> Gon_WeightedRandomChild 0x94ff80 (\"weight\") over the children: each child name is a result ability (SlotResult_*) with its weight; the picked name is cast (0x76ab80).",
+   "agent": "compD+compclose"
   },
   "Slow": {
    "base": "Status",
@@ -26019,16 +26109,26 @@
   "SmiteEnemiesWhoKill": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
-   "keys": {},
+   "keys": {
+    "damage_instance": {
+     "type": "object",
+     "default": null,
+     "required": false,
+     "accessor": "inlined FNV Contains",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/Passive_SpawnOrCastFromNode_0x7691d0.c",
+     "note": "when present the damage instance is read from it, else from the block itself"
+    }
+   },
    "includes": [
     "@DamageInstance"
    ],
    "vanillaMissed": [],
-   "notes": "slot101 SmiteEnemiesWhoKill_slot101_0x3a1520 has no keyed reads of its own; vanilla type/damage/elements/effects are DamageInstance keys — INFERRED that the node is handed to a damage-instance parser elsewhere (not witnessed in the decompiled slot).",
-   "agent": "compD"
+   "notes": "slot101 SmiteEnemiesWhoKill_slot101_0x3a1520 has no keyed reads of its own; vanilla type/damage/elements/effects are DamageInstance keys — INFERRED that the node is handed to a damage-instance parser elsewhere (not witnessed in the decompiled slot). | compclose: OnCharacterDies lambda_1 (DoCall 0x3a23e0) -> Passive helper 0x7691d0: DamageInstance_FromGon 0x2ba080 on damage_instance-or-self.",
+   "agent": "compD+compclose"
   },
   "SnareTrap": {
    "base": "Trap",
@@ -26080,19 +26180,17 @@
   },
   "SolarFlare": {
    "base": "GlobalModifier",
-   "status": "no-keys",
-   "open": true,
+   "status": "mapped",
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {},
-   "includes": [],
-   "vanillaMissed": [
-    "damage",
-    "effects",
-    "elements"
+   "includes": [
+    "@DamageInstance"
    ],
-   "notes": "tier 3 (unused in vanilla): mechanical pass found no keyed reads; not decompiled",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "tier 3 (unused in vanilla): mechanical pass found no keyed reads; not decompiled | compclose: slot33 0x90dc50 runs DamageInstance_FromGon 0x2ba080 on this+0x68 (damage / effects / elements).",
+   "agent": "compD+compclose"
   },
   "SoulLink": {
    "base": "Status",
@@ -26304,7 +26402,7 @@
   "SpawnEachTurn": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": {
     "type": "any",
@@ -26352,11 +26450,9 @@
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "stack_key"
-   ],
-   "notes": "stack_key (vanilla 5) is handled by the Passive base sibling helpers 0x769a50/0x769d60 (stack key read by 0x7698d0), not this class.",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "stack_key (vanilla 5) is handled by the Passive base sibling helpers 0x769a50/0x769d60 (stack key read by 0x7698d0), not this class. | compclose: stack_key = Passive::GetStackKey via slot37 -> 0x769a50/0x769d60.",
+   "agent": "compD+compclose"
   },
   "SpawnExtraThingsOnBattleStart": {
    "base": "GlobalModifier",
@@ -26888,7 +26984,7 @@
   "SpawnThingOnDamage": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": {
     "type": "string",
@@ -26959,6 +27055,15 @@
      "evidence": ".analysis/decompiled/SpawnThingOnDamage_slot67_0x7cc040.c",
      "note": ""
     },
+    "number": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "no reader on the class paths (slot67 spawns exactly one object); other Spawn* classes read number"
+    },
     "object": {
      "type": "string",
      "default": null,
@@ -26988,11 +27093,9 @@
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "number"
-   ],
-   "notes": "properties.layer / properties.pickup_type are read from the spawned object's spawn-db entry (lVar12+0x38), not this node. Vanilla `number` (items/neck_items.gon, 1 use) is not read by slot 67.",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "properties.layer / properties.pickup_type are read from the spawned object's spawn-db entry (lVar12+0x38), not this node. Vanilla `number` (items/neck_items.gon, 1 use) is not read by slot 67. | compclose: number unread.",
+   "agent": "compD+compclose"
   },
   "SpawnThingOnDeath": {
    "base": "Passive",
@@ -27032,95 +27135,101 @@
   },
   "SpawnTilePuddleOnBattleStart": {
    "base": "GlobalModifier",
-   "status": "mechanical",
-   "open": true,
+   "status": "mapped",
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
     "max_radius": {
      "type": "number",
-     "default": null,
+     "default": 4,
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x1402499b0 slot 48 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + inline number",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnTilePuddleOnBattleStart_slot48_0x2499b0.c"
     },
     "min_radius": {
      "type": "number",
-     "default": null,
+     "default": 2,
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x1402499b0 slot 48 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + inline number",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnTilePuddleOnBattleStart_slot48_0x2499b0.c"
     },
     "number": {
-     "type": "number",
-     "default": null,
+     "type": "int",
+     "default": 1,
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x1402499b0 slot 48 depth 0; not decompiled — may be read from another node"
-    }
-   },
-   "includes": [],
-   "vanillaMissed": [
-    "tile"
-   ],
-   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 11 undecoded keyed reads",
-   "agent": "compD"
-  },
-  "SpawnVolcanoOnBattleStart": {
-   "base": "GlobalModifier",
-   "status": "mechanical",
-   "open": true,
-   "children": null,
-   "scalar": null,
-   "keys": {
-    "max_radius": {
-     "type": "number",
-     "default": null,
-     "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090c880 slot 48 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + inline int, or a [min,max] array",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnTilePuddleOnBattleStart_slot48_0x2499b0.c"
     },
-    "min_radius": {
-     "type": "number",
+    "tile": {
+     "type": "string",
      "default": null,
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090c880 slot 48 depth 0; not decompiled — may be read from another node"
-    },
-    "number": {
-     "type": "number",
-     "default": null,
-     "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090c880 slot 48 depth 0; not decompiled — may be read from another node"
-    },
-    "object": {
-     "type": "any",
-     "default": null,
-     "required": false,
-     "accessor": "passed",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090c880 slot 48 depth 0; not decompiled — may be read from another node"
-    },
-    "puddle_tile": {
-     "type": "any",
-     "default": null,
-     "required": false,
-     "accessor": "passed",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090c880 slot 48 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get -> random pick 0x94fe40 -> String (a name or a list)",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnTilePuddleOnBattleStart_slot48_0x2499b0.c"
     }
    },
    "includes": [],
    "vanillaMissed": [],
-   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 8 undecoded keyed reads",
-   "agent": "compD"
+   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 11 undecoded keyed reads | compclose: slot48 0x2499b0 decompiled.",
+   "agent": "compD+compclose"
+  },
+  "SpawnVolcanoOnBattleStart": {
+   "base": "GlobalModifier",
+   "status": "mapped",
+   "open": false,
+   "children": null,
+   "scalar": null,
+   "keys": {
+    "max_radius": {
+     "type": "number",
+     "default": 4,
+     "required": false,
+     "accessor": "Get + inline number",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnVolcanoOnBattleStart_slot48_0x90c880.c"
+    },
+    "min_radius": {
+     "type": "number",
+     "default": 2,
+     "required": false,
+     "accessor": "Get + inline number",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnVolcanoOnBattleStart_slot48_0x90c880.c"
+    },
+    "number": {
+     "type": "int",
+     "default": 1,
+     "required": false,
+     "accessor": "Get + inline int, or a [min,max] array",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnVolcanoOnBattleStart_slot48_0x90c880.c"
+    },
+    "object": {
+     "type": "string",
+     "default": null,
+     "required": false,
+     "accessor": "inlined FNV lookup + String",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnVolcanoOnBattleStart_slot48_0x90c880.c"
+    },
+    "puddle_tile": {
+     "type": "string",
+     "default": "None",
+     "required": false,
+     "accessor": "Get -> random pick 0x94fe40 -> String (a name or a list)",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpawnVolcanoOnBattleStart_slot48_0x90c880.c"
+    }
+   },
+   "includes": [],
+   "vanillaMissed": [],
+   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 8 undecoded keyed reads | compclose: slot48 0x90c880 decompiled.",
+   "agent": "compD+compclose"
   },
   "SpawnerCatDataReference": {
    "base": "Passive",
@@ -27182,50 +27291,49 @@
   },
   "SpecialGodRays": {
    "base": "GlobalModifier",
-   "status": "mechanical",
-   "open": true,
-   "children": null,
+   "status": "mapped",
+   "open": false,
+   "children": "any",
    "scalar": null,
    "keys": {
-    "bigray_clip": {
-     "type": "int",
-     "default": null,
+    "*.bigray_clip": {
+     "type": "string",
+     "default": "GodRay",
      "required": false,
-     "accessor": "inline",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090b4e0 slot 33 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + inline text",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpecialGodRays_slot33_0x90b4e0.c"
     },
-    "follow_character_tag": {
+    "*.follow_character_tag": {
      "type": "string",
      "default": null,
      "required": false,
-     "accessor": "inline-type/String",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090b4e0 slot 33 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + String",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpecialGodRays_slot33_0x90b4e0.c"
     },
-    "position": {
-     "type": "object",
+    "*.position": {
+     "type": "array",
      "default": null,
      "required": false,
-     "accessor": "node",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090b4e0 slot 33 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + Number per item",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpecialGodRays_slot33_0x90b4e0.c",
+     "note": "per child; the child name is the ray set id (vanilla: Big)"
     },
-    "smallray_clip": {
-     "type": "any",
-     "default": null,
+    "*.smallray_clip": {
+     "type": "string",
+     "default": "GodRaySmall",
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x14090b4e0 slot 33 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + inline text",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/SpecialGodRays_slot33_0x90b4e0.c"
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "Big"
-   ],
-   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 4 undecoded keyed reads",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 4 undecoded keyed reads | compclose: slot33 0x90b4e0 iterates every child of this+0x68 (an arbitrary name -> {position, bigray_clip, smallray_clip, follow_character_tag}); the keys are per child, not top-level.",
+   "agent": "compD+compclose"
   },
   "SpeedUp": {
    "base": "Status",
@@ -27290,14 +27398,14 @@
   "SpewerAltGraphics": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": "any",
    "scalar": null,
    "keys": {},
    "includes": [],
    "vanillaMissed": [],
-   "notes": "slot19 SpewerAltGraphics_slot19_0x8fe0d0: Int(Get(node, <runtime state name>)) — the key is a std::string held by another object (+0xd0), so the child names are runtime-built (vanilla Normal/NormalFull/Fire/FireFull/Tar/TarFull → frame numbers).",
-   "agent": "compD"
+   "notes": "slot19 SpewerAltGraphics_slot19_0x8fe0d0: Int(Get(node, <runtime state name>)) — the key is a std::string held by another object (+0xd0), so the child names are runtime-built (vanilla Normal/NormalFull/Fire/FireFull/Tar/TarFull → frame numbers). | compclose: children any (state name -> clip) accepts every child; closed.",
+   "agent": "compD+compclose"
   },
   "SpiderInfested": {
    "base": "Status",
@@ -27441,16 +27549,14 @@
   "StackingFlowerTrail": {
    "base": "Passive",
    "status": "no-keys",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {},
    "includes": [],
-   "vanillaMissed": [
-    "stack_key"
-   ],
-   "notes": "slot43 has no reads of this node; vanilla stacks / stack_key are Passive-base keys.",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "slot43 has no reads of this node; vanilla stacks / stack_key are Passive-base keys. | compclose: stack_key = Passive::GetStackKey via slot43 -> 0x769ec0 -> 0x769a50.",
+   "agent": "compD+compclose"
   },
   "StalagmiteTile": {
    "base": "TacticsTile",
@@ -27727,7 +27833,7 @@
   "StatusAfterXStacks": {
    "base": "Status",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": "effects",
    "scalar": null,
    "keys": {
@@ -27753,11 +27859,9 @@
    "includes": [
     "@StatusesBlock"
    ],
-   "vanillaMissed": [
-    "stack_key"
-   ],
-   "notes": "Status. @StatusesBlock excluded names {threshold, stack_key, expires_on_end_turn}; stack_key = Passive base.",
-   "agent": "compD"
+   "vanillaMissed": [],
+   "notes": "Status. @StatusesBlock excluded names {threshold, stack_key, expires_on_end_turn}; stack_key = Passive base. | compclose: stack_key read by slot170 0x250460 and Passive::GetStackKey (Passive base key).",
+   "agent": "compD+compclose"
   },
   "StatusAfterXTurns": {
    "base": "Status",
@@ -27903,15 +28007,27 @@
   },
   "StatusAlliesScaledByCursedOnDeath": {
    "base": "Passive",
-   "status": "no-keys",
-   "open": true,
+   "status": "mapped",
+   "open": false,
    "children": "effects",
    "scalar": null,
-   "keys": {},
-   "includes": [],
+   "keys": {
+    "max": {
+     "type": "int",
+     "default": 2147483647,
+     "required": false,
+     "accessor": "Get + inline int (type 2)",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/StatusAlliesScaledByCursedOnDeath_OnDeath_lambda1_body_0x26f0f0.c",
+     "note": "cap on the cursed-count scale"
+    }
+   },
+   "includes": [
+    "@StatusesBlock"
+   ],
    "vanillaMissed": [],
-   "notes": "slot94 only dispatches a lambda over the board (0x2719b0); no reads of this node in the slot itself. Lambda body not decompiled — it may apply this node as a status block.",
-   "agent": "compD"
+   "notes": "slot94 only dispatches a lambda over the board (0x2719b0); no reads of this node in the slot itself. Lambda body not decompiled — it may apply this node as a status block. | compclose: OnDeath lambda_1 (DoCall 0x271c10 -> body 0x26f0f0): stacks scaled by the cursed count (capped by max), statuses (or self) applied to allies.",
+   "agent": "compD+compclose"
   },
   "StatusAllyWhenAllySpendsMana": {
    "base": "Passive",
@@ -27977,45 +28093,49 @@
   },
   "StatusCharactersOnRoundEnd": {
    "base": "GlobalModifier",
-   "status": "mechanical",
-   "open": true,
+   "status": "mapped",
+   "open": false,
    "children": "effects",
    "scalar": null,
    "keys": {
     "tag_filter": {
-     "type": "any",
-     "default": null,
+     "type": "string",
+     "default": "any",
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x140249640 slot 39 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + inline text",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/StatusCharactersOnRound_shared_slot_0x249640.c"
     }
    },
-   "includes": [],
+   "includes": [
+    "@StatusesBlock"
+   ],
    "vanillaMissed": [],
-   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 4 undecoded keyed reads",
-   "agent": "compD"
+   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 4 undecoded keyed reads | compclose: shared slot 0x249640 (Start slot38 / End slot39).",
+   "agent": "compD+compclose"
   },
   "StatusCharactersOnRoundStart": {
    "base": "GlobalModifier",
-   "status": "mechanical",
-   "open": true,
+   "status": "mapped",
+   "open": false,
    "children": "effects",
    "scalar": null,
    "keys": {
     "tag_filter": {
-     "type": "any",
-     "default": null,
+     "type": "string",
+     "default": "any",
      "required": false,
-     "accessor": "inline-type",
-     "confidence": "inferred",
-     "note": "mechanical pass (objdump), fn 0x140249640 slot 38 depth 0; not decompiled — may be read from another node"
+     "accessor": "Get + inline text",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/StatusCharactersOnRound_shared_slot_0x249640.c"
     }
    },
-   "includes": [],
+   "includes": [
+    "@StatusesBlock"
+   ],
    "vanillaMissed": [],
-   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 4 undecoded keyed reads",
-   "agent": "compD"
+   "notes": "tier 3 (unused in vanilla): mechanical keys copied, not verified by decompile; 4 undecoded keyed reads | compclose: shared slot 0x249640 (Start slot38 / End slot39).",
+   "agent": "compD+compclose"
   },
   "StatusCollector": {
    "base": "Passive",
@@ -31147,7 +31267,7 @@
   "Terminator2Run": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
@@ -31159,14 +31279,21 @@
      "confidence": "observed",
      "evidence": ".analysis/decompiled/Terminator2Run_slot68_0x7ebf40.c",
      "note": "ability forced after dodging (when the node is a scalar, the node itself is the name; logs when missing)"
+    },
+    "move_weights": {
+     "type": "string",
+     "default": "",
+     "required": false,
+     "accessor": "Get + inline text",
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/Terminator2Run_OnDodgedDamage_lambda1_body_0x7ec1e0.c",
+     "note": "brain move-weights preset name, read when the dodge lambda (OnDodgedDamage lambda_1, DoCall 0x7fb8a0) runs; passed to 0x134f40"
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "move_weights"
-   ],
-   "notes": "vanilla move_weights is not read in own slots 68/91; probably read by the queued lambda (Terminator2Run::OnDodgedDamage lambda_1) - not decompiled. Evidence: .analysis/decompiled/Terminator2Run_slot68_0x7ebf40.c",
-   "agent": "compE"
+   "vanillaMissed": [],
+   "notes": "vanilla move_weights is not read in own slots 68/91; probably read by the queued lambda (Terminator2Run::OnDodgedDamage lambda_1) - not decompiled. Evidence: .analysis/decompiled/Terminator2Run_slot68_0x7ebf40.c | compclose: move_weights in the OnDodgedDamage lambda body 0x7ec1e0.",
+   "agent": "compE+compclose"
   },
   "TerminatorChase": {
    "base": "Passive",
@@ -31697,10 +31824,19 @@
   "TourettesMeows": {
    "base": "Passive",
    "status": "mapped",
-   "open": true,
+   "open": false,
    "children": null,
    "scalar": null,
    "keys": {
+    "cooldown": {
+     "type": "any",
+     "default": null,
+     "required": false,
+     "unread": true,
+     "confidence": "observed",
+     "evidence": ".analysis/decompiled/compclose_unread_keys_xref.txt",
+     "note": "no reader on the class paths (slots 10/33 read pool and duration only)"
+    },
     "duration": {
      "type": "any",
      "default": 10,
@@ -31721,11 +31857,9 @@
     }
    },
    "includes": [],
-   "vanillaMissed": [
-    "cooldown"
-   ],
-   "notes": "vanilla key \"cooldown\" is NOT read by any own slot (code reads \"duration\"); vanilla value is probably ignored. Evidence: .analysis/decompiled/TourettesMeows_slot33_0x1649d0.c, .analysis/decompiled/TourettesMeows_slot10_0x164c50.c",
-   "agent": "compE"
+   "vanillaMissed": [],
+   "notes": "vanilla key \"cooldown\" is NOT read by any own slot (code reads \"duration\"); vanilla value is probably ignored. Evidence: .analysis/decompiled/TourettesMeows_slot33_0x1649d0.c, .analysis/decompiled/TourettesMeows_slot10_0x164c50.c | compclose: cooldown unread.",
+   "agent": "compE+compclose"
   },
   "TowerDefense": {
    "base": "Passive",
@@ -34101,24 +34235,25 @@
   "compB",
   "compC",
   "compD",
-  "compE"
+  "compE",
+  "compclose"
  ],
  "coverage": {
   "components": 1741,
-  "mapped": 473,
-  "noKeys": 898,
-  "mechanical": 369,
-  "unresolved": 1,
-  "open": 190,
-  "keys": 1314,
-  "keysObserved": 767,
-  "keysInferred": 547,
-  "vanillaComponents": 394,
-  "vanillaKeys": 631,
-  "vanillaKeysFound": 589,
-  "vanillaKeysUnread": 0,
-  "vanillaOpen": 38,
-  "vanillaClosed": 356,
-  "vanillaMapKeys": 188
+  "mapped": 484,
+  "noKeys": 897,
+  "mechanical": 360,
+  "unresolved": 0,
+  "open": 153,
+  "keys": 1337,
+  "keysObserved": 810,
+  "keysInferred": 527,
+  "vanillaComponents": 393,
+  "vanillaKeys": 613,
+  "vanillaKeysFound": 603,
+  "vanillaKeysUnread": 10,
+  "vanillaOpen": 5,
+  "vanillaClosed": 388,
+  "vanillaMapKeys": 205
  }
 }
