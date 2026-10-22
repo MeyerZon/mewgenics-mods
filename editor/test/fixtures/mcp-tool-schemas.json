@@ -184,6 +184,10 @@
         },
         "options": {
           "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {},
           "description": "scaffold options (displayName, desc, parent, mana, statusEffect, dryRun, ...)"
         }
       },
@@ -678,10 +682,13 @@
         },
         "resolve": {
           "type": "object",
-          "description": "name -> 0xRVA answers for ambiguous/failed entries",
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "description": "name -> 0xRVA answers for ambiguous/failed entries"
         },
         "dryRun": {
           "type": "boolean",
@@ -690,6 +697,76 @@
       },
       "required": [
         "build"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "vectorcraft_exec",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "scene": {
+          "type": "string",
+          "description": "scene file inside the mod, e.g. art/my_rat.scene.json"
+        },
+        "shapeId": {
+          "type": "string",
+          "description": "the shape to open in VectorCraft first (its SVG, as export_svg writes it); omit to start from a blank artboard of the stage size"
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "an engine command id, e.g. shape.rectangle, shape.ellipse, path.create, object.move, object.setProps (the app lists all ~1,090 with their params; coordinates are artboard px = the shape's SVG viewBox moved to 0,0)"
+              },
+              "params": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {},
+                "description": "the command's params, e.g. { x, y, width, height } or { d: 'M0 0 L10 0 …' }"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          },
+          "description": "run in order through window.vectorcraft.execute; a failure stops the rest unless continueOnError"
+        },
+        "exportTo": {
+          "type": "string",
+          "description": "the shape the exported drawing replaces (default shapeId). Omit together with shapeId to only run the commands and get the SVG text back"
+        },
+        "screenshot": {
+          "type": "boolean",
+          "description": "also save a PNG of the canvas under editor/data/vectorcraft/ and return screenshotPath"
+        },
+        "continueOnError": {
+          "type": "boolean",
+          "description": "keep running after a failed command (default false)"
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "how long to wait for the app to start in headless Chromium (default 120000)"
+        },
+        "webgl": {
+          "type": "boolean",
+          "description": "force the WebGL2 backend (?webgl; default true in headless)"
+        }
+      },
+      "required": [
+        "mod",
+        "scene",
+        "commands"
       ],
       "additionalProperties": false
     }

@@ -175,13 +175,13 @@ export async function runVectorcraftExecTests(test: TestFn, assert: AssertFn, eq
   const after = existsSync(sceneAbs) ? JSON.parse(readFileSync(sceneAbs, "utf8")) as { shapes: Record<string, { paths: { d: string; transform?: number[] }[] }> } : null;
   rmSync(sceneAbs, { force: true });
   test("vectorcraftExec (real, headless): opens body.svg, shape.rectangle, exports, re-origins and replaces the shape in the scene file; returns a screenshot PNG path", () => {
-    assert(made.ok, `scene created: ${made.error || ""}`);
+    assert(made.ok === true, `scene created: ${made.error || ""}`);
     assert(!runErr && !!run, runErr);
     const r = run!;
     if (r.skipped) { console.log(`  (skipped: ${r.reason})`); return; }
     assert(r.ok, JSON.stringify({ error: r.error, results: r.results }).slice(0, 600));
     eq(r.results.length, 1); eq(r.results[0]!.ok, true);
-    assert(r.applied && r.applied.shapeId === "body" && r.applied.paths === 3, JSON.stringify(r.applied));
+    assert(!!r.applied && r.applied.shapeId === "body" && r.applied.paths === 3, JSON.stringify(r.applied));
     eq(JSON.stringify(r.reorigin), JSON.stringify({ dx: -44, dy: -34 }), "body's viewBox origin undone");
     assert(!!after, "the scene file exists");
     const paths = after!.shapes.body!.paths;

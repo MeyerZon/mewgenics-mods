@@ -52,7 +52,7 @@ the linked docs; this page is the map.
 
 ### The toolkit we built (`editor/`)
 - A data-layer mod editor: a GON engine + overlay/merge engine + 4-check validator as the single source of truth, a
-  hand-rolled **MCP server** (`mewgenics-editor`, 23 tools incl. art authoring, for agents), and a React + TypeScript **web UI** built by
+  hand-rolled **MCP server** (`mewgenics-editor`, 26 tools incl. art authoring and `vectorcraft_exec`, for agents), and a React + TypeScript **web UI** built by
   Vite (Data + Art modes, IDE-style, with onboarding; zod at the `/api` boundary — `editor-ts-react-plan.md`). **Art mode** has a hand-written SWF emitter, SVG import, and a
   WebGL in-game-faithful preview. Validated: 77 unit + 33 Playwright e2e tests, typecheck clean. Overview:
   **[../README.md](../README.md)**; art design/plan: **[art-preview-plan.md](art-preview-plan.md)**.
@@ -94,6 +94,13 @@ the linked docs; this page is the map.
   `VENDORED.json` (per-file SHA-256; `npm run vendor:vectorcraft:check`). The zip is cached in `editor/data/vendor/`;
   offline the script prints `(skipped: …)` and the build goes on. Served from the editor's own origin (`.wasm` as
   `application/wasm`, `.ttf` as `font/ttf`), embedded as a same-origin `<iframe>` per upstream `HOSTING.md`.
+  **Agent channel (2026-10-22):** MCP `vectorcraft_exec` serves that folder from a throwaway loopback server, boots it
+  in Playwright's headless Chromium (the devDependency; SwiftShader WebGL2, ~0.5–4 s to `window.vectorcraft`) and
+  drives the same promise API the Art tab uses (`execute` over ~1,090 engine commands, `app.export` → SVG, Playwright's
+  `page.screenshot` for the PNG — the web build's own `ui.screenshot` answers only `{ width, height }`). Observed
+  re-origin: our `viewBox="x y w h"` becomes the artboard at 0,0, coordinates shift by (−x, −y), exports are always
+  `viewBox="0 0 w h"`; `svg-reorigin.ts` undoes it. `vectorcraft-cli mcp --headless` (the native route) would need an
+  install and was not asked for.
 - Built since 2026-10-20: art MCP tools (#62), clip authoring / Timeline tab (#66), the cat rig / Rig tab (#67), text
   (#69), the SVG round trip (#70). Not possible: PlaceObject3 filters (#65) and `ImportAssets2` imports (#71) — see
   `docs/art-preview-plan.md` §8 item 10.
