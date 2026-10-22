@@ -1,0 +1,7 @@
+// _modelnames (test-only, 3D phase M3 "@Name"): named models declared once; units refer to them by name.
+// Appended to the base registry mods/fw-3d ships (data/models.gon), merged by the game's own GON loader.
+NameBox {
+	file "models/name-box.gltf"
+	scale 0.8
+	yaw 45
+}

@@ -22,6 +22,9 @@ import * as pack from "./pack.ts";
 import * as levelio from "./level/level-io.ts";
 import * as levelart from "./level/level-art.ts";
 import type { LvlFile } from "./level/lvl.ts";
+import { embeddedBaseColorImage, conventionTexturePath } from "./art/glb-texture.ts";
+import { decodePng } from "./art/png.ts";
+import { modelPathProblem } from "./model3d.ts";
 export { listVanillaSwfs, readVanillaSwf, vanillaSwfDir } from "./art/art-io.ts";
 import { checkInstalledBuild } from "./bindings/check.ts";
 import { portManifest, renderPortReport } from "./bindings/port.ts";
@@ -94,7 +97,7 @@ export interface ComponentKeyInfo {
   children: string | null;
   scalar: string | null;
   required: string[];
-  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string; confidence: string; evidence?: string; note?: string }>;
+  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string; confidence: string; unread?: boolean; evidence?: string; note?: string }>;
 }
 
 /** Search C++ component class names, optionally with where-used. */
@@ -267,6 +270,62 @@ export function readArtAsset(modName: string, relPath: string) {
 export function writeArtAsset(modName: string, relPath: string, bytes: Uint8Array) {
   return artio.writeModBytes(modName, relPath, bytes);
 }
+export interface ExtractModelTextureResult {
+  ok: boolean;
+  error?: string;
+  /** a model code (model-codes.ts) when ok is false */
+  code?: string;
+  /** mods/<mod>/textures/models/<stem>.png */
+  path?: string;
+  bytes?: number;
+  width?: number;
+  height?: number;
+  /** where the image was in the model file: "bufferView N" or "data-uri" */
+  source?: string;
+  written?: boolean;
+  /** findings about the PNG itself (the DLL's decoder limits) */
+  findings: { code: string; message: string }[];
+  note?: string;
+}
+
+/**
+ * Write a glTF model's EMBEDDED base-colour PNG (a .glb bufferView or a data: URI) to the convention path
+ * mods/<mod>/textures/models/<stem>.png, so it can be edited as a file (design: docs/3d-importer-design.md §3.3 item 3).
+ * Refuses to overwrite unless `overwrite`; `dryRun` writes nothing. The write goes through the mod write guard
+ * (art-io writeModBytes -> repo.ts resolveModWritePath: inside mods/<mod>/ only, never saves/, never game files).
+ * Since M3 the DLL draws the embedded image itself and prefers it over the convention file: to draw the extracted
+ * (edited) file, name it explicitly (graphics.model { texture "models/<stem>.png" }) or remove the image from the model.
+ */
+export function extractModelTexture(modName: string, modelPath: string, opts: { overwrite?: boolean; dryRun?: boolean } = {}): ExtractModelTextureResult {
+  const problem = modelPathProblem(modelPath);
+  if (problem) return { ok: false, code: "model-path-invalid", error: `${modelPath}: ${problem}`, findings: [] };
+  if (modelPath.endsWith(".obj")) return { ok: false, code: "model-extension", error: "an OBJ model has no embedded image (only .glb / .gltf can embed one)", findings: [] };
+  const read = artio.readModBytes(modName, modelPath);
+  if (!read.ok) return { ok: false, code: "model-file-missing", error: read.error, findings: [] };
+  const img = embeddedBaseColorImage(read.bytes);
+  if (!img.ok) return { ok: false, code: img.code, error: img.error, findings: [] };
+  const findings: { code: string; message: string }[] = [];
+  let width: number | undefined, height: number | undefined;
+  try {
+    const d = decodePng(img.bytes);
+    width = d.width; height = d.height;
+    if (d.width > 2048 || d.height > 2048) findings.push({ code: "model-image-embedded-unsupported", message: `${d.width}x${d.height}: the DLL decodes up to 2048 px per side` });
+    else if (d.width > 1024 || d.height > 1024) findings.push({ code: "model-texture-size", message: `${d.width}x${d.height}: larger than 1024 px (no mipmaps: it shimmers)` });
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    findings.push({ code: /interlaced|bit depth|not supported/.test(m) ? "model-image-embedded-unsupported" : "model-image-embedded-invalid", message: m });
+  }
+  const rel = conventionTexturePath(modelPath);
+  const path = `mods/${modName}/${rel}`;
+  const exists = artio.readModBytes(modName, rel).ok;
+  if (exists && !opts.overwrite) return { ok: false, error: `${path} already exists (pass overwrite: true to replace it)`, path, findings };
+  const note = `the DLL draws ${modelPath}'s embedded image before the convention file; to draw ${path} instead, set graphics.model { texture "${rel.slice("textures/".length)}" } (an explicit texture wins) or remove the image from the model`;
+  if (opts.dryRun) return { ok: true, path, bytes: img.bytes.length, width, height, source: img.source, written: false, findings, note };
+  const w = artio.writeModBytes(modName, rel, img.bytes);
+  if (!w.ok) return { ok: false, error: w.error, findings };
+  return { ok: true, path: w.path, bytes: w.bytes, width, height, source: img.source, written: true, findings, note };
+}
+
 export function readArtPalette(which?: Parameters<typeof readPalette>[0]) {
   const p = readPalette(which);
   return { ...p, hints: knownRowHints(), defaultAbc: DEFAULT_ABC_MODE };

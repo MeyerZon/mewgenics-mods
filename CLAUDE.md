@@ -26,10 +26,13 @@ These are enforced in code and in the launch flow; keep them intact.
   `launch-dev.bat`) so it writes isolated `*dev*` saves. The editor refuses any write outside `mods/<name>/` and any
   write under a `saves/` path — with one owner-approved exception (2026-10-20): before a `.mewtest` script that
   says `enter Campaign`, the in-game runner moves the harness's own disposable slot `mewtest01.sav` aside into the
-  run dir (`savecheck.resetCampaignSlot`: a rename of that one name, never a delete, never another file).
+  run dir (`savecheck.resetCampaignSlot`: a rename of that one name, never a delete, never another file); extended
+  by the owner (2026-10-22) to the game's own backups of that slot: the runner may move `saves/backups/mewtest01_*.savbackup`
+  (only those names) into the run dir the same way, by rename, never a delete.
 - **Never commit game bytes or assets.** `.gitignore` excludes `.extracted/`, `.analysis/`, `*.gpak/exe/dll/wav/ogg/swf/sav`,
   `editor/node_modules/`, and `editor/data/`. Keep it that way; the only game-derived data tracked is short byte
-  signatures in `bindings/`.
+  signatures in `bindings/`, plus `editor/component-schema.json` (owner, 2026-10-22: it stays tracked), which holds
+  names and format facts derived from RE (class and key names, defaults, evidence paths), not game bytes.
 - Keep Steam launch options empty so plain (non-dev) launches stay vanilla and never see mod data.
 
 ### Flagged sources — do not fetch
@@ -83,7 +86,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   the editor from a git worktree").
 - `npm test` — the full unit suite (`node test/run-tests.ts`: GON, overlays, validator, art, the in-game runner
   against a fake game, an MCP spawn smoke, the bindings library against fake PE images and the installed exe;
-  ~250 checks). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
+  1256 checks on 2026-10-22, all sections present). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
   reports the skipped count. Without `.extracted/` the data-dependent sections print `(skipped: …)` and the suite
   still exits 0 (a nested run with `MEWGENICS_EXTRACTED_DATA` pointing at an empty dir checks that on every run).
   `tools/gpak.py` is covered by `test/gpak-tests.ts` on a synthetic archive (needs a Python 3 on PATH, else skips).
@@ -103,8 +106,8 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   Steam running and `native/dist/mewframework.dll` + `mewtest.dll`; otherwise it skips naming the missing piece.
   Agents may run it unprompted (owner decision 2026-10-18); it hides the window and hashes the real save
   before/after. Same thing for agents: MCP `run_ingame_test { mod, test | script }`.
-- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (31 tools, incl. the art tools
-  with `import_bitmap` (a PNG as a raster sprite / background plate / bitmap fill), `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
+- `npm run mcp` — the MCP stdio server. Registered with Claude Code as `mewgenics-editor` (32 tools, incl. the art tools
+  with `import_bitmap` (a PNG as a raster sprite / background plate / bitmap fill), `extract_model_texture` (a .glb's embedded PNG into the mod), `bake_glow` and `vectorcraft_exec` (draws on a shape in the vendored VectorCraft headlessly via Playwright's
   Chromium), `check_game_build`, `port_bindings`, the room tools `read_level` / `write_level`, and `pack_mod` / `install_mod`).
 - `npm run pack -- <mod> [--force] [--init]` — ship a mod: needs `mods/<mod>/mod.json` (name, version, author,
   description, `gameBuild` = the Steam build id; `--init` drafts it), rebuilds its SWFs, refuses on validator errors
@@ -129,8 +132,9 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   the cat rig redirect rules (registry, `_CatRig_` exports, the SymbolClass list scan), Joker's Luck's reroll, the 3D observer's rules, the
   mesh draw (4x4 maths, the C std::function, GL save/restore, shader dialect), the OBJ / glTF loaders + JSON tokenizer,
   the 3D-object registry, per-unit models, the GON walker, the glTF loader, mesh textures + palette, the sprite/mesh
-  painter order, the harness's modules, the cat rig sample's bind loop; 441 checks = 14 + 7 + 16 + 15 + 14 + 15 + 27 + 5 + 4 + 10 + 12 + 11 + 30 + 41 + 16 + 8 + 10 + 8 + 31 + 10 + 12 + 118 + 7
-  in 23 suites, `-Werror`),
+  painter order, the M3 named models, hide_sprite, unit facing, PNG decoder + embedded model textures, unit palette
+  row and per-band mesh slices, the harness's modules, the cat rig sample's bind loop; 502 checks = 14 + 8 + 16 + 15 + 14 + 15 + 27 + 5 + 10 + 12 + 11 + 30 + 41 + 16 + 11 + 8 + 8 + 33 + 10 + 13 + 6 + 7 + 15 + 4 + 10 + 6 + 8 + 4 + 118 + 7
+  in 30 suites, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.

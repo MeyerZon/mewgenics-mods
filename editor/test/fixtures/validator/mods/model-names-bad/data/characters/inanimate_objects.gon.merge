@@ -1,0 +1,13 @@
+// an unknown name, and a reference to a declared (but refused) entry: the entry is reported at the registry, not here
+Crate {
+	graphics {
+		model "@Nope"
+	}
+}
+Rock {
+	graphics {
+		model {
+			file "@Chain"
+		}
+	}
+}

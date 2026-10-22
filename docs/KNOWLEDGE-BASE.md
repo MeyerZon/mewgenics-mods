@@ -241,6 +241,7 @@ PR; everything else is on `main`.
 
 | Doc | What it covers |
 |---|---|
+| [feature-inventory.md](feature-inventory.md) | What the toolkit can do on `main`, one verified line per feature (data mods, `FW_*` API, 3D, harness directives, validator codes, MCP tools, scripts) |
 | [engine-map.md](engine-map.md) | Build identity, engine subsystems, RVAs, data model, native status pipeline, SWF loader / display / cat parts / glows / localization, dev scenes, save safety |
 | [data-mods.md](data-mods.md) | `-modpaths` + GON overlay semantics (fidelity tables, typing), content shapes, lighting/tint knobs, localized text, data↔native pairing |
 | [spatial-model.md](spatial-model.md) | 2D-vs-3D verdict and the coordinate/grid/rendering evidence |

@@ -1,0 +1,301 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "mods": "dev-sandbox, fw-3d, _unitpal",
+  "grey": 153,
+  "topShade": 0.896108908109597,
+  "shots": [
+    "shot-pal-a.png",
+    "shot-pal-b.png"
+  ],
+  "units": [
+    {
+      "entry": "TomTom",
+      "handle": 1,
+      "row": 9,
+      "base": 9,
+      "override": -1,
+      "note": null
+    },
+    {
+      "entry": "Mangy",
+      "handle": 2,
+      "row": 16,
+      "base": 16,
+      "override": -1,
+      "note": null
+    },
+    {
+      "entry": "Rat",
+      "handle": 3,
+      "row": -1,
+      "base": null,
+      "override": null,
+      "note": "no CatParts: not a cat, colours as authored"
+    }
+  ],
+  "judgement": {
+    "verdict": "distinct-rows",
+    "pass": true,
+    "column": 8,
+    "units": [
+      {
+        "entry": "TomTom",
+        "handle": 1,
+        "row": 9,
+        "loggedRows": [
+          9
+        ],
+        "target": [
+          255,
+          249,
+          233
+        ],
+        "counts": {
+          "row9": 12946,
+          "row16": 0
+        },
+        "shot": 0,
+        "ok": true
+      },
+      {
+        "entry": "Mangy",
+        "handle": 2,
+        "row": 16,
+        "loggedRows": [
+          16
+        ],
+        "target": [
+          223,
+          223,
+          223
+        ],
+        "counts": {
+          "row16": 13054,
+          "row9": 0
+        },
+        "shot": 1,
+        "ok": true
+      },
+      {
+        "entry": "Rat",
+        "handle": 3,
+        "row": -1,
+        "loggedRows": [
+          -1
+        ],
+        "target": null,
+        "counts": {
+          "row9": 0,
+          "row16": 0
+        },
+        "shot": 0,
+        "ok": true
+      }
+    ]
+  },
+  "sprite": [
+    {
+      "entry": "TomTom",
+      "row": 9,
+      "counts": {
+        "row9": 115,
+        "row16": 55
+      }
+    },
+    {
+      "entry": "Mangy",
+      "row": 16,
+      "counts": {
+        "row9": 15,
+        "row16": 283
+      }
+    },
+    {
+      "entry": "Rat",
+      "row": -1,
+      "counts": {
+        "row9": 0,
+        "row16": 0
+      }
+    }
+  ],
+  "palette": {
+    "rows": {
+      "9": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          104,
+          104,
+          104
+        ],
+        [
+          104,
+          104,
+          104
+        ],
+        [
+          175,
+          169,
+          157
+        ],
+        [
+          175,
+          169,
+          157
+        ],
+        [
+          130,
+          124,
+          118
+        ],
+        [
+          130,
+          124,
+          118
+        ],
+        [
+          255,
+          249,
+          233
+        ],
+        [
+          255,
+          249,
+          233
+        ],
+        [
+          241,
+          210,
+          210
+        ],
+        [
+          241,
+          210,
+          210
+        ],
+        [
+          255,
+          208,
+          249
+        ],
+        [
+          255,
+          208,
+          249
+        ],
+        [
+          242,
+          226,
+          214
+        ],
+        [
+          242,
+          226,
+          214
+        ],
+        [
+          255,
+          255,
+          255
+        ]
+      ],
+      "16": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          198,
+          182,
+          156
+        ],
+        [
+          198,
+          182,
+          156
+        ],
+        [
+          196,
+          190,
+          184
+        ],
+        [
+          196,
+          190,
+          184
+        ],
+        [
+          234,
+          233,
+          229
+        ],
+        [
+          234,
+          233,
+          229
+        ],
+        [
+          223,
+          223,
+          223
+        ],
+        [
+          223,
+          223,
+          223
+        ],
+        [
+          201,
+          201,
+          201
+        ],
+        [
+          201,
+          201,
+          201
+        ],
+        [
+          223,
+          223,
+          223
+        ],
+        [
+          223,
+          223,
+          223
+        ],
+        [
+          241,
+          241,
+          241
+        ],
+        [
+          241,
+          241,
+          241
+        ],
+        [
+          255,
+          255,
+          255
+        ]
+      ]
+    }
+  },
+  "run": {
+    "verdict": "pass",
+    "reason": "all 2 expectation(s) passed; 2 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "editor/data/ingame-runs/20261022-160700-_unitpal-unit-palette",
+    "glErrors": [],
+    "shotsCheck": {
+      "status": "ok",
+      "detail": "2 distinct of 2"
+    }
+  }
+}

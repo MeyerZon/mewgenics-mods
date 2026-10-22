@@ -153,7 +153,8 @@ static void fg_bool(int i, const char *name, int b) {
  *          27 hide_sprite true } } }
  * 34 Bad { 35 graphics { 36 model { 37 file "models/b.obj"  38 scale -1  39 yaw "left"  40 offset [43 1 44 2]
  *          41 tint "red"  42 palette 1 } } }
- * 45 NoFile { 46 graphics { 47 model { 48 scale 2 } } } */
+ * 45 NoFile { 46 graphics { 47 model { 48 scale 2 } } }
+ * 49 BadHide { 50 graphics { 51 model { 52 file "models/h.obj"  53 hide_sprite 1 } } } */
 static void fg_tree_blocks(void) {
     fg_tree();
     fg_container(16, "Box", 3, 17, 1);
@@ -189,6 +190,11 @@ static void fg_tree_blocks(void) {
     fg_container(46, "graphics", 3, 47, 1);
     fg_container(47, "model", 3, 48, 1);
     fg_number(48, "scale", 2.0, "2");
+    fg_container(49, "BadHide", 3, 50, 1);
+    fg_container(50, "graphics", 3, 51, 1);
+    fg_container(51, "model", 3, 52, 2);
+    fg_scalar(52, "file", 1, "models/h.obj");
+    fg_number(53, "hide_sprite", 1.0, "1");
 }
 static int dnear(double a, double b) { return a - b < 1e-9 && b - a < 1e-9; }
 
@@ -204,6 +210,7 @@ TEST(model_block_defaults) {
     CHECK(m.tint[0] == 1.0f && m.tint[1] == 1.0f && m.tint[2] == 1.0f && m.tint[3] == 1.0f);
     CHECK_EQ(m.palette, -1);
     CHECK_EQ(m.doubleSided, -1);
+    CHECK_EQ(m.hideSprite, -1);
     CHECK_EQ(m.invalid, 0);
 }
 
@@ -236,7 +243,8 @@ TEST(model_block_reads_every_key_of_the_block_form) {
     CHECK(m.tint[0] == 1.0f && m.tint[1] == 0.5f && m.tint[2] == 0.25f && m.tint[3] == 1.0f);   /* 3 numbers: alpha 1 */
     CHECK_EQ(m.palette, 0);
     CHECK_EQ(m.doubleSided, 1);
-    CHECK_EQ(m.invalid, 0);                                                    /* hide_sprite: unknown here, ignored */
+    CHECK_EQ(m.hideSprite, 1);                                                 /* M3: hide_sprite true */
+    CHECK_EQ(m.invalid, 0);
 }
 
 TEST(model_block_bad_values_keep_their_defaults_and_set_their_bits) {
@@ -252,6 +260,18 @@ TEST(model_block_bad_values_keep_their_defaults_and_set_their_bits) {
     CHECK_EQ(fw_gon_model_block(fg_mem_read, NULL, fg_node(45), &m), 0);   /* a block without file */
     CHECK_EQ(m.invalid & FW_GON_MODEL_BAD_FILE, FW_GON_MODEL_BAD_FILE);
     CHECK_STR(m.file, "");
+    CHECK_EQ(m.hideSprite, -1);
+}
+
+TEST(model_block_hide_sprite_not_a_bool_keeps_the_default_and_sets_its_bit) {
+    fg_tree_blocks();
+    FwGonModel m;
+    CHECK_EQ(fw_gon_model_block(fg_mem_read, NULL, fg_node(49), &m), 1);   /* the model still draws */
+    CHECK_STR(m.file, "models/h.obj");
+    CHECK_EQ(m.hideSprite, -1);                                             /* a bad value never hides the sprite */
+    CHECK_EQ(m.invalid, FW_GON_MODEL_BAD_HIDE_SPRITE);
+    CHECK_EQ(fw_gon_model_block(fg_mem_read, NULL, fg_node(0), &m), 1);     /* the string form: not given */
+    CHECK_EQ(m.hideSprite, -1);
 }
 
 TEST(model_block_unreadable_block_children_is_minus_one) {

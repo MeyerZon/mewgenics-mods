@@ -1,0 +1,9 @@
+# T2 2026-10-22, build 25143593: mods/_modelnames/tests/model-names.mewtest with the mods listed _modelnames, fw-3d, dev-sandbox (fw-3d SECOND),
+# run 20261022-160622: the game's Mod Path lines (debug.log, verbatim after 'Mod Path:') and the named-model lines of mewframework.log.
+# fw-3d holds the base data/models.gon; _modelnames's data/models.gon.append sits on a path listed BEFORE it and was not applied.
+Mod Path: C:\OldBackUp\My Programming Stuff\experiments\mewgenics-mods\.claude\worktrees\mesh3-name\mods\_modelnames
+Mod Path: C:\OldBackUp\My Programming Stuff\experiments\mewgenics-mods\.claude\worktrees\mesh3-name\mods\fw-3d
+Mod Path: C:\OldBackUp\My Programming Stuff\experiments\mewgenics-mods\.claude\worktrees\mesh3-name\mods\dev-sandbox
+model names: data/models.gon: 1 entry: FwCrate (GonResource 0000017ce6ecd260)
+mesh: @NameBox: model-name-unknown: no data/models.gon entry named NameBox (unit Rat; 1 named model) — drawing the 2D clip
+mesh: @NoSuchModel: model-name-unknown: no data/models.gon entry named NoSuchModel (unit Pooter; 1 named model) — drawing the 2D clip

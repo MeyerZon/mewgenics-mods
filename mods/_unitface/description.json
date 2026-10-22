@@ -1,0 +1,7 @@
+{
+  "title": "Unit model facing probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for the 3D phase M3 unit facing: the vanilla Rat gains `graphics { model { file \"models/face-box.obj\" yaw 0 } }`, a 0.6-tile box with a cyan front face and a yellow back face, so a turned Rat shows its model turned (the cyan face toward the camera when it faces front, the yellow one when it faces away). Load it with fw-3d (the mesh shader): `mods: _unitface, fw-3d`. Never for play.",
+  "requirements": []
+}

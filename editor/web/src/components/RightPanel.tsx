@@ -113,7 +113,7 @@ function ComponentKeys({ components }: { components: ComponentSearchResult }): R
       {keys.length === 0 ? <small className="muted">no keys of its own (scalar form = stacks)</small> : null}
       {keys.map(([k, v]) => (
         <div key={k} className="ck">
-          <code>{k}</code> <small className="muted">{`${v.type}${v.default !== null ? ` = ${String(v.default)}` : ""}${v.required ? " (required)" : ""}${v.from !== c.name ? ` · from ${v.from}` : ""}`}</small>
+          <code>{k}</code> <small className="muted">{`${v.type}${v.default !== null ? ` = ${String(v.default)}` : ""}${v.required ? " (required)" : ""}${v.unread ? " (vanilla writes it; the game ignores it)" : ""}${v.from !== c.name ? ` · from ${v.from}` : ""}`}</small>
         </div>
       ))}
       {c.children ? <small className="muted">{`also takes ${c.children} names as children`}</small> : null}

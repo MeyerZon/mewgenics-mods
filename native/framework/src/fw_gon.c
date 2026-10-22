@@ -135,6 +135,7 @@ void fw_gon_model_defaults(FwGonModel *m) {
     for (int k = 0; k < 4; k++) m->tint[k] = 1.0f;
     m->palette = -1;
     m->doubleSided = -1;
+    m->hideSprite = -1;
 }
 
 /* an array of numbers at key under block into v (n in [minN, maxN]): 1 ok (*got = n), 0 missing, 2 wrong shape, -1 unreadable */
@@ -171,12 +172,35 @@ static int read_bool(FwMemRead rd, void *u, const unsigned char *block, const ch
     return 1;
 }
 
+int fw_gon_children(FwMemRead rd, void *u, const void *node, const void **begin, long *count) {
+    if (begin) *begin = NULL;
+    if (count) *count = 0;
+    int type = 0;
+    if (!rd || !node || !begin || !count || !rd(u, (const unsigned char *)node + OFF_GON_TYPE, &type, sizeof type)) return -1;
+    if (type != FW_GON_TYPE_OBJECT && type != FW_GON_TYPE_ARRAY) return 0;
+    const unsigned char *b = NULL;
+    long c = 0;
+    if (children(rd, u, (const unsigned char *)node, &b, &c) < 0) return -1;
+    *begin = b;
+    *count = c;
+    return 1;
+}
+
 int fw_gon_model_block(FwMemRead rd, void *u, const void *gonEntry, FwGonModel *out) {
     if (!out) return -1;
     fw_gon_model_defaults(out);
     const unsigned char *node = NULL;
     int type = 0, r = typed(rd, u, gonEntry, "graphics.model", &node, &type);
     if (r != 1) return r;
+    return fw_gon_model_node(rd, u, node, out);
+}
+
+int fw_gon_model_node(FwMemRead rd, void *u, const void *nodeIn, FwGonModel *out) {
+    if (!out) return -1;
+    fw_gon_model_defaults(out);
+    const unsigned char *node = (const unsigned char *)nodeIn;
+    int type = 0, r;
+    if (!rd || !node || !rd(u, node + OFF_GON_TYPE, &type, sizeof type)) return -1;
     if (type == FW_GON_TYPE_STRING) {
         if (!read_str(rd, u, node + OFF_GON_TEXT, out->file, sizeof out->file)) { out->file[0] = 0; return -1; }
         return 1;
@@ -196,20 +220,20 @@ int fw_gon_model_block(FwMemRead rd, void *u, const void *gonEntry, FwGonModel *
     r = typed(rd, u, node, "scale", &k, &type);
     if (r < 0) return -1;
     if (r == 1) {
-        if (type == FW_GON_TYPE_NUMBER && fw_gon_get_number(rd, u, k, "", &d) == 1 && d > 0) m.scale = d;
+        if (type == FW_GON_TYPE_NUMBER && fw_gon_get_number(rd, u, k, "", &d) == 1 && d > 0) { m.scale = d; m.given |= FW_GON_MODEL_HAS_SCALE; }
         else m.invalid |= FW_GON_MODEL_BAD_SCALE;
     }
     /* yaw: a number */
     r = typed(rd, u, node, "yaw", &k, &type);
     if (r < 0) return -1;
     if (r == 1) {
-        if (type == FW_GON_TYPE_NUMBER && fw_gon_get_number(rd, u, k, "", &d) == 1) m.yaw = d;
+        if (type == FW_GON_TYPE_NUMBER && fw_gon_get_number(rd, u, k, "", &d) == 1) { m.yaw = d; m.given |= FW_GON_MODEL_HAS_YAW; }
         else m.invalid |= FW_GON_MODEL_BAD_YAW;
     }
     /* offset: exactly 3 numbers */
     r = read_numbers(rd, u, node, "offset", v, 3, 3, &n);
     if (r < 0) return -1;
-    if (r == 1) for (int i = 0; i < 3; i++) m.offset[i] = v[i];
+    if (r == 1) { for (int i = 0; i < 3; i++) m.offset[i] = v[i]; m.given |= FW_GON_MODEL_HAS_OFFSET; }
     else if (r == 2) m.invalid |= FW_GON_MODEL_BAD_OFFSET;
     /* texture: a string */
     r = typed(rd, u, node, "texture", &k, &type);
@@ -221,7 +245,7 @@ int fw_gon_model_block(FwMemRead rd, void *u, const void *gonEntry, FwGonModel *
     /* tint: 3 or 4 numbers */
     r = read_numbers(rd, u, node, "tint", v, 3, 4, &n);
     if (r < 0) return -1;
-    if (r == 1) { for (int i = 0; i < n; i++) m.tint[i] = (float)v[i]; if (n == 3) m.tint[3] = 1.0f; }
+    if (r == 1) { for (int i = 0; i < n; i++) m.tint[i] = (float)v[i]; if (n == 3) m.tint[3] = 1.0f; m.given |= FW_GON_MODEL_HAS_TINT; }
     else if (r == 2) m.invalid |= FW_GON_MODEL_BAD_TINT;
     /* palette, double_sided: bools */
     int b = 0;
@@ -231,6 +255,11 @@ int fw_gon_model_block(FwMemRead rd, void *u, const void *gonEntry, FwGonModel *
     r = read_bool(rd, u, node, "double_sided", &b);
     if (r < 0) return -1;
     if (r == 1) m.doubleSided = b; else if (r == 2) m.invalid |= FW_GON_MODEL_BAD_DOUBLE_SIDED;
+    /* hide_sprite (M3, fw_mesh_hide.h): a bool; a bad value keeps -1, so the sprite stays */
+    r = read_bool(rd, u, node, "hide_sprite", &b);
+    if (r < 0) return -1;
+    if (r == 1) m.hideSprite = b; else if (r == 2) m.invalid |= FW_GON_MODEL_BAD_HIDE_SPRITE;
     *out = m;
     return 1;
 }
+
