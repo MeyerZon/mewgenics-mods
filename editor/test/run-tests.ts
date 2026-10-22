@@ -419,6 +419,14 @@ if (BASE_READY) {
   if (vt) vt.runValidatorTests(test, assert, eq);
 }
 
+// ---- 4c. Sounds and music (WAV rules, gpak index, sound sets, audio validator findings; T1 on the pack) ----
+console.log("\n# Audio (sounds and music)");
+{
+  let at: typeof import("./audio-tests.ts") | null = null;
+  try { at = await import("./audio-tests.ts"); } catch (e) { test("audio-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (at) at.runAudioTests(test, assert, eq);
+}
+
 // ---- 5. MCP smoke test ------------------------------------------------------
 /** The `tools/call` result shape the smoke reads (MCP content blocks). */
 interface ToolCallResult {
