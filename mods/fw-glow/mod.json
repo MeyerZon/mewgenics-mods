@@ -1,0 +1,9 @@
+{
+  "name": "fw-glow",
+  "version": "0.1.0",
+  "author": "MeyerZon",
+  "description": "The data half of mewframework per-unit glow (API v4, FW_SetUnitGlow): the rim shader shaders/fw_unit_glow.shader that the framework loads as material fw_unit_glow. Load it next to any mod that calls FW_SetUnitGlow. Changes no game content.",
+  "gameBuild": "25143593",
+  "license": "MIT",
+  "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
+}

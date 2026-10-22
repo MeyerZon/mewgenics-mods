@@ -1,0 +1,9 @@
+{
+  "name": "dev-sandbox",
+  "version": "0.1.0",
+  "author": "MeyerZon",
+  "description": "Development sandbox: small .merge/.append overlays (a difficulty, an ability) and one art scene that check -modpaths loading end to end. Not gameplay content.",
+  "gameBuild": "25143593",
+  "license": "MIT",
+  "attribution": "Made with mewgenics-mods (https://github.com/MeyerZon/mewgenics-mods)."
+}
