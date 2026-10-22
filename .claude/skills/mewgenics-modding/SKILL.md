@@ -121,9 +121,19 @@ exportTo?, screenshot? }`**: the vendored VectorCraft web build starts in Playwr
 installed), the shape's SVG becomes its artboard (the viewBox moved to 0,0 — command coordinates are artboard px),
 the commands run through `window.vectorcraft.execute` (`shape.rectangle { x, y, width, height }`, `shape.ellipse`,
 `path.create { d }`, `object.move { dx, dy }`, …), the export is re-origined and replaces `exportTo` in the scene file;
-it answers `skipped: true` with the reason when the build is not vendored. The server has 26 tools; the art ones are
-`list_art_scenes`, `read_art_scene`, `write_art_scene`, `new_art_scene`, `import_svg`, `export_svg`, `bake_glow`,
-`build_swf`, `inspect_swf`, `vectorcraft_exec`.
+it answers `skipped: true` with the reason when the build is not vendored. The server has 27 tools; the art ones are
+`list_art_scenes`, `read_art_scene`, `write_art_scene`, `new_art_scene`, `import_svg`, `import_bitmap`, `export_svg`,
+`bake_glow`, `build_swf`, `inspect_swf`, `vectorcraft_exec`.
+
+**Raster art and fonts (OBSERVED 2026-10-22, `docs/art-pipeline.md` "Raster art" / "Fonts").** Not only vectors: the
+game draws PNG bitmaps natively (every vanilla combat background is a 2000×1500 bitmap plate). `import_bitmap { mod,
+base64 | file, scene, mode: sprite | background | fill, scale, repeat, smooth: false }` adds `<id>Bmp`, the shape `<id>`
+and (sprite / background) a 1-frame clip `<id>Clip` exported for `graphics.movieclip` or a tileset's
+`combat_background` (`data/tilesets.gon.merge`); keep both sides < 4096 (`bitmap-too-large`), author at ≥ 1.7 texels
+per clip px for crisp 1440p (`bitmap-upscaled`), `smooth: false` for pixel art, `repeat: true` to tile. Gray texels
+are palette-remapped on a paletted (cat) unit like `gray:N`. A mod font is `scene.fonts.<Id> = { ascent, descent,
+glyphs: { "A": { d, advance } } }` (em 1024, y down, baseline 0) and `texts[].font: "<Id>"`; a missing glyph falls back
+to another font (`font-glyph-missing`); **a font class nobody exports crashes the game** (`font-class-unknown`).
 
 What the game does with a mod's SWF (OBSERVED 2026-10-20/21, build 25143593; `editor/src/core/art/engine-behaviour.ts`):
 

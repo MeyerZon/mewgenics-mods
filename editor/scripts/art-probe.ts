@@ -21,6 +21,9 @@
 // control _artprobe/render-tileset-control.mewtest (no overlay) and write tileset-summary.json: the marker per shot
 // (baseline before `spawn Rat`, two after) and the outcome (probe-outcomes.ts tilesetOutcome). `--loctext --from <runDir>`
 // re-reads an earlier run's report.json and shots instead of launching the game.
+// --raster (2026-10-22): write the big generated PNGs (art/generated/), build art/raster.scene.json, patch its
+// missing-font text's class (patchMissingFontClass), run render-raster / render-raster-cat / render-font-missing,
+// _bgprobe/render-backdrop and the control render-tileset-control, and write raster-summary.json (probe-raster.ts).
 // Exit 0 when the run passed and the marker was found in at least one shot, 1 otherwise, 2 when the game cannot run.
 //   node scripts/art-probe.ts [--json]
 
