@@ -451,7 +451,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_touchedPassives")!.value, "0xe50");
     for (const e of offs) assert(!!(e.struct && e.exposure.some((x) => "macro" in x)), `${e.name} has struct + macro`);
   });
-  test("25143593.json: GON at runtime (2026-10-22) — HP / shield / stats / base health / the unit's GON entry on Character, the GonObject node layout, every one witnessed in a function that has a .pdata body", () => {
+  test("25143593.json: GON at runtime (2026-10-22) — HP / shield / stats / base health / the unit's GON entry and name key on Character, the GonObject node layout, every one witnessed in a function that has a .pdata body", () => {
     const m = loadManifest(realPath);
     const macro = (n: string) => (entry(m, n)!.exposure[0] as MacroExposure).macro;
     const witness = (n: string) => entry(m, n)!.anchors.witness!;
@@ -462,7 +462,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     eq(entry(m, "Character_stats")!.value, "0x5a0"); eq(macro("Character_stats"), "OFF_CH_STATS"); eq(entry(m, "Character_stats")!.ctype, "int32[7]"); eq(witness("Character_stats").function, "Character_init");
     eq(entry(m, "Character_baseHealth")!.value, "0x5e8"); eq(macro("Character_baseHealth"), "OFF_CH_BASE_HEALTH");
     eq(entry(m, "Character_gonEntry")!.value, "0x240"); eq(macro("Character_gonEntry"), "OFF_CH_GON_ENTRY"); eq(entry(m, "Character_gonEntry")!.ctype, "const GonObject*");
-    eq(entry(m, "Character_gonName")!.value, "0x248"); eq(macro("Character_gonName"), "OFF_CH_GON_NAME");
+    eq(entry(m, "Character_nameKey")!.value, "0x248"); eq(macro("Character_nameKey"), "OFF_CH_NAME_KEY");
     // GonObject (0xb0 bytes): what the harness's walker reads instead of calling the game's getters
     const node: [string, string, string][] = [
       ["GonObject_children", "0x38", "OFF_GON_CHILDREN"], ["GonObject_childrenEnd", "0x40", "OFF_GON_CHILDREN_END"], ["GonObject_int", "0x50", "OFF_GON_INT"],

@@ -131,7 +131,7 @@ static void do_dump(MtRunner *r, const MtHost *h, long id) {
         mt_jw_int(&w, "i", i);
         mt_jw_str(&w, "name", u.name);
         mt_jw_str(&w, "class", u.cls);
-        mt_jw_str(&w, "entry", u.entry);
+        mt_jw_str(&w, "namekey", u.nameKey);
         mt_jw_int(&w, "faction", u.faction);
         mt_jw_int(&w, "move", u.move);
         mt_jw_int(&w, "act", u.act);
@@ -387,7 +387,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             return 1;
         }
         case MT_D_EXPECT_UNIT: {
-            int isStr = d->field == MT_F_NAME || d->field == MT_F_CLASS || d->field == MT_F_ENTRY;
+            int isStr = d->field == MT_F_NAME || d->field == MT_F_CLASS || d->field == MT_F_NAMEKEY;
             char unitText[80];
             unit_text(d, unitText, sizeof unitText);
             if (isStr) snprintf(arg, sizeof arg, "%s %s %s \"%s\"", unitText, mt_unit_field_name(d->field), op_text(d->op), d->a);
@@ -405,7 +405,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             }
             int ok;
             if (isStr) {
-                const char *actual = d->field == MT_F_NAME ? u.name : d->field == MT_F_CLASS ? u.cls : u.entry;
+                const char *actual = d->field == MT_F_NAME ? u.name : d->field == MT_F_CLASS ? u.cls : u.nameKey;
                 int same = strcmp(actual, d->a) == 0;
                 ok = d->op == MT_OP_EQ ? same : !same;
                 snprintf(detail, sizeof detail, "unit %d \"%s\": %s \"%s\"", idx, u.name, mt_unit_field_name(d->field), actual);
@@ -441,7 +441,7 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
                 r->pc++;
                 return 1;
             }
-            const char *entry = u.entry[0] ? u.entry : "?";
+            const char *entry = u.nameKey[0] ? u.nameKey : "?";   /* the name key identifies the unit in the detail */
             const void *node = h->unit_gon ? h->unit_gon(h->user, idx) : NULL;
             if (!node || !h->mem_read) {
                 snprintf(detail, sizeof detail, "unit %d \"%s\" (%s): no GON entry (Character+OFF_CH_GON_ENTRY unreadable)", idx, u.name, entry);

@@ -743,7 +743,7 @@ TEST(runner_dump_with_and_without_units) {
     fk_two_units();
     steps_until_done(5);
     CHECK(has(ev(0), "\"available\":true")); CHECK(has(ev(0), "\"count\":2"));
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"entry\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
     CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\""));
 }
 
@@ -788,7 +788,7 @@ TEST(runner_dump_emits_stacks_parallel_to_statuses) {
     fk_two_units_with_stacks();
     steps_until_done(5);
     CHECK(has(ev(0), "\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[2,7]}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"entry\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[],\"stacks\":[]}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":0,\"shield\":0,\"divineshield\":0,\"strength\":0,\"dexterity\":0,\"constitution\":0,\"intelligence\":0,\"speed\":0,\"charisma\":0,\"luck\":0,\"statuses\":[],\"stacks\":[]}"));
 }
 
 TEST(runner_wait_rounds_advances_on_round_counter) {
@@ -1267,15 +1267,15 @@ TEST(exit_tick_wraparound) {
 }
 
 /* ====================================================================== */
-/* GON at runtime (2026-10-22): the walker, entry/hp/stats in the units    */
-/* event, expect gon, expect unit hp|shield|divineshield|<stat>|entry      */
+/* GON at runtime (2026-10-22): the walker, namekey/hp/stats in the units  */
+/* event, expect gon, expect unit hp|shield|divineshield|<stat>|namekey    */
 /* ====================================================================== */
 static void fk_units_with_numbers(void) {
     fk_two_units();
-    snprintf(fk.units[0].entry, MT_UNIT_NAME, "PlayerCat");
+    snprintf(fk.units[0].nameKey, MT_UNIT_NAME, "PlayerCat");
     fk.units[0].hp = 23; fk.units[0].shield = 2; fk.units[0].divineShield = 1;
     for (int k = 0; k < MT_STAT_COUNT; k++) fk.units[0].stats[k] = 4 + k;       /* 4 5 6 7 8 9 10 */
-    snprintf(fk.units[1].entry, MT_UNIT_NAME, "Pooter");
+    snprintf(fk.units[1].nameKey, MT_UNIT_NAME, "Pooter");
     fk.units[1].hp = 12;
     for (int k = 0; k < MT_STAT_COUNT; k++) fk.units[1].stats[k] = 5;
     fk.units[1].stats[MT_STAT_SPEED] = 15;
@@ -1347,31 +1347,31 @@ TEST(script_expect_gon_parses_number_string_bool_exists_missing_and_rejects_bad_
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
 }
 
-TEST(script_expect_unit_accepts_hp_shield_divineshield_stats_entry_and_negative_ints) {
+TEST(script_expect_unit_accepts_hp_shield_divineshield_stats_namekey_and_negative_ints) {
     char err[256]; int line = 0;
-    const char *s = "expect unit 1 hp == 12\nexpect unit Rat speed >= 15\nexpect unit 0 entry == \"PlayerCat\"\nexpect unit 0 luck != -1\nexpect unit 0 shield == 0\nexpect unit 0 divineshield == 0\nexpect unit 0 constitution > 0\nquit\n";
+    const char *s = "expect unit 1 hp == 12\nexpect unit Rat speed >= 15\nexpect unit 0 namekey == \"PlayerCat\"\nexpect unit 0 luck != -1\nexpect unit 0 shield == 0\nexpect unit 0 divineshield == 0\nexpect unit 0 constitution > 0\nquit\n";
     CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
     CHECK_EQ(g_s.count, 8);
     CHECK_EQ(g_s.d[0].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[0].field, MT_F_HP); CHECK_EQ(g_s.d[0].value, 12);
     CHECK_EQ(g_s.d[1].field, MT_F_SPEED); CHECK_EQ(g_s.d[1].op, MT_OP_GE); CHECK_EQ(g_s.d[1].value, 15);
-    CHECK_EQ(g_s.d[2].field, MT_F_ENTRY); CHECK_STR(g_s.d[2].a, "PlayerCat");
+    CHECK_EQ(g_s.d[2].field, MT_F_NAMEKEY); CHECK_STR(g_s.d[2].a, "PlayerCat");
     CHECK_EQ(g_s.d[3].field, MT_F_LUCK); CHECK_EQ(g_s.d[3].value, -1);
     CHECK_EQ(g_s.d[4].field, MT_F_SHIELD); CHECK_EQ(g_s.d[5].field, MT_F_DIVINESHIELD); CHECK_EQ(g_s.d[6].field, MT_F_CONSTITUTION);
-    CHECK_STR(mt_unit_field_name(MT_F_HP), "hp"); CHECK_STR(mt_unit_field_name(MT_F_ENTRY), "entry"); CHECK_STR(mt_unit_field_name(MT_F_LUCK), "luck");
-    const char *bad[] = { "expect unit 1 hp == \"x\"\n", "expect unit 1 entry == bare\n", "expect unit 1 entry > \"x\"\n", "expect unit 1 divine_shield == 0\n", "expect unit 1 hp == -\n" };
+    CHECK_STR(mt_unit_field_name(MT_F_HP), "hp"); CHECK_STR(mt_unit_field_name(MT_F_NAMEKEY), "namekey"); CHECK_STR(mt_unit_field_name(MT_F_LUCK), "luck");
+    const char *bad[] = { "expect unit 1 hp == \"x\"\n", "expect unit 1 namekey == bare\n", "expect unit 1 namekey > \"x\"\n", "expect unit 1 divine_shield == 0\n", "expect unit 1 hp == -\n" };
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
 }
 
-TEST(runner_dump_emits_entry_hp_shield_divineshield_and_the_seven_stats) {
+TEST(runner_dump_emits_namekey_hp_shield_divineshield_and_the_seven_stats) {
     fk_reset("dump\nquit\n");
     fk_units_with_numbers();
     steps_until_done(5);
-    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"entry\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
-    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"entry\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"statuses\":[],\"stacks\":[]}"));
+    CHECK(has(ev(0), "{\"i\":0,\"name\":\"Lumee\",\"class\":\"Fighter\",\"namekey\":\"PlayerCat\",\"faction\":0,\"move\":3,\"act\":1,\"turnkind\":2,\"hp\":23,\"shield\":2,\"divineshield\":1,\"strength\":4,\"dexterity\":5,\"constitution\":6,\"intelligence\":7,\"speed\":8,\"charisma\":9,\"luck\":10,\"statuses\":[\"LuckUp\",\"JokersLuck\"],\"stacks\":[0,0]}"));
+    CHECK(has(ev(0), "{\"i\":1,\"name\":\"Rat\",\"class\":\"Rat\",\"namekey\":\"Pooter\",\"faction\":1,\"move\":0,\"act\":0,\"turnkind\":0,\"hp\":12,\"shield\":0,\"divineshield\":0,\"strength\":5,\"dexterity\":5,\"constitution\":5,\"intelligence\":5,\"speed\":15,\"charisma\":5,\"luck\":5,\"statuses\":[],\"stacks\":[]}"));
 }
 
-TEST(runner_expect_unit_hp_shield_stats_and_entry) {
-    fk_reset("expect unit 1 hp == 12\nexpect unit Lumee hp > 20\nexpect unit 0 shield == 2\nexpect unit 1 speed == 15\nexpect unit 0 luck == 10\nexpect unit 0 constitution == 5\nexpect unit 1 entry == \"Pooter\"\nexpect unit 0 entry != \"Pooter\"\nexpect unit 0 divineshield == 1\nquit\n");
+TEST(runner_expect_unit_hp_shield_stats_and_namekey) {
+    fk_reset("expect unit 1 hp == 12\nexpect unit Lumee hp > 20\nexpect unit 0 shield == 2\nexpect unit 1 speed == 15\nexpect unit 0 luck == 10\nexpect unit 0 constitution == 5\nexpect unit 1 namekey == \"Pooter\"\nexpect unit 0 namekey != \"Pooter\"\nexpect unit 0 divineshield == 1\nquit\n");
     fk_units_with_numbers();
     steps_until_done(12);
     CHECK(has(ev(0), "\"kind\":\"unit\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"1 hp == 12\"")); CHECK(has(ev(0), "\"detail\":\"unit 1 \\\"Rat\\\": hp 12\""));
@@ -1380,8 +1380,8 @@ TEST(runner_expect_unit_hp_shield_stats_and_entry) {
     CHECK(has(ev(3), "\"ok\":true")); CHECK(has(ev(3), "speed 15"));
     CHECK(has(ev(4), "\"ok\":true")); CHECK(has(ev(4), "luck 10"));
     CHECK(has(ev(5), "\"ok\":false")); CHECK(has(ev(5), "constitution 6"));
-    CHECK(has(ev(6), "\"ok\":true")); CHECK(has(ev(6), "\"arg\":\"1 entry == \\\"Pooter\\\"\"")); CHECK(has(ev(6), "entry \\\"Pooter\\\""));
-    CHECK(has(ev(7), "\"ok\":true")); CHECK(has(ev(7), "entry \\\"PlayerCat\\\""));
+    CHECK(has(ev(6), "\"ok\":true")); CHECK(has(ev(6), "\"arg\":\"1 namekey == \\\"Pooter\\\"\"")); CHECK(has(ev(6), "namekey \\\"Pooter\\\""));
+    CHECK(has(ev(7), "\"ok\":true")); CHECK(has(ev(7), "namekey \\\"PlayerCat\\\""));
     CHECK(has(ev(8), "\"ok\":true")); CHECK(has(ev(8), "divineshield 1"));
     CHECK(has(last_ev(), "\"expect_pass\":8")); CHECK(has(last_ev(), "\"expect_fail\":1"));
 }

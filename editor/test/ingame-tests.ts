@@ -170,16 +170,16 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(p.ok && p.body.startsWith("expect unit 6 faction == 1\n"), "DLL-side directive");
     });
 
-    test("expect unit: the GON-at-runtime fields (2026-10-22) — entry (string), hp|shield|divineshield and the seven stats (integers, negatives allowed); UNIT_FIELDS == mt_script.c order", () => {
-      eq(script.UNIT_FIELDS.join(","), "name,class,entry,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck");
+    test("expect unit: the GON-at-runtime fields (2026-10-22) — namekey (string), hp|shield|divineshield and the seven stats (integers, negatives allowed); UNIT_FIELDS == mt_script.c order", () => {
+      eq(script.UNIT_FIELDS.join(","), "name,class,namekey,faction,move,act,turnkind,hp,shield,divineshield,strength,dexterity,constitution,intelligence,speed,charisma,luck");
       const a = parseDirective("expect unit 8 hp == 12", 1) as { what: string; unit: string; field: string; op: string; value: number };
       eq(a.what, "unit"); eq(a.unit, "8"); eq(a.field, "hp"); eq(a.op, "=="); eq(a.value, 12);
       eq((parseDirective("expect unit Pooter speed >= 15", 1) as { field: string; value: number }).field, "speed");
       eq((parseDirective("expect unit 0 luck != -1", 1) as { value: number }).value, -1);
-      const e = parseDirective('expect unit 8 entry == "Pooter"', 1) as { field: string; op: string; value: string };
-      eq(e.field, "entry"); eq(e.op, "=="); eq(e.value, "Pooter");
+      const e = parseDirective('expect unit 8 namekey == "ENEMY_POOTER_NAME"', 1) as { field: string; op: string; value: string };
+      eq(e.field, "namekey"); eq(e.op, "=="); eq(e.value, "ENEMY_POOTER_NAME");
       for (const f of ["shield", "divineshield", "strength", "dexterity", "constitution", "intelligence", "charisma"]) eq((parseDirective(`expect unit 1 ${f} > 0`, 1) as { field: string }).field, f);
-      for (const bad of ['expect unit 1 hp == "x"', "expect unit 1 entry == bare", 'expect unit 1 entry > "x"', "expect unit 1 divine_shield == 0", "expect unit 1 hp == -"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      for (const bad of ['expect unit 1 hp == "x"', "expect unit 1 namekey == bare", 'expect unit 1 namekey > "x"', "expect unit 1 divine_shield == 0", "expect unit 1 hp == -"]) assert("error" in parseDirective(bad, 1), `${bad} is an error`);
     });
 
     test("expect gon directive parses (2026-10-22): <unit> <path> then <op> <number> | ==|!= \"<string>\" | ==|!= true|false | exists | missing; bad paths, operators and values are line errors; DLL-side", () => {
@@ -416,7 +416,7 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(v.end!.code, 0); eq(g.end!.code, 0);
     });
     test("OBSERVED 2026-10-22 fixture: the numeric golden — `.patch` health.multiply 2 / speed.add 10 on Pooter seen through `expect gon` (the merged entry at Character+0x240) and the units event's hp / speed (result-golden-numeric.jsonl vs result-golden-numeric-vanilla.jsonl)", () => {
-      type U = { i: number; name: string; entry: string; faction: number; hp: number; shield: number; divineshield: number; strength: number; constitution: number; speed: number; luck: number };
+      type U = { i: number; name: string; namekey: string; faction: number; hp: number; shield: number; divineshield: number; strength: number; constitution: number; speed: number; luck: number };
       type X = { line: number; kind: string; arg: string; ok: boolean; detail: string };
       type R = { units: { count: number; list: U[] } | null; expects: { passed: number; failed: number }; events: ({ ev: string } & Partial<X>)[]; end: { code: number; reason: string } | null };
       const v = parseResults(fixture("result-golden-numeric-vanilla.jsonl")) as unknown as R;
@@ -425,14 +425,14 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(v.units!.count, 10, "vanilla (seed 42): 4 cats + 4 coins + Pooter + Rat");
       eq(g.units!.count, 10, "golden: the same spawns (no GoldenRat here)");
       const poo = v.units!.list[8]!, pooG = g.units!.list[8]!;
-      eq(poo.entry, "Pooter"); eq(pooG.entry, "Pooter", "the units event names the data/characters entry (Character+0x248)");
+      eq(poo.namekey, "ENEMY_POOTER_NAME"); eq(pooG.namekey, "ENEMY_POOTER_NAME", "the units event carries the graphics.name key (Character+0x248 — OBSERVED: the loc key, not the entry name)");
       eq(poo.hp, 6, "vanilla Pooter: properties.health 6 is the HP right after spawn (Character+0x4b0)");
       eq(pooG.hp, 12, ".patch health.multiply 2 -> HP 12 right after spawn");
       eq(poo.speed, 5); eq(pooG.speed, 15, ".patch speed.add 10 -> the speed stat Character::init stored (+0x5b0)");
       eq(poo.constitution, 5); eq(pooG.constitution, 5, "an untouched stat is the data value (IntOr default 5)");
       eq(poo.shield, 0); eq(poo.divineshield, 0);
       const rat = v.units!.list[9]!, ratG = g.units!.list[9]!;
-      eq(rat.entry, "Rat"); eq(ratG.entry, "Rat");
+      eq(rat.namekey, "ENEMY_LILRAT_NAME"); eq(ratG.namekey, "GOLDEN_RAT_NAME", ".merge graphics.name shows in the key"); eq(ratG.name, "Golden Rat");
       eq(rat.hp, 5); eq(ratG.hp, 5, "Rat's .merge touches name/faction only: HP stays properties.health 5");
       eq(rat.strength, 4, "stats.strength 4 from data/characters/enemies.gon");
       const gons = (r: R) => r.events.filter((e) => e.ev === "expect" && e.kind === "gon") as X[];

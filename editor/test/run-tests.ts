@@ -346,7 +346,7 @@ if (BASE_READY) {
     eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "GoldenRat:added");
     eq(p.effectiveEntryCount, p.baseEntryCount + 1);
   });
-  test("_golden-merge .patch preview: Pooter changed — faction.overwrite allies and stats.speed.add 10 -> 15", () => {
+  test("_golden-merge .patch preview: Pooter changed — faction.overwrite allies, stats.speed.add 10 -> 15 and properties.health.multiply 2 -> 12", () => {
     const p = previewMerge("_golden-merge", "data/characters/enemies.gon.patch");
     assert(p.ok, `preview: ${JSON.stringify(p)}`);
     if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
@@ -355,6 +355,7 @@ if (BASE_READY) {
     const eff = p.touched[0]!.effective || "";
     assert(/faction\s+allies/.test(eff), `faction overwritten: ${eff.slice(0, 500)}`);
     assert(/speed\s+15\b/.test(eff), `speed 5 + 10 = 15: ${eff.slice(0, 500)}`);
+    assert(/health\s+12\b/.test(eff), `health 6 * 2 = 12 (the in-game twin is mods/_golden-merge/tests/numeric.mewtest): ${eff.slice(0, 500)}`);
     eq(p.effectiveEntryCount, p.baseEntryCount);
   });
   test("_golden-merge CSV .append preview: two 12-column loc rows added (GOLDEN_RAT_NAME, APPENDED_RAT_NAME)", () => {

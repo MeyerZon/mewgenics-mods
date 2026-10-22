@@ -13,12 +13,12 @@ export const MAX_CMD_BYTES = 4078; // the game's std::string small/large allocat
 export const UNITS_OPS = ["==", "!=", ">=", "<=", ">", "<"];
 /** fields `expect unit` can read (the units event's per-unit fields); must agree with mt_script.c UNIT_FIELDS */
 export const UNIT_FIELDS = [
-  "name", "class", "entry", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
+  "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
   "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck",
 ] as const;
 export type UnitField = (typeof UNIT_FIELDS)[number];
 /** the `expect unit` fields that take a quoted value with == / != (the rest are integers with any op) */
-export const UNIT_STRING_FIELDS: readonly UnitField[] = ["name", "class", "entry"];
+export const UNIT_STRING_FIELDS: readonly UnitField[] = ["name", "class", "namekey"];
 
 export interface Finding {
   line: number;
@@ -37,7 +37,7 @@ export type Directive =
   | { line: number; kind: "expect"; what: "round"; op: string; n: number }
   | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; op: string; n: number }
   | { line: number; kind: "expect"; what: "stacks"; status: string; unit: string; varied: true }
-  /** one field of one unit in the units event: name|class|entry compare as strings (== !=), the rest as integers */
+  /** one field of one unit in the units event: name|class|namekey compare as strings (== !=), the rest as integers */
   | { line: number; kind: "expect"; what: "unit"; unit: string; field: UnitField; op: string; value: string | number }
   /** one node of the unit's merged data/characters entry (Character+0x240, walked by mewtest.dll): a number literal
    *  matches a number node (any op), a quoted string a string node (== !=), true/false a bool node (== !=) */
@@ -204,9 +204,9 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         if (!(UNIT_FIELDS as readonly string[]).includes(field)) return { error: `expect unit: unknown field "${field}" (${UNIT_FIELDS.join("|")})` };
         if (!UNITS_OPS.includes(op)) return { error: `expect unit: bad operator "${op}" (${UNITS_OPS.join(" ")})` };
         if ((UNIT_STRING_FIELDS as readonly string[]).includes(field)) {
-          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class/entry take == or != and a quoted value" };
+          if (op !== "==" && op !== "!=") return { error: "expect unit: name/class/namekey take == or != and a quoted value" };
           const q = parseQuoted(val, 0);
-          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class/entry take == or != and a quoted value" };
+          if (!q || val.slice(q.end).trim()) return { error: "expect unit: name/class/namekey take == or != and a quoted value" };
           return { line: lineNo, kind: "expect", what: "unit", unit, field: field as UnitField, op, value: q.value };
         }
         if (!/^-?\d+$/.test(val)) return { error: "expect unit: the integer fields take one integer" };

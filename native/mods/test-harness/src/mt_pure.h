@@ -69,10 +69,10 @@ typedef enum MtDirKind {
     MT_D_EXPECT_UNIT,   /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
     MT_D_EXPECT_GON     /* expect gon <unit> <path> (<op> <number> | ==|!= "<string>" | ==|!= true|false | exists | missing): the unit's GON entry */
 } MtDirKind;
-/* expect unit: which MtUnit field; name|class|entry compare as strings (== !=), the rest as integers (any op).
+/* expect unit: which MtUnit field; name|class|namekey compare as strings (== !=), the rest as integers (any op).
  * Order = mt_script.c UNIT_FIELDS = script.ts UNIT_FIELDS; the stat fields follow MT_STAT_* (data/characters order). */
 typedef enum MtUnitField {
-    MT_F_NAME, MT_F_CLASS, MT_F_ENTRY, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND, MT_F_HP, MT_F_SHIELD, MT_F_DIVINESHIELD,
+    MT_F_NAME, MT_F_CLASS, MT_F_NAMEKEY, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND, MT_F_HP, MT_F_SHIELD, MT_F_DIVINESHIELD,
     MT_F_STRENGTH, MT_F_DEXTERITY, MT_F_CONSTITUTION, MT_F_INTELLIGENCE, MT_F_SPEED, MT_F_CHARISMA, MT_F_LUCK
 } MtUnitField;
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out);   /* 1 ok */
@@ -179,7 +179,7 @@ int mt_gon_get(MtMemRead rd, void *u, const void *node, const char *path, MtGonV
 #define MT_STATUS_NAME 32
 typedef struct MtUnit {
     char name[MT_UNIT_NAME], cls[MT_UNIT_NAME];
-    char entry[MT_UNIT_NAME];              /* the data/characters entry name (Character+OFF_CH_GON_NAME) */
+    char nameKey[MT_UNIT_NAME];            /* the display-name loc key, graphics.name (Character+OFF_CH_NAME_KEY; OBSERVED 2026-10-22, not the entry name) */
     int faction, move, act, turnKind;
     int hp, shield, divineShield;          /* Character+OFF_CH_HP / OFF_CH_SHIELD / OFF_CH_DIVINE_SHIELD */
     int stats[MT_STAT_COUNT];              /* Character+OFF_CH_STATS, mt_stat_name order */

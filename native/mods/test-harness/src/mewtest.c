@@ -550,8 +550,8 @@ static int h_unit_info(void *u, int i, MtUnit *out) {
     read_i32(AT(ch, OFF_CH_MOVE), &out->move);
     read_i32(AT(ch, OFF_CH_ACT), &out->act);
     read_i32(AT(ch, OFF_CH_TURNKIND), &out->turnKind);
-    /* GON at runtime (2026-10-22): the entry name, current HP / shields and the seven stats Character::init stored */
-    if (!read_msvc_string(AT(ch, OFF_CH_GON_NAME), out->entry, sizeof out->entry)) out->entry[0] = 0;
+    /* GON at runtime (2026-10-22): the display-name key, current HP / shields and the seven stats Character::init stored */
+    if (!read_msvc_string(AT(ch, OFF_CH_NAME_KEY), out->nameKey, sizeof out->nameKey)) out->nameKey[0] = 0;
     read_i32(AT(ch, OFF_CH_HP), &out->hp);
     read_i32(AT(ch, OFF_CH_SHIELD), &out->shield);
     read_i32(AT(ch, OFF_CH_DIVINE_SHIELD), &out->divineShield);

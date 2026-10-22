@@ -63,7 +63,7 @@ static int parse_op(const char *p, size_t n, MtOp *out) {
 }
 
 /* MtUnitField order; the units event's keys; script.ts UNIT_FIELDS */
-static const char *const UNIT_FIELDS[] = { "name", "class", "entry", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
+static const char *const UNIT_FIELDS[] = { "name", "class", "namekey", "faction", "move", "act", "turnkind", "hp", "shield", "divineshield",
                                            "strength", "dexterity", "constitution", "intelligence", "speed", "charisma", "luck" };
 int mt_unit_field_parse(const char *p, size_t n, MtUnitField *out) {
     for (size_t i = 0; i < sizeof UNIT_FIELDS / sizeof UNIT_FIELDS[0]; i++) {
@@ -256,16 +256,16 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
             }
             const char *field = skip_ws(tail);
             size_t fl = tok_len(field);
-            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|entry|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck)");
+            if (!fl || !mt_unit_field_parse(field, fl, &d.field)) return fail(err, errCap, errLine, lineNo, "expect unit: unknown field (name|class|namekey|faction|move|act|turnkind|hp|shield|divineshield|strength|dexterity|constitution|intelligence|speed|charisma|luck)");
             const char *opp = skip_ws(field + fl);
             size_t ol = tok_len(opp);
             const char *val = skip_ws(opp + ol);
             if (!ol || !*val) return fail(err, errCap, errLine, lineNo, "expect unit needs: <unit> <field> <op> <value>");
             if (!parse_op(opp, ol, &d.op)) return fail(err, errCap, errLine, lineNo, "expect unit: bad operator (== != >= <= > <)");
-            if (d.field == MT_F_NAME || d.field == MT_F_CLASS || d.field == MT_F_ENTRY) {
-                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/entry take == or != and a quoted value");
+            if (d.field == MT_F_NAME || d.field == MT_F_CLASS || d.field == MT_F_NAMEKEY) {
+                if (d.op != MT_OP_EQ && d.op != MT_OP_NE) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey take == or != and a quoted value");
                 const char *after = parse_quoted(val, q, sizeof q, &qn);
-                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/entry take == or != and a quoted value");
+                if (!after || *skip_ws(after)) return fail(err, errCap, errLine, lineNo, "expect unit: name/class/namekey take == or != and a quoted value");
                 if (!(d.a = arena_add(s, q, qn))) return fail(err, errCap, errLine, lineNo, "script too large");
             } else {
                 size_t nl = tok_len(val);

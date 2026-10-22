@@ -6404,7 +6404,7 @@
       "note": "the unit's data/characters entry as the game holds it: SpawnDatabase(*0x1413c79d0)+0x38 -> Get_const(name), already variant_of-resolved and overlay-merged; the harness's `expect gon` walks it"
     },
     {
-      "name": "Character_gonName",
+      "name": "Character_nameKey",
       "kind": "offset",
       "struct": "Character",
       "value": "0x248",
@@ -6417,21 +6417,21 @@
           "dispSize": 4,
           "nth": 0
         },
-        "note": "mov rdx,rax; lea rcx,[r14+0x248]; call string_assign; lea rcx,[rbp-0x60] — a std::string assignment into Character+0x248 (2 matches, both 0x248)"
+        "note": "mov rdx,rax; lea rcx,[r14+0x248]; call string_assign; lea rcx,[rbp-0x60] — a std::string assignment into Character+0x248 (2 matches, both 0x248; the value a spawned unit carries is its graphics.name key)"
       },
       "consumers": [
         "native/mods/test-harness/src/mewtest.c:h_unit_info"
       ],
       "exposure": [
         {
-          "macro": "OFF_CH_GON_NAME"
+          "macro": "OFF_CH_NAME_KEY"
         }
       ],
       "evidence": [
         "docs/engine-map.md#gon-at-runtime-2026-10-21",
         ".analysis/decompiled/Character_init_0xf70f0.c"
       ],
-      "note": "the entry name (std::string) copied by Character::init; the units event's `entry` field"
+      "note": "OBSERVED 2026-10-22 (golden-numeric T2): the unit's display-name loc key — graphics.name, e.g. ENEMY_POOTER_NAME, GOLDEN_RAT_NAME after a .merge — a std::string Character::init copies; the units event's `namekey` field. notes-gon.md inferred the entry name here; the entry name's home is still unknown"
     },
     {
       "name": "GonObject_children",
