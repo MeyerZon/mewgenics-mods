@@ -847,6 +847,31 @@ TEST(runner_expect_stacks_op_by_index_and_name_and_missing_status) {
     CHECK(has(last_ev(), "\"expect_pass\":2")); CHECK(has(last_ev(), "\"expect_fail\":4"));
 }
 
+/* signed operands: JokersLuck goes below 0 (luck-seeded round 3: Wengar -10); `-` is a sign, never a flag */
+TEST(script_expect_stacks_takes_a_signed_integer) {
+    char err[256]; int line = 0;
+    const char *s = "expect stacks JokersLuck on 0 == -10\nexpect stacks JokersLuck on \"Wengar The Wion\" < -0\nexpect unit 0 luck == -3\nexpect gon 0 a.b == -0.5\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 5);
+    CHECK_EQ(g_s.d[0].kind, MT_D_EXPECT_STACKS); CHECK_EQ(g_s.d[0].op, MT_OP_EQ); CHECK_EQ(g_s.d[0].value, -10); CHECK_EQ(g_s.d[0].varied, 0);
+    CHECK_EQ(g_s.d[1].kind, MT_D_EXPECT_STACKS); CHECK_STR(g_s.d[1].b, "Wengar The Wion"); CHECK_EQ(g_s.d[1].op, MT_OP_LT); CHECK_EQ(g_s.d[1].value, 0);
+    CHECK_EQ(g_s.d[2].kind, MT_D_EXPECT_UNIT); CHECK_EQ(g_s.d[2].value, -3);
+    CHECK_EQ(g_s.d[3].kind, MT_D_EXPECT_GON); CHECK(g_s.d[3].dvalue == -0.5);
+    const char *bad[] = { "expect stacks JokersLuck on 0 == -\n", "expect stacks JokersLuck on 0 == --1\n", "expect stacks JokersLuck on 0 == - 1\n",
+                          "expect stacks JokersLuck on 0 == 1-\n", "expect stacks JokersLuck on 0 == -1.5\n", "expect units == -1\n", "wait rounds -1\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+}
+
+TEST(runner_expect_stacks_compares_negative_values) {
+    fk_reset("expect stacks JokersLuck on 0 == -10\nexpect stacks JokersLuck on Lumee < 0\nexpect stacks JokersLuck on 0 == 10\nquit\n");
+    fk_two_units_with_stacks();
+    fk.units[0].stacks[1] = -10;
+    steps_until_done(6);
+    CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"arg\":\"JokersLuck on 0 == -10\"")); CHECK(has(ev(0), "JokersLuck -10 on unit 0"));
+    CHECK(has(ev(1), "\"ok\":true"));
+    CHECK(has(ev(2), "\"ok\":false"));
+}
+
 /* ---- expect unit <unit> <field> <op> <value>: name|class (quoted, == !=), faction|move|act|turnkind (int, any op) ---- */
 TEST(script_expect_unit_parses_fields_ops_and_rejects_bad_forms) {
     char err[256]; int line = 0;

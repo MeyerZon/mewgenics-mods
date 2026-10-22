@@ -203,6 +203,17 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       eq(ok.what, "stacks"); eq(ok.unit, "Lumee"); eq(ok.op, "!="); eq(ok.n, 0);
     });
 
+    test("signed operands (mt_script.c in sync): expect stacks takes -N (luck-seeded: Wengar -10), expect unit -N and expect gon -0.5 still parse; '-' alone, '--1', '- 1', '1-', a decimal stacks value and negative counts are errors", () => {
+      eq(JSON.stringify(parseDirective("expect stacks JokersLuck on 0 == -10", 3)), JSON.stringify({ line: 3, kind: "expect", what: "stacks", status: "JokersLuck", unit: "0", op: "==", n: -10 }));
+      eq(JSON.stringify(parseDirective('expect stacks JokersLuck on "Wengar The Wion" < -0', 4)), JSON.stringify({ line: 4, kind: "expect", what: "stacks", status: "JokersLuck", unit: "Wengar The Wion", op: "<", n: 0 }));
+      eq((parseDirective("expect unit 0 luck == -3", 1) as { value: number }).value, -3);
+      eq((parseDirective("expect gon 0 a.b == -0.5", 1) as { value: number }).value, -0.5);
+      for (const bad of ["expect stacks JokersLuck on 0 == -", "expect stacks JokersLuck on 0 == --1", "expect stacks JokersLuck on 0 == - 1", "expect stacks JokersLuck on 0 == 1-", "expect stacks JokersLuck on 0 == -1.5", "expect units == -1", "wait rounds -1"])
+        assert("error" in parseDirective(bad, 1), `${bad} is an error`);
+      const p = parseScript("expect stacks JokersLuck on 0 == -10\nquit\n", { owningMod: "m" });
+      assert(p.ok && p.body.startsWith("expect stacks JokersLuck on 0 == -10\n"), `DLL-side directive: ${JSON.stringify(p.errors)}`);
+    });
+
     test("expect unit directive parses (index / bare / quoted unit; string fields name|class with == !=; integer fields faction|move|act|turnkind with every op); bad forms are line errors", () => {
       const a = parseDirective("expect unit 6 faction == 1", 1) as { what: string; unit: string; field: string; op: string; value: number };
       eq(a.what, "unit"); eq(a.unit, "6"); eq(a.field, "faction"); eq(a.op, "=="); eq(a.value, 1);

@@ -203,7 +203,7 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
         }
         if (rest2 === "varied") return { line: lineNo, kind: "expect", what: "stacks", status: m[1]!, unit, varied: true };
         if (rest2.startsWith("varied")) return { error: "expect stacks: unexpected text after varied" };
-        const op = /^(\S+)\s+(\d+)$/.exec(rest2);
+        const op = /^(\S+)\s+(-?\d+)$/.exec(rest2); // signed: stacks go below 0 (mt_script.c parse_int)
         if (!op) return { error: "expect stacks needs: <Status> on <unit> (<op> <N> | varied)" };
         if (!UNITS_OPS.includes(op[1]!)) return { error: `expect stacks: bad operator "${op[1]}" (${UNITS_OPS.join(" ")}) or varied` };
         return { line: lineNo, kind: "expect", what: "stacks", status: m[1]!, unit, op: op[1]!, n: Number(op[2]) };

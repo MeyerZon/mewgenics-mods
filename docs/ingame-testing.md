@@ -112,7 +112,8 @@ expect noconsole "<substr>"                      no such line since the last cmd
 expect status <Name> on <index|bareword|"name">  a unit carries the status (vanilla or framework-registered)
 expect units <==|!=|>=|<=|>|<> <N>               unit count in the current combat
 expect round <op> <N>                            TurnControl's round (0 outside combat)
-expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail)
+expect stacks <Status> on <unit> <op> <N>        the status's stacks on that unit (absent status = fail); N is a
+                                                 signed integer (`== -10`: a leading `-` is a sign, never a flag)
 expect stacks <Status> on <unit> varied          >= 2 distinct stacks values seen for (unit, status) by earlier dump /
                                                  expect stacks directives (and this one)
 expect unit <unit> <field> <op> <value>          one field of one unit as the units event shows it: name|class|namekey
@@ -130,8 +131,8 @@ expect gon <unit> <path> <op> <number>           one node of the unit's merged d
 expect gon <unit> <path> ==|!= "<string>"        it (Character+0x240; variant_of-resolved, every overlay applied): the
 expect gon <unit> <path> ==|!= true|false        DLL walks <path> (dot-separated; an all-digit segment indexes the
 expect gon <unit> <path> exists|missing          children, any other is the first child of that name) without calling
-                                                 the game. A number literal matches a number node only (compared on
-                                                 the node's double, any op), a quoted string a string node only, true/
+                                                 the game. A number literal (-?digits[.digits], e.g. `-0.5`) matches a
+                                                 number node only (compared on the node's double, any op), a quoted string a string node only, true/
                                                  false a bool node only; `exists` = present and not null, `missing` =
                                                  absent or null. Event kind "gon", arg e.g. `8 properties.health == 12`,
                                                  detail `unit 8 "Pooter" (ENEMY_POOTER_NAME): properties.health =

@@ -262,7 +262,7 @@ static int parse_line(MtScript *s, const char *line, size_t len, int lineNo, cha
                 size_t nl = tok_len(num);
                 if (!tl || !nl || *skip_ws(num + nl)) return fail(err, errCap, errLine, lineNo, "expect stacks needs: <Status> on <unit> (<op> <N> | varied)");
                 if (!parse_op(tail, tl, &d.op)) return fail(err, errCap, errLine, lineNo, "expect stacks: bad operator (== != >= <= > <) or `varied`");
-                if (!parse_uint(num, nl, &d.value)) return fail(err, errCap, errLine, lineNo, "expect stacks: N must be an integer");
+                if (!parse_int(num, nl, &d.value)) return fail(err, errCap, errLine, lineNo, "expect stacks: N must be an integer (optionally negative)");
             }
         } else if (kl == 4 && !strncmp(rest, "unit", 4)) {
             /* expect unit <idx|bareword|"name"> <field> <op> <value> */

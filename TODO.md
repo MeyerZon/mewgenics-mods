@@ -573,9 +573,11 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   (splitmix64, `fw_rng.c`, host-tested), seeded from QPC at load and re-seeded by the harness `seed` directive; the
   sample rolls through `jl_roll.c` (host test: same seed, same rerolls) and no longer touches `srand`/`rand`.
   T2 `luck-seeded` now pins 1 -> 5 -> (<0, Webster 8, Christine 7), identical on two runs.
-- [ ] **`.mewtest` numbers cannot be negative** (found 2026-10-22, `fix/jokers-luck-rng`): `expect stacks X on 0 == -10`
-  is a script error, so `luck-seeded` can only assert Wengar's round-3 -10 as `< 0`. Accept a leading `-` in
-  `expect stacks` / `expect unit` numbers (harness `mt_script.c` + editor `src/core/ingame/script.ts`, both tested).
+- [x] **`.mewtest` numbers cannot be negative** (found 2026-10-22, `fix/jokers-luck-rng`): `expect stacks X on 0 == -10`
+  was a script error, so `luck-seeded` could only assert Wengar's round-3 -10 as `< 0`. Fixed 2026-10-22
+  (`fix/harness-negative-numbers`): `expect stacks` takes a signed integer in both parsers (`mt_script.c` parse_int,
+  `script.ts`), as `expect unit` and `expect gon` (`-0.5`) already did; host tests on both pin `-`, `--1`, `- 1`,
+  `1-` as errors. `luck-seeded` now pins round 3 as Wengar `== -10`, Flint `== -6` (T2 pass).
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")
