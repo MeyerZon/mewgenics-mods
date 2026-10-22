@@ -1,0 +1,107 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "script": "mods/_modelnames/tests/model-names.mewtest",
+  "mods": "fw-3d, _modelnames, dev-sandbox",
+  "run": {
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 2 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "editor/data/ingame-runs/20261022-160724-_modelnames-model-names"
+  },
+  "shots": [
+    {
+      "label": "names-a",
+      "file": "shot-names-a.png"
+    },
+    {
+      "label": "names-b",
+      "file": "shot-names-b.png"
+    }
+  ],
+  "shotsCheck": {
+    "status": "ok",
+    "detail": "2 distinct of 2"
+  },
+  "glErrors": [],
+  "measure": "magenta (glow-measure chroma rule) in a square box of side 0.1 x shot width around the Rat model anchor (its mesh object ndc -> letterboxed shot pixel), vs the whole shot",
+  "measures": [
+    {
+      "shot": "names-a",
+      "size": [
+        3440,
+        1440
+      ],
+      "anchorNdc": [
+        0.761,
+        -0.0138,
+        0.0532
+      ],
+      "anchorPx": [
+        2694,
+        730
+      ],
+      "box": {
+        "x0": 2522,
+        "y0": 557,
+        "x1": 2867,
+        "y1": 902
+      },
+      "magentaInBox": 21838,
+      "regionInBox": {
+        "count": 21838,
+        "x0": 106,
+        "y0": 89,
+        "x1": 236,
+        "y1": 256
+      },
+      "magentaWholeShot": 21838
+    },
+    {
+      "shot": "names-b",
+      "size": [
+        3440,
+        1440
+      ],
+      "anchorNdc": [
+        0.761,
+        -0.0138,
+        0.0532
+      ],
+      "anchorPx": [
+        2694,
+        730
+      ],
+      "box": {
+        "x0": 2522,
+        "y0": 557,
+        "x1": 2867,
+        "y1": 902
+      },
+      "magentaInBox": 21838,
+      "regionInBox": {
+        "count": 21838,
+        "x0": 106,
+        "y0": 89,
+        "x1": 236,
+        "y1": 256
+      },
+      "magentaWholeShot": 21838
+    }
+  ],
+  "m2Baseline": {
+    "fixture": "unit-model-summary.json",
+    "patch": 13935,
+    "note": "the M2 unit box (scale 1, same 0.6-tile gltf) on the same Rat tile (8.5, 0.5); 21838 / 13935 = 1.567 vs 1.25^2 = 1.5625"
+  },
+  "registryLines": [
+    "model names: data/models.gon: 2 entries: FwCrate, NameBox (GonResource 000001d0d5428270)"
+  ],
+  "unitLines": [
+    "unit model: Rat: @NameBox -> data/models.gon entry NameBox",
+    "unit model: Rat 000001daf9397708 -> models/name-box.gltf (block scale=1.25 yaw=45 offset=(0 0 0))"
+  ],
+  "unknownLines": [
+    "mesh: @NoSuchModel: model-name-unknown: no data/models.gon entry named NoSuchModel (unit Pooter; 2 named models) — drawing the 2D clip"
+  ],
+  "registryEntryLines": []
+}

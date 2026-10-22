@@ -406,6 +406,7 @@ void fw_mesh_free(FwMesh *m) {
     if (!m) return;
     free(m->verts);
     free(m->indices);
+    free(m->image);
     memset(m, 0, sizeof *m);
 }
 
@@ -546,6 +547,8 @@ const FwMeshCode FW_MESH_CODES[FW_MC_COUNT] = {
     [FW_MC_PATH_INVALID] = { "model-path-invalid", "error" },
     [FW_MC_FILE_MISSING] = { "model-file-missing", "error" },
     [FW_MC_UNREGISTERED] = { "model-unregistered", "error" },
+    [FW_MC_NAME_UNKNOWN] = { "model-name-unknown", "error" },
+    [FW_MC_REGISTRY_ENTRY] = { "model-registry-entry", "error" },
     [FW_MC_PARSE_ERROR] = { "model-parse-error", "error" },
     [FW_MC_EXTENSION] = { "model-extension", "error" },
     [FW_MC_GLB_HEADER] = { "model-glb-header", "error" },
@@ -580,6 +583,8 @@ const FwMeshCode FW_MESH_CODES[FW_MC_COUNT] = {
     [FW_MC_TEXTURE_MISSING] = { "model-texture-missing", "warning" },
     [FW_MC_TEXTURE_FORMAT] = { "model-texture-format", "warning" },
     [FW_MC_TEXTURE_SIZE] = { "model-texture-size", "warning" },
+    [FW_MC_IMAGE_EMBEDDED_INVALID] = { "model-image-embedded-invalid", "warning" },
+    [FW_MC_IMAGE_EMBEDDED_UNSUPPORTED] = { "model-image-embedded-unsupported", "warning" },
     [FW_MC_NO_NORMALS] = { "model-no-normals", "info" },
     [FW_MC_TEXTURE_EMBEDDED] = { "model-texture-embedded", "info" },
     [FW_MC_MTL_IGNORED] = { "model-mtl-ignored", "info" },

@@ -1,0 +1,43 @@
+# face-box.obj - test-only (mods/_unitface): a 0.6-unit box whose FRONT face (+z in the file, the glTF / Blender
+# front) is cyan and whose BACK face (-z) is yellow; every other face is magenta. Hand-written for this repo (no game
+# data). The colours come from textures/models/face-box.png (16x4: magenta | cyan | yellow | magenta cells), one
+# texture coordinate per face (the cell centre), so a face is one flat colour under the mesh shader's Lambert shade.
+# The loader mirrors z into the game's axes, so the front ends up on world -z: at face yaw 0 (the unit faces (0,-1))
+# the cyan face looks to the lower right of the screen; turned away ((1,0) / (0,1)) the yellow back face shows instead.
+# 8 corners, 6 face normals, 3 texture points; 12 triangles, counter-clockwise seen from outside.
+o face_box
+v -0.3 0.0 -0.3
+v  0.3 0.0 -0.3
+v  0.3 0.0  0.3
+v -0.3 0.0  0.3
+v -0.3 0.6 -0.3
+v  0.3 0.6 -0.3
+v  0.3 0.6  0.3
+v -0.3 0.6  0.3
+vt 0.125 0.5
+vt 0.375 0.5
+vt 0.625 0.5
+vn  0 -1  0
+vn  0  1  0
+vn  0  0 -1
+vn  0  0  1
+vn -1  0  0
+vn  1  0  0
+# bottom (y = 0, normal -y): magenta
+f 1/1/1 2/1/1 3/1/1
+f 1/1/1 3/1/1 4/1/1
+# top (y = 0.6, normal +y): magenta
+f 5/1/2 8/1/2 7/1/2
+f 5/1/2 7/1/2 6/1/2
+# back (z = -0.3, normal -z): yellow
+f 1/3/3 5/3/3 6/3/3
+f 1/3/3 6/3/3 2/3/3
+# front (z = +0.3, normal +z): cyan
+f 4/2/4 3/2/4 7/2/4
+f 4/2/4 7/2/4 8/2/4
+# left (x = -0.3, normal -x): magenta
+f 1/1/5 4/1/5 8/1/5
+f 1/1/5 8/1/5 5/1/5
+# right (x = +0.3, normal +x): magenta
+f 2/1/6 6/1/6 7/1/6
+f 2/1/6 7/1/6 3/1/6

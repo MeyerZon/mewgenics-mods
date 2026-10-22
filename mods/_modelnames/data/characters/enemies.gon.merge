@@ -1,0 +1,15 @@
+// _modelnames (test-only): the vanilla Rat draws the registry's NameBox (its own scale overrides the entry's 0.8; the
+// entry's yaw 45 stays), the vanilla Pooter names a model nobody declares: one model-name-unknown line, its sprite stays.
+Rat {
+	graphics {
+		model {
+			file "@NameBox"
+			scale 1.25
+		}
+	}
+}
+Pooter {
+	graphics {
+		model "@NoSuchModel"
+	}
+}

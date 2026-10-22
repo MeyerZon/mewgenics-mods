@@ -35,7 +35,22 @@ export interface KeySpec {
   /** repo-relative `.analysis/decompiled/<file>.c` (git-ignored; the RE store) */
   evidence?: string;
   note?: string;
+  /**
+   * vanilla writes this key but no code reads it (RE: no reader of its string literal on this class's paths, or no
+   * literal at all — typically a typo). The game ignores it: the validator reports `ignored-key` (info), never
+   * `unknown-key`, so vanilla stays clean while a mod copying it is still told. Never required.
+   */
+  unread?: boolean;
+  /**
+   * where `default` was read: `disasm` = the instruction that produces the getter's default (an `xmm1`/`xmm2` load
+   * from .rdata, a `mov r, imm`, the absent branch of an inline type test), checked by the defaults audit; `pseudo` =
+   * Ghidra's pseudo-code only (which drops some PercentOr defaults and prints 0). Absent on rows the audit did not cover.
+   */
+  defaultEvidence?: DefaultEvidence;
 }
+
+export type DefaultEvidence = "disasm" | "pseudo";
+export const DEFAULT_EVIDENCE: readonly DefaultEvidence[] = ["disasm", "pseudo"];
 
 export interface ComponentSpec {
   /** the C++ base class (DeriveComponentWithBoilerplate<X, Base, id>); its keys are inherited */
@@ -87,6 +102,11 @@ export interface SchemaCoverage {
   vanillaComponents: number;
   vanillaKeys: number;
   vanillaKeysFound: number;
+  /** vanilla literal keys accounted for as `unread` (written by vanilla, read by nothing) */
+  vanillaKeysUnread: number;
+  /** components vanilla uses as object blocks that are still open / closed */
+  vanillaOpen: number;
+  vanillaClosed: number;
   /** vanilla keys under children:"any" components (arbitrary maps: form numbers, element names …), not counted above */
   vanillaMapKeys: number;
 }
@@ -161,7 +181,7 @@ export function resolveComponent(schema: ComponentSchema, name: string): Resolve
     }
     for (const [k, v] of Object.entries(c.keys)) keys[k] = { ...v, from: link };
   }
-  const required = Object.entries(keys).filter(([k, v]) => v.required && !k.includes(".")).map(([k]) => k).sort();
+  const required = Object.entries(keys).filter(([k, v]) => v.required && !v.unread && !k.includes(".")).map(([k]) => k).sort();
   return { name, chain, keys, open, children, scalar, status: own.status, required };
 }
 
@@ -179,22 +199,29 @@ export interface BlockCheckResult {
   unknown: string[];
   /** required keys absent from the block */
   missing: string[];
+  /** keys (as written) the schema marks `unread`: vanilla writes them, the game ignores them */
+  ignored: string[];
 }
 
 /** Check one component block's child keys against the resolved spec. */
 export function checkComponentBlock(r: ResolvedComponent, block: VObject, o: BlockCheckOptions): BlockCheckResult {
   const top = new Set(Object.keys(r.keys).map((k) => k.split(".")[0]!));
   const unknown: string[] = [];
+  const ignored: string[] = [];
   const present = new Set<string>();
   for (const e of block.entries) {
     const name = o.patch ? parsePolicy(e.key).name : e.key;
     present.add(name);
+    if (r.keys[name]?.unread) {
+      ignored.push(e.key);
+      continue;
+    }
     if (r.open || r.children === "any" || top.has(name)) continue;
     if (r.children && o.isDynamicChild(name)) continue;
     unknown.push(e.key);
   }
   const missing = o.requireComplete ? r.required.filter((k) => !present.has(k)) : [];
-  return { unknown, missing };
+  return { unknown, missing, ignored };
 }
 
 /** Keys under which every child named like a component class is a component block. */
@@ -208,17 +235,22 @@ export const EFFECT_ROOTS = new Set(["effects", "temporary_effects"]);
  * and, inside a block, every child whose key is a component class (nested blocks). Non-component children of a
  * block are walked on for further roots (`AddPassivesToMinions { passives { … } }`). A top-level entry named like a
  * class (an ability called `Weakness`) is not a block. `path` is the key path from the document root.
+ * `isMap(name)`: the component's children are an arbitrary map (`children: "any"`: FormChanger forms, ElementalAttunement
+ * elements, AddTilesetObjects object names), so a child named like a class (a form called `Rain`) is a map key, not a
+ * block — it is walked on for roots like any other entry.
  */
 export function forEachComponentBlock(
   root: VNode,
   isComponent: (name: string) => boolean,
   visit: (name: string, value: VNode, path: string[]) => void,
+  isMap: (name: string) => boolean = () => false,
 ): void {
   const inBlock = (name: string, v: VNode, path: string[]): void => {
     visit(name, v, path);
     if (v.t !== "obj") return;
+    const map = isMap(name);
     for (const e of v.entries) {
-      if (isComponent(e.key)) inBlock(e.key, e.value, [...path, e.key]);
+      if (!map && isComponent(e.key)) inBlock(e.key, e.value, [...path, e.key]);
       else entry(e.key, e.value, path);
     }
   };
@@ -255,6 +287,9 @@ export function keySpecErrors(k: unknown, where: string): string[] {
   if (k.evidence !== undefined && k.evidence !== null && !isStr(k.evidence)) e.push(`${where}.evidence: must be a string or null`);
   if (k.accessor !== undefined && !isStr(k.accessor)) e.push(`${where}.accessor: must be a string`);
   if (k.note !== undefined && !isStr(k.note)) e.push(`${where}.note: must be a string`);
+  if (k.unread !== undefined && typeof k.unread !== "boolean") e.push(`${where}.unread: must be a boolean`);
+  if (k.unread === true && k.required === true) e.push(`${where}.required: an unread key cannot be required`);
+  if (k.defaultEvidence !== undefined && !DEFAULT_EVIDENCE.includes(k.defaultEvidence as DefaultEvidence)) e.push(`${where}.defaultEvidence: ${JSON.stringify(k.defaultEvidence)} is not one of ${DEFAULT_EVIDENCE.join("|")}`);
   return e;
 }
 
@@ -304,7 +339,7 @@ export function describeComponent(schema: ComponentSchema, name: string): Record
   if (!r) return null;
   const keys: Record<string, Record<string, unknown>> = {};
   for (const [k, v] of Object.entries(r.keys).sort(([a], [b]) => a.localeCompare(b))) {
-    keys[k] = { type: v.type, default: v.default, required: v.required, from: v.from, confidence: v.confidence, ...(v.evidence ? { evidence: v.evidence } : {}), ...(v.note ? { note: v.note } : {}) };
+    keys[k] = { type: v.type, default: v.default, required: v.required, from: v.from, confidence: v.confidence, ...(v.unread ? { unread: true } : {}), ...(v.evidence ? { evidence: v.evidence } : {}), ...(v.note ? { note: v.note } : {}) };
   }
   return { name, chain: r.chain, status: r.status, open: r.open, children: r.children, scalar: r.scalar, required: r.required, keys };
 }

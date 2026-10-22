@@ -345,3 +345,145 @@ export function judgeOcclusion(shots: RgbaImageLike[], occ: MeshOccLine[], expec
     : (m.coverage >= OCC_FRONT_MIN ? "front-unoccluded" : "occluded-in-front");
   return { verdict, pass: verdict === "behind-occluded" || verdict === "front-unoccluded", coverage: m.coverage, expectedPx: m.expectedPx, magentaPx: m.magentaPx, shot, occ: line };
 }
+// ---- M3: hide_sprite ----
+// A unit whose GON model block says `hide_sprite true` has its units-layer sprite item skipped while its model draws
+// (native/framework/src/fw_mesh_hide.c). mewframework logs "unit model: <Entry>: hide_sprite: ..." once at discovery,
+// "unit model: <Entry>: model-flag hide_sprite ..." for a bad value, and "mesh hide f=.. units=.. items=.. skipped=.."
+// in the plan windows. The shot proof: around the model's magenta patch the unit's sprite would show its black outline;
+// count those dark pixels in a hide shot and in a control shot (same scene, hide_sprite false).
+export interface HideMeasure { patch: GlowRegion | null; box: Box | null; dark: number; total: number }
+export type HideVerdict = "hidden" | "not-hidden" | "no-patch" | "control-no-sprite";
+export interface HideJudgement { verdict: HideVerdict; share: number | null }
+export interface MeshHideLine { frame: number; units: number; items: number; skipped: number }
+export interface MeshHideLog { hides: MeshHideLine[]; hideUnits: string[]; badFlag: string[] }
+/** a pixel is "dark" (the sprite's black outline) when r + g + b < this; the arena floor and the shaded box stay above */
+export const HIDE_DARK_SUM = 90;
+/** the control must show the sprite: at least this many dark pixels around the box */
+export const HIDE_MIN_CONTROL_DARK = 200;
+/** hidden = the hide shot keeps less than this share of the control's dark pixels */
+export const HIDE_MAX_SHARE = 0.05;
+
+/** the magenta patch, the box around it (widened by its width each side, 2x its height above, 1x below: where an
+ * upright sprite standing on the same anchor shows) and its dark pixels */
+export function measureHideRegion(img: RgbaImageLike, colour = MESH_PROBE_COLOUR): HideMeasure {
+  const g = measureGlow(img, colour);
+  if (!g.region) return { patch: null, box: null, dark: 0, total: 0 };
+  const r = g.region, w = r.x1 - r.x0, h = r.y1 - r.y0;
+  const box: Box = { x0: Math.max(0, r.x0 - w), y0: Math.max(0, r.y0 - 2 * h), x1: Math.min(img.width - 1, r.x1 + w), y1: Math.min(img.height - 1, r.y1 + h) };
+  let dark = 0, total = 0;
+  for (let y = box.y0; y <= box.y1; y++)
+    for (let x = box.x0; x <= box.x1; x++) {
+      const i = (y * img.width + x) * 4;
+      total++;
+      if (img.rgba[i]! + img.rgba[i + 1]! + img.rgba[i + 2]! < HIDE_DARK_SUM) dark++;
+    }
+  return { patch: r, box, dark, total };
+}
+
+export function judgeHide(hide: HideMeasure, control: HideMeasure): HideJudgement {
+  if (!hide.patch || !control.patch) return { verdict: "no-patch", share: null };
+  if (control.dark < HIDE_MIN_CONTROL_DARK) return { verdict: "control-no-sprite", share: null };
+  const share = hide.dark / control.dark;
+  return { verdict: share < HIDE_MAX_SHARE ? "hidden" : "not-hidden", share };
+}
+
+export function parseMeshHideLog(text: string): MeshHideLog {
+  const out: MeshHideLog = { hides: [], hideUnits: [], badFlag: [] };
+  for (const line of text.split(/\r?\n/)) {
+    let m = /mesh hide f=(\d+) units=(\d+) items=(\d+) skipped=(\d+)/.exec(line);
+    if (m) { out.hides.push({ frame: +m[1]!, units: +m[2]!, items: +m[3]!, skipped: +m[4]! }); continue; }
+    m = /unit model: (\S+): hide_sprite: /.exec(line);
+    if (m) { out.hideUnits.push(m[1]!); continue; }
+    m = /unit model: (\S+): model-flag hide_sprite /.exec(line);
+    if (m) out.badFlag.push(m[1]!);
+  }
+  return out;
+}
+
+
+// ---- 3D phase M3 "pal": the palette row of a unit's GON `palette true` model ----------------------------------------
+// mewframework logs "unit palette: <entry> handle=<h> row=<r> base=<b> override=<o>" for a cat (its CatParts row, the
+// row of its 2D doll) or "unit palette: <entry> handle=<h> row=-1 (<why>)" for a unit without CatParts
+// (native/framework/src/fw_unit_palette.c fw_unit_fmt_palette, host-pinned in test_unit_palette.c), and every draw's
+// "mesh object ... palette=<row>". A shot proves the row when the box around a cat's model holds palette.png's texel of
+// that row at the column fw_mesh.shader picks for the model's grey on its top face, and none of the other cats' texels;
+// a non-cat's model holds no cat row's texel (its greys stay grey).
+export interface UnitPaletteLine { entry: string; handle: number; row: number; base: number | null; override: number | null; note: string | null }
+const UNIT_PAL_RE = /^unit palette: (\S+) handle=(\d+) row=(-?\d+)(?: base=(-?\d+) override=(-?\d+))?(?: \((.*)\))?$/;
+
+export function parseUnitPaletteLog(text: string): UnitPaletteLine[] {
+  const out: UnitPaletteLine[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const m = UNIT_PAL_RE.exec(raw.replace(/^.*?(?=unit palette: )/, ""));
+    if (!m) continue;
+    out.push({ entry: m[1]!, handle: +m[2]!, row: +m[3]!, base: m[4] !== undefined ? +m[4] : null, override: m[5] !== undefined ? +m[5] : null, note: m[6] ?? null });
+  }
+  return out;
+}
+
+/** palette.png's texel at (column, row) */
+export function paletteTexel(pal: RgbaImageLike, column: number, row: number): [number, number, number] {
+  const i = (row * pal.width + column) * 4;
+  return [pal.rgba[i]!, pal.rgba[i + 1]!, pal.rgba[i + 2]!];
+}
+
+export interface UnitPaletteResult {
+  entry: string; handle: number; row: number; loggedRows: number[]; target: [number, number, number] | null;
+  counts: Record<string, number>; shot: number | null; anchorPx: [number, number] | null; box: Box | null; ok: boolean;
+}
+export type UnitPaletteVerdict = "distinct-rows" | "same-row" | "wrong-colours" | "no-units" | "stale-shots" | "no-shots";
+export interface UnitPaletteJudgement { verdict: UnitPaletteVerdict; pass: boolean; column: number; units: UnitPaletteResult[] }
+
+/** Judges every logged unit's model: a cat (row >= 0) passes when its box holds >= minEach pixels of its row's texel at
+ * the top-face column and fewer than minEach / 10 of every other cat row's texel (and every draw logged that row); a
+ * non-cat (row -1) passes when it holds fewer than minEach / 10 of every cat row's texel and its draws logged -1.
+ * "distinct-rows" (pass) = every unit passes and at least two cats show different rows. `grey` is the model's base
+ * colour (0..255), `topShade` fw_mesh.shader's light on the top face (lambertShade([0, 1, 0])). */
+export function judgeUnitPalette(shots: RgbaImageLike[], objects: MeshObjectLine[], units: UnitPaletteLine[], pal: RgbaImageLike, grey: number, topShade: number, opts: { minEach?: number; tol?: number; boxShare?: number } = {}): UnitPaletteJudgement {
+  const minEach = opts.minEach ?? 300, tol = opts.tol ?? 4, boxShare = opts.boxShare ?? 0.04;
+  const column = paletteColumn(grey, topShade);
+  if (!shots.length) return { verdict: "no-shots", pass: false, column, units: [] };
+  if (shots.length >= 2 && shots.every((s) => sameBytes(s, shots[0]!))) return { verdict: "stale-shots", pass: false, column, units: [] };
+  const last = new Map<number, UnitPaletteLine>();
+  for (const u of units) last.set(u.handle, u);
+  if (!last.size) return { verdict: "no-units", pass: false, column, units: [] };
+  const cats = [...last.values()].filter((u) => u.row >= 0);
+  const results: UnitPaletteResult[] = [];
+  for (const u of last.values()) {
+    const objs = objects.filter((o) => o.handle === u.handle && o.anchor === "unit");
+    const own: ColourTarget | null = u.row >= 0 ? { name: `row${u.row}`, rgb: paletteTexel(pal, column, u.row) } : null;
+    const others: ColourTarget[] = cats.filter((c) => c.handle !== u.handle && c.row !== u.row).map((c) => ({ name: `row${c.row}`, rgb: paletteTexel(pal, column, c.row) }));
+    const targets = own ? [own, ...others] : others;
+    const j = targets.length ? judgeColourPatch(shots, objs, targets, { minEach, tol, boxShare }) : null;
+    const loggedRows = [...new Set(objs.map((o) => o.palette ?? -2))];
+    const counts = j?.counts ?? {};
+    const othersLow = others.every((t) => (counts[t.name] ?? 0) < minEach / 10);
+    const ok = !!j && j.anchorPx !== null && othersLow && loggedRows.length === 1 && loggedRows[0] === u.row && (!own || (counts[own.name] ?? 0) >= minEach);
+    results.push({ entry: u.entry, handle: u.handle, row: u.row, loggedRows, target: own ? own.rgb : null, counts, shot: j?.shot ?? null, anchorPx: j?.anchorPx ?? null, box: j?.box ?? null, ok });
+  }
+  const rows = new Set(cats.map((c) => c.row));
+  const verdict: UnitPaletteVerdict = !results.every((r) => r.ok) ? "wrong-colours" : rows.size >= 2 ? "distinct-rows" : "same-row";
+  return { verdict, pass: verdict === "distinct-rows", column, units: results };
+}
+
+/** the palette columns a model of base grey `grey` can produce (fw_mesh.shader: shade FW_MESH_AMBIENT..1) */
+export function modelPaletteColumns(grey: number): [number, number] {
+  return [paletteColumn(grey, FW_MESH_AMBIENT), paletteColumn(grey, 1)];
+}
+
+/** The cat's 2D doll next to its model: pixels in `box` within tol of any texel (columns 1..14) of each row, leaving out
+ * the columns the model itself can produce (modelPaletteColumns) and pure greys (an unpaletted floor or model looks
+ * the same), so what is counted can only be the sprite's paletted fill. A cat's own row should dominate the other cats' rows around it. */
+export function spriteRowCounts(img: RgbaImageLike, box: Box, pal: RgbaImageLike, rows: number[], grey: number, tol = 6): Record<string, number> {
+  const [c0, c1] = modelPaletteColumns(grey);
+  const sets = rows.map((r) => ({ name: `row${r}`, texels: Array.from({ length: 14 }, (_, k) => k + 1).filter((c) => c < c0 || c > c1).map((c) => paletteTexel(pal, c, r)).filter((t) => !(t[0] === t[1] && t[1] === t[2])) }));
+  const out: Record<string, number> = {};
+  for (const s of sets) out[s.name] = 0;
+  const x0 = Math.max(0, Math.floor(box.x0)), y0 = Math.max(0, Math.floor(box.y0));
+  const x1 = Math.min(img.width, Math.ceil(box.x1)), y1 = Math.min(img.height, Math.ceil(box.y1));
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const i = (y * img.width + x) * 4;
+    for (const s of sets) if (s.texels.some((t) => near(img, i, t, tol))) out[s.name]!++;
+  }
+  return out;
+}

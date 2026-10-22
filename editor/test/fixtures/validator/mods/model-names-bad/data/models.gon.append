@@ -1,0 +1,19 @@
+// malformed registry entries (3D phase M3 "@Name"), one per rule
+Chain {
+	file "@Good"
+}
+NoFile {
+	scale 1
+}
+Num 5
+BadPath {
+	file "textures/x.png"
+}
+Missing {
+	file "models/none.obj"
+}
+BadScale {
+	file "models/box.obj"
+	scale -1
+}
+Good "models/box.obj"
