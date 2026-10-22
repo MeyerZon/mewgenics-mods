@@ -238,9 +238,22 @@ layering detail; the naming/trigger wiring is **OBSERVED**.
 - **Data layer:** retarget which clip an ability/class plays (`.merge` the `graphics` block to
   an existing clip name); pick different existing part indices / `default_face` for a custom
   cat; add a custom cat via `custom_cats.gon.append` using existing part indices + palette.
-- **Authoring + native:** new part art or new animation clips are SWF (Flash) work; because raw
-  parts are **Frame Reliance** (§3), adding *new, non-conflicting* parts needs
-  **MewCatPartFramework** (native) to register them (§6).
+- **New cat animations with the cat's own parts are data-only (OBSERVED 2026-10-22, experiment A0, PRs #74 / #76):**
+  the vanilla cat clip is `CatTest` (catanis.swf) and vanilla itself extends it with catanis2.swf's `_Append_CatTest`;
+  a mod SWF's `_Append_CatTest` frames `<name>F` / `<name>B` (each placing a rig as the child `ani`) merge at boot
+  too, and a `_CAT` unit whose `alt_animations [[idle <name>]]` (or an ability's `animation <name>`) picks the label
+  is drawn in that frame **with the cat's own parts — palette, texture, face** — provided every slot-named instance
+  (`tail leg2 arm2 body leg1 arm1 head`) is an EMPTY 1-frame sprite (`CatParts::prerender` 0x742350 fills a hidden or
+  empty slot; a visible non-empty one crashes at `Mewgenics.exe+0x741f5d`). The editor authors exactly that
+  (`new_art_scene { template: "cat-animation" }`, a `parts: "game"` rig, validator `cat-anim-*`). What the game then
+  does to the doll — one `paletted` material inherited by the whole subtree, `tex`/`scars`/age overlays inside the
+  vanilla part symbols, faces instantiated by the game and positioned by `CatHeadPlacements`, the engine-written
+  x-flip, the separate `Shadow` sprite — and the rig rules that follow (`referencepoint` child, `<anim>F/B` labels,
+  no baked mirror, no own shadow) are `docs/engine-map.md` "CatTest and the cat animation clips" and "Cat parts:
+  entry path, palette, faces, mirroring". No native framework is involved.
+- **Still native (or copied geometry):** *new* part art in catparts.swf (raw parts are **Frame Reliance**, §3, so a
+  new part index needs a native registrar such as **MewCatPartFramework**, §6), and a non-`_CAT` character wearing a
+  cat's parts (the parked hook seam S1 in engine-map, or copying part geometry into the mod — owner's call).
 
 ---
 

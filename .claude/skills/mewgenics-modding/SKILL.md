@@ -110,6 +110,10 @@ The MCP art tools cover the whole loop: `new_art_scene` → `import_svg { svgTex
 palette-remapped by the game for cats; enemy clips are not paletted and are drawn mirrored; bitmaps are smoothed and
 clamped (`npm run test:artprobe` shows the game drawing a probe; `docs/art-preview-plan.md` §8).
 
+Localized text: a `scene.texts` string is literal today. The game localizes a DefineEditText whose initial text is a
+loc key (`docs/data-mods.md` "Localized text for mods" — INFERRED from the decompile, untested, parked by the owner);
+do not promise it to a user until the probe there has run.
+
 ## The mod-development loop (agent alone until the last step)
 
 1. Author the overlays (`new_from_template`, `write_overlay`); `validate_mod` and
