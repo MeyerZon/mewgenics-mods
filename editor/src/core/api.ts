@@ -22,7 +22,8 @@ import { portManifest, renderPortReport } from "./bindings/port.ts";
 import { loadManifest, saveManifest, listManifests, BINDINGS_DIR } from "./bindings/manifest.ts";
 import { parsePe, PeError } from "./bindings/pe.ts";
 import { locateGameDir } from "./ingame/launch.ts";
-import { isInside, touchesSaves, SafetyError } from "./repo.ts";
+import { isInside, touchesSaves, SafetyError, DATA_CACHE_DIR } from "./repo.ts";
+import { loadAudioIndex, audioCategoryEntries, AUDIO_CATEGORIES } from "./audio/sound-sets.ts";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import type { TextOverride } from "./validate/validator.ts";
@@ -40,11 +41,21 @@ export type { RegisteredName } from "./names.ts";
 
 /** List base-data categories with entry counts. */
 export function listBaseData(): { hasBaseData: boolean; categories: baseData.CategoryCount[] } {
-  return { hasBaseData: baseData.hasBaseData(), categories: baseData.listCategories() };
+  const categories = baseData.listCategories();
+  // sounds / music / sound_files come from the cached audio index (npm run build:index), when present
+  const ix = loadAudioIndex(DATA_CACHE_DIR);
+  if (ix) for (const c of AUDIO_CATEGORIES) categories.push({ category: c, count: audioCategoryEntries(ix, c)?.length ?? 0 });
+  return { hasBaseData: baseData.hasBaseData(), categories };
 }
 
 /** List entries within a category. */
 export function listBaseEntries(category: string, filter?: string): { category: string; entries: string[] } {
+  if ((AUDIO_CATEGORIES as readonly string[]).includes(category)) {
+    const ix = loadAudioIndex(DATA_CACHE_DIR);
+    const all = ix ? audioCategoryEntries(ix, category) ?? [] : [];
+    const f = filter?.toLowerCase();
+    return { category, entries: f ? all.filter((n) => n.toLowerCase().includes(f)) : all };
+  }
   return { category, entries: baseData.listEntries(category, filter) };
 }
 
