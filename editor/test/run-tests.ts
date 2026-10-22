@@ -20,6 +20,7 @@ import { previewMerge } from "../src/core/preview-merge.ts";
 import { EXTRACTED_DATA, REPO_ROOT, MODS_DIR } from "../src/core/repo.ts";
 import { makeTestFilter } from "./filter.ts";
 import { runGonRoundTripTests } from "./gon-roundtrip-tests.ts";
+import { runGonTests } from "./gon-tests.ts";
 
 /** The harness contract every suite is written against (`runXTests(test, assert, eq)`). */
 export type TestFn = (name: string, fn: () => void) => void;
@@ -129,6 +130,9 @@ console.log("\n# Runner (name filter)");
     });
   }
 }
+
+// ---- 1b. GON typing fidelity (T0; the game's tokenizer + parser rules) -------
+runGonTests(test, assert, eq);
 
 // ---- 2. Overlay engine fixtures --------------------------------------------
 console.log("\n# Overlay engine (Append / DeepMerge / PatchMerge)");
