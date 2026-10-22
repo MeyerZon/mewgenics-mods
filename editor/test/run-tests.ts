@@ -419,6 +419,13 @@ if (BASE_READY) {
   if (vt) vt.runValidatorTests(test, assert, eq);
 }
 
+// ---- 4f. The 3D data seam: graphics.model (validator codes, registered model names, mods/fw-3d; T0 + T1) ----
+{
+  let m3: typeof import("./model3d-tests.ts") | null = null;
+  try { m3 = await import("./model3d-tests.ts"); } catch (e) { test("model3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (m3) m3.runModel3dTests(test, assert, eq);
+}
+
 // ---- 5. MCP smoke test ------------------------------------------------------
 /** The `tools/call` result shape the smoke reads (MCP content blocks). */
 interface ToolCallResult {

@@ -101,3 +101,8 @@ export function resolutionSets(src: ResolutionSources = {}): ResolutionSets {
     registered,
   };
 }
+
+/** RED STUB: split registered names by kind (model vs the rest). */
+export function splitRegisteredNames(_list: RegisteredName[]): { names: Set<string>; models: Set<string> } {
+  return { names: new Set(), models: new Set() };
+}
