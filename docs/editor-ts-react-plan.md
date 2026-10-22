@@ -176,6 +176,24 @@ PR 1 of the UX overhaul adds the shared building blocks; later PRs move the scre
   Rooms), "Open first file & validate" and the raw JSON behind `<details>`. The Components tab shows the where-used
   files `/api/components?whereUsed=1` returns (first 8, "show all"). The editor status line reads `S.validating`
   (`validating…` from the keystroke until the newest check answers, then `validated`; `validation off` without a mod).
+- **Art mode (PR 4)**: Art is its own chunk: `App.tsx` `React.lazy`-loads `art/ArtPanes.tsx` (the three panes,
+  `preview-gl.ts` and the Ruffle host) behind an `EmptyState` fallback; `art-state.ts` stays in the shell (actions.ts
+  imports it) and gets `createPreview` through `registerPreviewFactory`. `web/src/prefs.ts` keeps per-viewer view
+  options as JSON under `mewged.prefs.<key>` (`art.showGray | background | loop | ghostCat`; the old
+  `mewged.art.ghostCat` migrates on first read), read by `hooks/usePref.ts` and applied to the renderer when it is
+  created. The Preview panel has one View options card (raw gray — the Shapes tab's copy is gone —, a controlled
+  background select, ghost cat on a `parts: game` rig; loop stays in the transport), a controlled palette-row box and
+  the note that browsing rows never dirties the scene. A shape row is id · chips · ramp · meta · Preview · `…` (the
+  `Menu` primitive, open state `S.openMenu = "shape:<id>"`; `ShapeRowMenu.tsx`), whose items keep the old
+  aria-labels; Replace clicks the row's hidden file input. One "Import SVG or PNG" drop zone: a PNG picked or dropped on
+  any Art zone waits in `A.pendingPng` for the Import PNG strip (mode, scale, pixel art, tile) and Import. The
+  VectorCraft panel is mounted once in `ArtCenter`, after and outside the `key={scenePath}` scene panel, so its
+  iframe survives scene switches (`.artpanel.vc-on` shrinks the scene panel to its header); a document remembers its
+  mod + scene and Apply is off in another scene. `SceneTabs.tsx` is the Shapes tab (rows, Bake glow form, path fills)
+  and re-exports `SpritesTab` / `ExportsTab` / `JsonTab`; the views edit the scene through art-state actions that
+  replace the edited object, so the `React.memo` shape / sprite / layer rows re-render only when theirs changes. The
+  JSON tab keeps typed text when the scene moves underneath (a Reload / Keep banner). Every Art file is off the
+  conventions allow-list but one positional path-row key in `SceneTabs.tsx`.
 
 ## Follow-ups (not in this stack)
 

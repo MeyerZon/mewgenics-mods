@@ -2,26 +2,30 @@
 // "Open in VectorCraft" hands one shape over as the SVG svg-export.ts writes; "Apply to shape" exports the
 // document back (presentation attributes, text outlined), undoes the artboard re-origin (svg-reorigin.ts) and
 // replaces the shape through the same /api/art/import-svg path Replace… uses. Nothing is written to disk until
-// the top-bar Save (Ctrl+S). The panel stays mounted (parked off-screen) while another sub-tab is active, so the app, its
-// document and its undo history survive tab switches; opening another scene remounts it.
+// the top-bar Save (Ctrl+S). ArtCenter mounts the panel once, outside the per-scene panel, and parks it off-screen while
+// another sub-tab (or no scene) shows, so the 74 MB app, its document and its undo history survive tab and scene
+// switches (moving the iframe in the DOM would reload it). A document remembers the mod and scene it came from; while
+// another scene is open, Apply is off and the status names the scene the drawing belongs to.
 // Static drawing only — animation stays in the Timeline tab. VectorCraft is a product name of the ArtCraft Team
 // (no logo is shown: the brand files are not open source).
 
 import React, { useEffect, useRef, useState } from "react";
 import { useStore } from "../store.ts";
-import { toast } from "../state.ts";
-import { A, getScene, openShapeInVectorcraft, applyVectorcraftSvg, shapeSvgFor, setVcDirty } from "./art-state.ts";
+import { S, toast } from "../state.ts";
+import { A, getScene, openShapeInVectorcraft, applyVectorcraftSvg, shapeSvgFor, setVcDirty, setVcShape } from "./art-state.ts";
 import { sx } from "./Bits.tsx";
 import { apiOf, exportSvg, isDirty, isVendored, openSvg, vectorcraftUrl, waitForApi } from "./vectorcraft-host.ts";
 import type { VcApi } from "./vectorcraft-host.ts";
 
 type Phase = "checking" | "absent" | "idle" | "loading" | "ready" | "failed";
 
-interface OpenDoc { shapeId: string; name: string; viewBox: number[] }
+interface OpenDoc { shapeId: string; name: string; viewBox: number[]; mod: string; scenePath: string }
 
 export function VectorcraftPanel({ active }: { active: boolean }) {
   const vcShape = useStore(A, (a) => a.vcShape);
   const vcRequest = useStore(A, (a) => a.vcRequest);
+  const scenePath = useStore(A, (a) => a.scenePath);
+  const mod = useStore(S, (s) => s.mod);
   useStore(A, (a) => a.rev);
   const sc = getScene();
   const ids = Object.keys(sc?.shapes || {});
@@ -72,13 +76,16 @@ export function VectorcraftPanel({ active }: { active: boolean }) {
     void openSvg(a, `${vcShape}.svg`, r.svg).then((ok) => {
       setBusy("");
       if (!ok) { toast(`VectorCraft did not open ${vcShape}.svg`); return; }
-      setDoc({ shapeId: vcShape, name: `${vcShape}.svg`, viewBox: r.viewBox });
+      setDoc({ shapeId: vcShape, name: `${vcShape}.svg`, viewBox: r.viewBox, mod: S.get().mod, scenePath: A.get().scenePath });
       setDirty(false);
     });
   }, [phase, vcRequest, vcShape]);
 
-  // the shell's unsaved-work guard (dirty.ts "vc") sees an edited document; a remount (another scene) clears it
-  useEffect(() => { setVcDirty(!!doc && dirty); }, [doc, dirty]);
+  // the open document belongs to the scene it was opened from
+  const ours = !!doc && doc.mod === mod && doc.scenePath === scenePath;
+  // the shell's unsaved-work guard (dirty.ts "vc") sees an edited document of the open scene (another scene's drawing
+  // already went through the guard when that scene was left)
+  useEffect(() => { setVcDirty(ours && dirty); }, [ours, dirty]);
   useEffect(() => () => setVcDirty(false), []);
 
   // the app has no change events: poll the dirty flag while the tab is visible
@@ -92,7 +99,7 @@ export function VectorcraftPanel({ active }: { active: boolean }) {
 
   async function apply() {
     const a = api.current;
-    if (!a || !doc) return;
+    if (!a || !doc || !ours) return;
     setBusy("exporting…");
     try {
       const svg = await exportSvg(a);
@@ -119,6 +126,7 @@ export function VectorcraftPanel({ active }: { active: boolean }) {
     : phase === "loading" ? "loading VectorCraft… (a 74 MB wasm; the first start takes a while)"
     : phase === "failed" ? `${error} — the renderer may be unavailable; retry with WebGL2 forced.`
     : busy ? busy
+    : doc && !ours ? `${doc.name} belongs to the scene ${doc.scenePath}${doc.mod !== mod ? ` of ${doc.mod}` : ""} — open that scene to apply it, or Open a shape of this one`
     : doc ? `${doc.name} open (viewBox ${doc.viewBox.join(" ")})${dirty ? " — edited" : ""}`
     : "running — pick a shape and press Open";
 
@@ -127,11 +135,11 @@ export function VectorcraftPanel({ active }: { active: boolean }) {
     <div className="vcpanel" style={active ? undefined : sx("position:absolute;left:-20000px;top:0;width:1000px;height:700px;visibility:hidden")}>
       <p className="muted vc-caption">VectorCraft (github.com/storytold/vectorcraft, MIT OR Apache-2.0, the pinned web build) — static drawing of one shape at a time. Open hands the shape over as SVG; Apply brings the drawing back over the same shape at its own coordinates (the artboard re-origin is undone). Animation stays in the Timeline tab.</p>
       <div style={sx("display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px")}>
-        <select className="vc-shape" value={vb} onChange={(e) => A.set({ vcShape: e.target.value })} disabled={!ids.length}>
+        <select className="vc-shape" value={vb} onChange={(e) => setVcShape(e.target.value)} disabled={!ids.length}>
           {ids.length ? ids.map((id) => <option key={id} value={id}>{id}</option>) : <option value="">— no shapes —</option>}
         </select>
         <button className="btn sm vc-open" disabled={!vb || phase === "absent" || phase === "failed" || !!busy} onClick={() => openShapeInVectorcraft(vb)} title="Export the shape as SVG and open it in VectorCraft">Open in VectorCraft</button>
-        <button className="btn primary sm vc-apply" disabled={!doc || !dirty || !!busy || phase !== "ready"} onClick={() => void apply()} title="Export the VectorCraft document as SVG and replace the shape with it (in memory; Save in the top bar writes it)">Apply to shape</button>
+        <button className="btn primary sm vc-apply" disabled={!ours || !dirty || !!busy || phase !== "ready"} onClick={() => void apply()} title="Export the VectorCraft document as SVG and replace the shape with it (in memory; Save in the top bar writes it)">Apply to shape</button>
         {phase === "failed" ? <button className="btn ghost sm vc-retry" onClick={retryWebgl}>Retry with WebGL2</button> : null}
       </div>
       <div className="vc-status muted">{status}</div>

@@ -5,8 +5,8 @@
 import React from "react";
 import { useStore } from "../store.ts";
 import { toast } from "../state.ts";
-import { A, getScene, setScene, bump, scheduleValidate, setTarget } from "./art-state.ts";
-import { sx } from "./Bits.tsx";
+import { A, getScene, setScene, bump, scheduleValidate, setTarget, openInTimeline } from "./art-state.ts";
+import { sx, findingKeys } from "./Bits.tsx";
 import { CAT_ANIM_EXPORT, CAT_ANIM_FACINGS, CAT_ANIM_FOUR_WAY, addCatRig, assignSlot, newCatAnimation, catAnimDonor, catSlotsFor, fourWayGroups } from "../../../src/core/art/cat-rig.ts";
 import type { Scene, Finding } from "./types.ts";
 
@@ -37,6 +37,7 @@ export function RigTab() {
   const donor = catAnimDonor(sc);
   const donorRef = (sc.exports || {})[CAT_ANIM_EXPORT];
   const animFindings = findings.filter((f) => /^cat-anim/.test(f.code));
+  const animKeys = findingKeys(animFindings);
   const apply = (r: { scene: Scene; findings: Finding[] }, then?: () => void) => {
     const e = r.findings.find((f) => f.severity === "error");
     if (e) return toast(e.message);
@@ -76,6 +77,7 @@ export function RigTab() {
       {rigs.map((id) => {
         const sp = sc.sprites[id]!;
         const rf = findings.filter((f) => f.path === `sprites.${id}` && /^rig-/.test(f.code));
+        const rfKeys = findingKeys(rf);
         return (
           <div key={id} className="card plain">
             <div style={sx("display:flex;align-items:center;gap:10px")}>
@@ -83,9 +85,9 @@ export function RigTab() {
               <span className="meta">{`${sp.facing === "back" ? "back-facing · " : ""}${sp.frames} frames · labels ${Object.keys(sp.labels || {}).join(", ") || "-"}`}</span>
               <div className="grow" />
               <button className="btn ghost sm" onClick={() => setTarget(id)}>Preview</button>
-              <button className="btn ghost sm" onClick={() => { A.set({ subtab: "timeline" }); setTarget(id); }}>Animate</button>
+              <button className="btn ghost sm" onClick={() => openInTimeline(id)}>Open in Timeline</button>
             </div>
-            {rf.map((f, i) => <div key={i} className={`pill chip ${f.severity === "error" ? "err" : f.severity === "warning" ? "warn" : "muted"}`} style={sx("margin-top:6px")}>{f.message}</div>)}
+            {rf.map((f, n) => <div key={rfKeys[n]} className={`pill chip ${f.severity === "error" ? "err" : f.severity === "warning" ? "warn" : "muted"}`} style={sx("margin-top:6px")}>{f.message}</div>)}
             <div style={sx("margin-top:8px")}>
               {catSlotsFor(sp).map((slot) => {
                 const layer = sp.layers.find((l) => l.name === slot.name);
@@ -152,9 +154,9 @@ export function RigTab() {
             <span className="meta">{`${sc.sprites[donor]!.frames} frames · exported as ${CAT_ANIM_EXPORT}`}</span>
             <div className="grow" />
             <button className="btn ghost sm" onClick={() => setTarget(donor)}>Preview</button>
-            <button className="btn ghost sm" onClick={() => { A.set({ subtab: "timeline" }); setTarget(donor); }}>Timeline</button>
+            <button className="btn ghost sm" onClick={() => openInTimeline(donor)}>Open in Timeline</button>
           </div>
-          {animFindings.map((f, i) => <div key={i} className={`pill chip cat-anim-finding ${f.severity === "error" ? "err" : f.severity === "warning" ? "warn" : "muted"}`} style={sx("margin-top:6px")}>{f.message}</div>)}
+          {animFindings.map((f, n) => <div key={animKeys[n]} className={`pill chip cat-anim-finding ${f.severity === "error" ? "err" : f.severity === "warning" ? "warn" : "muted"}`} style={sx("margin-top:6px")}>{f.message}</div>)}
           <div style={sx("margin-top:8px")}>
             {catAnimPairs(sc.sprites[donor]!.labels || {}).map((pair) => {
               const placed = pair.frames.map((fr) => (fr.frame === null ? null : placedRef(sc, donor, fr.frame)));
@@ -167,7 +169,7 @@ export function RigTab() {
                   </span>
                   <span className="meta mono">{placed.map((r, i) => `${pair.frames[i]!.suffix}: ${r || "(nothing)"}`).join(" · ")}</span>
                   <div className="grow" />
-                  {rig ? <button className="btn ghost sm" onClick={() => { A.set({ subtab: "timeline" }); setTarget(rig); }}>Animate pose</button> : null}
+                  {rig ? <button className="btn ghost sm" onClick={() => openInTimeline(rig)}>Animate pose</button> : null}
                 </div>
               );
             })}

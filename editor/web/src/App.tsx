@@ -6,7 +6,7 @@
 // with unsaved work raises the browser's own beforeunload prompt.
 
 import React from "react";
-import { useS, PaneBoundary, Modal, Button } from "./components/ui.tsx";
+import { useS, PaneBoundary, Modal, Button, EmptyState } from "./components/ui.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { Explorer } from "./components/Explorer.tsx";
 import { Center } from "./components/Center.tsx";
@@ -17,9 +17,6 @@ import { ConceptsDrawer } from "./components/ConceptsDrawer.tsx";
 import { BaseEntryDrawer, ComponentsDrawer } from "./components/Drawers.tsx";
 import { TourModal, ArtTourModal } from "./components/Tours.tsx";
 import { WorkedExample, ArtWorkedExample } from "./components/WorkedExamples.tsx";
-import { ArtExplorer } from "./art/ArtExplorer.tsx";
-import { ArtCenter } from "./art/ArtCenter.tsx";
-import { ArtRightPanel } from "./art/ArtRightPanel.tsx";
 import { initArtUi } from "./art/art-state.ts";
 import { RoomExplorer, RoomCenter, RoomRightPanel } from "./rooms/Rooms.tsx";
 import { startup, closeMenu, saveCurrent, loadStatus } from "./actions.ts";
@@ -27,6 +24,26 @@ import { initShortcuts, setSaveHandler } from "./shortcuts.ts";
 import { isDirty, resolveConfirm } from "./dirty.ts";
 
 let artUiReady = false;
+
+// Art mode is its own chunk (art/ArtPanes.tsx: the panes, the preview renderer, the Ruffle host), fetched the first
+// time Art mode shows; the three lazies share the one import.
+const artPanes = () => import("./art/ArtPanes.tsx");
+const ArtExplorer = React.lazy(() => artPanes().then((m) => ({ default: m.ArtExplorer })));
+const ArtCenter = React.lazy(() => artPanes().then((m) => ({ default: m.ArtCenter })));
+const ArtRightPanel = React.lazy(() => artPanes().then((m) => ({ default: m.ArtRightPanel })));
+
+function ArtLoading(): React.JSX.Element {
+  return (
+    <div className="emptycenter">
+      <EmptyState icon="▲" title="Loading Art mode…" />
+    </div>
+  );
+}
+
+/** One lazily loaded Art pane, with the loading state while its chunk arrives. */
+function Lazy({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <React.Suspense fallback={<ArtLoading />}>{children}</React.Suspense>;
+}
 
 function Shell(): React.JSX.Element {
   const mod = useS((s) => s.mod);
@@ -37,9 +54,9 @@ function Shell(): React.JSX.Element {
     <div className="shell">
       <TopBar />
       <div className="body" style={{ gridTemplateColumns: columns }}>
-        <PaneBoundary name="Explorer">{roomMode ? <RoomExplorer /> : artMode ? <ArtExplorer /> : <Explorer />}</PaneBoundary>
-        <PaneBoundary name="Editor">{roomMode ? <RoomCenter /> : artMode ? <ArtCenter /> : <Center />}</PaneBoundary>
-        {mod ? <PaneBoundary name="Right panel">{roomMode ? <RoomRightPanel /> : artMode ? <ArtRightPanel /> : <RightPanel />}</PaneBoundary> : null}
+        <PaneBoundary name="Explorer">{roomMode ? <RoomExplorer /> : artMode ? <Lazy><ArtExplorer /></Lazy> : <Explorer />}</PaneBoundary>
+        <PaneBoundary name="Editor">{roomMode ? <RoomCenter /> : artMode ? <Lazy><ArtCenter /></Lazy> : <Center />}</PaneBoundary>
+        {mod ? <PaneBoundary name="Right panel">{roomMode ? <RoomRightPanel /> : artMode ? <Lazy><ArtRightPanel /></Lazy> : <RightPanel />}</PaneBoundary> : null}
       </div>
       <StatusBar />
     </div>
