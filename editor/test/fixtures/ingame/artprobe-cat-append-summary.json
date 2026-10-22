@@ -1,8 +1,8 @@
 {
-  "observed": "2026-10-21, build 25143593",
-  "verdict": "crash",
-  "reason": "crash 0xc0000005 at Mewgenics.exe+0x741f5d; 3 shot(s)",
-  "crashRva": "0x741f5d",
+  "observed": "2026-10-22, build 25143593",
+  "verdict": "pass",
+  "reason": "all 3 expectation(s) passed; 6 shot(s)",
+  "crashRva": null,
   "controls": {
     "crawlingIdle": {
       "test": "render-cat-append-ctl",
@@ -27,51 +27,236 @@
     "arm1": "#a0ff40",
     "head": "#ffd0a0"
   },
-  "outcome": "crash",
+  "outcome": "filled-by-name",
   "shots": [
     "baseline",
     "vanilla",
-    "primer"
+    "primer",
+    "rig 1",
+    "rig 2",
+    "rig 3"
   ],
   "vanilla": {
     "label": "vanilla",
     "region": {
-      "n": 573498,
-      "x0": 959,
-      "y0": 248,
-      "x1": 2418,
-      "y1": 1255,
-      "cx": 1688.5,
-      "cy": 751.5
+      "n": 9870,
+      "x0": 2096,
+      "y0": 389,
+      "x1": 2330,
+      "y1": 562,
+      "cx": 2213,
+      "cy": 475.5
     },
     "near": {
-      "changed": 261097,
-      "excluded": 2058,
-      "other": 259039
-    }
+      "changed": 23320,
+      "excluded": 2759,
+      "other": 20561,
+      "colours": {
+        "tail": 0,
+        "leg2": 0,
+        "arm2": 0,
+        "body": 0,
+        "leg1": 0,
+        "arm1": 0,
+        "head": 2759,
+        "markerYellow": 0,
+        "markerMagenta": 0,
+        "markerCyan": 0
+      }
+    },
+    "outline": 10946
   },
   "primer": {
     "label": "primer",
     "marker": {
       "found": true,
       "box": {
-        "x0": 2490,
-        "y0": 461,
-        "x1": 2653,
-        "y1": 569
+        "x0": 2124,
+        "y0": 520,
+        "x1": 2289,
+        "y1": 630
       },
-      "scale": 1.7083333333333333,
+      "scale": 1.7291666666666667,
       "mirrored": true
     },
     "slots": {
-      "tail": 2331,
-      "leg2": 562,
-      "arm2": 692,
-      "body": 6609,
-      "leg1": 1204,
-      "arm1": 1171,
-      "head": 4999
+      "tail": 2356,
+      "leg2": 540,
+      "arm2": 646,
+      "body": 6491,
+      "leg1": 1141,
+      "arm1": 1127,
+      "head": 8087
     }
   },
-  "rig": []
+  "rig": [
+    {
+      "label": "rig 1",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1986,
+          "y0": 241,
+          "x1": 2168,
+          "y1": 362
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "ours": true,
+      "centredOn": "the cat under our marker",
+      "centre": {
+        "x": 2077,
+        "y": 808.5625
+      },
+      "outline": 11088,
+      "slots": {
+        "tail": 2268,
+        "leg2": 539,
+        "arm2": 15,
+        "body": 6534,
+        "leg1": 1186,
+        "arm1": 247,
+        "head": 8945
+      },
+      "near": {
+        "changed": 36290,
+        "excluded": 2648,
+        "other": 33642,
+        "colours": {
+          "tail": 2,
+          "leg2": 0,
+          "arm2": 5,
+          "body": 0,
+          "leg1": 0,
+          "arm1": 4,
+          "head": 2637,
+          "markerYellow": 0,
+          "markerMagenta": 0,
+          "markerCyan": 0
+        }
+      },
+      "region": {
+        "n": 9618,
+        "x0": 1974,
+        "y0": 816,
+        "x1": 2203,
+        "y1": 989,
+        "cx": 2088.5,
+        "cy": 902.5
+      }
+    },
+    {
+      "label": "rig 2",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 1986,
+          "y0": 241,
+          "x1": 2168,
+          "y1": 362
+        },
+        "scale": 1.90625,
+        "mirrored": true
+      },
+      "ours": true,
+      "centredOn": "the cat under our marker",
+      "centre": {
+        "x": 2077,
+        "y": 808.5625
+      },
+      "outline": 11695,
+      "slots": {
+        "tail": 2259,
+        "leg2": 544,
+        "arm2": 16,
+        "body": 6538,
+        "leg1": 1169,
+        "arm1": 252,
+        "head": 8714
+      },
+      "near": {
+        "changed": 38006,
+        "excluded": 2564,
+        "other": 35442,
+        "colours": {
+          "tail": 0,
+          "leg2": 0,
+          "arm2": 6,
+          "body": 2,
+          "leg1": 0,
+          "arm1": 2,
+          "head": 2554,
+          "markerYellow": 0,
+          "markerMagenta": 0,
+          "markerCyan": 0
+        }
+      },
+      "region": {
+        "n": 10762,
+        "x0": 1974,
+        "y0": 816,
+        "x1": 2203,
+        "y1": 988,
+        "cx": 2088.5,
+        "cy": 902
+      }
+    },
+    {
+      "label": "rig 3",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 2124,
+          "y0": 520,
+          "x1": 2289,
+          "y1": 630
+        },
+        "scale": 1.7291666666666667,
+        "mirrored": true
+      },
+      "ours": false,
+      "centredOn": "the primer's marker",
+      "centre": {
+        "x": 2206.5,
+        "y": 575
+      },
+      "outline": 4808,
+      "slots": {
+        "tail": 2269,
+        "leg2": 543,
+        "arm2": 539,
+        "body": 6538,
+        "leg1": 1165,
+        "arm1": 618,
+        "head": 9558
+      },
+      "near": {
+        "changed": 28378,
+        "excluded": 1644,
+        "other": 26734,
+        "colours": {
+          "tail": 0,
+          "leg2": 0,
+          "arm2": 16,
+          "body": 2,
+          "leg1": 0,
+          "arm1": 17,
+          "head": 1609,
+          "markerYellow": 0,
+          "markerMagenta": 0,
+          "markerCyan": 0
+        }
+      },
+      "region": {
+        "n": 9709,
+        "x0": 1471,
+        "y0": 616,
+        "x1": 1713,
+        "y1": 783,
+        "cx": 1592,
+        "cy": 699.5
+      }
+    }
+  ]
 }

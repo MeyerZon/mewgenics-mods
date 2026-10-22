@@ -14,11 +14,12 @@ docs sweep at the end of this list.
       (b) native swap (the game puts its own per-cat parts into our rig's slots) — several RE sessions, 3–6 PRs,
       uncertain;
       (c) neither — keep drawing our own parts (Rig tab + SVG round trip).
-      2026-10-21, experiment A0 (`npm run test:artprobe -- --cat-append`, engine-map "CatTest and the cat animation
-      clips"): route (b)'s cheapest form — append our rig as a `CatTest` frame (`_Append_CatTest`, the mechanism
-      vanilla's catanis2.swf uses) and let the game fill the named slots — **crashes on spawn** at
-      `Mewgenics.exe+0x741f5d` in five structural variants, while a vanilla appended label and a missing label both
-      spawn fine; whether slots are filled by name stays unanswered until `0x741f10` is decompiled. Still open.
+      **Appended cat animations work at the data layer with empty slots — OBSERVED 2026-10-22** (experiment A0,
+      `npm run test:artprobe -- --cat-append`, engine-map "CatTest and the cat animation clips"): a `_Append_CatTest`
+      frame placing a rig whose seven slots are EMPTY 1-frame sprites is filled by the game with the cat's own parts
+      (CatParts' create path; the 2026-10-21 crash at `+0x741f5d` was the visible non-empty placeholder — catB). So
+      route (b) costs nothing for cat animations; a native hook is only needed for scoped standalone rig clips (a
+      non-`_CAT` character getting a cat's parts), and (a)/(c) stay the options for drawn parts on such a character.
 - [ ] **Localized text?** Texts (#69) are the literal initial string in a game font. Should mods get localized text
       (loc keys / per-language strings), and is Peralta the right default font?
 - [ ] **Filters / glows:** the game refuses any PlaceObject3 filter ("FILTERS NOT SUPPORTED", #65), so the validator
@@ -369,7 +370,7 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
 ### Larger build-out
 - [ ] Animation-clip authoring workflow (DefineSprite timelines end-to-end) once the emitter is engine-valid
 - [ ] Part-indexed **cat-rig** authoring UI (model already supports named layers)
-- [ ] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-21: the append route (`_Append_CatTest` frame placing our rig, experiment A0) crashes on spawn at `Mewgenics.exe+0x741f5d`; controls pass; next step is decompiling `0x741f10` (engine-map "CatTest and the cat animation clips").
+- [ ] Cat parts in a rig: the import route is closed (2026-10-20: ImportAssets2 entries are never linked; placing one crashes — engine-map "Imports are not linked"). Remaining routes: copy part geometry into the mod (~1 day, frozen copies, redistributes game art) or native swap (several RE sessions). Owner's call. 2026-10-22: the append route (`_Append_CatTest` frame placing a rig with EMPTY slot sprites, experiment A0) works — the game draws the cat's own parts into our frame; the 2026-10-21 crash was the visible non-empty placeholder (engine-map "CatTest and the cat animation clips").
 - [x] Clip authoring (Timeline tab, timeline-edit.ts) and the cat rig (Rig tab, cat-rig.ts) — 2026-10-20, art build-out G + H; the game drives a character's root timeline, units are tinted by position
 - [ ] Emitter: ~~gradient fills~~ (done 2026-10-20, art build-out C: gradient.ts, gate `gradient`, probe square drawn in-game), ~~LineStyle2~~ (done 2026-10-20, art build-out E: DefineShape4, stroke.ts, gate `shape4`, caps honoured in-game), ~~fonts/text~~ (done 2026-10-21: DefineEditText in a game font class + ImportAssets2 fonts.swf, like vanilla; drawn in-game), ~~PlaceObject3~~ (done 2026-10-20, art build-out F: blends load and apply in-game; filters crash the game and are a validation error)
 - [ ] MCP tools for art (so agents can author art, not just data)

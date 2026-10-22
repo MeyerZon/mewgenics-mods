@@ -9,11 +9,11 @@ ArtProbe {
     }
 }
 
-// test-only: a Rat drawn by the CatProbe cat rig (one passthrough colour per vanilla cat slot; npm run test:artprobe -- --cat)
+// test-only: a Rat drawn by the CatProbeColours cat rig (one passthrough colour per vanilla cat slot; npm run test:artprobe -- --cat)
 ArtProbeCat {
     variant_of Rat
     graphics {
-        movieclip CatProbe
+        movieclip CatProbeColours
         name "ENEMY_LILRAT_NAME"
         shadow_size .70
         tooltip "ENEMY_LILRAT_DESC"
@@ -21,8 +21,8 @@ ArtProbeCat {
 }
 
 // test-only (experiment A0, 2026-10-21): a real cat — TomTom's parts (movieclip _CAT + custom_cat_data) — whose idle is
-// the frame probe.swf appends to the vanilla cat clip (_Append_CatTest: probeIdleF / probeIdleB place the CatProbe rig
-// as `pawing`); npm run test:artprobe -- --cat-append asks whether the game fills the rig's slots by name
+// the frame probe.swf appends to the vanilla cat clip (_Append_CatTest: probeIdleF / probeIdleB place the CatProbe rig —
+// EMPTY slot sprites — as `ani`); npm run test:artprobe -- --cat-append shows the game filling the rig's slots by name
 ArtProbeCatReal {
     variant_of TomTom
     graphics {

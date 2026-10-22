@@ -241,16 +241,30 @@ function changedAt(img: RgbaImageLike, ref: RgbaImageLike, i: number, tol: numbe
 
 export interface ChangedRegion { n: number; x0: number; y0: number; x1: number; y1: number; cx: number; cy: number }
 
+/** pixel i of img is near-black: every channel below `dark` */
+function darkAt(img: RgbaImageLike, i: number, dark: number): boolean {
+  const j = i * 4;
+  return img.rgba[j]! < dark && img.rgba[j + 1]! < dark && img.rgba[j + 2]! < dark;
+}
+
 /**
  * The largest 8-connected region of pixels that differ from `ref` (a shot of the same scene taken before something
  * was spawned) by more than `tol`; its bbox centre is where the new thing is. null when nothing changed. Crude by
- * design: idle bobbing of other units and UI changes also differ, but the spawned unit is the biggest blob.
+ * design: idle bobbing of other units and UI changes also differ, but the spawned unit is the biggest blob — unless
+ * the floor overlay toggles (OBSERVED: the move-range highlight), when the whole arena is the blob; with `dark`
+ * only near-black pixels count, which the overlay never adds and a real cat's outline is made of.
  */
-export function largestChangedRegion(img: RgbaImageLike, ref: RgbaImageLike, tol = 60): ChangedRegion | null {
+export function largestChangedRegion(img: RgbaImageLike, ref: RgbaImageLike, opts: number | { tol?: number; dark?: number; within?: { x0: number; y0: number; x1: number; y1: number } } = 60): ChangedRegion | null {
+  const tol = typeof opts === "number" ? opts : opts.tol ?? 60;
+  const dark = typeof opts === "number" ? undefined : opts.dark;
   const W = img.width, H = img.height;
   if (ref.width !== W || ref.height !== H) return null;
+  const win = typeof opts === "number" || !opts.within ? { x0: 0, y0: 0, x1: W - 1, y1: H - 1 } : opts.within;
   const mask = new Uint8Array(W * H);
-  for (let i = 0; i < W * H; i++) if (changedAt(img, ref, i, tol)) mask[i] = 1;
+  for (let y = Math.max(0, win.y0); y <= Math.min(H - 1, win.y1); y++) for (let x = Math.max(0, win.x0); x <= Math.min(W - 1, win.x1); x++) {
+    const i = y * W + x;
+    if (changedAt(img, ref, i, tol) && (dark === undefined || darkAt(img, i, dark))) mask[i] = 1;
+  }
   let best: ChangedRegion | null = null;
   const stack: number[] = [];
   for (let start = 0; start < mask.length; start++) {
@@ -282,6 +296,8 @@ export interface ChangedNear {
   excluded: number;
   /** the rest: what was drawn here that is neither our slot colours nor our marker — real cat parts, or nothing */
   other: number;
+  /** with `perColour`: the excluded pixels by colour name (which slot colours appeared here; the marker's own) */
+  colours?: Record<string, number>;
 }
 
 /**
@@ -290,12 +306,14 @@ export interface ChangedNear {
  * marker" measure of the cat append probe: run on the rig shot against the shot before the rig cat spawned, centred
  * on the marker, excluding the seven slot colours and the marker's own yellow / magenta / cyan.
  */
-export function changedPixelsNear(img: RgbaImageLike, ref: RgbaImageLike, centre: { x: number; y: number }, radius: number, opts: { tol?: number; exclude?: Record<string, string> } = {}): ChangedNear {
+export function changedPixelsNear(img: RgbaImageLike, ref: RgbaImageLike, centre: { x: number; y: number }, radius: number, opts: { tol?: number; exclude?: Record<string, string>; perColour?: boolean } = {}): ChangedNear {
   const out: ChangedNear = { changed: 0, excluded: 0, other: 0 };
   const W = img.width, H = img.height;
   if (ref.width !== W || ref.height !== H) return out;
   const tol = opts.tol ?? 60;
   const excl = parseColours(opts.exclude || {});
+  const colours: Record<string, number> | null = opts.perColour ? Object.fromEntries(excl.map(([k]) => [k, 0])) : null;
+  if (colours) out.colours = colours;
   const x0 = Math.max(0, Math.floor(centre.x - radius)), x1 = Math.min(W - 1, Math.ceil(centre.x + radius));
   const y0 = Math.max(0, Math.floor(centre.y - radius)), y1 = Math.min(H - 1, Math.ceil(centre.y + radius));
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -303,9 +321,30 @@ export function changedPixelsNear(img: RgbaImageLike, ref: RgbaImageLike, centre
     const i = y * W + x;
     if (!changedAt(img, ref, i, tol)) continue;
     out.changed++;
-    if (excl.some(([, c]) => matchTinted(img, i, c))) out.excluded++; else out.other++;
+    const hit = excl.find(([, c]) => matchTinted(img, i, c));
+    if (hit) { out.excluded++; if (colours) colours[hit[0]]!++; } else out.other++;
   }
   return out;
+}
+
+/**
+ * The near-black pixels within `radius` of `centre` that are new vs `ref` (changed by more than `tol`): a real cat's
+ * outline. The "real parts" measure of the cat append probe — the floor overlay (re-lighting, the move-range
+ * highlight) and the re-tinted units it touches never add black, and neither our rig nor the marker has any.
+ */
+export function darkPixelsNear(img: RgbaImageLike, ref: RgbaImageLike, centre: { x: number; y: number }, radius: number, opts: { tol?: number; dark?: number } = {}): number {
+  const W = img.width, H = img.height;
+  if (ref.width !== W || ref.height !== H) return 0;
+  const tol = opts.tol ?? 60, dark = opts.dark ?? 40;
+  let n = 0;
+  const x0 = Math.max(0, Math.floor(centre.x - radius)), x1 = Math.min(W - 1, Math.ceil(centre.x + radius));
+  const y0 = Math.max(0, Math.floor(centre.y - radius)), y1 = Math.min(H - 1, Math.ceil(centre.y + radius));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if ((x - centre.x) ** 2 + (y - centre.y) ** 2 > radius * radius) continue;
+    const i = y * W + x;
+    if (darkAt(img, i, dark) && changedAt(img, ref, i, tol)) n++;
+  }
+  return n;
 }
 
 /** The marker's yellow border and magenta / cyan cells (probe.scene.json `checker`), as exclude colours. */

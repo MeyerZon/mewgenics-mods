@@ -471,8 +471,16 @@ the summary is pinned in `editor/test/fixtures/ingame/artprobe-summary.json`):
     OBSERVED (`npm run test:artprobe -- --cat`): a character drawn by our seven-slot rig shows every slot in the
     game. Units are **tinted by where they stand** (the rig's colours came back at ~0.80–0.86 in a shaded spot while
     the main probe's gray control stood lit and read exact). Out of scope (engine work): adding parts to
-    catparts.swf or making the game swap its own cat parts into our slots. Not done: copying vanilla part geometry
-    into a mod (owner's call, H2).
+    catparts.swf. **The game swaps its own cat parts into our slots by itself (OBSERVED 2026-10-22, experiment A0,
+    PR #74):** on a `_CAT` cat, `CatParts::prerender` fills every slot-named instance of whatever clip the renderer
+    plays, provided the slot sprite is hidden or EMPTY (a visible non-empty placeholder is the `+0x741f5d` crash;
+    `.analysis/notes-catB.md`). A `parts: "game"` rig (`addCatRig(scene, name, { parts: "game" })`: empty
+    `<name>_<slot>` sprites, validator `rig-slot-not-empty`) placed as the child `ani` on an `_Append_CatTest` frame is
+    drawn with the cat's real parts — palette, texture, face — at the slot matrices we author; `mods/_artprobe`'s
+    `CatProbe` uses vanilla `idleF`'s slot matrices (pinned T1) so the parts stand like a cat. The preview draws
+    nothing for empty slots (a ghost cat is a follow-up: our placeholders are feet-anchored, the real parts are
+    centred on their own origin under 0.62-scale matrices). Not done: copying vanilla part geometry into a mod for a
+    non-`_CAT` character (owner's call, H2).
     **Text done 2026-10-21, the base game's way (owner: "use whatever base game uses"):** vanilla ability_icons.swf and
     ui.swf declare `ImportAssets2("fonts.swf")` with zero assets and use `DefineEditText` with a font *class* (flags
     0xeca3, HTML `<p align><font size color letterSpacing kerning>`), so no glyphs live in the file. `src/core/art/text.ts`

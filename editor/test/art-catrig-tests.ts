@@ -215,6 +215,8 @@ export async function runArtCatRigTests(test: TestFn, assert: AssertFn, eq: EqFn
     eq(g(A, R, { x: 12.5, y: 6.5 }, 10), 36);
     eq(g(A, R, { x: 12.5, y: 6.5 }, 10, { dark: 15 }), 0);
     eq(JSON.stringify(f(A, R, { dark: 40 })), JSON.stringify({ n: 36, x0: 10, y0: 4, x1: 15, y1: 9, cx: 12.5, cy: 6.5 }));
+    // `within` limits the search to a window (the arena, away from the HUD: OBSERVED the End Turn button animating)
+    eq(JSON.stringify(f(A, R, { dark: 40, within: { x0: 25, y0: 0, x1: 39, y1: 19 } })), JSON.stringify({ n: 4, x0: 30, y0: 2, x1: 31, y1: 3, cx: 30.5, cy: 2.5 }));
     eq(f(A, R, 60).n, W * H - 4); // the number form still means tol: everything but the dark-in-both corner changed
   });
 

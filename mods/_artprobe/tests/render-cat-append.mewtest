@@ -1,17 +1,24 @@
 mods: _artprobe, _autoplay
 timeout: 120s
 hide: false
-# Experiment A0 (2026-10-21): does the game fill the slots of an appended cat animation frame by name?
+# Experiment A0 (2026-10-21): the game fills the slots of an appended cat animation frame by name.
 # probe.swf exports _Append_CatTest (CatAppendRoot: labels probeIdleF / probeIdleB, each placing the CatProbe rig as
-# the nested sprite `pawing` at depth 1, like every vanilla CatTest frame). ArtProbeCatReal is TomTom (a real cat:
-# movieclip _CAT + custom_cat_data) with alt_animations [[idle probeIdle]], so its idle is our appended frame.
-# Shots: baseline (no spawn), vanilla (TomTom: real parts, the control), then the rig cat three times.
-# editor/scripts/art-probe.ts --cat-append reads them (probe-compare.ts): slot colours left, the marker, and what
-# changed near the marker vs the previous shot.
+# the nested child `ani` at depth 1 — the child the animation driver restarts). CatProbe's seven slots are EMPTY
+# 1-frame sprites at vanilla idleF's slot matrices (CatParts takes its create path only for a hidden or empty slot
+# sprite and inserts the ReferenceRenderer that draws the cat's own part; a visible non-empty slot is the +0x741f5d
+# crash — .analysis/notes-catB.md) plus the checker marker at the non-slot depth 15. ArtProbeCatReal is TomTom (a
+# real cat: movieclip _CAT + custom_cat_data) with alt_animations [[idle probeIdle]], so its idle is our appended frame.
+# Shots: baseline (settled: after the Battle Start banner, no spawn), vanilla (TomTom: real parts, the control),
+# primer (ArtProbeCat: the coloured CatProbeColours rig as a plain movieclip), then the rig cat three times within
+# 160 frames of its spawn (OBSERVED 2026-10-21: _autoplay's party killed it between +160 and +200 frames, after which
+# it lay in the vanilla death pose and our frame was gone).
+# editor/scripts/art-probe.ts --cat-append reads them (probe-compare.ts): our marker (a yellow box that is not the
+# primer's), the new near-black pixels under it vs the primer shot (a real cat's outline; the move-range overlay that
+# toggles between shots adds none), the same for TomTom vs the baseline, and the colour counts for the record.
 wait frames 120
 seed 42
 enter TacticsTest
-wait frames 60
+wait frames 300
 shot "baseline"
 cmd spawn TomTom
 expect console "Spawned TomTom" within 10
@@ -25,8 +32,8 @@ cmd spawn ArtProbeCatReal
 expect console "Spawned ArtProbeCatReal" within 10
 wait frames 120
 shot "rig 1"
-wait frames 40
+wait frames 20
 shot "rig 2"
-wait frames 40
+wait frames 20
 shot "rig 3"
 quit
