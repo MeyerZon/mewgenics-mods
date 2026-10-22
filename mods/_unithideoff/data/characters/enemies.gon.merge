@@ -1,0 +1,11 @@
+// _unithideoff (test-only, 3D phase M3): the control of _unithide — the same 0.4 box on the Rat, hide_sprite false, so
+// the Rat's sprite draws next to it.
+Rat {
+	graphics {
+		model {
+			file "models/unit-box.gltf"
+			scale 0.4
+			hide_sprite false
+		}
+	}
+}

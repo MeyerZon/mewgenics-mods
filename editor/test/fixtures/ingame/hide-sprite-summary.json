@@ -1,0 +1,62 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "what": "hide_sprite (3D phase M3): the Rat wears a magenta 0.4 box; hide = hide_sprite true (_unithide), control = hide_sprite false (_unithideoff); dark = pixels with r+g+b < 90 (the Rat sprite's black outline) in the box around the magenta patch (patch widened by its width each side, 2x its height above, 1x below)",
+  "hide": {
+    "script": "mods/_unithide/tests/unit-hide.mewtest",
+    "runDir": "editor/data/ingame-runs/20261022-155745-_unithide-unit-hide",
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 1 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "shot": {
+      "label": "hide",
+      "size": [
+        3440,
+        1440
+      ],
+      "patch": {
+        "count": 2844,
+        "x0": 2664,
+        "y0": 734,
+        "x1": 2723,
+        "y1": 794
+      },
+      "box": {
+        "x0": 2605,
+        "x1": 2782,
+        "y0": 614,
+        "y1": 854
+      },
+      "dark": 0,
+      "total": 42898
+    }
+  },
+  "control": {
+    "script": "mods/_unithide/tests/unit-hide-control.mewtest",
+    "runDir": "editor/data/ingame-runs/20261022-155755-_unithide-unit-hide-control",
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 1 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "shot": {
+      "label": "control",
+      "size": [
+        3440,
+        1440
+      ],
+      "patch": {
+        "count": 2856,
+        "x0": 2664,
+        "y0": 734,
+        "x1": 2723,
+        "y1": 794
+      },
+      "box": {
+        "x0": 2605,
+        "x1": 2782,
+        "y0": 614,
+        "y1": 854
+      },
+      "dark": 3178,
+      "total": 42898
+    }
+  }
+}

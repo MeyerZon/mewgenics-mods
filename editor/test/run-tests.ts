@@ -460,6 +460,13 @@ console.log("\n# Audio (sounds and music)");
   if (mc) mc.runModelCodesTests(test, assert, eq);
 }
 
+// ---- 4g2. Named models (3D phase M3 "@Name"): data/models.gon, model-name-unknown / model-registry-entry ----
+{
+  let mn: typeof import("./model-names-tests.ts") | null = null;
+  try { mn = await import("./model-names-tests.ts"); } catch (e) { test("model-names-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mn) mn.runModelNamesTests(test, assert, eq);
+}
+
 // ---- 5. MCP smoke test ------------------------------------------------------
 /** The `tools/call` result shape the smoke reads (MCP content blocks). */
 interface ToolCallResult {
@@ -518,7 +525,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 31 editor tools", () => eq(list.tools.length, 31));
+    test("tools/list returns the 32 editor tools", () => eq(list.tools.length, 32));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -682,12 +689,27 @@ await mcpSmoke();
   let mtt: typeof import("./mesh-tex-tests.ts") | null = null;
   try { mtt = await import("./mesh-tex-tests.ts"); } catch (e) { test("mesh-tex-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (mtt) mtt.runMeshTexTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let gtt: typeof import("./glb-texture-tests.ts") | null = null;
+  try { gtt = await import("./glb-texture-tests.ts"); } catch (e) { test("glb-texture-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (gtt) gtt.runGlbTextureTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let umt: typeof import("./unit-model-tests.ts") | null = null;
   try { umt = await import("./unit-model-tests.ts"); } catch (e) { test("unit-model-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (umt) umt.runUnitModelTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mht: typeof import("./mesh-hide-tests.ts") | null = null;
+  try { mht = await import("./mesh-hide-tests.ts"); } catch (e) { test("mesh-hide-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mht) mht.runMeshHideTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let uft: typeof import("./unit-face-tests.ts") | null = null;
+  try { uft = await import("./unit-face-tests.ts"); } catch (e) { test("unit-face-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (uft) uft.runUnitFaceTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let upt: typeof import("./unit-palette-tests.ts") | null = null;
+  try { upt = await import("./unit-palette-tests.ts"); } catch (e) { test("unit-palette-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (upt) upt.runUnitPaletteTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let mot: typeof import("./mesh-occlusion-tests.ts") | null = null;
   try { mot = await import("./mesh-occlusion-tests.ts"); } catch (e) { test("mesh-occlusion-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (mot) mot.runMeshOcclusionTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
+  let mst: typeof import("./mesh-slices-tests.ts") | null = null;
+  try { mst = await import("./mesh-slices-tests.ts"); } catch (e) { test("mesh-slices-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mst) mst.runMeshSlicesTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });
   let o3t: typeof import("./obs3d-tests.ts") | null = null;
   try { o3t = await import("./obs3d-tests.ts"); } catch (e) { test("obs3d-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
   if (o3t) o3t.runObs3dTests(test, assert, eq, (n) => { try { return readFileSync(join(HERE, "fixtures", "ingame", n), "utf8"); } catch { return null; } });

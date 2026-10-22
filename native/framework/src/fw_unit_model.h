@@ -10,8 +10,8 @@
  *    one per frame; a reused pool slot (new generation) is a new unit;
  *  - the object's own transform from the block: T(offset) x Ry(yaw) x S(scale) (column-major, the game's (x, height,
  *    z) axes; yaw > 0 turns the model clockwise as the vanilla camera shows it: front lower right -> down -> lower left);
- *  - facing: the unit's Renderer_GetScreenMatrix m0 sign (+1 / -1); -1 mirrors the model across the screen vertical,
- *    which in the iso basis is the x <-> z swap (fw_obj3d_model_matrix applies it about the anchor). */
+ *  - facing: the unit's Renderer_GetScreenMatrix m0 sign (+1 / -1); logged, and since M3 only the fallback of the
+ *    model's turn (fw_unit_face.h: the yaw follows Character::Face's direction; M2 mirrored x <-> z here). */
 #pragma once
 #include <stdint.h>
 #include <stddef.h>

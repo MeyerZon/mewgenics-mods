@@ -1,0 +1,156 @@
+# OBSERVED 2026-10-22 (build 25143593): mods/dev-sandbox/tests/mesh-slices.mewtest (MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_TINT=1,
+# MEWFW_MESH_PROBE_MODEL=models/<model>@<c>,<r>), the mesh lines of mod_logs/mewframework.log (window), first 3 plan windows.
+# --- slab2x1: run 20261022-160819: the 2x1 slab on (0,6)+(1,6): its middle band [7,8) goes in before the cat on (1,5) (key 7), which is drawn over it; its back band [8,9) after the cat on (2,6) (key 9)
+mesh: probe model models/slab2x1.obj on tile (0,6) (MEWFW_MESH_PROBE_MODEL @; no probe cube), tinted per band
+Place3DObjectOnTile(0, 6, models/slab2x1.obj): ok handle 1 (1 object(s))
+mesh: models/slab2x1.obj: loaded 24 vertices, 12 triangles, bounds x -0.45..1.45 h 0.00..0.50 z -0.45..0.45
+mesh slice f=1 obj=1 band=0/3 depth=[6.000 7.000) key=6.500 vis=(-0.6563 -0.3297 -0.4851 -0.1591) area=0.022694 tint=blue
+mesh slice f=1 obj=1 band=1/3 depth=[7.000 8.000) key=7.500 vis=(-0.6563 -0.2536 -0.3899 -0.0746) area=0.023463 tint=cyan
+mesh slice f=1 obj=1 band=2/3 depth=[8.000 9.000) key=8.500 vis=(-0.5611 -0.1691 -0.3899 0.0015) area=0.006513 tint=magenta
+mesh object f=1 handle=1 model=models/slab2x1.obj tile world=(0.50 0.00 6.50) ndc=(-0.571 -0.206 0.0416) tex=none palette=-1
+mesh order: world camera filter before ours = 0000000000000000 (units layer sorted=1 mode=0: interleaving)
+mesh order f=1 items=10 meshes=3 groups=3 unsorted=0 | d0 key=6.500 before item 6 key=6.000 | d1 key=7.500 before item 4 key=7.030 | d2 key=8.500 before item 3 key=8.000
+mesh order keys f=1 18.030 11.030 9.000 8.000 7.030 7.000 6.000 5.370 5.030 0.000
+mesh order item f=1 i=0 key=18.030 at=(8.50 9.50)
+mesh order item f=1 i=1 key=11.030 at=(3.50 7.50)
+mesh order item f=1 i=2 key=9.000 at=(2.50 6.50)
+mesh order item f=1 i=3 key=8.000 at=(2.50 5.50)
+mesh order item f=1 i=4 key=7.030 at=(5.50 1.50)
+mesh order item f=1 i=5 key=7.000 at=(1.50 5.50)
+mesh order item f=1 i=6 key=6.000 at=(1.50 4.50)
+mesh order item f=1 i=8 key=5.030 at=(3.50 1.50)
+mesh slice f=61 obj=1 band=0/3 depth=[6.000 7.000) key=6.500 vis=(-0.6563 -0.3499 -0.4851 -0.1793) area=0.022694 tint=blue
+mesh slice f=61 obj=1 band=1/3 depth=[7.000 8.000) key=7.500 vis=(-0.6563 -0.2738 -0.3899 -0.0948) area=0.023463 tint=cyan
+mesh slice f=61 obj=1 band=2/3 depth=[8.000 9.000) key=8.500 vis=(-0.5611 -0.1893 -0.3899 -0.0187) area=0.006513 tint=magenta
+mesh object f=61 handle=1 model=models/slab2x1.obj tile world=(0.50 0.00 6.50) ndc=(-0.571 -0.227 0.0416) tex=none palette=-1
+mesh order f=61 items=10 meshes=3 groups=3 unsorted=0 | d0 key=6.500 before item 6 key=6.000 | d1 key=7.500 before item 4 key=7.030 | d2 key=8.500 before item 3 key=8.000
+mesh order keys f=61 18.030 11.030 9.000 8.000 7.030 7.000 6.000 5.030 4.858 0.500
+mesh slice f=121 obj=1 band=0/3 depth=[6.000 7.000) key=6.500 vis=(-0.6563 -0.3298 -0.4851 -0.1592) area=0.022694 tint=blue
+mesh slice f=121 obj=1 band=1/3 depth=[7.000 8.000) key=7.500 vis=(-0.6563 -0.2537 -0.3899 -0.0747) area=0.023463 tint=cyan
+mesh slice f=121 obj=1 band=2/3 depth=[8.000 9.000) key=8.500 vis=(-0.5611 -0.1692 -0.3899 0.0014) area=0.006513 tint=magenta
+mesh object f=121 handle=1 model=models/slab2x1.obj tile world=(0.50 0.00 6.50) ndc=(-0.571 -0.206 0.0416) tex=none palette=-1
+mesh order f=121 items=10 meshes=3 groups=3 unsorted=0 | d0 key=6.500 before item 6 key=6.000 | d1 key=7.500 before item 4 key=7.030 | d2 key=8.500 before item 3 key=8.000
+mesh order keys f=121 18.030 11.030 9.000 8.000 7.030 7.000 6.000 5.030 4.207 0.500
+# --- slab2x1-m2: run 20261022-160902: MEWFW_MESH_ORDER=m2 control: every slice keyed by the origin (7), the tie with the cat on (1,5) went to the mesh: the slab is drawn over that cat (wrong: the cat stands in front of its middle band)
+mesh: MEWFW_MESH_ORDER=m2: the M2 painter plan (meshes keyed by their origin, meshes win ties)
+mesh: probe model models/slab2x1.obj on tile (0,6) (MEWFW_MESH_PROBE_MODEL @; no probe cube), tinted per band
+Place3DObjectOnTile(0, 6, models/slab2x1.obj): ok handle 1 (1 object(s))
+mesh: models/slab2x1.obj: loaded 24 vertices, 12 triangles, bounds x -0.45..1.45 h 0.00..0.50 z -0.45..0.45
+mesh slice f=1 obj=1 band=0/3 depth=[6.000 7.000) key=6.500 vis=(-0.6563 -0.3297 -0.4851 -0.1591) area=0.022694 tint=blue
+mesh slice f=1 obj=1 band=1/3 depth=[7.000 8.000) key=7.500 vis=(-0.6563 -0.2536 -0.3899 -0.0746) area=0.023463 tint=cyan
+mesh slice f=1 obj=1 band=2/3 depth=[8.000 9.000) key=8.500 vis=(-0.5611 -0.1691 -0.3899 0.0015) area=0.006513 tint=magenta
+mesh object f=1 handle=1 model=models/slab2x1.obj tile world=(0.50 0.00 6.50) ndc=(-0.571 -0.206 0.0416) tex=none palette=-1
+mesh order: world camera filter before ours = 0000000000000000 (units layer sorted=1 mode=0: interleaving)
+mesh order f=1 items=10 meshes=3 groups=1 unsorted=0 | d0 key=7.000 before item 7 key=6.000 | d1 key=7.000 before item 7 key=6.000 | d2 key=7.000 before item 7 key=6.000
+mesh order keys f=1 18.030 11.030 9.000 8.862 8.000 7.030 7.000 6.000 5.030 0.000
+mesh order item f=1 i=0 key=18.030 at=(8.50 9.50)
+mesh order item f=1 i=1 key=11.030 at=(3.50 7.50)
+mesh order item f=1 i=2 key=9.000 at=(2.50 6.50)
+mesh order item f=1 i=4 key=8.000 at=(2.50 5.50)
+mesh order item f=1 i=5 key=7.030 at=(5.50 1.50)
+mesh order item f=1 i=6 key=7.000 at=(1.50 5.50)
+mesh order item f=1 i=7 key=6.000 at=(1.50 4.50)
+mesh order item f=1 i=8 key=5.030 at=(3.50 1.50)
+mesh slice f=61 obj=1 band=0/3 depth=[6.000 7.000) key=6.500 vis=(-0.6563 -0.4806 -0.4851 -0.3100) area=0.022694 tint=blue
+mesh slice f=61 obj=1 band=1/3 depth=[7.000 8.000) key=7.500 vis=(-0.6563 -0.4046 -0.3899 -0.2255) area=0.023463 tint=cyan
+mesh slice f=61 obj=1 band=2/3 depth=[8.000 9.000) key=8.500 vis=(-0.5611 -0.3200 -0.3899 -0.1494) area=0.006513 tint=magenta
+mesh object f=61 handle=1 model=models/slab2x1.obj tile world=(0.50 0.00 6.50) ndc=(-0.571 -0.357 0.0416) tex=none palette=-1
+mesh order f=61 items=10 meshes=3 groups=1 unsorted=0 | d0 key=7.000 before item 7 key=6.000 | d1 key=7.000 before item 7 key=6.000 | d2 key=7.000 before item 7 key=6.000
+mesh order keys f=61 18.030 11.030 9.000 8.548 8.000 7.030 7.000 6.000 5.030 0.500
+mesh slice f=121 obj=1 band=0/3 depth=[6.000 7.000) key=6.500 vis=(-0.6563 -0.3316 -0.4851 -0.1610) area=0.022694 tint=blue
+mesh slice f=121 obj=1 band=1/3 depth=[7.000 8.000) key=7.500 vis=(-0.6563 -0.2555 -0.3899 -0.0764) area=0.023463 tint=cyan
+mesh slice f=121 obj=1 band=2/3 depth=[8.000 9.000) key=8.500 vis=(-0.5611 -0.1710 -0.3899 -0.0004) area=0.006513 tint=magenta
+mesh object f=121 handle=1 model=models/slab2x1.obj tile world=(0.50 0.00 6.50) ndc=(-0.571 -0.208 0.0416) tex=none palette=-1
+mesh order f=121 items=10 meshes=3 groups=1 unsorted=0 | d0 key=7.000 before item 7 key=6.000 | d1 key=7.000 before item 7 key=6.000 | d2 key=7.000 before item 7 key=6.000
+mesh order keys f=121 18.030 11.030 9.000 8.000 7.723 7.030 7.000 6.000 5.030 0.500
+# --- slab3x3: run 20261022-160912: the 3x3 slab centred on (3,3): six bands at six insertion points (4.5 .. 9.5); the cats on (1,4) and (2,5), in front of its left corner, cover small parts of bands [6,7) and [7,8)
+mesh: probe model models/slab3x3.obj on tile (3,3) (MEWFW_MESH_PROBE_MODEL @; no probe cube), tinted per band
+Place3DObjectOnTile(3, 3, models/slab3x3.obj): ok handle 1 (1 object(s))
+mesh: models/slab3x3.obj: loaded 24 vertices, 12 triangles, bounds x -1.45..1.45 h 0.00..0.50 z -1.45..1.45
+mesh slice f=1 obj=1 band=0/6 depth=[4.000 5.000) key=4.500 vis=(-0.0856 -0.4988 0.0856 -0.3282) area=0.022694 tint=blue
+mesh slice f=1 obj=1 band=1/6 depth=[5.000 6.000) key=5.500 vis=(-0.1807 -0.4227 0.1807 -0.2436) area=0.040493 tint=cyan
+mesh slice f=1 obj=1 band=2/6 depth=[6.000 7.000) key=6.500 vis=(-0.2758 -0.3382 0.2758 -0.1591) area=0.056574 tint=magenta
+mesh slice f=1 obj=1 band=3/6 depth=[7.000 8.000) key=7.500 vis=(-0.2758 -0.1591 0.2758 -0.0746) area=0.038595 tint=blue
+mesh slice f=1 obj=1 band=4/6 depth=[8.000 9.000) key=8.500 vis=(-0.1807 -0.0746 0.1807 0.0100) area=0.022514 tint=cyan
+mesh slice f=1 obj=1 band=5/6 depth=[9.000 10.000) key=9.500 vis=(-0.0856 0.0100 0.0856 0.0861) area=0.006513 tint=magenta
+mesh object f=1 handle=1 model=models/slab3x3.obj tile world=(3.50 0.00 3.50) ndc=(1.49e-08 -0.206 0.0416) tex=none palette=-1
+mesh order: world camera filter before ours = 0000000000000000 (units layer sorted=1 mode=0: interleaving)
+mesh order f=1 items=10 meshes=6 groups=6 unsorted=0 | d0 key=4.500 before item 9 key=0.000 | d1 key=5.500 before item 8 key=5.030 | d2 key=6.500 before item 7 key=6.000 | d3 key=7.500 before item 5 key=7.030 | d4 key=8.500 before item 4 key=8.000 | d5 key=9.500 before item 3 key=9.000
+mesh order keys f=1 18.030 11.030 9.658 9.000 8.000 7.030 7.000 6.000 5.030 0.000
+mesh order item f=1 i=0 key=18.030 at=(8.50 9.50)
+mesh order item f=1 i=1 key=11.030 at=(3.50 7.50)
+mesh order item f=1 i=3 key=9.000 at=(2.50 6.50)
+mesh order item f=1 i=4 key=8.000 at=(2.50 5.50)
+mesh order item f=1 i=5 key=7.030 at=(5.50 1.50)
+mesh order item f=1 i=6 key=7.000 at=(1.50 5.50)
+mesh order item f=1 i=7 key=6.000 at=(1.50 4.50)
+mesh order item f=1 i=8 key=5.030 at=(3.50 1.50)
+mesh slice f=61 obj=1 band=0/6 depth=[4.000 5.000) key=4.500 vis=(-0.0856 -0.5190 0.0856 -0.3484) area=0.022694 tint=blue
+mesh slice f=61 obj=1 band=1/6 depth=[5.000 6.000) key=5.500 vis=(-0.1807 -0.4429 0.1807 -0.2639) area=0.040493 tint=cyan
+mesh slice f=61 obj=1 band=2/6 depth=[6.000 7.000) key=6.500 vis=(-0.2758 -0.3584 0.2758 -0.1793) area=0.056574 tint=magenta
+mesh slice f=61 obj=1 band=3/6 depth=[7.000 8.000) key=7.500 vis=(-0.2758 -0.1793 0.2758 -0.0948) area=0.038595 tint=blue
+mesh slice f=61 obj=1 band=4/6 depth=[8.000 9.000) key=8.500 vis=(-0.1807 -0.0948 0.1807 -0.0102) area=0.022514 tint=cyan
+mesh slice f=61 obj=1 band=5/6 depth=[9.000 10.000) key=9.500 vis=(-0.0856 -0.0102 0.0856 0.0659) area=0.006513 tint=magenta
+mesh object f=61 handle=1 model=models/slab3x3.obj tile world=(3.50 0.00 3.50) ndc=(1.49e-08 -0.227 0.0416) tex=none palette=-1
+mesh order f=61 items=10 meshes=6 groups=6 unsorted=0 | d0 key=4.500 before item 9 key=0.500 | d1 key=5.500 before item 8 key=5.030 | d2 key=6.500 before item 7 key=6.000 | d3 key=7.500 before item 5 key=7.030 | d4 key=8.500 before item 4 key=8.000 | d5 key=9.500 before item 2 key=9.064
+mesh order keys f=61 18.030 11.030 9.064 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh slice f=121 obj=1 band=0/6 depth=[4.000 5.000) key=4.500 vis=(-0.0856 -0.4989 0.0856 -0.3283) area=0.022694 tint=blue
+mesh slice f=121 obj=1 band=1/6 depth=[5.000 6.000) key=5.500 vis=(-0.1807 -0.4228 0.1807 -0.2437) area=0.040493 tint=cyan
+mesh slice f=121 obj=1 band=2/6 depth=[6.000 7.000) key=6.500 vis=(-0.2758 -0.3383 0.2758 -0.1592) area=0.056574 tint=magenta
+mesh slice f=121 obj=1 band=3/6 depth=[7.000 8.000) key=7.500 vis=(-0.2758 -0.1592 0.2758 -0.0747) area=0.038595 tint=blue
+mesh slice f=121 obj=1 band=4/6 depth=[8.000 9.000) key=8.500 vis=(-0.1807 -0.0747 0.1807 0.0099) area=0.022514 tint=cyan
+mesh slice f=121 obj=1 band=5/6 depth=[9.000 10.000) key=9.500 vis=(-0.0856 0.0099 0.0856 0.0860) area=0.006513 tint=magenta
+mesh object f=121 handle=1 model=models/slab3x3.obj tile world=(3.50 0.00 3.50) ndc=(1.49e-08 -0.206 0.0416) tex=none palette=-1
+mesh order f=121 items=10 meshes=6 groups=6 unsorted=0 | d0 key=4.500 before item 9 key=0.500 | d1 key=5.500 before item 8 key=5.030 | d2 key=6.500 before item 7 key=6.000 | d3 key=7.500 before item 5 key=7.030 | d4 key=8.500 before item 3 key=8.441 | d5 key=9.500 before item 2 key=9.000
+mesh order keys f=121 18.030 11.030 9.000 8.441 8.000 7.030 7.000 6.000 5.030 0.500
+# --- backpost: run 20261022-161058: the post on the back quarter of (2,6), where a cat stands (key 9): one band [9,10) keyed 9.5, in before the cat, which covers it
+mesh: probe model models/backpost.obj on tile (2,6) (MEWFW_MESH_PROBE_MODEL @; no probe cube), tinted per band
+Place3DObjectOnTile(2, 6, models/backpost.obj): ok handle 1 (1 object(s))
+mesh: models/backpost.obj: loaded 24 vertices, 12 triangles, bounds x 0.05..0.45 h 0.00..0.90 z 0.05..0.45
+mesh slice f=1 obj=1 band=0/1 depth=[9.000 10.000) key=9.500 vis=(-0.4185 -0.0761 -0.3424 0.1617) area=0.015518 tint=blue
+mesh object f=1 handle=1 model=models/backpost.obj tile world=(2.50 0.00 6.50) ndc=(-0.38 0.000527 0.0529) tex=none palette=-1
+mesh order: world camera filter before ours = 0000000000000000 (units layer sorted=1 mode=0: interleaving)
+mesh order f=1 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.500 before item 3 key=9.000
+mesh order keys f=1 18.030 14.819 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.000
+mesh order item f=1 i=0 key=18.030 at=(8.50 9.50)
+mesh order item f=1 i=2 key=11.030 at=(3.50 7.50)
+mesh order item f=1 i=3 key=9.000 at=(2.50 6.50)
+mesh order item f=1 i=4 key=8.000 at=(2.50 5.50)
+mesh order item f=1 i=5 key=7.030 at=(5.50 1.50)
+mesh order item f=1 i=6 key=7.000 at=(1.50 5.50)
+mesh order item f=1 i=7 key=6.000 at=(1.50 4.50)
+mesh order item f=1 i=8 key=5.030 at=(3.50 1.50)
+mesh slice f=61 obj=1 band=0/1 depth=[9.000 10.000) key=9.500 vis=(-0.4185 -0.0965 -0.3424 0.1412) area=0.015518 tint=blue
+mesh object f=61 handle=1 model=models/backpost.obj tile world=(2.50 0.00 6.50) ndc=(-0.38 -0.0199 0.0529) tex=none palette=-1
+mesh order f=61 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.500 before item 3 key=9.000
+mesh order keys f=61 18.030 14.588 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+mesh slice f=121 obj=1 band=0/1 depth=[9.000 10.000) key=9.500 vis=(-0.4185 -0.0762 -0.3424 0.1616) area=0.015518 tint=blue
+mesh object f=121 handle=1 model=models/backpost.obj tile world=(2.50 0.00 6.50) ndc=(-0.38 0.000426 0.0529) tex=none palette=-1
+mesh order f=121 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.500 before item 3 key=9.000
+mesh order keys f=121 18.030 13.834 11.030 9.000 8.000 7.030 7.000 6.000 5.030 0.500
+# --- backpost-m2: run 20261022-161108: M2 control: keyed by its origin (9), the tie went to the mesh: the post is drawn over the cat standing in front of it (wrong)
+mesh: MEWFW_MESH_ORDER=m2: the M2 painter plan (meshes keyed by their origin, meshes win ties)
+mesh: probe model models/backpost.obj on tile (2,6) (MEWFW_MESH_PROBE_MODEL @; no probe cube), tinted per band
+Place3DObjectOnTile(2, 6, models/backpost.obj): ok handle 1 (1 object(s))
+mesh: models/backpost.obj: loaded 24 vertices, 12 triangles, bounds x 0.05..0.45 h 0.00..0.90 z 0.05..0.45
+mesh slice f=1 obj=1 band=0/1 depth=[9.000 10.000) key=9.500 vis=(-0.4185 -0.0761 -0.3424 0.1617) area=0.015518 tint=blue
+mesh object f=1 handle=1 model=models/backpost.obj tile world=(2.50 0.00 6.50) ndc=(-0.38 0.000527 0.0529) tex=none palette=-1
+mesh order: world camera filter before ours = 0000000000000000 (units layer sorted=1 mode=0: interleaving)
+mesh order f=1 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 3 key=8.000
+mesh order keys f=1 18.030 11.030 9.000 8.000 7.697 7.030 7.000 6.000 5.030 0.000
+mesh order item f=1 i=0 key=18.030 at=(8.50 9.50)
+mesh order item f=1 i=1 key=11.030 at=(3.50 7.50)
+mesh order item f=1 i=2 key=9.000 at=(2.50 6.50)
+mesh order item f=1 i=3 key=8.000 at=(2.50 5.50)
+mesh order item f=1 i=5 key=7.030 at=(5.50 1.50)
+mesh order item f=1 i=6 key=7.000 at=(1.50 5.50)
+mesh order item f=1 i=7 key=6.000 at=(1.50 4.50)
+mesh order item f=1 i=8 key=5.030 at=(3.50 1.50)
+mesh slice f=61 obj=1 band=0/1 depth=[9.000 10.000) key=9.500 vis=(-0.4185 -0.0998 -0.3424 0.1380) area=0.015518 tint=blue
+mesh object f=61 handle=1 model=models/backpost.obj tile world=(2.50 0.00 6.50) ndc=(-0.38 -0.0232 0.0529) tex=none palette=-1
+mesh order f=61 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 3 key=8.000
+mesh order keys f=61 18.030 11.030 9.000 8.000 7.719 7.030 7.000 6.000 5.030 0.500
+mesh slice f=121 obj=1 band=0/1 depth=[9.000 10.000) key=9.500 vis=(-0.4185 -0.0762 -0.3424 0.1616) area=0.015518 tint=blue
+mesh object f=121 handle=1 model=models/backpost.obj tile world=(2.50 0.00 6.50) ndc=(-0.38 0.000426 0.0529) tex=none palette=-1
+mesh order f=121 items=10 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 3 key=8.000
+mesh order keys f=121 18.030 11.030 9.000 8.000 7.139 7.030 7.000 6.000 5.030 0.500

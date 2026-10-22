@@ -13,8 +13,13 @@ REM M1 mesh draw: 4x4 maths vs the observed matrices, the std::function functor,
 REM registry + model matrix + the API v8 layout (test_obj3d_rules) and the GON walker / graphics.model seam, string and block forms (test_gon), the per-unit
 REM models: units walk, seen set, block transform, facing, log line (test_unit_model).
 REM phase-M mesh rules: OBJ parser, game axes, unit cube, model registry, model paths (test_mesh_rules), the
-REM JSON tokenizer (test_json), the glTF 2.0 loader (test_mesh_gltf), the mesh texture / palette rules (test_mesh_tex) and
-REM the M2 sprite/mesh painter order + camera filter (test_mesh_order).
+REM JSON tokenizer (test_json), the glTF 2.0 loader (test_mesh_gltf), the mesh texture / palette rules (test_mesh_tex),
+REM the M2 sprite/mesh painter order + camera filter (test_mesh_order), M3 hide_sprite: decision, set, the wrapping
+REM filter (test_mesh_hide), the M3 unit model facing: Character::Face direction -> model yaw (test_unit_face), the PNG
+REM decoder for a .glb's embedded image (test_png) and the embedded model texture: precedence, decode, upload
+REM (test_mesh_embtex), the M3 named models "@Name" (test_model_names), the M3 unit palette row: a cat's CatParts row for
+REM a GON `palette true` model (test_unit_palette) and the M3 per-band mesh slices: depth range, band plan, visible area,
+REM tints, probe tile, log line (test_mesh_slice).
 REM Builds build\test_*.exe with w64devkit GCC and runs them; exit code = failures.
 setlocal
 if not defined GCC set "GCC=C:\raylib\w64devkit\bin\gcc.exe"
@@ -100,7 +105,7 @@ if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_rules.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 "%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
-  "%HERE%test\test_obj3d_rules.c" "%HERE%src\fw_obj3d_rules.c" "%HERE%src\fw_mesh_rules.c" ^
+  "%HERE%test\test_obj3d_rules.c" "%HERE%src\fw_obj3d_rules.c" "%HERE%src\fw_unit_face.c" "%HERE%src\fw_mesh_rules.c" ^
   -o "%OUT%\test_obj3d_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_obj3d_rules.exe"
@@ -140,5 +145,47 @@ if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
   -o "%OUT%\test_mesh_order.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_order.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_mesh_hide.c" "%HERE%src\fw_mesh_hide.c" "%HERE%src\fw_mesh_order.c" "%HERE%src\fw_functor.c" "%HERE%src\fw_obj3d_rules.c" "%HERE%src\fw_unit_face.c" "%HERE%src\fw_mesh_rules.c" ^
+  -o "%OUT%\test_mesh_hide.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_mesh_hide.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_unit_face.c" "%HERE%src\fw_unit_face.c" "%HERE%src\fw_unit_model.c" "%HERE%src\fw_gon.c" ^
+  -o "%OUT%\test_unit_face.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_unit_face.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_png.c" "%HERE%src\fw_png.c" ^
+  -o "%OUT%\test_png.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_png.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_mesh_embtex.c" "%HERE%src\fw_mesh_embtex.c" "%HERE%src\fw_png.c" "%HERE%src\fw_mesh_rules.c" "%HERE%src\fw_mesh_gltf.c" "%HERE%src\fw_json.c" ^
+  -o "%OUT%\test_mesh_embtex.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_mesh_embtex.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_model_names.c" "%HERE%src\fw_model_names.c" "%HERE%src\fw_gon.c" "%HERE%src\fw_mesh_rules.c" ^
+  -o "%OUT%\test_model_names.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_model_names.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_unit_palette.c" "%HERE%src\fw_unit_palette.c" "%HERE%src\fw_gon.c" ^
+  -o "%OUT%\test_unit_palette.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_unit_palette.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_mesh_slice.c" "%HERE%src\fw_mesh_slice.c" "%HERE%src\fw_mesh_order.c" "%HERE%src\fw_functor.c" ^
+  -o "%OUT%\test_mesh_slice.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_mesh_slice.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal

@@ -10,6 +10,7 @@ Crate {
 			tint [1 2]
 			palette 3
 			double_sided "x"
+			hide_sprite 1
 			spin 1
 		}
 	}

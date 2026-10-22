@@ -1,0 +1,14 @@
+mods: dev-sandbox, fw-3d, _unithideoff
+timeout: 150s
+hide: false
+# 3D phase M3: the CONTROL of unit-hide.mewtest — the same 0.4 magenta box on the Rat with hide_sprite false
+# (_unithideoff), so the Rat's 2D sprite draws next to the box; same seed, same spawn, same frame count.
+wait frames 120
+seed 42
+enter TacticsTest
+wait turns 1
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 150
+shot "control"
+quit

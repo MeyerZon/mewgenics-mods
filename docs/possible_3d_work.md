@@ -242,17 +242,42 @@ look matters). Task-level detail (files, red test names, gotchas) is in `.analys
       for every unit of the fight (the NextTurn hook's TurnControl → the entity list) and registered on the unit; the
       model follows the interpolated Position (the Rat's box moved with it: `follows`, 0.09° off) and is drawn right
       after its unit's sprite (`d0 key=9.000 before item 5`, the Rat being item 4); the vanilla Crate draws crate.obj.
-      Open: hide the 2D clip (`hide_sprite`); a GON `palette true` has no row source yet (a cat's `CatParts+0x1b4`);
-      a facing change was not seen.
+      Open in M2, done in M5 below: `hide_sprite`, the `palette true` row source, the facing turn.
 - [x] **M2 model error codes** (design §2.6): one table `FW_MESH_CODES` = `editor/src/core/model-codes.ts`; one log line
       per model per process; a broken .glb in a fight is one line and the fight runs on (OBSERVED,
       `mesh-model-codes-log.txt`); the validator reports the header-level codes until PR #128's reader lands.
 - [x] **M3 assets + data seam** — model bytes, OBJ + glTF, API v8 objects (tile + unit, OBSERVED), GON `graphics.model`
-      per unit (OBSERVED), textures (OBSERVED); open: `@Name` models, `render3d {}`, an exported
-      `FW_Set3DObjectMaterial` (the API version decision with #109/#111), a .glb's embedded image. The importer design for both halves (glTF subset v1–v3, `model-*` codes, axes/UV/texture/colour
+      per unit (OBSERVED), textures (OBSERVED); `@Name` models and a .glb's embedded image are done in M5 below; open: `render3d {}`, an
+      exported `FW_Set3DObjectMaterial` (the API version decision with #109/#111; M5 needed no new export, API stays v8).
+      The importer design for both halves (glTF subset v1–v3, `model-*` codes, axes/UV/texture/colour
       rules, the GON `model {}` block, the Blender export recipe) is [`3d-importer-design.md`](3d-importer-design.md).
 - [x] **M4 palette shader** — `fw_mesh.shader` with `fw_tex` + the palettemap rule, OBSERVED remapping; open: the T3
       side-by-side with a cat of the same palette.
+- [x] **M5 the model replaces the unit — OBSERVED 2026-10-22** (`feat/3d-meshes-m3`; each item red → green → T2 on its own
+      branch, then T2 again with the integrated DLL; details in engine-map "3D phase M3"):
+  - [x] **hide_sprite** (`fw_mesh_hide.c`): a GON `hide_sprite true` skips the unit's one units-layer item in the M2
+        camera filter while its model draws; a model that fails to load keeps the sprite. T2 `mods/_unithide`: 0 vs 3178
+        dark (outline) px around the box, hide vs control. Open: the hit flash does not reach the mesh; the hover
+        outline / glow still follow the hidden sprite's mask (layer 0x18); API objects never hide.
+  - [x] **palette row source** (`fw_unit_palette.c`): `palette true` on a cat = its doll's row (`CatParts+0x1b8`
+        override unless -1 / -69, else `+0x1b4`; CatParts at `Character+0x90`); non-cats keep their authored colours.
+        T2 `mods/_unitpal`: TomTom's box 12946 px of row 9, Mangy's 13054 px of row 16, 0 of the other row. Open:
+        rainbow cats use the base row; an explicit `palette <n>` for non-cats.
+  - [x] **`@Name` models** (`fw_model_names.c`): `data/models.gon` read through the game's `Gon_LoadFile` (overlays from
+        every mod merge; fw-3d ships the base and must be listed first), `model "@X"` / `model { file "@X" … }` with the
+        unit's keys over the entry's; `model-name-unknown` / `model-registry-entry`; validator rules. T2
+        `mods/_modelnames`: the box at scale 1.25 (pixel ratio 1.567 vs 1.5625), one coded line for two Pooters. Open:
+        `FW_Register3DObject("@X")`; cross-mod names in the validator.
+  - [x] **a .glb's embedded image** (`fw_png.c` inflate + PNG decoder, `fw_mesh_embtex.c` upload in the functor; the
+        game has no Texture2D-from-memory path): explicit > embedded > convention; MCP `extract_model_texture`. T2
+        `models/totem.glb` with no PNG file: purple 1060 / lime 1080 px. Open: JPEG; validator decode.
+  - [x] **facing** (`fw_unit_face.c`): the yaw follows `Character+0x388` (Character::Face's direction; #114's entry),
+        GON `yaw` on top, the sprite mirror only as fallback. T2 `mods/_unitface` (with #114's `face` directive): the
+        cyan front at (0,-1)/(-1,0), the yellow back at (1,0)/(0,1). Open: smooth turning; API objects.
+  - [x] **multi-tile meshes + the same-tile tie** (`fw_mesh_slice.c`, `fw_clip` in `fw_mesh.shader`): a tile mesh is cut
+        per sort band [n, n+1) of world x + z, each slice keyed n + 0.5, ties go to the unit. T2 2x1 slab: band [7,8)
+        coverage 0.729 (the cat in front covers it; M2 control 1.008); a post behind a cat on its own tile 0.156 (M2
+        0.959). Open: unit-attached multi-tile models are not sliced.
 
 ### Phase P — true perspective
 - [ ] **P1 VP hook** on `Camera_GetViewProjection` for the world camera's draw pushes only (callers
