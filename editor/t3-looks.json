@@ -222,5 +222,29 @@
     "shots": [],
     "regenerate": "ask an agent: MCP vectorcraft_exec { mod: dev-sandbox, shape body, shape.ellipse }, then Build SWF and look in the Ruffle tab or cd editor && npm run test:artprobe",
     "status": "open"
+  },
+  {
+    "id": "pr124-raster-look",
+    "pr": 124,
+    "question": "In the raster shot, do the PNG sprite (four colour squares), the photo blocks and the orange block-font text look right at game scale, and is the soft 0x41 stripe acceptable next to the crisp 0x43 one?",
+    "shots": ["ingame-runs/*-_artprobe-render-raster/shot-raster-1.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --raster",
+    "status": "open"
+  },
+  {
+    "id": "pr124-backdrop",
+    "pr": 124,
+    "question": "In the backdrop shot, does the purple / teal mod plate read as the arena background, with the tileset foreground (wires, foliage, frame) on top?",
+    "shots": ["ingame-runs/*-_bgprobe-render-backdrop/shot-backdrop-1.png"],
+    "regenerate": "cd editor && npm run test:artprobe -- --raster",
+    "status": "open"
+  },
+  {
+    "id": "pr124-import-png",
+    "pr": 124,
+    "question": "Art mode → Shapes → Import PNG… (sprite / background plate / bitmap fill, scale, pixel art, tile): is the row clear, and does the preview show the PNG where the game would?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → a scene → Shapes",
+    "status": "open"
   }
 ]

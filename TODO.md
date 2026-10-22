@@ -44,6 +44,9 @@ and **Export answers** (a JSON to hand back to an agent). Decisions that are not
       `shot-rat-2.png`): any wrong offset or mirroring of the ArtProbe clip drawn for a plain Rat, against the ArtProbe
       enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
 - [ ] **Produce the unit-glow shots** (agents cannot: the registered MCP server predates PR #86's `glow` directive and the auto-mode classifier blocks a direct game launch): restart the `mewgenics-editor` MCP server (`/mcp` in Claude Code) or run `cd editor && npm run test:unitglow` in a terminal, then `npm run t3` — the gallery's `pr86-unit-glow` / `pr86-glow-width` cards fill in from the new `*-dev-sandbox-unit-glow` run dir.
+- [ ] `pr124-raster-look` (#124) — In the raster shot, do the PNG sprite, the photo blocks and the orange block-font text look right at game scale, and is the soft 0x41 stripe acceptable next to the crisp 0x43 one?
+- [ ] `pr124-backdrop` (#124) — In the backdrop shot, does the purple / teal mod plate read as the arena background, with the tileset foreground on top?
+- [ ] `pr124-import-png` (#124) — Art mode → Shapes → Import PNG…: is the row clear, and does the preview show the PNG where the game would?
 
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
@@ -505,6 +508,17 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
 - [ ] MCP tools for art (so agents can author art, not just data)
 - [x] External vector editor round trip (2026-10-21): VectorCraft (github.com/storytold/vectorcraft) is a static vector editor without timeline or player, so it edits single shapes through plain SVG — Export SVG / Replace… on Shapes rows, MCP `export_svg`, `svg-export.ts`; animation stays in the Timeline tab
 - [ ] Testing frontier from `automation-feasibility.md`: AI-brain auto-resolve to smoke-test mods in a real fight (tiers B/C) → now TDD targets 1–3 above; an IPC action layer (tier D) → the named-pipe mode in target 12
+
+### Raster art and fonts — follow-ups (PR #124, 2026-10-22)
+
+- [ ] **Cat ramp frame in-game:** `render-raster-cat` shows ArtProbeRasterCat (and A0's ArtProbeCatReal spawned first
+      in the same script) in the vanilla idle, not the appended frame, though A0's own `render-cat-append` still passes.
+      Find what makes the appended idle show (spawn order, a hit / turn re-playing idle?), then read the gray ramps
+      (`measureCatRamp`) to move "gray texels are remapped on a cat" from shader source to in-game OBSERVED.
+- [ ] **Two mod SWFs exporting `_Append_CatTest`:** with a second donor (an earlier raster.swf) A0's frame did not show
+      either; re-test once the item above is understood — if it holds, it is a cross-mod limit for cat animations.
+- [ ] **TTF/OTF → scene.fonts:** a font importer (cmap + glyf quadratic contours, pure TS) so modders need not draw
+      glyph paths by hand.
 
 ### Open engine unknowns to resolve
 - [x] Exact SWF-format + `_Append_`/SymbolClass convention the loader requires — binding needs no DoABC; `_Append_<Target>` merges at boot; an unknown target stalls the boot (OBSERVED 2026-10-19). **Display path closed 2026-10-21** (RE session `disp`; `docs/engine-map.md` "SWF loader and display path"): the complete tag switch of `createTag` 0xa2e990 (DefineFont 1/2, a second DoABC, PlaceObject3 filters, an over-page bitmap are FATAL; scaling grids, morph shapes, PlaceObject1 cxforms, imports are skipped), even-odd per fill style, cxform after the palette remap, pad-only gradients, by-name lookup last-loaded-first, the `tilesets.gon` clip-name remap. Editor rules: `swf-rules.ts` + `scene.ts` codes `font-tag-unsupported`, `abc-count`, `bitmap-too-large`, `scaling-grid-ignored`, `gradient-spread-ignored`, `morph-shape-skipped`, `place-cxform-ignored`, `fill-rule-ignored`, `export-shadows-vanilla`, `jpeg-bitmap`, `tag-ignored`. Still open: LineStyle2 joins / miter / hairline in the outline builder, the font-class → font lookup RVA, the `tilesets.gon` redirect in-game (INFERRED).
