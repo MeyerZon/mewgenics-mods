@@ -5,20 +5,14 @@
 import React, { useEffect, useState } from "react";
 import { useStore } from "../store.ts";
 import { toast } from "../state.ts";
-import { A, getScene, bump, scheduleValidate, setTarget, ensurePreview } from "./art-state.ts";
+import { A, getScene, bump, scheduleValidate, setTarget, ensurePreview, scrubTo } from "./art-state.ts";
 import { sx, CommitInput } from "./Bits.tsx";
 import { keyAt, setKey, removeKey, setLabel, removeLabel, insertFrames, deleteFrames, moveLayer, type EditResult } from "../../../src/core/art/timeline-edit.ts";
 import type { Scene, SceneKey } from "./types.ts";
 
 const NUM_FIELDS: Array<[keyof SceneKey, string]> = [["x", "x"], ["y", "y"], ["sx", "sx"], ["sy", "sy"], ["rot", "rot"], ["alpha", "alpha"]];
 
-function seek(f: number): void {
-  const p = ensurePreview();
-  p.pause();
-  p.setFrame(f);
-  A.set({ frame: f, playing: false });
-  p.render();
-}
+const seek = scrubTo;
 
 export function TimelineTab() {
   useStore(A, (a) => a.rev);
@@ -72,15 +66,15 @@ export function TimelineTab() {
       </div>
       <div className="tl-grid" style={{ gridTemplateColumns: `120px repeat(${sp.frames}, minmax(14px, 1fr))` }}>
         <span className="tl-name muted">frame</span>
-        {Array.from({ length: sp.frames }, (_, i) => (
-          <button key={i} className={"tl-ruler" + (i === f ? " sel" : "") + (labelsAt.has(i) ? " lab" : "")} title={labelsAt.has(i) ? labelsAt.get(i)!.join(", ") : `frame ${i}`} onClick={() => seek(i)}>{i % 5 === 0 ? String(i) : ""}</button>
+        {Array.from({ length: sp.frames }, (_, fr) => (
+          <button key={fr} className={"tl-ruler" + (fr === f ? " sel" : "") + (labelsAt.has(fr) ? " lab" : "")} title={labelsAt.has(fr) ? labelsAt.get(fr)!.join(", ") : `frame ${fr}`} onClick={() => seek(fr)}>{fr % 5 === 0 ? String(fr) : ""}</button>
         ))}
         {order.map(({ l, i: rowLi }) => {
           const name = l.name || `depth ${l.depth}`;
           const ks = l.keys.slice().sort((a, b) => a.frame - b.frame);
           return (
             <div key={rowLi} className={"tl-row" + (rowLi === li ? " on" : "")} style={{ display: "contents" }}>
-              <span className="tl-name mono" onClick={() => setLayerSel(rowLi)}>{name}</span>
+              <button type="button" className="tl-name mono" title={`select layer ${name}`} onClick={() => setLayerSel(rowLi)}>{name}</button>
               {Array.from({ length: sp.frames }, (_, cf) => {
                 const k = ks.find((q) => q.frame === cf);
                 const prev = ks.filter((q) => q.frame <= cf).pop();

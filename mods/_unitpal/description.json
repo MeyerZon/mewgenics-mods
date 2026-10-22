@@ -1,0 +1,7 @@
+{
+  "title": "Per-unit palette probe (test-only)",
+  "author": "mewgenics-mods",
+  "version": "0.1.0",
+  "description": "Test-only overlay for the 3D phase M3 palette row: the vanilla enemy cats TomTom (custom_cats palette 9) and Mangy (palette 16) and the Rat gain `graphics { model { file \"models/grey-box.gltf\" palette true } }` (a grey 0.6 glTF box, 0.6 tile), so mewframework draws each box through its unit's palette.png row: a cat's CatParts row, none for the Rat (not a cat: grey as authored). Load it with fw-3d (the mesh shader): `mods: _unitpal, fw-3d`. Never for play.",
+  "requirements": []
+}

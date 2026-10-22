@@ -1,0 +1,11 @@
+// _unitpal (test-only): the Rat (not a cat: no CatParts) wears the same grey box with `palette true`; the game never
+// palette-remaps a non-cat unit, so the box stays grey as authored (the documented default, row -1).
+Rat {
+	graphics {
+		model {
+			file "models/grey-box.gltf"
+			yaw 45
+			palette true
+		}
+	}
+}

@@ -3,7 +3,9 @@ import type { Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { openApp, seedToursSeen, selectMod, readFrame, collectConsole } from "./helpers.ts";
+import { openApp, seedToursSeen, selectMod, readFrame, collectConsole, openShapeMenu } from "./helpers.ts";
+import { encodePng } from "../../src/core/art/png.ts";
+import { tmpdir } from "node:os";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..", "..");
@@ -67,6 +69,7 @@ test.describe("Art mode — VectorCraft panel", () => {
     page.on("request", (r) => { const u = new URL(r.url()); if (u.hostname !== "127.0.0.1" && u.protocol !== "data:" && u.protocol !== "blob:") foreign.push(r.url()); });
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await openShapeMenu(page, "body");
     await page.getByRole("button", { name: "Open body in VectorCraft" }).click();
     await expect(page.locator(".subtabs .btn.on")).toHaveText("VectorCraft");
     const status = page.locator(".vc-status");
@@ -162,10 +165,11 @@ test.describe("Art mode — explorer & scene authoring", () => {
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
     // delete both shapes in-memory (not saved to disk)
-    const deletes = page.locator('.artrow button[aria-label^="Delete shape"]');
-    await expect(deletes).toHaveCount(2);
-    await deletes.first().click();
-    await page.locator('.artrow button[aria-label^="Delete shape"]').first().click();
+    await expect(page.locator('button[aria-label^="More actions for"]')).toHaveCount(2);
+    await openShapeMenu(page, "body");
+    await page.getByRole("button", { name: "Delete shape body" }).click();
+    await openShapeMenu(page, "eye");
+    await page.getByRole("button", { name: "Delete shape eye" }).click();
     await expect(page.locator(".artpanel")).toContainText("No shapes yet");
   });
 
@@ -289,6 +293,7 @@ test.describe("Art mode — explorer & scene authoring", () => {
     const errors = collectConsole(page);
     await openSandboxScene(page);
     await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await openShapeMenu(page, "body");
     await page.getByRole("button", { name: "Export SVG of body" }).click();
     await expect(page.getByText(/art\/body\.svg/)).toBeVisible();
     const file = join(SANDBOX, "art", "body.svg");
@@ -296,6 +301,7 @@ test.describe("Art mode — explorer & scene authoring", () => {
     // "edit" it externally: recolour the first path to gray level 3 (#333333)
     const edited = readFileSync(file, "utf8").replace(/fill="#[0-9a-f]{6}"/, 'fill="#333333"');
     writeFileSync(file, edited);
+    await openShapeMenu(page, "body");
     await page.locator('input[aria-label="Replace body from SVG"]').setInputFiles(file);
     await expect(page.getByText(/replaced shape "body"/)).toBeVisible();
     await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
@@ -313,6 +319,7 @@ test.describe("Art mode — explorer & scene authoring", () => {
     const shots = join(process.env.MEWGENICS_EDITOR_DATA || join(REPO_ROOT, "editor", "data"), "glow-shots"); // the cache dir (repo.ts DATA_CACHE_DIR)
     mkdirSync(shots, { recursive: true });
     const before = await page.locator(".pvcanvasbox canvas").screenshot({ path: join(shots, "before.png") });
+    await openShapeMenu(page, "body");
     await page.getByRole("button", { name: "Bake glow of body" }).click();
     await page.locator('input[aria-label="glow colour of body"]').fill("#ff8000");
     await page.locator('input[aria-label="glow blur of body"]').fill("6");
@@ -559,6 +566,149 @@ test.describe("Art mode — build tab", () => {
   });
 });
 
+test.describe("Art mode — view options, shape menu, PNG import, VectorCraft across scenes, JSON tab", () => {
+  test("View options: show raw gray and background are one card in the Preview panel and persist across a reload (mewged.prefs.art.*)", async ({ page }) => {
+    await openSandboxScene(page);
+    const opts = page.locator(".pvwrap .view-options");
+    await expect(opts).toBeVisible();
+    await expect(opts.locator(".sec", { hasText: "View options" })).toBeVisible();
+    await page.locator(".pvwrap label", { hasText: "show raw gray" }).locator('input[type="checkbox"]').check();
+    await page.locator('select[aria-label="preview background"]').selectOption("#000000");
+    expect(await page.evaluate(() => [localStorage.getItem("mewged.prefs.art.showGray"), localStorage.getItem("mewged.prefs.art.background")])).toEqual(["true", '"#000000"']);
+    await page.reload({ waitUntil: "networkidle" });
+    await selectMod(page, "dev-sandbox");
+    await page.locator(".explorer .srow", { hasText: "my_rat" }).first().click();
+    await expect(page.locator(".pvcanvasbox canvas")).toBeVisible();
+    await expect(page.locator(".pvwrap label", { hasText: "show raw gray" }).locator('input[type="checkbox"]')).toBeChecked();
+    await expect(page.locator('select[aria-label="preview background"]')).toHaveValue("#000000");
+    // the select stays truthful after the panel remounts (another right tab and back)
+    await page.locator(".rightpanel .tab", { hasText: "Findings" }).click();
+    await page.locator(".rightpanel .tab", { hasText: "Preview" }).click();
+    await expect(page.locator('select[aria-label="preview background"]')).toHaveValue("#000000");
+    // loop is still in the transport row and persisted too
+    const loop = page.locator(".transport label", { hasText: "loop" }).locator('input[type="checkbox"]');
+    await loop.uncheck();
+    expect(await page.evaluate(() => localStorage.getItem("mewged.prefs.art.loop"))).toBe("false");
+  });
+
+  test("the Shapes tab has no show raw gray checkbox of its own (the Preview panel's is the one)", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    await expect(page.locator(".artrow .id", { hasText: /^body$/ })).toBeVisible();
+    await expect(page.locator(".artpanel label", { hasText: "show raw gray" })).toHaveCount(0);
+    await expect(page.locator(".pvwrap label", { hasText: "show raw gray" })).toHaveCount(1);
+  });
+
+  test("a shape row is id · chips · ramp · meta · Preview · …; More actions for body opens a menu with the six row actions", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    const row = page.locator(".artrow", { has: page.locator(".id", { hasText: /^body$/ }) });
+    await expect(row.getByRole("button", { name: "Preview", exact: true })).toBeVisible();
+    const trigger = row.locator('button[aria-label="More actions for body"]');
+    await expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    // the row's other actions live in the menu, not inline
+    await expect(row.getByRole("button", { name: "Export SVG of body" })).toHaveCount(0);
+    await openShapeMenu(page, "body");
+    for (const name of ["Open body in VectorCraft", "Export SVG of body", "Bake glow of body", "Wrap body in a sprite", "Delete shape body"]) await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+    await expect(page.locator(".menu .item", { hasText: /Replace/ })).toBeVisible();
+    await expect(page.locator('input[type="file"][aria-label="Replace body from SVG"]')).toHaveCount(1);
+    // Esc closes it
+    await page.keyboard.press("Escape");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    // Wrap in a sprite: a 1-frame clip, then the Sprites tab
+    await openShapeMenu(page, "body");
+    await page.getByRole("button", { name: "Wrap body in a sprite" }).click();
+    await expect(page.locator(".subtabs .btn.on")).toHaveText("Sprites");
+    await expect(page.locator(".artpanel")).toContainText("bodyClip");
+  });
+
+  test("one Import SVG or PNG drop zone: a picked PNG shows the PNG options with an Import button, and Pixel art reaches the scene (smooth: false)", async ({ page }) => {
+    const png = join(tmpdir(), "e2e_pixel.png");
+    const px = new Uint8Array(4 * 4 * 4);
+    for (let i = 0; i < 16; i++) px.set([i * 16, 80, 160, 255], i * 4);
+    writeFileSync(png, encodePng(4, 4, px));
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "Shapes" }).click();
+    const zone = page.locator(".artpanel .dropzone");
+    await expect(zone).toHaveCount(1);
+    await expect(zone).toContainText("Import SVG or PNG");
+    await expect(page.locator('select[aria-label="PNG import mode"]')).toHaveCount(0);
+    await page.locator("input#art-svg-file").first().setInputFiles(png);
+    const strip = page.locator(".import-png");
+    await expect(strip).toBeVisible();
+    await expect(strip).toContainText("e2e_pixel.png");
+    await expect(strip.locator('select[aria-label="PNG import mode"]')).toBeVisible();
+    await expect(strip.locator('input[aria-label="PNG import scale"]')).toHaveAttribute("type", "number");
+    await strip.locator('input[aria-label="Pixel art"]').check();
+    await strip.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(page.getByText(/imported e2e_pixel\.png/)).toBeVisible();
+    await expect(strip).toHaveCount(0);
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const sc = JSON.parse(await page.locator('textarea[aria-label="scene JSON"]').inputValue());
+    expect(sc.bitmaps.e2e_pixelBmp).toMatchObject({ smooth: false });
+  });
+
+  test("VectorCraft stays loaded across a scene switch: the same iframe, never 'loading' again", async ({ page }) => {
+    test.setTimeout(240_000);
+    const other = join(SANDBOX, "art", "e2e_vc_other.scene.json");
+    const rat = JSON.parse(readFileSync(join(SANDBOX, "art", "my_rat.scene.json"), "utf8"));
+    writeFileSync(other, JSON.stringify({ ...rat, name: "e2e_vc_other" }, null, 2));
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "VectorCraft" }).click();
+    const status = page.locator(".vc-status");
+    if (/not vendored/.test(await status.innerText())) {
+      test.skip(true, "VectorCraft is not vendored here (cd editor && npm run build online once)");
+      return;
+    }
+    await expect(status).toContainText(/running/, { timeout: 180_000 });
+    const before = await page.locator("iframe.vc-frame").elementHandle();
+    await page.evaluate(() => {
+      const w = window as unknown as { __vcSawLoading: boolean };
+      w.__vcSawLoading = false;
+      new MutationObserver(() => { if (/loading/.test(document.querySelector(".vc-status")?.textContent || "")) w.__vcSawLoading = true; }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    });
+    await page.locator(".explorer .srow", { hasText: "e2e_vc_other" }).first().click();
+    await expect(page.locator(".artpanel h2")).toHaveText("e2e_vc_other");
+    await page.locator(".subtabs .btn", { hasText: "VectorCraft" }).click();
+    await expect(status).toContainText(/running/);
+    expect(await page.locator("iframe.vc-frame").evaluate((el, b) => el === b, before)).toBe(true);
+    // and back to my_rat: still the same frame, and it never went back to loading
+    await page.locator(".explorer .srow", { hasText: "my_rat" }).first().click();
+    await expect(page.locator(".artpanel h2")).toHaveText("my_rat");
+    expect(await page.evaluate(() => (window as unknown as { __vcSawLoading: boolean }).__vcSawLoading)).toBe(false);
+    expect(await page.locator("iframe.vc-frame").evaluate((el, b) => el === b, before)).toBe(true);
+  });
+
+  test("the JSON tab keeps typed text when the scene moves underneath (Play in the preview, then a palette row change with a Reload / Keep banner)", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.locator(".subtabs .btn", { hasText: "JSON" }).click();
+    const ta = page.locator('textarea[aria-label="scene JSON"]');
+    const typed = (await ta.inputValue()).replace('"my_rat"', '"my_rat_typed"');
+    await ta.fill(typed);
+    await page.getByRole("button", { name: /^(Play|Pause)$/ }).click();
+    await expect.poll(async () => (await readFrame(page))[0], { timeout: 5000 }).toBeGreaterThan(1);
+    await expect(ta).toHaveValue(typed);
+    // a real edit underneath (the palette row writes scene.preview) shows the Reload / Keep banner; Keep keeps the text
+    await page.locator("#pv-row").fill("3");
+    await page.locator("#pv-row").press("Tab");
+    const banner = page.locator(".json-stale");
+    await expect(banner).toContainText("scene changed underneath");
+    await banner.getByRole("button", { name: "Keep" }).click();
+    await expect(banner).toHaveCount(0);
+    await expect(ta).toHaveValue(typed);
+  });
+
+  test("the Build panel says SymbolClass binds the names in one sentence (the old gate procedure prose is gone; Prepare SWF gate stays)", async ({ page }) => {
+    await openSandboxScene(page);
+    await page.locator(".rightpanel .tab", { hasText: "Build" }).click();
+    const body = page.locator(".rightpanel .panelbody");
+    await expect(body).toContainText("SymbolClass binds the export names; the DoABC stub is optional.");
+    for (const stale of ["npm run", "test:swfgate", "The SWF gate (fix spec", "Flash-generated DoABC"]) await expect(body).not.toContainText(stale);
+    await expect(body.getByRole("button", { name: "Prepare SWF gate" })).toBeVisible();
+    await expect(body.locator('input[name="abcmode"]')).toHaveCount(2);
+  });
+});
+
 test.afterAll(() => {
   // remove build output + the imported SVG provenance copy from dev-sandbox
   try {
@@ -566,6 +716,8 @@ test.afterAll(() => {
     rmSync(join(SANDBOX, "art", "e2e_import.svg"), { force: true });
     rmSync(join(SANDBOX, "art", "body.svg"), { force: true });
     rmSync(join(SANDBOX, "art", "e2e_gradient.svg"), { force: true });
+    rmSync(join(SANDBOX, "art", "e2e_pixel.png"), { force: true });
+    rmSync(join(SANDBOX, "art", "e2e_vc_other.scene.json"), { force: true });
   } catch {
     /* non-fatal */
   }

@@ -3,9 +3,12 @@
 // templates). Type aliases (not interfaces) where a value must also satisfy an index-signature
 // parameter such as buildTree's.
 
+import type { TemplateKind } from "../../src/core/template-kinds.ts";
+
 export type OverlayMode = "append" | "merge" | "patch" | "replace";
 export type FileType = "gon" | "csv" | "txt" | "other";
-export type TemplateKindName = "ability" | "passive" | "item" | "status-data" | "room" | "tileset-variant" | "particle" | "vfx-ability" | "glowing-character";
+/** The scaffold kinds: one list in src/core/template-kinds.ts (the template modal imports TEMPLATE_KINDS). */
+export type TemplateKindName = TemplateKind;
 
 /** One file of a mod (mod-io ModFileInfo). */
 export type ModFileInfo = {
@@ -95,9 +98,14 @@ export interface ListBaseResult {
   categories: BaseCategory[];
 }
 
+/** One page of a category's entries (GET /api/base?category=&filter=&offset=&limit=). */
 export interface ListEntriesResult {
   category: string;
   entries: string[];
+  /** how many entries match in all */
+  total: number;
+  /** where this page starts */
+  offset: number;
 }
 
 export type BaseEntryView =
@@ -125,10 +133,35 @@ export interface ComponentKeyInfo {
   open: boolean;
   children: string | null;
   required: string[];
-  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string }>;
+  keys: Record<string, { type: string; default: number | boolean | string | null; required: boolean; from: string; unread?: boolean }>;
 }
 
 // ---- template scaffolder (templates) -------------------------------------------------------
 export type TemplateResult =
   | { ok: true; kind?: string; name?: string; written?: string[]; localizationKeys?: string[]; dryRun?: boolean; hint?: string }
   | { ok: false; error: string; partial?: string[] };
+
+// ---- editor status (GET /api/status: src/core/api.ts editorStatus) --------------------------
+export interface BuildComparison {
+  status: "match" | "mismatch" | "unknown";
+  modBuild: string;
+  installedBuild: string | null;
+  installedKnown: boolean | null;
+  installedTimeDateStamp?: string;
+}
+export interface EditorStatus {
+  gameDir: string;
+  exeFound: boolean;
+  known: boolean;
+  gameBuild: string | null;
+  timeDateStamp: string | null;
+  knownBuilds: string[];
+  extracted: boolean;
+  extractedSwfs: boolean;
+  frameworkDll: boolean;
+  mewtestDll: boolean;
+  mewjector: boolean;
+  saveSuffix: string;
+  modsDir: string;
+  mod?: { name: string; gameBuild: string | null; compare: BuildComparison | null };
+}

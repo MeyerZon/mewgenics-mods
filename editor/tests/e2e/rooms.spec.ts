@@ -29,6 +29,10 @@ const ART = encodeLvl(buildRoom({
 const SWFS = process.env.MEWGENICS_EXTRACTED_DATA ? join(process.env.MEWGENICS_EXTRACTED_DATA, "..", "swfs") : join(REPO_ROOT, ".extracted", "swfs");
 
 const cell = (page: Page, x: number, y: number) => page.locator(`.rcell[data-x="${x}"][data-y="${y}"]`);
+/** the explorer's one Palette list: Tiles | Objects (only the active kind is in the DOM) */
+const paletteKind = (page: Page, kind: "Tiles" | "Objects") => page.locator(".explorer [aria-label='Palette kind'] button", { hasText: kind }).click();
+/** the right panel's Inspector | Findings tabs */
+const rightTab = (page: Page, name: "Inspector" | "Findings") => page.locator(".rightpanel [role=tablist] [role=tab]", { hasText: name });
 
 async function openRooms(page: Page): Promise<void> {
   await openApp(page, "?mode=rooms");
@@ -44,6 +48,8 @@ test.beforeAll(() => {
   writeFileSync(join(MOD_DIR, "data", "tiles.gon.append"), `${MUD} {\n    editor {\n        image_tint [brown]\n        name "E2E Mud"\n    }\n    tile MudTile\n}\n`);
   writeFileSync(join(MOD_DIR, "levels", "e2e", "keep.lvl"), KEEP);
   writeFileSync(join(MOD_DIR, "levels", "e2e", "art.lvl"), ART);
+  // no objects at all: one lvl-no-player-spawn warning; never saved by the specs
+  writeFileSync(join(MOD_DIR, "levels", "e2e", "scratch.lvl"), encodeLvl(buildRoom({ objects: [], tiles: [] })));
 });
 test.afterAll(() => {
   rmSync(MOD_DIR, { recursive: true, force: true });
@@ -77,16 +83,18 @@ test.describe("Rooms mode — the Room editor", () => {
     for (let x = 0; x <= 4; x++) await expect(cell(page, x, 9)).toHaveAttribute("data-tile", String(MUD));
     await expect(cell(page, 5, 9)).not.toHaveAttribute("data-tile", String(MUD));
 
-    // object brush: the player spawn (spawns.gon `utility PlayerSpawn`)
+    // object brush: the player spawn (spawns.gon `utility PlayerSpawn`), in the Palette's Objects list
+    await paletteKind(page, "Objects");
     await page.locator(".explorer input[aria-label='Filter objects']").fill("PlayerSpawn");
     const spawnRow = page.locator(".palette-object .srow.pal").first();
     const spawnId = Number(await spawnRow.getAttribute("data-id"));
     await spawnRow.click();
     await cell(page, 5, 5).click();
     await expect(cell(page, 5, 5)).toHaveAttribute("data-objects", String(spawnId));
+    await rightTab(page, "Findings").click();
     await expect(page.locator(".roomfindings")).toContainText("No findings");
 
-    await page.locator(".room-save").click();
+    await page.locator(".topbar .topbar-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/painted\.lvl/)).toBeVisible();
 
     // the bytes on disk, through the editor's own codec
@@ -107,6 +115,7 @@ test.describe("Rooms mode — the Room editor", () => {
     // live findings: erase the 5 player spawns → lvl-no-player-spawn (before any save)
     await page.locator(".roomtools button", { hasText: "Erase" }).click();
     for (const [x, y] of [[1, 0], [3, 0], [5, 0], [7, 0], [5, 5]] as const) await cell(page, x, y).click();
+    await rightTab(page, "Findings").click();
     await expect(page.locator(".roomfindings")).toContainText("lvl-no-player-spawn");
     expect(errors.filter((e) => e.type !== "warning"), JSON.stringify(errors)).toHaveLength(0);
   });
@@ -117,7 +126,7 @@ test.describe("Rooms mode — the Room editor", () => {
     await expect(page.locator(".rcell")).toHaveCount(100);
     await expect(cell(page, 4, 4)).toHaveAttribute("data-tile", "random");
     await expect(cell(page, 2, 2)).toHaveAttribute("data-objects", "1,random");
-    await page.locator(".room-save").click();
+    await page.locator(".topbar .topbar-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/keep\.lvl/)).toBeVisible();
     expect(Buffer.from(readFileSync(join(MOD_DIR, "levels", "e2e", "keep.lvl"))).equals(Buffer.from(KEEP))).toBe(true);
 
@@ -130,7 +139,7 @@ test.describe("Rooms mode — the Room editor", () => {
     await page.getByLabel("tile choice 2").selectOption(String(MUD));
     await page.getByLabel("tile weight 2").fill("4");
     await expect(cell(page, 7, 7)).toHaveAttribute("data-tile", "random");
-    await page.locator(".room-save").click();
+    await page.locator(".topbar .topbar-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/keep\.lvl/)).toBeVisible();
     // the first save's toast may still be up: wait for the file itself
     await expect.poll(() => decodeLvl(readFileSync(join(MOD_DIR, "levels", "e2e", "keep.lvl"))).tiles[7 * 10 + 7]).toEqual([{ id: 0, weight: 1 }, { id: MUD, weight: 4 }]);
@@ -150,7 +159,7 @@ test.describe("Rooms mode — the Room editor", () => {
     await openRooms(page);
     await page.locator(".rooms-list .srow", { hasText: "e2e/vanilla_copy.lvl" }).click();
     await expect(page.locator(".rcell")).toHaveCount(100);
-    await page.locator(".room-save").click();
+    await page.locator(".topbar .topbar-save").click();
     await expect(page.getByText(/saved mods\/e2e-rooms\/levels\/e2e\/vanilla_copy\.lvl/)).toBeVisible();
     expect(Buffer.from(readFileSync(join(MOD_DIR, "levels", "e2e", "vanilla_copy.lvl"))).equals(bytes)).toBe(true);
   });
@@ -202,5 +211,111 @@ test.describe("Rooms mode — tileset art and the iso view", () => {
     await page.locator(".roomtools select[aria-label='Tileset']").selectOption("sewers");
     await expect(page.locator(".roomiso img.isoart").first()).toBeVisible();
     expect(errors.filter((e) => e.type !== "warning"), JSON.stringify(errors)).toHaveLength(0);
+  });
+});
+
+test.describe("Rooms mode — the explorer, the panes and the grid input (UX PR 5)", () => {
+  test("the Palette is one list with a Tiles | Objects switch: only the active kind is in the DOM", async ({ page }) => {
+    await openRooms(page);
+    const seg = page.locator(".explorer [role=group][aria-label='Palette kind']");
+    await expect(seg.locator("button", { hasText: "Tiles" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".explorer .palette-tile")).toHaveCount(1);
+    await expect(page.locator(".explorer .palette-object")).toHaveCount(0);
+    await expect(page.locator(".explorer input[aria-label='Filter tiles']")).toBeVisible();
+    await expect(page.locator(".explorer .palette-tile .srow.pal", { hasText: "E2E Mud" })).toBeVisible();
+    await paletteKind(page, "Objects");
+    await expect(seg.locator("button", { hasText: "Objects" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".explorer .palette-object")).toHaveCount(1);
+    await expect(page.locator(".explorer .palette-tile")).toHaveCount(0);
+    await expect(page.locator(".explorer input[aria-label='Filter objects']")).toBeVisible();
+    await expect(page.locator(".explorer input[aria-label='Filter tiles']")).toHaveCount(0);
+    await paletteKind(page, "Tiles");
+    await expect(page.locator(".explorer .palette-tile")).toHaveCount(1);
+  });
+
+  test("the right panel is Inspector | Findings tabs; Findings shows a summary card and the lvl-* rows, its count in the tab label", async ({ page }) => {
+    await openRooms(page);
+    await page.locator(".rooms-list .srow", { hasText: "e2e/scratch.lvl" }).click();
+    await expect(page.locator(".rcell")).toHaveCount(100);
+    await expect(rightTab(page, "Inspector")).toHaveAttribute("aria-selected", "true");
+    await expect(rightTab(page, "Findings")).toHaveText("Findings · 1");
+    await rightTab(page, "Findings").click();
+    await expect(rightTab(page, "Findings")).toHaveClass(/active/);
+    await expect(page.locator(".roomfindings .summary.warn")).toBeVisible();
+    await expect(page.locator(".roomfindings .finding", { hasText: "lvl-no-player-spawn" })).toBeVisible();
+    // the status pill opens the same tab
+    await rightTab(page, "Inspector").click();
+    await page.locator(".topbar .pill").last().click();
+    await expect(rightTab(page, "Findings")).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("keyboard painting: the grid is role=grid with one tabbable cell; arrows move the selection and Enter applies the tool", async ({ page }) => {
+    await openRooms(page);
+    await page.locator(".rooms-list .srow", { hasText: "e2e/scratch.lvl" }).click();
+    await expect(page.locator(".roomgrid[role=grid] [role=gridcell]")).toHaveCount(100);
+    await page.locator(".roomtools [aria-label='Room tool'] button", { hasText: "Select" }).click();
+    await cell(page, 6, 6).click();
+    await expect(page.locator(".rcell[tabindex='0']")).toHaveCount(1);
+    await expect(cell(page, 6, 6)).toHaveAttribute("tabindex", "0");
+    await page.locator(".palette-tile .srow.pal", { hasText: "E2E Mud" }).click();
+    await cell(page, 6, 6).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(cell(page, 7, 6)).toBeFocused();
+    await expect(cell(page, 7, 6)).toHaveAttribute("tabindex", "0");
+    await page.keyboard.press("Enter");
+    await expect(cell(page, 7, 6)).toHaveAttribute("data-tile", String(MUD));
+    await expect(cell(page, 6, 6)).toHaveAttribute("data-tile", "0");
+    // the edge clamps: ArrowDown x4 stays on row 9
+    for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowDown");
+    await expect(cell(page, 7, 9)).toBeFocused();
+    await page.keyboard.press(" ");
+    await expect(cell(page, 7, 9)).toHaveAttribute("data-tile", String(MUD));
+  });
+
+  test("+ New room: Enter in the dialog creates the room", async ({ page }) => {
+    await openRooms(page);
+    await page.locator(".explorer button", { hasText: "+ New room" }).click();
+    await page.locator("#newroom-name").fill("entered");
+    await page.locator("#newroom-folder").fill("e2e");
+    await page.locator("#newroom-folder").press("Enter");
+    await expect(page.locator(".modal")).toHaveCount(0);
+    await expect(page.locator(".roompath")).toContainText("levels/e2e/entered.lvl");
+    await expect(page.locator(".rcell")).toHaveCount(100);
+  });
+
+  test("painting one cell changes only that cell's DOM node", async ({ page }) => {
+    await openRooms(page);
+    await page.locator(".rooms-list .srow", { hasText: "e2e/scratch.lvl" }).click();
+    await expect(page.locator(".rcell")).toHaveCount(100);
+    await page.locator(".palette-tile .srow.pal", { hasText: "E2E Mud" }).click();
+    await cell(page, 3, 4).click();
+    await expect(cell(page, 3, 4)).toHaveAttribute("data-tile", String(MUD));
+    // tag every cell node and watch the grid for DOM mutations, then paint the selected cell with another tile
+    await page.evaluate(() => {
+      const w = window as unknown as { __mut: Set<string>; __obs: MutationObserver };
+      w.__mut = new Set();
+      document.querySelectorAll(".rcell").forEach((el) => ((el as HTMLElement & { __tag?: number }).__tag = 1));
+      const cellOf = (n: Node | null): string | null => {
+        const el = n && (n.nodeType === 1 ? (n as Element) : n.parentElement);
+        const c = el ? el.closest(".rcell") : null;
+        return c ? `${c.getAttribute("data-x")},${c.getAttribute("data-y")}` : null;
+      };
+      w.__obs = new MutationObserver((list) => {
+        for (const m of list) w.__mut.add(cellOf(m.target) ?? "grid");
+      });
+      w.__obs.observe(document.querySelector(".roomgrid")!, { subtree: true, attributes: true, childList: true, characterData: true });
+    });
+    await page.locator(".palette-tile .srow.pal").filter({ hasNotText: "E2E Mud" }).first().click();
+    await cell(page, 3, 4).click();
+    await expect(cell(page, 3, 4)).not.toHaveAttribute("data-tile", String(MUD));
+    const res = await page.evaluate(() => {
+      const w = window as unknown as { __mut: Set<string>; __obs: MutationObserver };
+      w.__obs.disconnect();
+      const all = [...document.querySelectorAll(".rcell")] as Array<HTMLElement & { __tag?: number }>;
+      return { mutated: [...w.__mut].sort(), sameNodes: all.filter((el) => el.__tag === 1).length, total: all.length };
+    });
+    expect(res.total).toBe(100);
+    expect(res.sameNodes).toBe(100);
+    expect(res.mutated).toEqual(["3,4"]);
   });
 });

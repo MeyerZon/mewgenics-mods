@@ -11,7 +11,7 @@
 // survives a remount (switching to Art mode and back replaces the center pane).
 
 import React from "react";
-import { S } from "../state.ts";
+import { setDocStats, markUnsaved } from "../state.ts";
 import { highlightGon, esc } from "../gon-highlight.ts";
 import { useS } from "./ui.tsx";
 import { scheduleLive } from "../actions.ts";
@@ -52,7 +52,7 @@ function recomputeEditorText(): void {
   } catch {
     docBytes = text.length;
   }
-  S.set({ docLines: editorLines.length, docBytes });
+  setDocStats(editorLines.length, docBytes);
 }
 
 // One paint: reads geometry first, then writes DOM (no read-after-write thrash).
@@ -139,7 +139,7 @@ export const editorCtl: EditorController = {
     ta.value = detachedText;
     editorTextDirty = true;
     const onInput = () => {
-      S.set({ saved: false });
+      markUnsaved();
       editorTextDirty = true;
       schedulePaint();
       scheduleLive();

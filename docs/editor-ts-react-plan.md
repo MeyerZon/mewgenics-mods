@@ -43,7 +43,7 @@ editor/
   web/src/state.ts            the app store (S, tpl) + actions (selectMod, openFile, save, …)
   web/src/components/*.tsx    TopBar, Explorer, Center (+ Editor), RightPanel, StatusBar, Toast, modals, drawers, tours
   web/src/art/*.ts(x)         art-state.ts, ArtExplorer, ArtCenter, ArtRightPanel, NewSceneModal, preview-gl.ts
-  web/src/rooms/*.ts(x)       Rooms mode (2026-10-22): room-state.ts (store + actions), Rooms.tsx (explorer, grid, inspector, findings)
+  web/src/rooms/*.ts(x)       Rooms mode (2026-10-22): room-state.ts (store + actions), RoomPanes.tsx (the lazy chunk: explorer, grid / iso, inspector, findings)
   web/art/preview-dev.html    second Vite page (the standalone preview harness) → preview-dev.ts
   web/server.ts → server.ts  static dist + /api bridge with the zod gate
   scripts/*.ts, test/*.ts     node runs them directly
@@ -117,7 +117,7 @@ room, else `default_tileset`, i.e. `alley`).
   resolution + the tileset list), `GET /api/level-tile-art?mod&tileset&tile=<id>|object=<id>` (the PNG; `&meta=1`
   gives its size and the clip's registration point in it). Thumbnails and the export index are cached in
   `editor/data/level-art/` (git-ignored, keyed by the SWF's size + mtime); no game art is ever committed.
-- **Iso view** (`Rooms.tsx` `IsoGrid`, `edit.ts` `isoCellCenter` / `isoDrawOrder`): 2:1 diamonds (the engine's
+- **Iso view** (`rooms/RoomIso.tsx`, `edit.ts` `isoCellCenter` / `isoDrawOrder`): 2:1 diamonds (the engine's
   projection: `docs/3d-rendering-feasibility.md`), cell (x, y) at ((x−y)·w/2, (x+y)·w/4), tile art on the cell centre,
   objects feet-registered on it, drawn in x+y order (back first). Painting, erasing and selecting work on the diamonds.
 - Tests: `test/level-art-tests.ts` (T0 on a SWF built by the editor's emitter + a synthetic base: resolver, reasons,
@@ -125,6 +125,109 @@ room, else `default_tileset`, i.e. `alley`).
   resolves to a clip or a named reason and every clip renders non-empty, the Rat and a static) and the two
   "tileset art and the iso view" specs in `tests/e2e/rooms.spec.ts` (the swatch fallback runs everywhere; the art
   check skips without `.extracted/swfs`).
+
+## UI primitives and conventions (2026-10-22)
+
+PR 1 of the UX overhaul adds the shared building blocks; later PRs move the screens onto them.
+
+- **Tokens** (`web/src/app.css` `:root`, with light-theme values): spacing `--sp-1..6` (4–32 px), radii
+  `--r-sm/md/lg`, stacking `--z-menu/scrim/example/toast`, `--shadow-pop`, and the colours that used to be
+  hard-coded (`--gutter`, `--link-hover`, `--vc-bg`, `--merge`, the GON syntax palette `--syn-*`, used once by
+  `.hl .*`).
+- **Primitives** (`web/src/components/ui.tsx`): `Button`, `IconButton` (needs `aria-label`), `Pill`, `Tabs` /
+  `SubTabs` (`role=tablist`, ←/→), `Segmented` (`.modeswitch`, `aria-pressed`), `SearchBox`, `SectionHeader`,
+  `EmptyState`, `Summary`, `FindingsList`, `Field` (label then control, `useId`), `Checkbox`, `Select`, `Modal`,
+  `Drawer`, `Menu`, `PaneBoundary`. They render the existing classes, so a screen moved onto them keeps its DOM.
+  `EmptyState` and `PaneBoundary` live JSX-free in `components/boundary.ts` so Node can unit-test them.
+- **Hooks / modules**: `hooks/useDialog.ts` (role + aria-modal, focus in, Tab trap, focus restore, Esc, scroll
+  lock); `shortcuts.ts` (the one window keydown listener: Ctrl/Cmd+S is always default-prevented, then the handler
+  set with `setSaveHandler`; Esc closes the topmost overlay of the `pushOverlay` stack, menu > tour > modal >
+  drawer); `toast(text, {kind, ms})` over the `S.messages` queue (`state.ts`); `apiFetch` (`api.ts`) throws an
+  `ApiError {status, message, issues}` and toasts it; `useStoreShallow` (`store.ts`) for selectors that build
+  objects or arrays; `S.busy` / `setBusy`. `main.tsx` renders under `React.StrictMode`.
+- **Conventions test** (`test/web-conventions-tests.ts`, run by `npm test`): source-text rules over `web/src`:
+  no `S./A./R.set(` in `components/`, `art/`, `rooms/` views (the `*-state.ts` actions may), no `window.confirm`
+  outside `actions.ts`, no clickable `<span>`/`<div>` (the scrim click-outside shells are exempt), no
+  `defaultValue`/`defaultChecked` outside `art/Bits.tsx`, every `useEffect` has a dependency array, no index keys.
+  Today's violations are listed per file in `test/fixtures/web-conventions-allow.json`. **The allow-list only
+  shrinks:** a file over its allowance fails, and so does an allowance above the real count, so fixing a violation
+  means lowering its number in the same PR. It never grows; the goal is an empty list.
+- e2e: `tests/e2e/a11y.spec.ts` pins the dialog, menu, toast and Ctrl+S behaviour.
+- **The shell (PR 2)**: one command bar. The top bar's Validate / Save (`.topbar-validate` / `.topbar-save`) and
+  Ctrl+S act on what the current mode has open (`actions.ts` `currentMode` / `saveCurrent` / `validateCurrent`:
+  the overlay, the scene, the room); the scene tab bar keeps only Build SWF and the room toolbar has no Save. The
+  status pill counts the current mode's findings and opens them. `web/src/dirty.ts` is the unsaved-work registry
+  (scopes `data`, `art`, `vc`, `rooms`, registered by `actions.ts`, `art-state.ts`, `room-state.ts`); `guard(scopes,
+  action)` opens the ConfirmModal (`S.confirm`: Cancel / Discard / Save and continue) before a mod switch, another
+  file / scene / room, a close or a new scene / room, and `beforeunload` asks on reload. Mode switches never ask
+  (nothing is lost). Saving a GON file only re-lists the mod's files (`refreshModFiles`) and a build only re-lists the
+  art (`refreshArtListings`), so neither closes an open scene or room. `GET /api/status` (`editorStatus` in
+  `src/core/api.ts`: PE headers only via the validator's memoized `installedNativeBuild`, `existsSync` checks) feeds
+  the status bar; `web/src/deeplink.ts` reads and writes `?mode=&mod=&file=` (`history.replaceState`). Launch… shows
+  the `launch-dev.bat mods\<mod>` command with Copy; the editor never starts the game. e2e: `tests/e2e/shell.spec.ts`.
+- **Data mode (PR 3)**: the base explorer pages instead of capping: `GET /api/base?category=&filter=&offset=&limit=`
+  answers `{entries, total, offset}` (`api.listBaseEntries`' optional page; junk offset → 0, limit clamped 1..5000;
+  no page → everything, as the MCP tool reads it), the UI asks for `BASE_PAGE` (300) and "Show 300 more" appends the
+  next page through `applyBasePage` (`state.ts`: offset 0 replaces, offset = loaded length appends, anything else is a
+  stale reply). The filter's placeholder names the category it filters. The scaffold kinds are one list,
+  `src/core/template-kinds.ts` (pure): the zod `TemplateKind` enum is built from it and the template modal imports
+  it. The modal is titled "New mod" from the mod menu (`openTemplate({intent: "mod"})`), "Scaffold an overlay"
+  otherwise; it is a `<form>` (Enter scaffolds) and the result is the written-file list with Open (a `.lvl` opens in
+  Rooms), "Open first file & validate" and the raw JSON behind `<details>`. The Components tab shows the where-used
+  files `/api/components?whereUsed=1` returns (first 8, "show all"). The editor status line reads `S.validating`
+  (`validating…` from the keystroke until the newest check answers, then `validated`; `validation off` without a mod).
+- **Art mode (PR 4)**: Art is its own chunk: `App.tsx` `React.lazy`-loads `art/ArtPanes.tsx` (the three panes,
+  `preview-gl.ts` and the Ruffle host) behind an `EmptyState` fallback; `art-state.ts` stays in the shell (actions.ts
+  imports it) and gets `createPreview` through `registerPreviewFactory`. `web/src/prefs.ts` keeps per-viewer view
+  options as JSON under `mewged.prefs.<key>` (`art.showGray | background | loop | ghostCat`; the old
+  `mewged.art.ghostCat` migrates on first read), read by `hooks/usePref.ts` and applied to the renderer when it is
+  created. The Preview panel has one View options card (raw gray — the Shapes tab's copy is gone —, a controlled
+  background select, ghost cat on a `parts: game` rig; loop stays in the transport), a controlled palette-row box and
+  the note that browsing rows never dirties the scene. A shape row is id · chips · ramp · meta · Preview · `…` (the
+  `Menu` primitive, open state `S.openMenu = "shape:<id>"`; `ShapeRowMenu.tsx`), whose items keep the old
+  aria-labels; Replace clicks the row's hidden file input. One "Import SVG or PNG" drop zone: a PNG picked or dropped on
+  any Art zone waits in `A.pendingPng` for the Import PNG strip (mode, scale, pixel art, tile) and Import. The
+  VectorCraft panel is mounted once in `ArtCenter`, after and outside the `key={scenePath}` scene panel, so its
+  iframe survives scene switches (`.artpanel.vc-on` shrinks the scene panel to its header); a document remembers its
+  mod + scene and Apply is off in another scene. `SceneTabs.tsx` is the Shapes tab (rows, Bake glow form, path fills)
+  and re-exports `SpritesTab` / `ExportsTab` / `JsonTab`; the views edit the scene through art-state actions that
+  replace the edited object, so the `React.memo` shape / sprite / layer rows re-render only when theirs changes. The
+  JSON tab keeps typed text when the scene moves underneath (a Reload / Keep banner). Every Art file is off the
+  conventions allow-list but one positional path-row key in `SceneTabs.tsx`.
+- **Rooms mode (PR 5)**: Rooms is its own chunk too: `App.tsx` `React.lazy`-loads `rooms/RoomPanes.tsx` (the
+  explorer, the centre, the right panel) behind an `EmptyState` fallback; `room-state.ts` stays in the shell. The old
+  `Rooms.tsx` is split into `RoomExplorer`, `RoomToolbar`, `RoomGrid`, `RoomIso`, `RoomInspector`, `NewRoomModal`,
+  `RoomBits` (labels, art lookup, the self-hiding thumbnail) and `grid-input.ts`. The explorer has the Rooms list and
+  ONE Palette list with a `Tiles | Objects` Segmented switch (`R.paletteKind`; only the active kind is in the DOM, the
+  list fills the rest of the explorer; choosing the Tile / Object tool or a brush shows that kind). The toolbar uses
+  `Segmented` for the tool and the view, a dirty dot after the path and an `IconButton` Close. The right panel is
+  `Inspector | Findings` tabs (`R.rightTab`; the Findings label carries the count, `Findings · 1`; the status pill
+  opens it) and Findings is a `Summary` (`findingsLevel(counts)`) + `FindingsList`. Grid input is pointer events (a
+  touch / pen press releases its implicit capture so a drag reaches the next cells) with ONE window `pointerup` /
+  `pointercancel` listener (`useStrokeEnd`, mounted by `RoomCenter`); both grids are `role=grid` with
+  `role=gridcell` buttons and one roving tab stop (the selection): arrows `moveSelection` (clamped, `clampSel`),
+  Enter / Space `applyAtSelection`. Cells (`Cell`, `IsoCell`) and palette rows are `React.memo` with primitive props
+  (tile id, objects summary, art src, selected, random), so painting one cell re-renders that cell. The New room dialog
+  is a `<form>` (Enter creates). Every `rooms/*` file is off the conventions allow-list. e2e: `tests/e2e/rooms.spec.ts`
+  "the explorer, the panes and the grid input (UX PR 5)".
+- **Onboarding (PR 6)**: the tours are anchored coachmarks. `web/src/tour-anchors.ts` defines every anchor id once
+  (`TOUR`, `tourAttr(id)` → `data-tour`; the primitives take `tour` on a tab / segment / tablist and `triggerTour` on a
+  Menu) plus the pure placement maths (`placeCard`: right of the target, flipped left / below / above, "over" when
+  nothing fits; `isOnScreen`). `GuidedTour` (`components/Tours.tsx`) spotlights the first present target of a step
+  (`.tour-spot`, a dimming box-shadow + ring) with the card beside it, re-measured on resize, a `ResizeObserver` and a
+  300 ms poll (late lazy panes), scrolling the target into view once; with no target on screen or `?tour=center` it
+  is the centred card. A step's `onEnter` switches mode (`ensureMode`), so the Art tour's step 2 enters Art mode.
+  Data (5), Art (7: + Timeline, Rig, VectorCraft) and Rooms (5, `mewged.onboard.roomTourSeen` / `roomTourDontShow`,
+  auto-opened on the first `enterRoomMode()`, suppressed by `?mode=rooms`) tours. Closing sets `*Seen`; the
+  "Don't show again" box writes `*DontShow` at once (`setTourDontShow`), which also hides the empty states' tour
+  nudges. The worked examples are `components/examples/` (`steps.ts`: ONE `EXAMPLE_STEPS` / `ART_EXAMPLE_STEPS` list
+  of `{id, title, sub, body, action}` with the bodies as data, so index and content cannot drift; `Stepper.tsx`, the
+  shell with `useDialog`; `DataExample.tsx`, `ArtExample.tsx`); the Data example opens on step 1 and step 3 is the
+  `combined.csv.append` rows. The Art example's jumps need a mod (else the mod switcher opens with a toast) and the
+  Import jump focuses the Shapes tab's Import card. The Concepts drawer has a Rooms section and shows the current
+  mode first (Help ▸ Rooms concepts scrolls to it). Tours, examples and the drawer are one lazy chunk
+  (`components/Onboarding.tsx`, 31.4 kB). Every view is off `store-set-in-view`; the allow-list holds only
+  `art/SceneTabs.tsx`'s one index key. e2e: `tests/e2e/onboarding.spec.ts`.
 
 ## Follow-ups (not in this stack)
 

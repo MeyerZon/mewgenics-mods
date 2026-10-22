@@ -1,0 +1,195 @@
+{
+  "observed": "2026-10-22, build 25143593, T2 run 20261022-160300-_unitface-unit-face (mods/_unitface/tests/unit-face.mewtest; framework = feat/3d-meshes-m3-face, harness = PR #114 face + PR #117 in-process GL shots)",
+  "run": {
+    "verdict": "pass",
+    "reason": "all 9 expectation(s) passed; 5 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)"
+  },
+  "shots": [
+    {
+      "label": "front",
+      "file": "shot-front.png",
+      "size": [
+        3440,
+        1440
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "yaw": 0,
+      "measure": {
+        "side": {
+          "count": 11318,
+          "cx": 2674.1,
+          "cy": 729.5
+        },
+        "front": {
+          "count": 5816,
+          "cx": 2729.5,
+          "cy": 758.4
+        },
+        "back": {
+          "count": 0,
+          "cx": 0,
+          "cy": 0
+        },
+        "window": [
+          2584,
+          639,
+          2765,
+          820
+        ]
+      },
+      "verdict": "turned"
+    },
+    {
+      "label": "front mirrored",
+      "file": "shot-front-mirrored.png",
+      "size": [
+        3440,
+        1440
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "yaw": 90,
+      "measure": {
+        "side": {
+          "count": 11368,
+          "cx": 2712.7,
+          "cy": 729.8
+        },
+        "front": {
+          "count": 5749,
+          "cx": 2657.1,
+          "cy": 758.2
+        },
+        "back": {
+          "count": 0,
+          "cx": 0,
+          "cy": 0
+        },
+        "window": [
+          2622,
+          639,
+          2803,
+          820
+        ]
+      },
+      "verdict": "turned"
+    },
+    {
+      "label": "back",
+      "file": "shot-back.png",
+      "size": [
+        3440,
+        1440
+      ],
+      "dir": [
+        1,
+        0
+      ],
+      "yaw": 270,
+      "measure": {
+        "side": {
+          "count": 11345,
+          "cx": 2712.7,
+          "cy": 729.7
+        },
+        "front": {
+          "count": 0,
+          "cx": 0,
+          "cy": 0
+        },
+        "back": {
+          "count": 5768,
+          "cx": 2657.2,
+          "cy": 758.3
+        },
+        "window": [
+          2622,
+          639,
+          2803,
+          820
+        ]
+      },
+      "verdict": "turned"
+    },
+    {
+      "label": "back mirrored",
+      "file": "shot-back-mirrored.png",
+      "size": [
+        3440,
+        1440
+      ],
+      "dir": [
+        0,
+        1
+      ],
+      "yaw": 180,
+      "measure": {
+        "side": {
+          "count": 11305,
+          "cx": 2674.1,
+          "cy": 729.5
+        },
+        "front": {
+          "count": 0,
+          "cx": 0,
+          "cy": 0
+        },
+        "back": {
+          "count": 5812,
+          "cx": 2729.5,
+          "cy": 758.4
+        },
+        "window": [
+          2584,
+          639,
+          2765,
+          820
+        ]
+      },
+      "verdict": "turned"
+    },
+    {
+      "label": "front again",
+      "file": "shot-front-again.png",
+      "size": [
+        3440,
+        1440
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "yaw": 0,
+      "measure": {
+        "side": {
+          "count": 11312,
+          "cx": 2674.1,
+          "cy": 729.5
+        },
+        "front": {
+          "count": 5818,
+          "cx": 2729.5,
+          "cy": 758.4
+        },
+        "back": {
+          "count": 0,
+          "cx": 0,
+          "cy": 0
+        },
+        "window": [
+          2584,
+          639,
+          2765,
+          820
+        ]
+      },
+      "verdict": "turned"
+    }
+  ]
+}

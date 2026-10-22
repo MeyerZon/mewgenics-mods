@@ -1359,6 +1359,34 @@ is `editor/component-schema.json` (data-mods.md "Component keys"), pinned by `ed
   `_Func_impl_no_alloc<…lambda…>::vftable` rows in `list_names.tsv`, `vftable+0x10` = `_Do_call` → the body (compB
   followed 309 of them across 75 classes). INFERRED: classes whose vanilla keys were not found (`vanillaMissed` in
   the schema) mostly hide them in a lambda not yet located.
+- **Follow-up (compclose / compclose2, notes `.analysis/notes-compclose{,2}.md`).** Found by xref of each missing
+  key's string literal (and inline immediate) -> containing function -> the vftables holding it (RTTI names lambdas by
+  their enclosing method, e.g. `<lambda_1>@?1??OnDodgedDamage@Terminator2Run@glaiel@@`). `Passive::GetStackKey` 0x7698d0
+  reads `stack_key` from `this+0x68` (`same_type` = the class name); `Passive::GetAllWithStackKey` and
+  `RemoveStatusByStackKey` scan it on every passive, so it is a `Passive` key. Keys in lambdas: Terminator2Run
+  `move_weights` (body 0x7ec1e0), MotherTumorPassive `Cat`/`NonCat` (0x7f17b0), StatusAlliesScaledByCursedOnDeath
+  `max` (0x26f0f0), SmiteEnemiesWhoKill -> 0x7691d0 (`damage_instance`-or-self -> `DamageInstance::FromGon`).
+  `FinalBossHitCountdown` slot33 0x7f7c40 `icon` (800) / `icon_ready` (801). `SpecialGodRays` 0x90b4e0 and
+  `AddTilesetObjects` 0x90a0e0 read per-child keys (`children: any`). Ghidra drops the `xmm1` default of `PercentOr`
+  in some pseudo-code (0 printed where the disassembly loads 0.5): defaults are taken from the disassembly. Pinned by
+  `editor/component-schema.json` + `editor/test/component-schema-tests.ts` (T1: vanilla 0 findings).
+- **Defaults audit (2026-10-22, branch `fix/component-schema-defaults`; OBSERVED, objdump over
+  `.analysis/exe/25143593/Mewgenics.exe`).** Every key default was re-read from the instruction that produces it, at
+  the call site after the key's literal (an `.rdata` string the key is loaded from, or `movabs`/`mov dword` immediates
+  spelling it): `PercentOr` / `NumberOr` take the default in `xmm1`, `IntOr` / `BoolOr` in `edx`/`dl`, the member
+  `Character::deval` 0x103320 in `xmm2` (rcx = this, rdx = node). MSVC often **hoists** the constant into a
+  callee-saved register (`movsd xmm7,[rip+…]` … `movaps xmm1,xmm7`): that is the pattern Ghidra's pseudo-code loses,
+  printing 0 (GlobalSpawnOnRoundEnd / SpawnEachTurn / SpawnExtraThingsOnBattleStart / ObjectDetector `chance` really
+  1.0, ChanceToForceEvent / LowerAmbientLight 0.25, ChaosBossFormChangeGuide `passives_health_threshold` 0.5). Inline
+  reads are a type test `cmp dword [node+0xa8], 2|5` whose absent branch writes the default (`mov eax,-2` Autism
+  `innate`, `mov al,1` AuraBase `aura_effects_allies`), or a **folded bool** (`cmp byte [node+0x60],0; je`) where the
+  default is whichever of the true/false paths the absent branch joins (MovementReaction `objects_too`,
+  `exclude_allies`, HealAlliesEachTurn `exclude_self` behave as true when absent). 328 key rows checked: 281
+  confirmed, 42 changed, 31 `null` defaults filled, 2 unresolved, 2 with two reads that disagree
+  (MovementReaction `enemies_only`: false in slot42's first read, true-when-absent in its second; AddTilesetObjects
+  `count`); scalar forms: 20 checked, SizeScale 0 → 1. `@DamageInstance.incident_ally_collects_pickups` was a phantom
+  (no such string in the exe; the key is `incidentally_collects_pickups`) and is deleted. Rows carry
+  `defaultEvidence: disasm|pseudo`; the fragment is `.analysis/component-schema-defaults.json`.
 - **Dispatch names.** The names `apply_status` 0x483120, `attach_passive` 0x494080 and 0x4ccb20 compare against
   (`lea rdx,[rip+str]` before `std::string == const char*` 0x52560): 1923 names, 386 of them not `glaiel::` classes
   (`HealthGain`, `Conditional_*`, `TakeExtraTurn`, …) — `.analysis/compmap/dispatch-names.json` →
@@ -2377,3 +2405,184 @@ entries of `bindings/25143593.json`). RVAs.
   (`mesh: models/broken.glb: model-glb-header: glb version 1 is not 2 — drawing the 2D clip`, fixture
   `mesh-model-codes-log.txt`; the failure is cached) and the fight runs on; a loaded one logs
   `mesh: <path>: loaded N vertices, M triangles, bounds x .. h .. z ..[; <warning codes>]`.
+
+### 3D phase M3 (2026-10-22, `feat/3d-meshes-m3`): hide_sprite, palette rows, @Name, embedded textures, facing, slices
+
+Six items, each test-first and OBSERVED in a fight (T2) on its own branch, then re-run with the integrated DLL (PR body).
+
+- **M3 hide_sprite — the model replaces the 2D sprite** (`hide`):
+
+- **hide_sprite (OBSERVED, T2 2026-10-22, phase M3; `native/framework/src/fw_mesh_hide.c`).** No new RE and no
+  manifest entry: it reuses the M2 per-item filter. Facts relied on:
+  - Layer_Draw 0x9896f0 skips an item when the camera's filter std::function (Camera+0x120, `OFF_CAM_LAYER_FILTER`)
+    returns false (OBSERVED M2, witness `48 8B 8F 20 01 00 00`).
+  - A unit owns exactly ONE item in the world camera's units layer 0x19: its `MaskedRendererIso` (Character+0x40, the
+    item's first field). OBSERVED in the M2 log (`mesh order item` lines: 10 items, the 8 MaskedRendererIso ones at the
+    8 units' tile centres) and now by the hide run's `mesh hide ... skipped=1` (one item per hidden unit).
+  - Everything else a unit shows lives elsewhere and is NOT touched: the Shadow component's sprite is layer 0xa
+    (OBSERVED catC: `Shadow::init` → layer 10); the hover outline / FW glow mask is layer 0x18 on the MASK camera
+    (TacticsTest+0x58, OBSERVED rim) — the world-camera filter never sees it; HUD (health bars, status icons, damage
+    text) is drawn outside the world camera's units layer (INFERRED from the hide shot: see T2 below).
+  - The hide filter WRAPS the order filter (`fw_mesh_hide_filter(inner = fw_mesh_order_filter)`): the order filter still
+    sees the skipped item first, so the unit-attached mesh is armed on it and submitted right before the next item —
+    the mesh takes exactly the sprite's place in the painter order. Nothing in the engine is written: the sprite keeps
+    animating, sorting and hit-testing; only its one draw per frame is skipped.
+  - Consequences (INFERRED, not shot): the hit flash / damage tint is the sprite's colour transform and is skipped with
+    it (the mesh shader's `fw_cx_mul/add` are identity: no flash on the mesh yet); the hover outline and an
+    `FW_SetUnitGlow` rim are computed from the 0x18 mask, which still holds the (undrawn) sprite's silhouette, so they
+    outline the invisible sprite around the mesh; the shadow stays.
+- **Proof (T2, 2026-10-22; `mods/_unithide/tests/unit-hide.mewtest` + `unit-hide-control.mewtest`; fixtures
+  `hide-sprite-log.txt`, `hide-sprite-control-log.txt`, `hide-sprite-summary.json`, pinned by `editor/test/mesh-hide-tests.ts`).**
+  The vanilla Rat spawned at (8.5, 0.5) wears a 0.4-scale magenta box (`models/unit-box.gltf`). Hide run
+  `20261022-155745-_unithide-unit-hide`: `unit model: Rat: hide_sprite: the 2D sprite is not drawn while the model draws`,
+  `mesh order f=1 items=11 meshes=1 groups=1 unsorted=0 | d0 key=9.000 before item 5 key=8.000` and
+  `mesh hide f=1 units=1 items=11 skipped=1` in every plan window (f=1..241), `mesh draw ... errors=0`. Control run
+  `20261022-155755-_unithide-unit-hide-control` (hide_sprite false): same plan line, no hide line. Around the box
+  (patch 2664..2723 x 734..794 at 3440x1440, both runs; region = patch widened by its width each side, 2x its height
+  above, 1x below = 42898 px) the Rat's black outline pixels (r+g+b < 90): **0** with hide_sprite, **3178** in the
+  control → `judgeHide` "hidden". The shadow ellipse stays under the box in the hide shot (layer 0xa untouched). Both
+  runs `run: pass`, `1 real save file(s) unchanged`. No health bar was visible on the full-HP Rat in either shot (HUD
+  behaviour unobserved).
+- Fallback (host-tested only): a model that fails to load never reaches the hide set (`resolve_model` < 0 → the object
+  is skipped before `fw_mesh_hide_add`; `fw_mesh_hide_wanted(.., modelDrawn 0) == 0`), so the sprite draws.
+
+- **M3 Palette row for `palette true` — a cat's own row** (`pal`):
+
+- **The doll's row, for other renderers (OBSERVED 2026-10-22, mesh3 pal, byte witnesses on the installed exe;
+  `.analysis/notes-mesh3pal.md`).** `Character::init(clip, shadow)` 0xf1150 stores the CatParts component at
+  **`Character+0x90`** right after `AddComponent<CatParts>` (`call 0x90a70 | 0x121a70; mov [rsi+0x90],rax; mov
+  [rax+0x70],r12`, 3 sites 0xf1224 / 0xf1dd7 / 0xf1e77, all 0x90); it is **NULL for every non-`_CAT` unit** (line 1044
+  tests it before giving the shadow `CatParts+0x160`). `CatParts_Refresh` 0x73f7d0: `mov edx,[rdi+0x1b4]` (0x73fcdf) →
+  `palette` = base row; `mov ecx,[rdi+0x1b8]; cmp ecx,-1` (0x73fd4b) → `palette` = override unless −1; `cmp dword
+  [rdi+0x1b8],-0x45; jne` (0x73fdea) → the per-part materials. `CatParts::init` 0x73cc70 skips −69 as a row too. The
+  row the doll's main material shows = override unless −1 / −69, else base.
+- Manifest (`bindings/25143593.json`, harvest-verified): `Character_init_clip` 0xf1150 + `CatParts_Refresh` 0x73f7d0
+  (signed witness hosts), `Character_catParts` 0x90 (`OFF_CH_CATPARTS`), `CatParts_palette` 0x1b4
+  (`OFF_CATPARTS_PALETTE`), `CatParts_paletteOverride` 0x1b8 (`OFF_CATPARTS_PAL_OVERRIDE`), `CatPartsMultiPalette`
+  −0x45 (`CONST_CAT_MULTI_PALETTE`, a displacement witness).
+- **Non-cat units have no palette (OBSERVED by absence).** No CatParts = no `paletted` material: an enemy Rat's clip
+  draws its authored colours (engine-map "a plain movieclip on a Rat ... still draws its colours"); its only recolour
+  is `graphics.tint` (a cxform multiply on the root node). So the framework gives a non-cat `palette true` model no
+  row (−1, colours as authored) and keeps its GON `tint`.
+- Per-unit palette (framework, `fw_unit_palette.c`, `obj3d_engine.c` follow()): every combat frame a GON object with
+  `palette true` reads its unit's row through the guarded reader and logs `unit palette: <entry> handle=<h> row=<r>
+  base=<b> override=<o>` (or `row=-1 (no CatParts: not a cat, colours as authored)`) when it changes.
+
+- **M3 Named models (`@Name`, data/models.gon)** (`name`):
+
+- **OBSERVED (T2 2026-10-22, run 20261022-160724).** `Gon_LoadFile` **0x611a0** `(ResourceMap* this, std::string* path by value, bool reload, bool)`,
+  called as `Gon_LoadFile(&ResourceMap, "data/models.gon", 0, 1)` from the per-unit discovery in TacticsTest::LateRender. It returns the
+  cached `GonResource*`, and the merged root GonObject is at **`res+0x28`** (`OFF_GONRES_OBJECT`). It read
+  `2 entries: FwCrate, NameBox`, which is fw-3d's plain base plus `_modelnames`'s `data/models.gon.append`. The callee destroys the
+  string (it ends in `string_TidyDeallocate(param_2)`, the same contract as `ResourceManager_GetBinaryResource`).
+- **OBSERVED (decompile + callers).** `ResourceMap` = the global **0x13c61e0**. Every Gon_LoadFile caller passes it in rcx
+  (SpawnDatabase_LoadGonDir, appmain, MewsicController_init, CatParts, Level_LoadFile). Witness: rip-ref #6 (lea) of
+  `ResourceManager_GetBinaryResource` 0x973750. Its mutex is at +0x48 (GetBinaryResource locks 0x13c6228).
+  `GonResource+0x28` is witnessed by `lea rcx,[rax+0x28]` right after the call in `ApplicationBase_appmain` (0x1409b9a31),
+  by `lea rdi,[rax+0x28]` in CatPartsRecord_reset 0x737536, and by `lea r8,[rax+0x28]` in MewsicController_init 0x23f738.
+  notes-loc: combined_decode applies overlays to `res+0x28`.
+- **OBSERVED (decompile) + OBSERVED (T2 run 20261022-160622).** Missing base: `0x9a1790` checks FileExists on the plain path
+  first. With no base anywhere, Gon_LoadFile goes the plain `FileManager_GetFile` way and returns NULL. Callers test this, e.g.
+  `MewApplication_load_font_remap` 0x746a80. **An overlay without a base file is never loaded.**
+- **OBSERVED (T2 2026-10-22, both runs) + decompile `FileManager_ResolveWithOverlays` 0x9a09f0. Mod-path order rule for overlays:**
+  the resolver lists the pack copy and then the mod paths. For each path it records the plain file (tag 0) and `.append` / `.merge` /
+  `.patch` (tags 1/2/3), and it remembers the index of the last plain file it met. The result is the slice **from that base to the end**.
+  The vector at 0x1413c58b8 is walked from its last element down, and the observed order says the first-listed `-modpaths` entry is
+  met first. So overlays on mod paths listed **before** the path that holds the effective base file are dropped. With
+  `_modelnames, fw-3d, dev-sandbox` only `FwCrate` loaded and both references were `model-name-unknown`
+  (`editor/test/fixtures/ingame/model-names-order-log.txt`). With `fw-3d, _modelnames, dev-sandbox` both entries loaded. INFERRED
+  for vanilla files: the pack copy is met first, so every mod's overlay applies, as before. The rule only bites when a **mod** ships
+  the plain base. The same rule is "later plain copies replace earlier ones" (docs: "later paths override earlier").
+- **OBSERVED (T2).** Two Pooters with `model "@NoSuchModel"` produce exactly one line:
+  `mesh: @NoSuchModel: model-name-unknown: no data/models.gon entry named NoSuchModel (unit Pooter; 2 named models) — drawing the 2D clip`.
+  No Register3DObject happens, and the Pooters keep their sprites.
+- **OBSERVED (T2, measure).** The Rat's `model { file "@NameBox" scale 1.25 }` over `NameBox { file "models/name-box.gltf" scale 0.8 yaw 45 }`
+  is drawn as `(block scale=1.25 yaw=45 offset=(0 0 0))`. Both shots have 21838 magenta px in a box of 0.1 × shot width around the
+  Rat's mesh-object anchor, and that is every magenta pixel in the shot. 21838 / 13935 (the M2 unit box, scale 1, same tile) = 1.567,
+  against 1.25² = 1.5625. So the unit's scale override reached the draw.
+- Manifest rows (bindings/25143593.json, end of the 3D block): FwSymbol 44 `Gon_LoadFile` 0x611a0 (signature
+  `48 89 5C 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC E0 00 00 00 45`, 34 bytes, unique);
+  FwData 19 `ResourceMap` 0x13c61e0 (witness rip-lea #6 of ResourceManager_GetBinaryResource); offset `GonResource_object`
+  0x28 → `OFF_GONRES_OBJECT` (witness ApplicationBase_appmain `48 8D 48 28 48 89 4E 08`, dispAt 3). All three are harvest-verified.
+
+- **M3 A .glb's embedded image as the model texture** (`glb`):
+
+- OBSERVED (decompile `Texture2D_LoadFromFile_0xa0ad40.c`, r3dE): the game has **no Texture2D-from-memory path**.
+  `App_GetTexture` 0x9bb490 takes only a name; `Texture2D_LoadFromFile` 0xa0ad40 always reads `"textures/" + name`
+  through `ResourceManager_GetBinaryResource` 0x973750 and dereferences the result. Its PNG decode is the statically
+  linked stb_image entry 0xa7c960, called as `(stbi__context*, int *w, int *h, int *comp, int req_comp = 0)` with the
+  context built on the stack: `+0x10` io.read = 0, `+0x30` read_from_callbacks = 0, `+0xb8` callback_already_read = 0,
+  `+0xc0/+0xc8` img_buffer / img_buffer_end and `+0xd0/+0xd8` the originals = the BinaryResource's data / data+size
+  (stb_image ≥ 2.27 layout). The pixels are freed by 0xd4cb24 (CRT free).
+- INFERRED / decision: calling 0xa7c960 would need two manifest entries (the loader + the CRT free) and a contract on a
+  private static-library struct; the DLL decodes embedded PNGs itself instead (`fw_png.c`, host-tested,
+  no manifest entry) and uploads with its own `glTexImage2D` exactly like Texture2D_LoadFromFile: `GL_RGBA`/`GL_RGBA`,
+  `GL_UNSIGNED_BYTE`, `glPixelStorei(GL_UNPACK_ALIGNMENT, 1)`, `GL_LINEAR` min/mag, `GL_REPEAT` s/t, no mipmaps, and the
+  game's premultiply (`c = (byte)(int)(c * (a * 0.00392156862745098))`, OBSERVED in 0xa0ad40 for 4-channel images).
+- Upload site (OBSERVED in T2 2026-10-22: gl name 40, purple 1060 / lime 1080 px at the anchor, 0 GL errors): inside our draw functor at replay (GL context current, after `fw_gl_save`):
+  the upload reads back and restores `GL_TEXTURE_BINDING_2D` of the active unit, `GL_UNPACK_ALIGNMENT` and
+  `GL_PIXEL_UNPACK_BUFFER_BINDING` (unbound for the upload when set), so the engine's texture-unit caches
+  (0x1413c19a0 / 0x1412f713c) stay truthful. The GL 1.1 entry points come from opengl32 (glGenTextures, glTexImage2D,
+  glTexParameteri, glPixelStorei).
+- Texture source precedence (pure, `fw_mesh_embtex.c` `fw_tex_source`): explicit name (GON `texture`,
+  `FW_Set3DObjectMaterial`, `MEWFW_MESH_PROBE_TEXTURE`) > the model file's embedded image > the convention
+  `textures/models/<stem>.png`. An embedded image that does not decode falls back to the convention. Log lines:
+  `mesh: texture embedded:<model> for <model>: decoded WxH (source embedded: ...)`, at replay
+  `mesh: texture embedded:<model> gl name N (our glTexImage2D of the decoded image, at replay; ...)`; App_GetTexture
+  loads now end `(source explicit)` / `(source convention)`; the object line shows `tex=embedded:<model>`.
+- Witnesses: `native/framework/test/test_png.c` (15), `test_mesh_embtex.c` (4, fake-GL upload sequence pinned),
+  `test_mesh_gltf.c` (+2), `editor/test/glb-texture-tests.ts`, T2 fixtures
+  `editor/test/fixtures/ingame/mesh-glb-tex-{log.txt,summary.json}` and `mesh-glb-explicit-{log.txt,summary.json}`.
+
+- **M3 Facing — the model turns with Character::Face** (`face`):
+
+- OBSERVED (PR #114, docs "Facing: Character::Face"): `glaiel::Character::Face` 0x10ce50 stores the grid direction the
+  unit faces as an iVec2D at **Character+0x388** (`mov [rdi+0x388],rbx; test r14b,r14b`, the one store, skipped for
+  (0,0)); manifest entry `Character_orientation` → `OFF_CH_ORIENTATION`, witness in `Character_Face` (reused verbatim
+  from #114; on this branch `Character_Face` is a reference entry with `exposure: []` — #114 exposes it as
+  `FW_SYM_Character_Face`). It is the logical direction (lock_orientation / always_face_forward already applied);
+  the sprite shows (0,−1)/(−1,0) as F and (1,0)/(0,1) as B, the second of each pair mirrored.
+- Grid (dx, dy) = world (x, z) (units stand at (col + 0.5, 0, row + 0.5)).
+- mewframework (`native/framework/src/fw_unit_face.c`, host suite `test_unit_face.c`): every combat frame each GON
+  unit model reads +0x388 (guarded) and turns by **yaw = atan2(−dx, −dy)** degrees: (0,−1) 0 (the model's front —
+  glTF/OBJ +Z, mirrored by the loaders to world −z — to the lower right), (−1,0) 90, (0,1) 180, (1,0) 270 (clockwise
+  on screen, the GON `yaw` convention; diagonals in 45-degree steps). Model matrix = T(anchor) × Ry(face yaw) ×
+  [T(offset) × Ry(GON yaw) × S(scale)]: the block's yaw/offset ride on top. (0,0) or an unreadable read falls back to
+  the sprite's mirror (Renderer_GetScreenMatrix m0 < 0 → 90, else 0). M2's x↔z mirror on m0 < 0 is gone (a mirror
+  turns a right-handed model inside out and cannot tell front from back).
+- Log: `unit model face: <entry> handle=<h> dir=(<dx> <dy>) yaw=<deg> src=dir|flip ms=<epoch ms>` on every change
+  (64 lines per process).
+- OBSERVED in-game (T2 run 20261022-160300-_unitface-unit-face, fixtures `editor/test/fixtures/ingame/unit-face-log.txt`
+  + `unit-face-summary.json`): a spawned Rat starts at dir (−1,0) → yaw 90; `face 8 0 -1` / `-1 0` / `1 0` / `0 1` /
+  `front` → yaw 0 / 90 / 270 / 180 / 0, each within one frame of the harness's face event. The probe box shows its
+  cyan FRONT face to the lower right (0,−1) and lower left (−1,0), its yellow BACK face to the lower left (1,0) and
+  lower right (0,1); 5 750–5 820 px of the shown face per 3440×1440 shot, the hidden face 0 px, the face centroid
+  ±55 px off the box centroid. 9/9 expectations, real save unchanged.
+
+- **M3 Multi-tile meshes (per-band slices) and the mesh/unit tie** (`order`):
+
+- **Per-band slices (OBSERVED, T2 2026-10-22, phase M3; `native/framework/src/fw_mesh_slice.c`).** The M2 limit (a
+  mesh keyed by one point, its origin, and a tie with a unit going to the mesh) is fixed by cutting every tile mesh
+  along world x + z into one slice per sort band [n, n + 1) of its bounds' depth range (min/max of x + z over the 8
+  world corners). Each slice is its own draw: `fw_clip = [n, n + 1)` (the first slice open towards the front, the last
+  towards the back, ±1e30), the shader discards fragments whose world x + z (`fw_model * position`) is outside, and the
+  slice is keyed **n + 0.5** in the painter order. Unit keys are integers (c + r + 1 on tile centres, +0.03 for some
+  obstacles), so a slice goes in before every unit at or in front of its band's front edge n and after every unit
+  behind it. More than 8 bands: neighbours merged (width grows). Unit-attached meshes are not sliced (one draw right
+  after their unit).
+- **Tie rule (M3):** a mesh whose key equals an item's key goes in BEFORE that item (the unit is drawn over it),
+  independent of the add order (`fw_mesh_order_before_item`: `e->key >= key`); M2 had `>` (the mesh won ties).
+  `MEWFW_MESH_ORDER=m2` restores the M2 plan (all slices keyed by the origin, mesh wins ties) for control runs.
+- **The OBJ loader negates z** (OBSERVED: a file box with z 0.05..0.45 logged `bounds ... z -0.45..-0.05`;
+  `fw_mesh_rules.c`, the game's left-handed axes). crate.obj's header ("axes are the game's (x, height, z)") is only
+  true because the crate is symmetric in z.
+- **Witnesses (T2, `editor/test/fixtures/ingame/mesh-slices-log.txt` / `mesh-slices-summary.json`):** fight TacticsTest
+  seed 42, cats on (2,6) key 9, (2,5) 8, (1,5) 7, (1,4) 6.
+  - 2x1 slab on (0,6)+(1,6) (depth 6.1..8.9): `d0 key=6.500 before item 6 key=6.000 | d1 key=7.500 before item 4
+    key=7.030 | d2 key=8.500 before item 3 key=8.000`; coverage [6,7) 1.002, **[7,8) 0.729** (the cat on (1,5), in
+    front of it, drawn over it), [8,9) 0.966 (drawn after the cat on (2,6)). M2 control: all three keyed 7 after the
+    cat on (1,5): [7,8) **1.008** (the slab over a cat standing in front of it).
+  - post on the back quarter of (2,6), where a cat stands (depth 9.1..9.9, one band keyed 9.5): `before item 3
+    key=9.000` (the cat on its tile) → coverage **0.156**; M2 control (key 9, tie to the mesh): **0.959**.
+  - 3x3 slab centred on (3,3): six bands at six insertion points (keys 4.5..9.5, `groups=6`), coverages 0.914..1.027.
+  - no GL error in any run; `1 real save file(s) unchanged` in each.

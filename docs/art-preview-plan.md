@@ -328,7 +328,7 @@ through `ani`, on the preview's clock like any nested sprite); the slot's alpha 
 | # | Step | Status |
 |---|---|---|
 | 1 | This plan | done |
-| 2 | UX artboards on the "Mewgenics Mod Editor UI" design canvas | **blocked for the agent — see §6** |
+| 2 | UX artboards on the "Mewgenics Mod Editor UI" design canvas | done 2026-10-22 (the owner ran the design pass; see §6) |
 | 3 | `swf-bits.ts` (bit writer, RECT/MATRIX/CXFORM, tag framing), `shape.ts` (DefineShape3 from normalized paths), `swf-emitter.ts` (header, FileAttributes, SceneAndFrameLabelData, shapes, SymbolClass, End), `swf-reader.ts` + tests | built |
 | 4 | `DefineSprite` timelines: `timeline.ts` baking → `PlaceObject2`/`RemoveObject2`/`ShowFrame`/`FrameLabel`; masks via clipDepth | built |
 | 5 | `lossless.ts`: PNG decode (8-bit, non-interlaced) → premultiply → zlib → `DefineBitsLossless2` fmt 5; bitmap fills | built |
@@ -342,6 +342,8 @@ through `ani`, on the preview's clock like any nested sprite); the slot's alpha 
 ---
 
 ## 6. UX design (artboards) — status and brief
+
+**Status 2026-10-22: done.** The owner ran the design pass in this repo's session; the Art boards from the brief below exist (ArtMode, PreviewPanel, PalettePicker) and the overhaul added ArtOptions (shape row menu, Import card, View options). Kept for the record:
 
 The task asked for the new panels to be designed on the existing design canvas
 ("Mewgenics Mod Editor UI", https://claude.ai/artifact/WmQ9kVrbuCvEc72uNgJuSa) via the
@@ -402,9 +404,10 @@ stall the boot — the proof the merge ran) · `control` (removes the gate files
 Art mode has first-run guidance that mirrors the data-mode tour, reusing the same
 components, tokens, and `localStorage` key family (`mewged.onboard.*`):
 
-- **Art-mode tour** — a dedicated 6-step tour (switch Data→Art, the scenes/shapes
-  explorer, import SVG, grayscale→palette, the in-game-faithful preview, Build + the
-  gate test). It opens automatically the first time the user enters Art mode (unless
+- **Art-mode tour** — a dedicated 7-step anchored tour (UX PR 6: switch to Art on the
+  Data | Art | Rooms switch, the scenes explorer, import an SVG or PNG, grayscale→palette,
+  the in-game-faithful preview, Build — SymbolClass binds the export names, the DoABC stub
+  is optional —, then Timeline, Rig, VectorCraft on the sub-tab bar). It opens automatically the first time the user enters Art mode (unless
   dismissed), persisted under `mewged.onboard.artTourSeen` / `artTourDontShow`, and is
   re-openable from the Help (`?`) menu. The data and art tours render through one shared
   `GuidedTour` component so they stay identical in look and behavior. A `?mode=art`
@@ -486,7 +489,7 @@ Real-browser profiling is a follow-up.
 3. **External tool (optional, not a dependency):** JPEXS FFDEC remains the recommended
    way to *edit vanilla files in place* (Strategy A). The editor can document it, not
    bundle it.
-4. Design artboards: run `/design` with the §6 brief.
+4. ~~Design artboards: run `/design` with the §6 brief.~~ Done 2026-10-22: the canvas gained five boards (Shell, RoomsMode, ArtOptions, Coachmark, TemplateResult) and the UX overhaul stack built them (`docs/web-ui-inventory.md` §8).
 
 **OBSERVED in the game 2026-10-20** (`npm run test:artprobe`: an ArtProbe enemy whose `graphics.movieclip` is our SWF,
 spawned in a seeded harness fight and screenshot six times; `editor/src/core/art/probe-compare.ts` reads the shots;

@@ -1,24 +1,61 @@
 // The editor shell: top bar, the three panes (Data or Art mode), status bar, toast, and the
 // overlays (modals, drawers, tours, worked examples) in the same order app.mjs mounted them.
+// Each pane and each overlay sits in its own PaneBoundary, so a render error blanks only that
+// part; the one keyboard listener (shortcuts.ts) is installed here, with Ctrl+S wired to the mode-aware
+// saveCurrent. The unsaved-work dialog (dirty.ts guard → S.confirm) renders here too, and a reload or close
+// with unsaved work raises the browser's own beforeunload prompt.
 
 import React from "react";
-import { useS } from "./components/ui.tsx";
+import { useS, PaneBoundary, Modal, Button, EmptyState } from "./components/ui.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { Explorer } from "./components/Explorer.tsx";
 import { Center } from "./components/Center.tsx";
 import { RightPanel } from "./components/RightPanel.tsx";
 import { StatusBar, Toast } from "./components/StatusBar.tsx";
 import { TemplateModal } from "./components/TemplateModal.tsx";
-import { ConceptsDrawer } from "./components/ConceptsDrawer.tsx";
 import { BaseEntryDrawer, ComponentsDrawer } from "./components/Drawers.tsx";
-import { TourModal, ArtTourModal } from "./components/Tours.tsx";
-import { WorkedExample, ArtWorkedExample } from "./components/WorkedExamples.tsx";
-import { ArtExplorer } from "./art/ArtExplorer.tsx";
-import { ArtCenter } from "./art/ArtCenter.tsx";
-import { ArtRightPanel } from "./art/ArtRightPanel.tsx";
 import { initArtUi } from "./art/art-state.ts";
-import { RoomExplorer, RoomCenter, RoomRightPanel } from "./rooms/Rooms.tsx";
-import { startup, closeMenu } from "./actions.ts";
+import { startup, closeMenu, saveCurrent, loadStatus } from "./actions.ts";
+import { initShortcuts, setSaveHandler } from "./shortcuts.ts";
+import { isDirty, resolveConfirm } from "./dirty.ts";
+
+let artUiReady = false;
+
+// Art mode is its own chunk (art/ArtPanes.tsx: the panes, the preview renderer, the Ruffle host), fetched the first
+// time Art mode shows; the three lazies share the one import.
+const artPanes = () => import("./art/ArtPanes.tsx");
+const ArtExplorer = React.lazy(() => artPanes().then((m) => ({ default: m.ArtExplorer })));
+const ArtCenter = React.lazy(() => artPanes().then((m) => ({ default: m.ArtCenter })));
+const ArtRightPanel = React.lazy(() => artPanes().then((m) => ({ default: m.ArtRightPanel })));
+
+// Rooms mode likewise (rooms/RoomPanes.tsx: the explorer, the grid / iso centre, the Inspector | Findings panel);
+// rooms/room-state.ts stays in the shell.
+const roomPanes = () => import("./rooms/RoomPanes.tsx");
+const RoomExplorer = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomExplorer })));
+const RoomCenter = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomCenter })));
+const RoomRightPanel = React.lazy(() => roomPanes().then((m) => ({ default: m.RoomRightPanel })));
+
+// Onboarding (the tours, the worked examples, the concepts drawer) is a chunk too, fetched the first time one opens.
+const onboardingChunk = () => import("./components/Onboarding.tsx");
+const TourModal = React.lazy(() => onboardingChunk().then((m) => ({ default: m.TourModal })));
+const ArtTourModal = React.lazy(() => onboardingChunk().then((m) => ({ default: m.ArtTourModal })));
+const RoomTourModal = React.lazy(() => onboardingChunk().then((m) => ({ default: m.RoomTourModal })));
+const WorkedExample = React.lazy(() => onboardingChunk().then((m) => ({ default: m.WorkedExample })));
+const ArtWorkedExample = React.lazy(() => onboardingChunk().then((m) => ({ default: m.ArtWorkedExample })));
+const ConceptsDrawer = React.lazy(() => onboardingChunk().then((m) => ({ default: m.ConceptsDrawer })));
+
+function PaneLoading({ mode }: { mode: "Art" | "Rooms" }): React.JSX.Element {
+  return (
+    <div className="emptycenter">
+      <EmptyState icon={mode === "Art" ? "▲" : "▦"} title={`Loading ${mode} mode…`} />
+    </div>
+  );
+}
+
+/** One lazily loaded Art / Rooms pane, with the loading state while its chunk arrives. */
+function Lazy({ mode = "Art", children }: { mode?: "Art" | "Rooms"; children: React.ReactNode }): React.JSX.Element {
+  return <React.Suspense fallback={<PaneLoading mode={mode} />}>{children}</React.Suspense>;
+}
 
 function Shell(): React.JSX.Element {
   const mod = useS((s) => s.mod);
@@ -29,12 +66,44 @@ function Shell(): React.JSX.Element {
     <div className="shell">
       <TopBar />
       <div className="body" style={{ gridTemplateColumns: columns }}>
-        {roomMode ? <RoomExplorer /> : artMode ? <ArtExplorer /> : <Explorer />}
-        {roomMode ? <RoomCenter /> : artMode ? <ArtCenter /> : <Center />}
-        {mod ? roomMode ? <RoomRightPanel /> : artMode ? <ArtRightPanel /> : <RightPanel /> : null}
+        <PaneBoundary name="Explorer">{roomMode ? <Lazy mode="Rooms"><RoomExplorer /></Lazy> : artMode ? <Lazy><ArtExplorer /></Lazy> : <Explorer />}</PaneBoundary>
+        <PaneBoundary name="Editor">{roomMode ? <Lazy mode="Rooms"><RoomCenter /></Lazy> : artMode ? <Lazy><ArtCenter /></Lazy> : <Center />}</PaneBoundary>
+        {mod ? <PaneBoundary name="Right panel">{roomMode ? <Lazy mode="Rooms"><RoomRightPanel /></Lazy> : artMode ? <Lazy><ArtRightPanel /></Lazy> : <RightPanel />}</PaneBoundary> : null}
       </div>
       <StatusBar />
     </div>
+  );
+}
+
+/** The unsaved-work dialog: Cancel (focused; Esc and the scrim too), Discard, and Save and continue when every dirty part can save. */
+function ConfirmModal(): React.JSX.Element | null {
+  const c = useS((s) => s.confirm);
+  if (!c) return null;
+  return (
+    <Modal
+      title={c.title}
+      icon="●"
+      className="confirm"
+      onClose={() => resolveConfirm("cancel")}
+      initialFocus=".confirm-cancel"
+      footer={
+        <>
+          <Button variant="ghost" className="confirm-cancel" onClick={() => resolveConfirm("cancel")}>
+            Cancel
+          </Button>
+          <Button variant="danger" className="confirm-discard" onClick={() => resolveConfirm("discard")}>
+            Discard
+          </Button>
+          {c.canSave ? (
+            <Button variant="primary" className="confirm-save" onClick={() => resolveConfirm("save")}>
+              Save and continue
+            </Button>
+          ) : null}
+        </>
+      }
+    >
+      <p style={{ margin: 0, lineHeight: 1.6 }}>{c.body}</p>
+    </Modal>
   );
 }
 
@@ -47,17 +116,20 @@ function Overlays(): React.JSX.Element {
   const exampleOpen = useS((s) => s.exampleOpen);
   const artTourOpen = useS((s) => s.artTourOpen);
   const artExampleOpen = useS((s) => s.artExampleOpen);
+  const roomTourOpen = useS((s) => s.roomTourOpen);
   return (
     <>
       <Toast />
-      {templateOpen ? <TemplateModal /> : null}
-      {conceptsOpen ? <ConceptsDrawer /> : null}
-      {baseDrawer ? <BaseEntryDrawer /> : null}
-      {compDrawer ? <ComponentsDrawer /> : null}
-      {tourOpen ? <TourModal /> : null}
-      {exampleOpen ? <WorkedExample /> : null}
-      {artTourOpen ? <ArtTourModal /> : null}
-      {artExampleOpen ? <ArtWorkedExample /> : null}
+      {templateOpen ? <PaneBoundary name="Template dialog" overlay><TemplateModal /></PaneBoundary> : null}
+      {conceptsOpen ? <PaneBoundary name="Concepts" overlay><React.Suspense fallback={null}><ConceptsDrawer /></React.Suspense></PaneBoundary> : null}
+      {baseDrawer ? <PaneBoundary name="Base entry" overlay><BaseEntryDrawer /></PaneBoundary> : null}
+      {compDrawer ? <PaneBoundary name="Components" overlay><ComponentsDrawer /></PaneBoundary> : null}
+      {tourOpen ? <PaneBoundary name="Guided tour" overlay><React.Suspense fallback={null}><TourModal /></React.Suspense></PaneBoundary> : null}
+      {exampleOpen ? <PaneBoundary name="Worked example" overlay><React.Suspense fallback={null}><WorkedExample /></React.Suspense></PaneBoundary> : null}
+      {artTourOpen ? <PaneBoundary name="Art tour" overlay><React.Suspense fallback={null}><ArtTourModal /></React.Suspense></PaneBoundary> : null}
+      {artExampleOpen ? <PaneBoundary name="Art worked example" overlay><React.Suspense fallback={null}><ArtWorkedExample /></React.Suspense></PaneBoundary> : null}
+      {roomTourOpen ? <PaneBoundary name="Rooms tour" overlay><React.Suspense fallback={null}><RoomTourModal /></React.Suspense></PaneBoundary> : null}
+      <PaneBoundary name="Unsaved changes" overlay><ConfirmModal /></PaneBoundary>
     </>
   );
 }
@@ -66,9 +138,30 @@ export function App(): React.JSX.Element {
   React.useEffect(() => {
     // any click outside a menu closes it (menus stopPropagation on their own clicks)
     window.addEventListener("click", closeMenu);
-    initArtUi();
+    const offKeys = initShortcuts();
+    setSaveHandler(async () => {
+      await saveCurrent();
+    });
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    const onFocus = () => void loadStatus();
+    window.addEventListener("focus", onFocus);
+    if (!artUiReady) {
+      artUiReady = true;
+      initArtUi();
+    }
     startup();
-    return () => window.removeEventListener("click", closeMenu);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("focus", onFocus);
+      offKeys();
+    };
   }, []);
   return (
     <>

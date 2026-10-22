@@ -6,6 +6,7 @@
 import { createStore } from "../store.ts";
 import { S, toast } from "../state.ts";
 import { getJson, post, url } from "../api.ts";
+import { registerDirty, guard } from "../dirty.ts";
 import { paintTiles, placeObject, removeObjects, setObjectPick, objectsAt, firstId } from "../../../src/core/level/edit.ts";
 import type { LvlFile, LvlPick } from "../../../src/core/level/lvl.ts";
 import type { ArtResolution } from "../../../src/core/level/tile-art.ts";
@@ -42,6 +43,9 @@ type WriteLevelResult = { ok: true; path: string; bytes: number; findings: Repor
 
 export type RoomTool = "select" | "tile" | "object" | "erase";
 export type RoomView = "flat" | "iso";
+export type PaletteKind = "tile" | "object";
+export type RoomRightTab = "inspector" | "findings";
+export type CellPos = { x: number; y: number };
 
 /** GET /api/level-art: which clip draws each palette id in the tileset (src/core/level/level-art.ts) */
 export interface LevelArtInfo {
@@ -79,6 +83,10 @@ export interface RoomState {
   tileFilter: string;
   objectFilter: string;
   view: RoomView;
+  /** the explorer Palette shows one kind at a time (Tiles | Objects) */
+  paletteKind: PaletteKind;
+  /** the right panel: Inspector | Findings */
+  rightTab: RoomRightTab;
   /** the tileset the art is shown in ("" until /api/level-art answers with the room's default) */
   tileset: string;
   art: LevelArtInfo | null;
@@ -101,6 +109,8 @@ export const R = createStore<RoomState>({
   tileFilter: "",
   objectFilter: "",
   view: "flat",
+  paletteKind: "tile",
+  rightTab: "inspector",
   tileset: "",
   art: null,
   artMeta: {},
@@ -108,6 +118,80 @@ export const R = createStore<RoomState>({
 
 export function isDirty(s: RoomState): boolean {
   return !!s.level && JSON.stringify(s.level) !== s.loadedJson;
+}
+
+// unsaved work (dirty.ts): asked on demand only (it stringifies the level)
+registerDirty("rooms", {
+  dirty: () => isDirty(R.get()),
+  label: () => `the room ${R.get().path}`,
+  save: () => saveLevel(),
+});
+
+/** A room row clicked: asks first when the open room has unsaved edits. */
+export async function pickLevel(relPath: string): Promise<void> {
+  if (relPath !== R.get().path && !(await guard(["rooms"], "Opening another room"))) return;
+  await openLevel(relPath);
+}
+
+/** The toolbar's Close: asks first when the room has unsaved edits. */
+export async function requestCloseLevel(): Promise<void> {
+  if (!(await guard(["rooms"], "Closing the room"))) return;
+  closeLevel();
+}
+
+/** A toolbar tool; Tile and Object also show that kind in the Palette. */
+export function setTool(tool: RoomTool): void {
+  R.set(tool === "tile" || tool === "object" ? { tool, paletteKind: tool } : { tool });
+}
+export function setView(view: RoomView): void {
+  R.set({ view });
+}
+export function setPaletteKind(paletteKind: PaletteKind): void {
+  R.set({ paletteKind });
+}
+export function setRightTab(rightTab: RoomRightTab): void {
+  R.set({ rightTab });
+}
+
+/** The selection moved by (dx, dy), clamped to the w x h grid; no selection starts at (0, 0). Pure. */
+export function clampSel(sel: CellPos | null, dx: number, dy: number, w: number, h: number): CellPos {
+  if (!sel) return { x: 0, y: 0 };
+  return { x: Math.max(0, Math.min(w - 1, sel.x + dx)), y: Math.max(0, Math.min(h - 1, sel.y + dy)) };
+}
+
+/** The Summary card level of a report's counts: any error → err, else any warning → warn, else ok. Pure. */
+export function findingsLevel(counts: { errors: number; warnings: number; infos?: number } | undefined | null): "ok" | "warn" | "err" {
+  if (!counts) return "ok";
+  return counts.errors > 0 ? "err" : counts.warnings > 0 ? "warn" : "ok";
+}
+
+/** A cell reached by keyboard (or clicked with Select): it becomes the selection and the one tabbable cell. */
+export function selectCell(x: number, y: number): void {
+  R.set({ sel: { x, y } });
+}
+
+/** Arrow keys on the grid: move the selection inside the open level. */
+export function moveSelection(dx: number, dy: number): void {
+  const { level, sel } = R.get();
+  if (!level) return;
+  R.set({ sel: clampSel(sel, dx, dy, level.width, level.height) });
+}
+
+/** Enter / Space on the grid: the current tool at the selection, as a click there. */
+export function applyAtSelection(): void {
+  const { level, sel } = R.get();
+  if (!level) return;
+  const at = sel ?? { x: 0, y: 0 };
+  applyTool(at.x, at.y, false);
+}
+export function setPaletteFilter(kind: PaletteKind, value: string): void {
+  R.set(kind === "tile" ? { tileFilter: value } : { objectFilter: value });
+}
+export function openNewRoom(): void {
+  R.set({ newOpen: true });
+}
+export function closeNewRoom(): void {
+  R.set({ newOpen: false });
 }
 
 /** Mod switched (or Rooms mode entered): the level list and the palette for that mod; closes the open level. */
@@ -210,37 +294,40 @@ export function addObjectAt(x: number, y: number): void {
 }
 
 export function chooseTileBrush(id: number): void {
-  R.set({ tileBrush: id, tool: "tile" });
+  R.set({ tileBrush: id, tool: "tile", paletteKind: "tile" });
 }
 export function chooseObjectBrush(id: number): void {
-  R.set({ objectBrush: id, tool: "object" });
+  R.set({ objectBrush: id, tool: "object", paletteKind: "object" });
 }
 export function brushLabel(p: LvlPick): string {
   return typeof p === "number" ? String(p) : `random(${p.map((c) => `${c.id}:${c.weight}`).join(", ")})`;
 }
 export { firstId };
 
-export async function saveLevel(): Promise<void> {
+/** Write the open room (the top-bar Save / Ctrl+S in Rooms mode). True when written. */
+export async function saveLevel(): Promise<boolean> {
   const { level, path } = R.get();
   const mod = S.get().mod;
-  if (!level || !path || !mod) return;
+  if (!level || !path || !mod) return false;
   const r = await post<"/api/level", WriteLevelResult>("/api/level", { mod, path, level });
   if (!r.ok) {
-    toast(`write refused: ${r.error}`);
-    return;
+    toast(`write refused: ${r.error}`, { kind: "error" });
+    return false;
   }
   const findings = r.findings;
   let errors = 0, warnings = 0, infos = 0;
   for (const f of findings) { if (f.severity === "error") errors++; else if (f.severity === "warning") warnings++; else infos++; }
   R.set({ loadedJson: JSON.stringify(level), report: { ok: errors === 0, findings, counts: { errors, warnings, infos } } });
-  toast(`saved ${r.path} (${r.bytes} bytes)`);
+  toast(`saved ${r.path} (${r.bytes} bytes)`, { kind: "ok" });
   await refreshLevels(mod);
+  return true;
 }
 
 /** New room: new_from_template kind room (4 player spawns + 2 Rats) → levels/<folder>/<name>.lvl, then open it. */
 export async function newRoom(folder: string, name: string): Promise<string | null> {
   const mod = S.get().mod;
   if (!mod) return "open a mod first";
+  if (!(await guard(["rooms"], "Creating a new room"))) return null;
   const res = await post<"/api/template", TemplateResult>("/api/template", { mod, kind: "room", name, options: { folder: folder || "custom" } });
   if (!res.ok) return res.error;
   R.set({ newOpen: false });

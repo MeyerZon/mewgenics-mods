@@ -1,0 +1,12 @@
+// _unithide (test-only, 3D phase M3): the Rat wears the magenta models/unit-box.gltf (a copy of _unitmodel's) shrunk
+// to 0.4 so the Rat's sprite would stick out around it, and hide_sprite true leaves the sprite out of the units layer.
+// The control mod _unithideoff is identical with hide_sprite false.
+Rat {
+	graphics {
+		model {
+			file "models/unit-box.gltf"
+			scale 0.4
+			hide_sprite true
+		}
+	}
+}

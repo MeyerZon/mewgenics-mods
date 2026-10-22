@@ -3,7 +3,10 @@
     "id": "pr63-gradient",
     "pr": 63,
     "question": "In the probe shot, does the leftmost square fade smoothly red → black (mirrored, like every enemy clip)?",
-    "shots": ["ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-probe/shot-probe-1.png",
+      "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe",
     "status": "open"
   },
@@ -11,7 +14,10 @@
     "id": "pr64-caps",
     "pr": 64,
     "question": "In the probe shot, is the top green line (butt caps) visibly shorter than the bottom one (square caps)?",
-    "shots": ["ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-probe/shot-probe-1.png",
+      "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe",
     "status": "open"
   },
@@ -19,7 +25,10 @@
     "id": "pr65-add-blend",
     "pr": 65,
     "question": "In the probe shot, does the add-blend square look like a lightened dark red over the arena (not a flat #600000)?",
-    "shots": ["ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-probe/shot-probe-1.png",
+      "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe",
     "status": "open"
   },
@@ -27,7 +36,10 @@
     "id": "pr69-probe-text",
     "pr": 69,
     "question": "In the probe shot, does the mint word PROBE read in the game's own lettering, mirrored like every enemy clip?",
-    "shots": ["ingame-runs/*-_artprobe-render-probe/shot-probe-1.png", "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-probe/shot-probe-1.png",
+      "ingame-runs/*-_artprobe-render-probe/shot-probe-6.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe",
     "status": "open"
   },
@@ -35,7 +47,10 @@
     "id": "pr67-cat-rig",
     "pr": 67,
     "question": "Does the CatProbe rig read as a cat — orange tail, blue body, peach head with ears — mirrored like every enemy?",
-    "shots": ["ingame-runs/*-_artprobe-render-cat/shot-cat-1.png", "ingame-runs/*-_artprobe-render-cat/shot-cat-3.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-cat/shot-cat-1.png",
+      "ingame-runs/*-_artprobe-render-cat/shot-cat-3.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --cat",
     "status": "open"
   },
@@ -43,7 +58,10 @@
     "id": "pr74-tomtom",
     "pr": 74,
     "question": "In shot-rig-1, does the cat under our yellow checker marker look like TomTom — the same gray textured parts, grumpy face and tail as the control TomTom — standing upright on its tile?",
-    "shots": ["ingame-runs/*-_artprobe-render-cat-append/shot-rig-1.png", "ingame-runs/*-_artprobe-render-cat-append/shot-vanilla.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-cat-append/shot-rig-1.png",
+      "ingame-runs/*-_artprobe-render-cat-append/shot-vanilla.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --cat-append",
     "status": "open"
   },
@@ -51,7 +69,9 @@
     "id": "pr74-size-facing",
     "pr": 74,
     "question": "Is the appended-frame cat the same size and facing as the control TomTom (both scale 1.1, both mirrored), with nothing missing — two legs, two arms, body, head, tail?",
-    "shots": ["ingame-runs/*-_artprobe-render-cat-append/shot-rig-1.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-cat-append/shot-rig-1.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --cat-append",
     "status": "open"
   },
@@ -59,7 +79,9 @@
     "id": "pr74-hit",
     "pr": 74,
     "question": "In shot-rig-3, does the hit reaction look like a normal enemy hit (the vanilla animation taking over our idle), not a glitch?",
-    "shots": ["ingame-runs/*-_artprobe-render-cat-append/shot-rig-3.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-cat-append/shot-rig-3.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --cat-append",
     "status": "open"
   },
@@ -67,7 +89,10 @@
     "id": "pr80-glow-preview",
     "pr": 80,
     "question": "Before → after: does the banded orange 6 px halo around the starter's gray square read as a glow at game scale (No = the default needs more bands or a wider blur)?",
-    "shots": ["glow-shots/before.png", "glow-shots/after.png"],
+    "shots": [
+      "glow-shots/before.png",
+      "glow-shots/after.png"
+    ],
     "regenerate": "cd editor && npm run test:e2e -- -g \"Bake glow\"",
     "status": "open"
   },
@@ -75,7 +100,10 @@
     "id": "pr86-unit-glow",
     "pr": 86,
     "question": "In shot-glow, does the Rat at the right of the arena carry a magenta band hugging its sprite, with no wash over its body (and none in shot-noglow)?",
-    "shots": ["ingame-runs/*-dev-sandbox-unit-glow/shot-glow.png", "ingame-runs/*-dev-sandbox-unit-glow/shot-noglow.png"],
+    "shots": [
+      "ingame-runs/*-dev-sandbox-unit-glow/shot-glow.png",
+      "ingame-runs/*-dev-sandbox-unit-glow/shot-noglow.png"
+    ],
     "regenerate": "cd editor && npm run test:unitglow",
     "status": "open"
   },
@@ -83,7 +111,9 @@
     "id": "pr86-glow-width",
     "pr": 86,
     "question": "Is glow_radius 12 the band width you want for the per-unit rim (and is the white hover rim being off while a unit glows acceptable)?",
-    "shots": ["ingame-runs/*-dev-sandbox-unit-glow/shot-glow.png"],
+    "shots": [
+      "ingame-runs/*-dev-sandbox-unit-glow/shot-glow.png"
+    ],
     "regenerate": "cd editor && npm run test:unitglow",
     "status": "open"
   },
@@ -91,7 +121,9 @@
     "id": "pr99-glow-colours",
     "pr": 99,
     "question": "In shot-two, does the cat carry a cyan rim and the Rat a magenta one, each hugging its own sprite (no cross-colour bleed), and is the cat's rim whole among the other cats (no straight scissor edge)?",
-    "shots": ["ingame-runs/*-dev-sandbox-unit-glow/shot-two.png"],
+    "shots": [
+      "ingame-runs/*-dev-sandbox-unit-glow/shot-two.png"
+    ],
     "regenerate": "cd editor && npm run test:unitglow",
     "status": "open"
   },
@@ -99,7 +131,10 @@
     "id": "pr104-data-glow",
     "pr": 104,
     "question": "In shot-glow, does FwGlowRat (glowing from DATA: the status FwGlow_ff00ff, no DLL) carry the same magenta band hugging its sprite as the native-API Rat, with nothing over its body (and none in shot-noglow)?",
-    "shots": ["ingame-runs/*-fw-glow-data-glow/shot-glow.png","ingame-runs/*-fw-glow-data-glow/shot-noglow.png"],
+    "shots": [
+      "ingame-runs/*-fw-glow-data-glow/shot-glow.png",
+      "ingame-runs/*-fw-glow-data-glow/shot-noglow.png"
+    ],
     "regenerate": "cd editor && npm run test:unitglow -- --data",
     "status": "open"
   },
@@ -107,7 +142,9 @@
     "id": "pr104-glow-icon",
     "pr": 104,
     "question": "The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip \"Glowing\"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?",
-    "shots": ["ingame-runs/*-fw-glow-data-glow/shot-glow.png"],
+    "shots": [
+      "ingame-runs/*-fw-glow-data-glow/shot-glow.png"
+    ],
     "regenerate": "cd editor && npm run test:unitglow -- --data",
     "status": "open"
   },
@@ -115,7 +152,9 @@
     "id": "glow-decide-icon",
     "pr": 104,
     "question": "Decide: a FwGlow_ status shows LuckUp's four-leaf clover on the unit's status bar. Keep the clover, or ask for a follow-up that hides the icon (or gives the glow status its own)?",
-    "shots": ["ingame-runs/*-fw-glow-data-glow/shot-glow.png"],
+    "shots": [
+      "ingame-runs/*-fw-glow-data-glow/shot-glow.png"
+    ],
     "regenerate": "cd editor && npm run test:unitglow -- --data",
     "status": "open"
   },
@@ -123,7 +162,9 @@
     "id": "glow-decide-hover",
     "pr": 104,
     "question": "Decide: while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?",
-    "shots": ["ingame-runs/*-fw-glow-data-glow/shot-glow.png"],
+    "shots": [
+      "ingame-runs/*-fw-glow-data-glow/shot-glow.png"
+    ],
     "regenerate": "cd editor && npm run test:unitglow -- --data",
     "status": "open"
   },
@@ -195,7 +236,11 @@
     "id": "pr76-wave-in-game",
     "pr": 76,
     "question": "Measured animated (run 20261022-101117: our marker, a TomTom-sized outline under it, the arm/head outline change 2.5x the idle control). shot-wave-1 vs shot-wave-3: does the cat under the yellow marker (the lower TomTom) wave its front arm with its own parts, and does it read as a wave rather than a twitch?",
-    "shots": ["ingame-runs/*-_artprobe-render-cat-wave/shot-wave-1.png", "ingame-runs/*-_artprobe-render-cat-wave/shot-wave-3.png", "ingame-runs/*-_artprobe-render-cat-wave/shot-vanilla.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-cat-wave/shot-wave-1.png",
+      "ingame-runs/*-_artprobe-render-cat-wave/shot-wave-3.png",
+      "ingame-runs/*-_artprobe-render-cat-wave/shot-vanilla.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --cat-wave",
     "status": "open"
   },
@@ -203,7 +248,10 @@
     "id": "pr80-glow-in-game",
     "pr": 80,
     "question": "Measured halo (run 20261022-101249: inner band = the #ff8000 swatch, alpha falling off outward on 4/4 rays, the control square unlit), but the four bands show as four plateaus (alpha ~.86/.66/.44/.21). In shot-glow-1, the dark square with the orange rim (bottom right of the clip): does it read as a glow at game scale, or are the bands too visible (then the default bake needs more steps)?",
-    "shots": ["ingame-runs/*-_artprobe-render-glow-arena/shot-glow-1.png", "ingame-runs/*-_artprobe-render-glow-arena/shot-baseline.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-glow-arena/shot-glow-1.png",
+      "ingame-runs/*-_artprobe-render-glow-arena/shot-baseline.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --glow-arena",
     "status": "open"
   },
@@ -267,7 +315,10 @@
     "id": "pr-cat-back",
     "pr": 105,
     "question": "Turned away (run 20261022-124301, the harness's `face 9 back` = Character::Face): in shot-shown-2, the three big cats seen from behind are our 1.5x back rig — the turned cat (bottom right; turned back to the camera in shot-turned-back), the data-locked one and the shown one. Does each read as TomTom seen from behind — the back of the head with both ears, the body, the tail in front — with nothing missing or misplaced (compare a vanilla cat walking away)?",
-    "shots": ["ingame-runs/*-_artprobe-render-cat-back/shot-shown-2.png", "ingame-runs/*-_artprobe-render-cat-back/shot-turned-back.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-cat-back/shot-shown-2.png",
+      "ingame-runs/*-_artprobe-render-cat-back/shot-turned-back.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --cat-back",
     "status": "open"
   },
@@ -283,7 +334,10 @@
     "id": "pr130-room-tile-art",
     "pr": 130,
     "question": "Rooms mode on _roomprobe → probe.lvl, Flat and Iso: do the tile/object thumbnails read as the game's art (water/lava painted in their tint, not magenta), is the Iso view the room as the in-game shot shows it (which corner is row 0?), and is painting on the diamonds comfortable?",
-    "shots": ["room-art-shots/flat.png", "room-art-shots/iso.png"],
+    "shots": [
+      "room-art-shots/flat.png",
+      "room-art-shots/iso.png"
+    ],
     "regenerate": "cd editor && npm run build && npm run web → http://127.0.0.1:4173/?mode=rooms → mod _roomprobe → roomprobe/probe.lvl → Flat / Iso (do not Save the probe room); shots: scratch script, or screenshot the two views into editor/data/room-art-shots/",
     "status": "open"
   },
@@ -291,7 +345,10 @@
     "id": "pr120-vfx-aura",
     "pr": 120,
     "question": "In shot-aura-2, does the new particle aura read as a rising cloud of pink discs on the right-hand Rat (not one flat blob)?",
-    "shots": ["ingame-runs/*-_vfxprobe-vfx-probe/shot-aura-2.png", "ingame-runs/*-_vfxprobe-vfx-probe/shot-baseline.png"],
+    "shots": [
+      "ingame-runs/*-_vfxprobe-vfx-probe/shot-aura-2.png",
+      "ingame-runs/*-_vfxprobe-vfx-probe/shot-baseline.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --vfx",
     "status": "open"
   },
@@ -299,7 +356,9 @@
     "id": "pr120-vfx-repoint",
     "pr": 120,
     "question": "In shot-repoint-1, does the re-pointed SparkleBuff draw our yellow-bordered marker clip (streaked along its motion) on the left Rat?",
-    "shots": ["ingame-runs/*-_vfxprobe-vfx-probe/shot-repoint-1.png"],
+    "shots": [
+      "ingame-runs/*-_vfxprobe-vfx-probe/shot-repoint-1.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --vfx",
     "status": "open"
   },
@@ -307,7 +366,9 @@
     "id": "pr124-raster-look",
     "pr": 124,
     "question": "In the raster shot, do the PNG sprite (four colour squares), the photo blocks and the orange block-font text look right at game scale, and is the soft 0x41 stripe acceptable next to the crisp 0x43 one?",
-    "shots": ["ingame-runs/*-_artprobe-render-raster/shot-raster-1.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-raster/shot-raster-1.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --raster",
     "status": "open"
   },
@@ -315,7 +376,9 @@
     "id": "pr124-backdrop",
     "pr": 124,
     "question": "In the backdrop shot, does the purple / teal mod plate read as the arena background, with the tileset foreground (wires, foliage, frame) on top?",
-    "shots": ["ingame-runs/*-_bgprobe-render-backdrop/shot-backdrop-1.png"],
+    "shots": [
+      "ingame-runs/*-_bgprobe-render-backdrop/shot-backdrop-1.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --raster",
     "status": "open"
   },
@@ -331,7 +394,10 @@
     "id": "pr109-rig-cat",
     "pr": 109,
     "question": "In shot-rig-1, does the cat under the yellow checker marker (ArtProbeRigCat, drawn by our _CatRig_ clip) look like a real cat — Mangy's parts: body, head with face, tail, four limbs — in the idle pose, mirrored like the other enemies, and like the same cat as the control ArtProbeVanillaCat in shot-vanilla (which must have NO marker)?",
-    "shots": ["ingame-runs/*-_artprobe-render-rig/shot-rig-1.png","ingame-runs/*-_artprobe-render-rig/shot-vanilla.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-rig/shot-rig-1.png",
+      "ingame-runs/*-_artprobe-render-rig/shot-vanilla.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --rig",
     "status": "open"
   },
@@ -339,7 +405,9 @@
     "id": "pr109-rig-labels",
     "pr": 109,
     "question": "A swap rig replaces CatTest wholesale, so an animation it has no label for (hits, attack, …) leaves the cat on its frame (silent, no crash). Acceptable for now, or should a follow-up make a swap rig fall back to the vanilla labels it lacks?",
-    "shots": ["ingame-runs/*-_artprobe-render-rig/shot-rig-3.png"],
+    "shots": [
+      "ingame-runs/*-_artprobe-render-rig/shot-rig-3.png"
+    ],
     "regenerate": "cd editor && npm run test:artprobe -- --rig",
     "status": "open"
   },
@@ -347,7 +415,10 @@
     "id": "pr118-rig-sample",
     "pr": 118,
     "question": "In shot-rig-1 (rig-dll), is the cat beside the small yellow checker marker (RigSampleCat, drawn by RigSampleCatClip which only catrig_sample.dll binds) a real cat with Mangy's parts in the idle pose, the same cat as the marker-less control in shot-vanilla?",
-    "shots": ["ingame-runs/*-catrig-sample-rig-dll/shot-rig-1.png","ingame-runs/*-catrig-sample-rig-dll/shot-vanilla.png"],
+    "shots": [
+      "ingame-runs/*-catrig-sample-rig-dll/shot-rig-1.png",
+      "ingame-runs/*-catrig-sample-rig-dll/shot-vanilla.png"
+    ],
     "regenerate": "cd editor && npm run test:catrigsample",
     "status": "open"
   },
@@ -355,7 +426,10 @@
     "id": "pr118-rig-dead",
     "pr": 118,
     "question": "In rig-labels shot-l20 the killed rig cat (a swap rig with no death label) still STANDS in its idle pose, while in rig-labels-ctl shot-l20 the vanilla cat lies dead. Acceptable for a swap rig that ships no death labels, or should a swap rig fall back to the vanilla labels it lacks (the pr109-rig-labels decision)?",
-    "shots": ["ingame-runs/*-catrig-sample-rig-labels/shot-l20.png","ingame-runs/*-catrig-sample-rig-labels-ctl/shot-l20.png"],
+    "shots": [
+      "ingame-runs/*-catrig-sample-rig-labels/shot-l20.png",
+      "ingame-runs/*-catrig-sample-rig-labels-ctl/shot-l20.png"
+    ],
     "regenerate": "cd editor && npm run test:catrigsample",
     "status": "open"
   },
@@ -432,6 +506,172 @@
       "ingame-runs/*-_unitmodel-unit-model/shot-unit-b.png"
     ],
     "regenerate": "npm run test:ingame -- _unitmodel unit-model (native/dist/mewframework.dll from feat/3d-meshes-m2)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-hide-sprite",
+    "pr": 138,
+    "question": "mods/_unithide: the vanilla Rat wears a small magenta box with hide_sprite true. Is the Rat's 2D body gone (only the box, its shadow under it) in shot-hide, while shot-control (hide_sprite false) shows the Rat around the box? Anything else of the Rat (outline, HUD) left over?",
+    "shots": [
+      "ingame-runs/*-_unithide-unit-hide/shot-hide.png",
+      "ingame-runs/*-_unithide-unit-hide-control/shot-control.png"
+    ],
+    "regenerate": "npm run test:ingame -- _unithide (native/dist/mewframework.dll from feat/3d-meshes-m3)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-unit-palette",
+    "pr": 138,
+    "question": "mods/_unitpal gives the enemy cats TomTom (row 9) and Mangy (row 16) and the Rat a grey box with `palette true`: does TomTom's box read as TomTom's colours (cream) and Mangy's as Mangy's (light grey), next to their 2D bodies, while the Rat's box stays plain grey? Note the boxes look brighter than the sprites (the fight's dark lighting/vignette does not reach mesh draws) — is that acceptable?",
+    "shots": [
+      "ingame-runs/*-_unitpal-unit-palette/shot-pal-a.png",
+      "ingame-runs/*-_unitpal-unit-palette/shot-pal-b.png"
+    ],
+    "regenerate": "npm run test:ingame -- _unitpal unit-palette (native/dist/mewframework.dll from feat/3d-meshes-m3)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-named-model",
+    "pr": 138,
+    "question": "mods/_modelnames: the Rat's graphics.model is \"@NameBox\" from data/models.gon (scale 1.25 over the entry's). Is there a magenta box standing on the Rat's tile, and do the two Pooters (unknown @NoSuchModel) still show their 2D sprites with no box?",
+    "shots": [
+      "ingame-runs/*-_modelnames-model-names/shot-names-a.png",
+      "ingame-runs/*-_modelnames-model-names/shot-names-b.png"
+    ],
+    "regenerate": "npm run test:ingame -- _modelnames model-names (mods: fw-3d first; native/dist/mewframework.dll from feat/3d-meshes-m3)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-glb-embedded-texture",
+    "pr": 138,
+    "question": "models/totem.glb carries its texture inside the file (no textures/models/totem.png): is the box on (4,3) a purple / lime 2 x 2 checker on every face, top face brightest, with no magenta and no grey crate texture? (shot-mesh-a is covered by the Battle Start! banner; look at shot-mesh-b)",
+    "shots": [
+      "ingame-runs/*-dev-sandbox-mesh3-glb-embedded/shot-mesh-b.png"
+    ],
+    "regenerate": "MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/totem.glb npm run test:ingame -- dev-sandbox (the glb probe script; native/dist/mewframework.dll from feat/3d-meshes-m3)",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-unit-face",
+    "pr": 138,
+    "question": "mods/_unitface: the Rat's box has a cyan front, yellow back, magenta sides. Facing (0,-1) and (-1,0) show the cyan front, (1,0) and (0,1) the yellow back (the mesh turns with Character::Face, not a mirror). Does each shot read that way, and does the snap at a turn look acceptable?",
+    "shots": [
+      "ingame-runs/*-_unitface-unit-face/shot-front.png",
+      "ingame-runs/*-_unitface-unit-face/shot-front-mirrored.png",
+      "ingame-runs/*-_unitface-unit-face/shot-back.png",
+      "ingame-runs/*-_unitface-unit-face/shot-back-mirrored.png"
+    ],
+    "regenerate": "npm run test:ingame -- _unitface unit-face",
+    "status": "open"
+  },
+  {
+    "id": "3d-m3-slices",
+    "pr": 138,
+    "question": "mods/dev-sandbox/tests/mesh-slices.mewtest: the 2x1 slab (blue/cyan/magenta bands) on (0,6)+(1,6) — is the grey cat on (1,5) drawn over the cyan band (M3) while the M2 control has the slab over that cat? The 3x3 slab: six bands, no gaps or seams at band edges? The blue post on the back quarter of (2,6): behind the white cat on that tile (M3), over it in the M2 control?",
+    "shots": [
+      "ingame-runs/20261022-160819-dev-sandbox-mesh-slices/shot-slices-b.png",
+      "ingame-runs/20261022-160902-dev-sandbox-mesh-slices/shot-slices-b.png",
+      "ingame-runs/20261022-160912-dev-sandbox-mesh-slices/shot-slices-b.png",
+      "ingame-runs/20261022-161058-dev-sandbox-mesh-slices/shot-slices-b.png",
+      "ingame-runs/20261022-161108-dev-sandbox-mesh-slices/shot-slices-b.png"
+    ],
+    "regenerate": "MEWFW_MESH_PROBE=1 MEWFW_MESH_PROBE_MODEL=models/slab2x1.obj@0,6 MEWFW_MESH_PROBE_TINT=1 npm run test:ingame -- dev-sandbox mesh-slices (also slab3x3.obj@3,3 / backpost.obj@2,6; MEWFW_MESH_ORDER=m2 for the controls)",
+    "status": "open"
+  },
+  {
+    "id": "ux-shell-commandbar",
+    "pr": 142,
+    "question": "Top bar in each of Data / Art / Rooms: is one Validate + one Save (with the unsaved dot and Ctrl+S) clearer than the old per-mode Save buttons, and does the status pill read right in every mode?",
+    "shots": [],
+    "regenerate": "cd editor && npm run build && npm run web → http://127.0.0.1:4173/ → edit something in each mode, watch the Save dot and the pill, press Ctrl+S",
+    "status": "open"
+  },
+  {
+    "id": "ux-launch-popover",
+    "pr": 142,
+    "question": "Launch… → does the copy-command popover (the launch-dev.bat line + Copy + the -savesuffix dev note) tell you enough to launch the mod by hand, now that the button no longer pretends to launch?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → open jokers-luck → Launch… → Copy → paste into a terminal",
+    "status": "open"
+  },
+  {
+    "id": "ux-dirty-guard",
+    "pr": 142,
+    "question": "Edit an overlay, then switch mods (or open another file): does the Unsaved changes dialog (Cancel / Discard / Save and continue) appear at the right moments and never when nothing is unsaved (browsing palette rows must not trigger it)?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → edit a .gon.append → mod menu → pick another mod; then in Art mode browse palette rows and switch scenes",
+    "status": "open"
+  },
+  {
+    "id": "ux-statusbar",
+    "pr": 142,
+    "question": "Status bar: do build <id> ✓, extracted ✓/–, framework ✓/– and the server dot match your machine (hover for the tooltip)?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → read the bottom bar; stop the server to see the dot go red",
+    "status": "open"
+  },
+  {
+    "id": "ux-template-result",
+    "pr": 145,
+    "question": "Scaffold an overlay: is the Created N files list with Open buttons (and the raw response behind a disclosure) better than the raw JSON, and does the kind dropdown (incl. room, tileset-variant, particle, vfx-ability, glowing-character) make sense?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → + New overlay → Scaffold → Open the first file",
+    "status": "open"
+  },
+  {
+    "id": "ux-base-paging",
+    "pr": 145,
+    "question": "Base data → abilities: is showing 300 of 3,076 · Show 300 more a comfortable way to reach an entry, with the filter placeholder naming the category?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Base data → abilities → Show 300 more",
+    "status": "open"
+  },
+  {
+    "id": "ux-art-shape-menu",
+    "pr": 146,
+    "question": "Art → Shapes: is Preview + the … menu (VectorCraft, Export SVG, Bake glow, Replace from SVG, Wrap in a sprite, Delete) easier to scan than seven inline buttons, and is the Import card (SVG or PNG, PNG options before Import) clear?",
+    "shots": [],
+    "regenerate": "cd editor && npm run build && npm run web → Art mode → dev-sandbox/my_rat → Shapes",
+    "status": "open"
+  },
+  {
+    "id": "ux-art-view-options",
+    "pr": 146,
+    "question": "Preview panel → View options (show raw gray, background, loop, ghost cat): do they persist across reloads as you expect, and is one row better than the scattered checkboxes?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → Art mode → Preview → change the options → reload",
+    "status": "open"
+  },
+  {
+    "id": "ux-vectorcraft-survives",
+    "pr": 146,
+    "question": "VectorCraft tab: after switching scenes, is the app still loaded (no 74 MB reload), and does Apply to shape refuse when the drawing belongs to another scene?",
+    "shots": [],
+    "regenerate": "cd editor && npm run build && npm run web → Art mode → VectorCraft → switch scene → back",
+    "status": "open"
+  },
+  {
+    "id": "ux-rooms-palette",
+    "pr": 147,
+    "question": "Rooms: is one Palette with the Tiles | Objects switch and real Inspector | Findings tabs easier than the three stacked lists, and is keyboard painting (arrows + Enter) usable?",
+    "shots": [],
+    "regenerate": "cd editor && npm run build && npm run web → http://127.0.0.1:4173/?mode=rooms → _roomprobe → probe.lvl (do not Save the probe room)",
+    "status": "open"
+  },
+  {
+    "id": "ux-tour-anchored",
+    "pr": 148,
+    "question": "First-run tours (Data, Art, Rooms): do the spotlight + anchored card point at the right controls, is the copy current (Launch…, show raw gray, SymbolClass/DoABC optional, Timeline/Rig/VectorCraft), and does Esc behave?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → ? → Guided tour / Art mode tour / Rooms mode tour (clear localStorage mewged.onboard.* to see the first-run auto-open)",
+    "status": "open"
+  },
+  {
+    "id": "ux-worked-examples",
+    "pr": 148,
+    "question": "Worked example — Joker's Luck: does it now start at step 1 and does step 3 (localization rows) say what to type; does the Art example drop you into the right panel at each step?",
+    "shots": [],
+    "regenerate": "cd editor && npm run web → ? → Worked example — Joker's Luck; ? → Art worked example",
     "status": "open"
   }
 ]

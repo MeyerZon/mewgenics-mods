@@ -30,11 +30,28 @@ export function Ramp({ used }: { used: number[] }) {
   const set = new Set(used);
   return (
     <div className="ramp" title={`gray levels used: ${used.join(", ") || "none"}`}>
-      {Array.from({ length: 16 }, (_, i) => (
-        <span key={i} className={set.has(i) ? "used" : ""} style={{ background: rampColor(i) }} />
+      {Array.from({ length: 16 }, (_, level) => (
+        <span key={level} className={set.has(level) ? "used" : ""} style={{ background: rampColor(level) }} />
       ))}
     </div>
   );
+}
+
+/** Stable keys for a list of scene findings: code + path (a repeat of the pair gets #2, #3, … in report order). */
+export function findingKeys(list: readonly Finding[]): string[] {
+  const seen = new Map<string, number>();
+  return list.map((f) => {
+    const k = `${f.code}|${f.path ?? ""}`;
+    const n = (seen.get(k) ?? 0) + 1;
+    seen.set(k, n);
+    return n === 1 ? k : `${k}#${n}`;
+  });
+}
+
+/** Scene findings as .finding rows. */
+export function FindingRows({ list }: { list: readonly Finding[] }) {
+  const keys = findingKeys(list);
+  return <>{list.map((f, n) => <FindingRow key={keys[n]} f={f} />)}</>;
 }
 
 export function FindingRow({ f }: { f: Finding }) {

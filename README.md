@@ -32,6 +32,8 @@ and fast to author.
 
 ## Start here (docs)
 
+- **[`docs/feature-inventory.md`](docs/feature-inventory.md)** — everything the toolkit can do today, one line per
+  feature (data mods, native API, 3D, harness, editor, MCP tools, tooling), each marked observed in-game or not.
 - **[`docs/engine-map.md`](docs/engine-map.md)** — what the binary is, verified facts, build identity, function RVAs,
   the status-system model.
 - **[`docs/data-mods.md`](docs/data-mods.md)** — GON overlay semantics (`.append`/`.merge`/`.patch`), content shapes
@@ -68,7 +70,7 @@ npm run test:ingame  # T2: launch the real game per mods/<mod>/tests/*.mewtest (
 npm run build        # Vite build of the web UI → web/dist/ (git-ignored)
 npm run web          # http://127.0.0.1:4173/ (serves web/dist + the /api bridge)
 npm run dev          # hot-reloading UI at http://127.0.0.1:5173/ (proxies /api to `npm run web`)
-npm run test:e2e     # vite build && playwright test (54 browser checks)
+npm run test:e2e     # vite build && playwright test (103 browser checks)
 npm run mcp          # MCP stdio server (register with Claude Code as `mewgenics-editor`)
 npm run pack -- <mod>               # ship it: build SWFs, validate, write data/dist/<mod>-<version>.zip
 npm run pack -- --install <zip>     # install a mod zip into mods/<name>/ (checked first, never overwrites)

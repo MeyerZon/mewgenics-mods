@@ -8,6 +8,8 @@ export const LS = {
   tourDontShow: "mewged.onboard.tourDontShow",
   artTourSeen: "mewged.onboard.artTourSeen",
   artTourDontShow: "mewged.onboard.artTourDontShow",
+  roomTourSeen: "mewged.onboard.roomTourSeen",
+  roomTourDontShow: "mewged.onboard.roomTourDontShow",
 };
 
 /**
@@ -38,13 +40,15 @@ export async function seedLocalStorage(page: Page, entries: Record<string, strin
   }, entries);
 }
 
-/** Seed both tours as already-seen (used by non-onboarding tests). */
+/** Seed the three tours (Data, Art, Rooms) as already-seen (used by non-onboarding tests). */
 export async function seedToursSeen(page: Page): Promise<void> {
   await seedLocalStorage(page, {
     [LS.tourSeen]: "1",
     [LS.tourDontShow]: "1",
     [LS.artTourSeen]: "1",
     [LS.artTourDontShow]: "1",
+    [LS.roomTourSeen]: "1",
+    [LS.roomTourDontShow]: "1",
   });
 }
 
@@ -75,4 +79,16 @@ export async function readFrame(page: Page): Promise<[number, number]> {
   const txt = (await page.locator(".transport .frame").innerText()).trim();
   const m = /(\d+)\s*\/\s*(\d+)/.exec(txt);
   return m ? [Number(m[1]), Number(m[2])] : [NaN, NaN];
+}
+
+/**
+ * Open the `…` overflow menu of a shape row in the Art Shapes tab (its trigger is "More actions for <id>") and wait
+ * for the menu; the row's actions (Open in VectorCraft, Export SVG, Bake glow, Replace from SVG, Wrap in a sprite,
+ * Delete) live there.
+ */
+export async function openShapeMenu(page: Page, id: string): Promise<void> {
+  const trigger = page.locator(`button[aria-label="More actions for ${id}"]`);
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(trigger.locator("xpath=..").locator(".menu")).toBeVisible();
 }

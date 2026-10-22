@@ -99,6 +99,11 @@ export function pillarGlb(): Uint8Array {
       { bufferView: 3, componentType: 5123, count: idx.length, type: "SCALAR" },
     ],
   };
+  return packGlb(json, views.map((v) => new Uint8Array(v.buffer, v.byteOffset, v.byteLength)), offsets, bin);
+}
+
+/** a GLB 2.0 container: the JSON chunk (space-padded) and one BIN chunk holding views[i] at offsets[i] (bin bytes) */
+function packGlb(json: unknown, views: Uint8Array[], offsets: number[], bin: number): Uint8Array {
   const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
   const jlen = pad4(jsonBytes.length);
   const total = 12 + 8 + jlen + 8 + bin;
@@ -114,6 +119,67 @@ export function pillarGlb(): Uint8Array {
   const b0 = 20 + jlen;
   dv.setUint32(b0, bin, true);
   dv.setUint32(b0 + 4, 0x004e4942, true);   // "BIN\0"
-  views.forEach((v, i) => out.set(new Uint8Array(v.buffer, v.byteOffset, v.byteLength), b0 + 8 + offsets[i]!));
+  views.forEach((v, i) => out.set(v, b0 + 8 + offsets[i]!));
   return out;
+}
+
+/** totem.glb (M3, a model's OWN texture): the pillar's box with a baseColorTexture whose image is EMBEDDED in the
+ * BIN chunk (bufferView + mimeType image/png) — no textures/models/totem.png exists, so the DLL must decode the .glb's
+ * image itself. The texture is a 2 x 2 checker of a PURPLE and a LIME no arena tile has (measured in the T2 shot);
+ * the base colour is white so the texel is drawn as is. */
+export const TOTEM = { size: 16, cell: 8, purple: [150, 40, 210] as const, lime: [150, 225, 30] as const, baseColor: [1, 1, 1, 1] as const };
+
+export function totemTexturePixels(): Uint8Array {
+  const { size, cell, purple, lime } = TOTEM;
+  const rgba = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const c = (Math.floor(x / cell) + Math.floor(y / cell)) % 2 === 0 ? purple : lime;
+      rgba.set([c[0], c[1], c[2], 255], (y * size + x) * 4);
+    }
+  }
+  return rgba;
+}
+
+export function totemTexturePng(): Uint8Array {
+  return encodePng(TOTEM.size, TOTEM.size, totemTexturePixels());
+}
+
+export function totemGlb(): Uint8Array {
+  const g = pillarGeometry();
+  const nv = g.positions.length / 3;
+  const png = totemTexturePng();
+  const pos = new Float32Array(g.positions), nrm = new Float32Array(g.normals), uv = new Float32Array(g.uvs), idx = new Uint16Array(g.indices);
+  const views: Uint8Array[] = [pos, nrm, uv, idx].map((v) => new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+  views.push(png);
+  const offsets: number[] = [];
+  let bin = 0;
+  for (const v of views) { offsets.push(bin); bin = pad4(bin + v.byteLength); }
+  const min = [0, 1, 2].map((k) => Math.min(...g.positions.filter((_, i) => i % 3 === k)));
+  const max = [0, 1, 2].map((k) => Math.max(...g.positions.filter((_, i) => i % 3 === k)));
+  const json = {
+    asset: { version: "2.0", generator: "mewgenics-mods editor/src/core/art/fw3d-assets.ts" },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: "totem", mesh: 0 }],
+    meshes: [{ name: "totem", primitives: [{ attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 }, indices: 3, material: 0, mode: 4 }] }],
+    materials: [{ name: "checker", pbrMetallicRoughness: { baseColorFactor: [...TOTEM.baseColor], baseColorTexture: { index: 0 }, metallicFactor: 0, roughnessFactor: 1 } }],
+    textures: [{ source: 0 }],
+    images: [{ name: "totem", bufferView: 4, mimeType: "image/png" }],
+    buffers: [{ byteLength: bin }],
+    bufferViews: [
+      { buffer: 0, byteOffset: offsets[0], byteLength: views[0]!.byteLength, target: 34962 },
+      { buffer: 0, byteOffset: offsets[1], byteLength: views[1]!.byteLength, target: 34962 },
+      { buffer: 0, byteOffset: offsets[2], byteLength: views[2]!.byteLength, target: 34962 },
+      { buffer: 0, byteOffset: offsets[3], byteLength: views[3]!.byteLength, target: 34963 },
+      { buffer: 0, byteOffset: offsets[4], byteLength: views[4]!.byteLength },
+    ],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: nv, type: "VEC3", min, max },
+      { bufferView: 1, componentType: 5126, count: nv, type: "VEC3" },
+      { bufferView: 2, componentType: 5126, count: nv, type: "VEC2" },
+      { bufferView: 3, componentType: 5123, count: idx.length, type: "SCALAR" },
+    ],
+  };
+  return packGlb(json, views, offsets, bin);
 }

@@ -185,6 +185,32 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     eq(JSON.stringify(r.data.options), "{}");
     assert(!s.safeParse({ mod: "m", kind: "ability" }).success, "name required");
   });
+  const tk = await load("../src/core/template-kinds.ts");
+  test("src/core/template-kinds.ts loads (pure: the web bundle imports it)", () => assert(!tk.__error, tk.__error ?? ""));
+  test("TEMPLATE_KINDS: the one list of scaffold kinds — the zod body enum is built from it and it holds every core kind", () => {
+    const kinds: string[] = tk.TEMPLATE_KINDS || [];
+    for (const k of ["ability", "passive", "item", "status-data", "particle", "vfx-ability", "room", "tileset-variant", "glowing-character"]) assert(kinds.includes(k), `missing ${k}`);
+    eq(JSON.stringify(sch.TemplateKind?.options), JSON.stringify(kinds), "api-schemas TemplateKind enum = TEMPLATE_KINDS");
+    const src = readFileSync(join(EDITOR, "src", "core", "template-kinds.ts"), "utf8");
+    assert(!/from "node:/.test(src), "no Node built-ins (the browser bundle imports it)");
+    const modal = readFileSync(join(EDITOR, "web", "src", "components", "TemplateModal.tsx"), "utf8");
+    assert(/TEMPLATE_KINDS/.test(modal) && !/const KINDS\b/.test(modal), "TemplateModal lists TEMPLATE_KINDS, not its own copy");
+  });
+  const coreApi = await load("../src/core/api.ts");
+  test("api.listBaseEntries pages: {entries, total, offset}; offset/limit clamp (negative/NaN → 0, limit 1..5000); no page → everything", () => {
+    assert(!coreApi.__error, coreApi.__error ?? "");
+    const all = coreApi.listBaseEntries("abilities");
+    eq(typeof all.total, "number", "total");
+    eq(all.offset, 0, "offset");
+    eq(all.entries.length, all.total, "no page asks for everything");
+    const p = coreApi.listBaseEntries("abilities", undefined, { offset: 2, limit: 3 });
+    eq(p.offset, 2);
+    eq(p.total, all.total);
+    eq(JSON.stringify(p.entries), JSON.stringify(all.entries.slice(2, 5)));
+    const c = coreApi.listBaseEntries("abilities", undefined, { offset: -7, limit: Number.NaN });
+    eq(c.offset, 0, "negative offset clamps to 0");
+    assert(c.entries.length <= 5000 && c.entries.length === Math.min(all.total, 5000) || all.total === 0, "NaN limit → the cap");
+  });
   test("api-schemas: /api/art/build: mod + path required; dryRun/writeSwflist booleans; abc string; scene any object", () => {
     const s = sch.API_BODY["/api/art/build"];
     assert(s.safeParse({ mod: "m", path: "art/a.scene.json" }).success, "minimal");
@@ -197,6 +223,412 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     const g = sch.API_BODY["/api/art/prepare-swf-gate"].safeParse({});
     assert(g.success, "gate: everything optional");
     eq(g.data.variant, "flat", "gate: variant defaults to flat");
+  });
+
+  // ---- UI foundations (docs/editor-ts-react-plan.md "UI primitives and conventions") ----
+  test("store.shallowEqual: same keys with Object.is-equal values are equal; arrays compare element-wise; anything else is not", () => {
+    const se = store.shallowEqual;
+    assert(typeof se === "function", "store.ts exports shallowEqual");
+    const arr = [1, 2];
+    assert(se({ a: 1, b: arr }, { a: 1, b: arr }), "same refs");
+    assert(!se({ a: 1, b: [1, 2] }, { a: 1, b: [1, 2] }), "a nested fresh array is a different value (shallow)");
+    assert(se([1, "x", arr], [1, "x", arr]), "arrays element-wise");
+    assert(!se([1, 2], [1, 2, 3]), "array length");
+    assert(!se({ a: 1 }, { a: 1, b: undefined }), "key count");
+    assert(se(NaN, NaN), "Object.is for primitives");
+    assert(!se({ a: 1 }, null), "null");
+    assert(typeof store.useStoreShallow === "function", "store.ts exports useStoreShallow");
+  });
+
+  const sc = await load("../web/src/shortcuts.ts");
+  test("web/src/shortcuts.ts loads", () => assert(!sc.__error, sc.__error ?? ""));
+  test("matchShortcut: Ctrl+S / Cmd+S (any case, repeats too) is save; Esc is escape; Alt or a bare key is nothing", () => {
+    const k = (key: string, o: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; repeat: boolean }> = {}) =>
+      sc.matchShortcut({ key, ctrlKey: false, metaKey: false, altKey: false, repeat: false, ...o });
+    eq(k("s", { ctrlKey: true }), "save");
+    eq(k("S", { metaKey: true }), "save");
+    eq(k("s", { ctrlKey: true, repeat: true }), "save", "a held Ctrl+S still matches, so the browser dialog stays suppressed");
+    eq(k("s", { ctrlKey: true, altKey: true }), null);
+    eq(k("s"), null);
+    eq(k("Escape"), "escape");
+    eq(k("Escape", { repeat: true }), null, "a held Esc closes one overlay, not the whole stack");
+    eq(k("Enter", { ctrlKey: true }), null);
+  });
+  test("overlay stack: Esc closes menu > tour > modal > drawer, newest first within a kind; popOverlay removes an entry", () => {
+    const log: string[] = [];
+    const d = sc.pushOverlay(() => log.push("drawer"), "drawer");
+    const m = sc.pushOverlay(() => log.push("modal"), "modal");
+    const menu = sc.pushOverlay(() => log.push("menu"), "menu");
+    const m2 = sc.pushOverlay(() => log.push("modal2"), "modal");
+    assert(sc.closeTopOverlay() === true, "something closed");
+    eq(log.join(","), "menu");
+    sc.popOverlay(menu);
+    sc.closeTopOverlay();
+    eq(log.join(","), "menu,modal2");
+    sc.popOverlay(m2);
+    sc.popOverlay(m);
+    sc.closeTopOverlay();
+    eq(log.join(","), "menu,modal2,drawer");
+    sc.popOverlay(d);
+    assert(sc.closeTopOverlay() === false, "an empty stack closes nothing");
+  });
+
+  const st = await load("../web/src/state.ts");
+  test("web/src/state.ts loads", () => assert(!st.__error, st.__error ?? ""));
+  test("pushMessage / expireMessage: a queue, newest last; a repeated text replaces its older copy; expiry removes by id; inputs never mutate", () => {
+    const a = { id: 1, text: "one", kind: "info" };
+    const b = { id: 2, text: "two", kind: "error" };
+    const l0: unknown[] = [];
+    const l1 = st.pushMessage(l0, a);
+    const l2 = st.pushMessage(l1, b);
+    eq(l0.length, 0, "input untouched");
+    eq(l2.map((m: { text: string }) => m.text).join(","), "one,two");
+    const l3 = st.pushMessage(l2, { id: 3, text: "one", kind: "ok" });
+    eq(l3.map((m: { id: number }) => m.id).join(","), "2,3", "the repeat moved to the end with its new id");
+    eq(st.expireMessage(l3, 2).map((m: { id: number }) => m.id).join(","), "3");
+    eq(st.expireMessage(l3, 99).length, 2, "an unknown id changes nothing");
+    let many: unknown[] = [];
+    for (let i = 0; i < 20; i++) many = st.pushMessage(many, { id: 100 + i, text: `m${i}`, kind: "info" });
+    assert(many.length <= 6, `the queue is capped (${many.length})`);
+    eq((many[many.length - 1] as { text: string }).text, "m19", "the newest survives the cap");
+  });
+  test("toast(): queues {id, text, kind} in S.messages (kind defaults to info) and S.message is gone", () => {
+    const before = (st.S.get().messages || []).length;
+    st.toast("hello from the test", { ms: 1 });
+    st.toast("an error", { kind: "error", ms: 1 });
+    const msgs = st.S.get().messages as { id: number; text: string; kind: string }[];
+    assert(Array.isArray(msgs), "S.messages is an array");
+    eq(msgs.length, before + 2);
+    eq(msgs[msgs.length - 2].kind, "info");
+    eq(msgs[msgs.length - 1].kind, "error");
+    assert(msgs[msgs.length - 2].id !== msgs[msgs.length - 1].id, "ids are unique");
+    assert(!("message" in st.S.get()), "no S.message left");
+  });
+  test("S.busy + setBusy(key, on): a per-action in-flight map", () => {
+    eq(JSON.stringify(st.S.get().busy), "{}");
+    st.setBusy("save", true);
+    eq(st.S.get().busy.save, true);
+    st.setBusy("save", false);
+    eq(st.S.get().busy.save, undefined, "off removes the key");
+  });
+  test("applyBasePage: offset 0 replaces the list; offset = loaded length appends; any other offset is stale and ignored; total follows the page", () => {
+    const f = st.applyBasePage;
+    assert(typeof f === "function", "applyBasePage exported from state.ts");
+    const a = ["A", "B", "C"];
+    const p1 = f({ entries: ["X"], total: 9 }, { entries: a, total: 5, offset: 0 });
+    eq(JSON.stringify(p1), JSON.stringify({ entries: a, total: 5 }));
+    const p2 = f(p1, { entries: ["D", "E"], total: 5, offset: 3 });
+    eq(JSON.stringify(p2.entries), JSON.stringify(["A", "B", "C", "D", "E"]));
+    eq(p2.total, 5);
+    const stale = f(p2, { entries: ["Q"], total: 5, offset: 3 });
+    assert(stale === p2, "a page whose offset is not the loaded length returns the input unchanged");
+    eq(JSON.stringify(a), JSON.stringify(["A", "B", "C"]), "inputs never mutate");
+    eq(st.BASE_PAGE, 300, "the page size the UI asks for");
+    eq(typeof st.S.get().validating, "boolean", "S.validating (the status line's live-check state)");
+  });
+
+  const apiMod = await load("../web/src/api.ts");
+  test("web/src/api.ts loads", () => assert(!apiMod.__error, apiMod.__error ?? ""));
+  const realFetch = globalThis.fetch;
+  const fakeFetch = (status: number, body: unknown, reject = false) =>
+    (async () => {
+      if (reject) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    }) as unknown as typeof fetch;
+  const outcomes: Record<string, { value?: unknown; error?: any }> = {};
+  const cases: [string, typeof fetch][] = [
+    ["ok", fakeFetch(200, { ok: true, n: 1 })],
+    ["bad", fakeFetch(400, { error: "body: mod: Required", issues: [{ path: ["mod"], message: "Required" }] })],
+    ["down", fakeFetch(0, null, true)],
+  ];
+  for (const [name, f] of cases) {
+    globalThis.fetch = f;
+    try {
+      outcomes[name] = { value: apiMod.__error ? undefined : await apiMod.getJson("/api/x") };
+    } catch (e) {
+      outcomes[name] = { error: e };
+    }
+  }
+  let postOutcome: { value?: unknown; error?: any } = {};
+  globalThis.fetch = fakeFetch(404, { error: "no route: POST /api/nope" });
+  try { postOutcome = { value: apiMod.__error ? undefined : await apiMod.postJson("/api/nope", {}) }; } catch (e) { postOutcome = { error: e }; }
+  globalThis.fetch = realFetch;
+  test("apiFetch: a 2xx returns the parsed JSON", () => eq(JSON.stringify(outcomes.ok?.value), '{"ok":true,"n":1}'));
+  test("apiFetch: a non-2xx throws ApiError {status, message, issues} and toasts the message as an error", () => {
+    const e = outcomes.bad?.error;
+    assert(!!apiMod.ApiError && e instanceof apiMod.ApiError, `ApiError thrown (${String(e)})`);
+    eq(e.status, 400);
+    eq(e.message, "body: mod: Required");
+    eq(e.issues?.[0]?.path?.[0], "mod");
+    const msgs = (st.S.get().messages || []) as { text: string; kind: string }[];
+    assert(msgs.some((m) => m.kind === "error" && m.text === "body: mod: Required"), JSON.stringify(msgs));
+    const p = postOutcome.error;
+    assert(p instanceof apiMod.ApiError && p.status === 404, "postJson goes through apiFetch too");
+  });
+  test("apiFetch: a network failure throws ApiError with status 0", () => {
+    const e = outcomes.down?.error;
+    assert(!!apiMod.ApiError && e instanceof apiMod.ApiError, String(e));
+    eq(e.status, 0);
+  });
+
+  // ---- PR 2: the dirty registry + guard (web/src/dirty.ts) and the deep-link codec (web/src/deeplink.ts) ----------
+  const dy = await load("../web/src/dirty.ts");
+  test("web/src/dirty.ts loads", () => assert(!dy.__error, dy.__error ?? ""));
+  {
+    let artDirty = false;
+    let roomsDirty = false;
+    let saved = 0;
+    if (!dy.__error) {
+      dy.registerDirty("art", { dirty: () => artDirty, label: () => "scene art/x.scene.json", save: async () => { saved++; artDirty = false; return true; } });
+      dy.registerDirty("rooms", { dirty: () => roomsDirty, label: () => "room levels/a.lvl" });
+    }
+    test("dirty: isDirty / dirtyLabel read only the registered providers of the scopes asked (all when none given)", () => {
+      eq(dy.isDirty(), false, "nothing dirty");
+      artDirty = true;
+      eq(dy.isDirty(), true);
+      eq(dy.isDirty(["rooms"]), false, "rooms only");
+      eq(dy.isDirty(["art", "rooms"]), true);
+      roomsDirty = true;
+      eq(dy.dirtyLabel(), "scene art/x.scene.json, room levels/a.lvl");
+      eq(dy.dirtyLabel(["rooms"]), "room levels/a.lvl");
+      artDirty = false;
+      roomsDirty = false;
+    });
+    const outcomes: Record<string, unknown> = {};
+    if (!dy.__error) {
+      outcomes.clean = await dy.guard(["art"], "Switching mods");
+      artDirty = true;
+      const p1 = dy.guard(["art"], "Switching mods");
+      outcomes.confirm = st.S.get().confirm;
+      dy.resolveConfirm("cancel");
+      outcomes.cancel = await p1;
+      outcomes.afterCancel = st.S.get().confirm;
+      const p2 = dy.guard(["art"], "Switching mods");
+      dy.resolveConfirm("discard");
+      outcomes.discard = await p2;
+      outcomes.savedAfterDiscard = saved;
+      const p3 = dy.guard(["art"], "Switching mods");
+      dy.resolveConfirm("save");
+      outcomes.save = await p3;
+      outcomes.savedAfterSave = saved;
+      roomsDirty = true;
+      const p4 = dy.guard(["rooms"], "Closing the room");
+      outcomes.noSaver = (st.S.get().confirm as { canSave?: boolean } | null)?.canSave;
+      dy.resolveConfirm("cancel");
+      await p4;
+      roomsDirty = false;
+      artDirty = false;
+    }
+    test("dirty: guard() proceeds at once when clean; when dirty it opens S.confirm {title, body, canSave} and resolves with the choice", () => {
+      eq(outcomes.clean, true, "clean → proceed, no dialog");
+      const c = outcomes.confirm as { title: string; body: string; canSave: boolean } | null;
+      assert(!!c && typeof c.title === "string" && /scene art\/x\.scene\.json/.test(c.body) && /Switching mods/.test(c.body), JSON.stringify(c));
+      eq(c?.canSave, true, "every dirty scope has a save → canSave");
+      eq(outcomes.cancel, false, "cancel → stay");
+      eq(outcomes.afterCancel, null, "the dialog closes");
+      eq(outcomes.discard, true, "discard → proceed");
+      eq(outcomes.savedAfterDiscard, 0, "discard does not save");
+      eq(outcomes.save, true, "save and continue → proceed after the save");
+      eq(outcomes.savedAfterSave, 1, "save and continue saved once");
+      eq(outcomes.noSaver, false, "a scope without save → no Save and continue");
+    });
+  }
+  const dl = await load("../web/src/deeplink.ts");
+  test("web/src/deeplink.ts loads", () => assert(!dl.__error, dl.__error ?? ""));
+  test("deeplink: readDeepLink parses ?mode=&mod=&file= (unknown mode → null); writeDeepLink keeps other params and drops empty ones", () => {
+    eq(JSON.stringify(dl.readDeepLink("?mode=art&mod=dev-sandbox&file=data/a.gon.append")), '{"mode":"art","mod":"dev-sandbox","file":"data/a.gon.append"}');
+    eq(JSON.stringify(dl.readDeepLink("")), '{"mode":null,"mod":"","file":""}');
+    eq(dl.readDeepLink("?mode=bogus").mode, null);
+    eq(dl.writeDeepLink("?x=1", { mode: "rooms", mod: "m", file: "" }), "?x=1&mode=rooms&mod=m");
+    eq(dl.writeDeepLink("?mode=art&file=old", { mode: "data", mod: "m", file: "a/b c.gon" }), "?mode=data&file=a%2Fb+c.gon&mod=m");
+    eq(dl.writeDeepLink("", { mode: "data", mod: "", file: "" }), "?mode=data");
+  });
+
+  // prefs.ts: per-viewer view options over localStorage (mewged.prefs.<key>, JSON values), with the old
+  // mewged.art.ghostCat key migrated on first read. A fake storage stands in for window.localStorage.
+  const pf = await load("../web/src/prefs.ts");
+  test("web/src/prefs.ts loads", () => assert(!pf.__error, pf.__error ?? ""));
+  if (!pf.__error) {
+    test("prefs: getPref returns the fallback when unset; setPref/getPref round-trip booleans and strings under mewged.prefs.<key> as JSON", () => {
+      const mem = new Map<string, string>();
+      pf.setPrefStorage({ get: (k: string) => (mem.has(k) ? mem.get(k)! : null), set: (k: string, v: string) => void mem.set(k, v) });
+      try {
+        eq(pf.getPref("art.showGray", false), false);
+        eq(pf.getPref("art.background", "checker"), "checker");
+        pf.setPref("art.showGray", true);
+        pf.setPref("art.background", "#000000");
+        pf.setPref("art.loop", false);
+        eq(pf.getPref("art.showGray", false), true);
+        eq(pf.getPref("art.background", "checker"), "#000000");
+        eq(pf.getPref("art.loop", true), false);
+        eq(mem.get("mewged.prefs.art.showGray"), "true");
+        eq(mem.get("mewged.prefs.art.background"), '"#000000"');
+        mem.set("mewged.prefs.art.loop", '"yes"');
+        eq(pf.getPref("art.loop", true), true, "a stored value of the wrong type reads as the fallback");
+        mem.set("mewged.prefs.art.showGray", "{not json");
+        eq(pf.getPref("art.showGray", false), false, "unparseable → fallback");
+      } finally {
+        pf.setPrefStorage(null);
+      }
+    });
+    test("prefs: art.ghostCat migrates the old mewged.art.ghostCat key (\"0\" = off) on first read and writes the new key", () => {
+      const mem = new Map<string, string>([["mewged.art.ghostCat", "0"]]);
+      pf.setPrefStorage({ get: (k: string) => (mem.has(k) ? mem.get(k)! : null), set: (k: string, v: string) => void mem.set(k, v) });
+      try {
+        eq(pf.getPref("art.ghostCat", true), false);
+        eq(mem.get("mewged.prefs.art.ghostCat"), "false");
+        mem.set("mewged.art.ghostCat", "1");
+        eq(pf.getPref("art.ghostCat", true), false, "the new key wins once written");
+      } finally {
+        pf.setPrefStorage(null);
+      }
+    });
+    test("prefs: subscribePrefs listeners hear setPref; unsubscribe stops them; with no storage (Node) getPref is the fallback", () => {
+      const mem = new Map<string, string>();
+      pf.setPrefStorage({ get: (k: string) => (mem.has(k) ? mem.get(k)! : null), set: (k: string, v: string) => void mem.set(k, v) });
+      let n = 0;
+      const off = pf.subscribePrefs(() => n++);
+      try {
+        pf.setPref("art.loop", false);
+        eq(n, 1);
+        off();
+        pf.setPref("art.loop", true);
+        eq(n, 1);
+      } finally {
+        pf.setPrefStorage(null);
+      }
+      eq(pf.getPref("art.background", "checker"), "checker");
+    });
+  }
+
+  // PaneBoundary lives in a JSX-free module so Node can load it (ui.tsx re-exports it). React's server renderer does
+  // not run error boundaries, so this covers the two halves the boundary is made of: the static
+  // getDerivedStateFromError (error → state) and render() for both states, rendered to HTML; reset() clears it.
+  const rs = await load("../web/src/rooms/room-state.ts");
+  test("web/src/rooms/room-state.ts loads", () => assert(!rs.__error, rs.__error ?? ""));
+  test("rooms clampSel: a move stays inside 0..w-1 / 0..h-1; no selection starts at (0,0)", () => {
+    eq(JSON.stringify(rs.clampSel?.({ x: 9, y: 0 }, 1, -1, 10, 10)), '{"x":9,"y":0}');
+    eq(JSON.stringify(rs.clampSel?.({ x: 4, y: 5 }, -1, 1, 10, 10)), '{"x":3,"y":6}');
+    eq(JSON.stringify(rs.clampSel?.({ x: 0, y: 9 }, -3, 7, 10, 10)), '{"x":0,"y":9}');
+    eq(JSON.stringify(rs.clampSel?.(null, 1, 0, 10, 10)), '{"x":0,"y":0}');
+  });
+  test("rooms moveSelection(dx, dy): moves R.sel in the open level and clamps at the edges; without a level it does nothing", () => {
+    const R = rs.R;
+    assert(!!R && typeof rs.moveSelection === "function", "R + moveSelection exported");
+    const level = { width: 10, height: 10, tiles: new Array(100).fill(0), objects: [] };
+    R.set({ level, sel: { x: 8, y: 1 } });
+    rs.moveSelection(1, 0);
+    eq(JSON.stringify(R.get().sel), '{"x":9,"y":1}');
+    rs.moveSelection(1, -1);
+    eq(JSON.stringify(R.get().sel), '{"x":9,"y":0}');
+    rs.moveSelection(-20, 20);
+    eq(JSON.stringify(R.get().sel), '{"x":0,"y":9}');
+    R.set({ level: null, sel: null });
+    rs.moveSelection(1, 1);
+    eq(R.get().sel, null);
+  });
+  test("rooms findingsLevel(counts): errors → err, else warnings → warn, else ok (missing counts → ok)", () => {
+    eq(rs.findingsLevel?.({ errors: 1, warnings: 3, infos: 0 }), "err");
+    eq(rs.findingsLevel?.({ errors: 0, warnings: 2, infos: 5 }), "warn");
+    eq(rs.findingsLevel?.({ errors: 0, warnings: 0, infos: 4 }), "ok");
+    eq(rs.findingsLevel?.(undefined), "ok");
+  });
+  test("rooms setTool / setPaletteKind / setRightTab: named actions; choosing the Tile or Object tool shows that palette", () => {
+    const R = rs.R;
+    rs.setPaletteKind("object");
+    eq(R.get().paletteKind, "object");
+    rs.setTool("tile");
+    eq(R.get().tool, "tile");
+    eq(R.get().paletteKind, "tile");
+    rs.setTool("select");
+    eq(R.get().paletteKind, "tile", "Select keeps the palette");
+    rs.setRightTab("findings");
+    eq(R.get().rightTab, "findings");
+    rs.setRightTab("inspector");
+  });
+
+  // ---- onboarding (UX PR 6): the coachmark placement and the worked example's one step list ----------------
+  const ta = await load("../web/src/tour-anchors.ts");
+  test("web/src/tour-anchors.ts loads", () => assert(!ta.__error, ta.__error ?? ""));
+  test("tour anchors: TOUR ids are unique kebab-case strings; tourAttr(id) is {'data-tour': id}", () => {
+    const ids = Object.values(ta.TOUR ?? {}) as string[];
+    assert(ids.length >= 19, `expected the 19 anchors, got ${ids.length}`);
+    eq(new Set(ids).size, ids.length, "unique");
+    for (const id of ids) assert(/^[a-z]+(-[a-z]+)*$/.test(id), id);
+    eq(JSON.stringify(ta.tourAttr?.("explorer-base")), '{"data-tour":"explorer-base"}');
+  });
+  test("tour placeCard: right of the target by default, vertically clamped into the viewport", () => {
+    const vp = { width: 1366, height: 820 };
+    const card = { width: 420, height: 300 };
+    const p = ta.placeCard?.({ left: 0, top: 400, width: 300, height: 380 }, vp, card);
+    eq(p?.side, "right");
+    assert(p.left >= 300, `left ${p?.left} clears the target`);
+    assert(p.top >= 0 && p.top + card.height <= vp.height, `top ${p?.top} inside the viewport`);
+  });
+  test("tour placeCard: flips left when the right side would overflow, below when neither side fits, 'over' when nothing fits", () => {
+    const vp = { width: 1366, height: 820 };
+    const card = { width: 420, height: 300 };
+    const l = ta.placeCard?.({ left: 1000, top: 60, width: 360, height: 40 }, vp, card);
+    eq(l?.side, "left");
+    assert(l.left + card.width <= 1000, `left card ends before the target (${l?.left})`);
+    const b = ta.placeCard?.({ left: 300, top: 10, width: 800, height: 40 }, vp, card);
+    eq(b?.side, "below");
+    assert(b.top >= 50, `below the target (${b?.top})`);
+    assert(b.left >= 0 && b.left + card.width <= vp.width, "clamped horizontally");
+    const o = ta.placeCard?.({ left: 300, top: 50, width: 700, height: 760 }, vp, card);
+    eq(o?.side, "over");
+  });
+  test("tour isOnScreen: a zero-size or fully off-viewport rect is not on screen; a partly visible one is", () => {
+    const vp = { width: 1000, height: 800 };
+    eq(ta.isOnScreen?.({ left: 10, top: 10, width: 0, height: 20 }, vp), false);
+    eq(ta.isOnScreen?.({ left: 10, top: 900, width: 50, height: 20 }, vp), false);
+    eq(ta.isOnScreen?.({ left: -60, top: 10, width: 50, height: 20 }, vp), false);
+    eq(ta.isOnScreen?.({ left: 10, top: 780, width: 50, height: 40 }, vp), true);
+  });
+  const exs = await load("../web/src/components/examples/steps.ts");
+  test("web/src/components/examples/steps.ts loads", () => assert(!exs.__error, exs.__error ?? ""));
+  test("EXAMPLE_STEPS: 5 steps, unique titles and ids, step 1 creates the mod folder, step 2 scaffolds, step 3 is combined.csv.append", () => {
+    const st = (exs.EXAMPLE_STEPS ?? []) as { id: string; title: string; body: unknown; action?: string }[];
+    eq(st.length, 5);
+    eq(new Set(st.map((s) => s.title)).size, 5, "unique titles");
+    eq(new Set(st.map((s) => s.id)).size, 5, "unique ids");
+    eq(st[0]?.title, "Create the mod folder");
+    eq(st[1]?.title, "Add the ability overlay");
+    eq(st[1]?.action, "scaffold");
+    eq(st[2]?.title, "Add localization rows");
+    const body3 = JSON.stringify(st[2]?.body);
+    assert(body3.includes("combined.csv.append"), "step 3 names combined.csv.append");
+    assert(body3.includes("ABILITY_JOKERSGAMBIT_NAME"), "step 3 shows the name row");
+  });
+  test("ART_EXAMPLE_STEPS: 5 steps with unique titles; the build step says the DoABC stub is optional", () => {
+    const st = (exs.ART_EXAMPLE_STEPS ?? []) as { title: string; body: unknown }[];
+    eq(st.length, 5);
+    eq(new Set(st.map((s) => s.title)).size, 5);
+    assert(/DoABC stub is optional/.test(JSON.stringify(st[4]?.body)), "SymbolClass / DoABC-optional wording");
+  });
+
+  const bd = await load("../web/src/components/boundary.ts");
+  test("web/src/components/boundary.ts loads", () => assert(!bd.__error, bd.__error ?? ""));
+  let rds: Record<string, any> = {};
+  let rc: Record<string, any> = {};
+  try { rds = await import("react-dom/server"); rc = await import("react"); } catch { /* asserted below */ }
+  test("PaneBoundary: getDerivedStateFromError keeps the error; render shows an EmptyState with the message and Reload pane; reset() clears it", () => {
+    const PB = bd.PaneBoundary;
+    assert(typeof PB === "function", "PaneBoundary exported");
+    const st1 = PB.getDerivedStateFromError(new Error("boom in pane"));
+    eq(st1.error.message, "boom in pane");
+    const child = rc.createElement("p", null, "child ok");
+    const inst = new PB({ name: "Explorer", children: child });
+    eq(rds.renderToString(inst.render()), "<p>child ok</p>", "no error → the children");
+    inst.state = { ...inst.state, ...st1 };
+    const html = rds.renderToString(inst.render());
+    assert(/emptystate/.test(html), html);
+    assert(/boom in pane/.test(html), html);
+    assert(/Reload pane/.test(html), html);
+    assert(/Explorer/.test(html), "names the pane");
+    inst.setState = (s: object) => { inst.state = { ...inst.state, ...s }; };
+    inst.reset();
+    eq(inst.state.error, null);
   });
 
   // ---- server request gate (spawns web/server.ts on an OS-chosen port) --------------
@@ -250,6 +682,48 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
           assert(b.status >= 400 && b.status < 500 && /application\/json/.test(b.type), JSON.stringify(b));
           assert(/"ok":false/.test(b.body), b.body);
         }
+      });
+    }
+    {
+      let s: { status: number; body: string; json: any } = { status: 0, body: "", json: null };
+      try {
+        const r = await fetch(`${base}/api/status?mod=jokers-luck`, { headers: { Connection: "close" } });
+        s = { status: r.status, body: await r.text(), json: null };
+        try { s.json = JSON.parse(s.body); } catch { /* asserted below */ }
+      } catch (e) { s.body = String(e); }
+      test("server: GET /api/status answers 200 with the editor status (booleans, saveSuffix dev, known builds) — with or without a game installed", () => {
+        eq(s.status, 200, s.body.slice(0, 200));
+        const j = s.json;
+        assert(!!j, "json");
+        for (const k of ["exeFound", "known", "extracted", "extractedSwfs", "frameworkDll", "mewtestDll", "mewjector"]) eq(typeof j[k], "boolean", k);
+        eq(j.saveSuffix, "dev");
+        eq(typeof j.gameDir, "string", "gameDir");
+        eq(typeof j.modsDir, "string", "modsDir");
+        assert(Array.isArray(j.knownBuilds) && j.knownBuilds.includes("25143593"), JSON.stringify(j.knownBuilds));
+        assert(j.gameBuild === null || typeof j.gameBuild === "string", "gameBuild");
+        assert(j.mod && typeof j.mod.compare === "object" && ["match", "mismatch", "unknown"].includes(j.mod.compare.status), JSON.stringify(j.mod));
+      });
+    }
+    {
+      const get = async (q: string) => {
+        try {
+          const r = await fetch(`${base}/api/base?${q}`, { headers: { Connection: "close" } });
+          const body = await r.text();
+          let json: any = null;
+          try { json = JSON.parse(body); } catch { /* asserted below */ }
+          return { status: r.status, body, json };
+        } catch (e) { return { status: 0, body: String(e), json: null }; }
+      };
+      const page2 = await get("category=abilities&offset=300&limit=300");
+      const junk = await get("category=abilities&offset=-4&limit=abc");
+      test("server: GET /api/base?category=&offset=&limit= answers one page {entries, total, offset}; junk offset/limit clamp", () => {
+        eq(page2.status, 200, page2.body.slice(0, 200));
+        const j = page2.json;
+        assert(j && Array.isArray(j.entries) && typeof j.total === "number", page2.body.slice(0, 200));
+        eq(j.offset, 300);
+        eq(j.entries.length, Math.max(0, Math.min(300, j.total - 300)));
+        eq(junk.status, 200, junk.body.slice(0, 200));
+        eq(junk.json?.offset, 0, "negative offset → 0");
       });
     }
     const dist = join(EDITOR, "web", "dist", "index.html");
