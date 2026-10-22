@@ -124,8 +124,9 @@ export function writeOverlay(modName: string, relPath: string, content: string):
   return modio.writeOverlay(modName, relPath, content);
 }
 
-export function validate(modName: string, override?: TextOverride) {
-  return validateMod(modName, override);
+/** `opts.modpaths`: the mods loaded together, in -modpaths order — adds the cross-mod append / SWF-name findings */
+export function validate(modName: string, override?: TextOverride, opts: { modpaths?: string[] } = {}) {
+  return validateMod(modName, override, opts.modpaths ? { modpaths: opts.modpaths } : {});
 }
 
 export function preview(modName: string, relPath: string, opts?: PreviewMergeOptions) {

@@ -1,0 +1,28 @@
+// test-only (multi-append probe, 2026-10-22): TomTom whose idle is _catappendA's appended CatTest frame probeA
+// (art/catappendA.scene.json: the empty-slot cat rig plus a MAGENTA marker box)
+ProbeCatA {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeA]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}
+
+// test-only: TomTom whose idle is probeC, the label BOTH probe mods append (A: BLUE marker, B: GREEN marker)
+ProbeCatC {
+    variant_of TomTom
+    graphics {
+        movieclip _CAT
+        name "ENEMY_TOMTOM_NAME"
+        custom_cat_data TomTom
+        scale 1.1
+        shadow_size 1.1
+        alt_animations [[idle probeC]]
+        tooltip "ENEMY_TOMTOM_DESC"
+    }
+}

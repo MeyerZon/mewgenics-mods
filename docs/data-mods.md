@@ -235,6 +235,25 @@ this section in sync with `merge.ts` and the fixtures.
 - **SWF list** (`swfs/swflist.gon`): `game [ ... ]` array of SWF files; add art with `swflist.gon.append`.
   In this repo `mods/<mod>/swfs/` is **build output** of the editor's art pipeline (the SWF and the generated
   `swflist.gon.append`) and is git-ignored; the source is `mods/<mod>/art/*.scene.json`.
+
+### Several mods appending to one clip (OBSERVED 2026-10-22)
+
+`npm run test:artprobe -- --multi-append` (mods `_catappendA`, `_catappendB`, `_catappendSame`; fixture
+`editor/test/fixtures/ingame/multi-append-summary.json`; the engine side is in `docs/engine-map.md` "Several mods
+appending to one clip"):
+
+- **Two mods' `_Append_CatTest` exports coexist**, in either `-modpaths` order: every donor's frames are merged into
+  `CatTest`, and each mod's cat plays its own appended idle.
+- **A label both mods append resolves to the later `-modpaths` mod's frame.** The earlier mod's frame stays in the
+  timeline but nothing can reach it by that name. The same overwrite applies to a label vanilla already has (e.g. a mod
+  `idleF` would replace the idle of every cat; INFERRED from the same store). Prefix labels with your mod's name.
+- **Two mods shipping the same `swfs/<name>.swf`:** the game resolves swflist entries by file name, later mods first,
+  so only the later mod's file loads, for both entries. The earlier mod's SWF (every export and append in it) never
+  loads. A mod SWF named like a vanilla one replaces it the same way (INFERRED). Give each SWF a distinct name.
+- `validate_mod { mod, modpaths: [...] }` (or `validateMod(mod, undefined, { modpaths })`) checks a set of mods
+  loaded together: `swf-file-conflict`, `swf-file-shadows-vanilla`, `cat-append-conflict`, `cat-append-shadows-vanilla`
+  (warnings) and `cat-append-shared` (info: several mods append to one clip, which is fine). It reads each mod's built
+  `swfs/*.swf`, or its `art/*.scene.json` when nothing is built.
 - **Text** (`data/text/combined.csv`): `KEY,en,notes,sp,fr,de,it,pt-br,ru,ko,ja,zh-cn`.
 - **Tilesets** (`data/tilesets.gon`): one flat object per tileset (`alley`, `junkyard`, `sewers`, …, `house`,
   `tutorial`, `finalboss`; 22 in this build) of `key value` string pairs plus `global_objects` / `reverb`

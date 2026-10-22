@@ -635,6 +635,52 @@ probeIdle]]`.
   - So a back-pose overlay **can** ride inside the back rig like any front-rig child. Keep it within the frame at the
     rig's placement scale.
 
+### Several mods appending to one clip (2026-10-22)
+
+Static reading of the decompiles already on disk plus five in-game runs (`npm run test:artprobe -- --multi-append`,
+probe mods `_catappendA` / `_catappendB` / `_catappendSame`; fixture `editor/test/fixtures/ingame/multi-append-summary.json`).
+
+- **When and how often (OBSERVED, decompile).** `process_animation_merges_caller` 0x9baaa0 loads every swflist entry
+  (`app+0x1c0`, 0x9bb9e0 per path), sorts the loaded-SWF array `app+0x118[0..app+0x114)` with 0x9bc690 (comparator
+  not read), then calls `process_animation_merges(app, swf)` 0x9bc070 **once per SWF**. That function walks the
+  file's SymbolClass list (`swf+0x78`) and, for each entry named `_Append_<T>` with a nonzero id, finds the target
+  `T` through the global lookup 0x9bb6f0 (last loaded first), finds the donor by its own id in that file, and calls
+  `Swf_Merge(target, donor)` 0xa58440. A target that cannot be found logs `Append movieclip: <name> could not locate
+  original movieclip to append to`. So the merge runs once per (SWF, `_Append_` export), all at boot, before any
+  instance exists.
+- **Accumulation (OBSERVED, decompile).** On the first merge `Swf_Merge` copies the target's timeline (`target+0x60`)
+  into `target+0x130`. Every merge, including the first, then appends to that copy: frame count `+0` += donor frames
+  (each donor's frames start at the current count); the per-clip file table `+0xa0/+0xa4/+0xa8` grows by the donor's
+  files, and every donor place op's byte 1, the file index (u8; so at most 256 contributing SWFs per clip, INFERRED
+  from the byte add), is shifted by the old count; the max depth `+4` = max(old, donor); frame 0 gets a remove op for
+  each new depth; the keyframe cache `+0xb0..+0xb8` is cleared and the baked byte `+0xc8` reset. A donor that was
+  itself a merge target contributes its own merged copy. Nothing is re-copied per SWF; the target grows in merge order.
+- **Labels: last merge wins (OBSERVED in-game and in the bytes).** Each donor label goes through find-or-insert
+  `0x123a00` (called at **0xa58a1b**) into the merged label map `+0x20`, then a plain store **`mov dword [rcx+0x30],
+  esi` at 0xa58a23** (`89 71 30`, esi = donor frame + offset) overwrites any earlier frame. The frame→name map `+0x60`
+  (0x9a9ad0 at 0xa58a61) is keyed by the new frame numbers and never collides. In-game: with `-modpaths _catappendA
+  _catappendB`, `probeC` (both mods define it) shows B's frame; with `_catappendB _catappendA` it shows A's. The merge
+  order is therefore the `-modpaths` order for mod SWFs (the sort at 0x9bc690 kept it for these two). A mod label that
+  equals a vanilla `CatTest` / catanis2 label is overwritten the same way: INFERRED, same instruction, not run.
+- **Coexistence (OBSERVED).** In both orders both mods' own labels (`probeA`, `probeB`) play their own frames on
+  their own cats, with fresh spawns and no hits. Two cat-animation mods can coexist; only shared label names conflict.
+- **Same file name (OBSERVED).** `_catappendSame` ships B's content as `swfs/catappendA.swf`, the name `_catappendA`
+  uses. With `-modpaths _catappendA _catappendSame`, A's marker never shows and B's content plays: swflist entries
+  resolve by file name through the mod paths, later first (debug.log lists the mod dirs in reverse at App.cpp:136), so
+  the later mod's file loads for both entries.
+- **What PR #124 saw was a measuring artefact, not a merge failure.** A0's marker sits at clip y −330. At game scale
+  (about 1.9 screen px per clip px at 3440×1440) that is about 630 px above the feet, so it leaves the top of the
+  screen for a cat in the back rows. In the #124 `render-raster-cat` shot the cat stands at y ≈ 410, so its marker
+  would be at y ≈ −220. The cat itself looks like the vanilla idle because the rig uses `idleF`'s slot matrices. The
+  probe now puts its markers at y −150.
+- **Editor side.** `src/core/art/append-conflicts.ts` + `validateMod(…, { modpaths })` / MCP `validate_mod { modpaths }`:
+  `swf-file-conflict`, `swf-file-shadows-vanilla`, `cat-append-conflict`, `cat-append-shadows-vanilla`,
+  `cat-append-shared` (info). Nothing in our emitter collides: each SWF has its own character ids and file-table
+  entry, so ids never cross files.
+- **Possible native follow-up (proposed, not built).** A post-hook on 0x9bc070, or a hook at the label store, could
+  log every label overwrite with both files' names, or keep the first definition. The validator already covers the
+  authoring side, so this is optional.
+
 ### SWF loader and display path (closed, 2026-10-21)
 
 RE session `disp` (Ghidra 12.1.4, static scans, the shipped shaders in `.extracted/shaders/`); every decompile cited

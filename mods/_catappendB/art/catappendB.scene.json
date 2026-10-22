@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "name": "catappendB",
+  "frameRate": 60,
+  "stage": {
+    "width": 1280,
+    "height": 720,
+    "background": "#000000"
+  },
+  "preview": {
+    "palette": 54
+  },
+  "shapes": {
+    "ProbeBRig_box": {
+      "paths": [
+        {
+          "d": "M-25 -150 L25 -150 L25 -100 L-25 -100 Z",
+          "fill": "#00ffff",
+          "fillRule": "nonzero"
+        }
+      ]
+    },
+    "ProbeBCollRig_box": {
+      "paths": [
+        {
+          "d": "M-25 -150 L25 -150 L25 -100 L-25 -100 Z",
+          "fill": "#00ff00",
+          "fillRule": "nonzero"
+        }
+      ]
+    }
+  },
+  "bitmaps": {},
+  "texts": {},
+  "gradients": {},
+  "sprites": {
+    "ProbeBRig_tail": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBRig_leg2": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBRig_arm2": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBRig_body": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBRig_leg1": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBRig_arm1": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBRig_head": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBRig": {
+      "frames": 24,
+      "labels": {
+        "idle": 0
+      },
+      "rig": "cat",
+      "parts": "game",
+      "layers": [
+        {
+          "name": "tail",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig_tail",
+              "matrix": [
+                0.599639892578125,
+                0.16241455078125,
+                -0.16241455078125,
+                0.599639892578125,
+                -24.45,
+                10.05
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg2",
+          "depth": 3,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig_leg2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0479583740234375,
+                0.6212615966796875,
+                -9.85,
+                23.65
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "arm2",
+          "depth": 5,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig_arm2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                17.15,
+                32.45
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "body",
+          "depth": 7,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig_body",
+              "matrix": [
+                0.621307373046875,
+                0.00445556640625,
+                -0.01177978515625,
+                0.6211090087890625,
+                -0.4,
+                16.35
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg1",
+          "depth": 9,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig_leg1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0883636474609375,
+                0.6212615966796875,
+                -32.1,
+                27.1
+              ]
+            }
+          ]
+        },
+        {
+          "name": "arm1",
+          "depth": 11,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig_arm1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                -4.7,
+                37.25
+              ]
+            }
+          ]
+        },
+        {
+          "name": "head",
+          "depth": 13,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig_head",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                10.95,
+                2.3
+              ]
+            }
+          ]
+        },
+        {
+          "name": "marker",
+          "depth": 15,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig_box",
+              "x": 0,
+              "y": 0
+            }
+          ]
+        }
+      ]
+    },
+    "ProbeBCollRig_tail": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBCollRig_leg2": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBCollRig_arm2": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBCollRig_body": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBCollRig_leg1": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBCollRig_arm1": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBCollRig_head": {
+      "frames": 1,
+      "labels": {},
+      "layers": []
+    },
+    "ProbeBCollRig": {
+      "frames": 24,
+      "labels": {
+        "idle": 0
+      },
+      "rig": "cat",
+      "parts": "game",
+      "layers": [
+        {
+          "name": "tail",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBCollRig_tail",
+              "matrix": [
+                0.599639892578125,
+                0.16241455078125,
+                -0.16241455078125,
+                0.599639892578125,
+                -24.45,
+                10.05
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg2",
+          "depth": 3,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBCollRig_leg2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0479583740234375,
+                0.6212615966796875,
+                -9.85,
+                23.65
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "arm2",
+          "depth": 5,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBCollRig_arm2",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                17.15,
+                32.45
+              ],
+              "cxform": {
+                "mul": [
+                  0.84765625,
+                  0.84765625,
+                  0.84765625,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "body",
+          "depth": 7,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBCollRig_body",
+              "matrix": [
+                0.621307373046875,
+                0.00445556640625,
+                -0.01177978515625,
+                0.6211090087890625,
+                -0.4,
+                16.35
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leg1",
+          "depth": 9,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBCollRig_leg1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                -0.0883636474609375,
+                0.6212615966796875,
+                -32.1,
+                27.1
+              ]
+            }
+          ]
+        },
+        {
+          "name": "arm1",
+          "depth": 11,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBCollRig_arm1",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                -4.7,
+                37.25
+              ]
+            }
+          ]
+        },
+        {
+          "name": "head",
+          "depth": 13,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBCollRig_head",
+              "matrix": [
+                0.6212615966796875,
+                0,
+                0,
+                0.6212615966796875,
+                10.95,
+                2.3
+              ]
+            }
+          ]
+        },
+        {
+          "name": "marker",
+          "depth": 15,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBCollRig_box",
+              "x": 0,
+              "y": 0
+            }
+          ]
+        }
+      ]
+    },
+    "CatAppendB": {
+      "frames": 4,
+      "labels": {
+        "probeBF": 0,
+        "probeBB": 1,
+        "probeCF": 2,
+        "probeCB": 3
+      },
+      "layers": [
+        {
+          "name": "ani",
+          "depth": 1,
+          "keys": [
+            {
+              "frame": 0,
+              "ref": "ProbeBRig",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 1,
+              "ref": "ProbeBRig",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 2,
+              "ref": "ProbeBCollRig",
+              "x": 3.85,
+              "y": -47.95
+            },
+            {
+              "frame": 3,
+              "ref": "ProbeBCollRig",
+              "x": 3.85,
+              "y": -47.95
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "exports": {
+    "_Append_CatTest": "CatAppendB"
+  },
+  "stage_instances": []
+}

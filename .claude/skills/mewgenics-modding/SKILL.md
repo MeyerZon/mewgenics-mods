@@ -45,6 +45,9 @@ Tools, by purpose:
 - `validate_mod` — run reference, localization, overlay-target and component-key
   checks (`unknown-key`: a key the component never reads; `missing-required-key`);
   returns ok/warning/error with source locations.
+  Pass `modpaths` (every mod loaded together, in -modpaths order) to also check the mods against each other:
+  `cat-append-conflict` (two mods append the same label; the later one wins), `swf-file-conflict` (two mods ship
+  the same swfs/<name>.swf; only the later one loads). Name your labels and SWFs after your mod.
 - `preview_merge` — compute the effective merged object (base + overlay).
 - `list_registered_native_names` — list native-registered status/ability names
   from `registered-names.json` (seeded with `JokersLuck`).
