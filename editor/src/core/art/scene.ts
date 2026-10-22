@@ -8,8 +8,11 @@
 //   N = floor(r*15 + .5) to column N of a `palette.png` row; non-gray pixels pass
 //   through unchanged. So fills are either `gray:N` (remapped) or a colour (passthrough).
 
+import { normalizePath } from "./geometry.ts";
 import type { Mat } from "./geometry.ts";
 import { gradientProblems } from "./gradient.ts";
+import { fillRuleProblems } from "./shape.ts";
+import { vanillaExportSource, exportShadowsMessage } from "./swf-rules.ts";
 import { BLEND_MODES, GL_PREVIEW_BLENDS, filterProblems } from "./effects.ts";
 import { rigFindings, catAnimFindings, CAT_CLIP_NAME } from "./cat-rig.ts";
 import { textProblems } from "./text.ts";
@@ -62,9 +65,24 @@ export interface ScenePath {
   transform?: Mat;
 }
 
+/** How a halo shape was baked (glow.ts); the validator reports it and the UI can re-bake it. */
+export interface BakedGlowMeta {
+  kind: "glow" | "dropShadow";
+  /** the source shape id */
+  of: string;
+  color: string;
+  blur: number;
+  strength: number;
+  steps: number;
+  dx?: number;
+  dy?: number;
+}
+
 export interface SceneShape {
   paths: ScenePath[];
   source?: string;
+  /** set on a halo shape bakeGlow / bakeDropShadow produced (glow.ts) */
+  baked?: BakedGlowMeta;
 }
 
 export interface GradientStopDef {
@@ -378,6 +396,12 @@ export function validateScene(input: unknown): SceneValidation {
       continue;
     }
     if (!sh.paths.length) warn("shape-empty", `shape "${id}" has no paths`, [`shapes.${id}`]);
+    if (sh.baked !== undefined) {
+      const b = sh.baked;
+      if (!b || typeof b.of !== "string" || (b.kind !== "glow" && b.kind !== "dropShadow")) err("glow-baked", `shape "${id}".baked must name kind (glow|dropShadow) and of (the source shape)`, [`shapes.${id}.baked`]);
+      else if (!scene.shapes[b.of]) warn("glow-orphan", `shape "${id}" is a baked ${b.kind} of "${b.of}", which no longer exists (delete it or re-bake)`, [`shapes.${id}.baked`]);
+      else findings.push({ severity: "info", code: "glow-baked", message: `shape "${id}" is a baked ${b.kind} of "${b.of}" (${b.color}, blur ${b.blur} px, ${b.steps} band${b.steps === 1 ? "" : "s"}${b.kind === "dropShadow" ? `, offset ${b.dx ?? 0}, ${b.dy ?? 0}` : ""}); re-bake it after editing "${b.of}"`, path: `shapes.${id}` });
+    }
     sh.paths.forEach((p, i) => {
       const at = `shapes.${id}.paths[${i}]`;
       if (!p || typeof p.d !== "string" || !p.d.trim()) {
@@ -391,6 +415,13 @@ export function validateScene(input: unknown): SceneValidation {
       else if (f.fill.kind === "bitmap" && !(scene.bitmaps || {})[f.fill.id]) err("bitmap-missing", `fill references unknown bitmap "${f.fill.id}"`, [at + ".fill"]);
       else if (f.fill.kind === "gradient" && !(scene.gradients || {})[f.fill.id]) err("gradient-missing", `fill references unknown gradient "${f.fill.id}"`, [at + ".fill"]);
       if (p.fillRule && p.fillRule !== "nonzero" && p.fillRule !== "evenodd") err("fill-rule", `fillRule must be nonzero|evenodd`, [at + ".fillRule"]);
+      else if (f.fill.kind !== "none" && !f.error && p.fillRule !== "evenodd") {
+        // OBSERVED 2026-10-21: the engine fills every fill style even-odd (libtess2 TESS_WINDING_ODD, 0xa73bb0); the emitter
+        // resolves nesting, so only crossings / self-overlaps draw differently from the authored nonzero rule
+        let problems: string[] = [];
+        try { problems = fillRuleProblems(normalizePath(p.d, { matrix: p.transform }), p.fillRule); } catch { /* path-parse is the emitter's finding */ }
+        if (problems.length) warn("fill-rule-ignored", `the engine fills each fill style even-odd (libtess2 TESS_WINDING_ODD), not nonzero: ${problems.join("; ")} in-game; set fillRule "evenodd" to preview it that way, or put the overlapping parts in separate paths`, [at + ".fillRule"]);
+      }
       if (p.stroke) {
         const sf = parseFill(p.stroke);
         if (sf.error) err("stroke", sf.error, [at + ".stroke"]);
@@ -420,6 +451,9 @@ export function validateScene(input: unknown): SceneValidation {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient`, [`gradients.${id}`]);
     ids.add(id);
     for (const p of gradientProblems((scene.gradients || {})[id])) err(p.code, `gradient "${id}": ${p.message}`, [`gradients.${id}` + (p.at ? `.${p.at}` : "")]);
+    const spread = (scene.gradients || {})[id]?.spread;
+    // OBSERVED 2026-10-21: GradientAtlas::RasterizeRow 0xa27de0 / default_gradient.shader have no reflect/repeat arithmetic
+    if (spread === "reflect" || spread === "repeat") warn("gradient-spread-ignored", `gradient "${id}": spread "${spread}" is written to the SWF but the game pads every gradient (the last stop's colour continues past the end); the preview pads too`, [`gradients.${id}.spread`]);
   }
   for (const id of Object.keys(scene.imports || {})) {
     if (ids.has(id)) err("dup-id", `id "${id}" used by more than one shape/sprite/bitmap/gradient/text/import`, [`imports.${id}`]);
@@ -497,7 +531,8 @@ export function validateScene(input: unknown): SceneValidation {
           else {
             k.filters.forEach((fl, fi) => { for (const msg of filterProblems(fl)) err("filter", `filters[${fi}]: ${msg}`, [`${kat}.filters[${fi}]`]); });
             // OBSERVED 2026-10-20 (gate "filters"): the game stops with "ERROR: FILTERS NOT SUPPORTED <swf>" on any filter list
-            if (k.filters.length) err("filter-unsupported", "the game does not support filters: it stops with \"ERROR: FILTERS NOT SUPPORTED\" when a SWF carries one (bake glows/shadows into the art instead)", [kat + ".filters"]);
+            // (PlaceObject::decode3 0xb78210 stops on the HasFilterList flag bit alone; docs/engine-map.md "Glow and outline passes")
+            if (k.filters.length) err("filter-unsupported", "the game does not support filters: it stops with \"ERROR: FILTERS NOT SUPPORTED\" when a SWF carries one. Bake the glow or shadow into the art instead (bakeGlow / MCP bake_glow / the shape row's Bake glow… button: a halo shape placed under the source), or use the engine's own knobs — CharacterLightSource { glow [r g b a] size N } for a ground light, AdvancedTint [mul…][add…] for a brightness lift (docs/data-mods.md \"Lighting and tint knobs\")", [kat + ".filters"]);
           }
         }
       });
@@ -514,6 +549,8 @@ export function validateScene(input: unknown): SceneValidation {
     if (typeof ref !== "string" || !(scene.shapes[ref] || scene.sprites[ref])) err("export-ref", `export "${linkage}" points at unknown id "${String(ref)}"`, [`exports.${linkage}`]);
     // OBSERVED 2026-10-21 (0x9bb6f0): clips resolve by name through a global registry of every loaded SWF, last-loaded first
     if (linkage === CAT_CLIP_NAME) err("cat-clip-override", `export "${CAT_CLIP_NAME}" would replace the game's cat clip for every cat (clips resolve through a global last-loaded-first registry); append frames with "_Append_${CAT_CLIP_NAME}" instead`, [`exports.${linkage}`]);
+    const vanillaFile = linkage ? vanillaExportSource(linkage) : null;
+    if (vanillaFile) findings.push({ severity: "info", code: "export-shadows-vanilla", message: `export ${exportShadowsMessage(linkage, vanillaFile)}`, path: `exports.${linkage}` });
   }
   // a cat animation donor (exports._Append_CatTest): facing pairs, a rig per labeled frame, depth 1 (cat-rig.ts)
   findings.push(...catAnimFindings(scene));

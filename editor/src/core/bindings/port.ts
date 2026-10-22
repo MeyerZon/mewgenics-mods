@@ -1,24 +1,32 @@
 // Port: take the manifest of a known build and find every entry again in a new exe.
 //
-// Ladder per function (first rung that yields exactly one answer wins):
+// Vtables port first (RTTI needs no function), then the ladder per function; the first rung whose
+// candidates, filtered by the cfgLite size/call tolerance, leave exactly one wins:
 //   1. the stored (masked) signature matches once: same RVA -> ported-exact, else ported-rescan
-//   2. a unique __FUNCSIG__ / literal string anchor, xref'd by rip-relative lea from exactly one
-//      .pdata function whose size/call count is within tolerance -> ported-anchor (funcsig-xref)
-//   3. an already-ported caller whose k-th call targeted this function -> ported-anchor (caller-ordinal)
-//   4. the .pdata function right after an already-ported neighbour (anchors.after) -> ported-anchor
-//   5. several candidates -> ambiguous (all listed); none -> failed. `resolve` lets an agent or a
+//   2. vtable-store: the only code site that lea's a named (RTTI-derived) vftable with the given
+//      pattern -> its .pdata function (constructors)
+//   3. imm32-witness: an imm32 equal to a constant re-derived on the new image, followed within N
+//      instructions by a call to a ported callee (`mov r8d, LuckUp_typeid` before Entity_FindComponentsByTypeId)
+//   4. caller-after-lea: the first in-tolerance E8 after `lea rdx,[rip+"literal"]` in a ported caller
+//   5. a unique __FUNCSIG__ / literal string anchor, xref'd by rip-relative lea from .pdata functions;
+//      several candidates are filtered by the tolerance before anything is called ambiguous (funcsig-xref)
+//   6. an already-ported caller whose k-th call targeted this function (caller-ordinal)
+//   7. the .pdata function right after / before an already-ported neighbour by table index
+//      (anchors.after / anchors.before: pdata-successor / pdata-predecessor)
+//   8. shared-data-ref: the other function referencing rip ref #k of a ported function
+//   9. several candidates -> ambiguous (all listed); none -> failed. `resolve` lets an agent or a
 //      human supply the answer (ported-anchor, method "resolved").
-// Data: witness rip-ref ordinal inside a ported function -> ported-witness; vtables via RTTI and
-// constants via a slot body / table index -> ported-derived; struct offsets via a witness byte
-// pattern -> ported-witness when unchanged, PROPOSED (value not applied) when the displacement
-// moved. Unanchored entries are carried over and reported as needs-human, never guessed.
-// Every ported function gets a fresh signature and fresh anchors on the new image.
+// Data: witness rip-ref ordinal inside a ported function -> ported-witness; constants via a slot
+// body / table index -> ported-derived; struct offsets via a witness byte pattern -> ported-witness
+// when unchanged, PROPOSED (value not applied) when the displacement moved. Unanchored entries are
+// carried over and reported as needs-human, never guessed. Every ported function gets a fresh
+// signature and fresh anchors on the new image (caller ordinals and dataRefs re-harvested).
 // Pure over (old manifest, new pe, new buf); node built-ins only.
 
 import { createHash } from "node:crypto";
 import { parsePattern, scanExec } from "./scan.ts";
 import { makeSignature } from "./siggen.ts";
-import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, decodeFunction, constantSources, constantHasSources, constantValues, readOffsetWitness } from "./harvest.ts";
+import { harvestFunction, harvestManifest, findString, findStringXrefs, findRtti, decodeFunction, constantSources, constantHasSources, constantValues, readOffsetWitness, findVtableStoreFunctions, findImm32WitnessFunctions, findCallsAfterStringLea, pdataNeighbour, findSharedDataRefFunctions, constantValueOnImage } from "./harvest.ts";
 import type { FunctionHarvest, RipRef } from "./harvest.ts";
 import { hex, parseValue, entry } from "./manifest.ts";
 import type { Manifest, Entry, PortCandidate } from "./manifest.ts";
@@ -135,6 +143,19 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
     finish(e, status, method, detail, hex(rva), undefined, was);
   };
 
+  // ---- vtables (RTTI): no function dependency, and the vtable-store / imm32-witness rungs need them ------
+  for (const e of out.entries) {
+    if (e.kind !== "vtable") continue;
+    const td = e.anchors.rtti && e.anchors.rtti.typeDescriptorName;
+    if (!td) { finish(e, "needs-human", "none", "no RTTI anchor", null); continue; }
+    const r = findRtti(pe, buf, td);
+    if (!r) { finish(e, "failed", "rtti", `RTTI chain for ${td} not found`, null); continue; }
+    const was = e.rva || "";
+    const same = hex(r.vftable) === was;
+    e.rva = hex(r.vftable);
+    finish(e, "ported-derived", "rtti", `${td} -> vftable ${hex(r.vftable)} (col ${hex(r.col)})${same ? " (unchanged)" : ` (was ${was})`}`, e.rva, undefined, was);
+  }
+
   // ---- functions: rung 1 (signature) + resolve ---------------------------------------
   const fns = out.entries.filter((e) => e.kind === "function");
   let pending: Pending[] = [];
@@ -154,63 +175,133 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
     pending.push({ e, why });
   }
 
-  // ---- rungs 2-4, iterated: later rungs need already-ported neighbours ---------------
+  // ---- rungs 2-8, iterated: later rungs need already-ported neighbours ---------------
+  const cand = (e: Entry, rva: number, via: string): Candidate => ({ rva: hex(rva), ...candidateStats(e, rva), via });
+  const ported = (name: string): number | undefined => newRva.get(name);
+  const fnAt = (rva: number): boolean => { const f = pe.pdata.find(rva); return !!f && f.begin === rva; };
+  /** a rung returns null when it does not apply or its inputs are not ready yet (a neighbour still pending), else its candidates */
+  type Rung = { method: string; run: (e: Entry, why: string[]) => Candidate[] | null };
+  const rungs: Rung[] = [
+    { method: "vtable-store", run: (e) => {
+      const a = e.anchors.vtableStore;
+      if (!a || !a.vtable) return null;
+      const vt = entry(out, a.vtable);
+      if (!vt || !vt.port || !vt.port.status.startsWith("ported") || !vt.rva) return [];
+      return findVtableStoreFunctions(pe, buf, parseInt(vt.rva, 16), a.pattern, out.sigCap).map((f) => cand(e, f, `vtable store of ${a.vtable}`));
+    } },
+    { method: "imm32-witness", run: (e, why) => {
+      const w = e.anchors.imm32Witness;
+      if (!w || !w.equals) return null;
+      const c = entry(out, w.equals);
+      const callee = ported(w.callee);
+      if (!c || callee === undefined) return null;   // callee not ported yet
+      const v = constantValueOnImage(out, pe, buf, c);
+      if (v.value === null) { why.push(`imm32 witness: ${w.equals} has no value on the new image (${v.via})`); return []; }
+      const value = v.value;
+      const fnsHit = findImm32WitnessFunctions(pe, buf, w.pattern, w.imm32At, value, callee, w.maxForward ?? 8, out.sigCap);
+      if (!fnsHit.length) why.push(`imm32 witness: no ${w.pattern} with imm32 ${hex(value)} (${v.via}) within ${w.maxForward ?? 8} instructions before a call to ${w.callee}`);
+      return fnsHit.map((f) => cand(e, f, `imm32 ${hex(value)} (${v.via}) before call to ${w.callee}`));
+    } },
+    { method: "caller-after-lea", run: (e, why) => {
+      const cs = (e.anchors.callers || []).filter((c) => c.afterStringLea);
+      if (!cs.length) return null;
+      const ready = cs.filter((c) => ported(c.function) !== undefined);
+      if (!ready.length) return null;
+      const outc: Candidate[] = [];
+      for (const c of ready) {
+        const sites = findCallsAfterStringLea(pe, buf, ported(c.function) as number, c.afterStringLea as string, c.maxForward ?? 24);
+        if (!sites.length) { why.push(`no lea of "${c.afterStringLea}" in ${c.function}`); continue; }
+        for (const s of sites) {
+          const t = s.targets.find((x) => withinTolerance(e, x));
+          if (t !== undefined && !outc.some((x) => x.rva === hex(t))) outc.push(cand(e, t, `first in-tolerance call after lea "${c.afterStringLea}" in ${c.function}`));
+        }
+      }
+      return outc;
+    } },
+    { method: "funcsig-xref", run: (e, why) => {
+      const anchorsStrings = (e.anchors.strings || []).filter((s) => s.unique && (s.role === "funcsig" || s.role === "literal"));
+      if (!anchorsStrings.length) return null;
+      let cands: Candidate[] | null = null;
+      for (const s of anchorsStrings) {
+        const fs = findString(pe, buf, s.text);
+        if (fs.rva === null || fs.count !== 1) { why.push(`${s.role} string ${fs.count === 0 ? "missing" : "not unique"} on the new build`); continue; }
+        const fnsHit = [...new Set(findStringXrefs(pe, buf, fs.rva).map((x) => (x.fn ? x.fn.begin : -1)).filter((x) => x >= 0))];
+        const here = fnsHit.map((rva) => cand(e, rva, `${s.role} xref`));
+        cands = cands === null ? here : cands.filter((c) => here.some((h) => h.rva === c.rva));
+      }
+      return cands;
+    } },
+    { method: "caller-ordinal", run: (e) => {
+      const viaCallers: Candidate[] = [];
+      let any = false;
+      for (const c of fns) {
+        if (!Array.isArray(c.anchors.callees) || !c.anchors.callees.some((cal) => cal.name === e.name)) continue;
+        any = true;
+        if (!newRva.has(c.name)) continue;
+        const d = decodeFunction(pe, buf, newRva.get(c.name) as number);
+        const calls = d.instrs.filter((x) => x.ins.kind === "call" && x.ins.reloc && x.ins.reloc.why === "E8 rel32" && x.ins.relTarget !== null).map((x) => x.at + x.ins.length + (x.ins.relTarget as number));
+        for (const cal of c.anchors.callees) {
+          if (cal.name !== e.name) continue;
+          const t = calls[cal.ordinal];
+          if (t !== undefined && pe.sectionOf(t) && !viaCallers.some((x) => x.rva === hex(t))) viaCallers.push(cand(e, t, `call #${cal.ordinal} of ${c.name}`));
+        }
+      }
+      return any ? viaCallers : null;
+    } },
+    { method: "pdata-successor", run: (e) => {
+      const a = e.anchors.after;
+      if (!a || !a.function) return null;
+      const nb = ported(a.function);
+      if (nb === undefined) return null;
+      const t = pdataNeighbour(pe, nb, 1);
+      return t === null ? [] : [cand(e, t, `.pdata successor of ${a.function}`)];
+    } },
+    { method: "pdata-predecessor", run: (e) => {
+      const a = e.anchors.before;
+      if (!a || !a.function) return null;
+      const nb = ported(a.function);
+      if (nb === undefined) return null;
+      const t = pdataNeighbour(pe, nb, -1);
+      return t === null ? [] : [cand(e, t, `.pdata predecessor of ${a.function}`)];
+    } },
+    { method: "shared-data-ref", run: (e, why) => {
+      const a = e.anchors.sharedDataRef;
+      if (!a || !a.with) return null;
+      const w = ported(a.with);
+      if (w === undefined) return null;
+      const ref = harvestNew(a.with, w).ripRefs[a.ripRefOrdinal];
+      if (!ref) { why.push(`${a.with} has no rip ref #${a.ripRefOrdinal} on the new build`); return []; }
+      return findSharedDataRefFunctions(pe, buf, parseInt(ref.target, 16), w).filter(fnAt).map((f) => cand(e, f, `shares ${ref.target} = rip ref #${a.ripRefOrdinal} of ${a.with}`));
+    } },
+  ];
   let progress = true;
   while (progress && pending.length) {
     progress = false;
     const still: Pending[] = [];
     for (const p of pending) {
       const e = p.e;
-      let cands: Candidate[] | null = null;
-      // rung 2: unique string anchors
-      const anchorsStrings = (e.anchors.strings || []).filter((s) => s.unique && (s.role === "funcsig" || s.role === "literal"));
-      for (const s of anchorsStrings) {
-        const fs = findString(pe, buf, s.text);
-        if (fs.rva === null || fs.count !== 1) { p.why.push(`${s.role} string ${fs.count === 0 ? "missing" : "not unique"} on the new build`); continue; }
-        const fnsHit = [...new Set(findStringXrefs(pe, buf, fs.rva).map((x) => (x.fn ? x.fn.begin : -1)).filter((x) => x >= 0))];
-        const here: Candidate[] = fnsHit.map((rva) => ({ rva: hex(rva), ...candidateStats(e, rva), via: `${s.role} xref` }));
-        cands = cands === null ? here : cands.filter((c) => here.some((h) => h.rva === c.rva));
-      }
-      let method = "funcsig-xref";
-      // rung 3: caller ordinal
-      if (!cands || cands.length === 0) {
-        const viaCallers: Candidate[] = [];
-        for (const c of fns) {
-          if (!newRva.has(c.name) || !Array.isArray(c.anchors.callees)) continue;
-          for (const cal of c.anchors.callees) {
-            if (cal.name !== e.name) continue;
-            const d = decodeFunction(pe, buf, newRva.get(c.name) as number);
-            const calls = d.instrs.filter((x) => x.ins.kind === "call" && x.ins.reloc && x.ins.reloc.why === "E8 rel32" && x.ins.relTarget !== null).map((x) => x.at + x.ins.length + (x.ins.relTarget as number));
-            const t = calls[cal.ordinal];
-            if (t !== undefined && pe.sectionOf(t)) viaCallers.push({ rva: hex(t), ...candidateStats(e, t), via: `call #${cal.ordinal} of ${c.name}` });
-          }
+      let winner: { c: Candidate; method: string; note: string } | null = null;
+      const report: Candidate[] = [];
+      for (const rung of rungs) {
+        const here = rung.run(e, p.why);
+        if (here === null || !here.length) continue;
+        const inTol = here.filter((c) => withinTolerance(e, parseInt(c.rva, 16)));
+        if (inTol.length === 1) {
+          winner = { c: inTol[0], method: rung.method, note: here.length > 1 ? `; ${here.length} candidates, 1 within tolerance` : "" };
+          break;
         }
-        if (viaCallers.length) { cands = viaCallers.filter((c, i, a) => a.findIndex((x) => x.rva === c.rva) === i); method = "caller-ordinal"; }
+        if (inTol.length === 0) p.why.push(`${rung.method}: ${here.map((c) => `${c.rva} (${c.bytes} bytes, ${c.calls} calls; ${c.via})`).join(", ")} but size/calls differ too much (want ${e.anchors.cfgLite ? `${e.anchors.cfgLite.bytes}/${e.anchors.cfgLite.calls}` : "?"})`);
+        for (const c of (inTol.length ? inTol : here)) if (!report.some((x) => x.rva === c.rva)) report.push(c);
       }
-      // rung 4: successor of a ported neighbour in .pdata
-      if ((!cands || cands.length === 0) && e.anchors.after && e.anchors.after.function && newRva.has(e.anchors.after.function)) {
-        const nb = pe.pdata.find(newRva.get(e.anchors.after.function) as number);
-        if (nb) {
-          let lo = 0, hi = pe.pdata.count - 1, idx = -1;
-          while (lo <= hi) { const mid = (lo + hi) >> 1; if (pe.pdata.get(mid).begin >= nb.end) { idx = mid; hi = mid - 1; } else lo = mid + 1; }
-          if (idx >= 0) { const t = pe.pdata.get(idx).begin; cands = [{ rva: hex(t), ...candidateStats(e, t), via: `.pdata successor of ${e.anchors.after.function}` }]; method = "pdata-successor"; }
-        }
-      }
-      if (cands && cands.length === 1) {
-        const rva = parseInt(cands[0].rva, 16);
-        if (withinTolerance(e, rva)) {
-          const o = e.anchors.cfgLite;
-          const drift = o && o.bytes ? `; size ${signed(cands[0].bytes - o.bytes)} / calls ${signed(cands[0].calls - (o.calls || 0))} vs old` : "";
-          portFunction(e, rva, "ported-anchor", method, `${cands[0].via} -> ${cands[0].rva} (${cands[0].bytes} bytes, ${cands[0].calls} calls${drift}; was ${e.rva})`);
-          progress = true;
-          continue;
-        }
-        p.why.push(`${cands[0].via} gives ${cands[0].rva} but size/calls differ too much (${cands[0].bytes} bytes, ${cands[0].calls} calls vs ${e.anchors.cfgLite ? `${e.anchors.cfgLite.bytes}/${e.anchors.cfgLite.calls}` : "?"})`);
-        still.push({ ...p, cands });
+      if (winner) {
+        const rva = parseInt(winner.c.rva, 16);
+        const o = e.anchors.cfgLite;
+        const drift = o && o.bytes ? `; size ${signed(winner.c.bytes - o.bytes)} / calls ${signed(winner.c.calls - (o.calls || 0))} vs old` : "";
+        portFunction(e, rva, "ported-anchor", winner.method, `${winner.c.via} -> ${winner.c.rva} (${winner.c.bytes} bytes, ${winner.c.calls} calls${drift}${winner.note}; was ${e.rva})`);
+        progress = true;
         continue;
       }
-      if (cands && cands.length > 1) { still.push({ ...p, cands }); continue; }
-      still.push(p);
+      still.push({ ...p, cands: report.length ? report : p.cands });
     }
     pending = still;
   }
@@ -220,22 +311,10 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
       finish(e, "ambiguous", "candidates", `${p.cands.length} candidate(s): ${p.cands.map((c) => `${c.rva} (${c.bytes} bytes, ${c.calls} calls; ${c.via})`).join(", ")}; ${p.why.join("; ")}`, null, p.cands);
     } else {
       const reasons = p.why.length ? p.why.join("; ") : "no unique funcsig/literal string anchor and no ported caller";
-      finish(e, "failed", "none", `${reasons}; no ported caller names it${e.anchors.after ? "" : "; no .pdata neighbour anchor"}`, null);
+      finish(e, "failed", "none", `${reasons}; no ported caller names it${e.anchors.after || e.anchors.before ? "" : "; no .pdata neighbour anchor"}`, null);
     }
   }
 
-  // ---- vtables (RTTI) ---------------------------------------------------------------
-  for (const e of out.entries) {
-    if (e.kind !== "vtable") continue;
-    const td = e.anchors.rtti && e.anchors.rtti.typeDescriptorName;
-    if (!td) { finish(e, "needs-human", "none", "no RTTI anchor", null); continue; }
-    const r = findRtti(pe, buf, td);
-    if (!r) { finish(e, "failed", "rtti", `RTTI chain for ${td} not found`, null); continue; }
-    const was = e.rva || "";
-    const same = hex(r.vftable) === was;
-    e.rva = hex(r.vftable);
-    finish(e, "ported-derived", "rtti", `${td} -> vftable ${hex(r.vftable)} (col ${hex(r.col)})${same ? " (unchanged)" : ` (was ${was})`}`, e.rva, undefined, was);
-  }
   // ---- constants --------------------------------------------------------------------
   for (const e of out.entries) {
     if (e.kind !== "constant") continue;
@@ -318,6 +397,16 @@ export function portManifest(old: Manifest, pe: Pe, buf: Buffer, opts: PortOptio
     if (e.kind === "function" && e.port && e.port.status.startsWith("ported")) {
       const manual = (e.anchors.strings || []).filter((s) => s.role === "literal");
       e.anchors = { ...e.anchors, ...h.anchors, strings: [...manual.map((s) => ({ ...s, unique: findString(pe, buf, s.text).count === 1 })), ...(h.anchors.strings || []).filter((s) => s.role !== "literal")] };
+      // caller ordinals follow the new image (the harvest of the caller names this entry at its new call index)
+      for (const c of e.anchors.callers || []) {
+        const caller = entry(harvested.manifest, c.function);
+        const ords = caller && caller.port && caller.port.status.startsWith("ported") ? (caller.anchors.callees || []).filter((x) => x.name === e.name).map((x) => x.ordinal) : [];
+        if (ords.length === 1) c.ordinal = ords[0];
+        else if (ords.length > 1 && c.ordinal !== undefined && !ords.includes(c.ordinal)) c.ordinal = ords[0];
+      }
+      // dataRefs follow by rip-ref ordinal (filled by the harvest on the old build)
+      const refs = harvestNew(e.name, newRva.get(e.name) as number).ripRefs;
+      for (const d of e.anchors.dataRefs || []) if (d.ripRefOrdinal !== undefined && refs[d.ripRefOrdinal]) d.rva = refs[d.ripRefOrdinal].target;
     }
   }
 

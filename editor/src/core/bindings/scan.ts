@@ -130,6 +130,33 @@ export function scanExec(pe: Pe, buf: Buffer, pat: Pattern): ScanResult {
   return scanSections(buf, pe.execSections, pat);
 }
 
+/**
+ * Every hit (up to `max`) of a pattern in the executable sections, as RVAs. Unlike scanExec this does not stop at two:
+ * the anchor rungs need the full candidate list to filter it (by a callee, a containing function, a tolerance).
+ */
+export function scanAllExec(pe: Pe, buf: Buffer, pat: Pattern, max = 64): number[] {
+  const hits: number[] = [];
+  const n = pat.length;
+  if (n === 0) return hits;
+  let lead = 0;
+  while (lead < n && pat.mask[lead]) lead++;
+  const needle = lead > 0 ? Buffer.from(pat.bytes.subarray(0, lead)) : null;
+  for (const s of pe.execSections) {
+    const hay = sectionBytes(buf, s);
+    const last = hay.length - n;
+    let i = 0;
+    while (i <= last && hits.length < max) {
+      if (needle) { const j = hay.indexOf(needle, i); if (j < 0 || j > last) break; i = j; }
+      let k = lead;
+      for (; k < n; k++) if (pat.mask[k] && hay[i + k] !== pat.bytes[k]) break;
+      if (k === n) hits.push(s.va + i);
+      i++;
+    }
+    if (hits.length >= max) break;
+  }
+  return hits;
+}
+
 export function scanSections(buf: Buffer, sections: PeSection[], pat: Pattern): ScanResult {
   const state: ScanState = { matches: 0 };
   const hits: number[] = [];

@@ -14,6 +14,8 @@ import { newCatAnimation } from "./cat-rig.ts";
 import { importSvg } from "./svg-import.ts";
 import { adoptGradients } from "./gradient.ts";
 import { shapeToSvg } from "./svg-export.ts";
+import { bakeGlow } from "./glow.ts";
+import type { BakeGlowOptions, BakeGlowResult } from "./glow.ts";
 import type { ImportOptions, ImportInfo } from "./svg-import.ts";
 import { decodePng } from "./png.ts";
 import type { RgbaImage } from "./png.ts";
@@ -21,6 +23,7 @@ import { emitSwf, minimalGateSwf } from "./swf-emitter.ts";
 import type { EmitReport } from "./swf-emitter.ts";
 import { readSwf } from "./swf-reader.ts";
 import type { SwfHeader, Tag } from "./swf-reader.ts";
+import { swfFindings } from "./swf-rules.ts";
 
 export const ART_DIR = "art";
 export const SWF_DIR = "swfs";
@@ -279,6 +282,25 @@ export function importSvgIntoScene(args: ImportSvgIntoSceneArgs): { ok: boolean;
   return { ok: true, paths: imp.shape.paths.length, findings: imp.findings || [] };
 }
 
+export interface BakeGlowIntoSceneArgs extends BakeGlowOptions {
+  mod: string;
+  /** the scene file inside the mod, e.g. art/my_rat.scene.json */
+  scenePath: string;
+  shapeId: string;
+}
+/** Bake a glow / drop shadow of a shape into a scene file (glow.ts) and save it: the agent-facing op behind MCP bake_glow. */
+export function bakeGlowIntoScene(args: BakeGlowIntoSceneArgs): { ok: boolean; error?: string; glowId?: string; layersAdded?: BakeGlowResult["layersAdded"]; findings: Finding[] } {
+  const rd = readArtScene(args.mod, args.scenePath);
+  if (!rd.ok || !rd.scene) return { ok: false, error: rd.error || "scene does not validate (fix it or write it with force first)", findings: rd.findings || [] };
+  const { mod: _m, scenePath: _p, shapeId, ...options } = args;
+  void _m; void _p;
+  const r = bakeGlow(rd.scene, shapeId, options);
+  if (!r.ok) return { ok: false, error: r.findings.map((f) => f.message).join("; ") || "bake refused", findings: r.findings };
+  const w = writeArtScene(args.mod, args.scenePath, r.scene);
+  if (!w.ok) return { ok: false, error: w.error || "write failed", findings: [...r.findings, ...((w as { findings?: Finding[] }).findings || [])] };
+  return { ok: true, glowId: r.glowId, layersAdded: r.layersAdded, findings: r.findings };
+}
+
 /**
  * Export one shape of a scene as art/<shapeId>.svg inside the mod, for an external vector editor (VectorCraft,
  * Inkscape, …). Import it back with importSvgIntoScene({ …, replace: true, options: { applyViewBox: false } }).
@@ -374,6 +396,10 @@ export function buildSwf(modName: string, relPath: string, opts: BuildSwfOptions
   try {
     const parsed = readSwf(out.bytes);
     verify = { ok: true, tags: parsed.tags.length, frameCount: parsed.header.frameCount };
+    // the loader's rules over the bytes (swf-rules.ts); a code the scene / emitter already raised is not repeated
+    const seen = new Set(findings.map((f) => f.code));
+    findings = findings.concat(swfFindings(parsed.tags).filter((f) => !seen.has(f.code)));
+    if (findings.some((f) => f.severity === "error")) return { ok: false, error: "the game's loader would reject this SWF", findings, report: out.report, verify };
   } catch (e) {
     verify = { ok: false, error: errText(e) };
     findings.push({ severity: "error", code: "self-check", message: `emitted SWF failed to re-parse: ${errText(e)}` });
@@ -447,11 +473,13 @@ export interface InspectSwfResult {
   exports?: Array<{ id: number; name: string }>;
   doAbc?: number;
   bytes?: number;
+  /** what the game's loader would do with it (swf-rules.ts): FATALs as errors, silent skips as warnings */
+  findings?: Finding[];
 }
 
 /**
  * Inspect a built (or any) SWF inside a mod with the verification reader: header, tag
- * histogram, SymbolClass names, frame labels, DoABC presence.
+ * histogram, SymbolClass names, frame labels, DoABC presence, and the loader's rules as findings.
  */
 export function inspectSwf(modName: string, relPath: string): InspectSwfResult {
   const r = readModBytes(modName, relPath);
@@ -472,7 +500,7 @@ export function inspectSwf(modName: string, relPath: string): InspectSwfResult {
       }
     };
     walk(parsed.tags);
-    return { ok: true, header: parsed.header, histogram, labels, exports, doAbc, bytes: r.bytes.length };
+    return { ok: true, header: parsed.header, histogram, labels, exports, doAbc, bytes: r.bytes.length, findings: swfFindings(parsed.tags) };
   } catch (e) {
     return { ok: false, error: `not a readable SWF: ${errText(e)}` };
   }

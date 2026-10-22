@@ -535,6 +535,69 @@
     }
   },
   {
+    "name": "bake_glow",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mod": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "scene file inside the mod"
+        },
+        "shapeId": {
+          "type": "string",
+          "description": "the shape to put a halo under"
+        },
+        "color": {
+          "type": "string",
+          "description": "halo colour: #rrggbb[aa] or gray:N (its alpha is the ceiling)"
+        },
+        "blur": {
+          "type": "number",
+          "description": "halo reach in the shape's local px (0.5..255)"
+        },
+        "strength": {
+          "type": "number",
+          "description": "alpha multiplier of the falloff (default 1; >1 saturates the inner bands)"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "glow",
+            "dropShadow"
+          ],
+          "description": "glow (centred, default) or dropShadow (offset by dx, dy)"
+        },
+        "dx": {
+          "type": "number",
+          "description": "dropShadow offset x, local px (default 4)"
+        },
+        "dy": {
+          "type": "number",
+          "description": "dropShadow offset y, local px (default 4)"
+        },
+        "steps": {
+          "type": "number",
+          "description": "concentric bands 1..8 (default 4)"
+        },
+        "replace": {
+          "type": "boolean",
+          "description": "re-bake over an existing <shapeId>_glow"
+        }
+      },
+      "required": [
+        "mod",
+        "path",
+        "shapeId",
+        "color",
+        "blur"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "build_swf",
     "inputSchema": {
       "type": "object",

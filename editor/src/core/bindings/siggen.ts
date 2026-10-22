@@ -112,7 +112,9 @@ export function decodeInstruction(bytes: Uint8Array, start: number): Instruction
   const n = bytes.length;
   let i = start;
   let rexW = false;
-  while (i < n && PREFIXES.has(bytes[i])) i++;
+  let opsize16 = false;   // 0x66: a 32-bit immediate becomes 16 bits
+  while (i < n && PREFIXES.has(bytes[i])) { if (bytes[i] === 0x66) opsize16 = true; i++; }
+  const immSize = opsize16 ? 2 : 4;
   if (i < n && bytes[i] >= 0x40 && bytes[i] <= 0x4f) { rexW = (bytes[i] & 8) !== 0; i++; }
   if (i >= n) return null;
   const op = bytes[i++];
@@ -150,11 +152,11 @@ export function decodeInstruction(bytes: Uint8Array, start: number): Instruction
   if (op === 0xc3 || op === 0xc2) return done(op === 0xc2 ? i + 2 : i, "ret");
   if (op >= 0xb8 && op <= 0xbf) {
     if (rexW) return done(i + 8, "movabs", { at: i, len: 8, why: "movabs imm64" });
-    return done(i + 4, "other");
+    return done(i + immSize, "other");
   }
   if (PLAIN.has(op)) return done(i, "other");
   if (IMM8.has(op) || REL8.has(op)) return done(i + 1, op === 0xeb ? "jmp" : (op >= 0x70 && op <= 0x7f) ? "jcc" : "other");
-  if (IMM32.has(op)) return done(i + 4, "other");
+  if (IMM32.has(op)) return done(i + immSize, "other");
   if (MODRM.has(op) || MODRM_IMM8.has(op) || MODRM_IMM32.has(op) || op === 0xf6 || op === 0xf7) {
     const m = modrm(bytes, i);
     if (!m) return null;
@@ -163,25 +165,53 @@ export function decodeInstruction(bytes: Uint8Array, start: number): Instruction
     if (!r) return null;
     let extra = 0;
     if (MODRM_IMM8.has(op)) extra = 1;
-    else if (MODRM_IMM32.has(op)) extra = 4;
+    else if (MODRM_IMM32.has(op)) extra = immSize;
     else if (op === 0xf6 && m.reg <= 1) extra = 1;
-    else if (op === 0xf7 && m.reg <= 1) extra = 4;
+    else if (op === 0xf7 && m.reg <= 1) extra = immSize;
     return extra ? done(start + r.length + extra, kind, r.reloc, r.relTarget) : r;
   }
   return null;
 }
 
-/** Relocation byte ranges from the start of `bytes` up to the first unknown opcode. */
+/**
+ * Relocation byte ranges from the start of `bytes` up to the first unknown opcode. A relocation that
+ * straddles the window end is clamped to the window, never dropped: the first bytes of a cut disp32 /
+ * rel32 are relocation bytes too (before 2026-10-21 they were kept exact, which made several committed
+ * signatures unique only through a relocation — notes-bind §2.1). The last instruction is decoded
+ * against a zero-padded copy so a truncated operand still reports where its relocation starts.
+ */
 export function decodeRelocs(bytes: Uint8Array): Reloc[] {
   const out: Reloc[] = [];
+  const padded = new Uint8Array(bytes.length + 16);
+  padded.set(bytes);
   let i = 0;
   while (i < bytes.length) {
-    const ins = decodeInstruction(bytes, i);
+    const ins = decodeInstruction(padded, i);
     if (!ins) break;
-    if (ins.reloc && ins.reloc.at + ins.reloc.len <= bytes.length) out.push(ins.reloc);
+    if (ins.reloc && ins.reloc.at < bytes.length) out.push({ at: ins.reloc.at, len: Math.min(ins.reloc.len, bytes.length - ins.reloc.at), why: ins.reloc.why });
     i += ins.length;
   }
   return out;
+}
+
+/**
+ * Instruction-boundary offsets of the code at `rva`, from the function start up to `maxOffset`, stopping
+ * at the first opcode the lite decoder does not know (after that the boundaries would be guesses).
+ */
+export function instructionStarts(pe: Pe, buf: Buffer, rva: number, maxOffset: number, end: number): number[] {
+  const off = pe.rvaToOff(rva);
+  if (off < 0) return [];
+  const avail = Math.min(end - rva, buf.length - off);
+  const bytes = Uint8Array.from(buf.subarray(off, off + Math.max(0, avail)));
+  const starts: number[] = [];
+  let i = 0;
+  while (i < bytes.length && i <= maxOffset) {
+    const ins = decodeInstruction(bytes, i);
+    if (!ins) break;   // an undecodable start would mask nothing: not a candidate
+    starts.push(i);
+    i += ins.length;
+  }
+  return starts;
 }
 
 export interface GeneratedSignature {
@@ -202,8 +232,10 @@ export interface MakeSignatureOptions {
 /**
  * Find the shortest masked prefix (>= minLen, <= cap bytes, never ending in a wildcard) that
  * matches exactly once in the executable sections at `rva`. When no prefix from the function
- * start works, later starts (every `step` bytes up to `maxOffset`) are tried and the signature
- * carries a negative `offset` so that hit + offset == rva (SymbolSig.offset in the DLL).
+ * start works, later starts are tried and the signature carries a negative `offset` so that
+ * hit + offset == rva (SymbolSig.offset in the DLL). A later start is always an instruction
+ * boundary of the decoded function (a start inside an instruction decodes garbage and masks
+ * nothing), and tried starts are at least `step` bytes apart, up to `maxOffset`.
  */
 export function makeSignature(pe: Pe, buf: Buffer, rva: number, opts: MakeSignatureOptions = {}): SignatureResult {
   const minLen = opts.minLen ?? 12;
@@ -212,7 +244,9 @@ export function makeSignature(pe: Pe, buf: Buffer, rva: number, opts: MakeSignat
   const step = opts.step ?? 8;
   const fn = pe.pdata.find(rva);
   const end = fn && fn.begin === rva ? fn.end : rva + cap + maxOffset;
-  for (let start = 0; start <= maxOffset; start += step) {
+  let last = -Infinity;
+  const starts = instructionStarts(pe, buf, rva, maxOffset, end).filter((s) => { if (s - last < step) return false; last = s; return true; });
+  for (const start of starts) {
     const at = rva + start;
     if (at + minLen > end) break;
     const off = pe.rvaToOff(at);
@@ -223,15 +257,19 @@ export function makeSignature(pe: Pe, buf: Buffer, rva: number, opts: MakeSignat
     const relocs = decodeRelocs(bytes);
     const mask = new Uint8Array(avail).fill(1);
     for (const r of relocs) for (let k = r.at; k < r.at + r.len && k < avail; k++) mask[k] = 0;
-    for (let len = minLen; len <= avail; len++) {
-      if (!mask[len - 1]) continue;
-      const pat: Pattern = { bytes: bytes.subarray(0, len), mask: mask.subarray(0, len), length: len };
-      const res = scanExec(pe, buf, pat);
-      if (res.count === 1 && res.hits[0] === at) {
-        const wildcards = relocs.filter((r) => r.at < len).map((r) => ({ at: r.at, len: Math.min(r.len, len - r.at), why: r.why }));
-        return { ok: true, signature: { pattern: patternToString(pat), exactLen: len, offset: -start, wildcards } };
-      }
-    }
+    // uniqueness is monotone in the length (a longer prefix can only lose matches, never the one at `at`), so one scan
+    // of the longest window decides whether this start can work at all and a binary search finds the shortest length
+    const lens: number[] = [];
+    for (let len = minLen; len <= avail; len++) if (mask[len - 1]) lens.push(len);
+    if (!lens.length) continue;
+    const patAt = (len: number): Pattern => ({ bytes: bytes.subarray(0, len), mask: mask.subarray(0, len), length: len });
+    const unique = (len: number): boolean => { const res = scanExec(pe, buf, patAt(len)); return res.count === 1 && res.hits[0] === at; };
+    if (!unique(lens[lens.length - 1])) continue;
+    let lo = 0, hi = lens.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (unique(lens[mid])) hi = mid; else lo = mid + 1; }
+    const len = lens[lo];
+    const wildcards = relocs.filter((r) => r.at < len).map((r) => ({ at: r.at, len: Math.min(r.len, len - r.at), why: r.why }));
+    return { ok: true, signature: { pattern: patternToString(patAt(len)), exactLen: len, offset: -start, wildcards } };
   }
   return { ok: false, reason: `no unique pattern of <= ${cap} bytes starting within ${maxOffset} bytes of 0x${rva.toString(16)} (function ${fn ? `0x${fn.begin.toString(16)}-0x${fn.end.toString(16)}` : "not in .pdata"})` };
 }

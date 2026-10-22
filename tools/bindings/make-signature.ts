@@ -34,10 +34,11 @@ if (mi >= 0) {
     console.error(`exe identity (${pe.timeDateStamp.toString(16)}/${pe.sizeOfImage.toString(16)}) does not match manifest ${m.build.steamBuildId}; use the port tool for a different build`);
     process.exit(1);
   }
-  let changed = 0, same = 0, failed = 0, wild = 0;
+  let changed = 0, same = 0, failed = 0, wild = 0, skipped = 0;
   for (const e of m.entries) {
     if (e.kind !== "function") continue;
-    if (only ? !only.has(e.name) : !e.signature) continue;
+    if (!only && !e.signature) { skipped++; console.log(`  skipped (null)  ${e.name} (no signature on this build; name it with --only to try one)`); continue; }
+    if (only && !only.has(e.name)) continue;
     const r = makeSignature(pe, buf, parseInt(e.rva || "0", 16), { minLen: 12, cap: m.sigCap });
     if (!r.ok) { failed++; console.log(`  FAILED      ${e.name}: ${r.reason}${e.signature ? " (kept old signature)" : ""}`); continue; }
     if (r.signature.wildcards.length) wild++;
@@ -48,7 +49,7 @@ if (mi >= 0) {
     console.log(`  ${e.signature ? "changed    " : "added      "} ${e.name}: ${old} -> ${neu}`);
     e.signature = r.signature;
   }
-  console.log(`\n${changed} changed, ${same} unchanged, ${failed} failed; ${wild} with wildcards`);
+  console.log(`\n${changed} changed, ${same} unchanged, ${failed} failed, ${skipped} skipped (null); ${wild} with wildcards`);
   if (write) {
     saveManifest(path, m);
     console.log(`wrote ${path}; now run: cd editor && npm run bindings:gen`);

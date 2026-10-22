@@ -323,6 +323,18 @@ data.**
 - **Native (INFERRED):** new shader passes, new post-process effects, or new logical shader
   names driven by the renderer (`glaiel::CombatShaders`, `Renderer*`) require C++.
 
+**Glows, outlines, drop shadows (OBSERVED 2026-10-21; the full decode is `docs/engine-map.md` "Glow and outline
+passes").** The player has no filter renderer: `PlaceObject::decode3` (`0xb78210`) stops the game on the PlaceObject3
+`HasFilterList` bit alone ("ERROR: FILTERS NOT SUPPORTED"), so the SWF glow/blur/dropShadow filters are a
+`filter-unsupported` validation error. The combat outline (`composite_glow.shader`, `jump_flood_*`) is a hover effect
+on the status-menu target with a compile-time white `glow_color`; no per-character field drives it. What a mod can do:
+**bake the glow** — the editor's `bakeGlow` (`src/core/art/glow.ts`, MCP `bake_glow`, the shape row's "Bake glow…")
+adds a halo shape `<id>_glow` (concentric bands of the outline pushed out by `blur` with falling alpha, holes kept)
+placed under the source on every layer that places it; a drop shadow is the same halo offset by dx, dy. Engine-side
+alternatives are data knobs, not rims: `CharacterLightSource { glow [r g b a] size N }` (an additive ground disc
+around the unit) and `AdvancedTint [mul…][add…]` (a brightness lift of the sprite's own pixels) — see
+`docs/data-mods.md` "Lighting and tint knobs".
+
 ---
 
 ## 7. Community tooling and frameworks (how modders actually make art)
