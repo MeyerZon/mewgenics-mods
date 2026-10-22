@@ -48,6 +48,8 @@ export const MODEL_CODES: readonly ModelCode[] = [
   { code: "model-texture-missing", severity: "warning", meaning: "the texture file is absent: the base colour draws alone" },
   { code: "model-texture-format", severity: "warning", meaning: "the texture is grey-only (GL_LUMINANCE, not drawable in the core profile)" },
   { code: "model-texture-size", severity: "warning", meaning: "the texture is larger than 1024 px (no mipmaps: it shimmers)" },
+  { code: "model-image-embedded-invalid", severity: "warning", meaning: "the model's embedded image (a .glb bufferView or a data: URI) cannot be read: a dangling / out-of-range bufferView, bad base64, or PNG bytes that do not decode (corrupt, truncated, a CRC / Adler-32 mismatch); the convention texture or the base colour draws" },
+  { code: "model-image-embedded-unsupported", severity: "warning", meaning: "the model's embedded PNG uses what the DLL's decoder does not: a bit depth other than 8, interlacing (Adam7), an unknown critical chunk, or a side over 2048 px; re-export it, or extract_model_texture and convert the PNG" },
   { code: "model-no-normals", severity: "info", meaning: "the file has no normals (on every corner): the engine computes flat ones" },
   { code: "model-texture-embedded", severity: "info", meaning: "the texture is embedded in the file (a GLB bufferView or a data: URI)" },
   { code: "model-mtl-ignored", severity: "info", meaning: "OBJ mtllib / usemtl: .mtl materials are not read (v1)" },

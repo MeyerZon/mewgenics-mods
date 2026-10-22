@@ -181,6 +181,12 @@ export const TOOL_INPUT = {
     timeoutMs: num("how long to wait for the app to start in headless Chromium (default 120000)").optional(),
     webgl: bool("force the WebGL2 backend (?webgl; default true in headless)").optional(),
   }),
+  extract_model_texture: z.object({
+    mod: str(),
+    path: str("the model inside the mod, e.g. models/totem.glb (.glb, or .gltf with a data: URI image)"),
+    overwrite: bool("replace an existing textures/models/<stem>.png (default false: refuse)").optional(),
+    dryRun: bool("find and check the image, write nothing").optional(),
+  }),
 };
 
 export type ToolName = keyof typeof TOOL_INPUT;
@@ -379,6 +385,11 @@ export const TOOLS: ToolDef[] = [
         dryRun: a.dryRun,
       });
     },
+  ),
+  def(
+    "extract_model_texture",
+    "Write a glTF model's EMBEDDED base-colour PNG (a .glb bufferView with mimeType image/png, or a data:image/png;base64 URI; the material of the first primitive that has one — the image the DLL itself draws) to mods/<mod>/textures/models/<stem>.png, the convention path, so it can be edited as a file. Refuses to overwrite unless overwrite:true; dryRun writes nothing. Returns { ok, path, bytes, width, height, source: 'bufferView N' | 'data-uri', written, findings: [{ code, message }] (model-image-embedded-unsupported / -invalid when the DLL's decoder would refuse it), note } or { ok:false, code, error } with a model code (model-path-invalid, model-file-missing, model-texture-missing: no embedded image, model-image-format: not a PNG). The DLL prefers the embedded image over the convention file: to draw the extracted file, set graphics.model { texture \"models/<stem>.png\" }.",
+    (a) => api.extractModelTexture(a.mod, a.path, { overwrite: a.overwrite, dryRun: a.dryRun }),
   ),
   def(
     "vectorcraft_exec",

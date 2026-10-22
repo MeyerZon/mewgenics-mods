@@ -61,6 +61,7 @@
 #include "fw_mesh_draw.h"
 #include "fw_mesh_rules.h"
 #include "fw_mesh_tex.h"
+#include "fw_mesh_embtex.h"   /* M3: a model's own (embedded) texture, decoded + uploaded by us */
 #include "fw_obj3d_rules.h"
 #include "fw_glow_rules.h"    /* fw_glow_renderer: Character -> its renderer */
 #include "fw_obs3d_rules.h"   /* fw_obs3d_renderer_position / fw_obs3d_position_xz */
@@ -96,6 +97,11 @@ typedef struct MeshGl {
     void (*VertexAttribPointer)(uint32_t loc, int size, uint32_t type, uint8_t norm, int stride, const void *off);
     void (*EnableVertexAttribArray)(uint32_t loc);
     void (*DrawElements)(uint32_t mode, int count, uint32_t type, const void *off);
+    /* M3 embedded textures (GL 1.1: opengl32 exports) */
+    void (*GenTextures)(int n, uint32_t *out);
+    void (*TexImage2D)(uint32_t target, int level, int32_t internalFormat, int w, int h, int border, uint32_t format, uint32_t type, const void *pixels);
+    void (*TexParameteri)(uint32_t target, uint32_t pname, int32_t v);
+    void (*PixelStorei)(uint32_t pname, int32_t v);
 } MeshGl;
 
 static FwGlFns g_gl;
@@ -132,6 +138,8 @@ static FwTexCache g_tex;
 static void *g_paletteTex;       /* palette.png's Texture2D*, loaded once on demand */
 static int g_paletteH, g_paletteState;   /* rows; 0 not tried, 1 loaded, -1 unavailable */
 static int g_texLogged, g_rowLogged;
+/* M3: per mesh slot, the model's embedded image (decoded at record time, uploaded by the functor at replay) */
+static FwEmbTex g_emb[FW_MESH_MAX_MODELS + 1];
 #define MESH_LOG_TEX_MAX 6
 static void *g_tt;
 static int g_worldFrame;         /* world-camera units-layer calls this fight */
@@ -139,7 +147,7 @@ static int g_probeLogged, g_drawLogged, g_errLogged, g_objLogged;
 static long g_draws;
 
 #define MESH_MAX_DRAWS 64
-typedef struct MeshDraw { int mesh; float mvp[16]; float world[16]; float colour[4]; void *tex; const char *texName; int palette; } MeshDraw;
+typedef struct MeshDraw { int mesh; float mvp[16]; float world[16]; float colour[4]; void *tex; const char *texName; int palette; int emb; } MeshDraw;
 typedef struct MeshFrame { int frame; int n; MeshDraw d[MESH_MAX_DRAWS]; } MeshFrame;
 static MeshFrame g_frame;        /* captured at record time, drawn by the functors at replay */
 /* M2: one group of draws per insertion point in the units layer's painter order (fw_mesh_order.c); one functor each */
@@ -198,6 +206,8 @@ static int load_gl(void) {
     LOAD(g_mg.Uniform1f, "glUniform1f"); LOAD(g_mg.Uniform1i, "glUniform1i"); LOAD(g_mg.GenVertexArrays, "glGenVertexArrays");
     LOAD(g_mg.GenBuffers, "glGenBuffers"); LOAD(g_mg.BufferData, "glBufferData"); LOAD(g_mg.VertexAttribPointer, "glVertexAttribPointer");
     LOAD(g_mg.EnableVertexAttribArray, "glEnableVertexAttribArray"); LOAD(g_mg.DrawElements, "glDrawElements");
+    LOAD(g_mg.GenTextures, "glGenTextures"); LOAD(g_mg.TexImage2D, "glTexImage2D"); LOAD(g_mg.TexParameteri, "glTexParameteri");
+    LOAD(g_mg.PixelStorei, "glPixelStorei");
     return ok && fw_gl_fns_complete(&g_gl);
 }
 
@@ -372,8 +382,8 @@ static FwTexEntry *load_texture(const FwTexChoice *c, const char *forModel) {
     const uint8_t *bytes = read_resource(c->path, &len);
     if (!bytes) {
         e->state = FW_TEX_ABSENT;
-        if (c->named) fw_log("mesh: model %s: model-texture-missing %s (%s not on the mod path or in the gpak): base colour only", forModel, c->name, c->path);
-        else fw_log("mesh: model %s: untextured (no %s): base colour", forModel, c->path);
+        if (c->named) fw_log("mesh: model %s: model-texture-missing %s (%s not on the mod path or in the gpak): base colour only (source %s)", forModel, c->name, c->path, c->explicitName ? "explicit" : "convention");
+        else fw_log("mesh: model %s: untextured (no %s): base colour (source convention)", forModel, c->path);
         return e;
     }
     char why[160];
@@ -387,11 +397,30 @@ static FwTexEntry *load_texture(const FwTexChoice *c, const char *forModel) {
     void *tex = (g_sym[FW_SYM_App_GetTexture] && make_str(&s, c->name)) ? ((fn_GetTexture)g_sym[FW_SYM_App_GetTexture])(NULL, &s) : NULL;   /* destroys s */
     e->texture = tex; e->w = w; e->h = h;
     e->state = tex ? FW_TEX_LOADED : FW_TEX_ABSENT;
-    fw_log("mesh: texture %s for %s: %s %dx%d (Texture2D %p, gl name %u at load)", c->name, forModel, tex ? "loaded" : "App_GetTexture returned NULL", w, h, tex, fw_tex_gl_name(tex));
+    fw_log("mesh: texture %s for %s: %s %dx%d (Texture2D %p, gl name %u at load) (source %s)", c->name, forModel, tex ? "loaded" : "App_GetTexture returned NULL", w, h, tex, fw_tex_gl_name(tex), c->explicitName ? "explicit" : "convention");
     return e;
 }
 
-static const FwTexEntry *object_texture(const Fw3dObject *o, const FwMesh *m) {
+static const FwTexEntry *object_texture_named(const Fw3dObject *o, const FwMesh *m);
+
+/* M3 precedence (fw_mesh_embtex.h): an explicit name > the model's embedded image > the convention. The embedded image
+ * is decoded once per model (one load line naming "source embedded", or its warning and then the convention). */
+static void object_texture(const Fw3dObject *o, const FwMesh *m, int slot, MeshDraw *d) {
+    if (fw_tex_source(o->texture, m && m->image && m->image_len) == FW_TEXSRC_EMBEDDED && slot > 0 && slot <= FW_MESH_MAX_MODELS) {
+        FwEmbTex *t = &g_emb[slot];
+        if (t->state == FW_EMB_UNKNOWN) {
+            char line[400];
+            fw_embtex_decode(t, o->model, m->image, m->image_len);
+            fw_embtex_fmt_load(line, sizeof line, o->model, t);
+            fw_log("%s", line);
+        }
+        if (t->state == FW_EMB_DECODED || t->state == FW_EMB_UPLOADED) { d->emb = slot; d->texName = t->name; return; }
+    }
+    const FwTexEntry *te = object_texture_named(o, m);
+    if (te && te->state == FW_TEX_LOADED) { d->tex = te->texture; d->texName = te->name; }
+}
+
+static const FwTexEntry *object_texture_named(const Fw3dObject *o, const FwMesh *m) {
     FwTexChoice c;
     if (!fw_tex_choose(o->texture, o->model, m && m->texture[0], &c)) {
         if (o->texture[0] && g_texLogged < MESH_LOG_TEX_MAX) { g_texLogged++; fw_log("mesh: model %s: texture name \"%s\" refused (textures/<...>.png, no ..): base colour only", o->model, o->texture); }
@@ -459,6 +488,7 @@ static void mesh_draw(void *user) {
     g_gl.Disable(FW_GL_BLEND);
     g_gl.Disable(FW_GL_CULL_FACE);
     g_gl.Disable(FW_GL_STENCIL_TEST);
+    const FwTexUploadGl up = { g_gl.GetIntegerv, g_mg.GenTextures, g_gl.BindTexture, g_mg.PixelStorei, g_mg.TexImage2D, g_mg.TexParameteri, g_gl.BindBuffer };
     int drawn = 0;
     for (int i = 0; i < seg->n; i++) {
         const MeshDraw *d = &fr->d[seg->idx[i]];
@@ -468,14 +498,15 @@ static void mesh_draw(void *user) {
         g_mg.UniformMatrix4fv(g_loc[U_MODEL], 1, 0, d->world);
         g_mg.Uniform4f(g_loc[U_COLOUR], d->colour[0], d->colour[1], d->colour[2], d->colour[3]);
         FwMeshMaterialPlan plan;
-        uint32_t texName = fw_tex_gl_name(d->tex);
+        uint32_t texName = d->emb > 0 ? fw_embtex_upload(&g_emb[d->emb], &up) : fw_tex_gl_name(d->tex);
         fw_mesh_material_plan(texName, palName, d->palette, &plan);
         fw_gl_bind_units(&g_gl, plan.units);
         g_mg.Uniform1i(g_loc[U_HASTEX], plan.hasTex);
         g_mg.Uniform1i(g_loc[U_PALETTE], plan.palette);
         if ((texName || plan.palette >= 0) && g_texLogged < MESH_LOG_TEX_MAX) {
             g_texLogged++;
-            if (texName) fw_log("mesh: texture %s gl name %u (Texture2D+0x%x, read at replay; unit %d, fw_has_tex %d)", d->texName ? d->texName : "?", texName, OFF_TEX2D_GLNAME, FW_MESH_TEX_UNIT, plan.hasTex);
+            if (texName && d->emb > 0) fw_log("mesh: texture %s gl name %u (our glTexImage2D of the decoded image, at replay; unit %d, fw_has_tex %d)", d->texName ? d->texName : "?", texName, FW_MESH_TEX_UNIT, plan.hasTex);
+            else if (texName) fw_log("mesh: texture %s gl name %u (Texture2D+0x%x, read at replay; unit %d, fw_has_tex %d)", d->texName ? d->texName : "?", texName, OFF_TEX2D_GLNAME, FW_MESH_TEX_UNIT, plan.hasTex);
             if (plan.palette >= 0) fw_log("mesh: palette.png gl name %u row %d (unit %d)", palName, plan.palette, FW_MESH_PALETTE_UNIT);
         }
         g_mg.DrawElements(FW_GL_TRIANGLES, g_gpu[d->mesh].nindices, FW_GL_UNSIGNED_INT, (const void *)0);
@@ -536,7 +567,7 @@ static void add_draw(int mesh, const float top[16], const float vp[16], const fl
     if (g_frame.n >= MESH_MAX_DRAWS) return;
     MeshDraw *d = &g_frame.d[g_frame.n];
     d->mesh = mesh;
-    d->tex = NULL; d->texName = NULL; d->palette = -1;
+    d->tex = NULL; d->texName = NULL; d->palette = -1; d->emb = -1;
     fw_mesh_object_mvp(top, vp, iso, world, d->mvp);
     memcpy(d->world, world, sizeof d->world);
     memcpy(d->colour, colour, sizeof d->colour);
@@ -640,8 +671,7 @@ static int collect(void *cam) {
          * never got here: resolve_model < 0 above, the sprite stays) */
         if (fw_mesh_hide_wanted(o->hideSprite, o->byTile, rnd, 1)) fw_mesh_hide_add(&g_hide, rnd);
         MeshDraw *d = &g_frame.d[g_frame.n - 1];
-        const FwTexEntry *te = object_texture(o, m);
-        if (te && te->state == FW_TEX_LOADED) { d->tex = te->texture; d->texName = te->name; }
+        object_texture(o, m, slot, d);
         d->palette = object_palette(o);
         if (g_objLogged < MESH_LOG_OBJ_MAX && g_worldFrame % MESH_LOG_PROBE_EVERY == 1) {
             g_objLogged++;

@@ -406,6 +406,7 @@ void fw_mesh_free(FwMesh *m) {
     if (!m) return;
     free(m->verts);
     free(m->indices);
+    free(m->image);
     memset(m, 0, sizeof *m);
 }
 
@@ -580,6 +581,8 @@ const FwMeshCode FW_MESH_CODES[FW_MC_COUNT] = {
     [FW_MC_TEXTURE_MISSING] = { "model-texture-missing", "warning" },
     [FW_MC_TEXTURE_FORMAT] = { "model-texture-format", "warning" },
     [FW_MC_TEXTURE_SIZE] = { "model-texture-size", "warning" },
+    [FW_MC_IMAGE_EMBEDDED_INVALID] = { "model-image-embedded-invalid", "warning" },
+    [FW_MC_IMAGE_EMBEDDED_UNSUPPORTED] = { "model-image-embedded-unsupported", "warning" },
     [FW_MC_NO_NORMALS] = { "model-no-normals", "info" },
     [FW_MC_TEXTURE_EMBEDDED] = { "model-texture-embedded", "info" },
     [FW_MC_MTL_IGNORED] = { "model-mtl-ignored", "info" },
