@@ -80,4 +80,16 @@ export function runMeshProbeTests(test: TestFn, assert: AssertFn, eq: EqFn, fixt
     eq(j.run.verdict, "pass");
     assert(/1 real save file\(s\) unchanged/.test(j.run.save), "save guard");
   });
+  test("OBSERVED (T2 2026-10-22, mesh-model-log.txt): MEWFW_MESH_PROBE_MODEL=models/crate.obj with mods/fw-3d on the mod path — the API v6 registry placed the crate on tile (4,3), ResourceManager_GetBinaryResource served mods/fw-3d/models/crate.obj (24 verts / 36 indices, feet on the floor), fw_mesh.shader compiled through the game's dialect, both meshes drew every frame with no GL error", () => {
+    const log = fixture ? fixture("mesh-model-log.txt") : null;
+    assert(!!log, "fixture present");
+    if (!log) return;
+    assert(/Place3DObjectOnTile\(4, 3, models\/crate\.obj\): ok handle 1/.test(log), "the API v6 placement");
+    assert(/mesh: model models\/crate\.obj loaded: 24 verts, 36 indices, bounds \(-0\.40 0\.00 -0\.40\)-\(0\.40 0\.80 0\.40\)/.test(log), "the model bytes from the mod path, parsed into the game's axes");
+    assert(/mesh: program \d+ ready \(mods\/fw-3d\/shaders\/fw_mesh\.shader;/.test(log), "the mod-shipped shader compiled (fw_shader_stage)");
+    const p = mm.parseMeshProbeLog(log);
+    eq(p.glErrors.length, 0);
+    assert(p.draws.length >= 1 && p.draws.every((d) => d.errors === 0 && /meshes=2\/2/.test(d.line)), "both meshes drew");
+    assert(/mesh object f=\d+ handle=1 model=models\/crate\.obj tile world=\(4\.50 0\.00 3\.50\)/.test(log), "the tile anchor");
+  });
 }
