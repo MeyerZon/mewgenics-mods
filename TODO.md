@@ -458,6 +458,15 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   `editor/test/fixtures/ingame/console-tacticstest-listcmds.txt` and listed in `ingame-testing.md`.
 
 ### Next, directly queued
+- [x] **JokersLuck never merged** (found in #104, fixed 2026-10-22, branch `fix/jokers-luck-context`): apply_status's ctx
+  is a Component in every shape and its +0x20 is the Scene, so the merge lookup through ctx+0x20 missed and a second
+  JokersLuck built a second object. `fw_walk_apply_existing` walks ctx+0x18; manifest `ApplyCtx_character` ->
+  `ApplyCtx_scene`; T2 `mods/jokers-luck/tests/merge-contexts.mewtest` (both shapes, 3 stacks per unit).
+- [ ] **`jokers-luck/luck-seeded` is no longer deterministic** (OBSERVED 2026-10-22, 4 launches in a row, with this
+  branch's framework and with #104's: first rerolls -9/+5/+9/-7 instead of the +10, -2, +3, +9 every earlier run had).
+  `jokers_luck.c` calls `srand(GetTickCount())` in DllMain and `rand()` on the game thread; msvcrt keeps that state per
+  thread (INFERRED: the test was deterministic only while DllMain ran on another thread). Fix: a per-mod LCG seeded from the
+  harness `seed` (or from the game RNG), not the CRT `rand`. `luck-rerolls` (`varied`) still passes.
 - [x] **Knowledge base** `docs/KNOWLEDGE-BASE.md` — what we know / what we don't / how to operate (indexes all deep-dive docs)
 - [x] Docs consolidation pass — gate-test + SWF-crash findings folded into `engine-map.md` (new "Art / SWF subsystem" section) and `KNOWLEDGE-BASE.md`; Ghidra timeout-env gotcha + concurrency rules live in `engine-map.md`
 - [x] Scrub tree for public — name + PC paths removed (see "Go public")

@@ -104,7 +104,7 @@ TEST(find_live_takes_temporary_statuses_too_but_never_a_removing_one) {
 
 TEST(entity_find_status_walks_the_apply_entity_directly_not_ctx_plus_0x20s_entity) {
     /* OBSERVED 2026-10-22 (data-glow T2, StatusOnSpawnIn): apply_status's ctx is the Character itself (ctx+0x18 =
-     * the entity holding the statuses, the new object's +0x38 = ctx) and ctx+0x20 is another object whose entity
+     * the entity holding the statuses, the new object's +0x38 = ctx) and ctx+0x20 is the Scene, whose +0x18
      * holds no components — so a merge lookup must walk the entity apply_status names, not ctx+0x20's */
     Fakes f; make_character(&f, 2);
     make_status(f.status[0], VT_A, 1, 1, 0, f.character);      /* removing: never */

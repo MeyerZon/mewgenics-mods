@@ -215,6 +215,13 @@ applies the status. The native half (`native/mods/jokers-luck`) registers the na
 `effects { JokersLuck N }` valid everywhere the game accepts a status name. Test in battle with the console command
 `bind JokersGambit`, then use the ability; carriers should show a luck modifier that changes every turn.
 
+A second application **merges** like a vanilla LuckUp: `JokersLuck 1` then `JokersLuck 2` on the same unit is one
+JokersLuck with 3 stacks (a Temporary application always builds its own object), whatever grants it — an ability's
+`effects`, `StatusOnBattleStart`, `StatusOnSpawnIn`. The framework finds the existing instance through the unit's
+entity, the one thing every `apply_status` context shape has in common (`docs/engine-map.md` "Status effects"; before
+2026-10-22 a second application built a second object). T2: `mods/jokers-luck/tests/merge-contexts.mewtest` with the
+test-only overlay `mods/_jokersluck-merge` (both shapes, 3 stacks per unit).
+
 ## Lighting and tint knobs
 
 The engine has no per-unit glow or outline a mod can switch on (the combat rim is a hover effect with a constant white
