@@ -228,6 +228,12 @@ export const TOOL_INPUT = {
     })).describe("applied in order to level / base64 / the file on disk / an empty 10x10 room").optional(),
     dryRun: bool("encode and validate, write nothing (returns base64)").optional(),
   }),
+  extract_model_texture: z.object({
+    mod: str(),
+    path: str("the model inside the mod, e.g. models/totem.glb (.glb, or .gltf with a data: URI image)"),
+    overwrite: bool("replace an existing textures/models/<stem>.png (default false: refuse)").optional(),
+    dryRun: bool("find and check the image, write nothing").optional(),
+  }),
 };
 
 export type ToolName = keyof typeof TOOL_INPUT;
@@ -439,6 +445,11 @@ export const TOOLS: ToolDef[] = [
     "vectorcraft_exec",
     "Draw on a scene shape headlessly in VectorCraft (the vendored web build, github.com/storytold/vectorcraft, started in Playwright's headless Chromium; nothing is installed). Opens the shape as the SVG export_svg writes (an artboard of its viewBox moved to 0,0), runs the engine commands in order through window.vectorcraft.execute (shape.rectangle { x, y, width, height }, shape.ellipse, path.create { d }, object.move { dx, dy }, …), exports the document as SVG (presentation attributes, text outlined), undoes the artboard re-origin and replaces exportTo (default shapeId) in the scene file through import_svg's path — returns { ok, opened, results: [{ command, ok, result | error }], applied: { shapeId, paths, findings }, reorigin: { dx, dy }, documents, screenshotPath?, ms }. Without shapeId it starts from a blank artboard of the stage size; without shapeId and exportTo it only runs the commands and returns the SVG text. Refuses with skipped:true + reason when the build is not vendored (cd editor && npm run build, online once) or Playwright's Chromium is absent. Static drawing only — animation stays in the scene's sprites.",
     (a) => api.vectorcraftExec({ mod: a.mod, scenePath: a.scene, shapeId: a.shapeId, commands: a.commands, exportTo: a.exportTo, screenshot: a.screenshot, continueOnError: a.continueOnError, timeoutMs: a.timeoutMs, webgl: a.webgl }),
+  ),
+  def(
+    "extract_model_texture",
+    "Write a glTF model's EMBEDDED base-colour PNG (a .glb bufferView with mimeType image/png, or a data:image/png;base64 URI; the material of the first primitive that has one — the image the DLL itself draws) to mods/<mod>/textures/models/<stem>.png, the convention path, so it can be edited as a file. Refuses to overwrite unless overwrite:true; dryRun writes nothing. Returns { ok, path, bytes, width, height, source: 'bufferView N' | 'data-uri', written, findings: [{ code, message }] (model-image-embedded-unsupported / -invalid when the DLL's decoder would refuse it), note } or { ok:false, code, error } with a model code (model-path-invalid, model-file-missing, model-texture-missing: no embedded image, model-image-format: not a PNG). The DLL prefers the embedded image over the convention file: to draw the extracted file, set graphics.model { texture \"models/<stem>.png\" }.",
+    (a) => api.extractModelTexture(a.mod, a.path, { overwrite: a.overwrite, dryRun: a.dryRun }),
   ),
   def(
     "pack_mod",
