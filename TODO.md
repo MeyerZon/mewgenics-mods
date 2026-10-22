@@ -115,7 +115,7 @@ Things no test on this machine can decide. Tick them off here; each links to whe
 ### Decisions
 - [x] **`sigCap` / `FW_SIG_MAX_BYTES` stays at 128** (owner, 2026-10-19): wait until a port actually reports a pattern
   over the cap, then raise `fw_sig.h` + `native/framework/test/test_sig.c` together (`docs/binding-port.md` "Known
-  limits"). `Status_GetCategory` needs 126 bytes today.
+  limits"). Nothing needs more than 86 bytes since 2026-10-22 (`Status_GetCategory`'s 126-byte pattern is gone).
 - [x] **One DLL per build** (owner, 2026-10-19): the manifest set and `signatures.h` carry only the current build;
   `offsets.h` stays shared `#define`s and the generator keeps refusing mixed manifests.
 - [ ] **SDL version policy**: when `port_bindings` reports the 8 SDL slots as `needs-human` (SDL version changed), the
@@ -303,9 +303,13 @@ Things no test on this machine can decide. Tick them off here; each links to whe
   dev play should go through `test00.sav` only (test director) or a copied slot, and whether to ask the developer what
   the suffix is meant to do. Harness side settled 2026-10-20: scripted meta-flow tests use the disposable
   `mewtest01.sav` (`enter Campaign`, moved aside per run); the human dev-play policy is still yours.
-- [ ] **`FrameBegin` signature on a future build**: 19 generic prologue bytes; fallback is `ApplicationBase_Step`
-  (both in the manifest). The port ladder regenerates them; if `FrameBegin` ends up `ambiguous`, switch the harness
-  hook to `Step`.
+- [x] **`FrameBegin` signature on a future build** — 2026-10-22: the 19 generic prologue bytes are replaced by a body
+  window from +45 (86 bytes, 4 rip refs masked) keyed on the per-frame defaults FrameBegin stores (`0xffffff09`,
+  `0x0be2`, `02 02 02 04`, `05 04 05 02`, `02`; 1 hit image-wide on 25143593), plus `before: ApplicationBase_FrameEnd`
+  and `FrameEnd.after: FrameBegin` (`.pdata` 25655 → 25656) as the rung behind it. It lea's no funcsig/file string
+  (71 rip refs, all globals — `.analysis/decompiled/ApplicationBase_FrameBegin_0x9b7870.c`). `ApplicationBase_Step`
+  stays the fallback hook point; `make-signature --manifest` would regenerate the prologue window, so keep the body
+  one by hand (noted in the entry and in `docs/binding-port.md`).
 - [ ] **Hidden window on other machines**: verified on this PC (NVIDIA, ~180 fps hidden); confirm elsewhere before
   relying on it in CI-like setups.
 - [x] **In-run console command set**: captured 2026-10-20 after `enter TacticsTest` — 84 commands, pinned verbatim in
@@ -383,10 +387,17 @@ MCP art tools → DefineShape4/LineStyle2 → PlaceObject3 → animation-clip au
   `docs/binding-port.md` "T1 cross-build result"). Proves anchors survive a relink; a body-changing build is still wanted.
 - [x] **Port-report `old` column bug** (found by the cross-build run) — fixed in PR #29 (2026-10-19): `finish` now takes
   the pre-port value from the caller; anchor-ported rows also record `size +N / calls +M vs old`.
-- [~] **Harden rung 3 (caller ordinal)**: `Status_ApplyLuckUp` / `LuckUp_ctor` port only by call ordinal with no fallback.
-  Candidates from the cross-build run: a callee-set rung, a tolerant ordinal window, a vftable-store rung for
-  constructors (needs the RTTI phase before the function rungs). Done in PR #29: `--gameVersion` on `cross-build.ts`
-  and the rung-2 size/call drift in the report. The new rungs themselves need a body-changing build to test against.
+- [x] **Harden rung 3 (caller ordinal)** — done 2026-10-22 (bindings hardening PR, from `.analysis/notes-bind.md`):
+  vtables port first; new rungs `vtable-store` (`LuckUp_ctor` = the only lea of `LuckUp_vftable`), `imm32-witness`
+  (`Status_ApplyLuckUp` = `mov r8d, LuckUp_typeid` before `Entity_FindComponentsByTypeId`, the id re-derived on the
+  new image), `caller-after-lea` (the first in-tolerance E8 after `lea rdx,["LuckUp"]` in `apply_status` /
+  `attach_passive`), `pdata-predecessor` and `shared-data-ref` (`NameExists` shares `GetValue`'s map); multi-candidate
+  string hits are filtered by the tolerance before `ambiguous`; the 11 lookups carry the `.pdata` chain. The harvest
+  verifies every one of these anchors on the current exe. The caller ordinal is the last rung for both LuckUp
+  entries, not the only one. Also fixed on the way: `decodeRelocs` dropped a reloc straddling the window end, the
+  decoder ignored the `66` prefix, and window starts fell inside instructions — three signatures were unique only
+  through unmasked relocation / type-id / `__LINE__` bytes and are `null` now (the DLL takes the raw RVA). Still
+  wanted: a body-changing build to exercise the rungs on a real recompile (the T1 cross-build only relinked).
 - [ ] **Witness patterns for the 46 unanchored entries** (40 struct offsets, 6 vtable slot constants) so the port stops
   reporting them as `needs-human`; the witness function + byte pattern per offset, verified by `harvest.ts`. The
   second witness for `LuckUp_typeid` (the `mov r8d, imm32` before `Entity_FindComponentsByTypeId` in

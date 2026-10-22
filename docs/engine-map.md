@@ -200,6 +200,34 @@ session; the container is `--rm` and disappears.
   marks removal when stacks reach 0), 170 `OnStacksChanged`, 171 stacks-cleared callback.
 - Object fields: +0x18 entity, +0x20 owner character (also +0x38), +0x5c `int stacks`, +0x68 GON data, +0x74 applied,
   +0x75 removing, +0x76 `tickdown_this_turn`, +0xc8 applier, +0xe9 "temporary" flag.
+- OBSERVED 2026-10-21 (session `bind`, `.analysis/notes-bind.md`, cross-checked in Ghidra): `LuckUp_ctor`
+  (`0x711c90`, 292 B) pool-allocates **0xF0 bytes** (`41 B8 F0 00 00 00` memset length; pool global `0x1414e40`,
+  element size 0xf8, referenced only by the ctor and its 54-byte static initialiser `0x1fa40`), runs the base
+  `Passive::Passive` (`0x4c940`), zeroes +0xc8..+0xe0, writes word 1 at +0xe8 (so +0xe8 = 1, +0xe9 `temporary` = 0),
+  stores `LuckUp_vftable` (`lea rax,[0xf57ab8]; mov [rbx],rax` at +140 — the **only** code reference to that vftable
+  image-wide), sets **+0x18 = entity, +0x20 = owner character**, +0x28 = the owner's first qword, pushes itself into
+  `entity+0x20` (`{cap u32, count u32, T** data}`, so Entity +0x24 = count, +0x28 = `Component**`), copies
+  `entity+0x19` to +0xe and calls slot 30 `OnInit` devirtualised (`0x8104b0`: stores data at +0x68, stacks at +0x5c,
+  reads GON `tickdown_this_turn` into +0x76). It is a byte-twin of the `AIControlNextTurn` ctor (`0x705db0`) and one
+  more 0xF0-byte Status ctor (`0x705ee0`) modulo relocations: no relocation-free byte signature exists for it.
+- `Status_NameExists` (`0x492e80`) and `Status_GetValue` (`0x492f20`) share the **same map global `0x13c4830`**
+  (end sentinel +8) — the only two functions referencing it: NameExists is "the status-value map has this name".
+  Each of the other lookups owns its own map global (GetCategory `0x13c47b0`, GetStackMode `0x13c47f0`, GetFlags
+  `0x13c4870`, GetIcon `0x13c48b0`, OnAppliedToDamageInstance `0x13c48f0`, OnKilledCharacter `0x13c4930`,
+  OnAppliedToTile `0x13c4970`, OnDamageReport `0x13c49b0`, IsHitEffect `0x13c49f0`); the log sink context
+  `0x12f7b08` is shared. The 13 are one template body each (FNV-1a, `0x4c340` map find, `NO STATUS NAMED` assert
+  with `{__LINE__, column, __FILE__, __FUNCSIG__}` → `0x9522c0`); the twins differ only in relocations and the assert
+  line/column (GetCategory 72, GetStackMode 77, GetValue 88, GetFlags 96, GetIcon 105, OnAppliedToDamageInstance
+  118, OnAppliedToTile 127, OnKilledCharacter 136, OnDamageReport 145, IsHitEffect 201). They sit in one `.pdata`
+  run after `apply_status` (11368 → 11369 GetCategory … 11379 AttachPassive; 11383 IsHitEffect → 11384 SpawnTile).
+- `Status_ApplyLuckUp` (`0x5f9760`, 711 B): the only relocation-free bytes unique to it image-wide are the type id
+  `41 B8 D6 04 00 00` (`mov r8d, LuckUp_typeid`, +357, four instructions before `Entity_FindComponentsByTypeId`);
+  every reloc-masked window of its body also matches the `Bruise` (`0x5c4240`) / `Bleed` (`0x5bf1a0`) apply siblings.
+  It has exactly three E8 callers — `apply_status` (`0x48b4cb`), `attach_passive` (`0x4b24b0`) and the third by-name
+  dispatcher `0x4ccb20` — in each the call is the first in-tolerance E8 after `lea rdx,[rip+"LuckUp"]` + the
+  `std::string == const char*` compare (`0x52560`). `"LuckUp\0"` occurs once in .rdata (`0xee23d8`) and is lea'd from
+  12 `.pdata` functions; adding `"None"` (`0xed0b90`) and the size tolerance leaves this one. These facts are the
+  `bindings/25143593.json` anchors `imm32Witness`, `callers[].afterStringLea`, `vtableStore` and `sharedDataRef`.
 - Character +0x18 = `Entity*`; Entity +0x24 = component count (u32), +0x28 = `Component**` array. Character +0xe50 =
   `touched_passives` (forces a stat recompute), +0x5d4 = accumulated luck bonus.
 - `Status_ApplyByName` (RVA `0x483120`): `Status* f(std::string* name, void* ctx, int stacks, void* src, void* p5,
