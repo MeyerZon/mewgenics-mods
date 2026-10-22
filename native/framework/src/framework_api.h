@@ -11,9 +11,9 @@
 
 #define FW_OWNER "mewframework"
 #define FW_VERSION_MAJOR 0
-#define FW_VERSION_MINOR 4
+#define FW_VERSION_MINOR 5
 #define FW_VERSION_PATCH 0
-#define FW_API_VERSION 4   /* bumped when functions are added; existing signatures never change */
+#define FW_API_VERSION 5   /* bumped when functions are added; existing signatures never change */
 
 /* Code symbols located by byte signature (see signatures.h). APPEND ONLY: mods compiled against an
  * older header keep working because the existing values never move. */
@@ -127,6 +127,14 @@ FW_EXPORT uintptr_t FW_GetData(int dataId);   /* absolute address of a FwData en
  * fight scene and a unit whose pool slot is reused is dropped. Same ABI as v4's first release. 1 on success. */
 FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a);
 FW_EXPORT int FW_ClearUnitGlow(void *character);   /* 1 when it was registered */
+/* --- API v5: a random stream for mods (fw_rng.c: splitmix64 + an unbiased bounded draw). Use it instead of the CRT
+ * rand: msvcrt keeps rand's state per thread, so a DLL's srand in DllMain never reaches the game thread and nothing
+ * can pin it. ONE stream shared by every mod, seeded when the framework loads from QueryPerformanceCounter, the
+ * process and the thread id (varied run to run) and re-seeded by the harness `seed <N>` directive with N (so every
+ * draw after it is identical run to run). Main thread only (turn callbacks, the harness); works on an inactive
+ * framework too. */
+FW_EXPORT uint32_t FW_Random(uint32_t bound);   /* uniform in [0, bound); 0 when bound == 0 */
+FW_EXPORT void FW_SeedRandom(uint64_t seed);    /* restart the stream from seed (the harness `seed` directive) */
 
 typedef int (*FW_fn_GetVersion)(void);
 typedef int (*FW_fn_IsActive)(void);
@@ -138,6 +146,8 @@ typedef int (*FW_fn_CharacterHasStatus)(void *, const char *);
 typedef uintptr_t (*FW_fn_GetData)(int);
 typedef int (*FW_fn_SetUnitGlow)(void *, float, float, float, float);
 typedef int (*FW_fn_ClearUnitGlow)(void *);
+typedef uint32_t (*FW_fn_Random)(uint32_t);
+typedef void (*FW_fn_SeedRandom)(uint64_t);
 
 typedef struct FwApi {
     FW_fn_GetVersion GetVersion;
@@ -149,7 +159,9 @@ typedef struct FwApi {
     FW_fn_CharacterHasStatus CharacterHasStatus;
     FW_fn_GetData GetData;            /* v3 */
     FW_fn_SetUnitGlow SetUnitGlow;    /* v4 */
-    FW_fn_ClearUnitGlow ClearUnitGlow; /* v4; new fields are appended so older layouts stay valid prefixes */
+    FW_fn_ClearUnitGlow ClearUnitGlow; /* v4 */
+    FW_fn_Random Random;              /* v5 */
+    FW_fn_SeedRandom SeedRandom;      /* v5; new fields are appended so older layouts stay valid prefixes */
 } FwApi;
 
 /* Resolve the framework's exports from the loaded module. Returns 1 when every function of
@@ -165,6 +177,7 @@ static inline int FW_Resolve(FwApi *api) {
     FW__R(RegisterStatus) FW__R(SetStatusStacks) FW__R(CharacterHasStatus)
     FW__R(GetData)
     FW__R(SetUnitGlow) FW__R(ClearUnitGlow)
+    FW__R(Random) FW__R(SeedRandom)
 #undef FW__R
     return 1;
 }

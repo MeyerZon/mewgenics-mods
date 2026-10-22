@@ -506,7 +506,8 @@ static int h_seed_rng(void *u, unsigned long long seed, char *detail, size_t cap
     uint64_t *expanded = g_RngSeedState(tmp, (uint64_t)seed);
     if (!expanded) { snprintf(detail, cap, "Rng_SeedState returned NULL"); return 0; }
     memcpy(state, expanded, sizeof tmp);
-    snprintf(detail, cap, "state at %p: %016llx… -> %016llx…", (void *)state, (unsigned long long)before[0], (unsigned long long)state[0]);
+    g_fw.SeedRandom((uint64_t)seed);   /* the mods' FW_Random stream (API v5) restarts from the same seed */
+    snprintf(detail, cap, "state at %p: %016llx… -> %016llx…; FW_Random seeded", (void *)state, (unsigned long long)before[0], (unsigned long long)state[0]);
     logf_("seed %llu: %s", seed, detail);
     return 1;
 }

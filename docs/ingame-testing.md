@@ -76,7 +76,9 @@ enter Campaign house                             the same fresh campaign, but th
 seed <N>                                         pin the game's RNG (TLS+0x178) to N (0..2^64-1) once the game's own
                                                  startup is over (it reseeds there; the harness retries until the
                                                  director exists). Put it right before `enter`: the party and every
-                                                 roll after it are then identical run to run, so assertions can be exact
+                                                 roll after it are then identical run to run, so assertions can be exact.
+                                                 It also re-seeds the native mods' FW_Random stream (framework API v5)
+                                                 with N, so a native status's rolls are pinned too (never CRT rand)
 glow <unit> <r> <g> <b> <a>                      FW_SetUnitGlow (framework API v4) on a unit of the walk (index, bareword or
 glow <unit> off                                  "name"): a coloured rim through the game's outline mask (0..1 floats; each
                                                  unit its own colour since glow v2); `off` = FW_ClearUnitGlow. Needs the fight and
@@ -148,7 +150,7 @@ Every event carries `t` (ms since harness start) and `frame`.
                                                 (docs/engine-map.md "GON at runtime"); an unreadable field reads as 0 / ""
 {"ev":"log","text":"..."}
 {"ev":"shot","line":N,"label":"...","hold_ms":700}   the runner captures the window on seeing this (report.artifacts.shots)
-{"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>"}
+{"ev":"seed","line":N,"seed":N,"ok":true,"detail":"state at 0x…: <before> -> <after>; FW_Random seeded"}
 {"ev":"glow","line":N,"unit":N,"name":"...","arg":"<the directive's argument text>","ok":true,"detail":"FW_SetUnitGlow on 0x…: ok"}   unit -1 when no unit matched
 {"ev":"idle","line":N}                               interactive mode: the script ran to its end; the DLL now serves the pipe
 {"ev":"exec","id":N,"op":"exec","text":"...","ok":true,"lines":["..."]}   a pipe request served (also the reply on the pipe)

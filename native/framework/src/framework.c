@@ -29,6 +29,7 @@
 #include "fw_sig.h"
 #include "fw_build.h"
 #include "fw_resolve.h"
+#include "fw_rng.h"
 
 MewjectorAPI g_mj;
 int g_mjAvailable = 0;
@@ -212,10 +213,23 @@ FW_EXPORT int FW_ClearUnitGlow(void *character) {
     return glow_engine_clear(character);
 }
 
+/* --- API v5: the mods' random stream (fw_rng.c); never the CRT rand --- */
+static FwRng g_rng;
+
+FW_EXPORT uint32_t FW_Random(uint32_t bound) { return fw_rng_below(&g_rng, bound); }
+FW_EXPORT void FW_SeedRandom(uint64_t seed) {
+    fw_rng_seed(&g_rng, seed);
+    fw_log("FW_Random seeded with %llu", (unsigned long long)seed);
+}
+
 /* ----------------------------------------------------------------------- */
 /* init                                                                     */
 /* ----------------------------------------------------------------------- */
 static void init(void) {
+    {   /* varied by default; the harness `seed <N>` re-seeds with N (FW_SeedRandom) */
+        LARGE_INTEGER qpc; QueryPerformanceCounter(&qpc);
+        fw_rng_seed(&g_rng, (uint64_t)qpc.QuadPart ^ ((uint64_t)GetCurrentProcessId() << 32) ^ (uint64_t)GetCurrentThreadId());
+    }
     g_log = fopen("mod_logs\\mewframework.log", "a");
     g_mjAvailable = MJ_Require(FW_OWNER) && MJ_Resolve(&g_mj);
     fw_log("mewframework %d.%d.%d starting; mewjector=%s", FW_VERSION_MAJOR, FW_VERSION_MINOR, FW_VERSION_PATCH,

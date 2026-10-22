@@ -118,8 +118,8 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `native/mods/test-harness/build.bat` builds `mewtest.dll` (copy to `native/dist/` too).
 - `native\test-all.bat` — host-side unit tests for the pure native parts (framework signature scanner + build gate
   and generated tables, the status definition rules, the custom-status vtable clone + thunks, the entity/component
-  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the harness's modules;
-  197 checks = 14 + 6 + 16 + 15 + 14 + 15 + 27 + 90, `-Werror`),
+  walks + apply/merge writes, symbol resolution + the hook plan, the per-unit glow rules (incl. the FwGlow_ data seam), the `FW_Random` stream, Joker's Luck's
+  reroll, the harness's modules; 206 checks = 14 + 6 + 16 + 15 + 14 + 15 + 27 + 5 + 4 + 90, `-Werror`),
   no game needed.
   `native/test-all.sh` is the same for a plain gcc (CI, Git Bash). Each suite is also runnable as
   `<dir>\test.bat`.
