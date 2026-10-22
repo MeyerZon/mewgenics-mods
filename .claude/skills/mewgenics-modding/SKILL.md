@@ -45,7 +45,12 @@ Tools, by purpose:
 - `list_registered_native_names` — list native-registered status/ability names
   from `registered-names.json` (seeded with `JokersLuck`).
 - `new_from_template` — scaffold an ability/passive/item/status-data overlay
-  plus matching localization rows.
+  plus matching localization rows; kind `glowing-character` (`options.colour`
+  rrggbb[aa], `parent` default Rat, `trigger` StatusOnSpawnIn | StatusOnBattleStart)
+  scaffolds a character variant that glows that colour from data (a status
+  `FwGlow_<colour>`; load `fw-glow` next to the mod) plus the status text rows.
+  A Temporary { status FwGlow_… turns N } glow ends when it expires (OBSERVED);
+  docs/data-mods.md "Asking for a unit glow from data".
 
 A web UI (`node editor/web/server.ts`, opened in a browser) browses base data
 and components and shows inline validation and merge-preview. It is for a human;

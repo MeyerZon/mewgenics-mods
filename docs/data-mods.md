@@ -282,6 +282,36 @@ MyGlowingRat {
   over (the status then no longer drives it). Proven by `mods/fw-glow/tests/data-glow.mewtest` (`npm run test:unitglow --
   --data`; fixture `editor/test/fixtures/ingame/data-glow-summary.json`: a 5620 px magenta rim around the spawned
   FwGlowRat, none before the spawn).
+- **A timed glow (OBSERVED 2026-10-22).** Grant it as a Temporary and the rim lasts exactly as long:
+
+  ```
+  FwGlowTempRat {                  // mods/fw-glow: glows until the end of its first turn
+      variant_of Rat
+      passives {
+          StatusOnSpawnIn {
+              Temporary {
+                  status FwGlow_ff00ff
+                  stacks 1
+                  turns 1
+                  expires_on_end_turn true   // or expires_on_begin_turn, as the vanilla Temporaries do
+              }
+          }
+      }
+  }
+  ```
+
+  `mods/fw-glow/tests/data-glow-expiry.mewtest` (`npm run test:unitglow -- --data-expiry`; fixture
+  `data-glow-expiry-summary.json`) spawns it in an autoplayed fight: rim and status at the spawn, both gone after the
+  rat's turn while the rat lives (verdict `expired`). Stacks reaching 0 and a cleanse take the same removal path but
+  were not run in-game.
+- **Scaffold one.** `new_from_template { mod, kind: "glowing-character", name, options: { colour } }` writes the
+  variant (`parent`, default `Rat`; `trigger` `StatusOnSpawnIn` or `StatusOnBattleStart`) into
+  `data/characters/enemies.gon.append`, the status's `keyword_tooltips` entry (skipped if the mod already has one) and
+  its 12-column text rows (`displayName` / `desc`, default "Glowing"). `colour` is `rrggbb`, `rrggbbaa` or the whole
+  `FwGlow_…` name; anything else is refused with the `invalid-glow-name` rule. For example
+  `{ kind: "glowing-character", name: "TealRat", options: { colour: "00ffcc" } }` gives
+  `TealRat { variant_of Rat passives { StatusOnSpawnIn { FwGlow_00ffcc 1 } } }` plus
+  `FwGlow_00ffcc { name "KEYWORD_FWGLOW_00FFCC_NAME" … }`. Spawn it with `spawn TealRat` in a fight, with `fw-glow` loaded.
 
 ## Limits of the data layer
 

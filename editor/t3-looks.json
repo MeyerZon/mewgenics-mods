@@ -112,6 +112,22 @@
     "status": "open"
   },
   {
+    "id": "glow-decide-icon",
+    "pr": 104,
+    "question": "Decide: a FwGlow_ status shows LuckUp's four-leaf clover on the unit's status bar. Keep the clover, or ask for a follow-up that hides the icon (or gives the glow status its own)?",
+    "shots": ["ingame-runs/*-fw-glow-data-glow/shot-glow.png"],
+    "regenerate": "cd editor && npm run test:unitglow -- --data",
+    "status": "open"
+  },
+  {
+    "id": "glow-decide-hover",
+    "pr": 104,
+    "question": "Decide: while a unit glows the game's white hover rim stays off for it. Leave it off, or ask for a follow-up that redraws the hover rim on top of the glow?",
+    "shots": ["ingame-runs/*-fw-glow-data-glow/shot-glow.png"],
+    "regenerate": "cd editor && npm run test:unitglow -- --data",
+    "status": "open"
+  },
+  {
     "id": "pr59-ruffle-tab",
     "pr": 59,
     "question": "Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?",

@@ -1530,6 +1530,16 @@ and reaches the DLL through the generated `signatures.h` / `offsets.h`.
   `FwGlow_` names from the LateRender hook — the game never makes a component for an unknown name (apply_status falls
   through, the lookups say `NO STATUS NAMED` and one default is a divisor), so the name must be handled where the
   framework already hooks `apply_status`; the per-frame part is only the removal check of units already registered.
+  **Removal, OBSERVED 2026-10-22 (run `20261022-120852-fw-glow-data-glow-expiry`, `mods/fw-glow/tests/data-glow-expiry.mewtest`):**
+  a Temporary works and its expiry ends the rim. `FwGlowTempRat`'s `StatusOnSpawnIn { Temporary { status FwGlow_ff00ff
+  stacks 1 turns 1 expires_on_end_turn true } }` reaches the same `apply_status` hook with the temporary flag set (log:
+  `FwGlow_ff00ff: glow status created on … with 1 stacks (obj …, temporary)`) and the rim is drawn (5566 px magenta patch
+  (2630,693)-(2757,825), none before the spawn). Spawned during the cats' turn in round 1, the status is gone from the
+  `dump` after round 1 (the rat's own end of turn) and from the one after round 2; the sweep logged `glow: … no longer
+  carries a FwGlow_ status; rim cleared (0 registered)`; the round-3 shot of the still-living rat (hp 964) holds 0 magenta
+  px. Pinned by `editor/test/fixtures/ingame/data-glow-expiry-summary.json` (`compareExpiry`, glow-measure.ts). Not run
+  in-game: stacks reaching 0 and a cleanse (they go through the same `Status_Remove` mark the sweep's
+  `fw_walk_find_live` skips; host-tested only).
 - **Bindings added (glow block, all harvest-verified):** functions `TacticsTest_LateRender` 0x88d780, `vec_u32_AddUnique`
   0x72cd0, `ShaderManager_GetOrCreateMaterial` 0x9bb5d0, `Material_SetUniformVec4` 0x9bde70, `Material_SetUniformFloat`
   0x9bddc0, `Material_SetTexture` 0x9bdcd0, `Camera_AddPostProcessPass` 0x979880 (`FW_SYM_*`), reference
