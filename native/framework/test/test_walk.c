@@ -20,7 +20,7 @@
 _Static_assert(OFF_CH_ENTITY + 8 <= FAKE_CHARACTER_BYTES && OFF_CH_TOUCHED_PASSIVES + 1 <= FAKE_CHARACTER_BYTES, "character fake too small");
 _Static_assert(OFF_ENT_COMPCOUNT + 4 <= FAKE_ENTITY_BYTES && OFF_ENT_COMPS + 8 <= FAKE_ENTITY_BYTES, "entity fake too small");
 _Static_assert(OFF_STATUS_TEMPORARY + 1 <= FAKE_STATUS_BYTES && OFF_STATUS_APPLIER_OWNER + 8 <= FAKE_STATUS_BYTES, "status fake too small");
-_Static_assert(OFF_APPLYCTX_CHARACTER + 8 <= FAKE_CTX_BYTES && OFF_APPLYCTX_ENTITY + 8 <= FAKE_CTX_BYTES, "ctx fake too small");
+_Static_assert(OFF_APPLYCTX_SCENE + 8 <= FAKE_CTX_BYTES && OFF_APPLYCTX_ENTITY + 8 <= FAKE_CTX_BYTES, "ctx fake too small");
 _Static_assert(OFF_APPLYP6_APPLIER + 8 <= FAKE_P6_BYTES, "p6 fake too small");
 
 typedef struct Fakes {
@@ -134,13 +134,13 @@ TEST(apply_existing_finds_the_units_status_under_both_ctx_shapes_never_through_c
     *(void **)(scene + OFF_CH_ENTITY) = sceneEntity;
     FwApplyResolved a;
     /* shape 1, StatusOnSpawnIn: ctx = the Character (its +0x18 = entity), ctx+0x20 = the scene */
-    *(void **)(f.character + OFF_APPLYCTX_CHARACTER) = scene;
+    *(void **)(f.character + OFF_APPLYCTX_SCENE) = scene;
     fw_walk_apply_resolve(f.character, NULL, NULL, NULL, NULL, &a);
     CHECK(fw_walk_apply_existing(&a, VT_A) == f.status[1]);
     /* shape 2, StatusOnBattleStart: ctx = the passive component (its +0x18 = the unit's entity), ctx+0x20 = the scene */
     unsigned char passive[FAKE_CTX_BYTES]; memset(passive, 0, sizeof passive);
     *(void **)(passive + OFF_APPLYCTX_ENTITY) = f.entity;
-    *(void **)(passive + OFF_APPLYCTX_CHARACTER) = scene;
+    *(void **)(passive + OFF_APPLYCTX_SCENE) = scene;
     fw_walk_apply_resolve(passive, NULL, NULL, NULL, NULL, &a);
     CHECK(fw_walk_apply_existing(&a, VT_A) == f.status[1]);
     CHECK(fw_walk_apply_existing(&a, VT_B) == NULL);
@@ -198,12 +198,12 @@ TEST(each_custom_is_a_noop_without_character_entity_or_definitions) {
 TEST(apply_resolve_reads_ctx_and_picks_source_and_applier) {
     unsigned char ctx[FAKE_CTX_BYTES]; memset(ctx, 0, sizeof ctx);
     unsigned char p6[FAKE_P6_BYTES]; memset(p6, 0, sizeof p6);
-    *(void **)(ctx + OFF_APPLYCTX_CHARACTER) = (void *)0xC1;
+    *(void **)(ctx + OFF_APPLYCTX_SCENE) = (void *)0xC1;
     *(void **)(ctx + OFF_APPLYCTX_ENTITY) = (void *)0xE1;
     *(void **)(p6 + OFF_APPLYP6_APPLIER) = (void *)0xA6;
     FwApplyResolved r;
     fw_walk_apply_resolve(ctx, (void *)0x51, (void *)0x55, p6, (void *)0xD0, &r);
-    CHECK(r.character == (void *)0xC1);
+    CHECK(r.scene == (void *)0xC1);
     CHECK(r.entity == (void *)0xE1);
     CHECK(r.source == (void *)0x51);                                  /* an explicit source wins */
     CHECK(r.applier == (void *)0x55);                                 /* p5 wins over p6's applier */

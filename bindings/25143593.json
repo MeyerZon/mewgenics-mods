@@ -4716,25 +4716,25 @@
       "note": "= *(applier + OFF_APPLIER_OWNER)"
     },
     {
-      "name": "ApplyCtx_character",
+      "name": "ApplyCtx_scene",
       "kind": "offset",
       "struct": "ApplyContext",
       "value": "0x20",
-      "ctype": "Character*",
+      "ctype": "Scene*",
       "anchors": {
         "witness": {
           "function": "Status_ApplyLuckUp",
           "pattern": "48 8B 41 ?? 44 38 B8 ?? ?? ?? ?? 74",
           "dispAt": 3
         },
-        "note": "mov rax,[rcx+0x20]; cmp [rax+0x4b0],r15b: ctx->character then its scene's destroyed flag; unique"
+        "note": "mov rax,[rcx+0x20]; cmp [rax+0x4b0],r15b: ctx->scene then the scene's destroyed flag (Scene_destroyed +0x4b0); unique"
       },
       "consumers": [
         "native/framework/src/fw_walk.c:fw_walk_apply_resolve"
       ],
       "exposure": [
         {
-          "macro": "OFF_APPLYCTX_CHARACTER"
+          "macro": "OFF_APPLYCTX_SCENE"
         }
       ],
       "evidence": [

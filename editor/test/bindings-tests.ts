@@ -1786,7 +1786,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   const WITNESSED_OFFSETS_BATCH2 = [
     "Character_entity", "Character_catData", "CatData_class", "Character_name", "Character_faction", "Character_move", "Character_act",
     "Character_turnKind", "Entity_componentCount", "Entity_components", "Status_removing", "Status_stacks", "Status_character",
-    "Status_temporary", "Status_applier", "Status_applierOwner", "ApplyCtx_character", "ApplyCtx_entity", "ApplyP6_applier",
+    "Status_temporary", "Status_applier", "Status_applierOwner", "ApplyCtx_scene", "ApplyCtx_entity", "ApplyP6_applier",
     "Applier_owner", "Character_touchedPassives",
   ];
   test("the committed manifest has no unanchored entry: the six vtable-slot constants derive from the LuckUp vftable (extent, slot search) or a call-slot witness", () => {

@@ -39,8 +39,9 @@ typedef void (*FwWalkVisit)(int defIndex, void *component, void *user);
 int fw_walk_each_custom(void *character, void *const *vts, int count, FwWalkVisit cb, void *user);
 
 /* ---- apply_status(name, ctx, stacks, src, p5, p6, temporary, p8) argument resolution ---- */
-typedef struct FwApplyResolved { void *character; void *entity; void *source; void *applier; } FwApplyResolved;
-/* character/entity from ctx; source = src or defaultSource; applier = p5, else p6->applier, else NULL */
+typedef struct FwApplyResolved { void *scene; void *entity; void *source; void *applier; } FwApplyResolved;
+/* scene/entity from ctx (a Component in every shape: the passive component, the Character itself; its +0x18 = the
+ * unit's entity, +0x20 = the Scene, which LuckUp_ctor takes first exactly as the vanilla apply passes it); source = src or defaultSource; applier = p5, else p6->applier, else NULL */
 void fw_walk_apply_resolve(const void *ctx, void *src, void *p5, const void *p6, void *defaultSource, FwApplyResolved *out);
 /* The instance of vt an apply_status with this resolution merges into (fw_walk_apply_merges decides whether it does):
  * the first non-removing, non-temporary one among the components of the unit the apply targets; NULL if none. */

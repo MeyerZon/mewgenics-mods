@@ -499,6 +499,19 @@ export async function runIngameTests(test: TestFn, assert: AssertFn, eq: EqFn): 
       assert(r.events.some((e) => e.ev === "expect" && e.kind === "noconsole" && e.ok === true), "bind JokersGambit was accepted (no 'No command named')");
       eq(r.expects.failed, 0); eq(r.end!.code, 0);
     });
+    test("OBSERVED 2026-10-22 fixture: merge-contexts — a second JokersLuck merges into the first under both apply_status ctx shapes: 4 cats (StatusOnBattleStart) and Lil' Rat (StatusOnSpawnIn) each carry ONE JokersLuck with 1 + 2 = 3 stacks (result-merge-contexts.jsonl)", () => {
+      const r = parseResults(fixture("result-merge-contexts.jsonl")) as unknown as { events: { ev: string; kind?: string; ok?: boolean; list?: { name: string; statuses: string[]; stacks: number[] }[] }[]; expects: { passed: number; failed: number }; end: { code: number } | null };
+      const dumps = r.events.filter((e) => e.ev === "units");
+      eq(dumps.length, 2);
+      const luck = (u: { statuses: string[]; stacks: number[] }) => u.statuses.map((s, k) => s === "JokersLuck" ? u.stacks[k]! : null).filter((v) => v !== null);
+      const cats = dumps[0]!.list!.filter((u) => luck(u).length > 0);
+      eq(cats.length, 4, "the four party cats carry JokersLuck after battle start");
+      for (const c of cats) eq(JSON.stringify(luck(c)), "[3]", `${c.name}: one JokersLuck, 3 stacks (before the fix: [1,2])`);
+      const rat = dumps[1]!.list!.find((u) => u.name === "Lil' Rat");
+      assert(!!rat, "the spawned JokersLuckRat is in the second dump");
+      eq(JSON.stringify(luck(rat!)), "[3]", "Lil' Rat: one JokersLuck, 3 stacks (before the fix: [1,2])");
+      eq(r.expects.failed, 0); eq(r.expects.passed, 4); eq(r.end!.code, 0);
+    });
     test("exec and idle events are kept: result.execs (id, op, text, ok, lines) and result.idle", () => {
       const text = '{"ev":"start","t":0,"frame":0}\n{"ev":"idle","line":2,"t":10,"frame":5}\n{"ev":"exec","id":1,"op":"exec","text":"spawn Rat","ok":true,"lines":["Spawned Rat"],"t":20,"frame":9}\n{"ev":"exec","id":2,"op":"dump","ok":true,"t":21,"frame":10}\n{"ev":"end","code":0,"reason":"quit","t":30,"frame":12}\n';
       const r = parseResults(text) as unknown as { execs: { id: number; op: string; text?: string; ok: boolean; lines?: string[]; frame: number }[]; idle: boolean };

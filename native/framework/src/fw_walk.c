@@ -37,13 +37,14 @@ int fw_walk_each_custom(void *character, void *const *vts, int count, FwWalkVisi
 }
 
 void fw_walk_apply_resolve(const void *ctx, void *src, void *p5, const void *p6, void *defaultSource, FwApplyResolved *out) {
-    out->character = *(void *const *)((const char *)ctx + OFF_APPLYCTX_CHARACTER);
+    out->scene = *(void *const *)((const char *)ctx + OFF_APPLYCTX_SCENE);
     out->entity = *(void *const *)((const char *)ctx + OFF_APPLYCTX_ENTITY);
     out->source = src ? src : defaultSource;
     out->applier = p5 ? p5 : (p6 ? *(void *const *)((const char *)p6 + OFF_APPLYP6_APPLIER) : NULL);
 }
 
-void *fw_walk_apply_existing(const FwApplyResolved *a, const void *vt) { return fw_walk_find_status(a->character, vt); }
+/* the unit is ctx+0x18's entity in every ctx shape (a passive component, the Character itself); ctx+0x20 is the Scene */
+void *fw_walk_apply_existing(const FwApplyResolved *a, const void *vt) { return fw_walk_entity_find_status(a->entity, vt); }
 
 int fw_walk_merge_stacks(void *existing, int delta, void *applier) {
     *fw_walk_status_stacks(existing) += delta;
