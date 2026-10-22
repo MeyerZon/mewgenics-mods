@@ -8321,7 +8321,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#gon-at-runtime-2026-10-21",
-        ".analysis/decompiled/GonObject_Int_0x0.c"
+        ".analysis/decompiled/GonObject_Int_0x941540.c"
       ],
       "note": "int view of a number node (strtol at parse time; 1.5 -> 1)"
     },
@@ -8350,7 +8350,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#gon-at-runtime-2026-10-21",
-        ".analysis/decompiled/GonObject_Number_0x0.c"
+        ".analysis/decompiled/GonObject_Number_0x941920.c"
       ],
       "note": "double view of a number node (strtod at parse time)"
     },
@@ -8379,7 +8379,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#gon-at-runtime-2026-10-21",
-        ".analysis/decompiled/GonObject_Bool_0x0.c"
+        ".analysis/decompiled/GonObject_Bool_0x942290.c"
       ],
       "note": "bool byte of a type-5 node (exactly `true` / `false` at parse time)"
     },
@@ -8408,7 +8408,7 @@
       ],
       "evidence": [
         "docs/engine-map.md#gon-at-runtime-2026-10-21",
-        ".analysis/decompiled/GonObject_StringRef_0x0.c"
+        ".analysis/decompiled/GonObject_StringRef_0x941140.c"
       ],
       "note": "the raw token text of every scalar (numbers and bools keep their source text; quotes are stripped by the tokenizer)"
     },

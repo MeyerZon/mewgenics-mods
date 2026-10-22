@@ -93,20 +93,24 @@ worktree has none of the git-ignored inputs the main checkout accumulated — `e
    `New-Item -ItemType Junction -Path "<worktree>\editor\node_modules" -Target "<main>\editor\node_modules"`.
    Do not junction `.extracted`, `.analysis` or `editor/data`: the variables below replace those, and every junction
    is a removal hazard (`CLAUDE.md` "Worktrees with junctions are a data-loss trap").
-2. **Env vars, for every `npm` command run in the worktree** — two, one per git-ignored tree:
+2. **Env vars, for every `npm` command run in the worktree** — three, one per git-ignored tree:
    - `MEWGENICS_EXTRACTED_DATA=<main>\.extracted\data` — the whole extracted pack. Its parent is the extracted root
      (`repo.ts` `EXTRACTED_ROOT` / `extractedPath(...)`), so the base data (T1 tests, the validator, the merge
      preview), the vanilla SWFs (`swfs/`: the art T1 tests, the Ruffle tab's list) and the palette textures
      (`textures/`: the art palette reader) all follow this one variable.
    - `MEWGENICS_EDITOR_DATA=<main>\editor\data` — the caches (`repo.ts` `DATA_CACHE_DIR`): `component-names.json`
-     (the component class list; `build:index` rebuilds it only from `.analysis/list_names.tsv`, and `.analysis`
-     resolves against the worktree's own root, where it is absent, so the existing list is kept) and
+     (the component class list; `build:index` rebuilds it only from `.analysis/list_names.tsv`, found through
+     `MEWGENICS_ANALYSIS_DIR` below — without it the existing list is kept) and
      `base-index.json`, plus `ingame-runs/` and the VectorCraft zip cache (`vendor/`, so `npm run build` vendors
      offline). Without it the component-dependent check logs `(skipped: editor/data/component-names.json missing …)`,
      the validator reports one `component-list-missing` info instead of an `unknown-component` warning per passive,
      and `npm run build:index` writes a fresh `base-index.json` into the worktree's own `editor/data/`. It always
      writes to this directory (pinned in `editor/test/repo-tests.ts`). An override under any `saves/` path is
      refused at load.
+   - `MEWGENICS_ANALYSIS_DIR=<main>\.analysis` — the reverse-engineering store (read only): `build:index` and the
+     component loader distill the component list from its `list_names.tsv`, and it also lets a worktree see the main
+     checkout's decompile store (the bindings "evidence paths exist" check resolves `.analysis/...` under it and
+     skips without it).
    - Override only, not needed in a worktree: `MEWGENICS_VANILLA_SWF_DIR` points the vanilla SWF reads somewhere
      other than `<extracted root>/swfs` (the art tests use it with a temp dir).
 
