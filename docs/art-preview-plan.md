@@ -410,6 +410,13 @@ Real-browser profiling is a follow-up.
    names from `swflist.gon`, read-only, traversal and saves paths refused). Was: proposed, not installed. Without it, vanilla import is limited to what `swf-reader.ts`
    decodes (DefineShape/Sprite/PlaceObject2 → our model), which is the planned no-dep
    route.
+   **VectorCraft vendored 2026-10-22 (owner's go: a build-time download, nothing installed):**
+   `scripts/vendor-vectorcraft.ts` fetches the one pinned release asset `vectorcraft-web-0.14.0.zip` (27,734,185
+   bytes, SHA-256 `6f28a8bc…ba075e`, MIT OR Apache-2.0) from GitHub Releases at `npm run build` / `dev`, verifies
+   size + hash before extracting, unpacks it with a built-in zip reader (no path escapes, CRC-32 checked) into the
+   git-ignored `web/public/vectorcraft/` with every licence text, and records `VENDORED.json` (per-file hashes,
+   `npm run vendor:vectorcraft:check`). Offline it skips with a warning. The server serves `.wasm` as
+   `application/wasm` and `.ttf` as `font/ttf`, as upstream `HOSTING.md` requires. The in-editor panel is the next PR.
 3. **External tool (optional, not a dependency):** JPEXS FFDEC remains the recommended
    way to *edit vanilla files in place* (Strategy A). The editor can document it, not
    bundle it.

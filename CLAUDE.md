@@ -70,7 +70,10 @@ Owner's rule (2026-10-18): **every change, every piece, is done by TDD.** Refere
 
 **Editor** (run from `editor/`; runtime deps `react`, `react-dom`, `zod`, `@ruffle-rs/ruffle` (browser-only, vendored into the git-ignored
 `web/public/ruffle/` by `npm run build` / `dev`); dev-only `vite`, `typescript@7.0.2`,
-`@playwright/test`; see `docs/editor-ts-react-plan.md`):
+`@playwright/test`; see `docs/editor-ts-react-plan.md`). `npm run build` / `dev` also vendor VectorCraft's prebuilt
+web build (`scripts/vendor-vectorcraft.ts`: the ONE pinned release zip, size + SHA-256 verified before extraction,
+Node built-ins only, nothing installed; owner decision 2026-10-22) into the git-ignored `web/public/vectorcraft/`,
+skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hashes it:
 - First-time: `npm install` then `npm run build:index` (writes the git-ignored `editor/data/` caches — the component
   list and base-data index the validator needs; regenerate after the base game updates). In a secondary git
   worktree, point at the main checkout instead: one `node_modules` junction plus `MEWGENICS_EXTRACTED_DATA` /

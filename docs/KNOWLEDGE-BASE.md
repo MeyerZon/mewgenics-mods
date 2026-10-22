@@ -153,6 +153,15 @@ PR; everything else is on `main`.
   duplicate keys would confirm.
 - **VectorCraft's agent channel:** approved in principle by the owner (2026-10-21, at least for testing) so agents can
   draw parts headlessly; **install decision pending** — nothing is installed without the owner's say-so.
+- **VectorCraft (WASM) vendored** — owner decision 2026-10-22 (YES to a build-time download, nothing installed):
+  `editor/scripts/vendor-vectorcraft.ts` downloads the one pinned release asset `vectorcraft-web-0.14.0.zip`
+  (27,734,185 bytes, SHA-256 `6f28a8bc…ba075e`, MIT OR Apache-2.0, from GitHub Releases) at `npm run build` / `dev`,
+  verifies size + hash BEFORE extracting, unpacks it with its own zip reader (central directory, `inflateRawSync`,
+  CRC-32, path-escape refusal) into the git-ignored `editor/web/public/vectorcraft/` (35 files, 75.4 MB on disk:
+  a 73.7 MB `.wasm`, the 176 KB wasm-bindgen glue, `index.html`, three Noto `.ttf` + every licence text) and writes
+  `VENDORED.json` (per-file SHA-256; `npm run vendor:vectorcraft:check`). The zip is cached in `editor/data/vendor/`;
+  offline the script prints `(skipped: …)` and the build goes on. Served from the editor's own origin (`.wasm` as
+  `application/wasm`, `.ttf` as `font/ttf`), embedded as a same-origin `<iframe>` per upstream `HOSTING.md`.
 - **T3 looks** (owner, later): the art-probe shots in `editor/data/ingame-runs/` — gradient, LineStyle2 caps, blend
   square, Timeline / Rig tabs, PROBE lettering, the SVG round trip, the Ruffle tab, the baked glow, the appended cat
   frame with the real cat in it.
