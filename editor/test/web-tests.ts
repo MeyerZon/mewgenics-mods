@@ -41,6 +41,8 @@ export const POST_ROUTES = [
   "/api/art/build",
   "/api/art/asset",
   "/api/art/prepare-swf-gate",
+  "/api/level",
+  "/api/level/validate",
 ];
 
 /** Start web/server.ts on an OS-chosen port and return { port, stop }. */
