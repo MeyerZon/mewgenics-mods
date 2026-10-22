@@ -1,0 +1,22 @@
+mods: dev-sandbox, fw-3d
+timeout: 120s
+hide: false
+# 3D phase M2 "model error codes" (design §2.6, docs/data-mods.md "3D models: error codes"): a model that cannot load
+# is a missing model, never a crash. Run with MEWFW_MESH_PROBE=1 and MEWFW_MESH_PROBE_MODEL=models/<a broken model>
+# in the environment (the T2 driver writes a deliberately broken models/broken.glb into a mod on the path for the
+# run): mewframework logs exactly ONE line "mesh: models/broken.glb: model-glb-header: ... — drawing the 2D clip",
+# the probe cube still draws, and the fight keeps running to the end. With MEWFW_MESH_PROBE_MODEL=models/crate.obj
+# the same script pins the success line "mesh: models/crate.obj: loaded 24 vertices, 12 triangles, bounds ...".
+# Without the variables this is a plain fight with shots.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 90
+shot "codes-a"
+wait frames 45
+shot "codes-b"
+wait frames 30
+quit

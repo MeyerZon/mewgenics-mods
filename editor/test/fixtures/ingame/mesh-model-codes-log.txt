@@ -1,0 +1,21 @@
+# OBSERVED 2026-10-22 (build 25143593): mods/dev-sandbox/tests/mesh-model-codes.mewtest (mods: dev-sandbox, fw-3d),
+# MEWFW_MESH_PROBE=1, the mesh2-codes DLL (design §2.6 log lines). The mesh: / Place3D lines of mewframework.log.
+# [broken] MEWFW_MESH_PROBE_MODEL=models/broken.glb (a 24-byte GLB with header version 1, on the mod path for the run):
+# run 20261022-150233, run: pass, 1 real save file(s) unchanged, 702 frames to quit; the probe cube judged 'cube'
+# (31069 magenta px, 0 px from the projected centre); resolve_model ran every world frame, ONE line logged.
+[broken] mesh: probe cube on tile (3,3) (MEWFW_MESH_PROBE); probe model models/broken.glb
+[broken] Place3DObjectOnTile(4, 3, models/broken.glb): ok handle 1 (1 object(s))
+[broken] mesh: shaders/fw_mesh.shader found on the mod path
+[broken] mesh: models/broken.glb: model-glb-header: glb version 1 is not 2 — drawing the 2D clip
+[broken] mesh: program 102 ready (mods/fw-3d/shaders/fw_mesh.shader; fw_mvp 8, fw_base_color 2, fw_light_dir 6)
+[broken] mesh: uploaded the unit cube: 24 verts / 36 indices (vao 76)
+[broken] {"ev":"end","code":0,"reason":"quit","frames":702,"turns":1,"elapsed_ms":7922,"expect_pass":1,"expect_fail":0,"t":7922,"frame":702}
+# [crate] MEWFW_MESH_PROBE_MODEL=models/crate.obj: run 20261022-150244, run: pass, 1 real save file(s) unchanged.
+[crate] mesh: probe cube on tile (3,3) (MEWFW_MESH_PROBE); probe model models/crate.obj
+[crate] Place3DObjectOnTile(4, 3, models/crate.obj): ok handle 1 (1 object(s))
+[crate] mesh: shaders/fw_mesh.shader found on the mod path
+[crate] mesh: models/crate.obj: loaded 24 vertices, 12 triangles, bounds x -0.40..0.40 h 0.00..0.80 z -0.40..0.40
+[crate] mesh: program 102 ready (mods/fw-3d/shaders/fw_mesh.shader; fw_mvp 8, fw_base_color 2, fw_light_dir 6)
+[crate] mesh: uploaded the unit cube: 24 verts / 36 indices (vao 76)
+[crate] mesh: uploaded models/crate.obj: 24 verts / 36 indices (vao 77)
+[crate] {"ev":"end","code":0,"reason":"quit","frames":607,"turns":1,"elapsed_ms":7312,"expect_pass":1,"expect_fail":0,"t":7312,"frame":607}

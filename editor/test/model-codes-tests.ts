@@ -139,4 +139,22 @@ export function runModelCodesTests(test: TestFn, assert: AssertFn, eq: EqFn): vo
       rmSync(dir, { recursive: true, force: true });
     }
   });
+  test("OBSERVED (T2 2026-10-22, mesh-model-codes-log.txt): a broken models/broken.glb on the mod path is ONE §2.6 line (model-glb-header, an error code of the shared list) and the fight runs to its quit; models/crate.obj logs the §2.6 success line", () => {
+    const log = readFileSync(join(HERE, "fixtures", "ingame", "mesh-model-codes-log.txt"), "utf8");
+    const broken = log.split(/\r?\n/).filter((l) => l.startsWith("[broken] "));
+    const crate = log.split(/\r?\n/).filter((l) => l.startsWith("[crate] "));
+    const brokenModelLines = broken.filter((l) => l.includes("mesh: models/broken.glb"));
+    eq(brokenModelLines.length, 1, "one line per model per process");
+    const m = /^\[broken\] mesh: (models\/broken\.glb): (model-[a-z-]+): (.+) — drawing the 2D clip$/.exec(brokenModelLines[0]!);
+    assert(m !== null, brokenModelLines[0]!);
+    eq(m![2], "model-glb-header");
+    eq(modelCodeInfo(m![2]!)?.severity, "error");
+    eq(checkModelBytes("models/broken.glb", Uint8Array.from([...enc.encode("glTF"), 1, 0, 0, 0, 24, 0, 0, 0, 4, 0, 0, 0, ...enc.encode("JSON{}  ")]))[0]?.code, m![2], "the validator says what the DLL logged for the same bytes");
+    assert(!broken.some((l) => /uploaded models\/broken/.test(l)), "never uploaded");
+    const end = JSON.parse(broken.find((l) => l.includes('"ev":"end"'))!.slice("[broken] ".length));
+    eq(end.reason, "quit");
+    assert(end.frames > 600, `the fight ran on: ${end.frames} frames`);
+    assert(crate.some((l) => /^\[crate\] mesh: models\/crate\.obj: loaded 24 vertices, 12 triangles, bounds x -0\.40\.\.0\.40 h 0\.00\.\.0\.80 z -0\.40\.\.0\.40$/.test(l)), "the success line");
+    eq(crate.filter((l) => l.includes("mesh: models/crate.obj")).length, 1);
+  });
 }
