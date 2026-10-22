@@ -6798,6 +6798,36 @@
       ]
     },
     {
+      "name": "TacticsTest_compositePass",
+      "kind": "offset",
+      "struct": "TacticsTest",
+      "value": "0x98",
+      "ctype": "Pass*",
+      "anchors": {
+        "witness": {
+          "function": "TacticsTest_init",
+          "pattern": "E8 ?? ?? ?? ?? 48 8B 8C 24 ?? ?? ?? ?? 48 89 81 98 00 00 00",
+          "dispAt": 16,
+          "dispSize": 4
+        },
+        "note": "mov [rcx+0x98],rax (0x835597) right after AddPostProcessPass(mainCamera, composite_outlines, 0x1a) at 0x83558a: the game's white outline composite. It starts enabled with full-screen rects and its predicate (the mask had content) is true whenever a glowing unit is in the mask, so it would wash every glowing unit's body white ((1 - luminance) of the mask): the glow engine disables it while units are registered, exactly what LateRender does on every hovered frame in jump-flood mode"
+      },
+      "consumers": [
+        "native/framework/src/glow_engine.c",
+        "native/framework/src/fw_glow_rules.c"
+      ],
+      "exposure": [
+        {
+          "macro": "OFF_TT_COMPOSITE_PASS"
+        }
+      ],
+      "evidence": [
+        "docs/engine-map.md#per-unit-glow-native-2026-10-22",
+        ".analysis/notes-rim.md",
+        ".analysis/notes-glow.md"
+      ]
+    },
+    {
       "name": "Camera_rttTexture",
       "kind": "offset",
       "struct": "Camera",

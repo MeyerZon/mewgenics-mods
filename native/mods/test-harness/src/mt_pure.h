@@ -66,7 +66,8 @@ typedef enum MtDirKind {
     MT_D_EXPECT_STACKS, /* expect stacks <Status> on <unit> (<op> N | varied) */
     MT_D_SHOT,          /* shot "<label>": emit a shot event, then hold MT_SHOT_HOLD_MS so the runner can capture the window */
     MT_D_SEED,          /* seed <N>: pin the game's RNG state through the host (reproducible party and fight) */
-    MT_D_EXPECT_UNIT    /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
+    MT_D_EXPECT_UNIT,   /* expect unit <unit> <field> <op> <value>: a field of one unit in the units event */
+    MT_D_GLOW           /* glow <unit> <r> <g> <b> <a> | <unit> off: FW_SetUnitGlow / FW_ClearUnitGlow on a unit of the walk (API v4) */
 } MtDirKind;
 /* expect unit: which MtUnit field; name|class compare as strings (== !=), the rest as integers (any op) */
 typedef enum MtUnitField { MT_F_NAME, MT_F_CLASS, MT_F_FACTION, MT_F_MOVE, MT_F_ACT, MT_F_TURNKIND } MtUnitField;
@@ -103,6 +104,8 @@ typedef struct MtDirective {
     unsigned long long seed;   /* seed: the value (full 64-bit) */
     int enterMode;      /* enter: MT_ENTER_* */
     MtUnitField field;  /* expect unit: the field; a string value lives in a, an integer one in value */
+    float rgba[4];      /* glow: the colour (0..1 each); a = the argument text verbatim for the event */
+    int glowOff;        /* glow … off: clear instead of set */
 } MtDirective;
 typedef struct MtScript {
     MtDirective d[MT_MAX_DIRECTIVES];
@@ -183,6 +186,9 @@ typedef struct MtHost {
     /* interactive mode: hand a reply to the pipe right now (used for quit, which exits before the pipe thread
      * would get to it); NULL when there is no pipe */
     void     (*pipe_reply)(void *u, const char *jsonLine);
+    /* glow on unit i of the walk: rgba = the colour, NULL = clear. 1 done, 0 refused (detail), -1 unavailable
+     * (framework without API v4) */
+    int      (*set_unit_glow)(void *u, int i, const float *rgba, char *detail, size_t cap);
 } MtHost;
 
 typedef enum MtState { MT_S_RUN, MT_S_WAIT_CONSOLE, MT_S_WAIT_FRAMES, MT_S_WAIT_TURNS, MT_S_WAIT_MS, MT_S_WAIT_WITHIN, MT_S_WAIT_ROUNDS, MT_S_WAIT_SHOT, MT_S_IDLE } MtState;

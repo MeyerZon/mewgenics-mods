@@ -294,6 +294,30 @@ static int exec_directive(MtRunner *r, const MtHost *h) {
             h->request_exit(h->user, 1);
             return 0;
         }
+        case MT_D_GLOW: {
+            MtUnit u;
+            memset(&u, 0, sizeof u);
+            int avail = h->units_available(h->user);
+            int idx = avail ? resolve_unit(h, d, &u) : -1;
+            int rc;
+            detail[0] = 0;
+            if (idx < 0) { rc = 0; snprintf(detail, sizeof detail, "no such unit%s", avail ? "" : " (no combat)"); }
+            else rc = h->set_unit_glow(h->user, idx, d->glowOff ? NULL : d->rgba, detail, sizeof detail);
+            MtJsonW w;
+            mt_jw_begin(&w, g_json, sizeof g_json, "glow");
+            mt_jw_int(&w, "line", d->line);
+            mt_jw_int(&w, "unit", idx);
+            mt_jw_str(&w, "name", idx >= 0 ? u.name : "");
+            mt_jw_str(&w, "arg", d->a);
+            mt_jw_bool(&w, "ok", rc == 1);
+            mt_jw_str(&w, "detail", detail);
+            stamp_and_emit(r, h, &w);
+            if (rc == 1) { r->pc++; return 1; }
+            if (rc < 0) { finish(r, h, 4, "glow_unavailable"); h->request_exit(h->user, 4); return 0; }
+            finish(r, h, 1, "glow_failed");
+            h->request_exit(h->user, 1);
+            return 0;
+        }
         case MT_D_SHOT: {
             MtJsonW w;
             mt_jw_begin(&w, g_json, sizeof g_json, "shot");

@@ -141,14 +141,16 @@ TEST(accessors_read_through_the_generated_offsets) {
     CHECK(fw_glow_generation(ch) == 77);
     CHECK(fw_glow_extra_layers(rnd) == rnd + OFF_RND_EXTRA_LAYERS);
     unsigned char tt[FAKE_TT_BYTES]; memset(tt, 0, sizeof tt);
-    FakeCamera mask, main; int tex = 0, pass = 0;
+    FakeCamera mask, main; int tex = 0, pass = 0, composite = 0;
     void *maskCam = make_camera(&mask, &tex), *mainCam = make_camera(&main, NULL);
     *(void **)(tt + OFF_TT_MASK_CAMERA) = maskCam;
     *(void **)(tt + OFF_TT_MAIN_CAMERA) = mainCam;
     *(void **)(tt + OFF_TT_BLUR_PASS) = &pass;
+    *(void **)(tt + OFF_TT_COMPOSITE_PASS) = &composite;
     CHECK(fw_glow_mask_camera(tt) == maskCam);
     CHECK(fw_glow_main_camera(tt) == mainCam);
     CHECK(fw_glow_blur_pass(tt) == &pass);
+    CHECK(fw_glow_composite_pass(tt) == &composite);
     CHECK(fw_glow_camera_texture(maskCam) == &tex);
     CHECK(fw_glow_camera_texture(mainCam) == NULL);
 }

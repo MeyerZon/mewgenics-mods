@@ -618,10 +618,21 @@ static void pipe_write_line(const char *line) {
 }
 static void h_pipe_reply(void *u, const char *json) { (void)u; pipe_write_line(json); }
 
+/* glow <unit> …: FW_SetUnitGlow / FW_ClearUnitGlow (framework API v4) on the Character* of the units walk */
+static int h_set_unit_glow(void *u, int i, const float *rgba, char *detail, size_t cap) {
+    (void)u;
+    void *d[MAX_UNITS]; int n;
+    if (!g_fw.SetUnitGlow || !g_fw.ClearUnitGlow) { snprintf(detail, cap, "framework older than API v4 (no FW_SetUnitGlow)"); return -1; }
+    if (!char_array(d, &n) || i < 0 || i >= n || !d[i]) { snprintf(detail, cap, "unit %d is not in the units walk", i); return 0; }
+    int ok = rgba ? g_fw.SetUnitGlow(d[i], rgba[0], rgba[1], rgba[2], rgba[3]) : g_fw.ClearUnitGlow(d[i]);
+    snprintf(detail, cap, "%s on %p: %s", rgba ? "FW_SetUnitGlow" : "FW_ClearUnitGlow", d[i], ok ? "ok" : "refused (see mewframework.log)");
+    return ok ? 1 : 0;
+}
+
 static const MtHost HOST = {
     NULL, h_console_ready, h_exec_cmd, h_console_count, h_console_line, h_turn_count, h_round_number, h_now_ms,
     h_units_available, h_unit_count, h_unit_info, h_unit_has_status, h_emit, h_request_exit, h_enter_scene, h_seed_rng,
-    h_pipe_reply,
+    h_pipe_reply, h_set_unit_glow,
 };
 
 /* the FrameBegin hook needs HOST, which is defined after it */

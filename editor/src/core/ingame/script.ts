@@ -44,7 +44,9 @@ export type Directive =
   /** the DLL emits a shot event and holds the scene ~700 ms; the runner captures the game window into the run dir */
   | { line: number; kind: "shot"; label: string }
   /** pin the game's RNG (TLS+0x178) once its startup is over; the value is kept as digits (full 64-bit range) */
-  | { line: number; kind: "seed"; seed: string };
+  | { line: number; kind: "seed"; seed: string }
+  /** per-unit glow (framework API v4): FW_SetUnitGlow(unit, rgba) or, with `off`, FW_ClearUnitGlow on a unit of the walk */
+  | { line: number; kind: "glow"; unit: string; rgba: [number, number, number, number] | null };
 
 /** Scenes `enter` knows; must agree with mt_script.c (mt_scene_id). */
 export const KNOWN_SCENES = ["TacticsTest", "Campaign"];
@@ -227,6 +229,27 @@ export function parseDirective(line: string, lineNo: number): Directive | { erro
     case "seed": {
       if (!/^\d{1,20}$/.test(rest) || BigInt(rest) > 18446744073709551615n) return { error: "seed needs one unsigned integer (0..18446744073709551615)" };
       return { line: lineNo, kind: "seed", seed: BigInt(rest).toString() };
+    }
+    case "glow": {
+      const usage = "glow needs: <unit> <r> <g> <b> <a> | <unit> off";
+      if (!rest) return { error: usage };
+      let unit: string, tail: string;
+      if (rest.startsWith('"')) {
+        const q = parseQuoted(rest, 0);
+        if (!q) return { error: "glow: bad quoted unit name" };
+        unit = q.value;
+        tail = rest.slice(q.end).trim();
+      } else {
+        const sp = rest.search(/\s/);
+        if (sp < 0) return { error: usage };
+        unit = rest.slice(0, sp);
+        tail = rest.slice(sp).trim();
+      }
+      if (tail === "off") return { line: lineNo, kind: "glow", unit, rgba: null };
+      if (tail.startsWith("off")) return { error: "glow: unexpected text after off" };
+      const parts = tail.split(/\s+/);
+      if (parts.length !== 4 || !parts.every((p) => /^\d+(\.\d+)?$/.test(p) && Number(p) <= 1)) return { error: "glow needs four colour values 0..1 (r g b a) or off" };
+      return { line: lineNo, kind: "glow", unit, rgba: parts.map(Number) as [number, number, number, number] };
     }
     case "enter": {
       if (!rest) return { error: `enter needs a scene name (${KNOWN_SCENES.join("|")})` };

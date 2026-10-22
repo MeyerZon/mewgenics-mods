@@ -1475,6 +1475,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     ["TacticsTest_maskCamera", "OFF_TT_MASK_CAMERA", "0x58", "TacticsTest_LateRender"],
     ["TacticsTest_mainCamera", "OFF_TT_MAIN_CAMERA", "0x68", "TacticsTest_LateRender"],
     ["TacticsTest_blurPass", "OFF_TT_BLUR_PASS", "0x90", "TacticsTest_init"],
+    ["TacticsTest_compositePass", "OFF_TT_COMPOSITE_PASS", "0x98", "TacticsTest_init"],
     ["Camera_rttTexture", "OFF_CAM_RTT_TEXTURE", "0x50", "Camera_SetRenderToTexture"],
     ["Camera_passes", "OFF_CAM_PASSES", "0xb0", "Camera_AddPostProcessPass"],
     ["Character_renderer", "OFF_CH_RENDERER", "0x40", "StatusMenu_update"],
@@ -1492,7 +1493,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   /** layer / slot constants: name, macro, value */
   const GLOW_CONSTANTS: [string, string, string][] = [["MaskLayer", "CONST_MASK_LAYER", "0x18"], ["CompositeLayer", "CONST_COMPOSITE_LAYER", "0x1a"], ["GlowFramebufSlot", "CONST_GLOW_FRAMEBUF_SLOT", "6"], ["VT_TacticsTest_LateRender", "VT_TT_LATERENDER", "19"]];
   const GLOW_NAMES = new Set([...GLOW_SYMBOLS.map((x) => x[0]), ...GLOW_REFERENCE.map((x) => x[0]), "ShaderManager_global", "TacticsTest_vftable", ...GLOW_OFFSETS.map((x) => x[0]), ...GLOW_CONSTANTS.map((x) => x[0])]);
-  test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 16 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
+  test("the committed manifest carries the per-unit glow bindings (2026-10-22) as one contiguous block after DevMenu_TacticsTest_lambda: 7 FwSymbol functions, 4 reference functions, the ShaderManager global, the TacticsTest vftable (RTTI), 17 witnessed offsets, 4 witnessed/derived constants; the generated headers expose them", () => {
     const m = loadManifest(realPath);
     eq(m.entries.length, 121 + GLOW_NAMES.size, "121 pre-existing entries + the glow block");
     for (const [name, rva, index] of GLOW_SYMBOLS) {

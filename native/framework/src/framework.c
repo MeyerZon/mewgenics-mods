@@ -123,9 +123,10 @@ static void hook_Character_BeginTurn(void *character, int kind) {
     if (g_next_Character_BeginTurn) g_next_Character_BeginTurn(character, kind);
 }
 
-/* One step of FW_HOOK_PLAN: this file's two observer hooks; everything else is the status engine's. */
+/* One step of FW_HOOK_PLAN: this file's two observer hooks, the glow engine's render hook; everything else is the status engine's. */
 static int install_step(const FwHookSpec *spec, int ordinal, int failuresSoFar, void *user) {
     (void)ordinal; (void)failuresSoFar; (void)user;
+    if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_TacticsTest_LateRender) return glow_engine_hook_step(spec);
     if (spec->step == FW_HOOK_SYMBOL && spec->index == FW_SYM_Character_BeginTurn) {
         uintptr_t rva = g_sym[spec->index] - g_base;
         void *tramp = NULL;
@@ -193,6 +194,18 @@ FW_EXPORT int FW_SetStatusStacks(void *status, int value) {
 
 FW_EXPORT int FW_CharacterHasStatus(void *character, const char *statusName) {
     return status_engine_has_status(character, statusName);
+}
+
+/* --- API v4: per-unit glow (glow_engine.c) --- */
+FW_EXPORT int FW_SetUnitGlow(void *character, float r, float g, float b, float a) {
+    if (!g_active) return 0;
+    float rgba[4] = { r, g, b, a };
+    return glow_engine_set(character, rgba);
+}
+
+FW_EXPORT int FW_ClearUnitGlow(void *character) {
+    if (!g_active) return 0;
+    return glow_engine_clear(character);
 }
 
 /* ----------------------------------------------------------------------- */

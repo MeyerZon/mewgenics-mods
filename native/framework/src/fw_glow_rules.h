@@ -5,12 +5,13 @@
  *
  * The mechanism (docs/engine-map.md "Per-unit glow", .analysis/notes-rim.md): a unit is drawn into the combat outline
  * MASK by its own renderer when the renderer's extra-layer vector (+OFF_RND_EXTRA_LAYERS) lists layer
- * CONST_MASK_LAYER; the mask camera (TacticsTest+OFF_TT_MASK_CAMERA) renders that layer flat white into its texture
- * (+OFF_CAM_RTT_TEXTURE), the game's blur chain (TacticsTest+OFF_TT_BLUR_PASS) spreads it, and a composite pass on the
- * main camera (+OFF_TT_MAIN_CAMERA, layer CONST_COMPOSITE_LAYER) paints a colour wherever the blurred mask is set and
- * the unblurred mask is not. The engine owns one such composite (material fw_unit_glow / composite_glow.shader) and
- * re-finds its pass in the camera's per-layer vector every frame (passes die with the camera). Every field is reached
- * through the generated offsets.h macros. */
+ * CONST_MASK_LAYER; the mask camera (TacticsTest+OFF_TT_MASK_CAMERA) renders that layer (the sprite multiplied by
+ * white: rgb = its luminance, alpha = its coverage) into its texture (+OFF_CAM_RTT_TEXTURE), and composite passes on
+ * the main camera (+OFF_TT_MAIN_CAMERA, layer CONST_COMPOSITE_LAYER) read it. The engine owns one such composite
+ * (material fw_unit_glow / mods/fw-glow/shaders/fw_unit_glow.shader, which computes the band from the mask's alpha
+ * by itself), re-finds its pass in the camera's per-layer vector every frame (passes die with the camera) and keeps
+ * the game's own white composite (TacticsTest+OFF_TT_COMPOSITE_PASS) off while units glow. The game's blur chain
+ * (+OFF_TT_BLUR_PASS) is only read for tests. Every field is reached through the generated offsets.h macros. */
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
@@ -47,6 +48,9 @@ static inline void     *fw_glow_extra_layers(void *renderer) { return (char *)re
 static inline void     *fw_glow_mask_camera(const void *tt) { return *(void *const *)((const char *)tt + OFF_TT_MASK_CAMERA); }
 static inline void     *fw_glow_main_camera(const void *tt) { return *(void *const *)((const char *)tt + OFF_TT_MAIN_CAMERA); }
 static inline void     *fw_glow_blur_pass(const void *tt) { return *(void *const *)((const char *)tt + OFF_TT_BLUR_PASS); }
+/* the game's white composite_outlines pass on the main camera: it paints (1 - luminance) white over every unit in the
+ * mask while its predicate holds, so the engine disables it while units are registered */
+static inline void     *fw_glow_composite_pass(const void *tt) { return *(void *const *)((const char *)tt + OFF_TT_COMPOSITE_PASS); }
 static inline void     *fw_glow_camera_texture(const void *camera) { return *(void *const *)((const char *)camera + OFF_CAM_RTT_TEXTURE); }
 
 /* ---- the renderer's extra-layer vector ---- */
