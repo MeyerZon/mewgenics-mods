@@ -1,0 +1,22 @@
+mods: dev-sandbox
+timeout: 90s
+hide: false
+# Per-unit glow (native API v4, FW_SetUnitGlow / FW_ClearUnitGlow through the harness's `glow` directive): a seeded
+# fight, a spawned Rat, a magenta glow on it, a shot, the glow cleared, a second shot. editor/scripts/unit-glow-probe.ts
+# (`npm run test:unitglow`) runs this and measures the magenta rim in the two shots (glow-measure.ts): the glow shot
+# must add a connected magenta patch the no-glow shot lacks. Magenta rather than red because the arena and the UI
+# already hold reds. No _autoplay: the fight waits for the player's input, so the scene is still between the shots.
+wait frames 120
+seed 42
+enter TacticsTest
+wait frames 60
+cmd spawn Rat
+expect console "Spawned Rat" within 10
+wait frames 60
+glow "Lil' Rat" 1 0 1 1
+wait frames 60
+shot "glow"
+glow "Lil' Rat" off
+wait frames 60
+shot "noglow"
+quit

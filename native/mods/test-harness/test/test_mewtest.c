@@ -366,6 +366,7 @@ typedef struct Fake {
     int enterResult; int enterCalls; int enterScene; int enterMode;   /* enter_scene: programmable result (1 ok / 0 refused / -1 unavailable) */
     int seedResult; int seedCalls; unsigned long long seedValue;   /* seed_rng: programmable result (1 ok / 0 refused / -1 unavailable) */
     char pipeReply[8192]; int pipeReplies;                          /* pipe_reply: the last reply the runner handed to the glue */
+    int glowResult; int glowCalls; int glowUnit; int glowCleared; float glowRgba[4];   /* set_unit_glow: programmable result (1 ok / 0 refused / -1 unavailable) */
 } Fake;
 static Fake fk;
 
@@ -409,10 +410,18 @@ static int fk_seed_rng(void *u, unsigned long long seed, char *detail, size_t ca
 
 static void fk_pipe_reply(void *u, const char *json) { (void)u; fk.pipeReplies++; snprintf(fk.pipeReply, sizeof fk.pipeReply, "%s", json); }
 
+static int fk_set_unit_glow(void *u, int i, const float *rgba, char *detail, size_t cap) {
+    (void)u;
+    fk.glowCalls++; fk.glowUnit = i; fk.glowCleared = rgba == NULL;
+    if (rgba) memcpy(fk.glowRgba, rgba, sizeof fk.glowRgba);
+    snprintf(detail, cap, "fake glow %d", i);
+    return fk.glowResult;
+}
+
 static const MtHost HOST = {
     NULL, fk_console_ready, fk_exec_cmd, fk_console_count, fk_console_line, fk_turn_count, fk_round, fk_now,
     fk_units_available, fk_unit_count, fk_unit_info, fk_unit_has_status, fk_emit, fk_request_exit, fk_enter_scene, fk_seed_rng,
-    fk_pipe_reply,
+    fk_pipe_reply, fk_set_unit_glow,
 };
 
 static MtRunner rr;
@@ -1195,6 +1204,72 @@ TEST(exit_tick_wraparound) {
     int code = -1;
     CHECK_EQ(mt_exit_decide(&s, 0x00000BB9u, &code), MT_X_EXIT_CLEAN);                /* 7097 ms later, across the wrap */
     CHECK_EQ(code, 0);
+}
+
+/* ---- glow <unit> <r> <g> <b> <a> | glow <unit> off: FW_SetUnitGlow / FW_ClearUnitGlow on a unit of the units walk ---- */
+TEST(script_glow_parses_unit_and_rgba_or_off_and_rejects_bad_forms) {
+    char err[256]; int line = 0;
+    const char *s = "glow 8 1 0 1 1\nglow \"Lil' Rat\" 0.5 0.25 0 1\nglow Rat off\nquit\n";
+    CHECK(mt_script_parse(s, strlen(s), &g_s, err, sizeof err, &line));
+    CHECK_EQ(g_s.count, 4);
+    CHECK_EQ(g_s.d[0].kind, MT_D_GLOW); CHECK_EQ(g_s.d[0].unitIsIndex, 1); CHECK_EQ(g_s.d[0].n, 8); CHECK_EQ(g_s.d[0].glowOff, 0);
+    CHECK(g_s.d[0].rgba[0] == 1.0f && g_s.d[0].rgba[1] == 0.0f && g_s.d[0].rgba[2] == 1.0f && g_s.d[0].rgba[3] == 1.0f);
+    CHECK_STR(g_s.d[0].a, "8 1 0 1 1");                                   /* the argument text, for the event */
+    CHECK_EQ(g_s.d[1].kind, MT_D_GLOW); CHECK_EQ(g_s.d[1].unitIsIndex, 0); CHECK_STR(g_s.d[1].b, "Lil' Rat");
+    CHECK(g_s.d[1].rgba[0] == 0.5f && g_s.d[1].rgba[1] == 0.25f && g_s.d[1].rgba[2] == 0.0f && g_s.d[1].rgba[3] == 1.0f);
+    CHECK_EQ(g_s.d[2].kind, MT_D_GLOW); CHECK_STR(g_s.d[2].b, "Rat"); CHECK_EQ(g_s.d[2].glowOff, 1);
+    const char *bad[] = { "glow\n", "glow 8\n", "glow 8 1 0 1\n", "glow 8 1 0 1 x\n", "glow 8 1 0 1 1 extra\n", "glow 8 2 0 0 1\n", "glow 8 -1 0 0 1\n", "glow 8 off now\n", "glow \"Lil Rat 1 0 1 1\n" };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        CHECK(!mt_script_parse(bad[i], strlen(bad[i]), &g_s, err, sizeof err, &line));
+        CHECK_EQ(line, 1);
+    }
+}
+
+TEST(runner_glow_resolves_the_unit_calls_the_host_and_emits_a_glow_event) {
+    fk_reset("glow 1 1 0 1 1\nquit\n");
+    fk.unitsAvailable = 1; fk.unitCount = 2;
+    snprintf(fk.units[0].name, MT_UNIT_NAME, "Antonieta"); snprintf(fk.units[1].name, MT_UNIT_NAME, "Lil' Rat");
+    fk.glowResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.glowCalls, 1); CHECK_EQ(fk.glowUnit, 1); CHECK_EQ(fk.glowCleared, 0);
+    CHECK(fk.glowRgba[0] == 1.0f && fk.glowRgba[1] == 0.0f && fk.glowRgba[2] == 1.0f && fk.glowRgba[3] == 1.0f);
+    CHECK(has(ev(0), "{\"ev\":\"glow\"")); CHECK(has(ev(0), "\"line\":1")); CHECK(has(ev(0), "\"unit\":1")); CHECK(has(ev(0), "\"name\":\"Lil' Rat\""));
+    CHECK(has(ev(0), "\"arg\":\"1 1 0 1 1\"")); CHECK(has(ev(0), "\"ok\":true")); CHECK(has(ev(0), "\"detail\":\"fake glow 1\""));
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":0"));
+}
+
+TEST(runner_glow_by_name_and_off_clears) {
+    fk_reset("glow \"Lil' Rat\" off\nquit\n");
+    fk.unitsAvailable = 1; fk.unitCount = 2;
+    snprintf(fk.units[0].name, MT_UNIT_NAME, "Antonieta"); snprintf(fk.units[1].name, MT_UNIT_NAME, "Lil' Rat");
+    fk.glowResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 1);
+    CHECK_EQ(fk.glowCalls, 1); CHECK_EQ(fk.glowUnit, 1); CHECK_EQ(fk.glowCleared, 1);
+    CHECK(has(ev(0), "\"unit\":1")); CHECK(has(ev(0), "\"arg\":\"\\\"Lil' Rat\\\" off\"")); CHECK(has(ev(0), "\"ok\":true"));
+}
+
+TEST(runner_glow_unknown_unit_or_refused_ends_with_code_1_glow_failed_unavailable_with_4) {
+    fk_reset("glow 5 1 0 1 1\nquit\n");                                   /* no such unit: the host is never called */
+    fk.unitsAvailable = 1; fk.unitCount = 2; fk.glowResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK_EQ(fk.glowCalls, 0);
+    CHECK(has(ev(0), "{\"ev\":\"glow\"")); CHECK(has(ev(0), "\"ok\":false")); CHECK(has(ev(0), "\"unit\":-1"));
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"glow_failed\""));
+    fk_reset("glow 0 1 0 1 1\nquit\n");                                   /* the framework refused */
+    fk.unitsAvailable = 1; fk.unitCount = 1; fk.glowResult = 0;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK_EQ(fk.glowCalls, 1);
+    CHECK(has(last_ev(), "\"code\":1")); CHECK(has(last_ev(), "\"reason\":\"glow_failed\""));
+    fk_reset("glow 0 1 0 1 1\nquit\n");                                   /* an older framework without the API */
+    fk.unitsAvailable = 1; fk.unitCount = 1; fk.glowResult = -1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK(has(last_ev(), "\"code\":4")); CHECK(has(last_ev(), "\"reason\":\"glow_unavailable\""));
+    fk_reset("glow 0 1 0 1 1\nquit\n");                                   /* no combat at all */
+    fk.unitsAvailable = 0; fk.unitCount = 0; fk.glowResult = 1;
+    CHECK_EQ(mt_runner_step(&rr, &HOST), 0);
+    CHECK_EQ(fk.glowCalls, 0);
+    CHECK(has(last_ev(), "\"reason\":\"glow_failed\""));
 }
 
 int main(void) { return MT_RUN_ALL(); }
