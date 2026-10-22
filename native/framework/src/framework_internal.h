@@ -36,6 +36,7 @@ void obs3d_on_late_render(void *tacticsTest);        /* called by the glow engin
 
 /* mesh_engine.c (phase M: meshes in the vanilla scene; docs/possible_3d_work.md) */
 int mesh_engine_wants_layer_hook(void);               /* reads MEWFW_MESH_PROBE once; 1 when the Camera_RenderOneLayer hook must be installed */
+void mesh_engine_before_layer(void *cam, int layer);  /* record time, before the original: M2 installs the per-item filter */
 void mesh_engine_after_layer(void *cam, int layer);   /* record time, after the original Camera_RenderOneLayer */
 void mesh_engine_on_late_render(void *tacticsTest);   /* every combat frame, from the glow engine's LateRender hook */
 /* obj3d_engine.c (API v6: 3D objects; records only — the mesh engine resolves models and draws) */

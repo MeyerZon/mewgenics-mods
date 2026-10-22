@@ -35,9 +35,15 @@
  * Texture2D+OFF_TEX2D_GLNAME, binds unit 0 = fw_tex, unit 1 = palettemap (fw_gl_bind_units: both units are saved and
  * restored by fw_gl_save / fw_gl_restore) and sets fw_has_tex / palette. A missing named texture = one
  * "model-texture-missing" line and the base colour.
- * Limits (M1/M2 so far): the units layer neither tests nor writes depth, so meshes are drawn OVER the sprites of the
- * units layer and below and UNDER everything drawn later (UI, overlays) — sprite/mesh occlusion is phase M2; a unit's
- * GON graphics.model is read by obj3d_engine_unit_model but not walked per unit yet.
+ * Sprite/mesh occlusion (M2, fw_mesh_order.c): the draws are collected BEFORE the original Camera_RenderOneLayer and
+ * interleaved into the units layer's painter order: our per-item filter std::function sits at the world camera's
+ * +OFF_CAM_LAYER_FILTER for the duration of that one call (the previous impl is chained and put back) and Layer_Draw
+ * 0x9896f0 calls it before every (descending-key) item; a mesh's functor is submitted right before the first item
+ * whose key is not larger than the mesh's (x + z of its origin; a unit-attached one right after its unit's item), the
+ * rest after the layer. One functor per insertion point; meshes depth-test only against each other (the units layer
+ * never writes depth). A layer that is not sorted or not drawn forward falls back to the M1 path (all after it).
+ * Limits: meshes are drawn UNDER everything recorded after the units layer (UI, overlays); a multi-tile mesh is keyed
+ * by one point (its origin).
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -47,6 +53,7 @@
 #include "framework_internal.h"
 #include "fw_m4.h"
 #include "fw_functor.h"
+#include "fw_mesh_order.h"
 #include "fw_gl_state.h"
 #include "fw_mesh_draw.h"
 #include "fw_mesh_rules.h"
@@ -131,7 +138,19 @@ static long g_draws;
 #define MESH_MAX_DRAWS 64
 typedef struct MeshDraw { int mesh; float mvp[16]; float world[16]; float colour[4]; void *tex; const char *texName; int palette; } MeshDraw;
 typedef struct MeshFrame { int frame; int n; MeshDraw d[MESH_MAX_DRAWS]; } MeshFrame;
-static MeshFrame g_frame;        /* captured at record time, drawn by the functor at replay */
+static MeshFrame g_frame;        /* captured at record time, drawn by the functors at replay */
+/* M2: one group of draws per insertion point in the units layer's painter order (fw_mesh_order.c); one functor each */
+typedef struct MeshSeg { int n; int idx[MESH_MAX_DRAWS]; } MeshSeg;
+static MeshSeg g_segs[MESH_MAX_DRAWS];
+static int g_nsegs;
+static FwMeshOrder g_order;
+static FwMeshOrderFilter g_flt;
+static FwFilterImpl g_fltImpl;
+static void *g_fltCam, *g_fltPrev;
+static int g_fltInstalled;       /* our filter sits at the world camera's +OFF_CAM_LAYER_FILTER (inside the original call) */
+static int g_pendingAfter;       /* draws collected but the layer cannot be interleaved: all go after it (the M1 path) */
+static int g_orderLogged, g_fltLogged, g_itemsLogged;
+#define MESH_LOG_ORDER_MAX 6
 
 #define MESH_LOG_PROBE_EVERY 60
 #define MESH_LOG_PROBE_MAX   6
@@ -397,8 +416,9 @@ static int object_palette(const Fw3dObject *o) {
 
 /* ------------------------------------------------------------------ the functor (replay time) */
 static void mesh_draw(void *user) {
-    MeshFrame *fr = (MeshFrame *)user;
-    if (!fr->n || g_glState < 0) return;
+    MeshSeg *seg = (MeshSeg *)user;
+    MeshFrame *fr = &g_frame;
+    if (!seg->n || g_glState < 0) return;
     if (g_glState == 0) {
         if (!load_gl()) { g_glState = -1; fw_log("mesh: GL entry points missing; meshes disabled"); return; }
         g_glState = 2;
@@ -432,8 +452,8 @@ static void mesh_draw(void *user) {
     g_gl.Disable(FW_GL_CULL_FACE);
     g_gl.Disable(FW_GL_STENCIL_TEST);
     int drawn = 0;
-    for (int i = 0; i < fr->n; i++) {
-        const MeshDraw *d = &fr->d[i];
+    for (int i = 0; i < seg->n; i++) {
+        const MeshDraw *d = &fr->d[seg->idx[i]];
         if (!upload(d->mesh)) continue;
         g_gl.BindVertexArray(g_gpu[d->mesh].vao);
         g_mg.UniformMatrix4fv(g_loc[U_MVP], 1, 0, d->mvp);
@@ -461,9 +481,9 @@ static void mesh_draw(void *user) {
         g_drawLogged++;
         fw_log("mesh draw f=%d n=%ld fbo=%d viewport=(%d %d %d %d) depthTest=%d depthFunc=0x%x blend=%d prog=%d vao=%d meshes=%d/%d errors=%d",
                fr->frame, g_draws, st.drawFramebuffer, st.viewport[0], st.viewport[1], st.viewport[2], st.viewport[3],
-               st.depthTest, st.depthFunc, st.blend, st.program, st.vao, drawn, fr->n, post);
+               st.depthTest, st.depthFunc, st.blend, st.program, st.vao, drawn, seg->n, post);
     }
-    fr->n = 0;   /* one draw per recorded frame */
+    seg->n = 0;   /* one draw per recorded group */
 }
 
 /* ------------------------------------------------------------------ record time */
@@ -484,6 +504,7 @@ void mesh_engine_on_late_render(void *tt) {
     if (tt != g_tt) {
         g_tt = tt;
         g_worldFrame = 0;
+        g_orderLogged = g_itemsLogged = g_fltLogged = 0;
         read_settings();
         if (g_probe > 0 && g_probeModel[0]) {
             float identity[16];
@@ -502,25 +523,45 @@ int mesh_engine_wants_layer_hook(void) {
     return 1;
 }
 
-static void add_draw(int mesh, const float top[16], const float vp[16], const float iso[16], const float world[16], const float colour[4]) {
+/* key/anchor: the draw's place in the units layer's painter order (fw_mesh_order.h) */
+static void add_draw(int mesh, const float top[16], const float vp[16], const float iso[16], const float world[16], const float colour[4], double key, const void *anchor) {
     if (g_frame.n >= MESH_MAX_DRAWS) return;
-    MeshDraw *d = &g_frame.d[g_frame.n++];
+    MeshDraw *d = &g_frame.d[g_frame.n];
     d->mesh = mesh;
     d->tex = NULL; d->texName = NULL; d->palette = -1;
     fw_mesh_object_mvp(top, vp, iso, world, d->mvp);
     memcpy(d->world, world, sizeof d->world);
     memcpy(d->colour, colour, sizeof d->colour);
+    fw_mesh_order_add(&g_order, key, anchor, g_frame.n);
+    g_frame.n++;
 }
 
-/* after Camera_RenderOneLayer(cam, layer) returned (record time) */
-void mesh_engine_after_layer(void *cam, int layer) {
-    if (g_glState < 0 || !fw_mesh_draw_after_layer(g_tt, cam, layer)) return;
+/* fw_mesh_order's submit callback: one group of draws -> one draw functor through Batch_SubmitFunctor (record time;
+ * called from inside Layer_Draw by our filter, or after the layer) */
+static void submit_group(void *ctx, const int *draws, int n) {
+    (void)ctx;
+    if (n <= 0 || g_nsegs >= MESH_MAX_DRAWS || g_glState < 0) return;
+    MeshSeg *seg = &g_segs[g_nsegs++];
+    seg->n = n;
+    memcpy(seg->idx, draws, (size_t)n * sizeof draws[0]);
+    FwStdFunction f;
+    fw_functor_make(&f, mesh_draw, seg);
+    ((fn_SubmitFunctor)g_sym[FW_SYM_Batch_SubmitFunctor])(NULL, &f);
+    if (fw_functor_unexpected_deallocs()) { fw_log("mesh: the engine asked our functor to free itself; meshes disabled"); g_glState = -1; }
+}
+
+/* the frame's draws (record time, before the original Camera_RenderOneLayer: the matrix stack top is the same before
+ * and after it, the original pushes and pops its own VP); returns the draw count */
+static int collect(void *cam) {
     int nobj = obj3d_engine_count();
-    if (g_probe <= 0 && nobj == 0) return;
+    g_frame.n = 0;
+    g_nsegs = 0;
+    fw_mesh_order_reset(&g_order);
+    if (g_probe <= 0 && nobj == 0) return 0;
     g_worldFrame++;
     const float *top = fw_mesh_stack_top((const void *const *)data_ptr(FW_DATA_MatStackData), (const int *)data_ptr(FW_DATA_MatStackTop));
     const float *iso = (const float *)data_ptr(FW_DATA_Iso);
-    if (!top || !iso || !g_sym[FW_SYM_Batch_SubmitFunctor]) return;
+    if (!top || !iso || !g_sym[FW_SYM_Batch_SubmitFunctor]) return 0;
     if (!g_modShaderRead) {   /* once, at record time (the resource getter is a game call; the functor only does GL) */
         g_modShaderRead = 1;
         size_t len = 0;
@@ -531,7 +572,6 @@ void mesh_engine_after_layer(void *cam, int layer) {
     if (!g_cubeBuilt) g_cubeBuilt = fw_mesh_unit_cube(&g_cube);
     float vp[16];
     ((fn_GetVP)g_sym[FW_SYM_Camera_GetViewProjection])(cam, vp);
-    g_frame.n = 0;
     g_frame.frame = g_worldFrame;
     if (g_probe > 0 && g_cubeBuilt) {
         double c[3];
@@ -541,9 +581,18 @@ void mesh_engine_after_layer(void *cam, int layer) {
         fw_m4_identity(world);
         world[0] = world[5] = world[10] = (float)FW_MESH_PROBE_SIZE;
         world[12] = (float)c[0]; world[13] = (float)c[1]; world[14] = (float)c[2];
-        add_draw(MESH_CUBE, top, vp, iso, world, magenta);
+        double key = fw_mesh_order_tile_key(c[0], c[2]);
+        add_draw(MESH_CUBE, top, vp, iso, world, magenta, key, NULL);
         if ((g_worldFrame - 1) % MESH_LOG_PROBE_EVERY == 0 && g_probeLogged < MESH_LOG_PROBE_MAX) {
             g_probeLogged++;
+            /* the cube's screen silhouette (M2 occlusion measure: editor/src/core/art/mesh-measure.ts measureOcclusion) */
+            const float lo[3] = { -0.5f, 0.0f, -0.5f }, hi[3] = { 0.5f, 1.0f, 0.5f };
+            double box[4], area = 0;
+            if (fw_mesh_order_hull(g_frame.d[g_frame.n - 1].mvp, lo, hi, box, &area)) {
+                char ob[200];
+                fw_mesh_order_fmt_occ(ob, sizeof ob, g_worldFrame, g_probeCol, g_probeRow, key, box, area);
+                fw_log("%s", ob);
+            }
             const float mid[3] = { 0.0f, 0.5f, 0.0f };   /* the cube's centre in its local unit space (h 0..1) */
             float ndc[3] = { 0 }, model[16], vpm[16], cv[3] = { 0 };
             fw_m4_project(g_frame.d[g_frame.n - 1].mvp, mid, ndc);
@@ -562,8 +611,9 @@ void mesh_engine_after_layer(void *cam, int layer) {
         int slot = resolve_model(o->model);
         if (slot < 0) continue;
         double xz[2], *at = NULL;
+        void *rnd = NULL;
         if (!o->byTile) {
-            void *rnd = o->character ? fw_glow_renderer(o->character) : NULL;
+            rnd = o->character ? fw_glow_renderer(o->character) : NULL;
             void *pos = rnd ? fw_obs3d_renderer_position(rnd) : NULL;
             if (!pos) continue;
             fw_obs3d_position_xz(pos, xz);
@@ -572,8 +622,10 @@ void mesh_engine_after_layer(void *cam, int layer) {
         float world[16];
         fw_obj3d_model_matrix(o, at, world);
         const FwMesh *m = mesh_at(slot);
+        /* painter key: a tile object by its origin; a unit-attached one right after its unit's own item */
+        double key = at ? fw_mesh_order_unit_key(xz[0], xz[1]) : fw_mesh_order_tile_key(world[12], world[14]);
         int before = g_frame.n;
-        add_draw(slot, top, vp, iso, world, m ? m->base_color : (const float[4]){ 1, 1, 1, 1 });
+        add_draw(slot, top, vp, iso, world, m ? m->base_color : (const float[4]){ 1, 1, 1, 1 }, key, at ? rnd : NULL);
         if (g_frame.n == before) continue;
         MeshDraw *d = &g_frame.d[g_frame.n - 1];
         const FwTexEntry *te = object_texture(o, m);
@@ -590,9 +642,78 @@ void mesh_engine_after_layer(void *cam, int layer) {
             fw_log("%s", buf);
         }
     }
-    if (!g_frame.n) return;
-    FwStdFunction f;
-    fw_functor_make(&f, mesh_draw, &g_frame);
-    ((fn_SubmitFunctor)g_sym[FW_SYM_Batch_SubmitFunctor])(NULL, &f);
-    if (fw_functor_unexpected_deallocs()) { fw_log("mesh: the engine asked our functor to free itself; meshes disabled"); g_glState = -1; }
+    return g_frame.n;
+}
+
+/* before Camera_RenderOneLayer(cam, layer) (record time): for the fight's world camera drawing the units layer, collect
+ * the frame's draws and, when the layer is sorted and drawn forward, put our per-item filter at the camera's
+ * +OFF_CAM_LAYER_FILTER (the previous impl is chained and put back in mesh_engine_after_layer): Layer_Draw 0x9896f0 then
+ * calls it before every item, and it submits the meshes that are farther than that item right there (fw_mesh_order.c) */
+void mesh_engine_before_layer(void *cam, int layer) {
+    /* any other camera / layer (also a nested call during ours) leaves the state alone */
+    if (g_glState < 0 || g_fltInstalled || !fw_mesh_draw_after_layer(g_tt, cam, layer)) return;
+    g_pendingAfter = 0;
+    if (!collect(cam)) return;
+    const void *l = fw_obs3d_layer(fw_obs3d_cam_queue(cam), layer);
+    int inter = fw_mesh_order_interleave(l);
+    void *prev = fw_mesh_order_cam_filter(cam);
+    if (!g_fltLogged) {
+        g_fltLogged = 1;
+        fw_log("mesh order: world camera filter before ours = %p (units layer sorted=%d mode=%d: %s)", prev,
+               l ? *((const unsigned char *)l + OFF_LAYER_SORTED) : -1, fw_obs3d_layer_mode(l), inter ? "interleaving" : "all meshes after the layer");
+    }
+    if (!inter) { g_pendingAfter = 1; return; }
+    g_flt.order = &g_order;
+    g_flt.layer = layer;
+    g_flt.submit = submit_group;
+    g_flt.ctx = NULL;
+    g_flt.prev = prev;
+    g_flt.index = 0;
+    fw_filter_make(&g_fltImpl, fw_mesh_order_filter, &g_flt);
+    g_fltCam = cam;
+    g_fltPrev = prev;
+    fw_mesh_order_set_cam_filter(cam, &g_fltImpl);
+    g_fltInstalled = 1;
+}
+
+/* the plan lines (a few windows per fight) and, once, the units layer's MaskedRendererIso items with their tiles */
+static void log_order(void *cam, int layer) {
+    if ((g_worldFrame - 1) % MESH_LOG_PROBE_EVERY != 0 || g_orderLogged >= MESH_LOG_ORDER_MAX) return;
+    g_orderLogged++;
+    char buf[1024];
+    fw_mesh_order_fmt(buf, sizeof buf, g_worldFrame, &g_order);
+    fw_log("%s", buf);
+    fw_mesh_order_fmt_keys(buf, sizeof buf, g_worldFrame, &g_order);
+    fw_log("%s", buf);
+    if (g_itemsLogged) return;
+    g_itemsLogged = 1;
+    const void *l = fw_obs3d_layer(fw_obs3d_cam_queue(cam), layer);
+    int n = fw_obs3d_layer_items(l);
+    const unsigned char *items = l ? *(const unsigned char *const *)((const unsigned char *)l + OFF_LAYER_ITEMS) : NULL;
+    for (int i = 0; items && i < n && i < FW_MESH_ORDER_LOG_ITEMS; i++) {
+        const unsigned char *it = items + ((size_t)i << CONST_LAYER_ITEM_SHIFT);
+        void *rnd = (void *)fw_mesh_order_item_renderable(it);
+        if (!fw_obs3d_is_masked_renderer_iso(rnd, g_base + g_build->rva_MaskedRendererIso_vftable)) continue;
+        double xz[2];
+        fw_obs3d_position_xz(fw_obs3d_renderer_position(rnd), xz);
+        fw_mesh_order_fmt_item(buf, sizeof buf, g_worldFrame, i, fw_mesh_order_item_key(it), xz);
+        fw_log("%s", buf);
+    }
+}
+
+/* after Camera_RenderOneLayer(cam, layer) returned (record time): put the camera's filter back, submit the meshes
+ * nearer than every item (or, when the layer could not be interleaved, all of them: the M1 path) */
+void mesh_engine_after_layer(void *cam, int layer) {
+    if (g_fltInstalled && cam == g_fltCam) {
+        fw_mesh_order_set_cam_filter(cam, g_fltPrev);
+        g_fltInstalled = 0;
+        fw_mesh_order_finish(&g_flt);
+        log_order(cam, layer);
+    } else if (g_pendingAfter && fw_mesh_draw_after_layer(g_tt, cam, layer)) {
+        int out[FW_MESH_ORDER_MAX];
+        int n = fw_mesh_order_rest(&g_order, out, FW_MESH_ORDER_MAX);
+        submit_group(NULL, out, n);
+        log_order(cam, layer);
+        g_pendingAfter = 0;
+    }
 }

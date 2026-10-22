@@ -261,7 +261,12 @@ export function judgeUnitModelFollows(a: RgbaImageLike, b: RgbaImageLike, worldA
   out.angleDeg = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
   return { ...out, verdict: out.angleDeg <= FOLLOW_MAX_ANGLE ? "follows" : "wrong-direction" };
 }
-// ---- M2: sprite/mesh occlusion (red stubs) ----
+// ---- M2: sprite/mesh occlusion ----
+// mewframework interleaves the mesh draws into the units layer's painter order (native/framework/src/fw_mesh_order.c)
+// and, for the probe cube, logs its projected silhouette: "mesh occ f=.. tile=(c,r) key=K hull=(x0 y0 x1 y1) area=A"
+// (NDC bbox + convex-hull area). An unoccluded flat cube covers about area x (cw/2) x (ch/2) shot pixels (cw x ch = the
+// letterboxed 16:9 area); the magenta pixels inside the hull's box divided by that is the coverage. A cube behind a
+// unit loses part of its silhouette to the unit's sprite (coverage clearly below 1); a cube in front keeps all of it.
 export interface MeshOccLine { frame: number; tile: [number, number]; key: number; hull: [number, number, number, number]; area: number }
 export interface MeshOrderPlacement { draw: number; key: number; item: number | null; itemKey: number | null }
 export interface MeshOrderLine { frame: number; items: number; meshes: number; groups: number; unsorted: number; placements: MeshOrderPlacement[]; line: string }
@@ -270,6 +275,73 @@ export interface MeshOrderLog { occ: MeshOccLine[]; orders: MeshOrderLine[]; ite
 export interface OcclusionMeasure { expectedPx: number; magentaPx: number; coverage: number; box: [number, number, number, number] }
 export type OcclusionVerdict = "behind-occluded" | "front-unoccluded" | "not-occluded" | "occluded-in-front" | "no-cube" | "stale-shots" | "no-occ-lines" | "no-shots";
 export interface OcclusionJudgement { verdict: OcclusionVerdict; pass: boolean; coverage: number | null; expectedPx: number | null; magentaPx: number | null; shot: number | null; occ: MeshOccLine | null }
-export function parseMeshOrderLog(_text: string): MeshOrderLog { return { occ: [], orders: [], items: [], filterPrev: null, interleaving: false }; }
-export function measureOcclusion(_img: RgbaImageLike, _occ: MeshOccLine): OcclusionMeasure { return { expectedPx: 0, magentaPx: 0, coverage: 0, box: [0, 0, 0, 0] }; }
-export function judgeOcclusion(_shots: RgbaImageLike[], _occ: MeshOccLine[], _expect: "behind" | "front"): OcclusionJudgement { return { verdict: "no-shots", pass: false, coverage: null, expectedPx: null, magentaPx: null, shot: null, occ: null }; }
+
+/** behind: the cube must have lost at least this share of its silhouette (a cat's sprite over its lower part) */
+export const OCC_BEHIND_MAX = 0.85;
+/** front: the cube must keep at least this share (MSAA edges + the shader's darkest face still count as magenta) */
+export const OCC_FRONT_MIN = 0.9;
+/** below this the cube is not there at all */
+export const OCC_PRESENT_MIN = 0.05;
+
+const OCC_RE = new RegExp(String.raw`^mesh occ f=(\d+) tile=\((\d+),(\d+)\) key=${NUM} hull=\(${NUM} ${NUM} ${NUM} ${NUM}\) area=${NUM}`);
+const ORDER_RE = /^mesh order f=(\d+) items=(\d+) meshes=(\d+) groups=(\d+) unsorted=(\d+)(.*)$/;
+const ITEM_RE = new RegExp(String.raw`^mesh order item f=(\d+) i=(\d+) key=${NUM} at=\(${NUM} ${NUM}\)`);
+const FILTER_RE = /^mesh order: world camera filter before ours = (\S+) \((.*)\)/;
+
+export function parseMeshOrderLog(text: string): MeshOrderLog {
+  const out: MeshOrderLog = { occ: [], orders: [], items: [], filterPrev: null, interleaving: false };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/^.*?(?=mesh[ :])/, "");
+    let m = OCC_RE.exec(line);
+    if (m) { out.occ.push({ frame: +m[1]!, tile: [+m[2]!, +m[3]!], key: +m[4]!, hull: [+m[5]!, +m[6]!, +m[7]!, +m[8]!], area: +m[9]! }); continue; }
+    m = ORDER_RE.exec(line);
+    if (m) {
+      const placements: MeshOrderPlacement[] = [];
+      for (const part of m[6]!.split(" | ").slice(1)) {
+        const b = /^d(\d+) key=(-?[0-9.]+) before item (\d+) key=(-?[0-9.]+)/.exec(part.trim());
+        const a = /^d(\d+) key=(-?[0-9.]+) (after the layer|not drawn)/.exec(part.trim());
+        if (b) placements.push({ draw: +b[1]!, key: +b[2]!, item: +b[3]!, itemKey: +b[4]! });
+        else if (a) placements.push({ draw: +a[1]!, key: +a[2]!, item: null, itemKey: null });
+      }
+      out.orders.push({ frame: +m[1]!, items: +m[2]!, meshes: +m[3]!, groups: +m[4]!, unsorted: +m[5]!, placements, line });
+      continue;
+    }
+    m = ITEM_RE.exec(line);
+    if (m) { out.items.push({ frame: +m[1]!, index: +m[2]!, key: +m[3]!, at: [+m[4]!, +m[5]!] }); continue; }
+    m = FILTER_RE.exec(line);
+    if (m) { out.filterPrev = m[1]!; out.interleaving = /interleaving/.test(m[2]!); }
+  }
+  return out;
+}
+
+/** a magenta pixel (the probe colour's chroma: red and blue both exceed green by >= 50, glow-measure's rule) */
+function isProbe(r: number, g: number, b: number): boolean { return Math.min(r, b) - g >= 50; }
+
+export function measureOcclusion(img: RgbaImageLike, occ: MeshOccLine): OcclusionMeasure {
+  const W = img.width, H = img.height, aspect = 16 / 9;
+  const cw = W / H > aspect ? H * aspect : W, ch = W / H > aspect ? H : W / aspect;
+  const expectedPx = occ.area * (cw / 2) * (ch / 2);
+  const a = ndcToShotPixel([occ.hull[0], occ.hull[3]], W, H), b = ndcToShotPixel([occ.hull[2], occ.hull[1]], W, H);
+  const x0 = Math.max(0, Math.floor(a[0]) - 2), y0 = Math.max(0, Math.floor(a[1]) - 2);
+  const x1 = Math.min(W - 1, Math.ceil(b[0]) + 2), y1 = Math.min(H - 1, Math.ceil(b[1]) + 2);
+  let magentaPx = 0;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = (y * W + x) * 4;
+    if (isProbe(img.rgba[i]!, img.rgba[i + 1]!, img.rgba[i + 2]!)) magentaPx++;
+  }
+  return { expectedPx, magentaPx, coverage: expectedPx > 0 ? magentaPx / expectedPx : 0, box: [x0, y0, x1, y1] };
+}
+
+export function judgeOcclusion(shots: RgbaImageLike[], occ: MeshOccLine[], expect: "behind" | "front"): OcclusionJudgement {
+  const base: OcclusionJudgement = { verdict: "no-shots", pass: false, coverage: null, expectedPx: null, magentaPx: null, shot: null, occ: null };
+  if (!shots.length) return base;
+  if (!occ.length) return { ...base, verdict: "no-occ-lines" };
+  if (shots.length >= 2 && shots.every((s) => sameBytes(s, shots[0]!))) return { ...base, verdict: "stale-shots" };
+  const line = occ.reduce((p, c) => (c.frame >= p.frame ? c : p));
+  const shot = shots.length - 1;
+  const m = measureOcclusion(shots[shot]!, line);
+  const verdict: OcclusionVerdict = m.coverage < OCC_PRESENT_MIN ? "no-cube"
+    : expect === "behind" ? (m.coverage <= OCC_BEHIND_MAX ? "behind-occluded" : "not-occluded")
+    : (m.coverage >= OCC_FRONT_MIN ? "front-unoccluded" : "occluded-in-front");
+  return { verdict, pass: verdict === "behind-occluded" || verdict === "front-unoccluded", coverage: m.coverage, expectedPx: m.expectedPx, magentaPx: m.magentaPx, shot, occ: line };
+}
