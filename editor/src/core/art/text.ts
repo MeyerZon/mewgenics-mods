@@ -22,14 +22,19 @@ export interface SceneText {
   /** the text box, px */
   width: number;
   height: number;
+  /** false: no HTML flag and the raw string as the initial text (default true: vanilla's `<p><font>` wrapper); the
+   * loc-key probe's plain variant (docs/engine-map.md "Localization and text fields") */
+  html?: boolean;
 }
 
 /** vanilla's DefineEditText flags: HasText WordWrap Multiline ReadOnly HasTextColor | HasFontClass HasLayout HTML UseOutlines */
 export const EDIT_TEXT_FLAGS = 0xeca3;
+/** the same without the HTML bit (0x0002 of the second flag byte): the initial text is plain */
+export const EDIT_TEXT_FLAGS_PLAIN = EDIT_TEXT_FLAGS & ~0x0002;
 const ALIGN: Record<string, number> = { left: 0, right: 1, center: 2, justify: 3 };
 
 export interface TextProblem {
-  code: "text-font" | "text-empty" | "text-size" | "text-box" | "text-color";
+  code: "text-font" | "text-empty" | "text-size" | "text-box" | "text-color" | "text-html";
   message: string;
   at?: string;
 }
@@ -46,6 +51,7 @@ export function textProblems(t: SceneText | null | undefined): TextProblem[] {
     const f = parseFill(t.color);
     if (f.error || (f.fill.kind !== "gray" && f.fill.kind !== "rgba")) out.push({ code: "text-color", message: "color must be gray:N or #rrggbb", at: "color" });
   }
+  if (t.html !== undefined && typeof t.html !== "boolean") out.push({ code: "text-html", message: "html must be true or false", at: "html" });
   if (t.align !== undefined && !(t.align in ALIGN)) out.push({ code: "text-box", message: "align must be left, center or right", at: "align" });
   return out;
 }
@@ -72,8 +78,9 @@ export function encodeDefineEditText(id: number, t: SceneText): Uint8Array {
   w.u16(id);
   const hw = Math.round((t.width * 20) / 2), hh = Math.round((t.height * 20) / 2);
   writeRect(w, { xmin: -hw, xmax: hw, ymin: -hh, ymax: hh });
-  w.u8(EDIT_TEXT_FLAGS >> 8); // flag bytes in file order: ec, a3
-  w.u8(EDIT_TEXT_FLAGS & 0xff);
+  const flags = t.html === false ? EDIT_TEXT_FLAGS_PLAIN : EDIT_TEXT_FLAGS;
+  w.u8(flags >> 8); // flag bytes in file order: ec, a3 (a1 plain)
+  w.u8(flags & 0xff);
   w.string(t.font || "Peralta");
   w.u16(Math.round(t.size * 20));
   writeRgba(w, textRgba(t));
@@ -84,7 +91,7 @@ export function encodeDefineEditText(id: number, t: SceneText): Uint8Array {
   w.u16(0);
   w.s16(0);
   w.string(""); // VariableName
-  w.string(textHtml(t));
+  w.string(t.html === false ? t.text : textHtml(t));
   return tag(TAG.DefineEditText, w.finish());
 }
 

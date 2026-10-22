@@ -74,6 +74,26 @@ export async function runArtTextTests(test: TestFn, assert: AssertFn, eq: EqFn):
     assert(et.initialText.includes("Hi &lt;there&gt;") && /^<p align="right">/.test(et.initialText), et.initialText);
   });
 
+  test("html: false emits the DefineEditText without the HTML flag (eca1) and with the raw string as its initial text — the loc-key probe's plain variant (a key must reach has_key_current_lang byte-for-byte)", () => {
+    need();
+    const bytes = T.encodeDefineEditText(3, { text: "ENEMY_TOMTOM_NAME", font: "Peralta", size: 24, color: "#00ffa0", align: "center", width: 300, height: 40, html: false });
+    const et = (readTags(bytes, 0, bytes.length)[0] as any).editText;
+    eq(et.flags.toString(16), "eca1");
+    eq(et.initialText, "ENEMY_TOMTOM_NAME");
+    eq(et.fontClass, "Peralta");
+    const html = (readTags(T.encodeDefineEditText(3, { text: "A&B", size: 24, width: 300, height: 40, html: true }), 0, 999)[0] as any).editText;
+    eq(html.flags.toString(16), "eca3", "html: true is the default shape");
+    const raw = (readTags(T.encodeDefineEditText(3, { text: "A&B", size: 24, width: 300, height: 40, html: false }), 0, 999)[0] as any).editText;
+    eq(raw.initialText, "A&B", "no entity escaping without HTML");
+  });
+
+  test("textProblems: html must be a boolean when given", () => {
+    need();
+    const codes = T.textProblems({ text: "x", size: 10, width: 10, height: 10, html: "no" }).map((p: any) => p.code);
+    assert(codes.includes("text-html"), codes.join(","));
+    eq(T.textProblems({ text: "x", size: 10, width: 10, height: 10, html: false }).length, 0);
+  });
+
   test("emitSwf: a scene with text gets one ImportAssets2(fonts.swf, 0 assets) before its first DefineEditText; a scene without text gets none", () => {
     const plain = (readSwf(emitter.emitSwf(exampleScene("tx")).bytes) as any).tags.map((t: any) => t.name);
     assert(!plain.includes("ImportAssets2") && !plain.includes("DefineEditText"), plain.join(","));

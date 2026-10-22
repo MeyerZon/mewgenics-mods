@@ -1,0 +1,312 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "verdict": "pass",
+  "reason": "all 1 expectation(s) passed; 3 shot(s)",
+  "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+  "runDir": "20261022-090100-_artprobe-render-loctext",
+  "marker": {
+    "found": true,
+    "box": {
+      "x0": 2528,
+      "y0": 781,
+      "x1": 2692,
+      "y1": 890
+    },
+    "scale": 1.71875,
+    "mirrored": true
+  },
+  "outcomes": {
+    "vanillaHtml": "literal",
+    "vanillaPlain": "substituted",
+    "modHtml": "literal",
+    "modPlain": "substituted"
+  },
+  "votes": {
+    "vanillaHtml": 2,
+    "vanillaPlain": 2,
+    "modHtml": 2,
+    "modPlain": 2
+  },
+  "plainRenders": true,
+  "shots": [
+    {
+      "label": "loc 1",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 2528,
+          "y0": 781,
+          "x1": 2692,
+          "y1": 890
+        },
+        "scale": 1.71875,
+        "mirrored": true
+      },
+      "measure": {
+        "boxes": {
+          "keyVanillaHtml": {
+            "ink": 5326,
+            "inkWidth": 179.78181818181818,
+            "inkHeight": 24.436363636363637
+          },
+          "litVanillaHtml": {
+            "ink": 0,
+            "inkWidth": 0,
+            "inkHeight": 0
+          },
+          "keyVanillaPlain": {
+            "ink": 1410,
+            "inkWidth": 54.10909090909091,
+            "inkHeight": 20.945454545454545
+          },
+          "litVanillaPlain": {
+            "ink": 0,
+            "inkWidth": 0,
+            "inkHeight": 0
+          },
+          "keyModHtml": {
+            "ink": 3359,
+            "inkWidth": 102.4,
+            "inkHeight": 20.945454545454545
+          },
+          "litModHtml": {
+            "ink": 804,
+            "inkWidth": 202.47272727272727,
+            "inkHeight": 11.636363636363637
+          },
+          "keyModPlain": {
+            "ink": 4399,
+            "inkWidth": 197.23636363636365,
+            "inkHeight": 20.945454545454545
+          },
+          "litModPlain": {
+            "ink": 6496,
+            "inkWidth": 278.1090909090909,
+            "inkHeight": 21.527272727272727
+          },
+          "valueVanilla": {
+            "ink": 2722,
+            "inkWidth": 117.52727272727273,
+            "inkHeight": 20.945454545454545
+          },
+          "valueMod": {
+            "ink": 5317,
+            "inkWidth": 197.23636363636365,
+            "inkHeight": 20.945454545454545
+          }
+        },
+        "pairs": {
+          "vanillaHtml": {
+            "toValue": 0.899,
+            "toLiteral": 1
+          },
+          "vanillaPlain": {
+            "toValue": 0.587,
+            "toLiteral": 1
+          },
+          "modHtml": {
+            "toValue": 0.844,
+            "toLiteral": 0.868
+          },
+          "modPlain": {
+            "toValue": 0.629,
+            "toLiteral": 0.795
+          }
+        },
+        "outcomes": {
+          "vanillaHtml": "substituted",
+          "vanillaPlain": "substituted",
+          "modHtml": "substituted",
+          "modPlain": "substituted"
+        },
+        "plainRenders": false
+      }
+    },
+    {
+      "label": "loc 2",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 2528,
+          "y0": 782,
+          "x1": 2691,
+          "y1": 890
+        },
+        "scale": 1.7083333333333333,
+        "mirrored": true
+      },
+      "measure": {
+        "boxes": {
+          "keyVanillaHtml": {
+            "ink": 9872,
+            "inkWidth": 326.6341463414634,
+            "inkHeight": 24.585365853658537
+          },
+          "litVanillaHtml": {
+            "ink": 10186,
+            "inkWidth": 330.1463414634147,
+            "inkHeight": 24.585365853658537
+          },
+          "keyVanillaPlain": {
+            "ink": 2937,
+            "inkWidth": 118.2439024390244,
+            "inkHeight": 21.073170731707318
+          },
+          "litVanillaPlain": {
+            "ink": 10041,
+            "inkWidth": 330.1463414634147,
+            "inkHeight": 24.585365853658537
+          },
+          "keyModHtml": {
+            "ink": 8616,
+            "inkWidth": 276.2926829268293,
+            "inkHeight": 24
+          },
+          "litModHtml": {
+            "ink": 9095,
+            "inkWidth": 278.6341463414634,
+            "inkHeight": 24
+          },
+          "keyModPlain": {
+            "ink": 5937,
+            "inkWidth": 198.4390243902439,
+            "inkHeight": 21.658536585365855
+          },
+          "litModPlain": {
+            "ink": 9113,
+            "inkWidth": 279.219512195122,
+            "inkHeight": 24.585365853658537
+          },
+          "valueVanilla": {
+            "ink": 2718,
+            "inkWidth": 118.2439024390244,
+            "inkHeight": 21.073170731707318
+          },
+          "valueMod": {
+            "ink": 6109,
+            "inkWidth": 198.4390243902439,
+            "inkHeight": 21.073170731707318
+          }
+        },
+        "pairs": {
+          "vanillaHtml": {
+            "toValue": 0.879,
+            "toLiteral": 0.626
+          },
+          "vanillaPlain": {
+            "toValue": 0.288,
+            "toLiteral": 0.885
+          },
+          "modHtml": {
+            "toValue": 0.736,
+            "toLiteral": 0.548
+          },
+          "modPlain": {
+            "toValue": 0.704,
+            "toLiteral": 0.758
+          }
+        },
+        "outcomes": {
+          "vanillaHtml": "literal",
+          "vanillaPlain": "substituted",
+          "modHtml": "literal",
+          "modPlain": "substituted"
+        },
+        "plainRenders": true
+      }
+    },
+    {
+      "label": "loc 3",
+      "marker": {
+        "found": true,
+        "box": {
+          "x0": 2528,
+          "y0": 781,
+          "x1": 2692,
+          "y1": 890
+        },
+        "scale": 1.71875,
+        "mirrored": true
+      },
+      "measure": {
+        "boxes": {
+          "keyVanillaHtml": {
+            "ink": 9865,
+            "inkWidth": 324.6545454545454,
+            "inkHeight": 24.436363636363637
+          },
+          "litVanillaHtml": {
+            "ink": 10103,
+            "inkWidth": 328.1454545454545,
+            "inkHeight": 24.436363636363637
+          },
+          "keyVanillaPlain": {
+            "ink": 2941,
+            "inkWidth": 117.52727272727273,
+            "inkHeight": 20.945454545454545
+          },
+          "litVanillaPlain": {
+            "ink": 10071,
+            "inkWidth": 328.1454545454545,
+            "inkHeight": 24.436363636363637
+          },
+          "keyModHtml": {
+            "ink": 5226,
+            "inkWidth": 274.6181818181818,
+            "inkHeight": 23.854545454545455
+          },
+          "litModHtml": {
+            "ink": 8680,
+            "inkWidth": 276.94545454545454,
+            "inkHeight": 23.854545454545455
+          },
+          "keyModPlain": {
+            "ink": 2131,
+            "inkWidth": 75.63636363636364,
+            "inkHeight": 20.945454545454545
+          },
+          "litModPlain": {
+            "ink": 0,
+            "inkWidth": 0,
+            "inkHeight": 0
+          },
+          "valueVanilla": {
+            "ink": 2731,
+            "inkWidth": 117.52727272727273,
+            "inkHeight": 20.945454545454545
+          },
+          "valueMod": {
+            "ink": 6148,
+            "inkWidth": 197.23636363636365,
+            "inkHeight": 20.945454545454545
+          }
+        },
+        "pairs": {
+          "vanillaHtml": {
+            "toValue": 0.871,
+            "toLiteral": 0.208
+          },
+          "vanillaPlain": {
+            "toValue": 0.173,
+            "toLiteral": 0.884
+          },
+          "modHtml": {
+            "toValue": 0.837,
+            "toLiteral": 0.456
+          },
+          "modPlain": {
+            "toValue": 0.799,
+            "toLiteral": 1
+          }
+        },
+        "outcomes": {
+          "vanillaHtml": "literal",
+          "vanillaPlain": "substituted",
+          "modHtml": "literal",
+          "modPlain": "substituted"
+        },
+        "plainRenders": true
+      }
+    }
+  ]
+}

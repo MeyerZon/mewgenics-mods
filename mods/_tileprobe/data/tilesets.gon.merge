@@ -1,0 +1,5 @@
+// test-only (tileset redirect probe, 2026-10-22): in the alley tileset (TacticsTest's default) a character whose
+// graphics.movieclip is `Rat` is drawn by _artprobe's ArtProbe clip (ResolveClipName 0x7bdbb0; non-_CAT characters only)
+alley {
+    Rat ArtProbe
+}

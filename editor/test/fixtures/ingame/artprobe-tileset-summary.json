@@ -1,0 +1,71 @@
+{
+  "observed": "2026-10-22, build 25143593",
+  "overlay": "alley { Rat ArtProbe }",
+  "outcome": "redirected",
+  "redirect": {
+    "mod": "_tileprobe",
+    "test": "render-tileset-redirect",
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 3 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "20261022-090748-_tileprobe-render-tileset-redirect",
+    "baseline": {
+      "found": false,
+      "box": null
+    },
+    "after": [
+      {
+        "label": "rat 1",
+        "found": true,
+        "box": {
+          "x0": 2528,
+          "y0": 782,
+          "x1": 2692,
+          "y1": 890
+        },
+        "scale": 1.71875,
+        "mirrored": true
+      },
+      {
+        "label": "rat 2",
+        "found": true,
+        "box": {
+          "x0": 2528,
+          "y0": 781,
+          "x1": 2692,
+          "y1": 890
+        },
+        "scale": 1.71875,
+        "mirrored": true
+      }
+    ]
+  },
+  "control": {
+    "mod": "_artprobe",
+    "test": "render-tileset-control",
+    "verdict": "pass",
+    "reason": "all 1 expectation(s) passed; 3 shot(s)",
+    "save": "1 real save file(s) unchanged (campaign02.sav, mewtest01.sav, test00.sav belong to the suffixed launch)",
+    "runDir": "20261022-090756-_artprobe-render-tileset-control",
+    "baseline": {
+      "found": false,
+      "box": null
+    },
+    "after": [
+      {
+        "label": "rat 1",
+        "found": false,
+        "box": null,
+        "scale": 0,
+        "mirrored": false
+      },
+      {
+        "label": "rat 2",
+        "found": false,
+        "box": null,
+        "scale": 0,
+        "mirrored": false
+      }
+    ]
+  }
+}

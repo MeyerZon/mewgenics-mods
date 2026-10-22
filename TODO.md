@@ -2,6 +2,17 @@
 
 Living status snapshot (last updated 2026-10-22: the 2026-10-21/22 parallel RE run is in PRs #73–#83 + two in flight, none merged yet; everything through #72 is merged). `[x]` done · `[~]` in progress · `[ ]` planned, not started.
 
+## Requires a human
+
+Looks no measure in this repo can judge; the shots are under `editor/data/ingame-runs/` (rebuild with the named command).
+
+- [ ] **Loc-text shot** (`npm run test:artprobe -- --loctext`, run `20261022-090100-_artprobe-render-loctext`,
+      `shot-loc-2.png`): is the substituted string ("Tom Tom", "LOCALIZED OK") rendered in the right font / size — the
+      same lettering as the HTML boxes beside it?
+- [ ] **Redirected Rat** (`npm run test:artprobe -- --tileset`, run `20261022-090748-_tileprobe-render-tileset-redirect`,
+      `shot-rat-2.png`): any wrong offset or mirroring of the ArtProbe clip drawn for a plain Rat, against the ArtProbe
+      enemy in `render-probe` and the vanilla Rat in the control run `20261022-090756-_artprobe-render-tileset-control`?
+
 ## Open decisions — return to these next time (parked 2026-10-21, status as of 2026-10-22)
 
 Owner: "we will decide on it later". Everything through PR #72 is merged; the 2026-10-21/22 run answered most of
@@ -18,8 +29,14 @@ these without a decision (status per bullet below; the PR map follows).
       a ghost cat in the preview for empty slots.
 - [x] **Localized text?** **Owner, 2026-10-21: deferred; Peralta is fine as the default font.** Since then session
       `loc` found it **looks data-only** (the text-box ctor 0x98d910 localizes an initial text that is a loc key; every
-      `data/text/*.csv` is loaded — engine-map "Localization and text fields", INFERRED for mods, untested). A probe
-      script is queued as agent work (`docs/data-mods.md` "Localized text for mods"); no editor change until it passes.
+      `data/text/*.csv` is loaded — engine-map "Localization and text fields"). **Probed 2026-10-22 (OBSERVED,
+      `mods/_artprobe/tests/render-loctext.mewtest`):** a DefineEditText whose initial text is exactly a key is shown
+      localized — for a vanilla key and for a key a mod adds via `combined.csv.append` — **only when it is emitted
+      without the HTML flag** (`scene.texts[].html: false`); in vanilla's `<p><font>` wrapper the key is drawn as
+      written. Open (agent, no decision): make key texts plain automatically / a validator rule.
+- [x] **`tilesets.gon` clip redirect** — probed 2026-10-22 (OBSERVED, `mods/_tileprobe`): `alley { Rat ArtProbe }`
+      makes every plain Rat in the alley tileset draw the mod clip `ArtProbe` (marker found after `spawn Rat`, none
+      in the overlay-free control). `docs/data-mods.md` "Redirecting a vanilla character's clip via tilesets.gon".
 - [x] **Filters / glows** — answered 2026-10-21 (PR #80): the game refuses any PlaceObject3 filter (the loader has no
       filter renderer; `PlaceObject::decode3` 0xb78210 stops on the flag bit), so the validator keeps blocking them and
       the **bake helper is done**: `bakeGlow` / `bakeDropShadow` (`editor/src/core/art/glow.ts`), MCP `bake_glow`, the
