@@ -387,7 +387,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   test("25143593.json: FwSymbol table == framework_api.h FW_SYM_* order (44, incl. the v4 run-entry symbols, the 7 glow symbols, the 2 glow-v2 screen-matrix symbols and the 3 observe3d camera symbols and the 4 M1 mesh symbols); each has a signature except the three with no relocation-free unique window", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_SYM_");
-    eq(want.length, 44);   // +4: M1 promoted Batch_SubmitFunctor, ResourceManager_GetBinaryResource, App_GetTexture, Material_Bind (40..43)
+    eq(want.length, 45);   // +4: M1 promoted Batch_SubmitFunctor, ResourceManager_GetBinaryResource, App_GetTexture, Material_Bind (40..43); +1 M3 Gon_LoadFile (44)
     eq(entry(m, "AddComponent_MewDirector_test")!.rva, "0x758650");
     eq(entry(m, "Entity_DestroyOwnerOf")!.rva, "0x94eba0");
     eq(entry(m, "AddComponent_MewDirector_named")!.rva, "0x1be1a0");
@@ -415,7 +415,7 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   test("25143593.json: FwData table == framework_api.h FW_DATA_* order (19, incl. the MewDirector and ShaderManager globals and the 8 render globals of the 3D block); App_global first", () => {
     const m = loadManifest(realPath);
     const want = enumerators("FW_DATA_");
-    eq(want.length, 19);
+    eq(want.length, 20);   // +1: M3 ResourceMap (19), the resource manager Gon_LoadFile caches in
     eq(entry(m, "MewDirector_global")!.rva, "0x13dac30");
     const got = dataTable(m);
     eq(got.map((e) => (e.exposure.find((x) => "enum" in x) as EnumExposure).enum).join("\n"), want.join("\n"));
@@ -1877,7 +1877,9 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
   // and the palette shader path binds its material with Material_Bind and the palette texture from App_GetTexture), and the
   // matrix stack data pointer is FwData 18 (MatStackData, witnessed by rip ref #14 of Batch_AddInstance)
   const R3D_SYMBOLS: [string, string, number][] = [["Camera_render", "0x9787c0", 37], ["Camera_GetViewProjection", "0x9785e0", 38], ["Camera_RenderOneLayer", "0x979210", 39],
-    ["Batch_SubmitFunctor", "0xa47820", 40], ["ResourceManager_GetBinaryResource", "0x973750", 41], ["App_GetTexture", "0x9bb490", 42], ["Material_Bind", "0x9bda20", 43]];
+    ["Batch_SubmitFunctor", "0xa47820", 40], ["ResourceManager_GetBinaryResource", "0x973750", 41], ["App_GetTexture", "0x9bb490", 42], ["Material_Bind", "0x9bda20", 43],
+    // M3 named models ("@Name"): data/models.gon through the game loader (overlays of every mod merged)
+    ["Gon_LoadFile", "0x611a0", 44]];
   const R3D_REFERENCE: [string, string][] = [["Layer_Draw", "0x9896f0"], ["Position_GetInterpolated", "0x9b4a30"],
     ["Batch_Replay", "0xa481d0"], ["Batch_AddInstance", "0xa47e50"], ["Batch_ApplyGroupState", "0xa497d0"],
     ["Swf_DisplayObject_Render", "0x9b0a50"], ["MatStack_Ortho", "0x9fec80"], ["MatStack_Push", "0x9feaf0"], ["Mat4_IsMirrored", "0xa082b0"], ["Camera_MouseToCamera2D", "0x9796d0"],
@@ -1896,7 +1898,8 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     // adds as FW_SYM_Character_Face (here reference only: the model reads the stored direction, it never calls Face)
     ["Character_Face", "0x10ce50"]];
   const R3D_DATA: [string, string, number][] = [["Iso", "0x12f7a00", 11], ["IsoInverse", "0x12f79c0", 12], ["RenderStateFlags", "0x12f714c", 13], ["CullDisableCounter", "0x13c5c90", 14],
-    ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17], ["MatStackData", "0x13c5bd8", 18]];
+    ["DepthBias", "0x13c5c40", 15], ["MatStackTop", "0x13c5c00", 16], ["CurrentCamera", "0x13c6d88", 17], ["MatStackData", "0x13c5bd8", 18],
+    ["ResourceMap", "0x13c61e0", 19]];
   const R3D_OFFSETS: [string, string, string][] = [["Camera_rtt", "OFF_CAM_RTT", "0x80"], ["Camera_hdr", "OFF_CAM_HDR", "0x81"], ["Camera_queue", "OFF_CAM_QUEUE", "0x40"],
     ["Camera_layerBits", "OFF_CAM_LAYER_BITS", "0xc8"], ["RenderQueue_layers", "OFF_RQ_LAYERS", "0x38"], ["RenderQueue_layersEnd", "OFF_RQ_LAYERS_END", "0x40"],
     ["Layer_count", "OFF_LAYER_COUNT", "0xc"], ["Layer_items", "OFF_LAYER_ITEMS", "0x10"], ["Layer_mode", "OFF_LAYER_MODE", "0x24"], ["Renderer_position", "OFF_RND_POSITION", "0x40"],
@@ -1910,7 +1913,9 @@ export async function runBindingsTests(test: TestFn, assert: AssertFn, eq: EqFn)
     // sorted flag and the item's sort key (descending = farther first) the mesh engine interleaves its draws by
     ["Camera_layerFilter", "OFF_CAM_LAYER_FILTER", "0x120"], ["Layer_sorted", "OFF_LAYER_SORTED", "0x20"], ["LayerItem_key", "OFF_ITEM_KEY", "0x10"],
     // M3 face: the grid direction Character::Face stores (PR #114's entry, same name / macro / witness); the model's yaw follows it
-    ["Character_orientation", "OFF_CH_ORIENTATION", "0x388"]];
+    ["Character_orientation", "OFF_CH_ORIENTATION", "0x388"],
+    // M3 named models: the merged root GonObject inside the GonResource Gon_LoadFile returns
+    ["GonResource_object", "OFF_GONRES_OBJECT", "0x28"]];
   const R3D_CONSTANTS: [string, string, string][] = [["LayerStride", "CONST_LAYER_STRIDE", "0xe8"], ["LayerItemShift", "CONST_LAYER_ITEM_SHIFT", "5"],
     ["UnitsLayer", "CONST_UNITS_LAYER", "0x19"], ["FlatLayer", "CONST_FLAT_LAYER", "0x13"]];
   const R3D_NAMES = new Set([...R3D_SYMBOLS.map((x) => x[0]), ...R3D_REFERENCE.map((x) => x[0]), ...R3D_DATA.map((x) => x[0]), "MaskedRendererIso_vftable",

@@ -64,13 +64,26 @@ typedef struct FwGonModel {
     int hideSprite;              /* M3 `hide_sprite`: -1 not given, 0 false, 1 true = the unit's 2D sprite is not drawn while
                                   * its model draws (fw_mesh_hide.h); a model that fails to load never hides the sprite */
     int invalid;                /* FW_GON_MODEL_BAD_* bits of the keys whose value was refused (default kept) */
+    int given;                   /* FW_GON_MODEL_HAS_* bits: keys the block set to a valid value (M3 "@Name": they override the named entry) */
 } FwGonModel;
+enum {
+    FW_GON_MODEL_HAS_SCALE  = 1 << 0,
+    FW_GON_MODEL_HAS_YAW    = 1 << 1,
+    FW_GON_MODEL_HAS_OFFSET = 1 << 2,
+    FW_GON_MODEL_HAS_TINT   = 1 << 3    /* texture / palette / double_sided carry their own "not given" ("" / -1) */
+};
 /* the defaults above, file "" (isBlock 0) */
 void fw_gon_model_defaults(FwGonModel *m);
 /* `graphics.model` of a data/characters entry, either form, into out (defaults first). 1 found (a string, or a block
  * with a string `file`), 0 none (no key, a scalar that is not a string, a block without `file`: BAD_FILE set),
  * -1 unreadable (out keeps the defaults). Same reader, offsets and plausibility guards as fw_gon_get_string. */
 int fw_gon_model_block(FwMemRead rd, void *u, const void *gonEntry, FwGonModel *out);
+/* the same parse on a model value node itself (a string, or a block): what fw_gon_model_block does at `graphics.model`, and
+ * what the M3 named-model registry (fw_model_names.c) does for each entry of data/models.gon. Same results. */
+int fw_gon_model_node(FwMemRead rd, void *u, const void *node, FwGonModel *out);
+/* a container node's children: 1 ok (*begin = the first child, *count; children are GON_NODE_SIZE apart), 0 a scalar /
+ * null node (count 0), -1 unreadable / implausible */
+int fw_gon_children(FwMemRead rd, void *u, const void *node, const void **begin, long *count);
 /* the number at `path` (a type-2 node's double view, OFF_GON_DOUBLE): 1 ok, 0 missing / not a number, -1 unreadable */
 int fw_gon_get_number(FwMemRead rd, void *u, const void *node, const char *path, double *out);
 /* the node's own key (OFF_GON_NAME), e.g. "Crate" for an entry: 1 ok, -1 unreadable; out "" unless 1 */

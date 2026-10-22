@@ -437,6 +437,13 @@ if (BASE_READY) {
   if (mc) mc.runModelCodesTests(test, assert, eq);
 }
 
+// ---- 4g2. Named models (3D phase M3 "@Name"): data/models.gon, model-name-unknown / model-registry-entry ----
+{
+  let mn: typeof import("./model-names-tests.ts") | null = null;
+  try { mn = await import("./model-names-tests.ts"); } catch (e) { test("model-names-tests.ts loads", () => assert(false, String(e instanceof Error ? e.message : e))); }
+  if (mn) mn.runModelNamesTests(test, assert, eq);
+}
+
 // ---- 5. MCP smoke test ------------------------------------------------------
 /** The `tools/call` result shape the smoke reads (MCP content blocks). */
 interface ToolCallResult {

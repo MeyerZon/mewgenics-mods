@@ -88,13 +88,14 @@ export function runModel3dTests(test: TestFn, assert: AssertFn, eq: EqFn): void 
     for (const h of hits) eq(h.severity, "error");
     eq(only(r, "model-file-missing").length, 0, "an invalid path is not also missing");
   });
-  test("model3d: model-unregistered is an error for an @name no native mod registers (kind model)", () => {
+  test("model3d: an @name no native mod registers and no data/models.gon declares is model-name-unknown (M3; was model-unregistered)", () => {
     const r = v("model-unregistered");
-    const hits = only(r, "model-unregistered");
+    const hits = only(r, "model-name-unknown");
     eq(hits.length, 1, codes(r));
     eq(hits[0]!.severity, "error");
     assert(/NotRegistered/.test(hits[0]!.message), hits[0]!.message);
-    eq(only(v("model-clean", { registeredModels: [] }), "model-unregistered").length, 1, "@Crate3D without the registration");
+    eq(only(r, "model-unregistered").length, 0, "the M2 code is no longer raised");
+    eq(only(v("model-clean", { registeredModels: [] }), "model-name-unknown").length, 1, "@Crate3D without the registration");
   });
   test("model3d: a `model` key outside a character's graphics block is not a model reference", () => {
     const r = validateMod("model-clean", { relPath: "data/characters/inanimate_objects.gon.merge", text: "Crate {\n\tproperties {\n\t\tmodel \"../nope\"\n\t}\n}\n" }, {

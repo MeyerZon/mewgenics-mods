@@ -146,4 +146,10 @@ if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_embtex.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_model_names.c" "%HERE%src\fw_model_names.c" "%HERE%src\fw_gon.c" "%HERE%src\fw_mesh_rules.c" ^
+  -o "%OUT%\test_model_names.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_model_names.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal

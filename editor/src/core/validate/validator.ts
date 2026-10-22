@@ -201,6 +201,8 @@ export interface ValidateOptions {
   baseShaderDir?: string;
   /** native-registered 3D model names (tests/fixtures); default editor/registered-names.json entries of kind "model" */
   registeredModels?: Iterable<string>;
+  /** named models (data/models.gon, M3 "@Name") declared outside this mod (tests/fixtures); default the base registry, mods/fw-3d/data/models.gon */
+  namedModels?: Iterable<string>;
 }
 
 /**

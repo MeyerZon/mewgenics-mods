@@ -239,3 +239,6 @@ int fw_gon_model_block(FwMemRead rd, void *u, const void *gonEntry, FwGonModel *
     *out = m;
     return 1;
 }
+
+int fw_gon_model_node(FwMemRead rd, void *u, const void *node, FwGonModel *out) { (void)rd; (void)u; (void)node; if (out) fw_gon_model_defaults(out); return -9; }   /* RED STUB */
+int fw_gon_children(FwMemRead rd, void *u, const void *node, const void **begin, long *count) { (void)rd; (void)u; (void)node; (void)begin; if (count) *count = -1; return -9; }   /* RED STUB */

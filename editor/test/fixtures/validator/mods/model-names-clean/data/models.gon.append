@@ -1,0 +1,7 @@
+// named models (3D phase M3 "@Name"): declared once here, referenced by units as "@RatBox" / file "@Pillar"
+RatBox {
+	file "models/box.obj"
+	scale 0.8
+	yaw 45
+}
+Pillar "models/box.obj"

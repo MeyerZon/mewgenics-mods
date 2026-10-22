@@ -37,6 +37,7 @@ run_suite "mewframework GON walker" "$FW/build/test_gon" -DFW_NO_WINDOWS= -I"$FW
 run_suite "mewframework JSON tokenizer" "$FW/build/test_json" -I"$FW/src" "$FW/test/test_json.c" "$FW/src/fw_json.c"
 run_suite "mewframework glTF loader" "$FW/build/test_mesh_gltf" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_gltf.c" "$FW/src/fw_mesh_gltf.c" "$FW/src/fw_json.c" "$FW/src/fw_mesh_rules.c" -lm
 run_suite "mewframework mesh textures + palette" "$FW/build/test_mesh_tex" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_tex.c" "$FW/src/fw_mesh_tex.c" "$FW/src/fw_gl_state.c" "$FW/src/fw_mesh_rules.c" -lm
+run_suite "mewframework named models (M3 @Name)" "$FW/build/test_model_names" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_model_names.c" "$FW/src/fw_model_names.c" "$FW/src/fw_gon.c" "$FW/src/fw_mesh_rules.c" -lm
 run_suite "mewframework sprite/mesh order (M2)" "$FW/build/test_mesh_order" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_order.c" "$FW/src/fw_mesh_order.c" "$FW/src/fw_functor.c" -lm
 run_suite "mewframework hide_sprite (M3)" "$FW/build/test_mesh_hide" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_mesh_hide.c" "$FW/src/fw_mesh_hide.c" "$FW/src/fw_mesh_order.c" "$FW/src/fw_functor.c" "$FW/src/fw_obj3d_rules.c" "$FW/src/fw_unit_face.c" "$FW/src/fw_mesh_rules.c" -lm
 run_suite "mewframework unit model facing (M3)" "$FW/build/test_unit_face" -DFW_NO_WINDOWS= -I"$FW/src" "$FW/test/test_unit_face.c" "$FW/src/fw_unit_face.c" "$FW/src/fw_unit_model.c" "$FW/src/fw_gon.c" -lm
