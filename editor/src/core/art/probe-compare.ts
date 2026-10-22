@@ -44,6 +44,9 @@ export interface ProbeShot {
   textPixels: number;
   /** the marker's screen bbox */
   box: { x0: number; y0: number; x1: number; y1: number } | null;
+  /** the shot edge a not-found marker region touches: drawn, but cut by the frame (OBSERVED 2026-10-22: the back
+   * rig's checker at the window's top edge, engine-map "The back facing and the four-way quartet"); null otherwise */
+  clipped: "top" | "bottom" | "left" | "right" | null;
 }
 
 const near = (r: number, g: number, b: number, c: Rgb, tol: number) => Math.abs(r - c[0]) <= tol && Math.abs(g - c[1]) <= tol && Math.abs(b - c[2]) <= tol;
@@ -73,7 +76,7 @@ function classifyBlink(c: Rgb): ProbeShot["blink"] {
 }
 
 export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
-  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", blend: "unknown", blendRgb: [0, 0, 0], walkerX: NaN, text: "missing", textPixels: 0, box: null };
+  const none: ProbeShot = { found: false, scale: 0, mirrored: false, sampling: "unknown", blendedRatio: 0, edge: "unknown", blink: "other", control: [0, 0, 0], cx: [0, 0, 0], gradient: "unknown", gradLeft: [0, 0, 0], gradRight: [0, 0, 0], caps: "unknown", blend: "unknown", blendRgb: [0, 0, 0], walkerX: NaN, text: "missing", textPixels: 0, box: null, clipped: null };
   // 1. the yellow marker: the largest 8-connected region of near-yellow pixels (stray UI yellow elsewhere is ignored)
   const W = img.width, H = img.height;
   const mask = new Uint8Array(W * H);
@@ -105,7 +108,10 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   if (count < 30) return none;
   const w = x1 - x0 + 1, h = y1 - y0 + 1;
   const scale = w / 96;
-  if (Math.abs(h / scale - 64) > 12) return { ...none, box: { x0, y0, x1, y1 } };
+  if (Math.abs(h / scale - 64) > 12) {
+    const clipped: ProbeShot["clipped"] = y0 === 0 ? "top" : y1 === H - 1 ? "bottom" : x0 === 0 ? "left" : x1 === W - 1 ? "right" : null;
+    return { ...none, box: { x0, y0, x1, y1 }, clipped };
+  }
   // 2. orientation: where the magenta/cyan cells are inside the marker
   let mcSum = 0, mcN = 0;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -185,7 +191,7 @@ export function analyzeProbeShot(img: RgbaImageLike): ProbeShot {
   const text: ProbeShot["text"] = textPixels > 40 ? "drawn" : "missing";
   return {
     gradient, gradLeft, gradRight, caps, blend, blendRgb, walkerX, text, textPixels,
-    found: true, scale, mirrored,
+    found: true, scale, mirrored, clipped: null,
     sampling: blendedRatio > 0.1 ? "smooth" : "nearest",
     blendedRatio, edge, blink,
     control: patch(img, sx(230), sy(30)),

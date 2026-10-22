@@ -183,7 +183,7 @@
         { "name": "arm1", "depth": 9, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_arm1", "matrix": [0.6212615966796875, 0, 0.0306396484375, 0.6212615966796875, 17.3, 30.75] } ] },
         { "name": "leg1", "depth": 11, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_leg1", "matrix": [0.6212615966796875, 0, 0, 0.6212615966796875, -10.1, 37.75] } ] },
         { "name": "tail", "depth": 13, "keys": [ { "frame": 0, "ref": "probeBackPoseBack_tail", "matrix": [0.599639892578125, 0.16241455078125, -0.16241455078125, 0.599639892578125, -26.55, 13.55] } ] },
-        { "name": "marker", "depth": 15, "keys": [ { "frame": 0, "ref": "CatProbeMc_marker", "x": -48, "y": -330 } ] }
+        { "name": "marker", "depth": 15, "keys": [ { "frame": 0, "ref": "CatProbeMc_marker", "x": -48, "y": -220 } ] }
       ]
     },
     "ArtProbeGlow": {
