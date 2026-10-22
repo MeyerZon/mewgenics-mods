@@ -185,6 +185,32 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     eq(JSON.stringify(r.data.options), "{}");
     assert(!s.safeParse({ mod: "m", kind: "ability" }).success, "name required");
   });
+  const tk = await load("../src/core/template-kinds.ts");
+  test("src/core/template-kinds.ts loads (pure: the web bundle imports it)", () => assert(!tk.__error, tk.__error ?? ""));
+  test("TEMPLATE_KINDS: the one list of scaffold kinds — the zod body enum is built from it and it holds every core kind", () => {
+    const kinds: string[] = tk.TEMPLATE_KINDS || [];
+    for (const k of ["ability", "passive", "item", "status-data", "particle", "vfx-ability", "room", "tileset-variant", "glowing-character"]) assert(kinds.includes(k), `missing ${k}`);
+    eq(JSON.stringify(sch.TemplateKind?.options), JSON.stringify(kinds), "api-schemas TemplateKind enum = TEMPLATE_KINDS");
+    const src = readFileSync(join(EDITOR, "src", "core", "template-kinds.ts"), "utf8");
+    assert(!/from "node:/.test(src), "no Node built-ins (the browser bundle imports it)");
+    const modal = readFileSync(join(EDITOR, "web", "src", "components", "TemplateModal.tsx"), "utf8");
+    assert(/TEMPLATE_KINDS/.test(modal) && !/const KINDS\b/.test(modal), "TemplateModal lists TEMPLATE_KINDS, not its own copy");
+  });
+  const coreApi = await load("../src/core/api.ts");
+  test("api.listBaseEntries pages: {entries, total, offset}; offset/limit clamp (negative/NaN → 0, limit 1..5000); no page → everything", () => {
+    assert(!coreApi.__error, coreApi.__error ?? "");
+    const all = coreApi.listBaseEntries("abilities");
+    eq(typeof all.total, "number", "total");
+    eq(all.offset, 0, "offset");
+    eq(all.entries.length, all.total, "no page asks for everything");
+    const p = coreApi.listBaseEntries("abilities", undefined, { offset: 2, limit: 3 });
+    eq(p.offset, 2);
+    eq(p.total, all.total);
+    eq(JSON.stringify(p.entries), JSON.stringify(all.entries.slice(2, 5)));
+    const c = coreApi.listBaseEntries("abilities", undefined, { offset: -7, limit: Number.NaN });
+    eq(c.offset, 0, "negative offset clamps to 0");
+    assert(c.entries.length <= 5000 && c.entries.length === Math.min(all.total, 5000) || all.total === 0, "NaN limit → the cap");
+  });
   test("api-schemas: /api/art/build: mod + path required; dryRun/writeSwflist booleans; abc string; scene any object", () => {
     const s = sch.API_BODY["/api/art/build"];
     assert(s.safeParse({ mod: "m", path: "art/a.scene.json" }).success, "minimal");
@@ -284,6 +310,21 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
     eq(st.S.get().busy.save, true);
     st.setBusy("save", false);
     eq(st.S.get().busy.save, undefined, "off removes the key");
+  });
+  test("applyBasePage: offset 0 replaces the list; offset = loaded length appends; any other offset is stale and ignored; total follows the page", () => {
+    const f = st.applyBasePage;
+    assert(typeof f === "function", "applyBasePage exported from state.ts");
+    const a = ["A", "B", "C"];
+    const p1 = f({ entries: ["X"], total: 9 }, { entries: a, total: 5, offset: 0 });
+    eq(JSON.stringify(p1), JSON.stringify({ entries: a, total: 5 }));
+    const p2 = f(p1, { entries: ["D", "E"], total: 5, offset: 3 });
+    eq(JSON.stringify(p2.entries), JSON.stringify(["A", "B", "C", "D", "E"]));
+    eq(p2.total, 5);
+    const stale = f(p2, { entries: ["Q"], total: 5, offset: 3 });
+    assert(stale === p2, "a page whose offset is not the loaded length returns the input unchanged");
+    eq(JSON.stringify(a), JSON.stringify(["A", "B", "C"]), "inputs never mutate");
+    eq(st.BASE_PAGE, 300, "the page size the UI asks for");
+    eq(typeof st.S.get().validating, "boolean", "S.validating (the status line's live-check state)");
   });
 
   const apiMod = await load("../web/src/api.ts");
@@ -501,6 +542,28 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
         assert(Array.isArray(j.knownBuilds) && j.knownBuilds.includes("25143593"), JSON.stringify(j.knownBuilds));
         assert(j.gameBuild === null || typeof j.gameBuild === "string", "gameBuild");
         assert(j.mod && typeof j.mod.compare === "object" && ["match", "mismatch", "unknown"].includes(j.mod.compare.status), JSON.stringify(j.mod));
+      });
+    }
+    {
+      const get = async (q: string) => {
+        try {
+          const r = await fetch(`${base}/api/base?${q}`, { headers: { Connection: "close" } });
+          const body = await r.text();
+          let json: any = null;
+          try { json = JSON.parse(body); } catch { /* asserted below */ }
+          return { status: r.status, body, json };
+        } catch (e) { return { status: 0, body: String(e), json: null }; }
+      };
+      const page2 = await get("category=abilities&offset=300&limit=300");
+      const junk = await get("category=abilities&offset=-4&limit=abc");
+      test("server: GET /api/base?category=&offset=&limit= answers one page {entries, total, offset}; junk offset/limit clamp", () => {
+        eq(page2.status, 200, page2.body.slice(0, 200));
+        const j = page2.json;
+        assert(j && Array.isArray(j.entries) && typeof j.total === "number", page2.body.slice(0, 200));
+        eq(j.offset, 300);
+        eq(j.entries.length, Math.max(0, Math.min(300, j.total - 300)));
+        eq(junk.status, 200, junk.body.slice(0, 200));
+        eq(junk.json?.offset, 0, "negative offset → 0");
       });
     }
     const dist = join(EDITOR, "web", "dist", "index.html");
