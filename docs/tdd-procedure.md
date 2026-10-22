@@ -26,8 +26,13 @@ layer, which tier of test covers what, where a human still has to look, and what
   finding code is pinned at T0 by `editor/test/validator-tests.ts` on the synthetic base and fixture mods under
   `editor/test/fixtures/validator/` (one mod per code, plus a clean one); the sample mods against the real
   `.extracted/` remain the T1 check.
-- **Native framework**: the signature scanner is a pure unit with 13 host tests; everything else is verified by the
-  harness run (the symbols resolve, hooks install, Joker's Luck registers) and, since 2026-10-20, in a real fight:
+- **Native framework**: the pure modules have 70 host tests (`native/framework/test/`): the signature scanner (13),
+  the build gate + generated tables (6), the status definition rules + alias rewrite (14), the custom-status vtable
+  clone + thunk bodies (12, incl. a T1 clone of the real `.analysis/luckup-vtable.hex`), the entity/component walks
+  + apply/merge/set-stacks writes over fake objects (11) and symbol resolution / the launch gate / API bounds / the
+  hook plan (14). The glue (`framework.c`, `status_engine.c`: PE header, Mewjector calls, the game-ABI thunks and
+  the calls into the game) is verified by the harness run (the symbols resolve, hooks install, Joker's Luck
+  registers) and, since 2026-10-20, in a real fight:
   `mods/jokers-luck/tests/luck-rerolls.mewtest` enters a test fight (`enter TacticsTest`), gives the cats the status
   at battle start (`mods/_jokersluck-test/`, test-only) and asserts the stacks change across rounds
   (`expect stacks JokersLuck on 0 varied`).

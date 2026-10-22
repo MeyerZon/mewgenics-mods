@@ -447,6 +447,108 @@ function representativePoint(poly: number[]): [number, number] {
 }
 
 /**
+ * For the preview: which sub-paths of a path carry its fill in the emitted SWF (the ones `assignFillSides` gives a
+ * side). The engine then fills them EVEN-ODD as one contour set per fill style (ENGINE_DRAWING.fillRule), so the
+ * preview draws exactly these polygons with the even-odd stencil rule, whatever the authored `fillRule` was.
+ */
+export function fillSubpathMask(subs: SubPath[], fillRule: "nonzero" | "evenodd" | undefined): boolean[] {
+  return assignFillSides(subs, fillRule === "evenodd").map((s) => s !== "none");
+}
+
+/** Above this many flattened points per sub-path the O(n²) self-crossing scan is skipped (the overlap scan still runs). */
+export const FILL_RULE_SCAN_LIMIT = 1500;
+
+/**
+ * Where a `nonzero` path draws differently in-game. The engine fills each style even-odd over the sub-paths the
+ * emitter keeps, so two kept sub-paths whose outlines cross (a partial overlap: nonzero paints the union, even-odd
+ * leaves the overlap empty) or a sub-path that crosses itself (its doubly covered part empties) are holes in the game.
+ * Nesting is handled by `assignFillSides` and an `evenodd` path gets what it asked for, so both return nothing.
+ * @returns one short reason per problem (empty when the path draws as authored)
+ */
+export function fillRuleProblems(subs: SubPath[], fillRule: "nonzero" | "evenodd" | undefined): string[] {
+  if (fillRule === "evenodd") return [];
+  const sides = assignFillSides(subs, false);
+  const polys = subs.map((s, i) => (sides[i] === "none" ? null : flattenSubpath(s, 0.25)));
+  const boxes = polys.map((p) => (p ? polyBox(p) : null));
+  const out: string[] = [];
+  polys.forEach((p, i) => {
+    if (p && p.length / 2 <= FILL_RULE_SCAN_LIMIT && selfCrosses(p)) out.push(`sub-path ${i} crosses itself (the part it covers twice is empty)`);
+  });
+  for (let i = 0; i < polys.length; i++) {
+    const a = polys[i];
+    if (!a) continue;
+    for (let j = i + 1; j < polys.length; j++) {
+      const b = polys[j];
+      if (!b || !boxesTouch(boxes[i]!, boxes[j]!)) continue;
+      if (outlinesCross(a, b) || partiallyInside(a, b) || partiallyInside(b, a)) out.push(`sub-paths ${i} and ${j} partially overlap (their overlap is empty)`);
+    }
+  }
+  return out;
+}
+
+function polyBox(p: number[]): [number, number, number, number] {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < p.length; i += 2) {
+    const x = p[i]!, y = p[i + 1]!;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return [x0, y0, x1, y1];
+}
+function boxesTouch(a: [number, number, number, number], b: [number, number, number, number]): boolean {
+  return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+}
+/** Strict orientation sign of (a → b → c); 0 when collinear. */
+function orient(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number {
+  const v = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+  return v > 1e-9 ? 1 : v < -1e-9 ? -1 : 0;
+}
+/** Two segments cross at an interior point of both (touching ends and collinear overlaps do not count). */
+function properCross(ax: number, ay: number, bx: number, by: number, cx: number, cy: number, dx: number, dy: number): boolean {
+  const o1 = orient(ax, ay, bx, by, cx, cy);
+  const o2 = orient(ax, ay, bx, by, dx, dy);
+  const o3 = orient(cx, cy, dx, dy, ax, ay);
+  const o4 = orient(cx, cy, dx, dy, bx, by);
+  return o1 !== 0 && o2 !== 0 && o3 !== 0 && o4 !== 0 && o1 !== o2 && o3 !== o4;
+}
+/** Any two non-adjacent edges of one closed flat polygon cross. */
+function selfCrosses(p: number[]): boolean {
+  const n = p.length / 2;
+  for (let i = 0; i < n; i++) {
+    const i2 = (i + 1) % n;
+    for (let j = i + 2; j < n; j++) {
+      const j2 = (j + 1) % n;
+      if (j2 === i) continue;
+      if (properCross(p[2 * i]!, p[2 * i + 1]!, p[2 * i2]!, p[2 * i2 + 1]!, p[2 * j]!, p[2 * j + 1]!, p[2 * j2]!, p[2 * j2 + 1]!)) return true;
+    }
+  }
+  return false;
+}
+/** Any edge of `a` crosses any edge of `b` (a partial overlap; nested and disjoint outlines never cross). */
+function outlinesCross(a: number[], b: number[]): boolean {
+  const na = a.length / 2, nb = b.length / 2;
+  if (na * nb > FILL_RULE_SCAN_LIMIT * FILL_RULE_SCAN_LIMIT) return false;
+  for (let i = 0; i < na; i++) {
+    const i2 = (i + 1) % na;
+    for (let j = 0; j < nb; j++) {
+      const j2 = (j + 1) % nb;
+      if (properCross(a[2 * i]!, a[2 * i + 1]!, a[2 * i2]!, a[2 * i2 + 1]!, b[2 * j]!, b[2 * j + 1]!, b[2 * j2]!, b[2 * j2 + 1]!)) return true;
+    }
+  }
+  return false;
+}
+/** Some but not all of (up to 16 sampled) vertices of `a` lie strictly inside `b` (overlaps whose outlines only share edges). */
+function partiallyInside(a: number[], b: number[]): boolean {
+  const n = a.length / 2;
+  const step = Math.max(1, Math.floor(n / 16));
+  let inside = 0, sampled = 0;
+  for (let i = 0; i < n; i += step) {
+    sampled++;
+    if (windingNumber(a[2 * i]!, a[2 * i + 1]!, b) !== 0) inside++;
+  }
+  return inside > 0 && inside < sampled;
+}
+
+/**
  * Winding number of (px, py) with respect to a flat closed polygon. Positive when the
  * polygon's `signedArea` is positive and the point is inside.
  */

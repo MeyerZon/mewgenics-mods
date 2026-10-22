@@ -100,6 +100,19 @@ export const TOOL_INPUT = {
     path: str("scene file inside the mod"),
     shapeId: str("the shape to export"),
   }),
+  bake_glow: z.object({
+    mod: str(),
+    path: str("scene file inside the mod"),
+    shapeId: str("the shape to put a halo under"),
+    color: str("halo colour: #rrggbb[aa] or gray:N (its alpha is the ceiling)"),
+    blur: num("halo reach in the shape's local px (0.5..255)"),
+    strength: num("alpha multiplier of the falloff (default 1; >1 saturates the inner bands)").optional(),
+    kind: z.enum(["glow", "dropShadow"]).describe("glow (centred, default) or dropShadow (offset by dx, dy)").optional(),
+    dx: num("dropShadow offset x, local px (default 4)").optional(),
+    dy: num("dropShadow offset y, local px (default 4)").optional(),
+    steps: num("concentric bands 1..8 (default 4)").optional(),
+    replace: bool("re-bake over an existing <shapeId>_glow").optional(),
+  }),
   build_swf: z.object({
     mod: str(),
     path: str("scene file inside the mod"),
@@ -314,6 +327,11 @@ export const TOOLS: ToolDef[] = [
     "export_svg",
     "Export one shape of a scene as mods/<mod>/art/<shapeId>.svg for an external vector editor (VectorCraft, Inkscape, …: static drawing only — animation stays in the scene's sprites). Re-import the edited file with import_svg { mod, path: 'art/<shapeId>.svg', options: { applyViewBox: false }, into: { scene, shapeId, replace: true } } to keep its coordinates.",
     (a) => api.exportShapeSvg(a.mod, a.path, a.shapeId),
+  ),
+  def(
+    "bake_glow",
+    "Bake a glow or drop shadow into a scene the way the game allows: the SWF player stops on any PlaceObject3 filter (\"ERROR: FILTERS NOT SUPPORTED\"), so this adds an ordinary halo shape <shapeId>_glow — concentric bands of the source outline pushed out by blur with falling alpha — and places it immediately under the source on every sprite layer that places it. The source shape is never changed. For engine-side light/tint instead, use the passives CharacterLightSource { glow [r g b a] size N } (a ground disc) or AdvancedTint [mul][add] (docs/data-mods.md).",
+    (a) => api.bakeGlowIntoScene({ mod: a.mod, scenePath: a.path, shapeId: a.shapeId, color: a.color, blur: a.blur, strength: a.strength, kind: a.kind, dx: a.dx, dy: a.dy, steps: a.steps, replace: a.replace }),
   ),
   def(
     "build_swf",

@@ -116,6 +116,8 @@ export interface InspectResponse {
   exports?: SwfReportExport[];
   doAbc?: number;
   bytes?: number;
+  /** what the game's loader would do with the file (swf-rules.ts) */
+  findings?: Finding[];
 }
 
 export type PaletteRow = [number, number, number][];

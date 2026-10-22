@@ -370,7 +370,7 @@ if (BASE_READY) {
     eq(p.touched.map((t) => `${t.key}:${t.status}`).join(","), "GoldenRat:added");
     eq(p.effectiveEntryCount, p.baseEntryCount + 1);
   });
-  test("_golden-merge .patch preview: Pooter changed — faction.overwrite allies and stats.speed.add 10 -> 15", () => {
+  test("_golden-merge .patch preview: Pooter changed — faction.overwrite allies, stats.speed.add 10 -> 15 and properties.health.multiply 2 -> 12", () => {
     const p = previewMerge("_golden-merge", "data/characters/enemies.gon.patch");
     assert(p.ok, `preview: ${JSON.stringify(p)}`);
     if (!p.ok || p.kind !== "gon") throw new Error("gon preview expected");
@@ -379,6 +379,7 @@ if (BASE_READY) {
     const eff = p.touched[0]!.effective || "";
     assert(/faction\s+allies/.test(eff), `faction overwritten: ${eff.slice(0, 500)}`);
     assert(/speed\s+15\b/.test(eff), `speed 5 + 10 = 15: ${eff.slice(0, 500)}`);
+    assert(/health\s+12\b/.test(eff), `health 6 * 2 = 12 (the in-game twin is mods/_golden-merge/tests/numeric.mewtest): ${eff.slice(0, 500)}`);
     eq(p.effectiveEntryCount, p.baseEntryCount);
   });
   test("_golden-merge CSV .append preview: two 12-column loc rows added (GOLDEN_RAT_NAME, APPENDED_RAT_NAME)", () => {
@@ -455,7 +456,7 @@ async function mcpSmoke(): Promise<void> {
     test("initialize returns protocol 2025-06-18", () => eq(init.protocolVersion, "2025-06-18"));
     notify("notifications/initialized", {});
     const list = (await req("tools/list", {})) as { tools: unknown[] };
-    test("tools/list returns the 24 editor tools", () => eq(list.tools.length, 24));
+    test("tools/list returns the 25 editor tools", () => eq(list.tools.length, 25));
     let bres: unknown = null, berr = "";
     try { bres = await req("tools/call", { name: "build_swf", arguments: { mod: "dev-sandbox", path: "art/my_rat.scene.json", dryRun: true } }); } catch (e) { berr = String(e); }
     test("tools/call build_swf (dry run of dev-sandbox/art/my_rat.scene.json) -> ok, bytes > 0, the reader self-check passes", () => {
@@ -538,6 +539,10 @@ await mcpSmoke();
   runArtImportTests(test, assert, eq);
   const { runArtTextTests } = await import("./art-text-tests.ts");
   await runArtTextTests(test, assert, eq);
+  const { runArtGlowTests } = await import("./art-glow-tests.ts");
+  await runArtGlowTests(test, assert, eq);
+  const { runArtEngineRulesTests } = await import("./art-engine-rules-tests.ts");
+  await runArtEngineRulesTests(test, assert, eq);
 }
 
 // ---- 7. In-game test harness runner (fake game; never launches Mewgenics) ---

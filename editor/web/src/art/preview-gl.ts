@@ -9,24 +9,23 @@
 //   * frames come from the SAME pure baking the SWF emitter uses (`timeline.ts`), so
 //     the pixels on screen are computed from the matrices/cxforms the SWF will carry;
 //   * shapes are filled with the stencil technique (no triangulation): one TRIANGLE_FAN
-//     per sub-path writes winding counts (nonzero: INCR_WRAP/DECR_WRAP by facing;
-//     evenodd: INVERT), then the path's bounding quad is drawn where stencil != 0 and
-//     clears the count as it covers;
+//     per sub-path writes winding counts with the ENGINE's rule — even-odd (INVERT), over
+//     the sub-paths the emitter keeps (`fillSubpathMask`, shape.ts) — then the path's
+//     bounding quad is drawn where stencil != 0 and clears the count as it covers;
 //   * the fragment shader is a literal port of the engine's `paletted_full.shader`:
 //     gray level N = floor(r*15+.5) selects column N of palette row `u_row`; pixels whose
 //     channels differ pass through; the result is `* cxmul + cxadd` (OBSERVED GLSL);
 //   * bitmaps are uploaded premultiplied and un-premultiplied in the shader exactly like
 //     `swf_lib.shader` (`rgb /= max(a, .001)`).
 //
-// OBSERVED 2026-10-20 in the game (npm run test:artprobe; src/core/art/engine-behaviour.ts) and followed here: a
-// nested sprite advances on its own clock (`clock`: frames since playback started, not the parent's frame);
-// bitmap fills are sampled LINEAR and clamped. Enemy clips are drawn mirrored by the game (the preview does not).
-// INFERRED engine behaviours this renderer relies on (not verified in-engine):
-//   * PlaceObject2 cxform applies AFTER the palette remap (as the shader's
-//     `* color_xform[0] + color_xform[1]` suggests);
-//   * (bitmap sampling: OBSERVED, see above)
-//   * a bitmap fill's pixel space is the path's local space (bitmap px (u,v) sits at
-//     local (u,v)); the emitter's fill matrix convention must match.
+// Engine behaviours this renderer follows, all OBSERVED (src/core/art/engine-behaviour.ts is the one place they live;
+// 2026-10-20 in the game, npm run test:artprobe, and 2026-10-21 in the decompiled display path, docs/engine-map.md
+// "SWF loader and display path"): a nested sprite advances on its own clock (`clock`: frames since playback started,
+// not the parent's frame); bitmap fills (type 0x41) are sampled LINEAR and clamped; the fill rule is even-odd per
+// fill style; the PlaceObject cxform applies AFTER the palette remap (paletted_full.shader); every gradient pads
+// (no reflect/repeat in the rasterizer or the shader). Enemy clips are drawn mirrored by the game (the preview does
+// not). Still INFERRED: a bitmap fill's pixel space is the path's local space (bitmap px (u,v) sits at local (u,v));
+// the emitter's fill matrix convention must match.
 
 import {
   normalizePath,
@@ -41,8 +40,9 @@ import {
 } from "../../../src/core/art/geometry.ts";
 import { parseFill, fillToRgba, parseColor } from "../../../src/core/art/scene.ts";
 import { bakeSprite, bakeStage, labelList } from "../../../src/core/art/timeline.ts";
-import { nestedFrame } from "../../../src/core/art/engine-behaviour.ts";
+import { nestedFrame, ENGINE_DRAWING } from "../../../src/core/art/engine-behaviour.ts";
 import { strokePolys } from "../../../src/core/art/stroke.ts";
+import { fillSubpathMask } from "../../../src/core/art/shape.ts";
 import { C2D_COMPOSITE } from "../../../src/core/art/effects.ts";
 import { textRgba } from "../../../src/core/art/text.ts";
 import type { SceneText } from "../../../src/core/art/text.ts";
@@ -245,7 +245,8 @@ interface PreparedPath {
   subs: SubPath[];
   fill: Fill;
   fillRgba: Rgba | null;
-  fillRule: "nonzero" | "evenodd";
+  /** per sub-path: carries the fill in the SWF (shape.ts fillSubpathMask); the engine fills those even-odd */
+  fillMask: boolean[];
   strokeRgba: Rgba | null;
   /** the stroke's parsed fill (a gradient stroke has strokeRgba null) */
   strokeFill: Fill | null;
@@ -285,7 +286,7 @@ function prepareShape(shape: SceneShape): PreparedShape {
       subs,
       fill,
       fillRgba: fillToRgba(fill),
-      fillRule: p.fillRule === "evenodd" ? "evenodd" : "nonzero",
+      fillMask: fill.kind === "none" ? subs.map(() => false) : fillSubpathMask(subs, p.fillRule),
       strokeRgba: strokeFill ? fillToRgba(strokeFill) : null,
       strokeFill,
       strokeWidth,
@@ -308,6 +309,14 @@ function matScale(m: Mat): number {
  * @param mat composed placement matrix @param tolLocal flatten tolerance in shape-local px
  * @returns flat polygons [x0,y0,x1,y1,...] (stage space)
  */
+/** The engine's fill rule (OBSERVED: libtess2 TESS_WINDING_ODD baked into tessTesselate 0xa73bb0). */
+const FILL_RULE: "nonzero" | "evenodd" = ENGINE_DRAWING.fillRule;
+
+/** The flattened sub-paths that carry the fill (the engine fills exactly these, even-odd). */
+function fillPolysOf(path: PreparedPath, polys: number[][]): number[][] {
+  return polys.filter((_, i) => path.fillMask[i]);
+}
+
 function flattenPath(path: PreparedPath, mat: Mat, tolLocal: number): number[][] {
   const polys: number[][] = [];
   for (const sub of path.subs) {
@@ -700,7 +709,8 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
       g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
       g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
       g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
-      gradTex.set(id, { tex, unit: gradientUnitMatrix(gd), mode: gd.kind === "radial" ? 3 : 2, focal: gradientFocal(gd), spread: swfSpread(gd.spread) });
+      // OBSERVED: the game pads every gradient (ENGINE_DRAWING.gradientSpread); the authored spread only reaches the SWF bits
+      gradTex.set(id, { tex, unit: gradientUnitMatrix(gd), mode: gd.kind === "radial" ? 3 : 2, focal: gradientFocal(gd), spread: ENGINE_DRAWING.gradientSpread === "pad" ? 0 : swfSpread(gd.spread) });
     }
   }
 
@@ -1051,26 +1061,27 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
         for (const path of prep.paths) {
           const polys = flattenPath(path, mat, tol);
           if (!polys.length) continue;
-          if (path.fill.kind !== "none") {
+          const fillPolys = fillPolysOf(path, polys);
+          if (path.fill.kind !== "none" && fillPolys.length) {
             if (definingMask) {
-              glFill(polys, path.fillRule, null);
+              glFill(fillPolys, FILL_RULE, null);
             } else if (path.fill.kind === "bitmap") {
               const bm = bitmapTex.get(path.fill.id);
               const inv = bm ? invert(multiply(mat, path.transform)) : null;
               if (bm && inv) {
-                glFill(polys, path.fillRule, { color: { r: 255, g: 255, b: 255, a: 255 }, cx, bitmap: { tex: bm.tex, width: bm.width, height: bm.height, inv } });
+                glFill(fillPolys, FILL_RULE, { color: { r: 255, g: 255, b: 255, a: 255 }, cx, bitmap: { tex: bm.tex, width: bm.width, height: bm.height, inv } });
               } else if (!bm) {
                 missingBitmaps++;
-                glFill(polys, path.fillRule, { color: { r: 255, g: 0, b: 255, a: 128 }, cx, bitmap: null });
+                glFill(fillPolys, FILL_RULE, { color: { r: 255, g: 0, b: 255, a: 128 }, cx, bitmap: null });
               }
             } else if (path.fill.kind === "gradient") {
               const gt = gradTex.get(path.fill.id);
               const inv = gt ? invert(multiply(multiply(mat, path.transform), gt.unit)) : null;
               if (gt && inv) {
-                glFill(polys, path.fillRule, { color: { r: 255, g: 255, b: 255, a: 255 }, cx, bitmap: { tex: gt.tex, width: 1, height: 1, inv }, grad: { mode: gt.mode, focal: gt.focal, spread: gt.spread } });
+                glFill(fillPolys, FILL_RULE, { color: { r: 255, g: 255, b: 255, a: 255 }, cx, bitmap: { tex: gt.tex, width: 1, height: 1, inv }, grad: { mode: gt.mode, focal: gt.focal, spread: gt.spread } });
               }
             } else if (path.fillRgba) {
-              glFill(polys, path.fillRule, { color: path.fillRgba, cx, bitmap: null });
+              glFill(fillPolys, FILL_RULE, { color: path.fillRgba, cx, bitmap: null });
             }
           }
           const sg = path.strokeFill && path.strokeFill.kind === "gradient" ? gradTex.get(path.strokeFill.id) : undefined;
@@ -1246,8 +1257,9 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
         for (const path of prep.paths) {
           const polys = flattenPath(path, mat, tol);
           if (!polys.length) continue;
-          const p2 = toPath(polys, null);
-          if (path.fill.kind !== "none") {
+          const fillPolys = fillPolysOf(path, polys);
+          const p2 = toPath(fillPolys, null);
+          if (path.fill.kind !== "none" && fillPolys.length) {
             if (defining) {
               const mp = maskPaths[maskPaths.length - 1];
               if (mp) mp.addPath(p2);
@@ -1255,7 +1267,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
               const img = remappedBitmap(path.fill.id);
               if (img) {
                 c.save();
-                c.clip(p2, path.fillRule);
+                c.clip(p2, FILL_RULE);
                 const fm = multiply(mat, path.transform);
                 c.transform(fm[0], fm[1], fm[2], fm[3], fm[4], fm[5]);
                 // cxform approximated for bitmaps: alpha multiplier only
@@ -1268,7 +1280,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
               } else {
                 missingBitmaps++;
                 c.fillStyle = "rgba(255,0,255,0.5)";
-                c.fill(p2, path.fillRule);
+                c.fill(p2, FILL_RULE);
                 drawCalls++;
                 fillsDrawn++;
               }
@@ -1278,9 +1290,9 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
                 // Canvas2D fallback: stops remapped as colours (the GL path remaps per pixel); spread is pad only
                 const fm = multiply(multiply(mat, path.transform), gradientUnitMatrix(gd));
                 c.save();
-                c.clip(p2, path.fillRule);
+                c.clip(p2, FILL_RULE);
                 c.transform(fm[0], fm[1], fm[2], fm[3], fm[4], fm[5]);
-                const grad = gd.kind === "radial" ? c.createRadialGradient(gradientFocal(gd), 0, 0, 0, 0, 1) : c.createLinearGradient(-1, 0, 1, 0);
+                const grad =gd.kind === "radial" ? c.createRadialGradient(gradientFocal(gd), 0, 0, 0, 0, 1) : c.createLinearGradient(-1, 0, 1, 0);
                 for (const s of resolveStops(gd.stops)) grad.addColorStop(s.ratio / 255, css(remapColor(s.color, cx, palBytes, paletteRow, showGray)));
                 c.fillStyle = grad;
                 c.fillRect(-1e4, -1e4, 2e4, 2e4);
@@ -1290,7 +1302,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: PreviewOptions = 
               }
             } else if (path.fillRgba) {
               c.fillStyle = css(remapColor(path.fillRgba, cx, palBytes, paletteRow, showGray));
-              c.fill(p2, path.fillRule);
+              c.fill(p2, FILL_RULE);
               drawCalls++;
               fillsDrawn++;
             }
