@@ -96,6 +96,22 @@
     "status": "open"
   },
   {
+    "id": "pr104-data-glow",
+    "pr": 104,
+    "question": "In shot-glow, does FwGlowRat (glowing from DATA: the status FwGlow_ff00ff, no DLL) carry the same magenta band hugging its sprite as the native-API Rat, with nothing over its body (and none in shot-noglow)?",
+    "shots": ["ingame-runs/*-fw-glow-data-glow/shot-glow.png","ingame-runs/*-fw-glow-data-glow/shot-noglow.png"],
+    "regenerate": "cd editor && npm run test:unitglow -- --data",
+    "status": "open"
+  },
+  {
+    "id": "pr104-glow-icon",
+    "pr": 104,
+    "question": "The glow status shows LuckUp's four-leaf clover on the unit's status bar (and should tooltip \"Glowing\"): acceptable for a cosmetic status, or should hiding the icon be a follow-up?",
+    "shots": ["ingame-runs/*-fw-glow-data-glow/shot-glow.png"],
+    "regenerate": "cd editor && npm run test:unitglow -- --data",
+    "status": "open"
+  },
+  {
     "id": "pr59-ruffle-tab",
     "pr": 59,
     "question": "Art mode → Ruffle tab → vanilla ability_icons.swf or catparts.swf: is it useful as a reference next to your art?",
