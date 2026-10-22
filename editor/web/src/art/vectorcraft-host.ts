@@ -30,8 +30,9 @@ export interface VcApi {
 
 /** Served from the editor's own origin (Vite copies web/public/ into dist/; web/server.ts serves .wasm / .ttf with the right MIME). */
 export const VECTORCRAFT_DIR = "./vectorcraft/";
-/** The export we ask for: presentation attributes (what svg-import.ts reads) and text as outlines. */
-export const VC_EXPORT_SVG = { format: "svg", svg: { styling: "presentation", outlineText: true } } as const;
+/** The export we ask for (shared with the headless MCP tool): presentation attributes (what svg-import.ts reads) and text as outlines. */
+export { VC_EXPORT_SVG } from "../../../src/core/art/vectorcraft-exec.ts";
+import { VC_EXPORT_SVG } from "../../../src/core/art/vectorcraft-exec.ts";
 
 /** The iframe URL; `?webgl` forces the WebGL2 backend when WebGPU misbehaves (upstream HOSTING.md). */
 export function vectorcraftUrl(o: { webgl?: boolean } = {}): string {
