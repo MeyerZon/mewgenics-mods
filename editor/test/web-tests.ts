@@ -504,6 +504,49 @@ export async function runWebTests(test: TestFn, assert: AssertFn, eq: EqFn): Pro
   // PaneBoundary lives in a JSX-free module so Node can load it (ui.tsx re-exports it). React's server renderer does
   // not run error boundaries, so this covers the two halves the boundary is made of: the static
   // getDerivedStateFromError (error → state) and render() for both states, rendered to HTML; reset() clears it.
+  const rs = await load("../web/src/rooms/room-state.ts");
+  test("web/src/rooms/room-state.ts loads", () => assert(!rs.__error, rs.__error ?? ""));
+  test("rooms clampSel: a move stays inside 0..w-1 / 0..h-1; no selection starts at (0,0)", () => {
+    eq(JSON.stringify(rs.clampSel?.({ x: 9, y: 0 }, 1, -1, 10, 10)), '{"x":9,"y":0}');
+    eq(JSON.stringify(rs.clampSel?.({ x: 4, y: 5 }, -1, 1, 10, 10)), '{"x":3,"y":6}');
+    eq(JSON.stringify(rs.clampSel?.({ x: 0, y: 9 }, -3, 7, 10, 10)), '{"x":0,"y":9}');
+    eq(JSON.stringify(rs.clampSel?.(null, 1, 0, 10, 10)), '{"x":0,"y":0}');
+  });
+  test("rooms moveSelection(dx, dy): moves R.sel in the open level and clamps at the edges; without a level it does nothing", () => {
+    const R = rs.R;
+    assert(!!R && typeof rs.moveSelection === "function", "R + moveSelection exported");
+    const level = { width: 10, height: 10, tiles: new Array(100).fill(0), objects: [] };
+    R.set({ level, sel: { x: 8, y: 1 } });
+    rs.moveSelection(1, 0);
+    eq(JSON.stringify(R.get().sel), '{"x":9,"y":1}');
+    rs.moveSelection(1, -1);
+    eq(JSON.stringify(R.get().sel), '{"x":9,"y":0}');
+    rs.moveSelection(-20, 20);
+    eq(JSON.stringify(R.get().sel), '{"x":0,"y":9}');
+    R.set({ level: null, sel: null });
+    rs.moveSelection(1, 1);
+    eq(R.get().sel, null);
+  });
+  test("rooms findingsLevel(counts): errors → err, else warnings → warn, else ok (missing counts → ok)", () => {
+    eq(rs.findingsLevel?.({ errors: 1, warnings: 3, infos: 0 }), "err");
+    eq(rs.findingsLevel?.({ errors: 0, warnings: 2, infos: 5 }), "warn");
+    eq(rs.findingsLevel?.({ errors: 0, warnings: 0, infos: 4 }), "ok");
+    eq(rs.findingsLevel?.(undefined), "ok");
+  });
+  test("rooms setTool / setPaletteKind / setRightTab: named actions; choosing the Tile or Object tool shows that palette", () => {
+    const R = rs.R;
+    rs.setPaletteKind("object");
+    eq(R.get().paletteKind, "object");
+    rs.setTool("tile");
+    eq(R.get().tool, "tile");
+    eq(R.get().paletteKind, "tile");
+    rs.setTool("select");
+    eq(R.get().paletteKind, "tile", "Select keeps the palette");
+    rs.setRightTab("findings");
+    eq(R.get().rightTab, "findings");
+    rs.setRightTab("inspector");
+  });
+
   const bd = await load("../web/src/components/boundary.ts");
   test("web/src/components/boundary.ts loads", () => assert(!bd.__error, bd.__error ?? ""));
   let rds: Record<string, any> = {};

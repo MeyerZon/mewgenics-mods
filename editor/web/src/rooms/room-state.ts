@@ -43,6 +43,9 @@ type WriteLevelResult = { ok: true; path: string; bytes: number; findings: Repor
 
 export type RoomTool = "select" | "tile" | "object" | "erase";
 export type RoomView = "flat" | "iso";
+export type PaletteKind = "tile" | "object";
+export type RoomRightTab = "inspector" | "findings";
+export type CellPos = { x: number; y: number };
 
 /** GET /api/level-art: which clip draws each palette id in the tileset (src/core/level/level-art.ts) */
 export interface LevelArtInfo {
@@ -80,6 +83,10 @@ export interface RoomState {
   tileFilter: string;
   objectFilter: string;
   view: RoomView;
+  /** the explorer Palette shows one kind at a time (Tiles | Objects) */
+  paletteKind: PaletteKind;
+  /** the right panel: Inspector | Findings */
+  rightTab: RoomRightTab;
   /** the tileset the art is shown in ("" until /api/level-art answers with the room's default) */
   tileset: string;
   art: LevelArtInfo | null;
@@ -102,6 +109,8 @@ export const R = createStore<RoomState>({
   tileFilter: "",
   objectFilter: "",
   view: "flat",
+  paletteKind: "tile",
+  rightTab: "inspector",
   tileset: "",
   art: null,
   artMeta: {},
@@ -130,13 +139,52 @@ export async function requestCloseLevel(): Promise<void> {
   closeLevel();
 }
 
-export function setRoomTool(tool: RoomTool): void {
-  R.set({ tool });
+/** A toolbar tool; Tile and Object also show that kind in the Palette. */
+export function setTool(tool: RoomTool): void {
+  R.set(tool === "tile" || tool === "object" ? { tool, paletteKind: tool } : { tool });
 }
-export function setRoomView(view: RoomView): void {
+export function setView(view: RoomView): void {
   R.set({ view });
 }
-export function setPaletteFilter(kind: "tile" | "object", value: string): void {
+export function setPaletteKind(paletteKind: PaletteKind): void {
+  R.set({ paletteKind });
+}
+export function setRightTab(rightTab: RoomRightTab): void {
+  R.set({ rightTab });
+}
+
+/** The selection moved by (dx, dy), clamped to the w x h grid; no selection starts at (0, 0). Pure. */
+export function clampSel(sel: CellPos | null, dx: number, dy: number, w: number, h: number): CellPos {
+  if (!sel) return { x: 0, y: 0 };
+  return { x: Math.max(0, Math.min(w - 1, sel.x + dx)), y: Math.max(0, Math.min(h - 1, sel.y + dy)) };
+}
+
+/** The Summary card level of a report's counts: any error → err, else any warning → warn, else ok. Pure. */
+export function findingsLevel(counts: { errors: number; warnings: number; infos?: number } | undefined | null): "ok" | "warn" | "err" {
+  if (!counts) return "ok";
+  return counts.errors > 0 ? "err" : counts.warnings > 0 ? "warn" : "ok";
+}
+
+/** A cell reached by keyboard (or clicked with Select): it becomes the selection and the one tabbable cell. */
+export function selectCell(x: number, y: number): void {
+  R.set({ sel: { x, y } });
+}
+
+/** Arrow keys on the grid: move the selection inside the open level. */
+export function moveSelection(dx: number, dy: number): void {
+  const { level, sel } = R.get();
+  if (!level) return;
+  R.set({ sel: clampSel(sel, dx, dy, level.width, level.height) });
+}
+
+/** Enter / Space on the grid: the current tool at the selection, as a click there. */
+export function applyAtSelection(): void {
+  const { level, sel } = R.get();
+  if (!level) return;
+  const at = sel ?? { x: 0, y: 0 };
+  applyTool(at.x, at.y, false);
+}
+export function setPaletteFilter(kind: PaletteKind, value: string): void {
   R.set(kind === "tile" ? { tileFilter: value } : { objectFilter: value });
 }
 export function openNewRoom(): void {
@@ -246,10 +294,10 @@ export function addObjectAt(x: number, y: number): void {
 }
 
 export function chooseTileBrush(id: number): void {
-  R.set({ tileBrush: id, tool: "tile" });
+  R.set({ tileBrush: id, tool: "tile", paletteKind: "tile" });
 }
 export function chooseObjectBrush(id: number): void {
-  R.set({ objectBrush: id, tool: "object" });
+  R.set({ objectBrush: id, tool: "object", paletteKind: "object" });
 }
 export function brushLabel(p: LvlPick): string {
   return typeof p === "number" ? String(p) : `random(${p.map((c) => `${c.id}:${c.weight}`).join(", ")})`;

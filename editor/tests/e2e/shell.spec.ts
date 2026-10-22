@@ -126,6 +126,8 @@ test.describe("shell — one command bar", () => {
     await expect(page.locator(".rcell")).toHaveCount(100);
     await expect(page.locator(".room-save")).toHaveCount(0);
     await expect(saveBtn(page)).toBeEnabled();
+    // the findings live in the right panel's Findings tab (UX PR 5)
+    await page.locator(".rightpanel [role=tablist] [role=tab]", { hasText: "Findings" }).click();
     await expect(page.locator(".roomfindings")).toContainText("lvl-no-player-spawn");
     await expect(page.locator(".topbar .pill").last()).toContainText("1 warning");
   });
