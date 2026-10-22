@@ -1,0 +1,7 @@
+// include names the game never finds in the pack (it joins dir + name with no normalisation)
+newstuff {
+	#include "../maps/std_nodes.gon"
+	#include "/std_nodes.gon"
+	#include "sub\deeper.gon"
+	#include "std_nodes.gon"
+}

@@ -1,0 +1,10 @@
+// #define / #end macros: the game expands them before parsing (Gon_Pre_CollectDefines 0xa4f4a0 /
+// Gon_Pre_ExpandMacros 0xa501c0) and so does the editor
+#define NODE
+	shop1 {
+		type shop
+	}
+#end
+morestuff {
+	#NODE
+}

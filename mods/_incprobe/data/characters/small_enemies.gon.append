@@ -1,0 +1,15 @@
+// test-only (include probe, 2026-10-22): a two-argument #define macro (Gon_Pre_CollectDefines 0xa4f4a0, expanded by
+// Gon_Pre_ExpandMacros 0xa501c0 / Gon_Pre_SubstituteArgs 0xa4e0b0): `#INCPROBE_PROPS 55 2` becomes the properties
+// block below with hp = 55, mv = 2. tests/include-probe.mewtest: properties.health 55, properties.movement 2.
+#define INCPROBE_PROPS(hp, mv)
+    properties {
+        tag rat
+        faction enemies
+        movement mv
+        health hp
+    }
+#end
+IncProbeMacro {
+    variant_of Rat
+    #INCPROBE_PROPS 55 2
+}

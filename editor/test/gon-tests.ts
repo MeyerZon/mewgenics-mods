@@ -21,8 +21,9 @@ import { scalarType, numericValue } from "../src/core/gon/typing.ts";
 import { append, deepMerge, patchMerge } from "../src/core/overlay/merge.ts";
 import { preprocess, stripComments } from "../src/core/gon/preprocess.ts";
 import { locateInclude, preprocessFile } from "../src/core/gon-includes.ts";
-import { EXTRACTED_DATA } from "../src/core/repo.ts";
-import type { VNode, VScalar, VArray, VObject } from "../src/core/gon/types.ts";
+import { EXTRACTED_DATA, MODS_DIR } from "../src/core/repo.ts";
+import { parseScript } from "../src/core/ingame/script.ts";
+import type { VNode, VScalar, VArray, VObject, VEntry } from "../src/core/gon/types.ts";
 import type { TestFn, AssertFn, EqFn } from "./run-tests.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -364,9 +365,61 @@ export function runGonPreprocessTests(test: TestFn, assert: AssertFn, eq: EqFn):
     const r = pp('#include "a.gon"', { "a.gon": '#include "a.gon"' });
     assert(r.includes.some((i) => i.cycle === true), JSON.stringify(r.includes.slice(0, 3)));
   });
-  test("gon pre-pass: `#define` is reported (macros are expanded by the game, not modelled by the editor)", () => {
+  // ---- passes 3/4: `#define … #end` macros (Gon_Pre_CollectDefines 0xa4f4a0, Gon_Pre_ExpandMacros 0xa501c0,
+  // Gon_Pre_SubstituteArgs 0xa4e0b0). Vanilla uses no #define (0 of 210 files), so every case here is SYNTHETIC,
+  // hand-derived from the decompiles; the in-game check is mods/_incprobe/tests/include-probe.mewtest (IncProbeMacro).
+  test("gon macros: `#define NAME … #end` is removed and `#NAME` becomes the body (no parameters: body starts after the blanks)", () => {
     const r = pp("#define NODE\n shop1 { type shop }\n#end\nx { #NODE }");
     eq(r.defines.join(","), "NODE");
+    eq(r.text, "\nx { shop1 { type shop }\n }");
+  });
+  test("gon macros: `#define NAME(a, b)` — the body starts right after `)`, `#NAME x y` substitutes whole tokens", () => {
+    const r = pp("#define NODE(name, kind) name { type kind } #end\nnodes { #NODE shop1 shop #NODE camp1, camp }");
+    const nodes = field(r.text, "nodes");
+    if (nodes.t !== "obj") throw new Error("nodes");
+    eq(nodes.entries.map((e) => `${e.key}=${e.value.t}`).join(","), "shop1=obj,camp1=obj");
+    eq(r.text, "\nnodes {  shop1 { type shop }   camp1 { type camp }  }");
+  });
+  test("gon macros: arguments are tokens split by blanks and ( ) , : = [ ] { } — `#NAME (a, b)` works but leaves its `)`", () => {
+    eq(pp("#define P(a, b) a=b #end\nv #P (x, 5)").text, "\nv  x=5 )");
+    eq(pp("#define P(a, b) a=b #end\nv #P x:5").text, "\nv  x=5 ");
+  });
+  test("gon macros: `#NAME(a,b)` is not a call — the #-word must equal `#NAME` exactly (then the tokenizer sees a # comment)", () => {
+    eq(pp("#define P(a, b) a=b #end\nv 1 #P(x,5)").text, "\nv 1 #P(x,5)");
+  });
+  test("gon macros: substitution is per token (blank/separator-delimited): `x_y`, `\"x\"` and `#x` are left alone", () => {
+    eq(pp('#define T(x) x x_y "x" #x [x] #end\nv #T 5').text, '\nv  5 x_y "x" #x [5] ');
+  });
+  test("gon macros: the body's last token is substituted only when a delimiter follows it (SubstituteArgs flushes it raw)", () => {
+    eq(pp("#define T(x) x#end\nv #T 5").text, "\nv  x");
+  });
+  test("gon macros: a space before `(` still opens a parameter list (`#define X (1)` is a 1-parameter macro)", () => {
+    eq(pp("#define X (1) one #end\nv #X 9").text, "\nv  one ");
+  });
+  test("gon macros: expansion repeats over the whole text until a pass changes nothing (a macro may use another)", () => {
+    const r = pp("#define A #B #end\n#define B 7 #end\nv #A");
+    eq((field(r.text, "v") as VScalar).raw, "7");
+    eq(r.macroPasses, 2, "two expanding passes");
+    assert(!r.macroRunaway, "not runaway");
+  });
+  test("gon macros: at most 256 expanding passes (a self-referencing macro stops there)", () => {
+    const r = pp("#define A #A #end\nv #A");
+    eq(r.macroPasses, 256);
+    assert(r.macroRunaway === true, "runaway flagged");
+  });
+  test("gon macros: definitions are collected before expansion (use before define works); the last definition wins", () => {
+    eq((field(pp("v #A\n#define A 3 #end").text, "v") as VScalar).raw, "3");
+    eq((field(pp("#define A 1 #end\n#define A 2 #end\nv #A").text, "v") as VScalar).raw, "2");
+  });
+  test("gon macros: nothing happens inside \"…\" (neither #define nor #NAME), and an unknown #NAME stays as text", () => {
+    eq(pp('#define A 1 #end\ns "#A" t #A u #NOPE').text, '\ns "#A" t 1  u #NOPE');
+    eq(pp('s "#define A 1 #end"').defines.length, 0);
+  });
+  test("gon macros: a #define in an included file is visible to the includer (includes are inlined first)", () => {
+    eq((field(pp('#include "m.gon"\nv #A', { "m.gon": "#define A 4 #end" }).text, "v") as VScalar).raw, "4");
+  });
+  test("gon macros: `#end` ends the body even mid-word (the #-word test runs at every `#`)", () => {
+    eq(pp("#define A 1#end\nv #A").text, "\nv 1");
   });
   test("gon tokenizer: `/*/` closes the block comment like the pre-pass (x 5, y 6)", () => {
     const r = root("x /*/ 5\ny 6");
@@ -387,6 +440,23 @@ export function runGonPreprocessTests(test: TestFn, assert: AssertFn, eq: EqFn):
     assert(t.outside, "outside");
     eq(t.source, null);
     eq(t.text, null);
+  });
+  // The game joins `dir + name` with no normalisation; the pack index is looked up by that exact string and a loose
+  // (-modpaths) file by `<modpath> + string` through std::filesystem (FileManager_FileExists 0x9a14c0), so a `..`,
+  // `.`, `\`, leading-`/` or drive-letter name never matches a pack file (fatal) and reaches the OS for loose files.
+  for (const name of ["../maps/std_nodes.gon", "./std_nodes.gon", "sub/../std_nodes.gon", "/std_nodes.gon", "C:/x.gon", "sub\\deeper.gon"]) {
+    test(`gon include path: \`${name}\` is not a literal pack path — flagged unsafe, never read`, () => {
+      const t = locateInclude({ resource: "data/maps/town.gon", dataRoot: BASE, modDir: MOD }, name);
+      assert(t.unsafe === true, `unsafe: ${JSON.stringify(t)}`);
+      eq(t.source, null);
+      eq(t.text, null);
+    });
+  }
+  test("gon include path: a plain relative name (`sub/deeper.gon`) is literal and resolves", () => {
+    const t = locateInclude({ resource: "data/maps/town.gon", dataRoot: BASE }, "sub/deeper.gon");
+    assert(!t.unsafe, "literal");
+    eq(t.packPath, "data/maps/sub/deeper.gon");
+    eq(t.source, "base");
   });
   test("gon include file: base town.gon inlines std_nodes.gon and, nested, deeper.gon", () => {
     const r = preprocessFile(readFileSync(join(BASE, "maps", "town.gon"), "utf8"), { resource: "data/maps/town.gon", dataRoot: BASE });
@@ -432,5 +502,49 @@ export function runGonPreprocessTests(test: TestFn, assert: AssertFn, eq: EqFn):
       for (const e of std.entries) assert(nodes.entries.some((x) => x.key === e.key), `${f}: ${e.key} inlined`);
     }
     assert(n >= 19, `expected the 19 including maps, saw ${n}`);
+  });
+
+  // ---- mods/_incprobe: the in-game probe for "a mod #includes a file it ships" (+ one #define macro) ----------------
+  const PROBE = join(MODS_DIR, "_incprobe");
+  const NO_BASE = join(PROBE, "no-base-data");
+  const probeEntry = (rel: string, resource: string, name: string): VObject => {
+    const r = preprocessFile(readFileSync(join(PROBE, ...rel.split("/")), "utf8"), { resource, modDir: PROBE, dataRoot: NO_BASE });
+    const e = field(r.text, name);
+    if (e.t !== "obj") throw new Error(`${name} is an object`);
+    return e;
+  };
+  const at = (o: VObject, path: string): string => {
+    let n: VNode = o;
+    for (const k of path.split(".")) {
+      if (n.t !== "obj") return "(not an object)";
+      const e: VEntry | undefined = n.entries.find((x) => x.key === k);
+      if (!e) return "(missing)";
+      n = e.value;
+    }
+    return n.t === "str" ? n.raw : `(${n.t})`;
+  };
+  test("_incprobe: incprobe_props.gon (shipped by the mod) resolves from data/characters/enemies.gon.append as the mod's own file", () => {
+    const t = locateInclude({ resource: "data/characters/enemies.gon", modDir: PROBE, dataRoot: NO_BASE }, "incprobe_props.gon");
+    eq(t.packPath, "data/characters/incprobe_props.gon");
+    eq(t.source, "mod");
+  });
+  test("_incprobe: after the pre-pass IncProbe is a Rat variant with properties.health 77 (from the include)", () => {
+    const e = probeEntry("data/characters/enemies.gon.append", "data/characters/enemies.gon", "IncProbe");
+    eq(at(e, "variant_of"), "Rat");
+    eq(at(e, "properties.health"), "77");
+  });
+  test("_incprobe: after the pre-pass IncProbeMacro (small_enemies.gon.append, a 2-argument #define) has health 55, movement 2", () => {
+    const e = probeEntry("data/characters/small_enemies.gon.append", "data/characters/small_enemies.gon", "IncProbeMacro");
+    eq(at(e, "variant_of"), "Rat");
+    eq(at(e, "properties.health"), "55");
+    eq(at(e, "properties.movement"), "2");
+  });
+  test("_incprobe: include-probe.mewtest seeds 42, enters TacticsTest, spawns IncProbe + IncProbeMacro and checks the merged GON", () => {
+    const plan = parseScript(readFileSync(join(PROBE, "tests", "include-probe.mewtest"), "utf8"), { owningMod: "_incprobe", name: "include-probe" });
+    assert(plan.ok, JSON.stringify(plan.errors));
+    eq(plan.mods.join(","), "_incprobe,_autoplay");
+    for (const re of [/seed 42/, /enter TacticsTest/, /cmd spawn IncProbe\n/, /cmd spawn IncProbeMacro/, /expect gon 8 properties\.health == 77/, /expect gon 9 properties\.health == 55/]) {
+      assert(re.test(plan.body), `${re}: ${plan.body}`);
+    }
   });
 }

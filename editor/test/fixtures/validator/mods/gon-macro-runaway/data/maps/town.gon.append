@@ -1,0 +1,5 @@
+// a macro that names itself: every one of the game's 256 expansion passes changes the text
+#define LOOP #LOOP #end
+loopy {
+	x 1 #LOOP
+}

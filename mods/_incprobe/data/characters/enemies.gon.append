@@ -1,0 +1,8 @@
+// test-only (include probe, 2026-10-22): can a mod #include a file it ships? The game's pre-pass
+// (Gon_Pre_ExpandIncludes 0xa4edf0) resolves the name against the directory of the resource being loaded
+// (data/characters/ for data/characters/enemies.gon) through the file manager, so this mod's own
+// data/characters/incprobe_props.gon should be inlined here. tests/include-probe.mewtest: properties.health 77.
+IncProbe {
+    variant_of Rat
+    #include "incprobe_props.gon"
+}
