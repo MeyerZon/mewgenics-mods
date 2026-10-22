@@ -83,7 +83,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   the editor from a git worktree").
 - `npm test` — the full unit suite (`node test/run-tests.ts`: GON, overlays, validator, art, the in-game runner
   against a fake game, an MCP spawn smoke, the bindings library against fake PE images and the installed exe;
-  ~250 checks). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
+  1256 checks on 2026-10-22, all sections present). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
   reports the skipped count. Without `.extracted/` the data-dependent sections print `(skipped: …)` and the suite
   still exits 0 (a nested run with `MEWGENICS_EXTRACTED_DATA` pointing at an empty dir checks that on every run).
   `tools/gpak.py` is covered by `test/gpak-tests.ts` on a synthetic archive (needs a Python 3 on PATH, else skips).

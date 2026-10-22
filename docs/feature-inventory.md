@@ -343,7 +343,7 @@ Finding codes found in the code, by group:
 
 ---
 
-## 6. MCP server (`editor/src/mcp/tools.ts`, 31 tools)
+## 6. MCP server (`editor/src/mcp/tools.ts`, 32 tools)
 
 `npm run mcp`, registered as `mewgenics-editor`.
 
@@ -389,6 +389,9 @@ Finding codes found in the code, by group:
 **Rooms**
 30. `read_level` — read a `.lvl` room.
 31. `write_level` — write a room (whole, bytes or edit ops).
+
+**3D models** (added by #138, integration 2026-10-22b)
+32. `extract_model_texture` — a .glb / data-URI glTF model's embedded PNG to `textures/models/<stem>.png`.
 
 ---
 
@@ -498,7 +501,7 @@ up to #130 is on `main` now.
 
 ## 10. Test coverage at a glance
 
-- **`npm test`** — `1196 passed, 0 failed` when run on b2e13b7 for this doc, with the three `MEWGENICS_*` data env vars set (the integration commit 9f7738f quotes 1198; CLAUDE.md still says "~250").
+- **`npm test`** — `1196 passed, 0 failed` when run on b2e13b7 for this doc, with the three `MEWGENICS_*` data env vars set (the integration commit 9f7738f quotes 1198; CLAUDE.md said "~250" until integration 2026-10-22b; 1256 after #133 #134 #138).
 - **Native host suites** — 441 checks in 23 suites (CLAUDE.md "Native layer"); on Windows `native\test-all.bat` needs PR #139 to run them all.
 - **Playwright e2e** — 54 checks (counted: art-mode 25, data-mode 9, onboarding 10, rooms 5, shipping 2, smoke 3).
 - **MCP tools** — 31 (counted in `tools.ts`).

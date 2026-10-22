@@ -901,8 +901,8 @@ Since phase M2 (below): per-unit GON models, sorting with the sprites, textures 
 **Loading.** Needs a framework built with API v8 (mewframework 0.6) on a known build, and `mods/fw-3d` on the mod
 path next to the mod that uses it (`mods: <mod>, fw-3d` in a `.mewtest` header, `-modpaths … mods/fw-3d` in a
 launch): `mods/fw-3d` ships `models/crate.obj` (a hand-written 0.8-unit crate with normals and UVs) and gives the
-vanilla `Crate` its `graphics.model`. The API version is v6 because two open PRs (#109 CatRig, #111 `FW_Random`)
-each claim v5; their `FwApi` fields go before the v6 ones when they merge (the owner settles the order).
+vanilla `Crate` its `graphics.model`. The 3D objects are API v8 (`FW_API_VERSION 8`: v5 `FW_Random`, v6 game speed
+and v7 cat rigs came first); the M3/M5 features (hide_sprite, `@Name`, palette rows, facing, slices) add no export.
 
 ### The block form (phase M2)
 
@@ -1039,7 +1039,7 @@ listed for it (the log has one line).
 Modder notes: only the unit's own body sprite is hidden; the hover outline and a native glow still trace the sprite's
 silhouette (a known limit), and hit flashes do not reach the mesh yet. Tile objects (`FW_Place3DObjectOnTile`) have no
 sprite, so the flag does nothing there; API-registered unit models (`FW_Register3DObject`) never hide the sprite (no
-API for it in v6/v7 — GON only).
+API for it in v8 — GON only).
 
 Example:
 ```
