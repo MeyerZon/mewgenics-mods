@@ -18,7 +18,7 @@ layer, which tier of test covers what, where a human still has to look, and what
 
 ## What is test-backed today
 
-- **Editor core** (`editor/src/core/`): 145 unit tests (`npm test`), 33 Playwright end-to-end tests (`npm run test:e2e`),
+- **Editor core** (`editor/src/core/`): 1,314 unit checks (`npm test`), 103 Playwright end-to-end tests (`npm run test:e2e`, 2026-10-22),
   `tsc --noEmit` (strict TypeScript, no JSDoc typing left). The overlay engine's oracle is the decompiled
   `Gon_PatchMerge_a_0x944cc0.c`, `Gon_PatchMerge_b_0x944f50.c` and `Gon_DeepMerge_0x946680.c` (`.analysis/decompiled/`).
 - **Data mods** (`mods/`): the validator (reference integrity, localization, overlay targets, merge preview) is the T0/T1

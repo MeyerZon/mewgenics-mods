@@ -86,7 +86,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   the editor from a git worktree").
 - `npm test` — the full unit suite (`node test/run-tests.ts`: GON, overlays, validator, art, the in-game runner
   against a fake game, an MCP spawn smoke, the bindings library against fake PE images and the installed exe;
-  1256 checks on 2026-10-22, all sections present). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
+  1314 checks on 2026-10-22 at the top of the UX stack, all sections present). Filter by name with `npm test -- --only <substring>` (or `TEST_ONLY=<substring>`); the summary then
   reports the skipped count. Without `.extracted/` the data-dependent sections print `(skipped: …)` and the suite
   still exits 0 (a nested run with `MEWGENICS_EXTRACTED_DATA` pointing at an empty dir checks that on every run).
   `tools/gpak.py` is covered by `test/gpak-tests.ts` on a synthetic archive (needs a Python 3 on PATH, else skips).
@@ -99,7 +99,7 @@ skipping with a warning when offline; `npm run vendor:vectorcraft:check` re-hash
   `src/mcp/server.mjs` is a 4-line shim for registrations that predate the switch; point new ones at `server.ts`.
 - `npm run build` — Vite build of the web UI into the git-ignored `editor/web/dist/`, which `npm run web` serves
   (503 with instructions when unbuilt). `npm run dev` is the hot-reloading Vite server (proxies `/api` to `npm run web`).
-- `npm run test:e2e` — `vite build && playwright test`: the 54-check browser suite in `editor/tests/e2e/` that pins
+- `npm run test:e2e` — `vite build && playwright test`: the 103-check browser suite in `editor/tests/e2e/` that pins
   the UI's DOM and flows (Data mode, Art mode, Rooms mode, preview, onboarding, Export… / Import mod…). Needs Playwright's Chromium.
 - `npm run test:ingame [-- <mod> [<test>]]` — **T2**: launches the real game once per `mods/<mod>/tests/*.mewtest`
   on the `dev` save with the `mewtest` harness and prints a verdict per script (`docs/ingame-testing.md`). Needs

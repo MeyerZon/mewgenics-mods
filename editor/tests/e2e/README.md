@@ -59,6 +59,9 @@ npx playwright show-report              # open the last HTML report
   Tileset art: a clip-less tile/object keeps its tint swatch in the flat grid and
   the Iso view, painting works on the iso diamonds; with `.extracted/swfs` the grid
   shows thumbnails and the Iso view draws loaded images, objects after their tile.
+- **a11y** — dialogs (`role=dialog`, Esc, focus return, Tab trap), menus, the toast queue, Ctrl+S.
+- **shell** — the one command bar (Save / Validate / Ctrl+S in every mode), the status pill per mode, the
+  unsaved-work guard, the Launch… popover, `/api/status` + the status bar, deep links.
 - **onboarding** — the first-run data tour, the Art tour (auto-open on first Art
   entry, persistence of seen / "don't show again" across reload, re-open from the
   Help menu), the concepts drawer (Art section + 16-swatch ramp, mode-aware
