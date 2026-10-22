@@ -8,6 +8,8 @@ REM per-unit glow rules: registry, pruning, layer vector, pass lookup and writes
 REM phase-0 3D observer: budget, camera/layer/item accessors, log line formats (test_obs3d_rules) and the
 REM M1 mesh draw: 4x4 maths vs the observed matrices, the std::function functor, GL save/restore, probe rules (test_mesh_draw).
 REM phase-M mesh rules: OBJ parser, game axes, unit cube, model registry, model paths (test_mesh_rules).
+REM phase-0 3D observer: budget, camera/layer/item accessors, log line formats (test_obs3d_rules), the 3D-object
+REM registry + model matrix + the API v6 layout (test_obj3d_rules) and the GON walker / graphics.model seam (test_gon).
 REM Builds build\test_*.exe with w64devkit GCC and runs them; exit code = failures.
 setlocal
 if not defined GCC set "GCC=C:\raylib\w64devkit\bin\gcc.exe"
@@ -71,5 +73,15 @@ if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
   -o "%OUT%\test_mesh_rules.exe"
 if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
 "%OUT%\test_mesh_rules.exe"
+  "%HERE%test\test_obj3d_rules.c" "%HERE%src\fw_obj3d_rules.c" ^
+  -o "%OUT%\test_obj3d_rules.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_obj3d_rules.exe"
+if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
+"%GCC%" -std=c11 -O1 -g -Wall -Wextra -Werror -I"%HERE%src" ^
+  "%HERE%test\test_gon.c" "%HERE%src\fw_gon.c" ^
+  -o "%OUT%\test_gon.exe"
+if errorlevel 1 ( echo TEST BUILD FAILED & exit /b 1 )
+"%OUT%\test_gon.exe"
 if not "%errorlevel%"=="0" ( echo TESTS FAILED & exit /b 1 )
 endlocal

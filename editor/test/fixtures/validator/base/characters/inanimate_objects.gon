@@ -1,0 +1,18 @@
+Crate {
+	graphics {
+		movieclip Crate
+	}
+	properties {
+		type object
+	}
+}
+Rock {
+	graphics {
+		movieclip Rock
+	}
+}
+Tire {
+	graphics {
+		movieclip Tire
+	}
+}

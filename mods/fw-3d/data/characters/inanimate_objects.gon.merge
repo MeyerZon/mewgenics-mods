@@ -1,0 +1,9 @@
+// fw-3d sample: the vanilla Crate gains a 3D model (docs/data-mods.md "3D models in a mod (preview)").
+// `model` is read only by mewframework's 3D seam (fw_gon_entry_model on the unit's live entry); the game's own GON
+// getters look keys up by name and never ask for `model`, so vanilla ignores it (INFERRED) and keeps drawing the
+// `movieclip` — which is also the 2D fallback whenever the framework is inactive.
+Crate {
+	graphics {
+		model "models/crate.obj"
+	}
+}
